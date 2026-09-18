@@ -30632,6 +30632,14 @@
             "schema": {
               "type": "boolean"
             }
+          },
+          {
+            "name": "x-sr-bench-expected-config-hash",
+            "in": "header",
+            "description": "Optional lowercase SHA-256 of the active runtime document. Rejects a mismatched generation before evaluating signals.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "security": [
@@ -30654,6 +30662,9 @@
                       "additionalProperties": {
                         "type": "string"
                       }
+                    },
+                    "config_hash": {
+                      "type": "string"
                     },
                     "decision_error": {
                       "type": "string"
@@ -33412,6 +33423,12 @@
                 "schema": {
                   "type": "string"
                 }
+              },
+              "x-vsr-config-hash": {
+                "description": "SHA-256 of the actual runtime generation used by this Preview.",
+                "schema": {
+                  "type": "string"
+                }
               }
             }
           },
@@ -33505,6 +33522,50 @@
           },
           "403": {
             "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -33694,6 +33755,9 @@
                           "additionalProperties": {
                             "type": "string"
                           }
+                        },
+                        "config_hash": {
+                          "type": "string"
                         },
                         "decision_error": {
                           "type": "string"

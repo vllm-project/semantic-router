@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/configschema"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -194,12 +195,14 @@ func apiRoutingRoutes() []apiRoute {
 				Description: "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
 				Parameters: []OpenAPIParameter{
 					queryParameter("trace", "Include per-decision routing trace trees.", "boolean"),
+					headerParameter(headers.SRBenchExpectedConfigHash, "Optional lowercase SHA-256 of the active runtime document. Rejects a mismatched generation before evaluating signals.", false),
 				},
 			},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEvalClassification,
 			jsonResponse[services.EvalResponse](http.StatusOK, "Successful response"),
-			errorResponses(400, 413, 429, 500, 504),
+			responseHeaders(http.StatusOK, map[string]OpenAPIHeader{headers.VSRConfigHash: {Description: "SHA-256 of the actual runtime generation used by this Preview.", Schema: OpenAPISchema{Type: "string"}}}),
+			errorResponses(400, 412, 413, 429, 500, 504),
 			jsonResponseOrError[services.EvalResponse](http.StatusServiceUnavailable, "Decision unresolved, inference canceled, or server shutting down"),
 			strictJSONBodyFor[services.IntentRequest](),
 		),

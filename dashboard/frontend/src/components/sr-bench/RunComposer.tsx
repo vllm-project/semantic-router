@@ -23,7 +23,9 @@ export default function RunComposer({
 }: Props) {
   const [name, setName] = useState('Balance comparison')
   const [mode, setMode] = useState<Manifest['mode']>('live')
-  const [costPolicy, setCostPolicy] = useState<'require_priced' | 'capability_only'>('require_priced')
+  const [costPolicy, setCostPolicy] = useState<'require_priced' | 'capability_only'>(
+    'require_priced',
+  )
   const [profile, setProfile] = useState('quick')
   const [datasetID, setDatasetID] = useState('')
   const [targets, setTargets] = useState<Target[]>(() =>
@@ -43,7 +45,10 @@ export default function RunComposer({
   const profiles = catalog.profiles.map((item) => item.id)
   const dataset = datasets.find((item) => item.id === datasetID)
   const formManifest = useMemo(
-    () => ({ ...makeManifest(name, mode, profile, dataset, targets, limits), cost_policy: costPolicy }),
+    () => ({
+      ...makeManifest(name, mode, profile, dataset, targets, limits),
+      cost_policy: costPolicy,
+    }),
     [name, mode, profile, dataset, targets, limits, costPolicy],
   )
   const fingerprint = advanced ? json : JSON.stringify(formManifest)
@@ -114,7 +119,13 @@ export default function RunComposer({
         </label>
         <label>
           Profile
-          <select value={profile} onChange={(event) => { setProfile(event.target.value); setDatasetID('') }}>
+          <select
+            value={profile}
+            onChange={(event) => {
+              setProfile(event.target.value)
+              setDatasetID('')
+            }}
+          >
             {(profiles.length ? profiles : ['smoke', 'quick', 'standard']).map((value) => (
               <option key={value}>{value}</option>
             ))}
@@ -124,11 +135,13 @@ export default function RunComposer({
           Prepared dataset
           <select value={datasetID} onChange={(event) => setDatasetID(event.target.value)}>
             <option value="">Select a dataset</option>
-            {datasets.filter(item => !item.profile || item.profile === profile).map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.name ?? item.id} · {number(item.case_count)} cases
-              </option>
-            ))}
+            {datasets
+              .filter((item) => !item.profile || item.profile === profile)
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name ?? item.id} · {number(item.case_count)} cases
+                </option>
+              ))}
           </select>
         </label>
       </div>
@@ -180,7 +193,8 @@ export default function RunComposer({
       </div>
       {!registeredTargets.length && (
         <p className={styles.notice}>
-          No targets are registered. Run vllm-sr benchmark target register --file targets.json against this service’s store, then refresh.
+          No targets are registered. Run vllm-sr benchmark target register --file targets.json
+          against this service’s store, then refresh.
         </p>
       )}
       <div className={styles.targetList}>
@@ -231,8 +245,24 @@ export default function RunComposer({
           </fieldset>
         ))}
       </div>
-      <label>Cost accounting<select value={costPolicy} onChange={event => setCostPolicy(event.target.value as 'require_priced' | 'capability_only')}><option value="require_priced">Require complete prices and cost bounds</option><option value="capability_only">Capability only — no cost-saving claim</option></select></label>
-      {costPolicy === 'capability_only' && <p className={styles.notice}>Unknown or unpriced usage cannot be bounded by a USD budget. Time, output and call limits still apply; this run cannot prove cost savings.</p>}
+      <label>
+        Cost accounting
+        <select
+          value={costPolicy}
+          onChange={(event) =>
+            setCostPolicy(event.target.value as 'require_priced' | 'capability_only')
+          }
+        >
+          <option value="require_priced">Require complete prices and cost bounds</option>
+          <option value="capability_only">Capability only — no cost-saving claim</option>
+        </select>
+      </label>
+      {costPolicy === 'capability_only' && (
+        <p className={styles.notice}>
+          Unknown or unpriced usage cannot be bounded by a USD budget. Time, output and call limits
+          still apply; this run cannot prove cost savings.
+        </p>
+      )}
       <h3>Run budget and limits</h3>
       <div className={styles.formGrid}>
         <label>
@@ -303,7 +333,8 @@ export default function RunComposer({
       <details className={styles.details}>
         <summary>Advanced manifest</summary>
         <p>
-          Set sampling and run limits. Target endpoints, prices, credentials and harness settings are managed by the server; target edits are rejected.
+          Set sampling and run limits. Target endpoints, prices, credentials and harness settings
+          are managed by the server; target edits are rejected.
         </p>
         <label className={styles.checkbox}>
           <input

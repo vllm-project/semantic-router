@@ -59,7 +59,7 @@ export function useRunEvidence(id: string, revision: number) {
           if (responses[2].status === 'fulfilled') setCalls(responses[2].value.calls)
           if (responses[3].status === 'fulfilled') {
             const newEvents = responses[3].value
-            setEvents(previous => [...previous, ...newEvents])
+            setEvents((previous) => [...previous, ...newEvents])
           }
           const failed = responses.find((response) => response.status === 'rejected')
           setError(

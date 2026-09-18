@@ -172,7 +172,11 @@ unavailable sandboxes, missing prices and incompatible protocol options before
 paid work. Missing prices permit a capability-only run only when selected
 explicitly; they cannot establish a cost-saving claim. Conservative reservations
 include queued/in-flight calls. Actual spending and unaccounted usage remain
-visible when a provider fails to return usage.
+visible when a provider fails to return usage. Reservations estimate spend from
+the submitted request and frozen prices; they are not a universal hard dollar
+cap when a provider or routing plugin expands the request. Time, output and call
+limits are enforced separately. The worker stops further dispatch when observed
+spend reaches its limit; an in-flight request can exceed the estimate.
 
 ## Metrics and comparison
 

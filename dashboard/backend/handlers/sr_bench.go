@@ -122,7 +122,7 @@ func srBenchRouteMethod(path string) (string, bool) {
 	switch rest {
 	case "/health", "/catalog", "/datasets", "/targets":
 		return http.MethodGet, true
-	case "/plans", "/comparisons":
+	case "/plans", "/comparisons", "/replays":
 		return http.MethodPost, true
 	case "/runs":
 		// GET and POST are the only collection methods; the caller selects
@@ -140,7 +140,7 @@ func srBenchRouteMethod(path string) (string, bool) {
 		switch parts[2] {
 		case "results", "report", "events":
 			return http.MethodGet, true
-		case "cancel":
+		case "cancel", "regrade", "export":
 			return http.MethodPost, true
 		}
 	}

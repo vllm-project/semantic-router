@@ -38,9 +38,9 @@ def grade(payload):
                 Path(f"step-{index}.log").write_bytes(completed.stdout[-65536:] + completed.stderr[-65536:])
             except subprocess.TimeoutExpired:
                 results[step["step_number"]] = False
-        # SciCode's final subproblem is the composed main-problem solution.
-        main_key = row["sub_steps"][-1]["step_number"]
-        return {"correct": results[main_key], "subproblems": results, "main_problem": main_key}
+        # Match the pinned upstream main-problem metric: every subproblem
+        # must pass. The final subproblem alone is not sufficient.
+        return {"correct": bool(results) and all(results.values()), "subproblems": results, "main_problem": row["problem_id"]}
     raise ValueError("Unsupported sandbox grader")
 
 

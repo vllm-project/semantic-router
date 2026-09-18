@@ -53,7 +53,9 @@ def _private_token(path: Path) -> str:
                 stream.flush()
                 os.fsync(fd)
             if len(token) < 32:
-                raise ValueError("sr-bench service token must contain at least 32 characters")
+                raise ValueError(
+                    "sr-bench service token must contain at least 32 characters"
+                )
             return token
     finally:
         os.close(fd)
@@ -66,8 +68,12 @@ def _target_secret_refs(store: Path) -> set[str]:
         if isinstance(value, dict):
             for key, item in value.items():
                 if key == "api_key_env":
-                    if not isinstance(item, str) or not runtime_env_name_is_allowed(item):
-                        raise ValueError("sr-bench credential references must be safe environment names")
+                    if not isinstance(item, str) or not runtime_env_name_is_allowed(
+                        item
+                    ):
+                        raise ValueError(
+                            "sr-bench credential references must be safe environment names"
+                        )
                     refs.add(item)
                 else:
                     visit(item)
@@ -82,7 +88,9 @@ def _target_secret_refs(store: Path) -> set[str]:
     return refs
 
 
-def prepare_bench_runtime(config_dir: str, stack: RuntimeStackLayout, host_env=None) -> BenchRuntime:
+def prepare_bench_runtime(
+    config_dir: str, stack: RuntimeStackLayout, host_env=None
+) -> BenchRuntime:
     environment = os.environ if host_env is None else host_env
     origin = environment.get("SR_BENCH_URL", "")
     token_ref = environment.get("SR_BENCH_TOKEN_ENV", BENCH_TOKEN_ENV)
@@ -90,15 +98,29 @@ def prepare_bench_runtime(config_dir: str, stack: RuntimeStackLayout, host_env=N
         raise ValueError("SR_BENCH_TOKEN_ENV must name a safe environment variable")
     if origin:
         parsed = urlparse(origin)
-        if parsed.scheme not in {"http", "https"} or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment or parsed.path not in {"", "/"}:
-            raise ValueError("SR_BENCH_URL must be an HTTP(S) origin without credentials or a path")
+        if (
+            parsed.scheme not in {"http", "https"}
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise ValueError(
+                "SR_BENCH_URL must be an HTTP(S) origin without credentials or a path"
+            )
         token = environment.get(token_ref, "")
         if not token:
             raise ValueError("The configured sr-bench service token is missing")
         return BenchRuntime(origin.rstrip("/"), token_ref, {token_ref: token})
 
     root = Path(config_dir).resolve() / ".sr-bench" / stack.stack_name
-    store = Path(environment.get("SR_BENCH_STORE", str(root / "store"))).expanduser().absolute()
+    store = (
+        Path(environment.get("SR_BENCH_STORE", str(root / "store")))
+        .expanduser()
+        .absolute()
+    )
     if store.is_symlink():
         raise ValueError("SR_BENCH_STORE must not be a symlink")
     store.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -109,19 +131,31 @@ def prepare_bench_runtime(config_dir: str, stack: RuntimeStackLayout, host_env=N
     for ref in _target_secret_refs(store):
         value = environment.get(ref)
         if not value:
-            raise ValueError(f"Missing sr-bench target credential environment variable: {ref}")
+            raise ValueError(
+                f"Missing sr-bench target credential environment variable: {ref}"
+            )
         values[ref] = value
-    return BenchRuntime(f"http://{stack.sr_bench_container_name}:8090", token_ref, values, store)
+    return BenchRuntime(
+        f"http://{stack.sr_bench_container_name}:8090", token_ref, values, store
+    )
 
 
 def dashboard_bench_env(runtime: BenchRuntime) -> dict[str, str]:
-    return {"SR_BENCH_URL": runtime.origin, "SR_BENCH_TOKEN_ENV": runtime.token_env, runtime.token_env: ""}
+    return {
+        "SR_BENCH_URL": runtime.origin,
+        "SR_BENCH_TOKEN_ENV": runtime.token_env,
+        runtime.token_env: "",
+    }
 
 
-def bench_command_identity(command: list[str], token: str) -> str:
-    # The hash binds reuse to the same immutable command and private token;
+def bench_command_identity(command: list[str], credentials: dict[str, str]) -> str:
+    # The hash binds reuse to the same command and private credential values;
     # neither the token nor credentials appear in Docker's command arguments.
-    return hashlib.sha256((json.dumps(command, separators=(",", ":")) + token).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(
+            [command, credentials], sort_keys=True, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
 
 
 def reuse_bench_container(command: list[str], container_name: str) -> bool:
@@ -132,12 +166,28 @@ def reuse_bench_container(command: list[str], container_name: str) -> bool:
     """
     import subprocess
 
-    expected = next((arg.split("=", 1)[1] for arg in command if arg.startswith(BENCH_IDENTITY_LABEL + "=")), None)
+    expected = next(
+        (
+            arg.split("=", 1)[1]
+            for arg in command
+            if arg.startswith(BENCH_IDENTITY_LABEL + "=")
+        ),
+        None,
+    )
     if expected is None:
         return False
     result = subprocess.run(
-        [command[0], "inspect", "--format", '{{json .State.Status}} {{json .Config.Labels}}', container_name],
-        capture_output=True, text=True, check=False, timeout=10,
+        [
+            command[0],
+            "inspect",
+            "--format",
+            "{{json .State.Status}} {{json .Config.Labels}}",
+            container_name,
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
     )
     if result.returncode != 0:
         return False
@@ -148,7 +198,11 @@ def reuse_bench_container(command: list[str], container_name: str) -> bool:
     except (ValueError, TypeError):
         return False
     if status != "running":
-        raise ValueError("The sr-bench service is stopped; inspect its saved ledger before an explicit service restart")
+        raise ValueError(
+            "The sr-bench service is stopped; inspect its saved ledger before an explicit service restart"
+        )
     if not isinstance(labels, dict) or labels.get(BENCH_IDENTITY_LABEL) != expected:
-        raise ValueError("The running sr-bench service has a different image, store or credential; reconcile it before replacing the service")
+        raise ValueError(
+            "The running sr-bench service has a different image, store or credential; reconcile it before replacing the service"
+        )
     return True

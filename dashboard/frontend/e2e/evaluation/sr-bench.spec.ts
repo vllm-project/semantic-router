@@ -38,7 +38,9 @@ const report = {
         failed: 0,
         correct: 1,
         scored: 2,
-        accuracy: 0.5, macro_accuracy: 0.5, sr_bench_score: null,
+        accuracy: 0.5,
+        macro_accuracy: 0.5,
+        sr_bench_score: null,
         cost_usd: null,
         tokens: 120,
         latency_p50_s: 1,
@@ -227,5 +229,98 @@ test('catalog renders every registered adapter and fits mobile width', async ({ 
   await expect(page.getByRole('heading', { name: 'scicode', exact: true })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
+  )
+})
+
+test('replays saved answers and labels estimated metrics separately', async ({ page }) => {
+  await mockBench(page)
+  const replayRun = {
+    ...run,
+    id: 'replay-1',
+    manifest: { ...manifest, name: 'Saved replay', mode: 'replay' },
+  }
+  const submitted: unknown[] = []
+  await page.route('**/api/sr-bench/v1/runs', (route) =>
+    route.fulfill({
+      json: {
+        runs: [
+          run,
+          {
+            ...run,
+            id: 'preview-1',
+            manifest: { ...manifest, name: 'Route preview', mode: 'preview' },
+          },
+        ],
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/replays', (route) => {
+    submitted.push(route.request().postDataJSON())
+    return route.fulfill({ json: replayRun })
+  })
+  await page.route('**/api/sr-bench/v1/runs/replay-1**', (route) => {
+    const path = new URL(route.request().url()).pathname
+    const body = path.endsWith('/report')
+      ? {
+          ...report,
+          summary: {
+            targets: [
+              {
+                id: 'balance',
+                accuracy: null,
+                macro_accuracy: null,
+                sr_bench_score: null,
+                cost_usd: null,
+                estimated_macro_accuracy: 0.75,
+                estimated_cost_usd: 0.2,
+                estimated_latency_p50_s: 1,
+              },
+            ],
+            wall_time_s: 0,
+          },
+          limitations: ['Replay diagnostics only.'],
+        }
+      : path.endsWith('/calls')
+        ? { calls: [] }
+        : path.endsWith('/results')
+          ? { results: [] }
+          : path.endsWith('/events')
+            ? { events: [] }
+            : replayRun
+    return route.fulfill({ json: body })
+  })
+  await page.goto('/evaluation?view=compare')
+  await page.getByLabel('Saved single-model baseline').selectOption('run-1')
+  await page.getByLabel('Routing preview').selectOption('preview-1')
+  await page.getByRole('button', { name: 'Create diagnostic replay' }).click()
+  await expect(page.getByRole('heading', { name: 'Diagnostic replay estimates' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '75%', exact: true })).toBeVisible()
+  await expect(
+    page.getByText('These estimates reuse saved answers.', { exact: false }),
+  ).toBeVisible()
+  expect(submitted).toEqual([{ baseline_run_id: 'run-1', preview_run_id: 'preview-1' }])
+})
+
+test('regrades saved answers and exports development evidence with holdout errors visible', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/run-1/regrade', (route) =>
+    route.fulfill({
+      json: { kind: 'offline-regrade', changed_count: 0, model_requests: 0, results: [] },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/export', (route) =>
+    route.fulfill({ status: 400, json: { error: 'Holdout rows cannot be exported for training' } }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.getByRole('button', { name: 'Regrade saved answers' }).click()
+  await expect(page.getByText('0 changed grades · 0 model requests')).toBeVisible()
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download artifact JSON' }).click()
+  expect((await download).suggestedFilename()).toBe('run-1-offline-regrade.json')
+  await page.getByRole('button', { name: 'Export training matrix' }).click()
+  await expect(page.getByRole('alert')).toContainText(
+    'Holdout rows cannot be exported for training',
   )
 })

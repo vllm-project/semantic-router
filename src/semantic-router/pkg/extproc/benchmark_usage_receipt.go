@@ -48,6 +48,11 @@ func (r *OpenAIRouter) benchmarkUsageScopeKnown(ctx *RequestContext, allowLooper
 	for _, plugin := range decision.Plugins {
 		switch config.NormalizeDecisionPluginType(plugin.Type) {
 		case config.DecisionPluginSystemPrompt, config.DecisionPluginHeaderMutation, config.DecisionPluginRequestParams, config.DecisionPluginRouterReplay, config.DecisionPluginResponseCache:
+		case config.DecisionPluginContextCompression:
+			compression := decision.GetContextCompressionConfig()
+			if compression == nil || compression.Enabled && compression.EffectiveScoring().Method != config.ContextCompressionScoringBM25 {
+				return false
+			}
 		default:
 			return false
 		}
@@ -96,7 +101,7 @@ func (r *OpenAIRouter) benchmarkLooperUsage(resp *looper.Response, ctx *RequestC
 			receipt.Calls = append(receipt.Calls, benchmarkUsageCall{Model: attempt.Model, Role: attempt.Role, Stage: attempt.Stage, Status: string(attempt.Status), Usage: benchmarkUsageBuckets{u.PromptTokens, u.CompletionTokens, u.TotalTokens, u.CachedInputTokens, u.CacheWriteTokens}})
 			total = total.Add(&looper.ModelResponse{Usage: u})
 		}
-		if total.PromptTokens != resp.Usage.PromptTokens || total.CompletionTokens != resp.Usage.CompletionTokens || total.CachedInputTokens != resp.Usage.CachedInputTokens || total.CacheWriteTokens != resp.Usage.CacheWriteTokens {
+		if !total.Complete() || total.PromptTokens != resp.Usage.PromptTokens || total.CompletionTokens != resp.Usage.CompletionTokens || total.CachedInputTokens != resp.Usage.CachedInputTokens || total.CacheWriteTokens != resp.Usage.CacheWriteTokens {
 			receipt.Complete = false
 		}
 	}

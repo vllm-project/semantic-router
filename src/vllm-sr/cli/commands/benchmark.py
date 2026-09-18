@@ -51,6 +51,7 @@ def benchmark(ctx, url, store, no_autostart):
     """Prepare, run, inspect, and compare sr-bench 1.0 evaluations."""
     from cli.runtime_stack import resolve_runtime_stack
 
+    explicit_url, explicit_store = url is not None, store is not None
     stack = resolve_runtime_stack()
     root = (
         Path(os.environ.get("VLLM_SR_STATE_ROOT_DIR", str(Path.cwd())))
@@ -71,7 +72,7 @@ def benchmark(ctx, url, store, no_autostart):
             if managed_service
             else DEFAULT_URL
         )
-    client = Client(url, store, not no_autostart and not managed_service)
+    client = Client(url, store, not no_autostart and not managed_service and not explicit_url, verify_store=explicit_store or not explicit_url or managed_service)
     if managed_service and "Authorization" not in client.headers:
         if token_file.is_symlink() or token_file.stat().st_mode & 0o077:
             raise click.ClickException(
@@ -85,6 +86,17 @@ def benchmark(ctx, url, store, no_autostart):
 def catalog_command():
     """Show the nine benchmark adapters and evaluation profiles."""
     output(catalog())
+
+
+@benchmark.command("setup")
+@click.option("--benchmark", "benchmark_id", default="all")
+@click.option("--install", is_flag=True, help="Install pinned optional harnesses and task sources; makes no model requests.")
+@guarded
+def setup_command(benchmark_id, install):
+    """Inspect prerequisites or explicitly install optional benchmark harnesses."""
+    from cli.sr_bench.setup import setup
+
+    output(setup(benchmark_id, install))
 
 
 @benchmark.command("serve")
@@ -345,3 +357,38 @@ def target_register(client, source):
     os.chmod(temporary, 0o600)
     temporary.replace(destination)
     output({"targets": validated["targets"], "registered": len(validated["targets"])})
+
+
+@benchmark.command("replay")
+@click.option("--baseline",required=True,help="Completed single-model answer matrix run ID.")
+@click.option("--preview",required=True,help="Completed deterministic routing preview run ID.")
+@click.option("--idempotency-key")
+@click.pass_obj
+@guarded
+def replay_command(client,baseline,preview,idempotency_key):
+    """Estimate eligible static routes from saved answers without inference."""
+    output(client.request("POST","/replays",{"baseline_run_id":baseline,"preview_run_id":preview,"idempotency_key":idempotency_key}))
+
+
+@benchmark.command("regrade")
+@click.argument("run_id")
+@click.option("--output","destination",type=click.Path(path_type=Path),required=True)
+@click.pass_obj
+@guarded
+def regrade_command(client,run_id,destination):
+    """Regrade saved MCQ/grid final outputs without mutating original evidence."""
+    artifact=client.request("POST","/runs/"+run_id+"/regrade",{})
+    with destination.open("x") as file: file.write(json.dumps(artifact,indent=2,ensure_ascii=False)+"\n")
+    output({"path":str(destination),"changed_count":artifact["changed_count"],"model_requests":0})
+
+
+@benchmark.command("export")
+@click.argument("run_id")
+@click.option("--output","destination",type=click.Path(path_type=Path),required=True)
+@click.pass_obj
+@guarded
+def export_command(client,run_id,destination):
+    """Export a dev response matrix for training; holdout export is rejected."""
+    artifact=client.request("POST","/runs/"+run_id+"/export",{})
+    with destination.open("x") as file: file.write(json.dumps(artifact,indent=2,ensure_ascii=False)+"\n")
+    output({"path":str(destination),"case_count":len(artifact["cases"]),"split":artifact["split"]})

@@ -22,7 +22,13 @@ from cli.sr_bench_runtime import reuse_bench_container
 log = get_logger(__name__)
 
 
-def run_container_specs(container_specs, *, storage_secret_values: dict[str, str], bench_secret_values: dict[str, str] | None = None, bench_token_env: str = "SR_BENCH_TOKEN"):
+def run_container_specs(
+    container_specs,
+    *,
+    storage_secret_values: dict[str, str],
+    bench_secret_values: dict[str, str] | None = None,
+    bench_token_env: str = "SR_BENCH_TOKEN",
+):
     """Bring up each service in order, unwinding the stack on the first failure.
 
     A service can need more than one command, so a container is registered for
@@ -59,8 +65,14 @@ def run_container_specs(container_specs, *, storage_secret_values: dict[str, str
 
 
 def _run_service_commands(
-    commands, service_name: str, storage_secret_values: dict[str, str], *, on_created,
-    bench_secret_values: dict[str, str] | None = None, bench_token_env: str = "SR_BENCH_TOKEN", container_name: str = ""
+    commands,
+    service_name: str,
+    storage_secret_values: dict[str, str],
+    *,
+    on_created,
+    bench_secret_values: dict[str, str] | None = None,
+    bench_token_env: str = "SR_BENCH_TOKEN",
+    container_name: str = "",
 ):
     """Run one service's commands in order and stop at the first failure.
 
@@ -73,9 +85,16 @@ def _run_service_commands(
     creation_env = _service_child_env(service_name, storage_secret_values)
     if service_name == "sr-bench":
         values = bench_secret_values or {}
-        creation_env = {**os.environ, **values, "SR_BENCH_TOKEN": values.get(bench_token_env, "")}
+        creation_env = {
+            **os.environ,
+            **values,
+            "SR_BENCH_TOKEN": values.get(bench_token_env, ""),
+        }
     elif service_name == "dashboard" and bench_secret_values:
-        creation_env = {**os.environ, bench_token_env: bench_secret_values[bench_token_env]}
+        creation_env = {
+            **os.environ,
+            bench_token_env: bench_secret_values[bench_token_env],
+        }
     stdout_chunks: list[str] = []
     stderr_chunks: list[str] = []
 
@@ -90,12 +109,19 @@ def _run_service_commands(
                 env=creation_env if index == 0 else None,
             )
         except subprocess.CalledProcessError as exc:
-            if service_name == "sr-bench" and index == 0 and reuse_bench_container(cmd, container_name):
-                log.info("Reusing the independent sr-bench service; active runs continue")
-                continue
+            if service_name == "sr-bench" and index == 0:
+                try:
+                    reused = reuse_bench_container(cmd, container_name)
+                except (ValueError, subprocess.TimeoutExpired) as reconciliation_error:
+                    return (1, "\n".join(stdout_chunks), str(reconciliation_error))
+                if reused:
+                    log.info(
+                        "Reusing the independent sr-bench service; active runs continue"
+                    )
+                    continue
             if exc.stdout:
                 stdout_chunks.append(exc.stdout)
-            stderr_chunks.append(exc.stderr)
+            stderr_chunks.append(exc.stderr or "Container command failed")
             return (exc.returncode, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
         if index == 0:
             on_created()

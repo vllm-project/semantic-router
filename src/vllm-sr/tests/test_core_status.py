@@ -152,6 +152,7 @@ def test_stop_reports_noop_result_on_stdout(monkeypatch, capsys):
     removed_networks = []
     managed_names = (
         *stack_layout.runtime_container_names,
+        stack_layout.sr_bench_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
@@ -187,6 +188,7 @@ def test_stop_propagates_orphan_network_removal_failure(monkeypatch, capsys):
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
+        stack_layout.sr_bench_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
@@ -219,6 +221,7 @@ def test_stop_reports_success_when_only_dashboard_exists(monkeypatch, capsys):
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
+        stack_layout.sr_bench_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
@@ -248,6 +251,7 @@ def test_stop_does_not_report_success_when_container_removal_fails(monkeypatch, 
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
+        stack_layout.sr_bench_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
@@ -281,6 +285,7 @@ def test_stop_does_not_report_success_when_network_removal_fails(monkeypatch, ca
     stack_layout = runtime_stack.resolve_runtime_stack()
     managed_names = (
         *stack_layout.runtime_container_names,
+        stack_layout.sr_bench_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,
@@ -444,6 +449,7 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
 def _all_managed_names(stack_layout):
     return (
         *stack_layout.runtime_container_names,
+        stack_layout.sr_bench_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,

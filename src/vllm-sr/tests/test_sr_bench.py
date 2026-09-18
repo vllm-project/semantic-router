@@ -157,17 +157,19 @@ def test_live_http_usage_final_channel_and_idempotency(tmp_path, target):
     assert store.calls(run["id"])[0]["reasoning"] == "The answer might be B."
 
 
-def test_failed_final_stops_dispatch_keeps_partial(tmp_path, target):
+def test_truncated_final_counts_incorrect_and_continues(tmp_path, target):
     target.truncated = True
     m = manifest(target)
     m["cases"] *= 1
     m["cases"].append({**m["cases"][0], "id": "q2"})
     store = Store(tmp_path)
     run = Engine(store).start(m)
-    assert wait_run(store, run["id"])["status"] == "failed"
-    assert len(target.requests) == 1
+    assert wait_run(store, run["id"])["status"] == "completed"
+    assert len(target.requests) == 2
     result = store.results(run["id"])[0]
-    assert result["status"] == "failed" and result["partial"]["final"] == "A"
+    assert result["status"] == "completed" and result["correct"] is False
+    assert result["details"]["quality_failure"] == "output_limit"
+    assert store.calls(run["id"])[0]["final"] == "A"
     assert make_report(store, run["id"])["summary"]["targets"][0]["accuracy"] == 0
 
 
@@ -354,3 +356,76 @@ def test_arc_multiple_test_grids_are_atomic():
     }
     assert basic_grade(case, "[[[1,2]],[[3]]]")["correct"] is True
     assert basic_grade(case, "[[1,2]]")["correct"] is False
+
+
+def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
+    from cli.sr_bench.offline import replay, regrade, export_training
+    from cli.sr_bench.contracts import digest
+
+    store = Store(tmp_path)
+    engine = Engine(store)
+    m = manifest(target)
+    m["cases"][0]["metadata"] = {"split": "dev"}
+    baseline = engine.start(m)
+    wait_run(store, baseline["id"])
+    pm = plan(manifest(target))
+    pm.update(
+        {
+            "mode": "preview",
+            "cases": m["cases"],
+            "case_sha256": digest(m["cases"]),
+            "targets": [
+                {
+                    "id": "balance",
+                    "kind": "mom",
+                    "model": "balance",
+                    "base_url": m["targets"][0]["base_url"],
+                }
+            ],
+        }
+    )
+    pm["plan_sha256"] = digest({k: v for k, v in pm.items() if k != "plan_sha256"})
+    preview, _ = store.create(pm)
+    store.result(
+        preview["id"],
+        "q1",
+        "balance",
+        "completed",
+        {
+            "benchmark": "mmlu-pro",
+            "details": {
+                "routing": {
+                    "selection_status": "selected",
+                    "selection_method": "static",
+                    "selected_model": "model",
+                    "decision_result": {"plugins": []},
+                }
+            },
+        },
+    )
+    store.status(preview["id"], "completed")
+    cached = replay(store, baseline["id"], preview["id"])
+    report = make_report(store, cached["id"])
+    assert report["summary"]["total_spend_usd"] == 0
+    assert report["summary"]["targets"][0]["accuracy"] is None
+    assert report["summary"]["targets"][0]["estimated_accuracy"] == 1
+    assert report["summary"]["targets"][0]["sr_bench_score"] is None
+    assert regrade(store, baseline["id"])["changed_count"] == 0
+    exported = export_training(store, baseline["id"])
+    assert (
+        exported["split"] == "dev"
+        and exported["cases"][0]["targets"][0]["final"] == "A"
+    )
+    assert len(target.requests) == 1
+    with pytest.raises(ValueError, match="live"):
+        regrade(store, cached["id"])
+
+
+def test_training_export_refuses_unknown_split(tmp_path, target):
+    from cli.sr_bench.offline import export_training
+
+    store = Store(tmp_path)
+    run = Engine(store).start(manifest(target))
+    wait_run(store, run["id"])
+    with pytest.raises(ValueError, match="holdout and unknown"):
+        export_training(store, run["id"])

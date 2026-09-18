@@ -49,8 +49,12 @@ from cli.container_start_paths import (
 )
 from cli.container_start_runner import run_container_specs
 from cli.sr_bench_runtime import (
-    BENCH_CONFIG_ENV, BENCH_IDENTITY_LABEL, BenchRuntime,
-    bench_command_identity, dashboard_bench_env, prepare_bench_runtime,
+    BENCH_CONFIG_ENV,
+    BENCH_IDENTITY_LABEL,
+    BenchRuntime,
+    bench_command_identity,
+    dashboard_bench_env,
+    prepare_bench_runtime,
 )
 from cli.parser import parse_user_config
 from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
@@ -150,9 +154,10 @@ def container_start_vllm_sr(
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
     return run_container_specs(
-        container_specs, storage_secret_values=storage_secret_values,
+        container_specs,
+        storage_secret_values=storage_secret_values,
         bench_secret_values=bench_runtime.secrets if bench_runtime else {},
-        bench_token_env=bench_runtime.token_env if bench_runtime else "SR_BENCH_TOKEN"
+        bench_token_env=bench_runtime.token_env if bench_runtime else "SR_BENCH_TOKEN",
     )
 
 
@@ -187,7 +192,11 @@ def _build_common_runtime_env(
     # Signing authority belongs to Dashboard, never to recipe/data-plane env.
     common_env.pop("DASHBOARD_JWT_SECRET", None)
     # Benchmark credentials belong only to the independent worker and its gateway.
-    for name in (*BENCH_CONFIG_ENV, os.getenv("SR_BENCH_TOKEN_ENV", "SR_BENCH_TOKEN")):
+    for name in (
+        *BENCH_CONFIG_ENV,
+        "SR_BENCH_TOKEN",
+        os.getenv("SR_BENCH_TOKEN_ENV", "SR_BENCH_TOKEN"),
+    ):
         common_env.pop(name, None)
     common_env["VLLM_SR_RUNTIME_CONFIG_PATH"] = runtime_container_config
     common_env["VLLM_SR_SOURCE_CONFIG_PATH"] = runtime_container_config
@@ -344,11 +353,16 @@ def _runtime_container_specs(
         return specs
 
     if bench_runtime is not None and bench_runtime.managed:
-        specs.append(_build_bench_runtime_spec(
-            runtime=runtime, image=image_by_service["dashboard"],
-            nofile_limit=nofile_limit, network_name=runtime_network_name,
-            stack_layout=stack_layout, bench=bench_runtime,
-        ))
+        specs.append(
+            _build_bench_runtime_spec(
+                runtime=runtime,
+                image=image_by_service["dashboard"],
+                nofile_limit=nofile_limit,
+                network_name=runtime_network_name,
+                stack_layout=stack_layout,
+                bench=bench_runtime,
+            )
+        )
 
     dashboard_cmd = _build_dashboard_runtime_command(
         runtime=runtime,
@@ -571,22 +585,37 @@ def _build_dashboard_runtime_command(
     )
 
 
-def _build_bench_runtime_spec(*, runtime, image, nofile_limit, network_name, stack_layout, bench):
+def _build_bench_runtime_spec(
+    *, runtime, image, nofile_limit, network_name, stack_layout, bench
+):
     assert bench.store is not None
     worker_env = {name: "" for name in bench.secrets}
     # The service has one fixed token variable; the Dashboard may use a custom ref.
     worker_env["SR_BENCH_TOKEN"] = ""
     cmd = _build_service_run_command(
-        runtime=runtime, image=image, container_name=stack_layout.sr_bench_container_name,
-        nofile_limit=nofile_limit, network_name=network_name, env_vars=worker_env,
+        runtime=runtime,
+        image=image,
+        container_name=stack_layout.sr_bench_container_name,
+        nofile_limit=nofile_limit,
+        network_name=network_name,
+        env_vars=worker_env,
         mount_specs=[f"{bench.store}:{bench.store}:z"],
         port_mappings=[("127.0.0.1", stack_layout.sr_bench_port, 8090)],
         entrypoint="/opt/vllm-sr-dashboard-venv/bin/python",
-        command_args=["-m", "cli.sr_bench.service", "--store", str(bench.store), "--host", "0.0.0.0", "--port", "8090"],
+        command_args=[
+            "-m",
+            "cli.sr_bench.service",
+            "--store",
+            str(bench.store),
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8090",
+        ],
         inherited_env_keys=set(worker_env),
     )
     cmd[2:2] = ["--user", f"{os.getuid()}:{os.getgid()}"]
-    identity = bench_command_identity(cmd, bench.secrets[bench.token_env])
+    identity = bench_command_identity(cmd, bench.secrets)
     cmd[2:2] = ["--label", f"{BENCH_IDENTITY_LABEL}={identity}"]
     # Health verification performs only authenticated reads inside the container.
     probe = (
@@ -598,7 +627,14 @@ def _build_bench_runtime_spec(*, runtime, image, nofile_limit, network_name, sta
         " except Exception:\n  time.sleep(.5)\n"
         "else: raise SystemExit('sr-bench service readiness failed')"
     )
-    health = [runtime, "exec", stack_layout.sr_bench_container_name, "/opt/vllm-sr-dashboard-venv/bin/python", "-c", probe]
+    health = [
+        runtime,
+        "exec",
+        stack_layout.sr_bench_container_name,
+        "/opt/vllm-sr-dashboard-venv/bin/python",
+        "-c",
+        probe,
+    ]
     return ("sr-bench", stack_layout.sr_bench_container_name, (cmd, health))
 
 

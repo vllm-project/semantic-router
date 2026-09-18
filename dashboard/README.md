@@ -66,7 +66,7 @@ when changing sr-bench UI or workflows. `dashboard-check` runs, in order:
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
 | `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
 | `dashboard-test-frontend` | Frontend unit tests |
-| `dashboard-test-backend` | `go test ./...` on `dashboard/backend`, including authentication, ownership forwarding and the sr-bench service proxy |
+| `dashboard-test-backend` | Go test inventory and JSON test evidence on `dashboard/backend`, including authentication, ownership forwarding and the sr-bench service proxy |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
 
 The dashboard backend is a **separate Go module**, so `go test ./...` from the
@@ -133,7 +133,20 @@ The Evaluation page is sr-bench 1.0. It uses the same durable Python service as
 user identity. Closing the browser or restarting the Dashboard does not cancel
 a run. The benchmark service owns execution, persisted results and cancellation.
 
-Start the service in a separate terminal and point the Dashboard at it:
+`vllm-sr serve` starts an independent core benchmark worker with the Dashboard
+image. Its store is `<state-root>/.sr-bench/<stack>/store`; its private service
+token is adjacent to that store, outside the Router and Dashboard mounts. The
+worker publishes a loopback port, `8090 + port offset`, and receives neither a
+Docker socket nor GPU devices. Dashboard/config reloads reuse a matching running
+worker. A stopped or changed worker requires explicit reconciliation; `vllm-sr
+stop` stops it without deleting its evidence.
+
+The core image does not include every upstream execution environment. For code
+and interactive benchmarks, prepare a dedicated worker host with the required
+pinned harnesses and sandbox dependencies. `SR_BENCH_URL` selects that external
+worker and suppresses local worker creation. Use an origin reachable from the
+Dashboard container and the same server-side token for both clients. In local
+Dashboard development:
 
 ```bash
 # Set SR_BENCH_TOKEN to the same private value in both server environments.
@@ -141,7 +154,7 @@ vllm-sr benchmark --store ./data/sr-bench serve
 SR_BENCH_URL=http://127.0.0.1:8090 make dashboard-dev-backend
 ```
 
-The service binds loopback. Keep the token server-side and use the authenticated
+The standalone service binds loopback by default. Keep the token server-side and use the authenticated
 Dashboard origin for browser access. Register operator-owned targets with
 `vllm-sr benchmark --store ./data/sr-bench target register --file targets.json`.
 Targets contain endpoint and model identities, four token prices, and credential

@@ -86,7 +86,9 @@ class RuntimeStackLayout:
 
     @property
     def sr_bench_container_name(self) -> str:
-        return self.dashboard_container_name.replace("dashboard-container", "sr-bench-container")
+        return self.dashboard_container_name.replace(
+            "dashboard-container", "sr-bench-container"
+        )
 
     @property
     def sr_bench_port(self) -> int:

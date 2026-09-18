@@ -12,9 +12,18 @@ import {
 } from './model'
 import type { CaseResult, TargetMetrics } from './types'
 import { useRunEvidence } from './useRunEvidence'
+import RunArtifacts from './RunArtifacts'
 import styles from './SrBench.module.css'
 
-function MetricsTable({ targets, preview, summary = false }: { targets: TargetMetrics[]; preview: boolean; summary?: boolean }) {
+function MetricsTable({
+  targets,
+  preview,
+  summary = false,
+}: {
+  targets: TargetMetrics[]
+  preview: boolean
+  summary?: boolean
+}) {
   return (
     <div className={styles.tableScroll}>
       <table>
@@ -36,7 +45,9 @@ function MetricsTable({ targets, preview, summary = false }: { targets: TargetMe
             <tr key={target.id}>
               <th scope="row">{target.id}</th>
               <td>
-                {preview ? 'Preview only' : percent(summary ? target.macro_accuracy : target.accuracy)}
+                {preview
+                  ? 'Preview only'
+                  : percent(summary ? target.macro_accuracy : target.accuracy)}
                 {!preview && !summary && Array.isArray(target.accuracy_ci95) && (
                   <small>
                     95% CI {target.accuracy_ci95.map((value) => percent(value)).join(' – ')}
@@ -196,6 +207,37 @@ export default function RunDetails({
             <p className={styles.notice}>
               Route preview only. This run provides routing diagnostics, not a capability score.
             </p>
+          )}
+          {run.manifest.mode === 'replay' && (
+            <section className={styles.notice}>
+              <h3>Diagnostic replay estimates</h3>
+              <p>
+                These estimates reuse saved answers. No new inference occurred. They are not a
+                measured capability score, latency or cost-saving result.
+              </p>
+              <div className={styles.tableScroll}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Target</th>
+                      <th>Estimated macro accuracy</th>
+                      <th>Estimated cost</th>
+                      <th>Estimated latency p50</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.map((target) => (
+                      <tr key={target.id}>
+                        <th>{target.id}</th>
+                        <td>{percent(target.estimated_macro_accuracy)}</td>
+                        <td>{money(target.estimated_cost_usd)}</td>
+                        <td>{seconds(target.estimated_latency_p50_s)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
           )}
           <h3>Target comparison</h3>
           {metrics.length ? (
@@ -394,6 +436,9 @@ export default function RunDetails({
             <pre>{JSON.stringify(run.manifest, null, 2)}</pre>
             <pre>{JSON.stringify(report?.provenance ?? {}, null, 2)}</pre>
           </details>
+          {run.status === 'completed' && run.manifest.mode === 'live' && (
+            <RunArtifacts id={id} canRun={canRun} />
+          )}
           <div className={styles.actions}>
             <a
               href={`${SR_BENCH_API}/runs/${encodeURIComponent(id)}/report`}

@@ -34,7 +34,7 @@ export interface Target {
 export interface Manifest {
   version: 'sr-bench-1.0'
   name: string
-  mode: 'live' | 'preview'
+  mode: 'live' | 'preview' | 'replay'
   cost_policy?: 'require_priced' | 'capability_only'
   profile: string
   seed: number

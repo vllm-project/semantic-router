@@ -338,9 +338,10 @@ def chat(
             consume(event_lines)
         if guard_error:
             raise CallFailure(guard_error[0])
-        if not done or finish not in {"stop", "tool_calls", "function_call"}:
+        if not done or finish not in {"stop", "tool_calls", "function_call", "length"}:
             raise CallFailure(f"Incomplete final response (finish_reason={finish})")
         result = partial()
+        result["output_complete"] = finish != "length"
         if (
             target.get("expected_response_model")
             and model != target["expected_response_model"]

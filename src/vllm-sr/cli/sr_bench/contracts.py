@@ -65,6 +65,7 @@ DEFAULT_LIMITS = {
     "idle_timeout_s": 30,
     "max_output_tokens": 4096,
     "max_output_chars": 131072,
+    "max_log_bytes": 8388608,
     "repetition_window": 128,
     "repetition_limit": 5,
     "max_cost_usd": 5.0,

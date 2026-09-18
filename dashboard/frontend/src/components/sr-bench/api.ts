@@ -72,6 +72,10 @@ export const benchApi = {
     request<Report>(`${runPath(id)}/report`, { signal }),
   events: (id: string, after = 0, signal?: AbortSignal) =>
     request<{ events: RunEvent[] }>(`${runPath(id)}/events?after=${after}`, { signal }),
+  replay: (baseline: string, preview: string) =>
+    post<Run>('/replays', { baseline_run_id: baseline, preview_run_id: preview }),
+  regrade: (id: string) => post<Record<string, unknown>>(`${runPath(id)}/regrade`, {}),
+  exportMatrix: (id: string) => post<Record<string, unknown>>(`${runPath(id)}/export`, {}),
   compare: (baseline: string, candidate: string) =>
     post<Comparison>('/comparisons', {
       baseline_run_id: baseline,

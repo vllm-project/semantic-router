@@ -149,12 +149,32 @@ def make_report(store, run_id):
             ):
                 if key in item:
                     item[key] = None
+    if manifest["mode"] == "replay":
+        for item in metrics + benchmarks:
+            for key in (
+                "accuracy",
+                "macro_accuracy",
+                "cost_usd",
+                "latency_p50_s",
+                "latency_p95_s",
+                "ttft_p50_s",
+            ):
+                if key in item:
+                    item["estimated_" + key] = item[key]
+                    item[key] = None
+            item["sr_bench_score"] = None
+            item["total_spend_usd"] = 0
+            item["cost_complete"] = False
     limitations = [
         "Scores apply only to this frozen sr-bench protocol and selected cases, not an upstream full benchmark score.",
         "Repeated tuning on development cases requires a separate untouched holdout.",
         "Self-hosted token-equivalent cost is not a measured hardware invoice.",
         "Wilson intervals describe case uncertainty; they do not account for source contamination or tuning selection.",
     ]
+    if manifest["mode"] == "replay":
+        limitations.append(
+            "Offline single-selection replay reuses saved answers, token counts and latencies. It makes zero model requests and is not a formal live score or measured routing performance."
+        )
     if manifest["mode"] == "preview":
         limitations.append(
             "Preview evaluates routing only; it does not measure answer quality."
@@ -193,7 +213,7 @@ def make_report(store, run_id):
         "summary": {
             "targets": metrics,
             "wall_time_s": wall,
-            "total_spend_usd": sum_cost(calls),
+            "total_spend_usd": 0 if manifest["mode"] == "replay" else sum_cost(calls),
         },
         "benchmarks": benchmarks,
         "limitations": limitations,

@@ -152,12 +152,6 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     assert "--group-add" in envoy_cmd
 
 
-
-
-
-
-
-
 def test_split_runtime_uses_explicit_envoy_log_level(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

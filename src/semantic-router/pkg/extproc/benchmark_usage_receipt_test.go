@@ -103,3 +103,13 @@ func TestBenchmarkCallLimitStopsBeforePromptSelection(t *testing.T) {
 		t.Fatalf("prompt selection was not stopped: model=%q err=%v", model, err)
 	}
 }
+
+func TestBenchmarkUsageCompressionRequiresLocalScoring(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	for _, method := range []string{"bm25", "embedding", "unknown"} {
+		ctx := &RequestContext{VSRSelectedDecision: &config.Decision{Algorithm: &config.AlgorithmConfig{Type: "multi_factor"}, Plugins: []config.DecisionPlugin{{Type: "context_compression", Configuration: config.MustStructuredPayload(map[string]interface{}{"enabled": true, "scoring": map[string]interface{}{"method": method}})}}}}
+		if got := router.benchmarkUsageScopeKnown(ctx, false); got != (method == "bm25") {
+			t.Fatalf("compression scoring %s accounting=%t", method, got)
+		}
+	}
+}

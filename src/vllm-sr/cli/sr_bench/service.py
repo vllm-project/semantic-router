@@ -221,6 +221,22 @@ class Handler(BaseHTTPRequestHandler):
                         body.get("idempotency_key"),
                     ),
                 )
+            if route == ["replays"] and method == "POST":
+                from .offline import replay
+
+                body = self._body()
+                for key in ("baseline_run_id", "preview_run_id"):
+                    self.server.store.get(body[key], owner)
+                return self._send(
+                    201,
+                    replay(
+                        self.server.store,
+                        body["baseline_run_id"],
+                        body["preview_run_id"],
+                        actor,
+                        body.get("idempotency_key"),
+                    ),
+                )
             if route == ["comparisons"] and method == "POST":
                 body = self._body()
                 for key in ("baseline_run_id", "candidate_run_id"):
@@ -240,6 +256,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, run)
                 if len(route) == 3:
                     action = route[2]
+                    if action in {"regrade", "export"} and method == "POST":
+                        from .offline import regrade, export_training
+
+                        return self._send(
+                            200,
+                            (regrade if action == "regrade" else export_training)(
+                                self.server.store, run_id
+                            ),
+                        )
                     if action == "results" and method == "GET":
                         return self._send(
                             200, {"results": self.server.store.results(run_id)}

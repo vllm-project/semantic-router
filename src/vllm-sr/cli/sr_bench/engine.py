@@ -80,6 +80,8 @@ class Context:
         self._cancel = cancel
         self.deadline = min(deadline, time.monotonic() + self.limits["case_timeout_s"])
         self.calls = []
+        self.call_slots = 0
+        self.quality_failure = None
         self.artifact_dir = (
             self.store.root / "runs" / run_id / case["id"] / target["id"]
         )
@@ -97,12 +99,15 @@ class Context:
     def call(self, messages, role="subject", target=None, extra_body=None):
         if self.cancelled():
             raise CallFailure("Run cancelled or wall-time budget exhausted")
-        if len(self.calls) >= self.limits["max_calls_per_case"]:
-            raise CallFailure("Per-case call budget exhausted")
+        if self.quality_failure:
+            raise CallFailure(
+                "Case ended at the frozen output limit; no further calls are permitted"
+            )
         selected = target or self.target
         if isinstance(selected, str):
             selected = next(
-                (t for t in self.manifest["targets"] if t["id"] == selected), None
+                (t for t in self.manifest["targets"] if t["id"] == selected),
+                self.manifest.get("auxiliary_targets", {}).get(selected),
             )
             if selected is None:
                 raise ValueError("Unknown auxiliary target reference")
@@ -138,6 +143,8 @@ class Context:
                 / 1_000_000
             )
         with self.engine.lock:
+            if self.call_slots >= self.limits["max_calls_per_case"]:
+                raise CallFailure("Per-case call budget exhausted")
             committed = self.engine.spent.get(
                 self.run_id, 0
             ) + self.engine.reserved.get(self.run_id, 0)
@@ -151,6 +158,7 @@ class Context:
             self.engine.reserved[self.run_id] = (
                 self.engine.reserved.get(self.run_id, 0) + reservation
             )
+            self.call_slots += 1
         limits = {
             **self.limits,
             "total_timeout_s": min(
@@ -172,7 +180,8 @@ class Context:
                 },
             },
         )
-        self.calls.append({"id": call_id, "role": role})
+        call_record = {"id": call_id, "role": role}
+        self.calls.append(call_record)
         try:
             result = chat(
                 selected,
@@ -197,13 +206,20 @@ class Context:
                 and result["inference_call_count"] > selected["max_inference_calls"]
             ):
                 raise CallFailure("Inference call count exceeded frozen bound", result)
+            if not result.get("output_complete", True) and role != "subject":
+                raise CallFailure(
+                    "Auxiliary model output was truncated; grading is incomplete",
+                    result,
+                )
             self.store.finish_call(call_id, "completed", result)
-            self.calls[-1].update(result)
+            call_record.update(result)
             with self.engine.lock:
                 self.engine.spent[self.run_id] = self.engine.spent.get(
                     self.run_id, 0
                 ) + (result.get("cost_usd") or 0)
                 self.engine.reserved[self.run_id] -= reservation
+            if not result.get("output_complete", True):
+                self.quality_failure = "output_limit"
             return result
         except CallFailure as exc:
             self.store.finish_call(
@@ -211,7 +227,7 @@ class Context:
                 "cancelled" if self.cancelled() else "failed",
                 {**exc.partial, "error": str(exc)},
             )
-            self.calls[-1].update(exc.partial)
+            call_record.update(exc.partial)
             with self.engine.lock:
                 self.engine.spent[self.run_id] = self.engine.spent.get(
                     self.run_id, 0
@@ -286,9 +302,30 @@ class Engine:
                         )
                     headers["Authorization"] = "Bearer " + key
                 url = target["preview_url"]
+                if target.get("config_hash"):
+                    headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
+                payload = {
+                    "messages": case["messages"],
+                    "model": target["model"],
+                    "max_tokens": manifest["sampling"]["max_tokens"],
+                    "options": {"trace": True},
+                }
+                payload.update(
+                    {
+                        k: case[k]
+                        for k in (
+                            "tools",
+                            "tool_choice",
+                            "functions",
+                            "function_call",
+                            "response_format",
+                        )
+                        if k in case
+                    }
+                )
                 response = requests.post(
                     url,
-                    json={"messages": case["messages"], "model": target["model"]},
+                    json=payload,
                     headers=headers,
                     timeout=min(
                         manifest["limits"]["total_timeout_s"],
@@ -318,29 +355,11 @@ class Engine:
                 from .external import execute_case
 
                 result = execute_case(case, ctx)
-            subject = [c for c in ctx.calls if c["role"] == "subject"]
-            usage = (
-                {k: sum(c["usage"][k] for c in subject) for k in BUCKETS}
-                if subject and all(c.get("usage") is not None for c in subject)
-                else None
-            )
-            cost = (
-                sum(c["cost_usd"] for c in subject)
-                if subject and all(c.get("cost_usd") is not None for c in subject)
-                else None
-            )
-            data = {
-                **result,
-                "benchmark": case["benchmark"],
-                "usage": usage,
-                "cost_usd": cost,
-                "latency_s": time.monotonic() - started,
-                "subject_latency_s": sum(c.get("latency_s", 0) for c in subject),
-                "ttft_s": subject[0].get("ttft_s") if subject else None,
-                "call_count": len(ctx.calls),
-            }
-            self.store.result(run_id, case["id"], target["id"], "completed", data)
+            self._completed_case(ctx, result, started)
         except Exception as exc:
+            if ctx.quality_failure:
+                self._completed_case(ctx, {}, started)
+                return
             # Exception strings from subprocesses/HTTP can contain secrets; only controlled errors escape.
             message = (
                 str(exc)
@@ -361,6 +380,42 @@ class Engine:
             )
             # Fail closed: no new cases are dispatched after a transport/harness failure.
             cancel.set()
+
+    def _completed_case(self, ctx, result, started):
+        if ctx.quality_failure:
+            result = {
+                "answer": None,
+                "correct": False,
+                "score": 0.0,
+                "details": {
+                    "quality_failure": ctx.quality_failure,
+                    "output_complete": False,
+                },
+            }
+        subject = [c for c in ctx.calls if c["role"] == "subject"]
+        usage = (
+            {k: sum(c["usage"][k] for c in subject) for k in BUCKETS}
+            if subject and all(c.get("usage") is not None for c in subject)
+            else None
+        )
+        cost = (
+            sum(c["cost_usd"] for c in subject)
+            if subject and all(c.get("cost_usd") is not None for c in subject)
+            else None
+        )
+        data = {
+            **result,
+            "benchmark": ctx.case["benchmark"],
+            "usage": usage,
+            "cost_usd": cost,
+            "latency_s": time.monotonic() - started,
+            "subject_latency_s": sum(c.get("latency_s", 0) for c in subject),
+            "ttft_s": subject[0].get("ttft_s") if subject else None,
+            "call_count": len(ctx.calls),
+        }
+        self.store.result(
+            ctx.run_id, ctx.case["id"], ctx.target["id"], "completed", data
+        )
 
     def _run(self, run_id, manifest, cancel):
         self.store.status(run_id, "running")

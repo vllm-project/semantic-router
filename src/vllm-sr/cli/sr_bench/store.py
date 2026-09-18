@@ -184,6 +184,27 @@ class Store:
                 (status, canonical({**old, **data, "finished_at": now()}), call_id),
             )
 
+    def cached_call(self, run_id, case_id, target_id, data):
+        call_id = "cached-" + uuid.uuid4().hex
+        with self.lock, self.db:
+            self.db.execute(
+                "INSERT INTO calls VALUES(?,?,?,?,?,?,?)",
+                (
+                    call_id,
+                    run_id,
+                    case_id,
+                    target_id,
+                    "subject",
+                    "replayed",
+                    canonical(data),
+                ),
+            )
+            self.event(
+                run_id,
+                "call_replayed",
+                {"call_id": call_id, "source_call_id": data["source_call_id"]},
+            )
+
     def calls(self, run_id):
         with self.lock:
             return [

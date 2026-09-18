@@ -8,6 +8,7 @@ import { active, number } from '../components/sr-bench/model'
 import RunComposer from '../components/sr-bench/RunComposer'
 import RunDetails from '../components/sr-bench/RunDetails'
 import RunComparison from '../components/sr-bench/RunComparison'
+import ReplayComposer from '../components/sr-bench/ReplayComposer'
 import type { Catalog, Dataset, Run, Target } from '../components/sr-bench/types'
 import styles from '../components/sr-bench/SrBench.module.css'
 
@@ -181,7 +182,19 @@ export default function EvaluationPage() {
           )}
         </>
       )}
-      {view === 'compare' && <RunComparison runs={runs} />}
+      {view === 'compare' && (
+        <>
+          <RunComparison runs={runs} />
+          <ReplayComposer
+            runs={runs}
+            canRun={canRun}
+            onCreated={(run) => {
+              setSearch({ view: 'runs', run: run.id })
+              refresh()
+            }}
+          />
+        </>
+      )}
       {view === 'catalog' && catalog && (
         <section className={styles.panel}>
           <h2>Benchmark catalog</h2>

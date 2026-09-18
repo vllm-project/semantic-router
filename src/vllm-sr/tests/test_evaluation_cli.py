@@ -29,6 +29,9 @@ def test_catalog_and_clean_command_surface():
         "serve",
         "preview",
         "target",
+        "replay",
+        "regrade",
+        "export",
     }
     assert runner.invoke(benchmark, ["intelligence", "--help"]).exit_code == 2
 

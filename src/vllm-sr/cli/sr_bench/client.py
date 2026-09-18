@@ -13,15 +13,17 @@ from urllib.parse import urlparse
 import requests
 
 from . import VERSION
-from .contracts import digest
 from .service import DEFAULT_STORE, DEFAULT_URL, PREFIX
 
 
 class Client:
-    def __init__(self, url=DEFAULT_URL, store=DEFAULT_STORE, autostart=True):
+    def __init__(
+        self, url=DEFAULT_URL, store=DEFAULT_STORE, autostart=True, verify_store=True
+    ):
         self.url = url.rstrip("/")
         self.store = Path(store).expanduser().resolve()
         self.autostart = autostart
+        self.verify_store = verify_store
         self.headers = {}
         if os.environ.get("SR_BENCH_TOKEN"):
             self.headers["Authorization"] = "Bearer " + os.environ["SR_BENCH_TOKEN"]
@@ -38,7 +40,8 @@ class Client:
                 and response.json().get("version") == VERSION
             ):
                 if (
-                    urlparse(self.url).hostname in {"127.0.0.1", "localhost"}
+                    self.verify_store
+                    and urlparse(self.url).hostname in {"127.0.0.1", "localhost"}
                     and response.json().get("store_id")
                     != hashlib.sha256(str(self.store).encode()).hexdigest()
                 ):

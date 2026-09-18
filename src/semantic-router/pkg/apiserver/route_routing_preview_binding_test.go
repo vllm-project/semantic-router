@@ -4,12 +4,13 @@ package apiserver
 
 import (
 	"encoding/json"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 func TestPreviewUsesClassifierSnapshotHashAndChecksPrecondition(t *testing.T) {

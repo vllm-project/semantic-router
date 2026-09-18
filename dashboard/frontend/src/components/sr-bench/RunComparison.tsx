@@ -35,7 +35,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         <label>
           Baseline run
           <select
-            value={baseline} disabled={pending}
+            value={baseline}
+            disabled={pending}
             onChange={(event) => {
               setBaseline(event.target.value)
               setResult(null)
@@ -54,7 +55,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         <label>
           Candidate run
           <select
-            value={candidate} disabled={pending}
+            value={candidate}
+            disabled={pending}
             onChange={(event) => {
               setCandidate(event.target.value)
               setResult(null)
