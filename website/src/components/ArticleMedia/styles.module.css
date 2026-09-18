@@ -9,9 +9,8 @@
 
 .videoFigure .video {
   display: block;
-  width: 100%;
+  width: min(100%, 55svh, 28rem);
   height: auto;
-  max-height: min(55svh, 28rem);
   margin-inline: auto;
   object-fit: contain;
   background: #f7f5f1;
