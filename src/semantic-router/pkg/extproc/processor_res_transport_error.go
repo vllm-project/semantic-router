@@ -22,6 +22,7 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
 	// Error envelopes use the selected backend's response policy too.
+	recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return r.createErrorResponse(503, "protocol runtime unavailable")

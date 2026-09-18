@@ -26,6 +26,9 @@ const (
 // selectModelFromCandidates uses the configured selection algorithm to choose
 // a model. Invalid or unavailable selection falls back to the first configured
 // candidate while recording an explicit diagnostic.
+//
+// A Router Learning rejection is fail-closed and is checked once here, so the
+// selector, single-candidate and fallback paths all honour it.
 func (r *OpenAIRouter) selectModelFromCandidates(
 	selCtx *selection.SelectionContext,
 	algorithm *config.AlgorithmConfig,
@@ -40,6 +43,21 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 			ctx.VSRSelectedCandidate = (&selection.SelectionResult{}).WithCandidate(*chosen).SelectedCandidate
 		}
 	}()
+	selected, method, err := r.selectModelFromCandidatesInner(selCtx, algorithm, ctx)
+	if err != nil {
+		return nil, method, err
+	}
+	if ctx != nil && ctx.VSRProgressGateError != nil {
+		return nil, method, ctx.VSRProgressGateError
+	}
+	return selected, method, nil
+}
+
+func (r *OpenAIRouter) selectModelFromCandidatesInner(
+	selCtx *selection.SelectionContext,
+	algorithm *config.AlgorithmConfig,
+	ctx *RequestContext,
+) (*config.ModelRef, string, error) {
 	method := r.getSelectionMethod(algorithm)
 	if err := selectionRequestContext(ctx).Err(); err != nil {
 		return nil, string(method), err

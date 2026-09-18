@@ -107,3 +107,89 @@ func TestLearningPreviewExperienceRemainsFrozenAfterCapture(t *testing.T) {
 		t.Fatal("live state update missing")
 	}
 }
+
+func TestLearningPreviewProgressGatePreservesLiveWindow(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+	router, d := previewProtectionFixture()
+	router.Config.RouterLearning.Protection.Tuning.ProgressGate = &config.ProgressGateTuning{
+		Enabled: extprocBoolPtr(true), Mode: selection.GateModeEnforce, WindowSize: extprocIntPtr(1),
+	}
+	live := routerLearningRequestContext("gate-preview", "gate-preview")
+	live.VSRSelectedDecision = d
+	identity, ok := router.protectionIdentity(live, router.Config.RouterLearning.Protection)
+	if !ok {
+		t.Fatal("missing identity")
+	}
+	at := time.Now().Add(-time.Second)
+	sessiontelemetry.RecordSessionDecision(sessiontelemetry.SessionDecisionParams{SessionID: identity.memoryKey, SelectedModel: "cheap", SelectedCandidate: &d.ModelRefs[0], Timestamp: at})
+	for i := 0; i < 3; i++ {
+		sessiontelemetry.RecordTurnOutcome(identity.memoryKey, sessiontelemetry.TurnOutcome{TurnIndex: i, Model: "cheap", Category: sessiontelemetry.TurnProgress}, at.Add(time.Duration(i)*time.Millisecond))
+	}
+	before, _ := sessiontelemetry.PeekRouterSessionSnapshot(identity.memoryKey, at)
+	preview := router.SelectModelForEval(services.EvalModelSelectionInput{Decision: d, PreviewContext: &services.PreviewContext{SessionID: "gate-preview", ConversationID: "gate-preview"}})
+	if preview.Status != services.EvalSelectionSelected || preview.SelectedModel != "cheap" || preview.Provenance == nil || !preview.Provenance.StateDependent {
+		t.Fatalf("progress-gated preview = %+v", preview)
+	}
+	after, _ := sessiontelemetry.PeekRouterSessionSnapshot(identity.memoryKey, at)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatal("preview changed the live window, policy or session state")
+	}
+	if router.routerLearningRuntime != nil {
+		t.Fatal("protection-only preview enabled mutable adaptation")
+	}
+	base := (&selection.SelectionResult{Score: 0.9, AllScores: map[string]float64{"cheap": 0.1, "frontier": 0.9}}).WithCandidate(d.ModelRefs[1])
+	_, _, actual, _, err := router.applyRouterLearning(&selection.SelectionContext{DecisionName: d.Name, CandidateModels: d.ModelRefs}, base, &d.ModelRefs[1], live)
+	if err != nil || actual == nil || actual.Model != preview.SelectedModel {
+		t.Fatalf("live=%+v error=%v preview=%+v", actual, err, preview)
+	}
+}
+
+func TestLearningPreviewProgressEvidenceRemainsFrozen(t *testing.T) {
+	sessiontelemetry.ResetRouterSessionMemoryForTesting()
+	t.Cleanup(sessiontelemetry.ResetRouterSessionMemoryForTesting)
+	router, _ := previewProtectionFixture()
+	cfg := router.Config.RouterLearning.Protection
+	cfg.Tuning.ProgressGate = &config.ProgressGateTuning{Enabled: extprocBoolPtr(true), Mode: selection.GateModeEnforce}
+	live := &RequestContext{SessionID: "frozen-progress"}
+	key := routingLearningStateKey(live)
+	at := time.Now().Add(-time.Second)
+	for i := 0; i < 3; i++ {
+		sessiontelemetry.RecordTurnOutcome(key, sessiontelemetry.TurnOutcome{TurnIndex: i, Model: "cheap", Category: sessiontelemetry.TurnProgress}, at.Add(time.Duration(i)*time.Millisecond))
+	}
+	snapshot, err := router.newLearningPreview(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := &RequestContext{SessionID: live.SessionID, learningPreview: snapshot}
+	first, trace, ran := router.switchGateVerdict(cfg, ctx, nil, "cheap", "frontier", false)
+	if !ran || !first.Suppressed() || trace.WindowCount != 3 {
+		t.Fatalf("initial gate=%+v trace=%+v", first, trace)
+	}
+	for i := 0; i < 3; i++ {
+		sessiontelemetry.RecordTurnOutcome(key, sessiontelemetry.TurnOutcome{TurnIndex: 3 + i, Model: "cheap", Category: sessiontelemetry.TurnRegression}, time.Now())
+	}
+	second, secondTrace, _ := router.switchGateVerdict(cfg, ctx, nil, "cheap", "frontier", false)
+	if !reflect.DeepEqual(first, second) || !reflect.DeepEqual(trace, secondTrace) {
+		t.Fatal("preview consumed outcomes written after capture")
+	}
+	actual, liveTrace, _ := router.switchGateVerdict(cfg, live, nil, "cheap", "frontier", false)
+	if actual.Suppressed() || liveTrace.RegressionStreak != 3 {
+		t.Fatalf("live gate ignored new evidence: %+v %+v", actual, liveTrace)
+	}
+}
+
+func TestLearningPreviewPropagatesProgressGateHardRejection(t *testing.T) {
+	router, ctx := gateRejectedRouter(t, "preview-hard-rejection")
+	snapshot, err := router.newLearningPreview(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.learningPreview = snapshot
+	refs := []config.ModelRef{{Model: "cheap"}, {Model: "frontier"}}
+	base := (&selection.SelectionResult{Score: 1}).WithCandidate(refs[1])
+	output := router.finishEvalLearning(ctx, &selection.SelectionContext{CandidateModels: refs}, base, &refs[1], "multi_factor")
+	if ctx.VSRProgressGateError == nil || output.Status == services.EvalSelectionSelected || !strings.Contains(output.Reason, "progress gate hard filters") {
+		t.Fatalf("hard-rejected preview=%+v, gate error=%v", output, ctx.VSRProgressGateError)
+	}
+}

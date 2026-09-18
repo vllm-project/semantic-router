@@ -20,14 +20,15 @@ import (
 // Stores are read under their own locks; this is a captured-input receipt, not
 // a transaction spanning independent learning, session, and telemetry stores.
 type routerLearningPreviewSnapshot struct {
-	CapturedAt    time.Time
-	Seed          int64
-	Experience    map[string]routerLearningModelExperience
-	Sessions      map[string]previewSession
-	LastModels    map[string]previewLastModel
-	Warmth        map[string]previewWarmth
-	LookupEntries map[string]lookuptable.Entry
-	lookup        lookuptable.LookupTable
+	CapturedAt      time.Time
+	Seed            int64
+	Experience      map[string]routerLearningModelExperience
+	Sessions        map[string]previewSession
+	LastModels      map[string]previewLastModel
+	Warmth          map[string]previewWarmth
+	ProgressWindows map[string][]sessiontelemetry.TurnOutcome
+	LookupEntries   map[string]lookuptable.Entry
+	lookup          lookuptable.LookupTable
 }
 type (
 	previewSession struct {
@@ -50,6 +51,7 @@ func (r *OpenAIRouter) newLearningPreview(seed int64) (*routerLearningPreviewSna
 		CapturedAt: time.Now().UTC(), Seed: seed,
 		Experience: map[string]routerLearningModelExperience{}, Sessions: map[string]previewSession{},
 		LastModels: map[string]previewLastModel{}, Warmth: map[string]previewWarmth{},
+		ProgressWindows: map[string][]sessiontelemetry.TurnOutcome{},
 	}
 	r.routerLearningMu.Lock()
 	runtime := r.routerLearningRuntime
@@ -93,6 +95,19 @@ func (p *routerLearningPreviewSnapshot) session(key string) (sessiontelemetry.Ro
 		p.Sessions[key] = value
 	}
 	return value.Snapshot, value.Found
+}
+
+func (p *routerLearningPreviewSnapshot) progressOutcomes(session string, size int, ttl time.Duration) []sessiontelemetry.TurnOutcome {
+	if p.ProgressWindows == nil {
+		p.ProgressWindows = make(map[string][]sessiontelemetry.TurnOutcome)
+	}
+	key := fmt.Sprintf("%s:%d:%d", session, size, ttl)
+	window, ok := p.ProgressWindows[key]
+	if !ok {
+		window = sessiontelemetry.PeekRecentTurnOutcomesWithPolicy(session, p.CapturedAt, size, ttl)
+		p.ProgressWindows[key] = window
+	}
+	return window
 }
 
 func (p *routerLearningPreviewSnapshot) lastModel(key string) previewLastModel {
@@ -181,6 +196,9 @@ func (r *OpenAIRouter) finishEvalLearning(ctx *RequestContext, selCtx *selection
 		_, learned, candidate, _, err := r.applyRouterLearning(selCtx, base, ref, ctx)
 		if err != nil {
 			return evalSelectionUnavailable(err.Error())
+		}
+		if ctx.VSRProgressGateError != nil {
+			return evalSelectionUnavailable(ctx.VSRProgressGateError.Error())
 		}
 		selected, result = candidate, learned
 	}
