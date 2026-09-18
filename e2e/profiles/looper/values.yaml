@@ -55,6 +55,30 @@ config:
           - name: looper-fake-backend
             endpoint: looper-fake-backend.default.svc.cluster.local:8000
             weight: 1
+      - name: fusion-fallback-target
+        provider_model_id: fusion-fallback-target
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-fallback-broken
+        provider_model_id: fusion-fallback-broken
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-fallback-tiny-window
+        provider_model_id: fusion-fallback-tiny-window
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
+      - name: fusion-panel-slow
+        provider_model_id: fusion-panel-slow
+        backend_refs:
+          - name: looper-fake-backend
+            endpoint: looper-fake-backend.default.svc.cluster.local:8000
+            weight: 1
   routing:
     modelCards:
       - name: ratings-model-a
@@ -65,6 +89,13 @@ config:
       - name: fusion-panel-empty
       - name: fusion-panel-fail
       - name: fusion-judge
+      - name: fusion-fallback-target
+      - name: fusion-fallback-broken
+      - name: fusion-fallback-tiny-window
+        # Deliberately too small for the probe, so the stage budget gate must
+        # refuse this target before dispatching it.
+        context_window_size: 8
+      - name: fusion-panel-slow
     signals:
       keywords:
         - name: looper_ratings_probe_keywords
@@ -81,6 +112,40 @@ config:
           operator: OR
           keywords:
             - __LOOPER_CONFIDENCE_TRACE_PROBE__
+        - name: looper_fusion_fallback_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_FALLBACK_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_zero_usable_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_ZERO_USABLE_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_fallback_failure_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_FALLBACK_FAILURE_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_budget_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_BUDGET_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_deadline_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_DEADLINE_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_protocol_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_PROTOCOL_PROBE__
+          case_sensitive: true
+        - name: looper_fusion_cancel_probe_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_CANCEL_PROBE__
           case_sensitive: true
         - name: looper_fusion_separate_probe_keywords
           operator: OR
@@ -222,6 +287,198 @@ config:
             max_concurrent: 3
             min_successful_responses: 2
             on_error: skip
+      - name: looper_fusion_fallback_decision
+        description: Serve the configured fallback target when the Fusion panel misses quorum
+        priority: 120
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_fallback_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+          - model: fusion-panel-empty
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+              - fusion-panel-empty
+              - fusion-panel-fail
+            max_concurrent: 3
+            min_successful_responses: 2
+            on_error: skip
+            quorum_failure_policy: fallback
+            quorum_fallback_target: fusion-fallback-target
+      - name: looper_fusion_zero_usable_decision
+        description: Serve the fallback target when no panel response is usable
+        priority: 130
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_zero_usable_probe_keywords
+        modelRefs:
+          - model: fusion-panel-empty
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-empty
+              - fusion-panel-fail
+            max_concurrent: 2
+            min_successful_responses: 1
+            on_error: skip
+            quorum_failure_policy: fallback
+            quorum_fallback_target: fusion-fallback-target
+      - name: looper_fusion_fallback_failure_decision
+        description: Report a typed failure when the configured fallback target also fails
+        priority: 140
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_fallback_failure_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+          - model: fusion-panel-empty
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+              - fusion-panel-empty
+              - fusion-panel-fail
+            max_concurrent: 3
+            min_successful_responses: 2
+            on_error: skip
+            quorum_failure_policy: fallback
+            quorum_fallback_target: fusion-fallback-broken
+      - name: looper_fusion_budget_decision
+        description: Refuse a fallback target that no longer fits the remaining context budget
+        priority: 150
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_budget_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+          - model: fusion-panel-empty
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+              - fusion-panel-empty
+              - fusion-panel-fail
+            max_concurrent: 3
+            min_successful_responses: 2
+            on_error: skip
+            quorum_failure_policy: fallback
+            quorum_fallback_target: fusion-fallback-tiny-window
+      - name: looper_fusion_deadline_decision
+        description: Cancel a Fusion panel at its round deadline and serve the fallback target
+        priority: 160
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_deadline_probe_keywords
+        modelRefs:
+          - model: fusion-panel-slow
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-slow
+              - fusion-panel-fail
+            max_concurrent: 2
+            min_successful_responses: 2
+            round_timeout_seconds: 1
+            on_error: skip
+            quorum_failure_policy: fallback
+            quorum_fallback_target: fusion-fallback-target
+      - name: looper_fusion_protocol_decision
+        description: Serve the Fusion fallback consistently across supported inbound protocols
+        priority: 170
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_protocol_probe_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+          - model: fusion-panel-empty
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+              - fusion-panel-empty
+              - fusion-panel-fail
+            max_concurrent: 3
+            min_successful_responses: 2
+            on_error: skip
+            quorum_failure_policy: fallback
+            quorum_fallback_target: fusion-fallback-target
+      - name: looper_fusion_cancel_decision
+        description: Abandon a Fusion panel when the caller cancels, without serving a fallback
+        priority: 180
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_cancel_probe_keywords
+        modelRefs:
+          - model: fusion-panel-slow
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-slow
+              - fusion-panel-fail
+            max_concurrent: 2
+            min_successful_responses: 2
+            # Deliberately no round_timeout_seconds. The deadline decision above
+            # already covers the internal timeout; here caller cancellation must
+            # be the only thing that can end the panel, so the two contracts stay
+            # separable and the test cannot pass for the wrong reason.
+            on_error: skip
+            quorum_failure_policy: fallback
+            quorum_fallback_target: fusion-fallback-target
       - name: default-route
         description: Fallback for unmatched profile traffic
         priority: 10
@@ -236,7 +493,10 @@ config:
       strategy: priority
     services:
       response_api:
-        enabled: false
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
       router_replay:
         enabled: true
         store_backend: memory
