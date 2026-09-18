@@ -2538,6 +2538,9 @@
         "temperature": {
           "type": "number"
         },
+        "reasoning": {
+          "$ref": "#/$defs/ExternalModelReasoningConfig"
+        },
         "max_request_bytes": {
           "type": "integer"
         },
@@ -2547,6 +2550,25 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ExternalModelReasoningConfig": {
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "use_reasoning": {
+          "type": "boolean"
+        },
+        "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "family",
+        "use_reasoning"
+      ]
     },
     "FactCheckRule": {
       "properties": {
@@ -2623,6 +2645,12 @@
           "type": "boolean"
         },
         "on_error": {
+          "type": "string"
+        },
+        "quorum_failure_policy": {
+          "type": "string"
+        },
+        "quorum_fallback_target": {
           "type": "string"
         },
         "analysis_template": {

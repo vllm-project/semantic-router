@@ -75,7 +75,7 @@ func TestLLMLabelClassifierRationaleHTTP(t *testing.T) {
 				t.Fatal(err)
 			}
 			classifier, err := newLLMLabelClassifier(
-				models.cfg.ClassifierRules[0], models.cfg.FindExternalModelByName("judge"), models,
+				models.cfg.ClassifierRules[0], models.cfg.FindExternalModelByName("judge"), nil, models,
 			)
 			if err != nil {
 				t.Fatal(err)
