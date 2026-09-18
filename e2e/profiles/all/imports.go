@@ -43,6 +43,9 @@ var mockVLLMLocalImages = []framework.LocalImageBuild{
 		Dockerfile:   "tools/test/services/mock-vllm/Dockerfile",
 		Tag:          "ghcr.io/vllm-project/semantic-router/mock-vllm:latest",
 		BuildContext: "tools/test/services/mock-vllm",
+		RolloutRestarts: []framework.RolloutRestartTarget{
+			{Namespace: "default", Deployment: "mock-vllm"},
+		},
 	},
 }
 

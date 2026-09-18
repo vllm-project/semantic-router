@@ -65,11 +65,15 @@ func (u TokenUsage) Map() map[string]interface{} {
 		"completion_tokens": u.CompletionTokens,
 		"total_tokens":      u.TotalTokens,
 	}
-	if u.CachedInputTokens > 0 {
-		values["prompt_tokens_details"] = map[string]int64{"cached_tokens": u.CachedInputTokens}
-	}
-	if u.CacheWriteTokens > 0 {
-		values["cache_write_tokens"] = u.CacheWriteTokens
+	if u.CachedInputTokens > 0 || u.CacheWriteTokens > 0 {
+		details := map[string]int64{}
+		if u.CachedInputTokens > 0 {
+			details["cached_tokens"] = u.CachedInputTokens
+		}
+		if u.CacheWriteTokens > 0 {
+			details["cache_write_tokens"] = u.CacheWriteTokens
+		}
+		values["prompt_tokens_details"] = details
 	}
 	return values
 }
