@@ -2647,6 +2647,12 @@
         "on_error": {
           "type": "string"
         },
+        "quorum_failure_policy": {
+          "type": "string"
+        },
+        "quorum_fallback_target": {
+          "type": "string"
+        },
         "analysis_template": {
           "type": "string"
         },

@@ -28,6 +28,13 @@ build-e2e: ## Build the E2E test binary
 	@$(LOG_TARGET)
 	@echo "Building E2E test binary..."
 	@cd e2e && go build -o ../bin/e2e ./cmd/e2e
+	@$(MAKE) e2e-coverage-check
+
+.PHONY: e2e-coverage-check
+e2e-coverage-check: ## Run the runtime-derived E2E coverage drift gates (no cluster required)
+	@$(LOG_TARGET)
+	@echo "Running E2E coverage drift gates..."
+	@cd e2e && go test -count=1 ./pkg/verification/
 
 # Run E2E tests
 test-e2e-profile-multimodal: ## Unit-test the multimodal-routing E2E profile package (CRD mirrors the pack, chart defaults kept)

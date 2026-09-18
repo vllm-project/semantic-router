@@ -9,7 +9,8 @@ import (
 
 func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire chatResponseWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateChatResponseResource(wire); err != nil {
@@ -20,6 +21,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	}
 	response := decodeChatResponseEnvelope(wire)
 	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIChatV1, vendorExtensions)
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
 		"kv_transfer":     wire.hasLegacyKVTransferMetadata(),
@@ -34,7 +36,10 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	if err := decodeChatResponseUsage(wire.Usage, &response, &diagnostics, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
-	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, body, response.Generation, response.SourceStopReason, policy)
+	// Preserve the canonical bytes, not the upstream ones: a same-format
+	// encode replays the envelope verbatim, so preserving decorations here
+	// would re-emit what the decode just dropped.
+	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
 	return response, envelope, diagnostics, nil
 }
 
@@ -333,7 +338,7 @@ func (OpenAIChatCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
-	return decodeOpenAITransportError(body, policy)
+	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIChatV1)
 }
 
 func (OpenAIChatCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {
