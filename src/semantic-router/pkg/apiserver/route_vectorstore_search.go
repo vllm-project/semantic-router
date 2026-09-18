@@ -4,11 +4,13 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
 )
 
@@ -54,22 +56,30 @@ func (s *ClassificationAPIServer) handleSearchVectorStore(w http.ResponseWriter,
 		s.writeJSONRequestError(w, err)
 		return
 	}
+	if err = manager.CheckEmbeddingCompatibility(params.storeID); err != nil {
+		if errors.Is(err, vectorstore.ErrEmbeddingIncompatible) {
+			s.writeErrorResponse(w, http.StatusConflict, "EMBEDDING_REINDEX_REQUIRED", err.Error())
+		} else {
+			s.writeErrorResponse(w, http.StatusNotFound, "NOT_FOUND", "vector store not found")
+		}
+		return
+	}
 
-	queryEmbedding, err := embedder.Embed(r.Context(), params.request.Query)
+	queryEmbeddings, err := vectorStoreQueryVectors(r.Context(), embedder, params)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "EMBEDDING_ERROR", "failed to generate query embedding")
 		return
 	}
 
-	results, err := performVectorStoreSearch(r.Context(), manager, params, queryEmbedding)
+	results, err := performVectorStoreSearch(r.Context(), manager, params, queryEmbeddings...)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "SEARCH_ERROR", "search failed")
 		return
 	}
 
-	response := map[string]interface{}{
-		"object": "vector_store.search_results.page",
-		"data":   results,
+	response := objectListResponse[vectorstore.SearchResult]{
+		Object: "vector_store.search_results.page",
+		Data:   results,
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -126,30 +136,41 @@ func ensureVectorStoreSearchFilters(filters map[string]interface{}, query string
 	return filters
 }
 
+// vectorStoreQueryVectors embeds the query once per window of itself, so a
+// question that sits past the first window is still read. Hybrid search scores
+// the query text as well, so it keeps one embedding and its lexical half stays
+// weighed once rather than once per window.
+func vectorStoreQueryVectors(
+	ctx context.Context,
+	embedder vectorstore.Embedder,
+	params vectorStoreSearchParams,
+) ([][]float32, error) {
+	if params.request.Hybrid != nil {
+		vector, err := embedder.Embed(ctx, params.request.Query)
+		if err != nil {
+			return nil, err
+		}
+		return [][]float32{vector}, nil
+	}
+	return embedding.QueryVectors(ctx, embedder, params.request.Query, embedding.DefaultQueryWindowLimit)
+}
+
 func performVectorStoreSearch(
 	ctx context.Context,
 	manager *vectorstore.Manager,
 	params vectorStoreSearchParams,
-	queryEmbedding []float32,
+	queryEmbeddings ...[]float32,
 ) ([]vectorstore.SearchResult, error) {
-	if params.request.Hybrid == nil {
-		return manager.Backend().Search(
-			ctx,
-			params.storeID,
-			queryEmbedding,
-			params.topK,
-			params.threshold,
-			params.request.Filters,
-		)
-	}
-
-	backend := manager.Backend()
-	if searcher, ok := backend.(vectorstore.HybridSearcher); ok {
-		return searcher.HybridSearch(
+	if params.request.Hybrid != nil {
+		var vector []float32
+		if len(queryEmbeddings) > 0 {
+			vector = queryEmbeddings[0]
+		}
+		return manager.HybridSearch(
 			ctx,
 			params.storeID,
 			params.request.Query,
-			queryEmbedding,
+			vector,
 			params.topK,
 			params.threshold,
 			params.request.Filters,
@@ -157,15 +178,20 @@ func performVectorStoreSearch(
 		)
 	}
 
-	return vectorstore.GenericHybridRerank(
-		ctx,
-		backend,
-		params.storeID,
-		params.request.Query,
-		queryEmbedding,
-		params.topK,
-		params.threshold,
-		params.request.Filters,
-		params.request.Hybrid,
-	)
+	batches := make([][]vectorstore.SearchResult, 0, len(queryEmbeddings))
+	for _, queryEmbedding := range queryEmbeddings {
+		results, err := manager.Search(
+			ctx,
+			params.storeID,
+			queryEmbedding,
+			params.topK,
+			params.threshold,
+			params.request.Filters,
+		)
+		if err != nil {
+			return nil, err
+		}
+		batches = append(batches, results)
+	}
+	return vectorstore.MergeSearchResults(params.topK, batches...), nil
 }

@@ -35,6 +35,15 @@ type redisRouterSessionStore struct {
 	keyPrefix string
 }
 
+// Version 2 binds persisted snapshots to RoutingSessionKey's escaped identity
+// components. Unversioned snapshots used ambiguous raw IDs and cannot be reused.
+const redisRouterSessionEncodingVersion = 2
+
+type redisRouterSessionEnvelope struct {
+	Version  int                   `json:"version"`
+	Snapshot RouterSessionSnapshot `json:"snapshot"`
+}
+
 // RouterSessionStateStoreSlot owns one store generation and leases individual
 // Load/Save operations. Retirement prevents new leases, waits for in-flight
 // operations, and closes the store exactly once.
@@ -243,6 +252,7 @@ func hydrateRouterSessionSnapshot(snapshot RouterSessionSnapshot) {
 		sessionID:                       snapshot.SessionID,
 		userID:                          snapshot.UserID,
 		currentModel:                    snapshot.CurrentModel,
+		currentCandidate:                cloneSessionCandidate(snapshot.CurrentCandidate),
 		lastSeen:                        snapshot.LastSeen,
 		turnCount:                       snapshot.TurnCount,
 		switchCount:                     snapshot.SwitchCount,
@@ -272,15 +282,35 @@ func (s *redisRouterSessionStore) Load(sessionID string) (RouterSessionSnapshot,
 	if err != nil {
 		return RouterSessionSnapshot{}, false, err
 	}
-	var snapshot RouterSessionSnapshot
-	if err := json.Unmarshal(payload, &snapshot); err != nil {
+	return decodeRedisRouterSessionSnapshot(payload, sessionID)
+}
+
+func decodeRedisRouterSessionSnapshot(payload []byte, sessionID string) (RouterSessionSnapshot, bool, error) {
+	var envelope struct {
+		Version  int             `json:"version"`
+		Snapshot json.RawMessage `json:"snapshot"`
+	}
+	if err := json.Unmarshal(payload, &envelope); err != nil {
 		return RouterSessionSnapshot{}, false, err
+	}
+	if envelope.Version != redisRouterSessionEncodingVersion || len(envelope.Snapshot) == 0 {
+		return RouterSessionSnapshot{}, false, nil
+	}
+	var snapshot RouterSessionSnapshot
+	if err := json.Unmarshal(envelope.Snapshot, &snapshot); err != nil {
+		return RouterSessionSnapshot{}, false, err
+	}
+	if sessionID == "" || snapshot.SessionID != sessionID {
+		return RouterSessionSnapshot{}, false, nil
 	}
 	return snapshot, true, nil
 }
 
 func (s *redisRouterSessionStore) Save(snapshot RouterSessionSnapshot, ttl time.Duration) error {
-	payload, err := json.Marshal(snapshot)
+	payload, err := json.Marshal(redisRouterSessionEnvelope{
+		Version:  redisRouterSessionEncodingVersion,
+		Snapshot: snapshot,
+	})
 	if err != nil {
 		return err
 	}

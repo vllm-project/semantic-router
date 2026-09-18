@@ -11,17 +11,19 @@ import (
 // ModelPath must be a prepared local artifact directory. Device defaults to cpu;
 // accelerator selection is explicit and fails instead of falling back to CPU.
 // Encoder and embedding loaders execute float32. Existing generative accelerator
-// loaders use bfloat16. Encoder classification is limited to 512 tokens including
-// special tokens; MaxInputTokens can reduce that budget.
+// loaders use bfloat16. Classification defaults to 512 tokens including special
+// tokens. ModernBERT adapters accept an explicit budget up to checkpoint capacity;
+// unsupported adapter budgets fail preparation.
 type InstanceOptions struct {
-	ModelPath           string            `json:"model_path"`
-	ModelType           string            `json:"model_type,omitempty"`
-	Device              string            `json:"device,omitempty"`
-	Precision           string            `json:"precision,omitempty"`
-	MaxInputTokens      int               `json:"max_input_tokens,omitempty"`
-	Overflow            string            `json:"overflow,omitempty"`
-	Adapters            []InstanceAdapter `json:"adapters,omitempty"`
-	GenerationMaxTokens int               `json:"generation_max_tokens,omitempty"`
+	ModelPath              string            `json:"model_path"`
+	ModelType              string            `json:"model_type,omitempty"`
+	Device                 string            `json:"device,omitempty"`
+	Precision              string            `json:"precision,omitempty"`
+	MaxInputTokens         int               `json:"max_input_tokens,omitempty"`
+	DocumentMaxInputTokens int               `json:"document_max_input_tokens,omitempty"` // typed window tasks only
+	Overflow               string            `json:"overflow,omitempty"`
+	Adapters               []InstanceAdapter `json:"adapters,omitempty"`
+	GenerationMaxTokens    int               `json:"generation_max_tokens,omitempty"`
 }
 
 // InstanceAdapter is prepared during generative model loading. Adapter mutation
@@ -35,16 +37,18 @@ type InstanceAdapter struct {
 // inferred from a checkpoint's name. ResourceID identifies the actual owned
 // backbone. Explicit head bindings and clones retain the same ResourceID.
 type InstanceInfo struct {
-	ResourceID             uint64   `json:"resource_id"`
-	Task                   string   `json:"task"`
-	ModelType              string   `json:"model_type"`
-	Device                 string   `json:"device"`
-	Precision              string   `json:"precision"`
-	ArchitecturalMaxTokens int      `json:"architectural_max_tokens"`
-	MaxInputTokens         int      `json:"max_input_tokens"`
-	Overflow               string   `json:"overflow"`
-	Labels                 []string `json:"labels"`
-	Modalities             []string `json:"modalities"`
+	PairScorer             *PairScorerSelection `json:"pair_scorer,omitempty"`
+	ResourceID             uint64               `json:"resource_id"`
+	Task                   string               `json:"task"`
+	ModelType              string               `json:"model_type"`
+	Device                 string               `json:"device"`
+	Precision              string               `json:"precision"`
+	ArchitecturalMaxTokens int                  `json:"architectural_max_tokens"`
+	MaxInputTokens         int                  `json:"max_input_tokens"`
+	DocumentMaxInputTokens int                  `json:"document_max_input_tokens"`
+	Overflow               string               `json:"overflow"`
+	Labels                 []string             `json:"labels"`
+	Modalities             []string             `json:"modalities"`
 }
 
 // InputMetadata reports the complete input and what the task actually processed.
@@ -259,6 +263,21 @@ func (m *EmbeddingModel) EmbedAtLayer(text string, dimension, layer int) (Instan
 	}
 	return useInstance(m.instance, func(h uint64) (InstanceEmbeddingOutput, error) {
 		return nativeInstanceEmbedding(h, text, dimension, layer)
+	})
+}
+
+// RuntimeDescriptor returns the captured content and representation identity of
+// this loaded instance as JSON. Zero selects its actual default layer/dimension.
+// It does not reload artifacts or consult a process-global model.
+func (m *EmbeddingModel) RuntimeDescriptor(layer, dimension int) (string, error) {
+	if m == nil {
+		return "", ErrInstanceClosed
+	}
+	if layer < 0 || dimension < 0 {
+		return "", &InstanceError{Code: "configuration", Message: "layer and dimension must be nonnegative"}
+	}
+	return useInstance(m.instance, func(h uint64) (string, error) {
+		return nativeInstanceEmbeddingDescriptor(h, layer, dimension)
 	})
 }
 

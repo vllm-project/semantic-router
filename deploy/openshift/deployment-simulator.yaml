@@ -166,16 +166,16 @@ spec:
           from huggingface_hub import snapshot_download
 
           models = [
-              ("llm-semantic-router/mmbert32k-intent-classifier-merged", "mmbert32k-intent-classifier-merged"),
-              ("llm-semantic-router/mmbert32k-pii-detector-merged", "mmbert32k-pii-detector-merged"),
-              ("llm-semantic-router/mmbert32k-jailbreak-detector-merged", "mmbert32k-jailbreak-detector-merged"),
-              ("llm-semantic-router/mmbert-embed-32k-2d-matryoshka", "mom-embedding-ultra")
+              ("llm-semantic-router/Vela-1.0-Encoder-307M-Domain", "Vela-1.0-Encoder-307M-Domain", "f6354f54adcf38770f635ad903be2b00577f6c11"),
+              ("llm-semantic-router/Vela-1.0-Encoder-307M-PII", "Vela-1.0-Encoder-307M-PII", "6d3300c4bd7975f30a664503f6c725cf1fbbad48"),
+              ("llm-semantic-router/Vela-1.0-Encoder-307M-Guard", "Vela-1.0-Encoder-307M-Guard", "087f9e401012df839c83717b746967ac7aebfa3e"),
+              ("llm-semantic-router/Vela-1.0-Encoder-307M-Embedding", "Vela-1.0-Encoder-307M-Embedding", "1e57cebf5a7b7fec6e6973f05bbca97c5cca4436")
           ]
 
           cache_dir = "/app/cache/hf"
           base_dir = "/app/models"
 
-          for repo_id, local_dir_name in models:
+          for repo_id, local_dir_name, revision in models:
               local_dir = os.path.join(base_dir, local_dir_name)
 
               # Check if model already exists
@@ -189,10 +189,13 @@ spec:
                       if has_model:
                           break
 
-              if not has_model:
+              # A changed immutable release must not reuse stale file-presence checks.
+              if not has_model or revision != "main":
                   print(f"Downloading {repo_id}...")
                   snapshot_download(
                       repo_id=repo_id,
+                      revision=revision,
+                      ignore_patterns=["reproduction/*", "reproducibility/*", "lora/*"],
                       local_dir=local_dir,
                       cache_dir=cache_dir
                   )

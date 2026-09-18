@@ -301,21 +301,6 @@ func TestRealWorkerSealRejectsForgedCapacityProfileWithRecomputedReceipts(t *tes
 	}
 }
 
-func realEvaluationWorkerPython(t *testing.T) string {
-	t.Helper()
-	python := os.Getenv("VLLM_SR_EVALUATION_TEST_PYTHON")
-	if python == "" {
-		t.Skip("set VLLM_SR_EVALUATION_TEST_PYTHON to run the real Python worker")
-	}
-	pythonRoot, err := filepath.Abs("../../../src/vllm-sr")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PYTHONPATH", pythonRoot)
-	t.Setenv("TMPDIR", "/tmp")
-	return python
-}
-
 func newRealCapacitySealFixture(t *testing.T, python string) (*Service, string, Run) {
 	t.Helper()
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

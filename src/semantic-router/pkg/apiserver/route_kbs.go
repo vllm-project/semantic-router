@@ -259,6 +259,10 @@ func (s *ClassificationAPIServer) writableKnowledgeBaseConfig(w http.ResponseWri
 			return nil, false
 		}
 		if activeHash := s.activeConfigDocumentHash(); activeHash == "" || activeHash != candidateHash {
+			if s.configActivationStatus(candidateHash, activeHash) == "failed" {
+				s.writeErrorResponse(w, http.StatusConflict, "CONFIG_ACTIVATION_FAILED", "The saved configuration failed activation. Correct or roll back the full configuration before editing knowledge bases.")
+				return nil, false
+			}
 			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_ACTIVATION_PENDING", "A saved configuration is awaiting activation. Wait for activation or restore the previous configuration before editing knowledge bases.")
 			return nil, false
 		}

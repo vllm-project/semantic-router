@@ -13,7 +13,38 @@ ROOT = Path(__file__).resolve().parents[3]
 SOURCE = ROOT / "tools/agent/skills/vllm-sr-agent-operations"
 DESTINATION = ROOT / "website/static/install/agent/vllm-sr"
 PUBLIC_ORIGIN = "https://vllm-sr.ai/install/agent/vllm-sr/"
-MARKDOWN_LINK = re.compile(r"(!?\[[^\]\n]*\]\()([^\s)]+)(\))")
+MARKDOWN_LINK = re.compile(
+    r"(!?\[[^\]\n]*\]\([ \t]*)(<[^>\n]+>|[^\s)]+)"
+    r"((?:[ \t]+(?:\"[^\"\n]*\"|'[^'\n]*'|\([^\)\n]*\)))?[ \t]*\))"
+)
+REFERENCE_LINK = re.compile(
+    r"(^[ \t]{0,3}\[[^\]\n]+\]:[ \t]*)(<?[^\s>]+>?)(.*$)", re.MULTILINE
+)
+
+
+def absolute_target(target: str, path: Path, documents: dict[Path, str]) -> str:
+    """Resolve links without relying on where a downloaded skill is installed."""
+    parsed = urlsplit(target)
+    if parsed.scheme:
+        published = target
+    else:
+        published = urljoin(urljoin(PUBLIC_ORIGIN, path.as_posix()), target)
+
+    # Validate same-site skill references, including already-absolute links and
+    # fragments. Other site paths and external URLs retain their destinations.
+    published_path = urlsplit(published)
+    origin = urlsplit(PUBLIC_ORIGIN)
+    if published_path.netloc == origin.netloc and published_path.path.startswith(
+        origin.path
+    ):
+        relative = Path(unquote(published_path.path[len(origin.path) :]))
+        if relative not in documents:
+            raise ValueError(
+                f"{path}: reference is not a published skill document: {target}"
+            )
+    elif not parsed.scheme and not parsed.netloc and not target.startswith("/"):
+        raise ValueError(f"{path}: reference escapes skill source: {target}")
+    return published
 
 
 def published_files(source: Path) -> dict[Path, str]:
@@ -40,24 +71,16 @@ def published_files(source: Path) -> dict[Path, str]:
 
         def rewrite_link(match: re.Match[str], path: Path = path) -> str:
             target = match[2]
-            parsed = urlsplit(target)
-            if parsed.scheme or parsed.netloc or target.startswith(("#", "/")):
-                return match[0]
-            local = (source / path.parent / unquote(parsed.path)).resolve()
-            try:
-                relative = local.relative_to(source.resolve())
-            except ValueError as exc:
-                raise ValueError(
-                    f"{path}: reference escapes skill source: {target}"
-                ) from exc
-            if relative not in documents:
-                raise ValueError(
-                    f"{path}: reference is not a published skill document: {target}"
-                )
-            published = urljoin(urljoin(PUBLIC_ORIGIN, path.as_posix()), target)
+            wrapped = target.startswith("<") and target.endswith(">")
+            published = absolute_target(
+                target[1:-1] if wrapped else target, path, documents
+            )
+            if wrapped:
+                published = f"<{published}>"
             return f"{match[1]}{published}{match[3]}"
 
-        expected[path] = MARKDOWN_LINK.sub(rewrite_link, content)
+        content = MARKDOWN_LINK.sub(rewrite_link, content)
+        expected[path] = REFERENCE_LINK.sub(rewrite_link, content)
     return expected
 
 

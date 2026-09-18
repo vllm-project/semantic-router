@@ -28,9 +28,8 @@ func TestKnowledgeBaseOpenAPIDocumentsPendingPublication(t *testing.T) {
 		}
 		// A Kubernetes ConfigMap target reports "persisted" on this same 202,
 		// since activation there needs a restart rather than a poll (#3814).
-		statusEnum := pending.Content["application/json"].Schema.Properties["activation_status"].Enum
-		if !slices.Contains(statusEnum, "persisted") {
-			t.Fatalf("202 schema does not document the persisted (restart-required) status: %+v", statusEnum)
+		if !strings.Contains(pending.Description, "Kubernetes ConfigMap") {
+			t.Fatalf("202 response does not document the persisted (restart-required) case: %q", pending.Description)
 		}
 		if !strings.Contains(operation.Responses["409"].Description, "CONFIG_ACTIVATION_PENDING") {
 			t.Fatal("pending mutation conflict was not documented")
@@ -148,6 +147,11 @@ func TestOpenAPISpecPublishesInvocationParameters(t *testing.T) {
 	spec := server.generateOpenAPISpec()
 
 	eval := spec.Paths["/api/v1/routing/preview"].Post
+	for _, status := range []string{"429", "503", "504"} {
+		if _, ok := eval.Responses[status]; !ok {
+			t.Fatalf("Preview response %s is undocumented", status)
+		}
+	}
 	requireOpenAPIParameter(t, eval.Parameters, "trace", "query", false, "boolean")
 	if eval.RequestBody == nil || eval.RequestBody.Content["application/json"].Schema == nil {
 		t.Fatal("routing preview request schema is missing")

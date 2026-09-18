@@ -27,6 +27,20 @@ varios
 tread
 ot
 Sie
+# German, Spanish, and Portuguese recipe vocabulary and regex word stems
+algorithmus
+modell
+diagramas
+argumentos
+coordines
+erro
+finde
+incorret
+oder
+responde
+unter
+utiliza
+vor
 # Language codes (ISO 639-1) used in HuggingFace dataset configs
 te
 # NPM package names (not spelling errors)
@@ -90,3 +104,8 @@ naem
 FPR
 # go.sum hash fragment (perf/go.sum, not a spelling error)
 NCe
+# German possessive determiner in multilingual routing rules
+deine
+# French and Portuguese words in multilingual recipe probes
+espace
+analise

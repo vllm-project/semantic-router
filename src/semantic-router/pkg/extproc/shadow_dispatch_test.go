@@ -902,18 +902,18 @@ func TestSplitShadowEndpoint(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path, query, err := splitShadowEndpoint(tt.endpoint)
+			path, query, err := splitProviderEndpoint(tt.endpoint)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("splitShadowEndpoint(%q) = %q, %q, want error", tt.endpoint, path, query)
+					t.Fatalf("splitProviderEndpoint(%q) = %q, %q, want error", tt.endpoint, path, query)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("splitShadowEndpoint(%q) error = %v", tt.endpoint, err)
+				t.Fatalf("splitProviderEndpoint(%q) error = %v", tt.endpoint, err)
 			}
 			if path != tt.wantPath || query != tt.wantQuery {
-				t.Fatalf("splitShadowEndpoint(%q) = %q, %q, want %q, %q", tt.endpoint, path, query, tt.wantPath, tt.wantQuery)
+				t.Fatalf("splitProviderEndpoint(%q) = %q, %q, want %q, %q", tt.endpoint, path, query, tt.wantPath, tt.wantQuery)
 			}
 		})
 	}

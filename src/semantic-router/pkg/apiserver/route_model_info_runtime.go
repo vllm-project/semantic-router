@@ -20,7 +20,6 @@ func (s *ClassificationAPIServer) getSystemInfo() SystemInfo {
 		Architecture: runtime.GOARCH,
 		OS:           runtime.GOOS,
 		MemoryUsage:  fmt.Sprintf("%.2f MB", float64(m.Alloc)/1024/1024),
-		GPUAvailable: false, // TODO: Implement GPU detection.
 	}
 }
 

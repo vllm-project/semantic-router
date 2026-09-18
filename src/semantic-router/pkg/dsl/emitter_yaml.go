@@ -104,6 +104,14 @@ func addKeyValue(mapNode *yaml.Node, key string, value interface{}) {
 //	spec.config        ← canonical routing and supported runtime modules
 //	spec.vllmEndpoints ← model backends converted to K8s-native service references
 func EmitCRD(cfg *config.RouterConfig, name, namespace string) ([]byte, error) {
+	if len(cfg.Entrypoints) > 0 {
+		return nil, fmt.Errorf("SemanticRouter CRD does not support entrypoints; use canonical YAML")
+	}
+	for _, recipe := range cfg.Recipes {
+		if recipe.Name != config.DefaultRecipeName {
+			return nil, fmt.Errorf("SemanticRouter CRD does not support named recipe %q; use canonical YAML", recipe.Name)
+		}
+	}
 	if namespace == "" {
 		namespace = "default"
 	}
@@ -167,7 +175,7 @@ func buildCRDConfigSpec(cfg *config.RouterConfig) map[string]interface{} {
 	routingBytes, _ := yaml.Marshal(canonical.Routing)
 	var routing map[string]interface{}
 	_ = yaml.Unmarshal(routingBytes, &routing)
-	if !isZeroValue(routing) {
+	if len(routing) > 0 {
 		configSpec["routing"] = routing
 	}
 	if effort := canonical.Providers.Defaults.DefaultReasoningEffort; effort != "" {
@@ -275,27 +283,22 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 		return nil, fmt.Errorf("failed to parse base YAML: %w", err)
 	}
 
-	canonical := config.CanonicalConfigFromRouterConfig(cfg)
-	routingBytes, err := yaml.Marshal(canonical.Routing)
+	replacementBytes, err := EmitRoutingYAMLFromConfig(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal routing: %w", err)
+		return nil, fmt.Errorf("failed to marshal routing scopes: %w", err)
 	}
-	var routing interface{}
-	if err := yaml.Unmarshal(routingBytes, &routing); err != nil {
-		return nil, fmt.Errorf("failed to re-parse routing: %w", err)
+	var replacement map[string]interface{}
+	if err := yaml.Unmarshal(replacementBytes, &replacement); err != nil {
+		return nil, fmt.Errorf("failed to re-parse routing scopes: %w", err)
 	}
-	preserveBaseDecisionField(routing, base["routing"], "adaptations")
-
-	base["routing"] = routing
-	if len(canonical.Entrypoints) > 0 {
-		base["entrypoints"] = canonical.Entrypoints
-	} else {
-		delete(base, "entrypoints")
-	}
-	if len(canonical.Recipes) > 0 {
-		base["recipes"] = canonical.Recipes
-	} else {
-		delete(base, "recipes")
+	preserveBaseDecisionField(replacement["routing"], base["routing"], "adaptations")
+	preserveBaseRecipeDecisionField(replacement["recipes"], base["recipes"], "adaptations")
+	for _, key := range []string{"routing", "entrypoints", "recipes"} {
+		if value, present := replacement[key]; present {
+			base[key] = value
+		} else {
+			delete(base, key)
+		}
 	}
 
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
@@ -340,6 +343,11 @@ func marshalYAMLIndent2(node *yaml.Node) ([]byte, error) {
 // pruneZeroValues recursively removes zero-value entries from a nested map.
 func pruneZeroValues(m map[string]interface{}) {
 	for k, v := range m {
+		// Canonical routing already applied typed omitempty rules. Explicit
+		// false and zero values there carry policy semantics and must survive.
+		if k == "routing" {
+			continue
+		}
 		switch val := v.(type) {
 		case map[string]interface{}:
 			pruneZeroValues(val)

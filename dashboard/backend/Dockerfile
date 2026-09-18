@@ -10,6 +10,7 @@ ENV GOPROXY="https://proxy.golang.org|direct"
 
 COPY src/semantic-router/go.mod src/semantic-router/go.sum ./
 COPY src/semantic-router/ ./
+COPY dashboard/wasm/ /app/dashboard/wasm/
 
 # Local replace directives point at sibling bindings that are not needed for the
 # WASM build. Stub them under /app so `../../*-binding` resolves correctly.
@@ -24,7 +25,7 @@ RUN CGO_ENABLED=0 GOOS=js GOARCH=wasm go build \
       -buildvcs=false \
       -ldflags="-s -w" \
       -o /build/signal-compiler.wasm \
-      ./cmd/wasm/ && \
+      /app/dashboard/wasm/main_wasm.go && \
     if [ -f "$(go env GOROOT)/lib/wasm/wasm_exec.js" ]; then \
       cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" /build/wasm_exec.js; \
     else \
@@ -157,6 +158,8 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 RUN groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
     install -d -o nonroot -g root -m 0770 /app/data && \
+    find /app/frontend -type d -exec chmod 0755 {} + && \
+    find /app/frontend -type f -exec chmod 0644 {} + && \
     chown -R root:root /app/cli && \
     find /app/cli -type d -exec chmod 0555 {} + && \
     find /app/cli -type f -exec chmod 0444 {} + && \

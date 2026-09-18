@@ -3,8 +3,9 @@ title: Router Runtime
 description: Run the models that classify requests, generate embeddings, and check safety.
 ---
 
-Router Runtime runs the models used for routing: classifiers, embeddings, and
-safety checks. The LLMs that answer users are configured separately in
+Router Runtime runs Vela classifiers, embeddings, reranking, and safety checks.
+Start with [Vela models](../tutorials/global/vela-models.md) for the defaults.
+The LLMs that answer users are configured separately in
 [Model configuration](model-configuration.md).
 
 ## Choose a running mode
@@ -22,7 +23,8 @@ Both modes can be used in the same Router.
 ## Configure a use case
 
 - [Embeddings](runtime/embeddings.md): semantic matching, caches, and vector stores.
-- [Safety models](runtime/safety.md): prompt guard, PII, and hallucination detection.
+- [Safety models](runtime/safety.md): Guard, Safety, Hazard, PII, and grounding checks.
+- [Reranking](../tutorials/plugin/rag.md#neural-reranking): score retrieved candidates before generating an answer.
 
 For startup failures, capacity limits, and configuration reloads, see
 [Operations and troubleshooting](runtime/lifecycle-diagnostics.md).

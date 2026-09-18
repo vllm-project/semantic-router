@@ -155,6 +155,7 @@ class RoutingDiagnostic(StrictModel):
     traces: tuple[RoutingDecisionTrace, ...] = ()
     signals: tuple[RoutingSignalDiagnostic, ...] = ()
     applied_unknown_policies: tuple[tuple[str, str], ...] = ()
+    decision_error: str | None = Field(default=None, max_length=200)
 
     _case_id = field_validator("case_id")(_validate_id)
 

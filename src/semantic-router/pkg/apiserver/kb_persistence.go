@@ -90,6 +90,8 @@ func persistConfigAndSync(
 	yamlBytes []byte,
 	newCfg *config.RouterConfig,
 ) error {
+	release := s.runtimeRegistry.LockConfigPublication()
+	defer release()
 	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
 		return err
 	}
@@ -121,10 +123,16 @@ func (s *ClassificationAPIServer) knowledgeBaseActivationStatus(runtimePath stri
 	if err != nil {
 		return knowledgeBaseActivation{ActivationStatus: "pending"}, http.StatusAccepted
 	}
-	state := knowledgeBaseActivation{ActivationStatus: "pending", GeneratedRuntimeHash: hash}
-	if s.activeConfigDocumentHash() == hash {
-		state.ActivationStatus = "active"
+	state := knowledgeBaseActivation{
+		ActivationStatus:     s.configActivationStatus(hash, s.activeConfigDocumentHash()),
+		GeneratedRuntimeHash: hash,
+		Activation:           s.configActivation(hash),
+	}
+	switch state.ActivationStatus {
+	case "active":
 		return state, successStatus
+	case "failed":
+		return state, http.StatusServiceUnavailable
 	}
 	return state, http.StatusAccepted
 }

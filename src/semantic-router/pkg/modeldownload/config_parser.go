@@ -30,7 +30,7 @@ func extractFromValue(v reflect.Value, paths *[]string, seen map[string]bool) {
 	}
 
 	// Dereference pointers
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return
 		}
@@ -85,11 +85,14 @@ func isModelPathField(fieldName string) bool {
 
 // isModelDirectory checks if a path looks like a model directory (not a file)
 func isModelDirectory(path string) bool {
-	// If the basename has a file extension, treat it as a file rather than a model directory.
-	if filepath.Ext(filepath.Base(path)) != "" {
-		return false
-	}
-	return true
+	// Versioned model directories can contain dots (for example Vela-1.0).
+	// Only known artifact extensions identify a file; the model registry owns
+	// whether a directory is actually provisionable.
+	ext := strings.ToLower(filepath.Ext(filepath.Base(path)))
+	return !slices.Contains([]string{
+		".json", ".yaml", ".yml", ".txt", ".bin", ".pt", ".pth",
+		".safetensors", ".onnx", ".data", ".xml", ".model", ".gguf",
+	}, ext)
 }
 
 // embeddingModelWeightFiles are the files the candle embedding runtime loads to bring a
@@ -137,6 +140,7 @@ var onnxWeightExcludePatterns = []string{
 	"*.onnx",
 	"*.onnx.data",
 	"*.onnx_data",
+	"onnx/weights.data",
 }
 
 // candleEmbeddingModelExcludePatterns returns, per configured embedding model path,
@@ -179,7 +183,7 @@ func collectRequiredFilesByModel(v reflect.Value, requiredFilesByModel map[strin
 		return
 	}
 
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		if v.IsNil() {
 			return
 		}

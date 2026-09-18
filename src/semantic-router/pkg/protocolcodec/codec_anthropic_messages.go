@@ -167,6 +167,9 @@ func (AnthropicMessagesCodec) DecodeRequest(body []byte, policy llmprotocol.Poli
 }
 
 func validateAnthropicRequestWire(wire anthropicRequestWire) error {
+	if wire.TopK != nil && *wire.TopK < 0 {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_top_k", "Messages top_k cannot be negative", nil)
+	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"inference_geo": wire.InferenceGeo, "container": wire.Container,
 		"cache_control": wire.CacheControl,

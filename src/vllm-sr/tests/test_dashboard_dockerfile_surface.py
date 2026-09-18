@@ -1,9 +1,17 @@
 import os
+import shlex
 import socket
 import stat
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
+
+LINUX_PERMISSION_HELPER = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="The deployed permission helper requires Linux O_PATH and /proc/self/fd.",
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_DOCKERFILE = REPO_ROOT / "dashboard" / "backend" / "Dockerfile"
@@ -138,6 +146,7 @@ def test_dashboard_logs_handler_never_executes_a_container_runtime() -> None:
     assert 'exec.Command("podman"' not in content
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_pins_and_validates_runtime_socket(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -231,6 +240,7 @@ def test_dashboard_permission_helper_pins_and_validates_runtime_socket(
     assert "must be a Unix socket" in result.stderr
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_creates_recipe_store_under_writable_parent(
     tmp_path: Path,
 ) -> None:
@@ -275,6 +285,7 @@ def test_dashboard_permission_helper_rejects_recipe_store_symlink(
     assert result.returncode != 0
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_preserves_private_management_token(
     tmp_path: Path,
 ) -> None:
@@ -310,6 +321,7 @@ def test_dashboard_permission_helper_preserves_private_management_token(
     assert stat.S_IMODE(credentials.stat().st_mode) & stat.S_ISGID
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_probes_recipe_store_without_residue(
     tmp_path: Path,
 ) -> None:
@@ -373,6 +385,7 @@ def test_dashboard_permission_helper_rejects_symlinked_shared_tree_entry(
     assert stat.S_IMODE(outside.stat().st_mode) == 0o600
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_rejects_fifo_without_blocking(
     tmp_path: Path,
 ) -> None:
@@ -398,6 +411,7 @@ def test_dashboard_permission_helper_rejects_fifo_without_blocking(
     assert "unsafe file" in result.stderr
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_excludes_private_evaluation_store(
     tmp_path: Path,
 ) -> None:
@@ -434,6 +448,7 @@ def test_dashboard_permission_helper_excludes_private_evaluation_store(
     assert stat.S_IMODE(shared_file.stat().st_mode) & 0o060 == 0o060
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_keeps_evaluation_store_private_on_restart(
     tmp_path: Path,
 ) -> None:
@@ -463,6 +478,7 @@ def test_dashboard_permission_helper_keeps_evaluation_store_private_on_restart(
     assert stat.S_IMODE(evidence.stat().st_mode) == 0o600
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_rejects_symlink_in_private_store(
     tmp_path: Path,
 ) -> None:
@@ -526,13 +542,13 @@ def test_dashboard_dockerfile_ships_evaluation_worker_without_legacy_model_eval(
 def test_vllm_sr_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye" in content
+    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bookworm" in content
     assert "ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm" in content
     assert (
         "FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE}"
         in content
     )
-    assert "GLIBC_2.39+" in content
+    assert "FROM ${IMAGE_REGISTRY}library/debian:bookworm-slim" in content
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
     assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
@@ -600,6 +616,17 @@ def test_rocm_runtime_images_pin_only_the_attention_compiler_exclusion() -> None
     ):
         assert "MIGRAPHX_MLIR_USE_SPECIFIC_OPS=" not in dockerfile.read_text(
             encoding="utf-8"
+        ), dockerfile
+
+
+def test_rocm_runtime_images_ship_miopen_jit_headers() -> None:
+    for dockerfile in (VLLM_SR_ROCM_DOCKERFILE, EXTPROC_ROCM_DOCKERFILE):
+        runtime_stage = dockerfile.read_text(encoding="utf-8").rsplit(
+            "\nFROM ", maxsplit=1
+        )[-1]
+        assert "rocrand-dev" in runtime_stage, dockerfile
+        assert (
+            "test -r /opt/rocm/include/rocrand/rocrand_xorwow.h" in runtime_stage
         ), dockerfile
 
 
@@ -715,6 +742,30 @@ def test_extproc_dockerfile_copies_built_in_knowledge_bases() -> None:
 
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
     assert "COPY config/kb/ /app/config/kb/" not in content
+
+
+def test_extproc_dockerfile_stages_complete_openvino_go_package() -> None:
+    staged_sources: set[str] = set()
+    for line in EXTPROC_DOCKERFILE.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("COPY "):
+            continue
+        _, *sources, destination = shlex.split(line)
+        if destination.rstrip("/") != "openvino-binding":
+            continue
+        for source in sources:
+            for matched in REPO_ROOT.glob(source):
+                files = matched.glob("*.go") if matched.is_dir() else (matched,)
+                staged_sources.update(path.name for path in files)
+
+    runtime_sources = {
+        path.name
+        for path in (REPO_ROOT / "openvino-binding").glob("*.go")
+        if not path.name.endswith("_test.go")
+    }
+    assert runtime_sources <= staged_sources, (
+        "OpenVINO-tagged router image omits Go sources: "
+        f"{sorted(runtime_sources - staged_sources)}"
+    )
 
 
 def test_extproc_rocm_dockerfile_copies_built_in_knowledge_bases() -> None:

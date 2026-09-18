@@ -202,7 +202,7 @@ func TestWaitForRuntimeConfigActivationReportsPersistedNotActiveOnKubernetesTarg
 	server := &ClassificationAPIServer{runtimeRegistry: routerruntime.NewRegistry(old)}
 
 	newDocument := []byte("routing: {new: true}\n")
-	hash, status := server.waitForRuntimeConfigActivation(runtimePath, newDocument)
+	hash, status := server.waitForRuntimeConfigActivation(runtimePath, newDocument, 0)
 	if status != "persisted" {
 		t.Fatalf("status = %q, want persisted", status)
 	}

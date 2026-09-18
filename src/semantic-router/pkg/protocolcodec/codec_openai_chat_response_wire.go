@@ -33,6 +33,15 @@ type chatResponseWire struct {
 	RemoteEngineID      *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost          *string                   `json:"remote_host,omitempty"`
 	RemotePort          *int64                    `json:"remote_port,omitempty"`
+	// Groq attaches its request id here; it is provider metadata, not output.
+	XGroq json.RawMessage `json:"x_groq,omitempty"`
+	// Groq reports per-model usage for compound requests and null otherwise.
+	UsageBreakdown json.RawMessage `json:"usage_breakdown,omitempty"`
+}
+
+// hasUsageBreakdown reports Groq's per-model usage, which has no neutral slot.
+func (wire chatResponseWire) hasUsageBreakdown() bool {
+	return len(wire.UsageBreakdown) > 0 && !bytes.Equal(bytes.TrimSpace(wire.UsageBreakdown), []byte("null"))
 }
 
 // hasLegacyKVTransferMetadata recognizes the flat KV-transfer response
@@ -62,7 +71,8 @@ func (tier *chatServiceTierWire) UnmarshalJSON(raw []byte) error {
 		return err
 	}
 	switch value {
-	case "auto", "default", "flex", "priority", "scale":
+	// on_demand and performance are Groq's tiers on its OpenAI-compatible API.
+	case "auto", "default", "flex", "priority", "scale", "on_demand", "performance":
 		*tier = chatServiceTierWire(value)
 		return nil
 	default:
@@ -137,14 +147,24 @@ type chatUsageWire struct {
 	ComputeUnits            json.RawMessage                  `json:"compute_units,omitempty"`
 	PromptTokensDetails     *chatPromptTokensDetailsWire     `json:"prompt_tokens_details,omitempty"`
 	CompletionTokensDetails *chatCompletionTokensDetailsWire `json:"completion_tokens_details,omitempty"`
+	// Provider accounting extensions: xAI reports its own billing and search
+	// usage, Groq reports queue and generation timings in seconds.
+	CostInUSDTicks *int64   `json:"cost_in_usd_ticks,omitempty"`
+	NumSourcesUsed *int64   `json:"num_sources_used,omitempty"`
+	QueueTime      *float64 `json:"queue_time,omitempty"`
+	PromptTime     *float64 `json:"prompt_time,omitempty"`
+	CompletionTime *float64 `json:"completion_time,omitempty"`
+	TotalTime      *float64 `json:"total_time,omitempty"`
 }
 
 type chatPromptTokensDetailsWire struct {
-	CachedTokens     int64 `json:"cached_tokens"`
-	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
-	AudioTokens      int64 `json:"audio_tokens,omitempty"`
-	TextTokens       int64 `json:"text_tokens,omitempty"`
-	ImageTokens      int64 `json:"image_tokens,omitempty"`
+	CachedTokens       *int64           `json:"cached_tokens,omitempty"`
+	CacheWriteTokens   *int64           `json:"cache_write_tokens,omitempty"`
+	CreatedCacheTokens *int64           `json:"created_cache_tokens,omitempty"`
+	MultimodalTokens   map[string]int64 `json:"multimodal_tokens,omitempty"`
+	AudioTokens        int64            `json:"audio_tokens,omitempty"`
+	TextTokens         int64            `json:"text_tokens,omitempty"`
+	ImageTokens        int64            `json:"image_tokens,omitempty"`
 }
 
 type chatCompletionTokensDetailsWire struct {
