@@ -498,7 +498,6 @@ func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath str
 		return configDocumentETagHash(generatedDocument), "persisted"
 	}
 
-
 	runtimeHash, err := configFileHash(runtimePath)
 	if err != nil {
 		return "", "unknown"
