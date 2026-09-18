@@ -336,11 +336,12 @@ def main(
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f"Model will be saved to: {output_dir}")
 
-    # transformers >=5.0 dropped TrainingArguments(warmup_ratio=...) entirely (only
-    # warmup_steps remains) -- the baseline script's own `warmup_ratio=0.06` would hit
-    # the same TypeError on that version despite its requirements.txt allowing it
-    # (transformers>=4.40.0, no upper bound). Compute the equivalent step count
-    # ourselves so this works across both old and new transformers releases.
+    # transformers >=5.15 removed TrainingArguments(warmup_ratio=...) and
+    # logging_dir (only warmup_steps remains; 5.14.1 still accepts both). The
+    # baseline script's own `warmup_ratio=0.06` hits the same TypeError on that
+    # version despite its requirements.txt allowing it (transformers>=4.40.0, no
+    # upper bound). Compute the equivalent step count ourselves so this works
+    # across both old and new transformers releases.
     gradient_accumulation_steps = 2
     steps_per_epoch = -(-len(train_dataset) // (batch_size * gradient_accumulation_steps))
     warmup_steps = max(1, round(0.06 * steps_per_epoch * num_epochs))
