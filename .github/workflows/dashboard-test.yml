@@ -30,9 +30,6 @@ jobs:
       - name: Set up Go
         uses: ./.github/actions/setup-go-ci
 
-      - name: Set up golangci-lint
-        uses: golangci/golangci-lint-action@v7
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -49,6 +46,17 @@ jobs:
             ${{ runner.os }}-node-dashboard-
 
 
+
+      - name: Resolve golangci-lint version
+        id: golangci_lint
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up golangci-lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: ${{ steps.golangci_lint.outputs.version }}
+          install-mode: binary
+          args: --help
 
       - name: Load shared native libraries
         if: inputs.native-artifact != ''
