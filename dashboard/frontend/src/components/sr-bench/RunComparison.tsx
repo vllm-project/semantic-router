@@ -108,6 +108,10 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         Follow current Balance through two optimization rounds against your strongest observed
         single model. Each comparison requires the same frozen cases, sampling, prices and limits.
       </p>
+      <p className={styles.muted}>
+        Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost
+        measurements.
+      </p>
       <div className={styles.formGrid}>
         <label>
           Baseline run

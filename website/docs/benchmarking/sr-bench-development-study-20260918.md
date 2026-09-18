@@ -14,7 +14,7 @@ equivalence, production savings, or a complete sr-bench 1.0 score.
 Requests, response usage, and latency were measured from real executions.
 **Prices were a size-based simulation for this deployment, not provider billing
 or measured GPU cost.** Every monetary value below applies those frozen prices
-to recorded usage. See the [sr-bench guide](./sr-bench.md) for the reusable
+to recorded usage. See the [sr-bench guide](./sr-bench) for the reusable
 dataset, CLI, Dashboard, and reporting workflow.
 
 ## Scope and frozen protocol

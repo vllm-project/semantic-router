@@ -278,6 +278,17 @@
   max-width: 100%;
   margin: 0.8rem 0;
 }
+.callTableScroll {
+  max-height: min(28rem, 60vh);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.callTableScroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-secondary, #1c1c22);
+}
 .page table {
   width: 100%;
   border-collapse: collapse;

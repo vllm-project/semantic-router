@@ -187,10 +187,26 @@ test('live inventory, frozen dataset and persisted CLI run are visible', async (
   }
   if (plan!.baseline_run_id) {
     await openRun(page, plan!.baseline_run_id)
+    await expect(
+      page.getByRole('columnheader', { name: 'Macro accuracy', exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
+        { exact: true },
+      ),
+    ).toBeVisible()
+    const calls = page.getByRole('region', { name: 'Persisted call records', exact: true })
+    expect(
+      await calls.evaluate((element) => element.clientHeight <= window.innerHeight * 0.6 + 1),
+    ).toBe(true)
     await screenshot(page, testInfo, 'live-single-model-baseline.png')
     await page.reload()
     await expect(
       page.getByRole('heading', { name: 'Target comparison', exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('columnheader', { name: 'Macro accuracy', exact: true }),
     ).toBeVisible()
     await expect(page).toHaveURL(new RegExp(`run=${plan!.baseline_run_id}`))
   }
@@ -209,6 +225,12 @@ test('live comparison retains current Balance and two optimization revisions', a
   )
   const blocked = await openAcceptance(page)
   await page.getByRole('button', { name: 'Compare iterations', exact: true }).click()
+  await expect(
+    page.getByText(
+      'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
+      { exact: true },
+    ),
+  ).toBeVisible()
   await page
     .getByRole('combobox', { name: 'Baseline run', exact: true })
     .selectOption(plan!.baseline_run_id!)
@@ -230,6 +252,10 @@ test('live comparison retains current Balance and two optimization revisions', a
   await screenshot(page, testInfo, 'live-balance-two-optimization-loops.png')
   const comparisonURL = page.url()
   await page.reload()
+  await expect(page.getByRole('heading', { name: 'Compare iterations', exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('heading', { name: 'Single-model baseline', exact: true }),
+  ).toBeVisible()
   await expect(page.getByRole('heading', { name: /^Optimization 2 ·/ })).toBeVisible()
   await expect(page.getByText('Comparison withheld:', { exact: false })).toHaveCount(0)
   await expect(page).toHaveURL(comparisonURL)
@@ -274,7 +300,12 @@ test('live final recipe is verified and downloadable without launching a job', a
       exact: true,
     }),
   ).toBeVisible()
-  await expect(recipes.getByText(plan!.final_config_hash!, { exact: true })).toBeVisible()
+  await expect(
+    recipes
+      .locator('dt')
+      .filter({ hasText: /^Configuration hash$/ })
+      .locator('xpath=following-sibling::dd[1]'),
+  ).toHaveText(plan!.final_config_hash!)
   const downloading = page.waitForEvent('download')
   await recipes
     .getByRole('button', { name: `Download ${plan!.final_target_id} recipe`, exact: true })

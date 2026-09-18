@@ -121,6 +121,7 @@ export default function RunDetails({
     run,
     readAt,
     report,
+    reportRead,
     results,
     events,
     calls,
@@ -193,7 +194,9 @@ export default function RunDetails({
         </p>
       )}
       {!run ? (
-        <p role="status">Loading run…</p>
+        <p role="status">
+          {readError ? 'Run details are unavailable. Refresh evidence to retry.' : 'Loading run…'}
+        </p>
       ) : (
         <>
           <div className={styles.metricGrid}>
@@ -293,8 +296,18 @@ export default function RunDetails({
           )}
           <AccountingCorrection report={report} />
           <h3 id="run-targets">Target comparison</h3>
+          <p className={styles.muted}>
+            Costs apply frozen per-token prices to recorded usage; they are not invoice or
+            hardware-cost measurements.
+          </p>
           {metrics.length ? (
             <MetricsTable targets={metrics} preview={run.manifest.mode === 'preview'} summary />
+          ) : reportRead.loading ? (
+            <p role="status">Loading report metrics…</p>
+          ) : reportRead.error ? (
+            <p className={styles.error}>
+              Report metrics are unavailable. Refresh evidence to retry.
+            </p>
           ) : (
             <p className={styles.muted}>Summary metrics will appear as results are persisted.</p>
           )}
@@ -370,18 +383,20 @@ export default function RunDetails({
               </table>
             </div>
           </details>
-          <RecipeEvidence report={report} targets={run.manifest.targets} />
-          <div className={styles.twoColumns}>
-            <Distribution
-              title="Selected models"
-              entries={reportDistribution(metrics, 'selected_models')}
-            />
-            <Distribution
-              title="Matched decisions"
-              entries={reportDistribution(metrics, 'decisions')}
-            />
-          </div>
-          {run.manifest.mode !== 'live' && (
+          {report && <RecipeEvidence report={report} targets={run.manifest.targets} />}
+          {(report || metrics.length > 0) && (
+            <div className={styles.twoColumns}>
+              <Distribution
+                title="Selected models"
+                entries={reportDistribution(metrics, 'selected_models')}
+              />
+              <Distribution
+                title="Matched decisions"
+                entries={reportDistribution(metrics, 'decisions')}
+              />
+            </div>
+          )}
+          {run.manifest.mode !== 'live' && (report || metrics.length > 0) && (
             <>
               {metrics.some(
                 (target) => (target.selection_statuses?.execution_required ?? 0) > 0,
@@ -428,11 +443,16 @@ export default function RunDetails({
               />
             </label>
           </div>
-          <p className={styles.muted}>
-            Loaded {number(results.length)} of {number(resultsPage.total)} persisted results.
-            Filtering applies to loaded results. Detail pages are snapshots; refresh evidence to
-            reload them. Scores and costs above use the full report.
-          </p>
+          {resultsPage.total !== null && (
+            <p className={styles.muted}>
+              Loaded {number(results.length)} of {number(resultsPage.total)} persisted results.
+              Filtering applies to loaded results. Detail pages are snapshots; refresh evidence to
+              reload them. Scores and costs above use the full report.
+            </p>
+          )}
+          {resultsPage.loading && resultsPage.total === null && (
+            <p role="status">Loading persisted case results…</p>
+          )}
           {report?.provenance.accounting_correction && (
             <p className={styles.notice}>
               Original receipt accounting is shown in case and call details. See the report summary
@@ -473,7 +493,16 @@ export default function RunDetails({
               </tbody>
             </table>
           </div>
-          {!visible.length && <p className={styles.muted}>No matching persisted results.</p>}
+          {!visible.length &&
+            !resultsPage.loading &&
+            !resultsPage.error &&
+            resultsPage.total !== null && (
+              <p className={styles.muted}>
+                {resultsPage.total === 0
+                  ? 'No persisted case results yet.'
+                  : 'No matching persisted results.'}
+              </p>
+            )}
           <div className={styles.actions}>
             <button disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
               Previous results

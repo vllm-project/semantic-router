@@ -22,6 +22,7 @@ PACKAGES = {
             "data/tau2/domains/airline",
             "data/tau2/domains/retail",
             "data/tau2/domains/telecom",
+            "data/tau2/user_simulator",
         ],
     },
     "livecodebench": {
@@ -58,6 +59,29 @@ TASK_SOURCES = {
         "revision": "7131e4375048a0e408a8fb404b5f499d726b695b",
     },
 }
+TAU3_TEXT_ASSETS = (
+    "data/tau2/user_simulator/simulation_guidelines.md",
+    "data/tau2/user_simulator/simulation_guidelines_tools.md",
+)
+
+
+def missing_tau3_text_assets(root):
+    """Text tasks need both the ordinary and tool-using simulator prompts."""
+    return [
+        name
+        for name in TAU3_TEXT_ASSETS
+        if not (Path(root) / name).is_file() or not (Path(root) / name).stat().st_size
+    ]
+
+
+def validate_tau3_text_assets(root):
+    missing = missing_tau3_text_assets(root)
+    if missing:
+        raise ValueError(
+            "tau3 simulator data is missing or empty: "
+            + ", ".join(missing)
+            + "; run vllm-sr benchmark setup --benchmark tau3 --install"
+        )
 
 
 def home():
@@ -203,6 +227,11 @@ def _checkout(spec, root):
         raise ValueError(
             "Existing harness differs from its pinned version; select a fresh SR_BENCH_HOME"
         )
+    if spec.get("sparse"):
+        # Explicit setup also hydrates assets added to the sparse manifest for
+        # an existing clean checkout; its pinned commit and tracked files stay
+        # unchanged. Merely inspecting setup never changes the checkout.
+        _run(["git", "-C", root, "sparse-checkout", "set", *spec["sparse"]])
 
 
 def setup(benchmark="all", install=False, build_sandbox=False):
@@ -227,6 +256,8 @@ def setup(benchmark="all", install=False, build_sandbox=False):
                         "Optional harness installation requires uv on PATH"
                     )
                 _checkout(spec, root)
+                if name == "tau3":
+                    validate_tau3_text_assets(root)
                 if (root / "uv.lock").is_file() and name != "livecodebench":
                     uv_command = [uv]
                     if spec.get("uv_version"):
@@ -315,6 +346,8 @@ def setup(benchmark="all", install=False, build_sandbox=False):
             item["requirements"] = ["registered fixed judge target"]
         elif name == "tau3":
             item["requirements"] = ["registered fixed simulator and judge targets"]
+            item["missing_runtime_assets"] = missing_tau3_text_assets(root)
+            item["runtime_assets_available"] = not item["missing_runtime_assets"]
         result.append(item)
     response = {"version": "sr-bench-1.0", "home": str(home()), "benchmarks": result}
     sandbox_manifest = home() / "sandbox" / "manifest.json"

@@ -20,7 +20,7 @@ from .harness_worker import (
     frozen_terminal_image,
     validate_terminal_compose,
 )
-from .setup import harness_paths, scicode_test_path
+from .setup import harness_paths, scicode_test_path, validate_tau3_text_assets
 from .transport import CallFailure
 
 HARNESSES = {
@@ -104,6 +104,8 @@ def _preflight_harness(benchmark, config):
     )
     if dirty.returncode:
         raise ValueError(f"{benchmark} harness contains modified tracked files")
+    if benchmark == "tau3":
+        validate_tau3_text_assets(source_root)
     module_check = subprocess.run(
         [
             str(interpreter),

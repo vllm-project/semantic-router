@@ -39,18 +39,30 @@ export default function CallEvidence({
   return (
     <section>
       <h3>Call records</h3>
-      <p className={styles.muted}>
-        Showing {number(calls.length)} of {number(page.total)} persisted call summaries. Prompts and
-        responses load only when you inspect a call. These pages are snapshots; refresh evidence to
-        reload current statuses. Aggregate metrics above always come from the full report.
-      </p>
+      {page.total !== null && (
+        <p className={styles.muted}>
+          Showing {number(calls.length)} of {number(page.total)} persisted call summaries. Prompts
+          and responses load only when you inspect a call. These pages are snapshots; refresh
+          evidence to reload current statuses. Aggregate metrics above always come from the full
+          report.
+        </p>
+      )}
+      {page.loading && page.total === null && <p role="status">Loading persisted call records…</p>}
+      {!page.loading && !page.error && page.total === 0 && (
+        <p className={styles.muted}>No persisted call records yet.</p>
+      )}
       {accountingReconciled && (
         <p className={styles.muted}>
           Original receipt accounting; see the report for reconciled totals. Saved usage and costs
           below remain unchanged.
         </p>
       )}
-      <div className={styles.tableScroll}>
+      <div
+        className={`${styles.tableScroll} ${styles.callTableScroll}`}
+        role="region"
+        aria-label="Persisted call records"
+        tabIndex={0}
+      >
         <table>
           <thead>
             <tr>

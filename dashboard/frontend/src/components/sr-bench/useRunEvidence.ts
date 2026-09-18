@@ -4,15 +4,21 @@ import { active } from './model'
 import type { CallRecord, CaseResult, PageState, Report, Run, RunEvent } from './types'
 
 const emptyPage: PageState = { total: null, nextCursor: null, loading: false, error: '' }
+const initialPage: PageState = { ...emptyPage, loading: true }
+
+function readFailure(cause: unknown) {
+  return cause instanceof Error ? cause.message : 'Refresh to retry the read.'
+}
 
 export function useRunEvidence(id: string, revision: number) {
   const [run, setRun] = useState<Run | null>(null)
   const [report, setReport] = useState<Report | null>(null)
+  const [reportRead, setReportRead] = useState({ loading: true, error: '' })
   const [results, setResults] = useState<CaseResult[]>([])
   const [events, setEvents] = useState<RunEvent[]>([])
   const [calls, setCalls] = useState<CallRecord[]>([])
-  const [resultsPage, setResultsPage] = useState<PageState>(emptyPage)
-  const [callsPage, setCallsPage] = useState<PageState>(emptyPage)
+  const [resultsPage, setResultsPage] = useState<PageState>(initialPage)
+  const [callsPage, setCallsPage] = useState<PageState>(initialPage)
   const [error, setError] = useState('')
   const [readAt, setReadAt] = useState<string | null>(null)
   const control = useRef<{
@@ -30,11 +36,12 @@ export function useRunEvidence(id: string, revision: number) {
     let lastUpdated = ''
     setRun(null)
     setReport(null)
+    setReportRead({ loading: true, error: '' })
     setResults([])
     setEvents([])
     setCalls([])
-    setResultsPage(emptyPage)
-    setCallsPage(emptyPage)
+    setResultsPage(initialPage)
+    setCallsPage(initialPage)
     setError('')
 
     async function readEvents() {
@@ -67,6 +74,11 @@ export function useRunEvidence(id: string, revision: number) {
         setReadAt(new Date().toLocaleTimeString())
         terminal = !active(current.status)
         if (current.updated_at !== lastUpdated) {
+          setReportRead({ loading: true, error: '' })
+          if (!currentControl.resultsExpanded)
+            setResultsPage((previous) => ({ ...previous, loading: true, error: '' }))
+          if (!currentControl.callsExpanded)
+            setCallsPage((previous) => ({ ...previous, loading: true, error: '' }))
           const responses = await Promise.allSettled([
             benchApi.report(id, controller.signal),
             currentControl.resultsExpanded
@@ -79,6 +91,10 @@ export function useRunEvidence(id: string, revision: number) {
           ])
           if (controller.signal.aborted) return
           if (responses[0].status === 'fulfilled') setReport(responses[0].value)
+          setReportRead({
+            loading: false,
+            error: responses[0].status === 'rejected' ? readFailure(responses[0].reason) : '',
+          })
           if (
             responses[1].status === 'fulfilled' &&
             responses[1].value &&
@@ -92,6 +108,13 @@ export function useRunEvidence(id: string, revision: number) {
               loading: false,
               error: '',
             })
+          } else if (responses[1].status === 'rejected' && !currentControl.resultsExpanded) {
+            const reason = readFailure(responses[1].reason)
+            setResultsPage((previous) => ({
+              ...previous,
+              loading: false,
+              error: `Case results are unavailable: ${reason}`,
+            }))
           }
           if (
             responses[2].status === 'fulfilled' &&
@@ -106,6 +129,13 @@ export function useRunEvidence(id: string, revision: number) {
               loading: false,
               error: '',
             })
+          } else if (responses[2].status === 'rejected' && !currentControl.callsExpanded) {
+            const reason = readFailure(responses[2].reason)
+            setCallsPage((previous) => ({
+              ...previous,
+              loading: false,
+              error: `Call records are unavailable: ${reason}`,
+            }))
           }
           if (responses[3].status === 'fulfilled') {
             const newEvents = responses[3].value
@@ -198,6 +228,7 @@ export function useRunEvidence(id: string, revision: number) {
   return {
     run,
     report,
+    reportRead,
     results,
     events,
     calls,

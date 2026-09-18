@@ -189,6 +189,12 @@ test('shows truthful metrics, routing distribution and case evidence', async ({ 
   await page.goto('/evaluation?view=runs&run=run-1')
   await expect(page.getByRole('heading', { name: 'Target comparison' })).toBeVisible()
   await expect(page.getByRole('cell', { name: '50%', exact: true })).toBeVisible()
+  await expect(
+    page.getByText(
+      'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
+      { exact: true },
+    ),
+  ).toBeVisible()
   await expect(page.getByText('Subset evaluation; not a complete sr-bench score.')).toBeVisible()
   await expect(page.getByRole('cell', { name: '$0.00000' })).toHaveCount(0)
   await page.getByRole('button', { name: 'case-a' }).click()
@@ -526,6 +532,60 @@ test('shows learning preview selection and snapshot evidence without a capabilit
   await expect(evidence.getByText('model-a', { exact: true })).toHaveCount(0)
 })
 
+test('distinguishes pending, unavailable and genuinely empty run evidence', async ({ page }) => {
+  await mockBench(page)
+  let mode: 'pending' | 'failed' | 'empty' = 'pending'
+  let release!: () => void
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  for (const resource of ['report', 'results', 'calls']) {
+    await page.route(`**/api/sr-bench/v1/runs/run-1/${resource}*`, async (route) => {
+      if (mode === 'pending') await gate
+      if (mode === 'failed') {
+        await route.fulfill({ status: 503, json: { error: 'Saved evidence read failed' } })
+        return
+      }
+      await route.fulfill({
+        json:
+          resource === 'report'
+            ? { ...report, summary: { ...report.summary, targets: [] } }
+            : { [resource]: [], total: 0, limit: 100, next_cursor: null },
+      })
+    })
+  }
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(page.getByText('Loading report metrics…', { exact: true })).toBeVisible()
+  await expect(page.getByText('Loading persisted case results…', { exact: true })).toBeVisible()
+  await expect(page.getByText('Loading persisted call records…', { exact: true })).toBeVisible()
+  await expect(page.getByText('No matching persisted results.', { exact: true })).toHaveCount(0)
+  await expect(
+    page.getByText('No routing trace recorded for these results.', { exact: true }),
+  ).toHaveCount(0)
+  await expect(page.getByText('No persisted call records yet.', { exact: true })).toHaveCount(0)
+  mode = 'failed'
+  release()
+  await expect(
+    page.getByText('Report metrics are unavailable. Refresh evidence to retry.', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Case results are unavailable: Saved evidence read failed', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Call records are unavailable: Saved evidence read failed', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByText('No persisted case results yet.', { exact: true })).toHaveCount(0)
+  await expect(page.getByText('No persisted call records yet.', { exact: true })).toHaveCount(0)
+  mode = 'empty'
+  await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click()
+  await expect(page.getByText('No persisted case results yet.', { exact: true })).toBeVisible()
+  await expect(page.getByText('No persisted call records yet.', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Summary metrics will appear as results are persisted.', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
 test('recovers every event page after a temporary read failure', async ({ page }) => {
   await mockBench(page)
   await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
@@ -651,6 +711,26 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
   await expect(
     page.getByText('Showing 100 of 201 persisted call summaries.', { exact: false }),
   ).toBeVisible()
+  const callTable = page.getByRole('region', { name: 'Persisted call records', exact: true })
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 })
+    await callTable.evaluate((element) => {
+      element.scrollTop = element.scrollHeight
+    })
+    expect(
+      await callTable.evaluate((element) => {
+        const viewport = element.getBoundingClientRect()
+        const heading = element.querySelector('thead th')!.getBoundingClientRect()
+        return (
+          element.clientHeight <= window.innerHeight * 0.6 + 1 &&
+          element.scrollHeight > element.clientHeight &&
+          heading.top >= viewport.top - 1 &&
+          heading.top <= viewport.top + 2
+        )
+      }),
+    ).toBe(true)
+  }
+  await page.setViewportSize({ width: 1280, height: 844 })
   await expect(page.getByText('single: full-report-model', { exact: true })).toBeVisible()
   await expect(page.getByText('single: full-report-decision', { exact: true })).toBeVisible()
   await expect(page.getByRole('cell', { name: '125 / 250', exact: true })).toBeVisible()
@@ -688,6 +768,12 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
 test('compares complete runs using paired results', async ({ page }) => {
   await mockBench(page)
   await page.goto('/evaluation?view=compare')
+  await expect(
+    page.getByText(
+      'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
+      { exact: true },
+    ),
+  ).toBeVisible()
   await page.getByLabel('Baseline run').selectOption('run-1')
   await page.getByLabel('Current Balance run').selectOption('run-2')
   await page.getByRole('button', { name: 'Compare runs' }).click()
