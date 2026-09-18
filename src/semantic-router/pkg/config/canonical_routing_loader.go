@@ -44,6 +44,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		return nil, err
 	}
 	cfg := DefaultGlobalConfig()
+	cfg.RoutingFragmentOnly = true
 	cfg.CandidateRequirements = doc.Routing.CandidateRequirements.Clone()
 	cfg.DataPolicy = doc.Routing.DataPolicy.Clone()
 	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
