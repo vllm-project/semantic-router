@@ -25,13 +25,6 @@ func decodeInputCacheUsage(usage *llmprotocol.Usage, cached, written, created *i
 	return nil
 }
 
-func optionalAuthoritative(value *int64) llmprotocol.TokenCount {
-	if value == nil {
-		return unknownCount()
-	}
-	return authoritative(*value)
-}
-
 func appendAnthropicPartialCacheOmission(diagnostics *llmprotocol.Diagnostics, policy llmprotocol.Policy, source llmprotocol.WireFormat, usage llmprotocol.Usage) {
 	readKnown, writeKnown := usage.InputCacheRead.Value != nil, usage.InputCacheWrite.Value != nil
 	if readKnown != writeKnown {

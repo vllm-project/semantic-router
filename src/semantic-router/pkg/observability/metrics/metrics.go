@@ -148,6 +148,33 @@ var (
 		[]string{"model"},
 	)
 
+	// ModelPromptCacheReadTokens tracks provider-reported prompt-cache reads.
+	ModelPromptCacheReadTokens = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_prompt_cache_read_tokens_total",
+			Help: "The total number of provider prompt-cache read tokens by model",
+		},
+		[]string{"model"},
+	)
+
+	// ModelPromptCacheWriteTokens tracks provider-reported prompt-cache writes.
+	ModelPromptCacheWriteTokens = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_prompt_cache_write_tokens_total",
+			Help: "The total number of provider prompt-cache write tokens by model",
+		},
+		[]string{"model"},
+	)
+
+	// ModelPromptCacheUsageRecords exposes the provenance of prompt-cache usage.
+	ModelPromptCacheUsageRecords = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_model_prompt_cache_usage_records_total",
+			Help: "The number of provider prompt-cache usage records by model and state",
+		},
+		[]string{"model", "state"},
+	)
+
 	// PromptTokensPerRequest tracks the distribution of prompt tokens per request by model
 	PromptTokensPerRequest = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -428,6 +455,25 @@ func RecordModelTokensDetailed(model string, promptTokens, completionTokens floa
 	}
 	PromptTokensPerRequest.WithLabelValues(model).Observe(promptTokens)
 	CompletionTokensPerRequest.WithLabelValues(model).Observe(completionTokens)
+}
+
+// RecordModelPromptCacheUsage records provider prompt-cache usage and its
+// provenance. Token counters are updated only for authoritative or partial
+// provider fields; other states remain observable without implying zero.
+func RecordModelPromptCacheUsage(model string, readTokens, writeTokens float64, state string) {
+	if model == "" {
+		return
+	}
+	ModelPromptCacheUsageRecords.WithLabelValues(model, state).Inc()
+	if state != "authoritative" && state != "partial" {
+		return
+	}
+	if readTokens > 0 {
+		ModelPromptCacheReadTokens.WithLabelValues(model).Add(readTokens)
+	}
+	if writeTokens > 0 {
+		ModelPromptCacheWriteTokens.WithLabelValues(model).Add(writeTokens)
+	}
 }
 
 // RecordModelCompletionLatency records the latency of a model completion

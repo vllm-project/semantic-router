@@ -366,10 +366,15 @@ func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 		other = wire.OutputTokens - reasoning
 	}
 	usage := llmprotocol.Usage{
-		State:         llmprotocol.UsageAvailable,
-		InputUncached: unknownCount(), InputCacheRead: unknownCount(), InputCacheWrite: unknownCount(),
-		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
-		InputTotal: authoritative(wire.InputTokens), OutputTotal: authoritative(wire.OutputTokens), Total: authoritative(wire.TotalTokens),
+		State:           llmprotocol.UsageAvailable,
+		InputUncached:   unknownCount(),
+		InputCacheRead:  unknownCount(),
+		InputCacheWrite: unknownCount(),
+		OutputReasoning: authoritative(reasoning),
+		OutputOther:     authoritative(other),
+		InputTotal:      authoritative(wire.InputTokens),
+		OutputTotal:     authoritative(wire.OutputTokens),
+		Total:           authoritative(wire.TotalTokens),
 	}
 	if wire.InputTokensDetails != nil {
 		details := wire.InputTokensDetails
