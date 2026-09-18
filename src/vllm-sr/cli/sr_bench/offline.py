@@ -7,6 +7,7 @@ import copy
 from . import VERSION
 from .contracts import digest
 from .engine import basic_grade
+from .provenance import capture_runner
 
 BASIC = {"mmlu-pro", "gpqa-diamond", "arc-agi-2"}
 REPLAYABLE = BASIC | {"hle", "simpleqa-verified"}
@@ -159,6 +160,14 @@ def replay(store, baseline_id, preview_id, owner="local", request_key=None):
         for case in pm["cases"]:
             row = preview_rows[(case["id"], target["id"])]
             routing = row.get("details", {}).get("routing", {})
+            provenance = routing.get("selection_provenance") or {}
+            if (
+                provenance.get("state_dependent")
+                or provenance.get("mode") == "read_only_snapshot"
+            ):
+                raise ValueError(
+                    "State-dependent learning previews cannot be replayed as stateless single selections"
+                )
             decision = routing.get("decision_result")
             if routing.get("selection_status") != "selected" or routing.get(
                 "selection_method"
@@ -217,7 +226,9 @@ def replay(store, baseline_id, preview_id, owner="local", request_key=None):
     manifest["plan_sha256"] = digest(
         {k: v for k, v in manifest.items() if k != "plan_sha256"}
     )
-    run, created = store.create(manifest, owner, request_key)
+    run, created = store.create(
+        manifest, owner, request_key, provenance=capture_runner(manifest)
+    )
     if not created:
         return run
     run_id = run["id"]

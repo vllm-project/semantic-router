@@ -10,6 +10,8 @@ from pathlib import Path
 
 import click
 
+from cli.runtime_stack import resolve_runtime_stack
+from cli.sr_bench import setup, sources
 from cli.sr_bench.client import Client
 from cli.sr_bench.contracts import catalog, load_document, plan
 from cli.sr_bench.service import DEFAULT_STORE, DEFAULT_URL, serve
@@ -50,8 +52,6 @@ def output(value):
 @guarded
 def benchmark(ctx, url, store, no_autostart):
     """Prepare, run, inspect, and compare sr-bench 1.0 evaluations."""
-    from cli.runtime_stack import resolve_runtime_stack
-
     explicit_url, explicit_store = url is not None, store is not None
     if not explicit_url:
         stack = resolve_runtime_stack()
@@ -110,9 +110,7 @@ def catalog_command():
 @guarded
 def setup_command(benchmark_id, install, build_sandbox):
     """Inspect prerequisites or explicitly install optional benchmark harnesses."""
-    from cli.sr_bench.setup import setup
-
-    output(setup(benchmark_id, install, build_sandbox))
+    output(setup.setup(benchmark_id, install, build_sandbox))
 
 
 @benchmark.command("serve")
@@ -151,19 +149,17 @@ def dataset():
 @guarded
 def dataset_prepare(client, benchmark_id, profile, source_path, revision, seed, limit):
     """Download or read a pinned source and freeze a reusable dataset."""
-    from cli.sr_bench.sources import prepare_dataset
-
-    kwargs = dict(
-        benchmark=benchmark_id,
-        profile=profile,
-        store=client.store,
-        source_path=str(source_path) if source_path else None,
-        revision=revision,
-        seed=seed,
-    )
+    kwargs = {
+        "benchmark": benchmark_id,
+        "profile": profile,
+        "store": client.store,
+        "source_path": str(source_path) if source_path else None,
+        "revision": revision,
+        "seed": seed,
+    }
     if limit is not None:
         kwargs["limit"] = limit
-    output(prepare_dataset(**kwargs))
+    output(sources.prepare_dataset(**kwargs))
 
 
 @dataset.command("combine")
@@ -174,9 +170,11 @@ def dataset_prepare(client, benchmark_id, profile, source_path, revision, seed, 
 @guarded
 def dataset_combine(client, manifests):
     """Create a reusable multi-benchmark dataset from prepared manifests."""
-    from cli.sr_bench.sources import combine_datasets
-
-    output(combine_datasets([load_document(path) for path in manifests], client.store))
+    output(
+        sources.combine_datasets(
+            [load_document(path) for path in manifests], client.store
+        )
+    )
 
 
 @dataset.command("show")

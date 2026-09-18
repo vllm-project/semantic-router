@@ -8,6 +8,7 @@ import json
 import os
 import secrets
 import stat
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -18,6 +19,7 @@ from cli.runtime_stack import RuntimeStackLayout
 BENCH_CONFIG_ENV = ("SR_BENCH_URL", "SR_BENCH_TOKEN_ENV", "SR_BENCH_STORE")
 BENCH_TOKEN_ENV = "SR_BENCH_TOKEN"
 BENCH_IDENTITY_LABEL = "io.vllm-sr.sr-bench.identity"
+MIN_SERVICE_TOKEN_CHARS = 32
 
 
 @dataclass(frozen=True)
@@ -52,7 +54,7 @@ def _private_token(path: Path) -> str:
                 stream.write(token + "\n")
                 stream.flush()
                 os.fsync(fd)
-            if len(token) < 32:
+            if len(token) < MIN_SERVICE_TOKEN_CHARS:
                 raise ValueError(
                     "sr-bench service token must contain at least 32 characters"
                 )
@@ -164,8 +166,6 @@ def reuse_bench_container(command: list[str], container_name: str) -> bool:
     A configuration reload must not tear down the owner of in-flight requests.
     Unknown or stopped workers require explicit reconciliation, not a restart.
     """
-    import subprocess
-
     expected = next(
         (
             arg.split("=", 1)[1]

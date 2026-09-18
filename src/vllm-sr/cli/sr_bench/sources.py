@@ -66,7 +66,7 @@ def read_records(path):
         return list(csv.DictReader(io.StringIO(path.read_text(encoding="utf-8-sig"))))
     if path.suffix == ".parquet":
         try:
-            import pyarrow.parquet as pq
+            import pyarrow.parquet as pq  # noqa: PLC0415 - optional data preparation extra
         except ImportError as exc:
             raise ValueError(
                 "Parquet preparation requires pip install 'vllm-sr[bench]'"
@@ -108,7 +108,13 @@ def _stratified_order(cases, seed, balanced=False):
 
 def _acquire(benchmark, root):
     if benchmark not in HF_SOURCES:
-        from .setup import PACKAGES, TASK_SOURCES, _checkout, harness_paths, home
+        from .setup import (  # noqa: PLC0415 - setup reads dataset catalog lazily
+            PACKAGES,
+            TASK_SOURCES,
+            _checkout,
+            harness_paths,
+            home,
+        )
 
         if benchmark == "tau3":
             spec = PACKAGES[benchmark]
@@ -118,7 +124,10 @@ def _acquire(benchmark, root):
             path = home() / "sources" / benchmark
         _checkout(spec, path)
         return _local_source(benchmark, path, spec["revision"])
-    from huggingface_hub import hf_hub_download
+    # Only remote acquisition initializes Hub support.
+    from huggingface_hub import (  # noqa: PLC0415
+        hf_hub_download,
+    )
 
     repo, revision, filenames = HF_SOURCES[benchmark]
     records, files = [], []
@@ -221,6 +230,7 @@ def _local_source(benchmark, path, revision):
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         if actual.returncode == 0 and actual.stdout.strip() != revision:
             raise ValueError(
@@ -251,7 +261,10 @@ def prepare_dataset(
     limit=None,
 ):
     if benchmark not in COUNTS:
-        from .adapters import get_adapter
+        # Adapter registration imports source preparation.
+        from .adapters import (  # noqa: PLC0415
+            get_adapter,
+        )
 
         adapter = get_adapter(benchmark)
         if not adapter.prepare:

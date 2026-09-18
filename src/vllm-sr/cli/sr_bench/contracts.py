@@ -9,7 +9,14 @@ import math
 from pathlib import Path
 from urllib.parse import urlparse
 
+import yaml
+
 from . import VERSION
+from .adapters import get_adapter, list_adapters
+
+MAX_PARAMETER_BYTES = 65536
+MAX_INFERENCE_CALLS = 256
+MAX_CONCURRENCY = 32
 
 BENCHMARKS = (
     (
@@ -90,8 +97,6 @@ def digest(value):
 
 
 def catalog():
-    from .adapters import list_adapters
-
     return {
         "version": VERSION,
         "benchmarks": [adapter.catalog_entry() for adapter in list_adapters()],
@@ -111,8 +116,6 @@ def load_document(path):
             json.loads(line) for line in path.read_text().split("\n") if line.strip()
         ]
     if path.suffix in {".yaml", ".yml"}:
-        import yaml
-
         return yaml.safe_load(path.read_text())
     return json.loads(path.read_text())
 
@@ -158,7 +161,7 @@ def validate_request_params(params, limits, label="request_params"):
         serialized = json.dumps(params, allow_nan=False)
     except (ValueError, TypeError) as exc:
         raise ValueError(f"{label} must contain finite JSON values") from exc
-    if len(serialized.encode()) > 65536:
+    if len(serialized.encode()) > MAX_PARAMETER_BYTES:
         raise ValueError(f"{label} exceeds the frozen parameter size limit")
     if "n" in params and (isinstance(params["n"], bool) or params["n"] != 1):
         raise ValueError(
@@ -212,8 +215,10 @@ def validate_request_params(params, limits, label="request_params"):
         raise ValueError(f"{label}.chat_template_kwargs must be an object")
     if "stop" in params and not (
         isinstance(params["stop"], str)
-        or isinstance(params["stop"], list)
-        and all(isinstance(item, str) for item in params["stop"])
+        or (
+            isinstance(params["stop"], list)
+            and all(isinstance(item, str) for item in params["stop"])
+        )
     ):
         raise ValueError(f"{label}.stop must be text or a list of text")
     for name in ("ignore_eos", "skip_special_tokens", "spaces_between_special_tokens"):
@@ -224,6 +229,10 @@ def validate_request_params(params, limits, label="request_params"):
 def plan(manifest):
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be an object")
+    if "runner_provenance" in manifest:
+        raise ValueError(
+            "Runner provenance is captured by the service, not the manifest"
+        )
     m = copy.deepcopy(manifest)
     if m.get("version") != VERSION:
         raise ValueError(f"version must be {VERSION}")
@@ -232,12 +241,32 @@ def plan(manifest):
     m.setdefault("mode", "live")
     m.setdefault("profile", "quick")
     m.setdefault("seed", 20260918)
+    if isinstance(m["seed"], bool) or not isinstance(m["seed"], int):
+        raise ValueError("seed must be an integer")
     m.setdefault("name", "sr-bench")
     m.setdefault("cost_policy", "require_priced")
     if m["cost_policy"] not in {"require_priced", "capability_only"}:
         raise ValueError("cost_policy must be require_priced or capability_only")
     if m["profile"] not in {"smoke", "quick", "standard"}:
         raise ValueError("unknown profile")
+    if m["mode"] == "preview":
+        if not isinstance(m.get("preview_context", {}), dict):
+            raise ValueError("preview_context must be an object")
+        context = {"sampling_seed": m["seed"], **m.get("preview_context", {})}
+        if set(context) - {"session_id", "conversation_id", "sampling_seed"}:
+            raise ValueError("Unknown preview_context field")
+        for key in ("session_id", "conversation_id"):
+            if key in context and (
+                not isinstance(context[key], str) or not context[key]
+            ):
+                raise ValueError("Preview session identities must be nonempty strings")
+        if (
+            isinstance(context["sampling_seed"], bool)
+            or not isinstance(context["sampling_seed"], int)
+            or not -(2**63) <= context["sampling_seed"] < 2**63
+        ):
+            raise ValueError("preview sampling_seed must be a signed 64-bit integer")
+        m["preview_context"] = context
     if "dataset" in m:
         ds = m["dataset"]
         if not isinstance(ds, dict) or not ds.get("path") or not ds.get("sha256"):
@@ -269,8 +298,6 @@ def plan(manifest):
     if not isinstance(cases, list) or not cases:
         raise ValueError("at least one case is required")
     ids = set()
-    from .adapters import get_adapter, list_adapters
-
     available = {adapter.id for adapter in list_adapters()}
     for c in cases:
         if (
@@ -366,7 +393,7 @@ def plan(manifest):
                 )
             if t["kind"] == "mom" and (
                 not isinstance(t.get("max_inference_calls"), int)
-                or not 1 <= t["max_inference_calls"] <= 256
+                or not 1 <= t["max_inference_calls"] <= MAX_INFERENCE_CALLS
             ):
                 raise ValueError(
                     "Priced MoM requires a frozen max_inference_calls bound"
@@ -402,7 +429,7 @@ def plan(manifest):
         if not isinstance(limits[k], int):
             raise ValueError(f"{k} must be an integer")
     if (
-        limits["concurrency"] > 32
+        limits["concurrency"] > MAX_CONCURRENCY
         or limits["total_timeout_s"] > limits["max_run_seconds"]
         or limits["idle_timeout_s"] > limits["total_timeout_s"]
     ):

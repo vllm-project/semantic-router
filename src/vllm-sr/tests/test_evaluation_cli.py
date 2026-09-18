@@ -2,9 +2,8 @@
 
 import json
 
-from click.testing import CliRunner
-
 from cli.commands.benchmark import benchmark
+from click.testing import CliRunner
 
 
 def test_catalog_and_clean_command_surface():

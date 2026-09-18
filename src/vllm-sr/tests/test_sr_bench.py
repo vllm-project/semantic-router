@@ -9,13 +9,20 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 import requests
-
-from cli.sr_bench.contracts import plan
+from cli.sr_bench import adapters
+from cli.sr_bench.contracts import catalog, digest, plan
 from cli.sr_bench.engine import Engine, basic_grade
+from cli.sr_bench.offline import export_training, regrade, replay
 from cli.sr_bench.report import compare, make_report
 from cli.sr_bench.service import PREFIX, Server
-from cli.sr_bench.store import Store, TERMINAL
-from cli.sr_bench.transport import CallFailure, chat, final_content, normalize_usage
+from cli.sr_bench.store import TERMINAL, Store
+from cli.sr_bench.transport import (
+    CallFailure,
+    chat,
+    final_content,
+    mom_usage,
+    normalize_usage,
+)
 
 
 class Target(BaseHTTPRequestHandler):
@@ -367,7 +374,6 @@ def test_cost_reservation_rejects_before_generation(tmp_path, target):
 
 
 def test_multimodel_four_bucket_cost_receipt():
-    from cli.sr_bench.transport import mom_usage
 
     prices = {
         "a": {"input": 1, "cached_input": 0.1, "cache_write": 2, "output": 3},
@@ -414,8 +420,6 @@ def test_arc_multiple_test_grids_are_atomic():
 
 
 def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
-    from cli.sr_bench.offline import replay, regrade, export_training
-    from cli.sr_bench.contracts import digest
 
     store = Store(tmp_path)
     engine = Engine(store)
@@ -482,7 +486,6 @@ def test_offline_replay_regrade_and_export_never_infer(tmp_path, target):
 
 
 def test_training_export_refuses_unknown_split(tmp_path, target):
-    from cli.sr_bench.offline import export_training
 
     store = Store(tmp_path)
     run = Engine(store).start(manifest(target))
@@ -534,8 +537,6 @@ def test_native_target_params_are_frozen_sent_and_journaled(tmp_path, target):
 def test_registered_adapter_preflights_all_cases_and_executes_shared_client(
     tmp_path, target, monkeypatch
 ):
-    from cli.sr_bench import adapters
-    from cli.sr_bench.contracts import catalog
 
     adapters.list_adapters()
     monkeypatch.setattr(adapters, "_adapters", dict(adapters._adapters))

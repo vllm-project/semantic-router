@@ -8,11 +8,17 @@ import re
 import socket
 import threading
 import time
+from contextlib import suppress
+from http import HTTPStatus
 
 import requests
 
+MAX_USAGE_RECEIPT_BYTES = 12288
+MAX_RECEIPT_CALLS = 256
 
-class CallFailure(RuntimeError):
+
+# Shared internal transport/harness contract; preserving its exception identity.
+class CallFailure(RuntimeError):  # noqa: N818
     def __init__(self, message, partial=None):
         super().__init__(message)
         self.partial = partial or {}
@@ -43,12 +49,12 @@ def normalize_usage(raw):
         or cached + written > total
     ):
         raise CallFailure("Invalid token usage buckets")
-    return dict(
-        input_tokens=total - cached - written,
-        cached_input_tokens=cached,
-        cache_write_tokens=written,
-        output_tokens=output,
-    )
+    return {
+        "input_tokens": total - cached - written,
+        "cached_input_tokens": cached,
+        "cache_write_tokens": written,
+        "output_tokens": output,
+    }
 
 
 def cost_for(usage, model, prices):
@@ -73,7 +79,7 @@ def mom_usage(response_headers, response_usage, prices):
     """Account every traced child call; never price MoM tokens as its final model."""
     raw = response_headers.get("x-vsr-model-usage")
     if raw:
-        if len(raw.encode()) > 12288:
+        if len(raw.encode()) > MAX_USAGE_RECEIPT_BYTES:
             raise CallFailure("MoM usage receipt exceeds bounded contract")
         try:
             receipt = json.loads(raw)
@@ -86,7 +92,7 @@ def mom_usage(response_headers, response_usage, prices):
         ):
             raise CallFailure("Invalid MoM usage receipt contract")
         calls = receipt["calls"]
-        if not 1 <= len(calls) <= 256:
+        if not 1 <= len(calls) <= MAX_RECEIPT_CALLS:
             raise CallFailure("Invalid MoM inference call count")
         breakdown = []
         for call in calls:
@@ -206,7 +212,10 @@ def chat(
     response = None
     stop = threading.Event()
     guard_error = []
-    stream_file = open(stream_path, "xb", buffering=8192) if stream_path else None
+    # The finalizer fsyncs partial evidence before closing on every exit path.
+    stream_file = None
+    if stream_path:
+        stream_file = open(stream_path, "xb", buffering=8192)  # noqa: SIM115
 
     def partial():
         return {
@@ -237,7 +246,7 @@ def chat(
                 min(limits["idle_timeout_s"], limits["total_timeout_s"]),
             ),
         )
-        if response.status_code >= 400:
+        if response.status_code >= HTTPStatus.BAD_REQUEST:
             raise CallFailure(f"Target HTTP {response.status_code}")
         if "text/event-stream" not in response.headers.get("content-type", ""):
             raise CallFailure("Target did not return a streaming response")
@@ -255,10 +264,8 @@ def chat(
                 )
                 if why:
                     guard_error.append(why)
-                    try:
+                    with suppress(AttributeError, OSError):
                         response.raw._fp.fp.raw._sock.shutdown(socket.SHUT_RDWR)
-                    except (AttributeError, OSError):
-                        pass
                     return
 
         watcher = threading.Thread(target=watch, daemon=True)
@@ -398,5 +405,7 @@ def chat(
         if response is not None:
             response.close()
         if stream_file is not None:
-            os.fsync(stream_file.fileno())
-            stream_file.close()
+            try:
+                os.fsync(stream_file.fileno())
+            finally:
+                stream_file.close()

@@ -48,6 +48,9 @@ from cli.container_start_paths import (
     _runtime_mount_specs,
 )
 from cli.container_start_runner import run_container_specs
+from cli.parser import parse_user_config
+from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
+from cli.runtime_topology import resolve_runtime_topology
 from cli.sr_bench_runtime import (
     BENCH_CONFIG_ENV,
     BENCH_IDENTITY_LABEL,
@@ -56,9 +59,6 @@ from cli.sr_bench_runtime import (
     dashboard_bench_env,
     prepare_bench_runtime,
 )
-from cli.parser import parse_user_config
-from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
-from cli.runtime_topology import resolve_runtime_topology
 from cli.storage_secrets import (
     STORAGE_SECRET_ENV_NAMES,
     load_storage_secrets,
@@ -589,7 +589,7 @@ def _build_bench_runtime_spec(
     *, runtime, image, nofile_limit, network_name, stack_layout, bench
 ):
     assert bench.store is not None
-    worker_env = {name: "" for name in bench.secrets}
+    worker_env = dict.fromkeys(bench.secrets, "")
     # The service has one fixed token variable; the Dashboard may use a custom ref.
     worker_env["SR_BENCH_TOKEN"] = ""
     cmd = _build_service_run_command(

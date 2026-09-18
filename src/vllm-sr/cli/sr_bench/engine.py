@@ -4,16 +4,23 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import os
 import re
 import threading
 import time
+from http import HTTPStatus
 
 import requests
 
-from .contracts import plan
+from .adapters import get_adapter
+from .contracts import digest, plan
+from .failures import failure_reason, failure_summary
+from .provenance import capture_runner
 from .report import BUCKETS, make_report
 from .store import TERMINAL, now
-from .transport import effective_request, CallFailure, chat
+from .transport import CallFailure, chat, effective_request
+
+ARC_MAX_COLOR = 9
 
 
 def basic_grade(case, final):
@@ -40,7 +47,7 @@ def basic_grade(case, final):
                     and all(
                         isinstance(row, list)
                         and len(row) == len(grid[0])
-                        and all(type(x) is int and 0 <= x <= 9 for x in row)
+                        and all(type(x) is int and 0 <= x <= ARC_MAX_COLOR for x in row)
                         for row in grid
                     )
                 )
@@ -86,8 +93,6 @@ class Context:
             self.store.root / "runs" / run_id / case["id"] / target["id"]
         )
         # IDs must not be used as paths without normalization.
-        from .contracts import digest
-
         self.artifact_dir = (
             self.store.root / "runs" / run_id / digest([case["id"], target["id"]])[:24]
         )
@@ -251,11 +256,14 @@ class Engine:
         self.spent = {}
         self.reserved = {}
         self.user_cancelled = set()
+        self.first_failures = {}
         self.store.recover()
 
     def start(self, manifest, owner="local", request_key=None):
         frozen = plan(manifest)
-        run, created = self.store.create(frozen, owner, request_key)
+        run, created = self.store.create(
+            frozen, owner, request_key, provenance=capture_runner(frozen)
+        )
         if created:
             cancel = threading.Event()
             with self.lock:
@@ -302,8 +310,6 @@ class Engine:
             if manifest["mode"] == "preview":
                 headers = {"Content-Type": "application/json"}
                 if target.get("preview_api_key_env") or target.get("api_key_env"):
-                    import os
-
                     key = os.environ.get(
                         target.get("preview_api_key_env") or target["api_key_env"]
                     )
@@ -322,6 +328,7 @@ class Engine:
                         "max_tokens", manifest["sampling"]["max_tokens"]
                     ),
                     "options": {"trace": True},
+                    "preview_context": manifest["preview_context"],
                 }
                 payload.update(
                     {
@@ -345,7 +352,7 @@ class Engine:
                         manifest["limits"]["idle_timeout_s"],
                     ),
                 )
-                if response.status_code >= 400:
+                if response.status_code >= HTTPStatus.BAD_REQUEST:
                     raise ValueError(f"Preview HTTP {response.status_code}")
                 routing = response.json()
                 if (
@@ -362,8 +369,6 @@ class Engine:
                     "details": {"routing": routing},
                 }
             else:
-                from .adapters import get_adapter
-
                 result = get_adapter(case["benchmark"]).execute(case, ctx)
                 if (
                     not isinstance(result, dict)
@@ -399,6 +404,16 @@ class Engine:
                     "partial": getattr(exc, "partial", {}),
                 },
             )
+            with self.lock:
+                if run_id not in self.first_failures:
+                    failure = {
+                        "case_id": case["id"],
+                        "target_id": target["id"],
+                        "reason": failure_reason(message),
+                        "inferred_from_saved_results": False,
+                    }
+                    self.first_failures[run_id] = failure
+                    self.store.event(run_id, "failure_observed", failure)
             # Fail closed: no new cases are dispatched after a transport/harness failure.
             cancel.set()
 
@@ -496,7 +511,10 @@ class Engine:
                 status = "completed"
             else:
                 status = "failed"
-            self.store.status(run_id, status)
+            failure = self.first_failures.get(run_id)
+            self.store.status(
+                run_id, status, failure_summary(failure) if failure else None
+            )
             report = make_report(self.store, run_id)
             path = self.store.root / "runs" / run_id / "report.json"
             path.parent.mkdir(parents=True, exist_ok=True)

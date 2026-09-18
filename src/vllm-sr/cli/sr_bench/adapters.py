@@ -10,9 +10,10 @@ from __future__ import annotations
 import math
 import re
 import threading
+from collections.abc import Callable
 from dataclasses import dataclass
 from importlib.metadata import entry_points
-from typing import Callable, Protocol
+from typing import Protocol
 
 
 class AdapterContext(Protocol):
@@ -51,7 +52,7 @@ class BenchmarkAdapter:
 
 _adapters: dict[str, BenchmarkAdapter] = {}
 _lock = threading.RLock()
-_loaded = False
+_loaded = threading.Event()
 
 
 def _validate(adapter):
@@ -74,30 +75,34 @@ def _validate(adapter):
 
 
 def _basic_execute(case, context):
-    from .engine import basic_grade
+    # The engine dispatches adapters; defer this edge to avoid an import cycle.
+    from .engine import basic_grade  # noqa: PLC0415
 
     response = context.call(case["messages"])
     return basic_grade(case, response["final"])
 
 
 def _external_execute(case, context):
-    from .external import execute_case
+    # External preflight imports the frozen-plan contracts.
+    from .external import execute_case  # noqa: PLC0415
 
     return execute_case(case, context)
 
 
 def _external_preflight(case, manifest, cache):
-    from .external import preflight_case
+    from .external import preflight_case  # noqa: PLC0415 - contract cycle
 
     preflight_case(case, manifest, cache)
 
 
 def _initialize():
-    global _loaded
     with _lock:
-        if _loaded:
+        if _loaded.is_set():
             return
-        from .contracts import BENCHMARKS, BENCHMARK_WEIGHTS
+        from .contracts import (  # noqa: PLC0415 - registry cycle
+            BENCHMARK_WEIGHTS,
+            BENCHMARKS,
+        )
 
         basic = {"mmlu-pro", "gpqa-diamond", "arc-agi-2"}
         found = {}
@@ -130,7 +135,7 @@ def _initialize():
                 )
             found[adapter.id] = adapter
         _adapters.update(found)
-        _loaded = True
+        _loaded.set()
 
 
 def register_adapter(adapter):

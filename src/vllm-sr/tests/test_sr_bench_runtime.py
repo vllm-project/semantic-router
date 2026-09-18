@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import json
-from contextlib import nullcontext
 import stat
 import subprocess
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -146,7 +146,7 @@ def test_reused_worker_is_not_owned_by_failed_dashboard_start_rollback(monkeypat
     monkeypatch.setattr(
         container_start_runner,
         "_cleanup_started_containers",
-        lambda names: removed.extend(names),
+        removed.extend,
     )
     status, _, _ = container_start_runner.run_container_specs(
         [
@@ -212,7 +212,7 @@ def test_reconciliation_failure_rolls_back_only_new_runtime_containers(monkeypat
     monkeypatch.setattr(
         container_start_runner,
         "_cleanup_started_containers",
-        lambda names: removed.extend(names),
+        removed.extend,
     )
     status, _, error = container_start_runner.run_container_specs(
         [

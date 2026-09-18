@@ -7,12 +7,10 @@ from unittest.mock import Mock
 
 import pytest
 import requests
-from click.testing import CliRunner
-
 from cli.runtime_stack import resolve_runtime_stack
-from cli.sr_bench import VERSION
+from cli.sr_bench import VERSION, service
 from cli.sr_bench.client import Client
-from cli.sr_bench import service
+from click.testing import CliRunner
 
 command = importlib.import_module("cli.commands.benchmark")
 client_module = importlib.import_module("cli.sr_bench.client")

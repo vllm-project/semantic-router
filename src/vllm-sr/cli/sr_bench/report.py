@@ -10,6 +10,7 @@ from statistics import mean
 
 from . import VERSION
 from .contracts import BENCHMARK_WEIGHTS
+from .failures import first_saved_failure
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
 
@@ -172,12 +173,24 @@ def make_report(store, run_id):
             if manifest["mode"] == "preview"
             else store.results(manifest["replay_sources"]["preview_run_id"])
         )
-        for item in metrics:
+        for item in metrics + benchmarks:
+            case_ids = {
+                case["id"]
+                for case in manifest["cases"]
+                if not item.get("benchmark") or case["benchmark"] == item["benchmark"]
+            }
             routing = [
                 row.get("details", {}).get("routing", {})
                 for row in routing_rows
-                if row["target_id"] == item["id"]
+                if row["target_id"] == item["id"] and row["case_id"] in case_ids
             ]
+            for source, output in (
+                ("selection_status", "selection_statuses"),
+                ("selection_reason", "selection_reasons"),
+            ):
+                item[output] = dict(
+                    Counter(row[source] for row in routing if row.get(source))
+                )
             item["selected_models"] = dict(
                 Counter(
                     row["selected_model"]
@@ -250,6 +263,11 @@ def make_report(store, run_id):
     )
     metadata = manifest.get("limitations", [])
     limitations.extend(metadata)
+    runner = store.provenance(run_id)
+    if runner is None:
+        limitations.append(
+            "Runner source and dependency provenance was not captured for this saved run; it is unknown."
+        )
     if any(c["benchmark"] == "gpqa-diamond" for c in manifest["cases"]):
         limitations.append(
             "GPQA labels were previously seen in this project; this is a retest, not an unseen holdout claim."
@@ -268,6 +286,7 @@ def make_report(store, run_id):
         "status": run["status"],
         "mode": manifest["mode"],
         "cost_policy": manifest["cost_policy"],
+        "failure": store.first_failure(run_id) or first_saved_failure(results),
         "summary": {
             "targets": metrics,
             "wall_time_s": wall,
@@ -276,6 +295,7 @@ def make_report(store, run_id):
         "benchmarks": benchmarks,
         "limitations": limitations,
         "provenance": {
+            "runner": runner,
             "plan_sha256": manifest["plan_sha256"],
             "case_sha256": manifest["case_sha256"],
             "dataset": manifest.get("dataset"),
@@ -298,40 +318,73 @@ def make_report(store, run_id):
     }
 
 
+def _comparison_protocol(baseline, candidate):
+    for key in (
+        "case_sha256",
+        "sampling",
+        "benchmark_options",
+        "benchmark_weights",
+        "adapter_versions",
+        "mode",
+        "limits",
+    ):
+        if baseline.get(key) != candidate.get(key):
+            raise ValueError(f"Cannot compare different {key}")
+
+    def targets(manifest):
+        return {
+            **manifest.get("auxiliary_targets", {}),
+            **{target["id"]: target for target in manifest["targets"]},
+        }
+
+    def auxiliary(manifest):
+        inventory = targets(manifest)
+        resolved = {}
+        for benchmark, options in manifest.get("benchmark_options", {}).items():
+            for role in ("judge", "simulator"):
+                if ref := options.get(role):
+                    target = inventory[ref]
+                    resolved[benchmark, role] = {
+                        **{k: v for k, v in target.items() if k != "id"},
+                        "request_params": {
+                            **manifest["sampling"],
+                            **target.get("request_params", {}),
+                        },
+                    }
+        return resolved
+
+    if auxiliary(baseline) != auxiliary(candidate):
+        raise ValueError("Cannot compare changed effective judge/simulator targets")
+
+    prices, profiles = {}, {}
+    for manifest in (baseline, candidate):
+        for target in targets(manifest).values():
+            for model, price in target.get("prices", {}).items():
+                if model in prices and prices[model] != price:
+                    raise ValueError("Cannot compare changed frozen model prices")
+                prices[model] = price
+            if target["kind"] == "single":
+                model = target["model"]
+                profile = {**manifest["sampling"], **target.get("request_params", {})}
+                if model in profiles and profiles[model] != profile:
+                    raise ValueError(
+                        "Cannot compare changed single-model request parameters"
+                    )
+                profiles[model] = profile
+
+
 def compare(store, baseline_id, candidate_id):
     baseline = store.get(baseline_id)
     candidate = store.get(candidate_id)
     bm = baseline["manifest"]
     cm = candidate["manifest"]
-    for key in (
-        "case_sha256",
-        "sampling",
-        "benchmark_options",
-        "auxiliary_targets",
-        "benchmark_weights",
-        "adapter_versions",
-        "mode",
-    ):
-        if bm.get(key) != cm.get(key):
-            raise ValueError(f"Cannot compare different {key}")
+    _comparison_protocol(bm, cm)
     if bm["mode"] != "live":
         raise ValueError("Preview cannot support quality or cost-saving comparisons")
     if baseline["status"] != "completed" or candidate["status"] != "completed":
         raise ValueError("Both runs must complete before a paired comparison")
     br = store.results(baseline_id)
     cr = store.results(candidate_id)
-    baseline_profiles = {
-        t["model"]: t.get("request_params", {})
-        for t in bm["targets"]
-        if t["kind"] == "single"
-    }
-    for target in cm["targets"]:
-        if (
-            target["kind"] == "single"
-            and target["model"] in baseline_profiles
-            and target.get("request_params", {}) != baseline_profiles[target["model"]]
-        ):
-            raise ValueError("Cannot compare changed single-model request parameters")
     singles = [t for t in bm["targets"] if t["kind"] == "single"]
     if not singles:
         raise ValueError("Baseline must contain a single-model target")
@@ -366,7 +419,7 @@ def compare(store, baseline_id, candidate_id):
                 for c in bm["cases"]
                 if c["benchmark"] == b
             ]
-            for b in {c["benchmark"] for c in bm["cases"]}
+            for b in sorted({c["benchmark"] for c in bm["cases"]})
         }
         weights = {
             b: bm["benchmark_weights"][b]

@@ -12,6 +12,8 @@ from pathlib import Path
 
 from .contracts import canonical
 
+MAX_PAGE_SIZE = 500
+
 TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 
 
@@ -29,14 +31,13 @@ class Store:
         os.chmod(self.path, 0o600)
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=FULL")
-        self.db.executescript(
-            """
+        self.db.executescript("""
         CREATE TABLE IF NOT EXISTS runs(id TEXT PRIMARY KEY, owner TEXT NOT NULL, request_key TEXT, status TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, manifest TEXT NOT NULL, error TEXT, UNIQUE(owner,request_key));
         CREATE TABLE IF NOT EXISTS results(run_id TEXT, case_id TEXT, target_id TEXT, status TEXT, data TEXT, PRIMARY KEY(run_id,case_id,target_id));
         CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY,run_id TEXT,case_id TEXT,target_id TEXT,role TEXT,status TEXT,data TEXT);
         CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT,at TEXT,kind TEXT,data TEXT);
-        """
-        )
+        CREATE TABLE IF NOT EXISTS run_provenance(run_id TEXT PRIMARY KEY,data TEXT NOT NULL);
+        """)
         self.db.commit()
 
     def event(self, run_id, kind, data):
@@ -46,7 +47,7 @@ class Store:
                 (run_id, now(), kind, canonical(data)),
             )
 
-    def create(self, manifest, owner="local", request_key=None):
+    def create(self, manifest, owner="local", request_key=None, provenance=None):
         with self.lock, self.db:
             if request_key:
                 row = self.db.execute(
@@ -65,8 +66,28 @@ class Store:
                 "INSERT INTO runs VALUES(?,?,?,?,?,?,?,NULL)",
                 (run_id, owner, request_key, "queued", at, at, canonical(manifest)),
             )
+            if provenance is not None:
+                self.db.execute(
+                    "INSERT INTO run_provenance VALUES(?,?)",
+                    (run_id, canonical(provenance)),
+                )
             self.event(run_id, "created", {"plan_sha256": manifest["plan_sha256"]})
             return self.get(run_id), True
+
+    def provenance(self, run_id):
+        with self.lock:
+            row = self.db.execute(
+                "SELECT data FROM run_provenance WHERE run_id=?", (run_id,)
+            ).fetchone()
+            return json.loads(row[0]) if row else None
+
+    def first_failure(self, run_id):
+        with self.lock:
+            row = self.db.execute(
+                "SELECT data FROM events WHERE run_id=? AND kind='failure_observed' ORDER BY seq LIMIT 1",
+                (run_id,),
+            ).fetchone()
+            return json.loads(row[0]) if row else None
 
     def get(self, run_id, owner=None):
         with self.lock:
@@ -87,21 +108,21 @@ class Store:
             failed = sum(
                 v for k, v in counts.items() if k not in {"completed", "running"}
             )
-            return dict(
-                id=row[0],
-                owner=row[1],
-                status=row[2],
-                created_at=row[3],
-                updated_at=row[4],
-                manifest=m,
-                error=row[6],
-                progress=dict(
-                    total=len(m["cases"]) * len(m["targets"]),
-                    completed=completed,
-                    failed=failed,
-                    running=counts.get("running", 0),
-                ),
-            )
+            return {
+                "id": row[0],
+                "owner": row[1],
+                "status": row[2],
+                "created_at": row[3],
+                "updated_at": row[4],
+                "manifest": m,
+                "error": row[6],
+                "progress": {
+                    "total": len(m["cases"]) * len(m["targets"]),
+                    "completed": completed,
+                    "failed": failed,
+                    "running": counts.get("running", 0),
+                },
+            }
 
     def list(self, owner=None):
         with self.lock:
@@ -244,7 +265,11 @@ class Store:
             return self._call_record(row)
 
     def page(self, run_id, kind, after=0, limit=100):
-        if kind not in {"calls", "results"} or not 0 <= after or not 1 <= limit <= 500:
+        if (
+            kind not in {"calls", "results"}
+            or not after >= 0
+            or not 1 <= limit <= MAX_PAGE_SIZE
+        ):
             raise ValueError(
                 "Evidence pages require after>=0 and limit between 1 and 500"
             )

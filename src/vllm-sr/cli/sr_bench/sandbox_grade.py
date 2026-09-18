@@ -4,9 +4,9 @@ import json
 import os
 import selectors
 import signal
-import time
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 
@@ -59,8 +59,10 @@ def _run_script(path, env, timeout, max_log_bytes=131072):
 
 def grade(payload):
     if payload["benchmark"] == "livecodebench":
-        from lcb_runner.benchmarks.code_generation import CodeGenerationProblem
-        from lcb_runner.evaluation.compute_code_generation_metrics import (
+        from lcb_runner.benchmarks.code_generation import (  # noqa: PLC0415
+            CodeGenerationProblem,
+        )
+        from lcb_runner.evaluation.compute_code_generation_metrics import (  # noqa: PLC0415 - optional grading environment
             evaluate_generations_by_problem,
         )
 

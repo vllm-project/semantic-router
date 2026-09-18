@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import time
+from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -38,7 +39,7 @@ class Client:
             if response.status_code in {401, 403}:
                 raise ValueError(f"Service authentication failed; set {self.token_env}")
             if (
-                response.status_code == 200
+                response.status_code == HTTPStatus.OK
                 and response.json().get("version") == VERSION
             ):
                 if (
@@ -136,6 +137,6 @@ class Client:
                 "Service request failed; inspect runs before submitting again (requests are never retried)"
             ) from exc
         data = response.json()
-        if response.status_code >= 400:
+        if response.status_code >= HTTPStatus.BAD_REQUEST:
             raise ValueError(data.get("error", f"HTTP {response.status_code}"))
         return data

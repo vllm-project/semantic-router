@@ -1,13 +1,15 @@
 """Harness integrity, bounded execution, and owned-resource recovery checks."""
 
+import asyncio
 import json
 import os
 import subprocess
+import sys
 import time
+import types
 from types import SimpleNamespace
 
 import pytest
-
 from cli.sr_bench import harness_worker as worker
 from cli.sr_bench.contracts import digest
 from cli.sr_bench.sandbox_grade import _run_script
@@ -150,9 +152,6 @@ def test_terminal_uses_task_image_and_rejects_mutable_sidecars(tmp_path):
 def test_harbor_cancel_records_before_environment_start_and_cleans(
     tmp_path, monkeypatch
 ):
-    import asyncio
-    import sys
-    import types
 
     task = tmp_path / "task"
     task.mkdir()

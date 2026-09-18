@@ -135,12 +135,20 @@ all-success or at-least-one-success claims.
 
 - **Preview** exercises the live Router preview API for the exact messages,
   tools and model entrypoint. It records signals, decision, candidates and
-  selection status. Preview is routing evidence and has no answer-quality score.
-  An execution-required algorithm is reported as unresolved.
+  selection status. With Learning enabled, it evaluates the same selection,
+  adaptation and protection logic against a captured read-only state snapshot.
+  Optional session/conversation identity supplies the protection context. The
+  response includes the selected model, configuration and state hashes, capture
+  time and sampling seed. Preview does not hydrate or evict shared state, record
+  outcomes, or advance production random state. A seeded preview reproduces that
+  snapshot's sampled choice; a later request can differ when state or its random
+  draw changes. Preview is routing evidence and has no answer-quality score.
+  Algorithms that require model execution remain explicitly unresolved.
 - **Replay** uses a complete, identity-compatible saved single-model response
   matrix for eligible single-selection routing. Its report is an estimate.
-  Changed prompts, tool state, multi-model algorithms and new agent trajectories
-  require live calls. Missing cells do not generate requests implicitly.
+  State-dependent Learning snapshots are not eligible for replay. Changed
+  prompts, tool state, multi-model algorithms and new agent trajectories require
+  live calls. Missing cells do not generate requests implicitly.
 - **Live** executes the real model or MoM entrypoint and the full grader/task
   protocol. Only live evidence supports a measured capability/cost claim.
 
@@ -235,10 +243,17 @@ gated benchmark answers do not belong in the PR.
   dispatch, budget stop and incomplete accounting with deterministic fault tests.
 - [ ] Run actual single models and MoM through the CLI using fixed task IDs;
   verify saved responses, final-channel scoring, identities and metric arithmetic.
-- [ ] Complete loop 1: preview, baseline live comparison, inspect errors and cost,
-  formulate one routing change, validate/plan/apply and confirm active revision.
-- [ ] Complete loop 2: preview the changed revision, live paired comparison on
-  the same dev set, then inspect a disjoint holdout without tuning against it.
+- [ ] Measure the current Balance recipe and every constituent single model on
+  the same frozen development cases before tuning.
+- [ ] Complete optimization loop 1: inspect baseline errors and cost, formulate
+  a routing change, validate/plan/apply, confirm the active revision, then preview
+  and measure the first optimized Balance recipe.
+- [ ] Complete optimization loop 2: inspect the first iteration, apply and
+  preview a second revision, then measure it on the same development cases.
+  Compare all three Balance revisions with the complete single-model baseline.
+- [ ] Evaluate the frozen final recipe and the chosen baseline on a disjoint
+  holdout without tuning against it. Publish the final recipe and uncertainty;
+  report measured regressions or inconclusive improvements without hiding them.
 - [ ] Exercise all nine adapter execution/grade paths against real prerequisites;
   distinguish functional smoke acceptance from statistical capability claims.
 - [ ] Use the real Dashboard to launch and inspect a run, compare CLI-created

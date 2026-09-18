@@ -16,8 +16,8 @@ from cli.container_services import (
     container_status,
     container_stop_container,
 )
-from cli.utils import get_logger
 from cli.sr_bench_runtime import reuse_bench_container
+from cli.utils import get_logger
 
 log = get_logger(__name__)
 

@@ -163,7 +163,10 @@ def _checkout(spec, root):
         _run(["git", "init", root])
         _run(["git", "-C", root, "remote", "add", "origin", spec["repo"]])
     head = subprocess.run(
-        ["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=False,
     )
     if head.returncode:
         origin = subprocess.check_output(
@@ -194,7 +197,7 @@ def _checkout(spec, root):
     if (
         actual != spec["revision"]
         or subprocess.run(
-            ["git", "-C", str(root), "diff", "--quiet", "HEAD"]
+            ["git", "-C", str(root), "diff", "--quiet", "HEAD"], check=False
         ).returncode
     ):
         raise ValueError(
@@ -203,7 +206,10 @@ def _checkout(spec, root):
 
 
 def setup(benchmark="all", install=False, build_sandbox=False):
-    from .sources import COUNTS
+    # Source preparation also uses setup helpers.
+    from .sources import (  # noqa: PLC0415
+        COUNTS,
+    )
 
     names = list(COUNTS) if benchmark == "all" else [benchmark]
     if any(name not in COUNTS for name in names):

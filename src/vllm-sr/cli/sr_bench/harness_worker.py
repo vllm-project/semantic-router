@@ -8,11 +8,15 @@ import json
 import os
 import re
 import signal
-import uuid
 import subprocess
 import sys
 import urllib.request
+import uuid
 from pathlib import Path
+
+import yaml
+
+from .contracts import digest
 
 
 def call(messages, role="subject", extra_body=None):
@@ -44,8 +48,6 @@ def _tau_role(model):
 
 
 def _verify_tau_task(request):
-    from .contracts import digest
-
     metadata = request["case"]["metadata"]
     domain = metadata["domain"]
     if domain not in {"airline", "retail", "telecom"}:
@@ -149,10 +151,19 @@ def cleanup_owned_resources(directory):
 
 def _tau3(request):
     _verify_tau_task(request)
-    from litellm import ModelResponse
-    from tau2.data_model.simulation import TextRunConfig
-    from tau2.run import get_tasks, run_single_task
-    from tau2.utils import llm_utils
+    from litellm import (  # noqa: PLC0415
+        ModelResponse,
+    )
+    from tau2.data_model.simulation import (  # noqa: PLC0415
+        TextRunConfig,
+    )
+    from tau2.run import (  # noqa: PLC0415 - isolated optional harness environment
+        get_tasks,
+        run_single_task,
+    )
+    from tau2.utils import (  # noqa: PLC0415
+        llm_utils,
+    )
 
     def completion(model, messages, tools=None, tool_choice=None, **_kwargs):
         role = _tau_role(model)
@@ -319,7 +330,10 @@ def _lcb(request):
 
 
 def _scicode(request):
-    from inspect_evals.scicode.prompt_templates import INITIAL_PROMPT, SUBPROBLEM_PROMPT
+    from inspect_evals.scicode.prompt_templates import (  # noqa: PLC0415 - isolated optional harness environment
+        INITIAL_PROMPT,
+        SUBPROBLEM_PROMPT,
+    )
 
     row = request["case"]["metadata"]["source_record"]
     messages = [
@@ -355,12 +369,12 @@ def _scicode(request):
 
 
 async def _terminal_job(request):
-    from harbor.job import Job
-    from harbor.models.job.config import JobConfig
+    from harbor.job import Job  # noqa: PLC0415 - isolated optional harness environment
+    from harbor.models.job.config import (  # noqa: PLC0415
+        JobConfig,
+    )
 
     task_path = Path(request["case"]["metadata"]["task_path"])
-    from .contracts import digest
-
     tree = {
         str(f.relative_to(task_path)): hashlib.sha256(f.read_bytes()).hexdigest()
         for f in sorted(task_path.rglob("*"))
@@ -392,7 +406,7 @@ async def _terminal_job(request):
             "quiet": True,
         }
     )
-    from harbor.environments.docker.docker import (
+    from harbor.environments.docker.docker import (  # noqa: PLC0415 - isolated optional harness environment
         DockerEnvironment,
         _sanitize_docker_compose_project_name,
     )
@@ -451,8 +465,6 @@ def validate_terminal_compose(path):
     path = Path(path)
     if not path.exists():
         return
-    import yaml
-
     document = yaml.safe_load(path.read_text())
     if not isinstance(document, dict) or not isinstance(
         document.get("services", {}), dict
@@ -480,7 +492,9 @@ def _terminate(_signum, _frame):
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        raise SystemExit("Harness terminated; owned resources will be cleaned")
+        raise SystemExit(
+            "Harness terminated; owned resources will be cleaned"
+        ) from None
     for task in asyncio.all_tasks(loop):
         task.cancel()
 

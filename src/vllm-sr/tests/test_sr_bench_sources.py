@@ -5,10 +5,9 @@ from collections import Counter
 from pathlib import Path
 
 import pytest
-
-from cli.sr_bench.sources import _stratified_order, combine_datasets, prepare_dataset
-from cli.sr_bench.setup import PACKAGES, TASK_SOURCES
 from cli.sr_bench.contracts import load_document
+from cli.sr_bench.setup import PACKAGES, TASK_SOURCES
+from cli.sr_bench.sources import _stratified_order, combine_datasets, prepare_dataset
 
 
 def _source(tmp_path, count=198):

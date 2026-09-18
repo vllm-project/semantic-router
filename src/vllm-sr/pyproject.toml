@@ -33,7 +33,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-bench = ["pyarrow>=18.0.0"]
+bench = ["pyarrow>=18.0.0", "tomli>=2.0.1; python_version < '3.11'"]
 dev = [
     "pytest>=8.4.1",
     "black>=22.0.0",

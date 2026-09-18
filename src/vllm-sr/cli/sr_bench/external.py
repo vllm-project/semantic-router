@@ -13,8 +13,15 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from .transport import CallFailure
+from .contracts import digest
+from .harness_worker import (
+    _verify_tau_task,
+    cleanup_owned_resources,
+    frozen_terminal_image,
+    validate_terminal_compose,
+)
 from .setup import harness_paths, scicode_test_path
+from .transport import CallFailure
 
 HARNESSES = {
     "tau3": ("TAU3", "tau2"),
@@ -22,6 +29,9 @@ HARNESSES = {
     "scicode": ("SCICODE", "inspect_evals"),
     "terminal-bench-2.1": ("TERMINAL", "harbor"),
 }
+GIT_REVISION_LENGTH = 40
+MAX_HARNESS_STEPS = 1000
+
 JUDGE_VERSION = "sr-bench-reference-judge-v1"
 
 
@@ -65,8 +75,6 @@ def preflight_case(case, manifest, cache=None):
                 cache[key] = True
         request = {"case": case, "config": config, "source_root": str(source_root)}
         if benchmark == "tau3":
-            from .harness_worker import _verify_tau_task
-
             _verify_tau_task(request)
         elif benchmark == "terminal-bench-2.1":
             _preflight_terminal(case, config)
@@ -80,7 +88,7 @@ def _preflight_harness(benchmark, config):
             f"Install pinned {benchmark} environment and set SR_BENCH_{env_name}_PYTHON and SR_BENCH_{env_name}_ROOT"
         )
     revision = config.get("source_revision")
-    if not isinstance(revision, str) or len(revision) != 40:
+    if not isinstance(revision, str) or len(revision) != GIT_REVISION_LENGTH:
         raise ValueError(f"{benchmark} requires a full pinned source_revision")
     actual = subprocess.run(
         ["git", "-C", source_root, "rev-parse", "HEAD"],
@@ -105,6 +113,7 @@ def _preflight_harness(benchmark, config):
         ],
         capture_output=True,
         timeout=20,
+        check=False,
     )
     if module_check.returncode:
         raise ValueError(f"{benchmark} optional harness dependencies are unavailable")
@@ -144,19 +153,16 @@ def _preflight_harness(benchmark, config):
             raise ValueError("SciCode test data differs from the pinned digest")
     if (
         not isinstance(config.get("max_steps", 100), int)
-        or not 1 <= config.get("max_steps", 100) <= 1000
+        or not 1 <= config.get("max_steps", 100) <= MAX_HARNESS_STEPS
     ):
         raise ValueError("Harness max_steps must be between 1 and 1000")
 
 
 def _preflight_terminal(case, config):
     try:
-        import tomllib
+        import tomllib  # noqa: PLC0415 - only Terminal tasks need TOML parsing
     except ImportError:
-        import tomli as tomllib
-    from .contracts import digest
-    from .harness_worker import frozen_terminal_image, validate_terminal_compose
-
+        import tomli as tomllib  # noqa: PLC0415 - Python 3.10 compatibility for optional harness
     task = Path(case["metadata"]["task_path"])
     tree = {
         str(p.relative_to(task)): hashlib.sha256(p.read_bytes()).hexdigest()
@@ -372,8 +378,6 @@ def _harness(case, context):
         if process is not None and process.poll() is None:
             os.killpg(process.pid, signal.SIGKILL)
             process.wait(timeout=3)
-        from .harness_worker import cleanup_owned_resources
-
         cleanup_owned_resources(directory)
         bridge.shutdown()
         bridge.server_close()

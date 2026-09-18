@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 import fcntl
-import hmac
 import hashlib
+import hmac
 import json
 import os
 import signal
@@ -19,12 +19,17 @@ from cli.runtime_env_names import runtime_env_name_is_allowed
 from . import VERSION
 from .contracts import catalog, plan
 from .engine import Engine
+from .offline import export_training, regrade, replay
 from .report import compare, make_report
 from .store import Store
 
 PREFIX = "/api/sr-bench/v1"
 DEFAULT_STORE = Path.home() / ".local" / "share" / "vllm-sr" / "sr-bench"
 DEFAULT_URL = "http://127.0.0.1:8090"
+MAX_ACTOR_ID_CHARS = 256
+RUN_ROUTE_PARTS = 2
+RUN_ACTION_ROUTE_PARTS = 3
+CALL_ROUTE_PARTS = 4
 
 
 def service_credentials():
@@ -97,7 +102,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
             if not actor or role not in {"admin", "editor", "viewer"}:
                 raise PermissionError("Invalid actor identity")
-            if len(actor) > 256:
+            if len(actor) > MAX_ACTOR_ID_CHARS:
                 raise PermissionError("Invalid actor identity")
             return actor, role
         return "local", "local"
@@ -241,8 +246,6 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                 )
             if route == ["replays"] and method == "POST":
-                from .offline import replay
-
                 body = self._body()
                 for key in ("baseline_run_id", "preview_run_id"):
                     self.server.store.get(body[key], owner)
@@ -268,18 +271,20 @@ class Handler(BaseHTTPRequestHandler):
                         body["candidate_run_id"],
                     ),
                 )
-            if len(route) >= 2 and route[0] == "runs":
+            if len(route) >= RUN_ROUTE_PARTS and route[0] == "runs":
                 run_id = route[1]
                 run = self.server.store.get(run_id, owner)
-                if len(route) == 2 and method == "GET":
+                if len(route) == RUN_ROUTE_PARTS and method == "GET":
                     return self._send(200, run)
-                if len(route) == 4 and route[2] == "calls" and method == "GET":
+                if (
+                    len(route) == CALL_ROUTE_PARTS
+                    and route[2] == "calls"
+                    and method == "GET"
+                ):
                     return self._send(200, self.server.store.call(run_id, route[3]))
-                if len(route) == 3:
+                if len(route) == RUN_ACTION_ROUTE_PARTS:
                     action = route[2]
                     if action in {"regrade", "export"} and method == "POST":
-                        from .offline import regrade, export_training
-
                         return self._send(
                             200,
                             (regrade if action == "regrade" else export_training)(
@@ -320,7 +325,7 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
     if host not in {"127.0.0.1", "::1", "localhost"} and not token:
         raise ValueError(f"Non-loopback sr-bench service requires {token_reference}")
     if store_identity and (
-        len(store_identity) != 64
+        len(store_identity) != len(hashlib.sha256().hexdigest())
         or any(c not in "0123456789abcdef" for c in store_identity)
     ):
         raise ValueError("store-identity must be a SHA256 digest")
