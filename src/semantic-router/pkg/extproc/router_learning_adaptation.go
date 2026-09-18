@@ -28,6 +28,7 @@ type routerLearningSamplingDiagnostics struct {
 }
 
 type routerLearningCandidateScore struct {
+	candidate          config.ModelRef
 	model              string
 	score              float64
 	posteriorMean      float64
@@ -84,7 +85,7 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 		return baseAdaptationDecision(input, policy)
 	}
 
-	ref := modelRefForName(learningCtx.CandidateModels, winner.model)
+	ref := selection.CandidateForModel(learningCtx.CandidateModels, winner.model, &winner.candidate)
 	if ref == nil {
 		return baseAdaptationDecision(input, adaptationPolicy(mode, routerLearningActionKeepBase, "selected_model_missing", diag))
 	}
@@ -293,14 +294,14 @@ func (r *OpenAIRouter) deployedLearningModelRefs() []config.ModelRef {
 	if r == nil || r.Config == nil {
 		return nil
 	}
-	seen := map[string]struct{}{}
+	seen := map[selection.CandidateID]struct{}{}
 	refs := []config.ModelRef{}
 	add := func(ref config.ModelRef) {
 		ref.Model = strings.TrimSpace(ref.Model)
 		if ref.Model == "" {
 			return
 		}
-		key := ref.Model + "|" + ref.LoRAName
+		key := selection.CandidateIdentity(ref)
 		if _, ok := seen[key]; ok {
 			return
 		}
@@ -339,14 +340,14 @@ func unionConfigDecisionModelRefs(
 	if cfg == nil || match == nil {
 		return nil
 	}
-	seen := map[string]struct{}{}
+	seen := map[selection.CandidateID]struct{}{}
 	var refs []config.ModelRef
 	for _, decision := range cfg.AllRoutingDecisions() {
 		if !match(decision) {
 			continue
 		}
 		for _, ref := range decision.ModelRefs {
-			key := ref.Model + "|" + ref.LoRAName
+			key := selection.CandidateIdentity(ref)
 			if strings.TrimSpace(ref.Model) == "" {
 				continue
 			}
@@ -382,16 +383,19 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 	}
 	maxCost := r.maxCandidateCost(selCtx.CandidateModels)
 	scores := make([]routerLearningCandidateScore, 0, len(selCtx.CandidateModels))
+	// Experience is model-level: sample it once, not once per effort variant.
+	byModel := make(map[string]routerLearningCandidateScore)
 	for _, ref := range selCtx.CandidateModels {
 		model := strings.TrimSpace(ref.Model)
 		if model == "" {
 			continue
 		}
-		exp := r.routerLearningRuntimeState().experienceSnapshot(selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
-		if params, ok := r.Config.ModelConfig[model]; ok && params.QualityScore > 0 && exp.GoodFitCount+exp.UnderpoweredCount == 0 {
-			exp.QualitySeed = clamp01(params.QualityScore)
-			exp.SeedWeight = 2
+		if prior, ok := byModel[model]; ok {
+			prior.candidate = ref
+			scores = append(scores, prior)
+			continue
 		}
+		exp := r.routerLearningRuntimeState().experienceSnapshot(selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
 		alpha := exp.SeedWeight*exp.QualitySeed + float64(exp.GoodFitCount) + 1
 		beta := exp.SeedWeight*(1-exp.QualitySeed) + float64(exp.UnderpoweredCount) + 1
 		mean := alpha / (alpha + beta)
@@ -411,6 +415,7 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 			score += 0.001
 		}
 		scores = append(scores, routerLearningCandidateScore{
+			candidate:          ref,
 			model:              model,
 			score:              score,
 			posteriorMean:      mean,
@@ -422,6 +427,7 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 			cacheAdjustment:    cacheAdjustment,
 			coldStart:          exp.LastUpdated.IsZero(),
 		})
+		byModel[model] = scores[len(scores)-1]
 	}
 	sort.SliceStable(scores, func(i, j int) bool {
 		if scores[i].score == scores[j].score {
@@ -514,14 +520,15 @@ func proposalSelectionResult(
 	scores []routerLearningCandidateScore,
 ) *selection.SelectionResult {
 	result := &selection.SelectionResult{
-		SelectedModel: ref.Model,
-		LoRAName:      ref.LoRAName,
-		Score:         winner.score,
-		Confidence:    clamp01(winner.posteriorMean),
-		Method:        selection.MethodStatic,
-		Tier:          selection.TierSupported,
-		Reasoning:     "router_learning adaptation: routing_sampling",
-		AllScores:     map[string]float64{},
+		SelectedModel:     ref.Model,
+		SelectedCandidate: &ref,
+		LoRAName:          ref.LoRAName,
+		Score:             winner.score,
+		Confidence:        clamp01(winner.posteriorMean),
+		Method:            selection.MethodStatic,
+		Tier:              selection.TierSupported,
+		Reasoning:         "router_learning adaptation: routing_sampling",
+		AllScores:         map[string]float64{},
 	}
 	if baseResult != nil {
 		result.Method = baseResult.Method
@@ -531,10 +538,15 @@ func proposalSelectionResult(
 			result.AllScores = map[string]float64{}
 		}
 	}
+	rows := make(selection.CandidateScores, 0, len(scores))
 	for _, score := range scores {
-		result.AllScores[score.model] = score.score
+		candidate := score.candidate
+		if candidate.Model == "" {
+			candidate.Model = score.model
+		}
+		rows = append(rows, selection.CandidateScore{Candidate: candidate, Score: score.score})
 	}
-	return result
+	return result.WithScores(rows)
 }
 
 func adaptationPolicy(

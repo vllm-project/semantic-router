@@ -268,6 +268,20 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
 
+	// ModelDeployments contains canonical global.model_catalog.deployments.
+	// The router validates provider, device, precision and task compatibility.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelDeployments *apiextensionsv1.JSON `json:"model_deployments,omitempty" yaml:"model_deployments,omitempty"`
+
+	// ModelAdmission contains canonical global.model_catalog.admission budgets.
+	// Keys name deployments or the router's existing admission consumers.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelAdmission *apiextensionsv1.JSON `json:"model_admission,omitempty" yaml:"model_admission,omitempty"`
+
 	// Embedding models configuration (qwen3, gemma, mmbert)
 	// +optional
 	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
@@ -296,6 +310,22 @@ type ConfigSpec struct {
 	// +optional
 	ComplexityRules []ComplexityRulesConfig `json:"complexity_rules,omitempty"`
 
+	// ComplexityModel says how the complexity signal produces its score.
+	// Absent, the signal scores locally against each rule's hard/easy
+	// candidates. With a backend, a remote model produces the score and the
+	// candidates are never read. Mirrors
+	// global.model_catalog.modules.complexity in the router config.
+	// +optional
+	ComplexityModel *ComplexityModelConfig `json:"complexity_model,omitempty"`
+
+	// ExternalModels declares the remote models that classifier backends
+	// (`classifier.pii.backend.model`, `complexity_model.backend.model`) and
+	// the prompt guard protocol refer to by name. Mirrors
+	// global.model_catalog.external[] in the router config field for field;
+	// the router's own validator decides whether a backend resolves against it.
+	// +optional
+	ExternalModels []ExternalModelConfig `json:"external_models,omitempty"`
+
 	// Decision routing strategy ("priority" for priority-based matching)
 	// +kubebuilder:validation:Enum=priority
 	// +optional
@@ -305,14 +335,11 @@ type ConfigSpec struct {
 	// +optional
 	Decisions []DecisionConfig `json:"decisions,omitempty"`
 
-	// Reasoning families
+	// ReasoningEffort is the default reasoning effort for model bindings that do
+	// not select a different effort. The selected model family validates the
+	// value because built-in and custom families may expose different ladders.
 	// +optional
-	ReasoningFamilies map[string]ReasoningFamily `json:"reasoning_families,omitempty"`
-
-	// Default reasoning effort
-	// +kubebuilder:validation:Enum=low;medium;high
-	// +optional
-	DefaultReasoningEffort string `json:"default_reasoning_effort,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty"`
 
 	// API configuration
 	// +optional
@@ -553,11 +580,6 @@ type RedisCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // ValkeyCacheConfig defines Valkey cache backend configuration.
@@ -726,11 +748,6 @@ type ValkeyCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateIndex bool `json:"auto_create_index,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // MilvusCacheConfig defines Milvus cache backend configuration.
@@ -747,14 +764,6 @@ type MilvusCacheConfig struct {
 	// Search settings for Milvus queries
 	// +optional
 	Search MilvusCacheSearch `json:"search,omitempty"`
-
-	// Performance tuning for Milvus
-	// +optional
-	Performance MilvusCachePerformance `json:"performance,omitempty"`
-
-	// DataManagement settings for TTL and compaction
-	// +optional
-	DataManagement MilvusCacheDataManagement `json:"data_management,omitempty"`
 
 	// Development settings for Milvus cache
 	// +optional
@@ -967,97 +976,6 @@ type MilvusCacheSearchParams struct {
 	Ef int `json:"ef,omitempty"`
 }
 
-// MilvusCachePerformance defines performance tuning.
-type MilvusCachePerformance struct {
-	// ConnectionPool settings
-	// +optional
-	ConnectionPool MilvusCacheConnectionPool `json:"connection_pool,omitempty"`
-
-	// Batch settings for operations
-	// +optional
-	Batch MilvusCacheBatch `json:"batch,omitempty"`
-}
-
-// MilvusCacheConnectionPool defines connection pool settings.
-type MilvusCacheConnectionPool struct {
-	// MaxConnections in the pool
-	// +kubebuilder:default=10
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	MaxConnections int `json:"max_connections,omitempty"`
-
-	// MaxIdleConnections to keep
-	// +kubebuilder:default=5
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	MaxIdleConnections int `json:"max_idle_connections,omitempty"`
-
-	// AcquireTimeout in seconds
-	// +kubebuilder:default=30
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	AcquireTimeout int `json:"acquire_timeout,omitempty"`
-}
-
-// MilvusCacheBatch defines batch operation settings.
-type MilvusCacheBatch struct {
-	// InsertBatchSize for bulk inserts
-	// +kubebuilder:default=100
-	// +kubebuilder:validation:Minimum=1
-	// +optional
-	InsertBatchSize int `json:"insert_batch_size,omitempty"`
-
-	// Timeout for batch operations in seconds
-	// +kubebuilder:default=60
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	Timeout int `json:"timeout,omitempty"`
-}
-
-// MilvusCacheDataManagement defines data lifecycle settings.
-type MilvusCacheDataManagement struct {
-	// TTL settings for automatic expiration
-	// +optional
-	TTL MilvusCacheTTL `json:"ttl,omitempty"`
-
-	// Compaction settings
-	// +optional
-	Compaction MilvusCacheCompaction `json:"compaction,omitempty"`
-}
-
-// MilvusCacheTTL defines time-to-live settings.
-type MilvusCacheTTL struct {
-	// Enabled controls whether TTL is active
-	// +kubebuilder:default=false
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-
-	// TimestampField is the field used for TTL calculation
-	// +kubebuilder:default="created_at"
-	// +optional
-	TimestampField string `json:"timestamp_field,omitempty"`
-
-	// CleanupInterval in seconds between cleanup runs
-	// +kubebuilder:default=3600
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	CleanupInterval int `json:"cleanup_interval,omitempty"`
-}
-
-// MilvusCacheCompaction defines compaction settings.
-type MilvusCacheCompaction struct {
-	// Enabled controls whether auto-compaction is active
-	// +kubebuilder:default=false
-	// +optional
-	Enabled bool `json:"enabled,omitempty"`
-
-	// Interval in seconds between compaction runs
-	// +kubebuilder:default=86400
-	// +kubebuilder:validation:Minimum=0
-	// +optional
-	Interval int `json:"interval,omitempty"`
-}
-
 // MilvusCacheDevelopment defines development-mode settings.
 type MilvusCacheDevelopment struct {
 	// DropCollectionOnStartup clears the collection when router starts (for testing)
@@ -1069,11 +987,6 @@ type MilvusCacheDevelopment struct {
 	// +kubebuilder:default=true
 	// +optional
 	AutoCreateCollection bool `json:"auto_create_collection,omitempty"`
-
-	// VerboseErrors includes detailed error messages in logs
-	// +kubebuilder:default=true
-	// +optional
-	VerboseErrors bool `json:"verbose_errors,omitempty"`
 }
 
 // HNSWCacheConfig defines HNSW index configuration for hybrid/in-memory backends.
@@ -1167,8 +1080,8 @@ type HNSWEmbeddingConfig struct {
 	// +optional
 	TargetLayer int `json:"target_layer,omitempty"`
 
-	// EnableSoftMatching enables soft matching mode
-	// +kubebuilder:default=true
+	// EnableSoftMatching allows below-threshold matches when no rule meets its threshold.
+	// +kubebuilder:default=false
 	// +optional
 	EnableSoftMatching bool `json:"enable_soft_matching,omitempty"`
 
@@ -1214,8 +1127,61 @@ type EmbeddingEndpointConfig struct {
 	Dimensions int `json:"dimensions,omitempty"`
 }
 
-// ComplexityRulesConfig defines complexity-based signal classification
+// PrototypeScoringConfig overrides prototype-bank construction and scoring for
+// one embedding-backed signal rule. Router-owned defaults apply only after
+// translation; the operator preserves an absent override and an empty object.
+type PrototypeScoringConfig struct {
+	// Enabled controls prototype clustering. False retains every candidate.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// ClusterSimilarityThreshold is the clustering similarity threshold.
+	// Stored as a numeric string, like other fractional operator config fields.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	ClusterSimilarityThreshold string `json:"cluster_similarity_threshold,omitempty"`
+
+	// MaxPrototypes caps the number of cluster representatives.
+	// +optional
+	MaxPrototypes int `json:"max_prototypes,omitempty"`
+
+	// BestWeight weights the best prototype against the top-M mean.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	BestWeight string `json:"best_weight,omitempty"`
+
+	// TopM is the number of highest-scoring prototypes included in the mean.
+	// +optional
+	TopM int `json:"top_m,omitempty"`
+
+	// MarginThreshold is the minimum winner-versus-runner-up score margin.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	MarginThreshold string `json:"margin_threshold,omitempty"`
+}
+
+// ComplexityRulesConfig defines complexity-based signal classification.
+//
+// The CEL rules below reject at admission the boundary combinations the Router
+// refuses at config load. Without them the API server accepts the object and
+// the Router crashloops on it, which turns a typo into an outage instead of a
+// rejected write. They are per-object and static; anything needing the model
+// catalog - whether backend.model resolves, for instance - stays with the
+// Router's validator, which remains the single source of truth for the rest.
+//
+// +kubebuilder:validation:XValidation:rule="!(has(self.threshold) && (has(self.hard_above) || has(self.easy_below) || has(self.hard_below) || has(self.easy_above)))",message="threshold and an explicit boundary pair are mutually exclusive; keep one"
+// +kubebuilder:validation:XValidation:rule="!((has(self.hard_above) || has(self.easy_below)) && (has(self.hard_below) || has(self.easy_above)))",message="a rule states one direction: use hard_above with easy_below, or hard_below with easy_above"
+// +kubebuilder:validation:XValidation:rule="has(self.hard_above) == has(self.easy_below)",message="hard_above and easy_below are required together"
+// +kubebuilder:validation:XValidation:rule="has(self.hard_below) == has(self.easy_above)",message="hard_below and easy_above are required together"
+// +kubebuilder:validation:XValidation:rule="!(has(self.hard_above) && has(self.easy_below)) || double(self.easy_below) < double(self.hard_above)",message="easy_below must be below hard_above; the band between them is medium"
+// +kubebuilder:validation:XValidation:rule="!(has(self.hard_below) && has(self.easy_above)) || double(self.hard_below) < double(self.easy_above)",message="hard_below must be below easy_above; the band between them is medium"
 type ComplexityRulesConfig struct {
+	// PrototypeScoring replaces the family prototype-scoring configuration for
+	// this rule. Absence inherits the family; a present object is a complete
+	// override, including an empty object. Defaults remain Router-owned.
+	// +optional
+	PrototypeScoring *PrototypeScoringConfig `json:"prototype_scoring,omitempty"`
+
 	// Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity")
 	Name string `json:"name"`
 
@@ -1223,17 +1189,57 @@ type ComplexityRulesConfig struct {
 	// +optional
 	Description string `json:"description,omitempty"`
 
-	// Threshold for difficulty classification (0.0-1.0). Stored as string to avoid float precision issues.
-	// Queries scoring above this threshold are classified as "hard"
+	// Threshold for the local prototype-scoring path (0.0-1.0), stored as a
+	// string to avoid float precision issues. The local margin is
+	// hard-minus-easy and centred on zero, so the threshold is symmetric: a
+	// margin above it is "hard", below its negative is "easy", and in between
+	// is "medium". It does not apply under a score.v1 backend, whose score is
+	// in the model's own units; state a boundary pair instead.
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`
 
-	// Hard candidates represent complex/difficult examples
-	Hard ComplexityCandidates `json:"hard"`
+	// HardAbove and EasyBelow are the two cut points for a score where a
+	// higher value is harder, in the scoring model's own units - so no [0,1]
+	// pattern applies and negative values are valid. Both are required
+	// together, and the pair is mutually exclusive with Threshold and with
+	// HardBelow/EasyAbove. Stored as strings to avoid float precision issues.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	HardAbove string `json:"hard_above,omitempty"`
 
-	// Easy candidates represent simple/easy examples
-	Easy ComplexityCandidates `json:"easy"`
+	// EasyBelow is the lower cut point of the harder-when-higher pair: a score
+	// below it is "easy", and anything between EasyBelow and HardAbove is
+	// "medium". It must be below HardAbove, and both are required together.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	EasyBelow string `json:"easy_below,omitempty"`
+
+	// HardBelow and EasyAbove are the pair for a score where a lower value is
+	// harder - a model predicting the chance of a correct answer, say. They
+	// require a score.v1 backend: the local margin is harder-when-higher by
+	// construction, and inverting it locally means swapping the candidate
+	// lists. Stored as strings to avoid float precision issues.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	HardBelow string `json:"hard_below,omitempty"`
+
+	// EasyAbove is the upper cut point of the harder-when-lower pair: a score
+	// above it is "easy", and anything between HardBelow and EasyAbove is
+	// "medium". It must be above HardBelow, and both are required together.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	EasyAbove string `json:"easy_above,omitempty"`
+
+	// Hard candidates represent complex/difficult examples. Read only by the
+	// local path; a remote backend never consults them, so they are optional.
+	// +optional
+	Hard *ComplexityCandidates `json:"hard,omitempty"`
+
+	// Easy candidates represent simple/easy examples. Read only by the local
+	// path; a remote backend never consults them, so they are optional.
+	// +optional
+	Easy *ComplexityCandidates `json:"easy,omitempty"`
 
 	// Composer allows filtering based on other signals (e.g., only apply this rule if domain:medical)
 	// +optional
@@ -1244,6 +1250,98 @@ type ComplexityRulesConfig struct {
 type ComplexityCandidates struct {
 	// List of candidate phrases or examples
 	Candidates []string `json:"candidates"`
+}
+
+// ComplexityModelConfig configures how the complexity signal produces its
+// score. It mirrors global.model_catalog.modules.complexity in the router
+// config and is passed through field for field.
+//
+// The contract requirement sits here rather than on
+// RemoteClassifierBackendConfig because it is a property of this consumer, not
+// of the block: complexity reads two response shapes, so guessing wrong would
+// surface per request instead of at admission. A consumer that reads one shape
+// - categories does - keeps the field optional and defaults it.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || has(self.backend.contract)",message="complexity reads two response shapes, so backend.contract must be stated: score.v1 or label_distribution.v1"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract in ['score.v1', 'label_distribution.v1']",message="complexity reads score.v1 or label_distribution.v1; token_spans.v1 is the PII contract"
+type ComplexityModelConfig struct {
+	// Backend names a remote scoring model. Its absence keeps local prototype
+	// scoring; when set, the signal never reads the rules' hard/easy
+	// candidates. It sits on the module rather than on a rule because routing
+	// signals are replaced wholesale per recipe, so a per-rule backend would
+	// vanish under any recipe that did not repeat it.
+	// +optional
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+}
+
+// ExternalModelConfig is one entry of global.model_catalog.external[]: a
+// remote model a classifier backend or the prompt guard can name. Field names
+// are the router's YAML keys so the generic typed conversion carries them
+// unchanged.
+type ExternalModelConfig struct {
+	// Name is the catalog name a backend block refers to in its model field.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// ModelRole is what the model is used for; classifier backends require
+	// "classification", the prompt guard protocol requires "guardrail".
+	// +kubebuilder:validation:MinLength=1
+	ModelRole string `json:"model_role"`
+
+	// ModelName is the model identifier the remote service expects, and the
+	// value a token_spans.v1 envelope's model member must equal.
+	// +kubebuilder:validation:MinLength=1
+	ModelName string `json:"llm_model_name"`
+
+	// Endpoint is where the remote model is reached.
+	Endpoint ExternalModelEndpoint `json:"llm_endpoint"`
+
+	// TimeoutSeconds bounds one call when the backend block sets no deadline.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	TimeoutSeconds int `json:"llm_timeout_seconds,omitempty"`
+}
+
+// ExternalModelEndpoint is the address of a remote classification model.
+type ExternalModelEndpoint struct {
+	// +kubebuilder:validation:MinLength=1
+	Address string `json:"address"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int `json:"port"`
+	// +kubebuilder:validation:Enum=http;https
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
+}
+
+// RemoteClassifierBackendConfig is the shared remote-classifier block. How
+// the remote is called (protocol), what shape it answers with (contract),
+// which catalog entry it is (model) and how long to wait (deadline) are
+// independent axes rather than one enumeration. It mirrors the router's
+// backend block field for field so the operator passes it through unchanged.
+type RemoteClassifierBackendConfig struct {
+	// Protocol is how the remote is called.
+	// +kubebuilder:validation:Enum=http_classify;http_chat
+	Protocol string `json:"protocol"`
+
+	// Contract is the response shape the signal reads. Complexity reads two -
+	// score.v1, one regression number interpreted through each rule's
+	// boundaries, and label_distribution.v1, hard/easy/medium probabilities -
+	// so the router requires it there rather than guessing per request. PII
+	// reads token_spans.v1, entity spans with code-point offsets. Prompt guard
+	// http_chat reads label_decision.v1, a verdict without invented probability.
+	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1;token_spans.v1;label_decision.v1
+	// +optional
+	Contract string `json:"contract,omitempty"`
+
+	// Model is the name of an entry in the external model catalog.
+	// +kubebuilder:validation:MinLength=1
+	Model string `json:"model"`
+
+	// DeadlineMs bounds one remote call. Defaults to the router's value.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	DeadlineMs *int `json:"deadline_ms,omitempty"`
 }
 
 // RuleComposition defines how to compose/filter rules based on other signals
@@ -1341,7 +1439,13 @@ type ModelRefConfig struct {
 	// +optional
 	UseReasoning *bool `json:"use_reasoning,omitempty" yaml:"use_reasoning,omitempty"`
 
-	// ReasoningEffort specifies the reasoning effort level (low, medium, high)
+	// ReasoningMode selects the model's reasoning activation mode when the
+	// family supports more than a boolean switch.
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	ReasoningMode string `json:"reasoning_mode,omitempty" yaml:"reasoning_mode,omitempty"`
+
+	// ReasoningEffort selects one of the model family's declared effort levels.
 	// +optional
 	ReasoningEffort string `json:"reasoning_effort,omitempty" yaml:"reasoning_effort,omitempty"`
 }
@@ -1367,28 +1471,44 @@ type ToolsConfig struct {
 	FallbackToEmpty bool `json:"fallback_to_empty,omitempty"`
 }
 
-// PromptGuardConfig defines prompt guard configuration
+// PromptGuardConfig defines prompt guard configuration.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PromptGuardConfig struct {
+	// Backend selects a named external classifier and its typed result contract.
+	// +optional
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+	// MaxSequenceLength limits the total tokenized input, including special
+	// tokens. Omission or zero retains the 512-token budget. The model loader
+	// validates the requested budget against the loaded model's capacity.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
+	// Window enables explicit scanning of all input tokens. Omission or null
+	// keeps whole-input inference. Only the local mmbert32k variant supports it.
+	// +nullable
+	// +optional
+	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 	// Variant selects a local Candle-backed model variant. It is mutually
-	// exclusive with Protocol. When both fields are omitted, the operator uses
-	// mmbert32k.
+	// exclusive with Backend. When both are omitted, the operator uses mmbert32k.
 	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
 	Variant string `json:"variant,omitempty"`
-	// Protocol selects a remote HTTP backend's wire contract. Mutually
-	// exclusive with Variant. Requires an external model configured via a
-	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// Protocol is retired and rejected at admission. Configure Backend with
+	// the protocol, contract and explicit external model name instead.
 	// +kubebuilder:validation:Enum=http_chat;http_classify
 	// +optional
 	Protocol string `json:"protocol,omitempty"`
-	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
+	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.7"
+	// +kubebuilder:default="0.5"
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`
@@ -1411,6 +1531,20 @@ type PromptGuardConfig struct {
 	// +kubebuilder:validation:Enum=allow;block
 	// +optional
 	OnError string `json:"on_error,omitempty"`
+}
+
+// PromptGuardWindowConfig scans original content tokens with overlap. The
+// native tokenizer also checks that special tokens leave enough content room.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.overlap) || self.overlap < self.size",message="window.overlap must be smaller than window.size"
+type PromptGuardWindowConfig struct {
+	// Size is the inference window budget, including special tokens.
+	// +kubebuilder:validation:Minimum=1
+	Size int `json:"size"`
+	// Overlap counts content tokens shared by consecutive windows.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Overlap int `json:"overlap,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration
@@ -1437,8 +1571,32 @@ type CategoryModelConfig struct {
 	CategoryMappingPath string `json:"category_mapping_path,omitempty"`
 }
 
-// PIIModelConfig defines PII model configuration
+// PIIModelConfig defines PII model configuration.
+//
+// The contract rule sits on the consumer, as on ComplexityModelConfig: the
+// shared backend block lists every contract any consumer reads, and each
+// consumer narrows it to what it can parse, so a mismatch is refused at
+// admission instead of by the router at load.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract == 'token_spans.v1'",message="PII reads token_spans.v1 only; omit backend.contract or set it to token_spans.v1"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.use_mmbert_32k) || !self.use_mmbert_32k",message="backend cannot be combined with local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="max_sequence_length requires local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="window requires local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PIIModelConfig struct {
+	// MaxSequenceLength is the total tokenized input budget, including special
+	// tokens. Omission or zero preserves the 512-token legacy limit.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
+	// UseMmBERT32K selects the local model that supports token windows.
+	// +optional
+	UseMmBERT32K bool `json:"use_mmbert_32k,omitempty"`
+	// Window scans original content tokens with explicit overlap. Omission or
+	// null leaves window selection unchanged; no CRD defaults are injected.
+	// +nullable
+	// +optional
+	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// +optional
@@ -1451,14 +1609,18 @@ type PIIModelConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
-}
-
-// ReasoningFamily defines reasoning family configuration
-type ReasoningFamily struct {
+	// Backend names a remote token classifier speaking token_spans.v1. Its
+	// absence keeps local PII inference. The local selectors this replaces are
+	// model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit
+	// token windows are only supported by the local mmbert32k model.
 	// +optional
-	Type string `json:"type,omitempty"`
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+	// OnError selects what a PII backend failure, or a provider-declared
+	// truncation, does to the rule that consumed it: allow (default) treats the
+	// content as not matching, block matches it as classification_error.
+	// +kubebuilder:validation:Enum=allow;block
 	// +optional
-	Parameter string `json:"parameter,omitempty"`
+	OnError string `json:"on_error,omitempty"`
 }
 
 // APIConfig defines API configuration
@@ -1720,9 +1882,15 @@ type VLLMEndpointSpec struct {
 	// +kubebuilder:validation:MinLength=1
 	Model string `json:"model"`
 
-	// Reasoning family for the model (e.g., "qwen3", "deepseek", "gpt")
+	// Catalog optionally selects a repository built-in Model Card. Model remains
+	// the request-facing alias.
 	// +optional
-	ReasoningFamily string `json:"reasoningFamily,omitempty"`
+	Catalog string `json:"catalog,omitempty"`
+
+	// Reasoning optionally selects a built-in family or defines inline wire
+	// behavior for this self-hosted model. Catalog-backed models normally omit it.
+	// +optional
+	Reasoning *ModelReasoningSpec `json:"reasoning,omitempty"`
 
 	// LoRAs declares the LoRA adapters exposed for this logical model in routing.modelCards.
 	// +optional
@@ -1736,6 +1904,45 @@ type VLLMEndpointSpec struct {
 	// +optional
 	// +kubebuilder:default=1
 	Weight int `json:"weight,omitempty"`
+}
+
+// ModelReasoningSpec selects a catalog reasoning family or defines the request
+// projection for a custom self-hosted model. Family and inline fields are
+// mutually exclusive and are validated by the Router's canonical compiler.
+type ModelReasoningSpec struct {
+	// +optional
+	Family string `json:"family,omitempty"`
+
+	// +kubebuilder:validation:Enum=chat_template_kwargs;reasoning_effort;reasoning_mode;top_level_reasoning_effort
+	// +optional
+	Type string `json:"type,omitempty"`
+
+	// +optional
+	Parameter string `json:"parameter,omitempty"`
+
+	// +optional
+	ActivationParameter string `json:"activationParameter,omitempty"`
+
+	// EffortFlags maps a logical effort to a boolean chat-template parameter.
+	// +optional
+	EffortFlags map[string]string `json:"effortFlags,omitempty"`
+
+	// +optional
+	Levels []string `json:"levels,omitempty"`
+
+	// +optional
+	Default string `json:"default,omitempty"`
+
+	// +kubebuilder:validation:items:Enum=enabled;disabled;adaptive
+	// +optional
+	Modes []string `json:"modes,omitempty"`
+
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	// +optional
+	DefaultMode string `json:"defaultMode,omitempty"`
+
+	// +optional
+	Disabled string `json:"disabled,omitempty"`
 }
 
 // LoRAAdapterSpec defines one LoRA adapter exposed by a VLLMEndpoint model.

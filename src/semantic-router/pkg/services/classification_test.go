@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -238,9 +239,7 @@ func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testin
 	response := service.buildIntentResponseFromSignals(
 		signals,
 		decisionResult,
-		"projection_route",
-		0.91,
-		12,
+		Classification{Category: "projection_route", Confidence: 0.91, ConfidenceAvailable: confidenceAvailability(true), ProcessingTimeMs: 12},
 		req,
 		service.classifier,
 		service.config,
@@ -562,14 +561,14 @@ func TestGetRecommendedModel_EmptyModelRefs(t *testing.T) {
 func TestDetectPII_EdgeCases(t *testing.T) {
 	t.Run("Empty_text_returns_error", func(t *testing.T) {
 		service := &ClassificationService{classifier: nil}
-		_, err := service.DetectPII(PIIRequest{Text: ""})
+		_, err := service.DetectPII(context.Background(), PIIRequest{Text: ""})
 		require.Error(t, err)
 		assert.Equal(t, "text cannot be empty", err.Error())
 	})
 
 	t.Run("Nil_classifier_returns_placeholder", func(t *testing.T) {
 		service := &ClassificationService{classifier: nil}
-		resp, err := service.DetectPII(PIIRequest{Text: "hello"})
+		resp, err := service.DetectPII(context.Background(), PIIRequest{Text: "hello"})
 		require.NoError(t, err)
 		assert.False(t, resp.HasPII)
 		assert.Empty(t, resp.Entities)

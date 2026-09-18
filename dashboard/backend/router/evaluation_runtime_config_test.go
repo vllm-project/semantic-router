@@ -43,12 +43,12 @@ global:
     auto_model_names: [test-mom]
 providers:
   defaults:
-    default_model: model-fast
+    model: model-fast
   models:
     - name: model-fast
-      backend_refs: [{endpoint: fast.models.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: fast.models.test:8000}]
     - name: model-strong
-      backend_refs: [{endpoint: strong.models.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: strong.models.test:8000}]
 routing:
   modelCards:
     - {name: model-fast, modality: text}
@@ -134,19 +134,24 @@ routing:
 }
 
 func TestEvaluationRoutesLoadDeploymentScopedTargetsWithoutCatalogLeaks(t *testing.T) {
-	root := t.TempDir()
+	// Resolve the trusted temporary root, not the authored registry path:
+	// macOS exposes its temp directory through /var, which is a symlink.
+	root, rootErr := filepath.EvalSymlinks(t.TempDir())
+	if rootErr != nil {
+		t.Fatal(rootErr)
+	}
 	configPath := filepath.Join(root, "config.yaml")
 	configBytes := []byte(`version: v0.3
 global:
   router:
     auto_model_names: [test-mom]
 providers:
-  defaults: {default_model: model-fast}
+  defaults: {model: model-fast}
   models:
     - name: model-fast
-      backend_refs: [{endpoint: fast.models.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: fast.models.test:8000}]
     - name: model-strong
-      backend_refs: [{endpoint: strong.models.test:8000}]
+      backend_refs: [{provider: vllm, endpoint: strong.models.test:8000}]
 routing:
   modelCards:
     - {name: model-fast, modality: text}

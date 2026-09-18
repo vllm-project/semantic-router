@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
 // The Referer of a request made from a page whose URL carried ?authToken= holds a live
@@ -142,7 +143,7 @@ func serveRouterAPIProxy(
 		writeDisallowedRouterManagementResponse(w, r)
 		return
 	}
-	if strings.HasPrefix(r.URL.Path, "/api/router/v1/router_replay") {
+	if strings.HasPrefix(r.URL.Path, "/api/router/api/v1/observability/replays") {
 		// Let the proxy transport negotiate decompression so replay JSON can
 		// be redacted safely for read-only Dashboard principals.
 		r.Header.Del("Accept-Encoding")
@@ -155,9 +156,8 @@ func serveRouterAPIProxy(
 }
 
 func isReadonlyRouterMutation(r *http.Request) bool {
-	return r.Method != http.MethodGet &&
-		(strings.HasPrefix(r.URL.Path, "/api/router/api/v1/response-cache/") ||
-			strings.HasPrefix(r.URL.Path, "/api/router/api/v1/context-compression/"))
+	policy, ok := routercontract.LookupManagement(r.Method, r.URL.Path)
+	return ok && policy.Mutation
 }
 
 func writeDisallowedRouterManagementResponse(w http.ResponseWriter, r *http.Request) {
@@ -169,32 +169,8 @@ func writeDisallowedRouterManagementResponse(w http.ResponseWriter, r *http.Requ
 }
 
 func routerManagementProxyRouteAllowed(method, path string) bool {
-	if method == http.MethodGet &&
-		(path == "/api/router/v1/router_replay" || strings.HasPrefix(path, "/api/router/v1/router_replay/")) {
-		return true
-	}
-	switch path {
-	case "/api/router/v1/models":
-		return method == http.MethodGet || method == http.MethodHead
-	case "/api/router/v1/router/outcomes":
-		return method == http.MethodPost
-	case "/api/router/api/v1/response-cache/capabilities",
-		"/api/router/api/v1/response-cache/health",
-		"/api/router/api/v1/response-cache/stats",
-		"/api/router/api/v1/response-cache/audit",
-		"/api/router/api/v1/context-compression/capabilities",
-		"/api/router/api/v1/context-compression/health",
-		"/api/router/api/v1/context-compression/stats":
-		return method == http.MethodGet || method == http.MethodHead
-	case "/api/router/api/v1/response-cache/test",
-		"/api/router/api/v1/response-cache/invalidate",
-		"/api/router/api/v1/response-cache/flush",
-		"/api/router/api/v1/context-compression/preview",
-		"/api/router/api/v1/context-compression/recovery/invalidate":
-		return method == http.MethodPost
-	default:
-		return false
-	}
+	_, ok := routercontract.LookupManagement(method, path)
+	return ok
 }
 
 func routeRouterTrafficToEnvoy(
@@ -206,7 +182,7 @@ func routeRouterTrafficToEnvoy(
 		return false
 	}
 
-	if strings.HasPrefix(r.URL.Path, "/api/router/v1/chat/completions") {
+	if r.URL.Path == "/api/router/v1/chat/completions" && (r.Method == http.MethodPost || r.Method == http.MethodOptions) {
 		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
 		log.Printf("Proxying chat completions to Envoy: %s %s", r.Method, r.URL.Path)
 		if middleware.HandleCORSPreflight(w, r) {

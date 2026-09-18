@@ -4,11 +4,13 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - tools/linter/go/golangci-lint.version
       - tools/docker/Dockerfile.precommit
       - .github/workflows/precommit-publish.yml
   push:
     branches: [main]
     paths:
+      - tools/linter/go/golangci-lint.version
       - tools/docker/Dockerfile.precommit
       - .github/workflows/precommit-publish.yml
   workflow_dispatch:
@@ -31,6 +33,8 @@ jobs:
           platforms: linux/amd64
           push: false
           tags: semantic-router/precommit:pr
+          cache-from: type=gha,scope=precommit-linux-amd64
+          cache-to: type=gha,scope=precommit-linux-amd64,ignore-error=true
 
   publish:
     name: Publish pre-commit image
@@ -62,3 +66,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ env.owner }}/semantic-router/precommit:latest
+          cache-from: type=gha,scope=precommit-publish
+          cache-to: type=gha,scope=precommit-publish,ignore-error=true

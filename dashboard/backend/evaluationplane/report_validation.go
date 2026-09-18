@@ -13,20 +13,29 @@ import (
 var requiredGateIDs = canonicalReleaseGateIDs()
 
 func validateReportExecutionTimestamp(run Run, manifest RunManifest, generatedAt, sealedAt time.Time) error {
+	invalidTimestamp := func(reason string) error {
+		startedAt := "missing"
+		if run.StartedAt != nil {
+			startedAt = run.StartedAt.Format(time.RFC3339Nano)
+		}
+		return fmt.Errorf("%w: %s (generated_at=%s created_at=%s started_at=%s sealed_at=%s)",
+			ErrInvalid, reason, generatedAt.Format(time.RFC3339Nano), manifest.CreatedAt.Format(time.RFC3339Nano),
+			startedAt, sealedAt.Format(time.RFC3339Nano))
+	}
 	if run.StartedAt == nil || generatedAt.IsZero() || generatedAt.After(sealedAt) {
-		return fmt.Errorf("%w: report provenance timestamp is outside the server-owned execution window", ErrInvalid)
+		return invalidTimestamp("report provenance timestamp is outside the server-owned execution window")
 	}
 	// Replay evidence may be deterministically timestamped at manifest creation;
 	// it makes no claim about a live observation window. Live evidence must be
 	// generated after the server transitions the run to running.
 	if manifest.Mode == ModeReplay {
 		if generatedAt.Before(manifest.CreatedAt) {
-			return fmt.Errorf("%w: replay report provenance predates the immutable manifest", ErrInvalid)
+			return invalidTimestamp("replay report provenance predates the immutable manifest")
 		}
 		return nil
 	}
 	if manifest.Mode != ModeLive || generatedAt.Before(run.StartedAt.UTC()) {
-		return fmt.Errorf("%w: report provenance timestamp is outside the server-owned execution window", ErrInvalid)
+		return invalidTimestamp("report provenance timestamp is outside the server-owned execution window")
 	}
 	return nil
 }
@@ -401,9 +410,25 @@ func validateServerCoverage(label string, actual, expected Coverage) error {
 
 func validatePromotionSummary(report Report) error {
 	if report.Run.EvidenceLevel == "E0" {
-		if report.Summary.QualityScore != nil || report.Summary.LatencyP95MS != nil ||
+		if report.Summary.PrimaryMetric != nil || report.Summary.LatencyP95MS != nil ||
 			report.Summary.RuntimeCost != nil || report.Summary.CapacityTCO != nil {
 			return fmt.Errorf("%w: E0 reports cannot publish promotion headline metrics", ErrInvalid)
+		}
+		return nil
+	}
+	primaryMetric := func(ids ...string) *ReportPrimaryMetric {
+		for _, id := range ids {
+			for _, metric := range report.Metrics {
+				if metric.ID != id || metric.Value == nil {
+					continue
+				}
+				return &ReportPrimaryMetric{
+					ID:                 metric.ID,
+					Value:              *metric.Value,
+					Unit:               metric.Unit,
+					ConfidenceInterval: append([]float64(nil), metric.ConfidenceInterval...),
+				}
+			}
 		}
 		return nil
 	}
@@ -418,9 +443,9 @@ func validatePromotionSummary(report Report) error {
 		}
 		return nil
 	}
-	quality := metricValue("joint.realized_quality", "routing.accuracy", "model_pool.oracle_quality")
+	quality := primaryMetric("joint.realized_quality", "routing.accuracy", "model_pool.oracle_quality")
 	latency := metricValue("joint.latency_p95_ms", "capacity.latency_p95_ms", "routing.latency_p95_ms")
-	if !reflect.DeepEqual(report.Summary.QualityScore, quality) || !reflect.DeepEqual(report.Summary.LatencyP95MS, latency) ||
+	if !reflect.DeepEqual(report.Summary.PrimaryMetric, quality) || !reflect.DeepEqual(report.Summary.LatencyP95MS, latency) ||
 		!reflect.DeepEqual(report.Summary.RuntimeCost, report.Costs.Runtime.Amount) ||
 		!reflect.DeepEqual(report.Summary.CapacityTCO, report.Costs.CapacityTCO.Amount) {
 		return fmt.Errorf("%w: report promotion summary does not match typed evidence", ErrInvalid)

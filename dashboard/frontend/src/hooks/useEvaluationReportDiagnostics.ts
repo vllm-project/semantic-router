@@ -11,7 +11,8 @@ import { decodeEvaluationCapacityProfile } from '../utils/evaluationCapacityProf
 import { decodeEvaluationFailureSummary } from '../utils/evaluationFailureSummaryContract'
 import { getEvaluationArtifactJSON } from '../utils/evaluationPlaneApi'
 
-function artifactID(report: EvaluationReport, name: string): string | null {
+function artifactID(report: EvaluationReport | null, name: string): string | null {
+  if (!report) return null
   return (
     report.artifacts.find((artifact) => artifact.name.toLowerCase() === name.toLowerCase())?.id ||
     null
@@ -39,7 +40,7 @@ async function loadDiagnosticArtifact<T>(
 }
 
 export default function useEvaluationReportDiagnostics(
-  report: EvaluationReport,
+  report: EvaluationReport | null,
 ): EvaluationReportDiagnosticsState {
   const [state, setState] = useState<EvaluationReportDiagnosticsState>({
     failureSummary: null,
@@ -50,6 +51,16 @@ export default function useEvaluationReportDiagnostics(
   })
 
   useEffect(() => {
+    if (!report) {
+      setState({
+        failureSummary: null,
+        capacityProfile: null,
+        failureSummaryIssue: null,
+        capacityProfileIssue: null,
+        loading: false,
+      })
+      return
+    }
     const failureID = artifactID(report, 'failure-summary.json')
     const capacityID = artifactID(report, 'capacity-profile.json')
     if (!failureID && !capacityID) {

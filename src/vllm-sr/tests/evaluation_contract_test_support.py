@@ -297,7 +297,7 @@ def _assert_fixture_run_summary(report: WorkerReportDraft) -> None:
     assert all(track.status == "completed" for track in report.tracks)
     assert report.summary.coverage.evaluated == report.summary.coverage.total == 29
     assert report.summary.failed_gates == 0
-    assert report.summary.quality_score is None
+    assert report.summary.primary_metric is None
     assert report.summary.runtime_cost is None
     assert report.summary.capacity_tco is None
     assert report.costs.runtime.amount is not None

@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 var adapterSourceRevisionPattern = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 type suiteSourceReceiptProjection struct {
 	SchemaVersion           string  `json:"schema_version"`
+	SourceKind              string  `json:"source_kind"`
 	AdapterID               string  `json:"adapter_id"`
 	ExpectedSourceRevision  string  `json:"expected_source_revision"`
 	ObservedSourceRevision  string  `json:"observed_source_revision"`
@@ -39,14 +41,43 @@ func validateSuiteQualification(manifest suiteManifestProjection) error {
 		!digestPattern.MatchString(receipt.ArtifactSetDigest) {
 		return fmt.Errorf("%w: normalized imports require an E0 provenance receipt", ErrInvalid)
 	}
-	contract, known := normalizedAdapterContracts[manifest.AdapterID]
-	if !known || manifest.DecisionUnit != contract.decisionUnit ||
-		manifest.ActionSpace != contract.actionSpace ||
-		!normalizedAdapterTracksMatch(contract, manifest.TrackIDs) {
-		return fmt.Errorf("%w: normalized import workload does not match its adapter", ErrInvalid)
+	var evidence unqualifiedSuiteEvidence
+	if err := decodeExactJSON(receipt.Qualification, &evidence); err != nil ||
+		evidence.SchemaVersion != suiteQualificationContractVersion ||
+		evidence.Status != "exploratory_import" ||
+		evidence.NativeExecutionAttested || evidence.PromotionEligible ||
+		!validImportOrigin(evidence.Origin, evidence.ParserVerified) {
+		return fmt.Errorf("%w: normalized import provenance is invalid", ErrInvalid)
 	}
-	if _, err := validateSuiteSourceReceipt(manifest, contract); err != nil {
-		return err
+	var source suiteSourceReceiptProjection
+	if err := decodeExactJSON(manifest.SourceReceipt, &source); err != nil {
+		return fmt.Errorf("%w: normalized import source receipt is invalid", ErrInvalid)
+	}
+	contract, registered := normalizedAdapterContracts[manifest.AdapterID]
+	switch source.SourceKind {
+	case "registered_adapter":
+		if !registered {
+			return fmt.Errorf("%w: normalized import references an unknown adapter", ErrInvalid)
+		}
+		if manifest.DecisionUnit != contract.decisionUnit ||
+			manifest.ActionSpace != contract.actionSpace ||
+			!normalizedAdapterTracksMatch(contract, manifest.TrackIDs) {
+			return fmt.Errorf("%w: normalized import workload does not match its adapter", ErrInvalid)
+		}
+		if err := validateSuiteSourceReceipt(manifest, source, contract); err != nil {
+			return err
+		}
+	case "benchmark_pack":
+		if evidence.Origin != "user_provided_import" || evidence.ParserVerified ||
+			len(manifest.AdapterID) > 96 || strings.TrimSpace(manifest.DecisionUnit) == "" ||
+			strings.TrimSpace(manifest.ActionSpace) == "" {
+			return fmt.Errorf("%w: benchmark pack declaration is invalid", ErrInvalid)
+		}
+		if err := validateBenchmarkPackSourceReceipt(manifest, source); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("%w: normalized import source kind is invalid", ErrInvalid)
 	}
 	sourceDigest, err := canonicalJSONDigest(manifest.SourceReceipt)
 	if err != nil || sourceDigest != receipt.SourceReceiptDigest {
@@ -59,14 +90,6 @@ func validateSuiteQualification(manifest suiteManifestProjection) error {
 	subjectDigest, err := canonicalValueDigest(suiteQualificationSubject(manifest))
 	if err != nil || subjectDigest != receipt.ManifestSubjectDigest {
 		return fmt.Errorf("%w: suite provenance does not bind its manifest", ErrInvalid)
-	}
-	var evidence unqualifiedSuiteEvidence
-	if err := decodeExactJSON(receipt.Qualification, &evidence); err != nil ||
-		evidence.SchemaVersion != suiteQualificationContractVersion ||
-		evidence.Status != "exploratory_import" ||
-		evidence.NativeExecutionAttested || evidence.PromotionEligible ||
-		!validImportOrigin(evidence.Origin, evidence.ParserVerified) {
-		return fmt.Errorf("%w: normalized import provenance is invalid", ErrInvalid)
 	}
 	return nil
 }
@@ -102,19 +125,35 @@ func suiteQualificationSubject(manifest suiteManifestProjection) map[string]any 
 
 func validateSuiteSourceReceipt(
 	manifest suiteManifestProjection,
+	source suiteSourceReceiptProjection,
 	contract normalizedAdapterContract,
-) (suiteSourceReceiptProjection, error) {
-	var source suiteSourceReceiptProjection
-	if err := decodeExactJSON(manifest.SourceReceipt, &source); err != nil ||
-		source.SchemaVersion != adapterContractVersion ||
+) error {
+	if source.SchemaVersion != benchmarkSourceContractVersion ||
+		source.SourceKind != "registered_adapter" ||
 		source.AdapterID != manifest.AdapterID || !source.Verified || !source.SourceClean ||
 		source.ExpectedSourceRevision != contract.sourceRevision ||
 		source.ObservedSourceRevision != contract.sourceRevision ||
 		!adapterSourceRevisionPattern.MatchString(source.ExpectedSourceRevision) ||
 		!validDatasetSourceReceipt(source, contract.datasetRevision) {
-		return suiteSourceReceiptProjection{}, fmt.Errorf("%w: normalized import source receipt is invalid", ErrInvalid)
+		return fmt.Errorf("%w: normalized import source receipt is invalid", ErrInvalid)
 	}
-	return source, nil
+	return nil
+}
+
+func validateBenchmarkPackSourceReceipt(
+	manifest suiteManifestProjection,
+	source suiteSourceReceiptProjection,
+) error {
+	if source.SchemaVersion != benchmarkSourceContractVersion ||
+		source.SourceKind != "benchmark_pack" ||
+		source.AdapterID != manifest.AdapterID || !source.Verified || !source.SourceClean ||
+		source.ExpectedSourceRevision != source.ObservedSourceRevision ||
+		!adapterSourceRevisionPattern.MatchString(source.ExpectedSourceRevision) ||
+		source.ExpectedDatasetRevision != nil || source.ObservedDatasetRevision != nil ||
+		source.DatasetClean != nil {
+		return fmt.Errorf("%w: benchmark pack source receipt is invalid", ErrInvalid)
+	}
+	return nil
 }
 
 func validDatasetSourceReceipt(source suiteSourceReceiptProjection, expected string) bool {

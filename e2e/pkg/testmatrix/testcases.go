@@ -1,5 +1,7 @@
 package testmatrix
 
+import "fmt"
+
 // RouterSmoke is the smallest shared router check that heavy environments reuse.
 var RouterSmoke = []string{
 	"chat-completions-request",
@@ -24,9 +26,15 @@ var BaselineRouterContract = []string{
 	"pii-detection",
 	// PII entity positions are code-point offsets (issue #3146)
 	"pii-entity-offsets",
+	// PII past the classifier's sequence limit is still detected (issue #3364)
+	"pii-long-text",
+	// A jailbreak past the classifier's sequence limit is still detected (issue #3204)
+	"security-long-text",
 	"jailbreak-detection",
 	"decision-priority-selection",
 	"plugin-chain-execution",
+	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
+	"plugin-request-mutations",
 	"tool-selection",
 	"rule-condition-logic",
 	"decision-fallback-behavior",
@@ -41,10 +49,18 @@ var BaselineRouterContract = []string{
 	"entrypoint-recipe-routing",
 	// json_schema response_format survives auto-routing model rewrite (issue #3024)
 	"chat-completions-structured-output",
+	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
+	"plugin-short-circuit-no-dispatch",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
 	"session-pricing-response-api",
+	// Event signal rule matching and routing (issue #3178)
+	"event-routing",
+	// Language signal rule matching and routing (issue #3178)
+	"language-routing",
+	// Reask signal rule matching and routing (issue #3178)
+	"reask-routing",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
@@ -57,6 +73,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-preview",
 	"dashboard-config-versions",
 	"dashboard-deploy-invalid-yaml",
+	// A semantically invalid deploy must leave the active config serving (issue #3233)
+	"dashboard-deploy-safe-failure",
 	// Evaluation Plane lifecycle, evidence, report, comparison, and cancellation.
 	"dashboard-evaluation-plane",
 	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
@@ -110,4 +128,31 @@ func Combine(groups ...[]string) []string {
 	}
 
 	return combined
+}
+
+// BaselineStress lists the expensive pressure cases within the canonical inventory.
+var BaselineStress = []string{
+	"chat-completions-stress-request",
+	"chat-completions-progressive-stress",
+}
+
+// BaselineCases selects a qualification scope without a second functional allowlist.
+func BaselineCases(suite string) ([]string, error) {
+	if suite == "full" {
+		return append([]string(nil), BaselineRouterContract...), nil
+	}
+	if suite != "" && suite != "standard" {
+		return nil, fmt.Errorf("unknown baseline suite %q", suite)
+	}
+	stress := make(map[string]bool, len(BaselineStress))
+	for _, name := range BaselineStress {
+		stress[name] = true
+	}
+	var cases []string
+	for _, name := range BaselineRouterContract {
+		if !stress[name] {
+			cases = append(cases, name)
+		}
+	}
+	return cases, nil
 }

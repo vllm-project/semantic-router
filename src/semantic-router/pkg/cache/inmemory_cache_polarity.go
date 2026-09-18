@@ -62,7 +62,9 @@ func (c *InMemoryCache) applyPolarityNLI(
 // hit to a cache miss so the request can continue to the model backend.
 func (c *InMemoryCache) verifyPolarityNLI(ctx context.Context, model, cachedQuery, incomingQuery string) polarityNLIVerdict {
 	start := time.Now()
-	verifier := loadPolarityVerifier()
+	c.mu.RLock()
+	verifier := c.polarityGuard.Verifier
+	c.mu.RUnlock()
 	if verifier == nil {
 		c.recordPolarityNLISkipped(model, "polarity verifier not configured")
 		return polarityNLIVerdict{Skipped: true}
@@ -129,4 +131,12 @@ func (c *InMemoryCache) recordPolarityReject(
 		"cached_query":            logging.ContentDescriptor(cachedQuery),
 	})
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
+}
+
+// SetPolarityVerifier installs this cache's own verifier without changing any
+// other generation. Assembly calls it before the cache is published.
+func (c *InMemoryCache) SetPolarityVerifier(verifier PolarityVerifyFunc) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.polarityGuard.Verifier = verifier
 }

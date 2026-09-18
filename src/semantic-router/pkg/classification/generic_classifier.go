@@ -9,14 +9,23 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
-const defaultLLMLabelClassifierMaxTokens = 128
-const llmLabelScoreSumTolerance = 0.02
+const (
+	defaultLLMLabelClassifierMaxTokens = 128
+	llmLabelScoreSumTolerance          = 0.02
+)
 
 type labelClassification struct {
 	Scores    map[string]float64
 	Rationale string
+	// ScoreWindows is used by explicit native window scans. Each entry is a
+	// complete distribution; consumers must not merge class-wise maxima.
+	ScoreWindows []map[string]float64
+	// Thresholds is non-nil only for a prepared independent-score policy.
+	Thresholds  map[string]float64
+	PolicyTrace *ClassifierRuleMetrics
 }
 
 type labelClassifier interface {
@@ -24,22 +33,29 @@ type labelClassifier interface {
 }
 
 type llmLabelClassifier struct {
-	client       *VLLMClient
-	model        string
-	labels       []string
-	instructions string
-	timeout      time.Duration
-	maxTokens    int
+	client           *VLLMClient
+	model            string
+	labels           []string
+	instructions     string
+	disableRationale bool
+	timeout          time.Duration
+	maxTokens        int
+	handle           *binding.Resolved[string, labelClassification]
+	recipe           string
 }
 
 func newLLMLabelClassifier(
 	rule config.ClassifierSignalRule,
 	external *config.ExternalModelConfig,
+	models ...*classifierModelRuntime,
 ) (labelClassifier, error) {
 	if external == nil {
 		return nil, fmt.Errorf("external model %q is not configured", rule.Model)
 	}
 	client := newVLLMClientFromConfig(external)
+	if client.initErr != nil {
+		return nil, client.initErr
+	}
 	timeout := time.Duration(external.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 5 * time.Second
@@ -48,29 +64,55 @@ func newLLMLabelClassifier(
 	if maxTokens <= 0 {
 		maxTokens = defaultLLMLabelClassifierMaxTokens
 	}
-	return &llmLabelClassifier{
-		client:       client,
-		model:        external.ModelName,
-		labels:       append([]string(nil), rule.Labels...),
-		instructions: rule.Instructions,
-		timeout:      timeout,
-		maxTokens:    maxTokens,
-	}, nil
+	classifier := &llmLabelClassifier{
+		client:           client,
+		model:            external.ModelName,
+		labels:           append([]string(nil), rule.Labels...),
+		instructions:     rule.Instructions,
+		disableRationale: rule.DisableRationale,
+		timeout:          timeout,
+		maxTokens:        maxTokens,
+	}
+	runtime := consumerModelRuntime(models)
+	backendCfg := &config.RemoteClassifierBackend{Model: external.Name, Protocol: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractLabelDistribution}
+	spec := runtime.remoteSpec("classifier."+rule.Name, backendCfg)
+	handle, err := remoteTaskBinding(context.Background(), runtime, spec, external, client, classifier.classify, func(_ string, out labelClassification) error {
+		_, err := validateLLMLabelScores(classifier.labels, out.Scores)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+	classifier.handle, classifier.recipe = handle, string(spec.Recipe)
+	return classifier, nil
 }
 
-func (c *llmLabelClassifier) Classify(
+func (c *llmLabelClassifier) Classify(ctx context.Context, input string) (labelClassification, error) {
+	return c.handle.Call(ctx, c.recipe, input)
+}
+func (c *llmLabelClassifier) Close() error { return c.handle.Close() }
+
+func (c *llmLabelClassifier) classify(
 	ctx context.Context,
 	input string,
 ) (labelClassification, error) {
 	callCtx, cancel := context.WithTimeout(ctx, c.timeout)
 	defer cancel()
+	responseFields := `"scores" and "rationale"`
+	rationaleInstruction := ` "rationale" must be a short reason.`
+	if c.disableRationale {
+		responseFields = `"scores"`
+		rationaleInstruction = ""
+	}
 	systemPrompt := fmt.Sprintf(
 		"%s\n\nScore every label from: %s.\n"+
-			`Return only JSON with exactly "scores" and "rationale". `+
+			`Return only JSON with exactly %s. `+
 			`"scores" must map every exact label to a number between 0 and 1, `+
-			`and all scores must sum to 1. "rationale" must be a short reason.`,
+			`and all scores must sum to 1.%s`,
 		strings.TrimSpace(c.instructions),
 		strings.Join(c.labels, ", "),
+		responseFields,
+		rationaleInstruction,
 	)
 	response, err := c.client.GenerateWithSystemPrompt(
 		callCtx,
@@ -90,25 +132,32 @@ func (c *llmLabelClassifier) Classify(
 		return labelClassification{}, fmt.Errorf("classifier returned no choices")
 	}
 	content := strings.TrimSpace(response.Choices[0].Message.Content)
-	return parseLLMLabelClassification(content, c.labels)
+	return parseLLMLabelClassification(content, c.labels, c.disableRationale)
 }
 
 func parseLLMLabelClassification(
 	content string,
 	labels []string,
+	disableRationale bool,
 ) (labelClassification, error) {
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(content), &raw); err != nil {
 		return labelClassification{}, fmt.Errorf("classifier returned invalid JSON: %w", err)
 	}
-	if len(raw) != 2 || raw["scores"] == nil || raw["rationale"] == nil {
+	if disableRationale {
+		if raw["scores"] == nil || len(raw) > 2 || (len(raw) == 2 && raw["rationale"] == nil) {
+			return labelClassification{}, fmt.Errorf(
+				"classifier response must contain exactly scores and optional rationale",
+			)
+		}
+	} else if len(raw) != 2 || raw["scores"] == nil || raw["rationale"] == nil {
 		return labelClassification{}, fmt.Errorf(
 			"classifier response must contain exactly scores and rationale",
 		)
 	}
 	var result struct {
-		Scores    map[string]float64 `json:"scores"`
-		Rationale string             `json:"rationale"`
+		Scores    map[string]*float64 `json:"scores"`
+		Rationale *string             `json:"rationale"`
 	}
 	if err := json.Unmarshal(
 		[]byte(content),
@@ -116,15 +165,27 @@ func parseLLMLabelClassification(
 	); err != nil {
 		return labelClassification{}, fmt.Errorf("classifier returned invalid JSON: %w", err)
 	}
-	result.Rationale = strings.TrimSpace(result.Rationale)
-	if result.Rationale == "" {
+	rationale := ""
+	if result.Rationale != nil {
+		rationale = strings.TrimSpace(*result.Rationale)
+	} else if disableRationale && raw["rationale"] != nil {
+		return labelClassification{}, fmt.Errorf("classifier rationale must be a string")
+	}
+	if !disableRationale && rationale == "" {
 		return labelClassification{}, fmt.Errorf("classifier returned an empty rationale")
 	}
-	scores, err := validateLLMLabelScores(labels, result.Scores)
+	reported := make(map[string]float64, len(result.Scores))
+	for label, score := range result.Scores {
+		if score == nil {
+			return labelClassification{}, fmt.Errorf("classifier score for label %q must be a number", label)
+		}
+		reported[label] = *score
+	}
+	scores, err := validateLLMLabelScores(labels, reported)
 	if err != nil {
 		return labelClassification{}, err
 	}
-	return labelClassification{Scores: scores, Rationale: result.Rationale}, nil
+	return labelClassification{Scores: scores, Rationale: rationale}, nil
 }
 
 func validateLLMLabelScores(
@@ -174,16 +235,18 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 		)
 		switch rule.Type {
 		case config.ClassifierSignalTypeLocal:
-			classifier, err = newLocalLabelClassifier(rule)
+			classifier, err = newLocalLabelClassifier(rule, b.models)
 		case config.ClassifierSignalTypeLLM:
 			classifier, err = newLLMLabelClassifier(
 				rule,
 				b.cfg.FindExternalModelByName(rule.Model),
+				b.models,
 			)
 		case config.ClassifierSignalTypeSequenceClassifier:
 			classifier, err = newSequenceLabelClassifier(
 				rule,
 				b.cfg.FindExternalModelByName(rule.Model),
+				b.models,
 			)
 		default:
 			// Config validation rejects unknown types, so reaching here means a
@@ -192,9 +255,18 @@ func (b *classifierOptionBuilder) buildGenericClassifiersOption() (option, error
 			err = fmt.Errorf("unsupported type %q", rule.Type)
 		}
 		if err != nil {
+			closeLabelClassifiers(classifiers)
 			return nil, fmt.Errorf("build classifier signal %q: %w", rule.Name, err)
 		}
 		classifiers[rule.Name] = classifier
 	}
 	return withGenericClassifiers(classifiers), nil
+}
+
+func closeLabelClassifiers(classifiers map[string]labelClassifier) {
+	for _, classifier := range classifiers {
+		if closer, ok := classifier.(interface{ Close() error }); ok {
+			_ = closer.Close()
+		}
+	}
 }

@@ -8,7 +8,7 @@ Define embedding rules under `routing.signals.embeddings`.
 It depends on the embedding model configured in
 `global.model_catalog.embeddings`.
 
-Those assets can run locally or through an external OpenAI-compatible text embedding endpoint. See [Remote Embedding Providers](../../global/remote-embeddings) for the shared provider configuration; signal candidates, thresholds, and decision conditions remain unchanged.
+Those assets can run locally or through an external OpenAI-compatible text embedding endpoint. See [Runtime embeddings](../../../installation/runtime/embeddings) for the shared provider configuration; signal candidates, thresholds, and decision conditions remain unchanged.
 
 ## Key Advantages
 
@@ -60,7 +60,14 @@ routing:
 
 Tune the threshold and candidate list together; that matters more than adding many low-quality examples.
 
-Configure ranked fallback behavior with the embedding model settings:
+By default, a rule matches only when its similarity score reaches its
+`threshold`. Unmatched scores remain available to numeric predicates and
+projections.
+
+For ranked intent selection, you can explicitly enable soft matching below.
+When no rule meets its threshold, this permits matches above
+`min_score_threshold` instead. Leave it disabled when a rule's threshold must
+be a strict boundary, such as a risk or privacy condition.
 
 ```yaml
 global:
@@ -80,11 +87,37 @@ global:
             margin_threshold: 0.05
 ```
 
-`prototype_scoring` compresses each embedding rule's candidate bank into a smaller set of representative prototypes, then scores the rule from those prototypes instead of relying on one flat candidate list forever.
+The family-level `prototype_scoring` settings compress each rule's candidate
+bank and control its scoring. A rule can declare its own `prototype_scoring`
+object beside `candidates`. Omitting it inherits the family settings; declaring
+it replaces the complete object, with omitted fields using built-in defaults.
+An empty object therefore uses built-in defaults rather than family overrides.
 
-The Router scores every embedding rule and then applies `top_k` as the
-emission limit. The default is `1`, so only the strongest embedding signal is
-returned. Set `top_k: 0` to return every rule that meets its threshold.
+To retain every distinct authored candidate, including multilingual examples,
+set this on the rule:
+
+```yaml
+prototype_scoring:
+  enabled: false
+  best_weight: 0.75
+  top_m: 2
+```
+
+`enabled: false` disables clustering and the prototype cap, not aggregation.
+`max` still combines the best similarity and top-M support; `mean` still averages
+the retained bank. With compression enabled, `max_prototypes: 0` uses the default
+cap of 8. Retaining more candidates adds local scoring work; candidate embeddings
+are already computed before compression and request embedding calls are unchanged.
+Rule settings travel with an exported or initialized recipe and apply to both
+text and image queries.
+
+The Router scores every embedding rule. By default, `top_k: 0` retains every
+rule that meets its threshold, so independent predicates remain available to
+projections and decision priority. Set a positive `top_k`, such as `1` in the
+ranked example above, only when lower-ranked matches should be discarded.
+This limits emitted evidence; it does not reduce embedding inference work.
+Use recipe-local [partitions](../../projection/partitions) when a specific
+group of competing signals should have one winner.
 
 ## Design and validate candidate sets
 
@@ -101,7 +134,9 @@ list:
   emission is appropriate, a competing benign rule can also give ordinary
   inputs a better semantic match. Test it with your actual `top_k` and
   threshold settings; a benign rule is not a security blocklist.
-- Use `aggregation_method: max` when any strong example should match. Use
+- Use `aggregation_method: max` to favor the strongest example while considering
+  support from other prototypes. The rule threshold applies to the combined
+  score, so the best individual similarity can exceed it without a match. Use
   `mean` only when broad agreement across the candidate set is the behavior
   you want.
 - Calibrate `threshold` against labeled positive and negative traffic for the
@@ -188,7 +223,17 @@ The optional
 example includes `identifier_document_imagery`,
 `code_or_terminal_imagery`, and a benign `ambient_office_imagery` rule. Replace
 its candidates with examples from your deployment and recalibrate the
-threshold. The example value is not a portable default.
+threshold. The example values are not portable defaults.
+
+The shipped thresholds were obtained with
+[`tools/calibration/image-routing`](https://github.com/vllm-project/semantic-router/tree/main/tools/calibration/image-routing)
+against `llm-semantic-router/multi-modal-embed-small` (snapshot
+`fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4`, 384 dimensions, default
+`prototype_scoring`) and a hand-reviewed manifest of repository images in which
+every fixture is labelled positive for a named candidate, negative, or excluded
+as ambiguous. Treat them as a starting point for that model only: calibrate
+against your own labelled images before relying on the rules, and recalibrate
+whenever you change the model, the candidates, or the scoring configuration.
 
 ### Distinction from the `modality` signal type
 

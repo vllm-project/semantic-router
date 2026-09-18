@@ -7,12 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version contract to validate without publishing.
+        description: Release candidate to qualify without publishing.
         required: true
         type: string
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -24,6 +25,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      performance_base: ${{ steps.baseline.outputs.ref }}
       tag: ${{ steps.version.outputs.tag }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
@@ -69,27 +71,65 @@ jobs:
             --version "${{ steps.version.outputs.version }}" \
             --github-output "$GITHUB_OUTPUT"
 
-  docker:
-    name: Docker images
+      - name: Resolve compatible previous release for paired performance
+        id: baseline
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          python3 tools/ci/ci_plan.py previous-release \
+            --version "$RELEASE_VERSION" --github-output "$GITHUB_OUTPUT"
+
+  ci:
+    name: Release Candidate
     needs: validate
-    if: github.event_name == 'push'
+    uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
+      actions: read
+      security-events: write
+    with:
+      profile: release
+      tag: ${{ needs.validate.outputs.tag }}
+      performance-base-ref: ${{ needs.validate.outputs.performance_base }}
+    secrets: inherit
+
+  gate:
+    name: Release CPU Qualification
+    if: always()
+    needs: [validate, ci]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Require version and complete CPU evidence
+        env:
+          VERSION_RESULT: ${{ needs.validate.result }}
+          QUALIFICATION_RESULT: ${{ needs.ci.result }}
+        run: |
+          test "$VERSION_RESULT" = success
+          test "$QUALIFICATION_RESULT" = success
+
+  docker:
+    name: Publish Images
+    needs: [validate, gate, ci]
+    if: github.event_name == 'push' && needs.gate.result == 'success'
+    permissions:
+      contents: read
+      actions: read
       packages: write
     uses: ./.github/workflows/docker-publish.yml
     with:
       mode: release
-      images: '["dashboard","extproc","extproc-rocm","operator","operator-bundle","vllm-sr","vllm-sr-cuda","vllm-sr-rocm"]'
+      images: ${{ needs.ci.outputs.publish_images }}
       tag: ${{ needs.validate.outputs.tag }}
       publish_latest: true
     secrets: inherit
 
   helm:
-    name: Helm chart
-    needs: validate
-    if: github.event_name == 'push'
+    name: Publish Helm Chart
+    needs: [validate, gate]
+    if: github.event_name == 'push' && needs.gate.result == 'success'
     permissions:
       contents: read
+      actions: read
       packages: write
     uses: ./.github/workflows/helm-publish.yml
     with:
@@ -99,20 +139,21 @@ jobs:
     secrets: inherit
 
   pypi:
-    name: Python package
-    needs: validate
-    if: github.event_name == 'push'
+    name: Publish Python Package
+    needs: [validate, gate]
+    if: github.event_name == 'push' && needs.gate.result == 'success'
     uses: ./.github/workflows/pypi-publish.yml
     with:
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
       catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
+      prebuilt-dist: true
     secrets: inherit
 
   crate:
-    name: Rust crate
-    needs: validate
-    if: github.event_name == 'push'
+    name: Publish Rust Crate
+    needs: [validate, gate]
+    if: github.event_name == 'push' && needs.gate.result == 'success'
     uses: ./.github/workflows/publish-crate.yml
     with:
       version: ${{ needs.validate.outputs.version }}
@@ -121,8 +162,8 @@ jobs:
 
   release-notes:
     name: Publish GitHub Release
-    needs: [validate, docker, helm, pypi, crate]
-    if: github.event_name == 'push'
+    needs: [validate, gate, docker, helm, pypi, crate]
+    if: github.event_name == 'push' && needs.gate.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -160,7 +201,7 @@ jobs:
           body: |
             ## Release ${{ needs.validate.outputs.tag }}
 
-            Version validation completed before Docker, Helm, PyPI, crates.io,
+            Version and CPU runtime qualification completed before Docker, Helm, PyPI, crates.io,
             and operator image publication.
 
             ### Container images

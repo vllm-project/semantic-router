@@ -76,9 +76,10 @@ func TestParseStreamingUsage_IgnoresNullUsageChunks(t *testing.T) {
 
 func TestParseStreamingResponse_PopulatesUsage(t *testing.T) {
 	c := &Client{}
-	body := []byte("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n" +
-		"data: {\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n" +
-		"data: [DONE]\n")
+	body := []byte("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n\n" +
+		"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: [DONE]\n\n")
 
 	resp, err := c.parseStreamingResponse(body, "model-a")
 	if err != nil {

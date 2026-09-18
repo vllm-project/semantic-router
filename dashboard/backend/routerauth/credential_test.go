@@ -17,7 +17,7 @@ func (provider testCredentialProvider) ManagementCredential() (string, error) {
 }
 
 func TestRewriteAuthorizationReplacesAndStripsEveryBrowserCredential(t *testing.T) {
-	request, err := http.NewRequest(http.MethodGet, "http://router/config/hash?authToken=query-jwt&view=full", nil)
+	request, err := http.NewRequest(http.MethodGet, "http://router/api/v1/config/hash?authToken=query-jwt&view=full", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestRewriteAuthorizationStripsBrowserCredentialWhenManagedAuthIsDisabled(t 
 }
 
 func TestRewriteAuthorizationFailsClosedOnCredentialReadError(t *testing.T) {
-	request, err := http.NewRequest(http.MethodGet, "http://router/config/hash", nil)
+	request, err := http.NewRequest(http.MethodGet, "http://router/api/v1/config/hash", nil)
 	if err != nil {
 		t.Fatal(err)
 	}

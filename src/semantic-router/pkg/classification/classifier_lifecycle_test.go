@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 type countingEmbeddingInitializer struct {
@@ -117,11 +117,11 @@ func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T)
 		backendInitialized = true
 	}}
 	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		if !backendInitialized {
 			return nil, errors.New("embedding preload ran before backend initialization")
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
 		getEmbedding2DMatryoshka = originalFunc
@@ -246,7 +246,89 @@ func TestInitializeRuntimeInitializesCoreSignalClassifiersWhenUsed(t *testing.T)
 	}
 }
 
-func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) {
+// The response-stage consumers of the jailbreak classifier are never named by
+// a decision rule, so the signal-type walk alone would leave the model
+// uninitialized and every response-stage detection unavailable.
+func TestInitializeRuntimeInitializesJailbreakClassifierForResponseStageConsumers(t *testing.T) {
+	keywordDecisions := func(plugins ...config.DecisionPlugin) []config.Decision {
+		return []config.Decision{{
+			Name:    "keyword-route",
+			Rules:   config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{{Type: config.SignalTypeKeyword, Name: "probe"}}},
+			Plugins: plugins,
+		}}
+	}
+	tests := []struct {
+		name      string
+		rules     []config.JailbreakRule
+		decisions []config.Decision
+	}{
+		{
+			name:      "response-direction rule",
+			rules:     []config.JailbreakRule{{Name: "unsafe_completion", Direction: config.SignalDirectionResponse}},
+			decisions: keywordDecisions(),
+		},
+		{
+			name: "response_jailbreak plugin owns detection",
+			decisions: keywordDecisions(config.DecisionPlugin{
+				Type: "response_jailbreak",
+				Configuration: config.MustStructuredPayload(map[string]interface{}{
+					"enabled": true,
+				}),
+			}),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			categoryInitializer := &countingCoreClassifierInitializer{}
+			piiInitializer := &countingPIIInitializer{}
+			jailbreakInitializer := &countingCoreClassifierInitializer{}
+			classifier := &Classifier{
+				Config: &config.RouterConfig{
+					InlineModels: config.InlineModels{
+						Classifier: config.Classifier{
+							CategoryModel: config.CategoryModel{
+								ModelID:             "models/mmbert32k-intent-classifier-merged",
+								CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+							},
+							PIIModel: config.PIIModel{
+								ModelID:        "models/mmbert32k-pii-detector-merged",
+								PIIMappingPath: "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
+							},
+						},
+						PromptGuard: config.PromptGuardConfig{
+							Enabled:              true,
+							ModelID:              "models/mmbert32k-jailbreak-detector-merged",
+							JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
+						},
+					},
+					IntelligentRouting: config.IntelligentRouting{
+						Signals:   config.Signals{JailbreakRules: tt.rules},
+						Decisions: tt.decisions,
+					},
+				},
+				CategoryMapping:      &CategoryMapping{CategoryToIdx: map[string]int{"billing": 0, "support": 1}},
+				PIIMapping:           &PIIMapping{LabelToIdx: map[string]int{"EMAIL_ADDRESS": 0, "PHONE_NUMBER": 1}},
+				JailbreakMapping:     &JailbreakMapping{LabelToIdx: map[string]int{"benign": 0, "jailbreak": 1}},
+				categoryInitializer:  categoryInitializer,
+				piiInitializer:       piiInitializer,
+				jailbreakInitializer: jailbreakInitializer,
+			}
+
+			if err := classifier.InitializeRuntime(); err != nil {
+				t.Fatalf("InitializeRuntime() error = %v", err)
+			}
+			if categoryInitializer.calls != 0 || piiInitializer.calls != 0 {
+				t.Fatalf("expected the unused request-stage initializers to be skipped, got category=%d pii=%d", categoryInitializer.calls, piiInitializer.calls)
+			}
+			if jailbreakInitializer.calls != 1 {
+				t.Fatalf("expected the jailbreak initializer to run once for the response-stage consumer, got %d", jailbreakInitializer.calls)
+			}
+		})
+	}
+}
+
+func TestUnsupportedLocalHallucinationBackendRejectsCandidate(t *testing.T) {
 	original := nativeBackendCapabilities
 	t.Cleanup(func() { nativeBackendCapabilities = original })
 	nativeBackendCapabilities = NativeBackendCapabilities{Name: "test-backend"}
@@ -262,8 +344,8 @@ func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) 
 			continue
 		}
 		hallucinationTaskFound = true
-		if !task.BestEffort {
-			t.Fatal("unsupported local hallucination task must degrade without aborting unrelated startup")
+		if task.BestEffort {
+			t.Fatal("required hallucination task must reject an unusable candidate")
 		}
 		err := task.Run(context.Background())
 		if err == nil || !strings.Contains(err.Error(), "does not support local hallucination detection") {
@@ -273,8 +355,8 @@ func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) 
 	if !hallucinationTaskFound {
 		t.Fatal("configured local hallucination task was silently omitted")
 	}
-	if err := classifier.InitializeRuntime(); err != nil {
-		t.Fatalf("best-effort unsupported hallucination backend aborted startup: %v", err)
+	if err := classifier.InitializeRuntime(); err == nil {
+		t.Fatal("unsupported required model must reject candidate preparation")
 	}
 	if classifier.IsHallucinationDetectorReady() {
 		t.Fatal("unsupported local hallucination backend must not report ready")

@@ -259,6 +259,11 @@ func validateStoredExecutionAttestationFields(entry executionAttestationEntry, e
 	if entry.ResponseContentDigest != nil && !digestPattern.MatchString(*entry.ResponseContentDigest) {
 		return fmt.Errorf("%w: evaluation execution attestation response content digest is invalid", ErrInvalid)
 	}
+	if entry.FinalAnswerComplete != nil &&
+		((entry.Operation != workerBrokerRoutedChatCompletion && entry.Operation != workerBrokerArmChatCompletion) ||
+			(*entry.FinalAnswerComplete && (!entry.Success || entry.ResponseContentDigest == nil))) {
+		return fmt.Errorf("%w: final answer completion observation is invalid", ErrInvalid)
+	}
 	for _, value := range []*int64{entry.InputTokens, entry.OutputTokens} {
 		if value != nil && *value < 0 {
 			return fmt.Errorf("%w: evaluation execution attestation token count is invalid", ErrInvalid)
@@ -280,7 +285,7 @@ func validateStoredExecutionAttestationFields(entry executionAttestationEntry, e
 }
 
 func unattemptedRoutingDecisionUnavailable(entry executionAttestationEntry) bool {
-	return entry.Operation == workerBrokerRouterEvaluate && !entry.Success && entry.StatusCode == nil &&
+	return entry.Operation == workerBrokerRoutingPreview && !entry.Success && entry.StatusCode == nil &&
 		entry.RoutingRecipeDecision != nil && entry.RoutingRecipeDecision.SelectionStatus == "unavailable"
 }
 
@@ -293,7 +298,7 @@ func validateStoredExecutionAttestationOperation(entry executionAttestationEntry
 			entry.InputTokens != nil || entry.OutputTokens != nil || entry.RoutingRecipeDecision != nil {
 			return fmt.Errorf("%w: model discovery attestation is invalid", ErrInvalid)
 		}
-	case workerBrokerRouterEvaluate:
+	case workerBrokerRoutingPreview:
 		if entry.TrackID != "routing" || !evidenceIDPattern.MatchString(entry.CaseID) ||
 			!evidenceIDPattern.MatchString(entry.AttemptID) || entry.RequestedModel == nil ||
 			entry.FetchedAt == nil || entry.RoutingRecipeDecision == nil || entry.ResponseContentDigest != nil ||

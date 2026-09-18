@@ -115,8 +115,8 @@ func validateResearchBenchmark(benchmark ResearchBenchmark) error {
 		(benchmark.DatasetRevision != nil && !researchBenchmarkRevisionPattern.MatchString(*benchmark.DatasetRevision)) {
 		return fmt.Errorf("benchmark identity is invalid")
 	}
-	plugin := researchBenchmarkMethodPlugin(benchmark)
-	if err := ValidateEvaluationMethodPlugin(plugin); err != nil {
+	method := researchBenchmarkMethod(benchmark)
+	if err := ValidateEvaluationMethodDefinition(method); err != nil {
 		return fmt.Errorf("benchmark %q method declaration: %w", benchmark.AdapterID, err)
 	}
 	if benchmark.Status == "blocked" && len(benchmark.ImportTracks) != 0 {
@@ -179,8 +179,8 @@ func researchBenchmarkByAdapter(adapterID string) (ResearchBenchmark, bool) {
 	return copyResearchBenchmark(benchmark), found
 }
 
-func researchBenchmarkMethodPlugin(benchmark ResearchBenchmark) EvaluationMethodPlugin {
-	return EvaluationMethodPlugin{
+func researchBenchmarkMethod(benchmark ResearchBenchmark) EvaluationMethodDefinition {
+	return EvaluationMethodDefinition{
 		SchemaVersion: EvaluationMethodContractVersion, ID: benchmark.MethodID,
 		Version: EvaluationMethodContractVersion, Status: benchmark.Status, ExecutionOwner: benchmark.ExecutionOwner,
 		InputSchema: benchmark.InputSchema, ExportSchema: benchmark.ExportSchema,

@@ -5,8 +5,8 @@ import (
 	"math"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
 func TestEmbeddingClassifier_SoftMatchingDisabledWithoutHardMatch(t *testing.T) {
@@ -34,6 +34,35 @@ func TestEmbeddingClassifier_SoftMatchingDisabledWithoutHardMatch(t *testing.T) 
 	}
 	if ruleName != "" {
 		t.Errorf("Expected no match, got rule: %s with score: %.2f", ruleName, score)
+	}
+}
+
+func TestEmbeddingClassifier_DefaultsRespectRuleThreshold(t *testing.T) {
+	stubEmbeddingLookup(t, map[string][]float32{
+		"request":   makeEmbedding(1.0, 0.0, 0.0),
+		"reference": makeEmbedding(0.60, 0.0, 0.0),
+	})
+
+	for name, settings := range map[string]config.HNSWConfig{
+		"omitted settings":   {},
+		"canonical defaults": config.DefaultCanonicalGlobal().ModelCatalog.Embeddings.Semantic.EmbeddingConfig,
+	} {
+		t.Run(name, func(t *testing.T) {
+			classifier := newTestEmbeddingClassifier(t, []config.EmbeddingRule{{
+				Name: "intent", Candidates: []string{"reference"},
+				SimilarityThreshold: 0.8, AggregationMethodConfiged: config.AggregationMethodMax,
+			}}, settings)
+			result, err := classifier.ClassifyDetailed("request")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Matches) != 0 {
+				t.Fatalf("below-threshold similarity must not emit a routing signal: %+v", result.Matches)
+			}
+			if len(result.Scores) != 1 || result.Scores[0].Score < 0.59 {
+				t.Fatalf("unmatched similarity must remain available for numeric projections: %+v", result.Scores)
+			}
+		})
 	}
 }
 
@@ -68,7 +97,7 @@ func TestEmbeddingClassifier_SoftMatchingEnabledReturnsBestRule(t *testing.T) {
 	}
 }
 
-func TestEmbeddingClassifier_ClassifyAllDefaultTopKReturnsBestHardMatch(t *testing.T) {
+func TestEmbeddingClassifier_ClassifyAllExplicitTopOneReturnsBestHardMatch(t *testing.T) {
 	stubEmbeddingLookup(t, map[string][]float32{
 		"TensorFlow pipeline":  makeEmbedding(0.90, 0.85, 0.10),
 		"machine learning":     makeEmbedding(0.85, 0.0, 0.0),
@@ -79,14 +108,14 @@ func TestEmbeddingClassifier_ClassifyAllDefaultTopKReturnsBestHardMatch(t *testi
 		"ingredients":          makeEmbedding(0.0, 0.0, 0.25),
 	})
 
-	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{PreloadEmbeddings: true})
+	classifier := newTestEmbeddingClassifier(t, topicRules(), config.HNSWConfig{PreloadEmbeddings: true, TopK: intPtr(1)})
 
 	matched, err := classifier.ClassifyAll("TensorFlow pipeline")
 	if err != nil {
 		t.Fatalf("ClassifyAll failed: %v", err)
 	}
 	if len(matched) != 1 {
-		t.Fatalf("Expected 1 match with default top_k, got %d: %+v", len(matched), matched)
+		t.Fatalf("Expected 1 match with explicit top_k: 1, got %d: %+v", len(matched), matched)
 	}
 	if matched[0].RuleName != "programming" {
 		t.Fatalf("Expected top hard match to be 'programming', got %+v", matched)
@@ -369,7 +398,7 @@ func newTestEmbeddingClassifier(
 func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
 	calls := 0
 	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		calls++
 		return nil, errors.New("constructor must not call embedding backend")
 	}
@@ -392,11 +421,11 @@ func TestEmbeddingClassifierConstructorDoesNotPreloadCandidates(t *testing.T) {
 func TestEmbeddingClassifierWarmupFailureDoesNotPublishPartialEmbeddings(t *testing.T) {
 	failBadCandidate := true
 	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		if text == "bad" && failBadCandidate {
 			return nil, errors.New("synthetic embedding failure")
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
 		getEmbedding2DMatryoshka = originalFunc
@@ -433,16 +462,16 @@ func stubEmbeddingLookup(t *testing.T, mockEmbeddings map[string][]float32) {
 
 	originalLegacyFunc := getEmbeddingWithModelType
 	originalMatryoshkaFunc := getEmbedding2DMatryoshka
-	lookup := func(text string) *candle_binding.EmbeddingOutput {
+	lookup := func(text string) *tasks.EmbeddingResult {
 		if emb, ok := mockEmbeddings[text]; ok {
-			return &candle_binding.EmbeddingOutput{Embedding: emb}
+			return &tasks.EmbeddingResult{Embedding: emb}
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(0.0)}
+		return &tasks.EmbeddingResult{Embedding: makeEmbedding(0.0)}
 	}
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*tasks.EmbeddingResult, error) {
 		return lookup(text), nil
 	}
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*tasks.EmbeddingResult, error) {
 		return lookup(text), nil
 	}
 	t.Cleanup(func() {

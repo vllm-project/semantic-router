@@ -132,7 +132,7 @@ func resolveCreateRunExecutor(
 			liveTracks = normalizedSuiteLiveMethodTracks(suite)
 			for _, trackID := range request.TrackIDs {
 				if _, admitted := liveTracks[trackID]; containsTrack(suite.TrackIDs, trackID) && !admitted {
-					return nil, fmt.Errorf("%w: suite %q has no first-party normalized-live method for track %q", ErrInvalid, suiteID, trackID)
+					return nil, fmt.Errorf("%w: suite %q has no supported normalized-live method for track %q", ErrInvalid, suiteID, trackID)
 				}
 			}
 		}

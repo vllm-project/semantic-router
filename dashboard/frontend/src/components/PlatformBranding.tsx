@@ -33,7 +33,9 @@ const PlatformBranding = ({ variant = 'default', className = '' }: PlatformBrand
 
   return (
     <div className={`${styles.container} ${styles[variant]} ${className}`}>
-      <img src={imageSrc} alt="AMD" className={styles.logo} />
+      <a href="https://www.amd.com/" target="_blank" rel="noopener noreferrer">
+        <img src={imageSrc} alt="AMD" className={styles.logo} />
+      </a>
       {variant === 'inline' ? null : <span className={styles.text}>Powered by AMD GPU</span>}
     </div>
   )

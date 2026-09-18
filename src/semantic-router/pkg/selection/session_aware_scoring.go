@@ -13,11 +13,14 @@ func (s *SessionAwareSelector) adjustScores(
 	session *AgenticSessionContext,
 	current string,
 	idleExpired bool,
-) (map[string]float64, map[string]SessionCandidateTrace) {
+) (CandidateScores, map[string]SessionCandidateTrace) {
 	continuation := s.continuationEvidence(selCtx, session)
-	baseScores := cloneScores(base.AllScores)
-	ensureScoresForCandidates(&SelectionResult{AllScores: baseScores, SelectedModel: base.SelectedModel, Score: base.Score}, selCtx.CandidateModels)
-	currentBaseScore := baseScores[current]
+	baseScores := base.ScoresFor(selCtx.CandidateModels)
+	currentRef := CurrentSessionCandidate(selCtx, base, current)
+	if currentRef == nil {
+		return nil, nil
+	}
+	currentBaseScore, _ := baseScores.Get(*currentRef)
 	currentAdjustedScore, currentTrace := s.scoreCurrentCandidate(
 		currentBaseScore,
 		session,
@@ -31,25 +34,22 @@ func (s *SessionAwareSelector) adjustScores(
 		},
 	)
 
-	adjusted := make(map[string]float64, len(selCtx.CandidateModels))
+	adjusted := make(CandidateScores, 0, len(selCtx.CandidateModels))
 	traces := make(map[string]SessionCandidateTrace, len(selCtx.CandidateModels))
-	for _, candidate := range selCtx.CandidateModels {
-		model := candidate.Model
-		score := baseScores[model]
-		trace := SessionCandidateTrace{
-			Current:    model == current,
-			BaseScore:  score,
-			FinalScore: score,
-		}
-		if model == current {
-			adjusted[model] = currentAdjustedScore
-			traces[model] = currentTrace
+	for i, candidate := range selCtx.CandidateModels {
+		score, available := baseScores.Get(candidate)
+		if !available {
 			continue
 		}
-
-		score, trace = s.scoreSwitchCandidate(selCtx, session, current, model, score, currentBaseScore, currentAdjustedScore, idleExpired, continuation.Mass, trace)
-		adjusted[model] = score
-		traces[model] = trace
+		isCurrent := CandidateIdentity(candidate) == CandidateIdentity(*currentRef)
+		trace := SessionCandidateTrace{Current: isCurrent, BaseScore: score, FinalScore: score}
+		if isCurrent {
+			score, trace = currentAdjustedScore, currentTrace
+		} else {
+			score, trace = s.scoreSwitchCandidate(selCtx, session, current, candidate.Model, score, currentBaseScore, currentAdjustedScore, idleExpired, continuation.Mass, trace)
+		}
+		adjusted = append(adjusted, CandidateScore{Candidate: candidate, Score: score})
+		traces[candidateScoreKey(selCtx.CandidateModels, i)] = trace
 	}
 	return adjusted, traces
 }
@@ -181,9 +181,8 @@ func (s *SessionAwareSelector) modelCostPressure(model string) float64 {
 	if maxCost > 0 && modelCost > 0 {
 		return clamp01(modelCost / maxCost)
 	}
-	if params, ok := s.modelParams[model]; ok && params.QualityScore > 0 {
-		return clamp01(params.QualityScore)
-	}
+	// Unknown price is not inferred from model quality. Cost pressure remains
+	// neutral until an explicit price is available.
 	return 0.5
 }
 

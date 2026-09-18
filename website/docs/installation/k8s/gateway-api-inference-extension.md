@@ -58,7 +58,7 @@ by the Gateway API route. The exact value must agree across all three objects:
 # Router config fragment
 providers:
   defaults:
-    default_model: local/general
+    model: local/general
   models:
     - name: local/general
       provider_model_id: served-general
@@ -67,6 +67,7 @@ providers:
         - name: general-pool
           endpoint: general-pool.inference.svc.cluster.local:8000
           protocol: http
+          provider: vllm
           weight: 100
 ```
 
@@ -102,7 +103,7 @@ later endpoint choice inside `general-pool`.
 Create and validate a complete config before applying it:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 Then deploy with the [Helm or Operator workflow](../configuration-workflows).

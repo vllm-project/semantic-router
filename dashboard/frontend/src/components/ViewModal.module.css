@@ -58,8 +58,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  min-height: 76px;
-  padding: 1.25rem 1.5rem;
+  min-height: 68px;
+  padding: 1rem 1.25rem;
   background: rgba(9, 9, 10, 0.82);
   border-bottom: 1px solid var(--border-subtle);
 }
@@ -146,7 +146,10 @@
 .content {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 1.5rem;
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  padding: 1.25rem;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -158,20 +161,16 @@
 }
 
 .section {
-  margin-bottom: 1rem;
-  padding: 1rem;
+  margin: 0;
+  padding: 0.9rem;
   background: rgba(255, 255, 255, 0.018);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
 }
 
-.section:last-child {
-  margin-bottom: 0;
-}
-
 .sectionTitle {
-  margin: 0 0 1rem;
-  padding-bottom: 0.625rem;
+  margin: 0 0 0.75rem;
+  padding-bottom: 0.55rem;
   color: var(--text-primary);
   font-size: 0.8125rem;
   font-weight: 720;
@@ -183,7 +182,8 @@
 .fieldsGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  align-items: stretch;
+  gap: 0.8rem 1rem;
 }
 
 .field {
@@ -206,8 +206,9 @@
 }
 
 .fieldValue {
-  min-height: 2.75rem;
-  padding: 0.75rem;
+  flex: 1;
+  min-height: 2.5rem;
+  padding: 0.65rem 0.7rem;
   display: block;
   color: var(--text-primary);
   font-size: 0.875rem;
@@ -224,7 +225,7 @@
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 0.625rem;
-  padding: 1rem 1.5rem;
+  padding: 0.85rem 1.25rem;
   background: rgba(9, 9, 10, 0.94);
   border-top: 1px solid var(--border-subtle);
 }

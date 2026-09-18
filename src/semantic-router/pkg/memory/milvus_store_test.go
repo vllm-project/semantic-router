@@ -5,7 +5,6 @@ package memory
 import (
 	"context"
 	"errors"
-	"os"
 	"testing"
 	"time"
 
@@ -14,22 +13,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 )
-
-// TestMain initializes the embedding model before running tests
-func TestMain(m *testing.M) {
-	// Initialize embedding model for tests
-	err := candle_binding.InitModel("sentence-transformers/all-MiniLM-L6-v2", true)
-	if err != nil {
-		os.Exit(1)
-	}
-
-	// Run tests
-	code := m.Run()
-	os.Exit(code)
-}
 
 // MockMilvusClient facilitates testing without a running Milvus instance
 type MockMilvusClient struct {
@@ -352,7 +336,8 @@ func setupTestStore() (*MilvusStore, *MockMilvusClient) {
 	mockClient := &MockMilvusClient{}
 	// Use bert embedding config for tests since that's initialized in TestMain
 	testEmbeddingConfig := EmbeddingConfig{
-		Model: EmbeddingModelBERT,
+		Provider: memoryTestEmbeddingProvider(),
+		Model:    EmbeddingModelBERT,
 	}
 	options := MilvusStoreOptions{
 		Client:          mockClient,
@@ -703,7 +688,7 @@ func TestMilvusStore_RetryLogic_ContextCancellation(t *testing.T) {
 
 	_, err := store.Retrieve(cancelCtx, RetrieveOptions{Query: "test", UserID: "u1"})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "context cancelled")
+	assert.ErrorIs(t, err, context.Canceled)
 }
 
 func TestIsTransientError(t *testing.T) {
@@ -985,7 +970,8 @@ func TestMilvusStore_Schema_UserIDPartitionKey(t *testing.T) {
 	}
 
 	testEmbeddingConfig := EmbeddingConfig{
-		Model: EmbeddingModelBERT,
+		Provider: memoryTestEmbeddingProvider(),
+		Model:    EmbeddingModelBERT,
 	}
 
 	config := DefaultMemoryConfig()

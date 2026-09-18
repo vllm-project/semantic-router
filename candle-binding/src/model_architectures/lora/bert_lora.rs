@@ -820,3 +820,5 @@ impl HighPerformanceBertTokenClassifier {
         Ok(results)
     }
 }
+
+mod instances;

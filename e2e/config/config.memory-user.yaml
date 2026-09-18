@@ -6,12 +6,13 @@ listeners:
     timeout: 300s
 providers:
   defaults:
-    default_model: qwen3
+    model: qwen3
   models:
     - name: qwen3
       provider_model_id: qwen3
       backend_refs:
         - name: llm_katan
+          provider: vllm
           weight: 1
           endpoint: host.docker.internal:8000
           protocol: http
@@ -108,7 +109,7 @@ global:
       milvus:
         address: host.docker.internal:19530
         collection: memory_test_ci
-        dimension: 384
+        dimension: 768
       embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.10
@@ -122,10 +123,10 @@ global:
       semantic:
         qwen3_model_path: ""
         gemma_model_path: ""
-        mmbert_model_path: /app/models/mmbert-embed-32k-2d-matryoshka
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         multimodal_model_path: ""
         bert_model_path: ""
         use_cpu: true
         embedding_config:
           model_type: mmbert
-          target_dimension: 384
+          target_dimension: 768

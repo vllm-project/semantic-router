@@ -57,7 +57,7 @@ func NewEmbeddingClassifierWithProvider(cfgRules []config.EmbeddingRule, optConf
 
 	logging.ComponentEvent("classifier", "embedding_classifier_initialized", map[string]interface{}{
 		"model_type":          c.modelType,
-		"backend":             c.backend,
+		"backend":             c.inferenceBackend(),
 		"rules":               len(cfgRules),
 		"preload_embeddings":  optConfig.PreloadEmbeddings,
 		"target_dimension":    optConfig.TargetDimension,

@@ -8,14 +8,14 @@ from typing import Any, cast
 
 import pytest
 from benchmark_normalization_fixtures import BUILDERS, write_native_fixture
-from cli.commands.eval import eval
+from cli.commands.benchmark import benchmark
 from cli.evaluation.benchmark_normalization import normalize_benchmark_suite
 from cli.evaluation.benchmark_normalization_io import NormalizationError
 from cli.evaluation.benchmark_normalization_registry import (
-    BenchmarkNormalizerPlugin,
-    BenchmarkNormalizerRegistry,
+    BenchmarkNormalizerCatalog,
+    BenchmarkNormalizerDefinition,
     get_benchmark_normalizer,
-    get_benchmark_normalizer_plugin,
+    get_benchmark_normalizer_definition,
     get_benchmark_normalizers,
 )
 from cli.evaluation.benchmark_registry import get_benchmark_adapter
@@ -23,7 +23,6 @@ from cli.evaluation.builtin_executors import DEFAULT_EXECUTOR_REGISTRY
 from cli.evaluation.catalog_suites import CatalogSuite
 from cli.evaluation.executor_contracts import BUILTIN_NORMALIZED_SUITE_EXECUTORS
 from cli.evaluation.method_contract_v2 import COMPOUND_MODEL_BUDGET_METHOD_ID
-from cli.evaluation.method_registry_v2 import method_plugin_for_benchmark
 from cli.evaluation.metric_compound_model_budget import reduce_r2_compound_evidence
 from cli.evaluation.normalized_suite_executor import execute_normalized_suites
 from cli.evaluation.normalized_suite_live_admission import (
@@ -47,6 +46,7 @@ def _receipt(adapter_id: str) -> BenchmarkSourceReceipt:
     descriptor = get_benchmark_adapter(adapter_id)
     has_dataset = descriptor.dataset_revision is not None
     return BenchmarkSourceReceipt(
+        source_kind="registered_adapter",
         adapter_id=adapter_id,
         expected_source_revision=descriptor.source_revision,
         observed_source_revision=descriptor.source_revision,
@@ -88,54 +88,57 @@ def test_normalizer_inventory_is_explicit_for_all_thirteen_adapters() -> None:
             assert not descriptor.required_artifacts
 
 
-def _registered_plugins() -> tuple[BenchmarkNormalizerPlugin, ...]:
+def _registered_definitions() -> tuple[BenchmarkNormalizerDefinition, ...]:
     return tuple(
-        get_benchmark_normalizer_plugin(descriptor.adapter_id)
+        get_benchmark_normalizer_definition(descriptor.adapter_id)
         for descriptor in get_benchmark_normalizers()
     )
 
 
-def test_normalizer_plugins_are_immutable_and_own_parser_parity() -> None:
-    executable = get_benchmark_normalizer_plugin("routerarena")
-    blocked = get_benchmark_normalizer_plugin("routejudge-orbit")
+def test_normalizer_definitions_are_immutable_and_own_parser_parity() -> None:
+    executable = get_benchmark_normalizer_definition("routerarena")
+    blocked = get_benchmark_normalizer_definition("routejudge-orbit")
     assert executable.parser is not None
     assert blocked.parser is None
 
     with pytest.raises(FrozenInstanceError):
         executable.parser = None
-    with pytest.raises(ValueError, match="executable normalizer plugin must have"):
-        BenchmarkNormalizerPlugin(descriptor=executable.descriptor, parser=None)
+    with pytest.raises(ValueError, match="executable normalizer definition must have"):
+        BenchmarkNormalizerDefinition(descriptor=executable.descriptor, parser=None)
     with pytest.raises(ValueError, match="parser must be callable"):
-        BenchmarkNormalizerPlugin(
+        BenchmarkNormalizerDefinition(
             descriptor=executable.descriptor,
             parser=cast(Any, object()),
         )
-    with pytest.raises(ValueError, match="non-executable normalizer plugin must not"):
-        BenchmarkNormalizerPlugin(
+    with pytest.raises(
+        ValueError, match="non-executable normalizer definition must not"
+    ):
+        BenchmarkNormalizerDefinition(
             descriptor=blocked.descriptor,
             parser=executable.parser,
         )
 
 
-def test_normalizer_registry_rejects_duplicates_and_descriptor_drift() -> None:
-    plugins = _registered_plugins()
-    with pytest.raises(ValueError, match="duplicate benchmark normalizer plugin"):
-        BenchmarkNormalizerRegistry((*plugins, plugins[0]))
+def test_normalizer_catalog_rejects_duplicates_and_descriptor_drift() -> None:
+    definitions = _registered_definitions()
+    with pytest.raises(ValueError, match="duplicate benchmark normalizer definition"):
+        BenchmarkNormalizerCatalog((*definitions, definitions[0]))
     with pytest.raises(ValueError, match="descriptor parity mismatch"):
-        BenchmarkNormalizerRegistry(plugins[:-1])
+        BenchmarkNormalizerCatalog(definitions[:-1])
 
-    original = get_benchmark_normalizer_plugin("routerarena")
+    original = get_benchmark_normalizer_definition("routerarena")
     invalid_descriptor = original.descriptor.model_copy(
         update={"track_ids": ("preference",)}
     )
-    invalid_plugin = BenchmarkNormalizerPlugin(
+    invalid_definition = BenchmarkNormalizerDefinition(
         descriptor=invalid_descriptor,
         parser=original.parser,
     )
     with pytest.raises(ValueError, match="tracks outside its adapter contract"):
-        BenchmarkNormalizerRegistry(
+        BenchmarkNormalizerCatalog(
             tuple(
-                invalid_plugin if plugin is original else plugin for plugin in plugins
+                invalid_definition if definition is original else definition
+                for definition in definitions
             )
         )
 
@@ -210,9 +213,10 @@ def _assert_import_methods(
     assert all(method.status == "configured" for method in imported)
     assert all(not method.qualified_gate_ids for method in imported)
     assert all(method.reason is None for method in imported)
-    assert f"research-method:{method_plugin_for_benchmark(adapter_id).status}" in (
-        catalog.tags
-    )
+    assert {method.id for method in imported} == {
+        f"normalized.{adapter_id}.{track_id}.v1" for track_id in manifest.track_ids
+    }
+    assert all(not tag.startswith("research-method:") for tag in catalog.tags)
 
 
 def _assert_live_admission(
@@ -518,7 +522,7 @@ def test_suite_normalize_cli_materializes_current_contract(
     write_native_fixture("routerarena", export_root)
     runner = CliRunner()
     result = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-normalize",
             "--adapter",
@@ -539,7 +543,7 @@ def test_suite_normalize_cli_materializes_current_contract(
     assert (output_root / "request.json").is_file()
     assert (output_root / "bundle/grading/outcomes.jsonl").is_file()
     install = runner.invoke(
-        eval,
+        benchmark,
         [
             "suite-install",
             "--request",
@@ -568,7 +572,7 @@ def test_suite_normalize_cli_materializes_current_contract(
 
 
 def test_normalizer_cli_runnable_surface_excludes_blocked_adapters() -> None:
-    result = CliRunner().invoke(eval, ["normalizers", "--runnable-only"])
+    result = CliRunner().invoke(benchmark, ["normalizers", "--runnable-only"])
     assert result.exit_code == 0, result.output
     payload = json.loads(result.output)
     adapter_ids = {item["adapter_id"] for item in payload["normalizers"]}

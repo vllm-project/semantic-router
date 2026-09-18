@@ -11,7 +11,7 @@ implemented.
 | Concepts, use cases, and architecture | `website/docs/overview/` |
 | First run, configuration, deployment, and operations | The matching section in `website/sidebars.ts` |
 | Signals, projections, decisions, algorithms, and plugins | `website/docs/tutorials/` |
-| Stable HTTP or Kubernetes field reference | `website/docs/api/` |
+| CLI commands, HTTP APIs, or Kubernetes fields | `website/docs/api/` |
 | Contributor workflow | `website/docs/community/` or canonical repository contributor docs |
 
 Avoid creating a second source of truth for generated schemas, config
@@ -39,6 +39,7 @@ relative links for other docs pages. Put website images under
 
 ```bash
 cd website
+python3 -m pip install -r requirements.txt
 npm ci
 npm run start
 ```
@@ -51,10 +52,10 @@ npm test
 npm run build:en
 ```
 
-From the repository root, the docs-only CI path is:
+From the repository root, run the same changed-file path as CI:
 
 ```bash
-make agent-docs-ci-gate AGENT_BASE_REF=origin/main
+make check BASE_REF=origin/main
 ```
 
 The build treats broken internal links as errors. Check external links that are
@@ -63,24 +64,44 @@ guides.
 
 ## Generated references
 
-The configuration catalog is derived from `config/fragments/` and the first
-sentence of each matching capability guide's **Overview**. Regenerate and check
-it from the repository root:
+Commit generated references together with the source change. Check commands
+compare the committed output with freshly rendered content and fail without
+rewriting it; running a website build does not repair stale references.
 
-```bash
-make docs-config
-make docs-config-check
-```
+| Reference | Authoritative source | Regenerate | Check |
+| --- | --- | --- | --- |
+| Model Hub and built-in catalog | `config/catalog/` and built-in recipe bundles | `make model-catalog-generate` | `make model-catalog-generated-check` |
+| [CLI commands](../api/cli) | Registered Click commands in `src/vllm-sr/cli/` | `make docs-cli` | `make docs-cli-check` |
+| Configuration catalog | `config/fragments/` and capability guides' **Overview** | `make docs-config` | `make docs-config-check` |
+| OpenAPI and endpoint index | Go API route catalog and config schema | `make api-docs-generate` | `make api-docs-check` |
+| Operator field reference | Operator Go API types and comments | `make docs-crd` | `make docs-crd-check` |
+| Public operations skill | `tools/agent/skills/vllm-sr-agent-operations/` | `make agent-skill-sync` | `make agent-skill-check` |
+| GitHub community statistics | Generator sources, identity inputs, and the dated GitHub snapshot | `npm run contributors:rank` / `npm run committers:activity` in `website/` | `make docs-community-check` |
 
-The Operator field reference is generated from the current Go API types:
+`make docs-generated-check` checks the catalog, CLI reference, configuration
+catalog, and public skill without building native libraries. Every PR and main
+validation runs this gate, including changes confined to source files or docs.
+`npm run build` and `npm test` run the same reference checks first. They require
+Python 3.10 or newer and the dependencies in `website/requirements.txt`; set
+`VLLM_SR_DOCS_PYTHON` to choose a Python interpreter explicitly.
 
-```bash
-make docs-crd
-make docs-crd-check
-```
+Community statistics are dated snapshots of changing external data. Their
+offline gate verifies both the generating source digest and the generated body
+digest, rather than comparing against live GitHub activity. Changing a generator
+or its identity inputs requires a successful refresh; a network failure cannot
+silently reuse a snapshot from obsolete sources.
 
-Edit the source fragment, capability guide, or Operator API comment rather than
-editing a generated block by hand.
+`make generated-contract-check` also checks the config schema, OpenAPI, and
+Operator reference, using the normal Go/native build prerequisites.
+`make generated-contract-generate` refreshes those public references in
+dependency order. Edit the owning source or generator instead of hand-editing
+generated output.
+
+The website imports its model catalog at build time. Regenerating and committing
+the catalog must be followed by a successful production website deployment.
+To diagnose an outdated site, compare `/model-catalog/catalog.json` from the
+deployed site with `website/static/model-catalog/catalog.json` in the intended
+revision; matching source files in Git alone do not prove that revision is live.
 
 ## Localization
 

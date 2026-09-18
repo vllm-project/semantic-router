@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import EvaluationLatestEvidence from './EvaluationLatestEvidence'
-import { buildEvaluationOverviewModel } from './evaluationOverview'
+import { buildEvaluationOverviewModel } from './evaluationOverviewModel'
 
 describe('EvaluationLatestEvidence', () => {
   it('keeps report service failures behind actionable product copy', () => {
