@@ -9422,6 +9422,22 @@
                       }
                     }
                   },
+                  "preview_context": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "conversation_id": {
+                        "type": "string"
+                      },
+                      "sampling_seed": {
+                        "nullable": true,
+                        "type": "integer"
+                      },
+                      "session_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
                   "response_format": {},
                   "text": {
                     "type": "string"
@@ -30618,8 +30634,8 @@
     },
     "/api/v1/routing/preview": {
       "post": {
-        "summary": "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
-        "description": "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+        "summary": "Preview configured signals and model selection without invoking a generation backend. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+        "description": "Preview configured signals and model selection without invoking a generation backend. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
         "operationId": "post_api_v1_routing_preview",
         "tags": [
           "routing"
@@ -33374,6 +33390,43 @@
                     },
                     "selection_method": {
                       "type": "string"
+                    },
+                    "selection_provenance": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "captured_at": {
+                          "type": "string"
+                        },
+                        "caveat": {
+                          "type": "string"
+                        },
+                        "config_hash": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string"
+                        },
+                        "sampled": {
+                          "type": "boolean"
+                        },
+                        "sampling_seed": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "state_dependent": {
+                          "type": "boolean"
+                        },
+                        "state_hash": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "mode",
+                        "config_hash",
+                        "state_dependent",
+                        "sampled"
+                      ]
                     },
                     "selection_reason": {
                       "type": "string"
@@ -36468,6 +36521,43 @@
                         "selection_method": {
                           "type": "string"
                         },
+                        "selection_provenance": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "captured_at": {
+                              "type": "string"
+                            },
+                            "caveat": {
+                              "type": "string"
+                            },
+                            "config_hash": {
+                              "type": "string"
+                            },
+                            "mode": {
+                              "type": "string"
+                            },
+                            "sampled": {
+                              "type": "boolean"
+                            },
+                            "sampling_seed": {
+                              "nullable": true,
+                              "type": "integer"
+                            },
+                            "state_dependent": {
+                              "type": "boolean"
+                            },
+                            "state_hash": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "config_hash",
+                            "state_dependent",
+                            "sampled"
+                          ]
+                        },
                         "selection_reason": {
                           "type": "string"
                         },
@@ -36668,6 +36758,23 @@
                       },
                       "trace": {
                         "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "preview_context": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "conversation_id": {
+                        "type": "string"
+                      },
+                      "sampling_seed": {
+                        "nullable": true,
+                        "type": "integer"
+                      },
+                      "session_id": {
+                        "type": "string"
                       }
                     },
                     "additionalProperties": false

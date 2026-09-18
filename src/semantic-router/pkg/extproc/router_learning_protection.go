@@ -147,7 +147,7 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		return r.protectionDecisionFromResult(input, learningCtx, protected, preflight, proposal), nil
 	}
 
-	result, err := r.selectProtectionResult(selectionRequestContext(input.ctx), preflight.config, baseResult, learningCtx)
+	result, err := r.selectProtectionResult(input.ctx, preflight.config, baseResult, learningCtx)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return routerLearningDecision{}, err
@@ -251,8 +251,8 @@ func (r *OpenAIRouter) protectionRescueEvidence(
 ) bool {
 	tier := decisionTier(ctx)
 	decision := selectionDecisionStateKey(learningCtx)
-	currentExp := r.routerLearningRuntimeState().experienceSnapshot(decision, tier, current)
-	proposalExp := r.routerLearningRuntimeState().experienceSnapshot(decision, tier, proposal)
+	currentExp := r.learningExperience(ctx, decision, tier, current)
+	proposalExp := r.learningExperience(ctx, decision, tier, proposal)
 	currentWeak := currentExp.UnderpoweredCount >= 2 && currentExp.UnderpoweredCount > currentExp.GoodFitCount
 	currentUnreliable := currentExp.FailedCount >= 2
 	if !currentWeak && !currentUnreliable {
@@ -356,7 +356,7 @@ func protectionMode(ctx *RequestContext) string {
 }
 
 func (r *OpenAIRouter) selectProtectionResult(
-	ctx context.Context,
+	reqCtx *RequestContext,
 	cfg config.RouterLearningProtectionConfig,
 	baseResult *selection.SelectionResult,
 	learningCtx *selection.SelectionContext,
@@ -366,11 +366,13 @@ func (r *OpenAIRouter) selectProtectionResult(
 	if r.Config.ModelConfig != nil {
 		selector.InitializeFromConfig(r.Config.ModelConfig)
 	}
-	if r.LookupTable != nil {
+	if reqCtx != nil && reqCtx.learningPreview != nil {
+		selector.SetLookupTable(reqCtx.learningPreview.lookup)
+	} else if r.LookupTable != nil {
 		selector.SetLookupTable(r.LookupTable)
 	}
 
-	result, err := selector.Select(ctx, learningCtx)
+	result, err := selector.Select(selectionRequestContext(reqCtx), learningCtx)
 	if err != nil {
 		return nil, err
 	}

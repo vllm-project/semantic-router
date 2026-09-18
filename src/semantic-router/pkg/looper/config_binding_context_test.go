@@ -2,10 +2,11 @@ package looper
 
 import (
 	"context"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 func TestLooperChildCarriesParentConfigBinding(t *testing.T) {

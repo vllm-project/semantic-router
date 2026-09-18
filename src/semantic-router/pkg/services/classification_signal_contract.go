@@ -87,7 +87,7 @@ func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req I
 		resp.DecisionError = decisionErr.Error()
 		return resp, decisionErr
 	}
-	s.populateEvalModelSelection(resp, input, decisionResult)
+	s.populateEvalModelSelection(resp, input, decisionResult, req.PreviewContext)
 	return resp, nil
 }
 
@@ -95,6 +95,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	response *EvalResponse,
 	input intentSignalInput,
 	decisionResult *decision.DecisionResult,
+	previewContext *PreviewContext,
 ) {
 	if response == nil || decisionResult == nil || decisionResult.Decision == nil {
 		return
@@ -107,6 +108,9 @@ func (s *ClassificationService) populateEvalModelSelection(
 	}
 	demand, _ := modelselection.EffectiveCandidateDemand(input.semanticRequest, decisionResult.Decision)
 	selection := selector.SelectModelForEval(EvalModelSelectionInput{
+		PreviewContext:    previewContext,
+		ConversationFacts: input.conversationFacts,
+		SemanticRequest:   input.semanticRequest,
 		Demand:            demand,
 		Recipe:            response.Recipe,
 		Decision:          decisionResult.Decision,
@@ -118,6 +122,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	response.SelectionStatus = selection.Status
 	response.SelectionMethod = selection.Method
 	response.SelectionReason = selection.Reason
+	response.SelectionProvenance = selection.Provenance
 }
 
 func evalDecisionCategory(matchedRules []string) string {

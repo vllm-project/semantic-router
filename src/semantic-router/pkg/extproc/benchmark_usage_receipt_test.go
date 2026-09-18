@@ -2,10 +2,12 @@ package extproc
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -20,10 +22,14 @@ func TestBenchmarkUsageDirectProofAndCallLimit(t *testing.T) {
 		cache                   bool
 		known                   bool
 	}{
-		{name: "static", algorithm: "static", known: true}, {name: "multi_factor", algorithm: "multi_factor", known: true},
-		{name: "prompt helper", algorithm: "prompt"}, {name: "looper", algorithm: "fusion"},
-		{name: "shadow call", algorithm: "static", plugin: "shadow_dispatch"}, {name: "memory", algorithm: "static", plugin: "memory"},
-		{name: "unknown future plugin", algorithm: "static", plugin: "future"}, {name: "cache hit", algorithm: "static", cache: true},
+		{name: "static", algorithm: "static", known: true},
+		{name: "multi_factor", algorithm: "multi_factor", known: true},
+		{name: "prompt helper", algorithm: "prompt"},
+		{name: "looper", algorithm: "fusion"},
+		{name: "shadow call", algorithm: "static", plugin: "shadow_dispatch"},
+		{name: "memory", algorithm: "static", plugin: "memory"},
+		{name: "unknown future plugin", algorithm: "static", plugin: "future"},
+		{name: "cache hit", algorithm: "static", cache: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := &config.Decision{Algorithm: &config.AlgorithmConfig{Type: tc.algorithm}}
@@ -99,7 +105,7 @@ func TestBenchmarkCallLimitStopsBeforePromptSelection(t *testing.T) {
 	selected := &config.Decision{Name: "paid_selector", Algorithm: &config.AlgorithmConfig{Type: "prompt"}}
 	// No selector/client is initialized: reaching model selection would fail.
 	_, _, _, model, err := router.finalizeDecisionEvaluation(&decision.DecisionResult{Decision: selected}, "auto", "query", ctx)
-	if err != errBenchmarkCallLimit || model != "" {
+	if !errors.Is(err, errBenchmarkCallLimit) || model != "" {
 		t.Fatalf("prompt selection was not stopped: model=%q err=%v", model, err)
 	}
 }

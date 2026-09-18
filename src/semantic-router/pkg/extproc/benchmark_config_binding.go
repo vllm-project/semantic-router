@@ -87,7 +87,8 @@ func (r *OpenAIRouter) bindBenchmarkConfigResponse(response *ext_proc.Processing
 		}
 	}
 	(*mutation).RemoveHeaders = append((*mutation).RemoveHeaders, headers.VSRModelUsage, headers.VSRInferenceCallCount)
-	(*mutation).SetHeaders = append(kept, &core.HeaderValueOption{
+	(*mutation).SetHeaders = kept
+	(*mutation).SetHeaders = append((*mutation).SetHeaders, &core.HeaderValueOption{
 		Header:       &core.HeaderValue{Key: headers.VSRConfigHash, RawValue: []byte(r.Config.DocumentHash)},
 		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
 	})

@@ -12,7 +12,9 @@ func ValidConfigHash(value string) bool {
 		return false
 	}
 	for _, char := range value {
-		if !(char >= '0' && char <= '9' || char >= 'a' && char <= 'f') {
+		switch {
+		case char >= '0' && char <= '9', char >= 'a' && char <= 'f':
+		default:
 			return false
 		}
 	}
@@ -20,6 +22,8 @@ func ValidConfigHash(value string) bool {
 }
 
 // Benchmark accounting receipts contain no prompts, credentials, or content.
-const SRBenchMaxInferenceCalls = "x-sr-bench-max-inference-calls"
-const VSRInferenceCallCount = "x-vsr-inference-call-count"
-const VSRModelUsage = "x-vsr-model-usage"
+const (
+	SRBenchMaxInferenceCalls = "x-sr-bench-max-inference-calls"
+	VSRInferenceCallCount    = "x-vsr-inference-call-count"
+	VSRModelUsage            = "x-vsr-model-usage"
+)

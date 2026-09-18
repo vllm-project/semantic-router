@@ -6,6 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -34,6 +35,28 @@ type IntentRequest struct {
 	Model               string            `json:"model,omitempty"`
 	Metadata            map[string]string `json:"metadata,omitempty"`
 	Options             *IntentOptions    `json:"options,omitempty"`
+	PreviewContext      *PreviewContext   `json:"preview_context,omitempty"`
+}
+
+// PreviewContext supplies routing identity, never credentials or a state update.
+// A sampling seed reproduces this preview's draw, not a later live request.
+type PreviewContext struct {
+	SessionID      string `json:"session_id,omitempty"`
+	ConversationID string `json:"conversation_id,omitempty"`
+	SamplingSeed   *int64 `json:"sampling_seed,omitempty"`
+}
+
+// SelectionProvenance distinguishes a stateless route from an observation of
+// mutable routing inputs. State hashes are receipts, not execution preconditions.
+type SelectionProvenance struct {
+	Mode           string `json:"mode"`
+	ConfigHash     string `json:"config_hash"`
+	StateDependent bool   `json:"state_dependent"`
+	StateHash      string `json:"state_hash,omitempty"`
+	CapturedAt     string `json:"captured_at,omitempty"`
+	Sampled        bool   `json:"sampled"`
+	SamplingSeed   *int64 `json:"sampling_seed,omitempty"`
+	Caveat         string `json:"caveat,omitempty"`
 }
 
 // IntentOptions contains options for intent classification.
@@ -103,6 +126,7 @@ type EvalResponse struct {
 	SelectionStatus        string                                  `json:"selection_status,omitempty"`   // selected, planned_final, fallback, execution_required, not_required, unavailable, or failed
 	SelectionMethod        string                                  `json:"selection_method,omitempty"`
 	SelectionReason        string                                  `json:"selection_reason,omitempty"`
+	SelectionProvenance    *SelectionProvenance                    `json:"selection_provenance,omitempty"`
 	RoutingDecision        string                                  `json:"routing_decision,omitempty"`
 	Metrics                *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
 	SignalConfidences      map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
@@ -112,10 +136,13 @@ type EvalResponse struct {
 	DecisionError          string                                  `json:"decision_error,omitempty"`
 }
 
-// EvalModelSelectionInput is the content-minimized selection contract passed
-// from classification to the live Router selector. It intentionally excludes
-// raw tool schemas and message bodies beyond the current semantic query.
+// EvalModelSelectionInput carries the evaluated request and derived conversation
+// facts to the live selector. Request content remains local to this call and is
+// excluded from the returned selection provenance.
 type EvalModelSelectionInput struct {
+	PreviewContext    *PreviewContext
+	ConversationFacts classification.ConversationFacts
+	SemanticRequest   *llmprotocol.Request
 	Demand            selection.CandidateDemand
 	Recipe            config.RecipeName
 	Decision          *config.Decision
@@ -129,6 +156,7 @@ type EvalModelSelection struct {
 	Status        string
 	Method        string
 	Reason        string
+	Provenance    *SelectionProvenance
 }
 
 // EvalModelSelector performs a non-generating selection preview with the same

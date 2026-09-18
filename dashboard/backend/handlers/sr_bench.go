@@ -140,7 +140,7 @@ func srBenchRouteMethod(path string) (string, bool) {
 		switch parts[2] {
 		case "results", "report", "events", "calls":
 			return http.MethodGet, true
-		case "cancel", "regrade", "export":
+		case "cancel", "regrade", "export", "recover-plan", "recover":
 			return http.MethodPost, true
 		}
 	}

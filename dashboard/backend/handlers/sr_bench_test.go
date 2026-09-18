@@ -143,7 +143,7 @@ func TestSRBenchProxyDoesNotFollowRedirectsOrLeakTransportErrors(t *testing.T) {
 }
 
 func TestSRBenchOfflineRoutes(t *testing.T) {
-	for _, path := range []string{"/replays", "/runs/run-1/regrade", "/runs/run-1/export"} {
+	for _, path := range []string{"/replays", "/runs/run-1/regrade", "/runs/run-1/export", "/runs/run-1/recover-plan", "/runs/run-1/recover"} {
 		if method, found := srBenchRouteMethod(SRBenchAPIPath + path); !found || method != http.MethodPost {
 			t.Fatalf("offline route missing: %s", path)
 		}

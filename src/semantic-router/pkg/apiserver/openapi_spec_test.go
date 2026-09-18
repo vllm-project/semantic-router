@@ -158,6 +158,14 @@ func TestOpenAPISpecPublishesInvocationParameters(t *testing.T) {
 	if got := eval.RequestBody.Content["application/json"].Schema.AdditionalProperties; got != false {
 		t.Fatalf("routing preview request schema must reject unknown fields, got %#v", got)
 	}
+	previewSchema := eval.RequestBody.Content["application/json"].Schema.Properties["preview_context"]
+	if previewSchema.Type != "object" || previewSchema.Properties["session_id"].Type != "string" || previewSchema.Properties["sampling_seed"].Type != "integer" {
+		t.Fatal("preview routing context is undocumented")
+	}
+	responseSchema := eval.Responses["200"].Content["application/json"].Schema
+	if responseSchema == nil || responseSchema.Properties["selection_provenance"].Type != "object" {
+		t.Fatal("preview selection provenance is undocumented")
+	}
 	configPatch := spec.Paths["/api/v1/config"].Patch
 	requireOpenAPIParameter(t, configPatch.Parameters, "If-Match", "header", true, "string")
 	configPut := spec.Paths["/api/v1/config"].Put

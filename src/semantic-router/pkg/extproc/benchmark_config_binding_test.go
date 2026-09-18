@@ -8,6 +8,7 @@ import (
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
@@ -24,8 +25,10 @@ func TestBenchmarkConfigPreconditionRejectsBeforeGeneration(t *testing.T) {
 		name, expected, actual string
 		status                 int
 	}{
-		{"match", active, active, 0}, {"mismatch", strings.Repeat("b", 64), active, http.StatusPreconditionFailed},
-		{"unavailable", active, "", http.StatusServiceUnavailable}, {"malformed", "bad", active, http.StatusBadRequest},
+		{"match", active, active, 0},
+		{"mismatch", strings.Repeat("b", 64), active, http.StatusPreconditionFailed},
+		{"unavailable", active, "", http.StatusServiceUnavailable},
+		{"malformed", "bad", active, http.StatusBadRequest},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			router := &OpenAIRouter{Config: &config.RouterConfig{DocumentHash: tc.actual}}
