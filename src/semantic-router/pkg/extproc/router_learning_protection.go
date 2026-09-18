@@ -177,7 +177,11 @@ func (r *OpenAIRouter) applyProtectionSwitch(
 		attachRejectedRescue(decision.selectionResult, rescue.selectionResult)
 		decision.policy.Details.Protection.trace = protectionTraceFromResult(decision.selectionResult)
 		if progressGateConfig(preflight.config.Tuning).Enabled && input.ctx != nil {
-			if reason := r.progressCandidateReason(input.ctx, learningCtx, selectedModelName(input.baseResult)); reason != "" {
+			baseCandidate := firstNonNilModelRef(
+				input.selectedModelRef,
+				selectedModelRefFromResult(learningCtx, input.baseResult),
+			)
+			if reason := r.progressCandidateReason(input.ctx, learningCtx, baseCandidate); reason != "" {
 				input.ctx.VSRProgressGateError = fmt.Errorf("%w: %s", selection.ErrNoEligibleCandidates, reason)
 			}
 		}
@@ -237,7 +241,7 @@ func (r *OpenAIRouter) protectionRescueDecision(
 		attachSwitchGateTrace(&result, gateTrace)
 		hardReason := progressHardLock(learningCtx)
 		if hardReason == "" {
-			hardReason = r.progressCandidateReason(input.ctx, learningCtx, proposalModel)
+			hardReason = r.progressCandidateReason(input.ctx, learningCtx, selected)
 		}
 		if hardReason != "" {
 			gateTrace.Decision, gateTrace.Reason = selection.GateDecisionSuppress, hardReason
@@ -323,7 +327,7 @@ func (r *OpenAIRouter) protectionDecisionFromResult(
 	baseModel := selectedModelName(input.baseResult)
 	proposalModel := selectedModelName(enteredResult)
 	if preflight.mode == config.DecisionAdaptationModeObserve {
-		if result.SessionPolicy != nil {
+		if result != nil && result.SessionPolicy != nil {
 			finishProgressTrace(result.SessionPolicy.SwitchGate, proposalModel, false, "protection_observe")
 		}
 		policy := protectionPolicyFromSelectionResult(
@@ -442,8 +446,10 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	if result == nil {
 		return
 	}
+	current := currentLearningModelRef(learningCtx)
 	currentModel := currentLearningModel(learningCtx)
 	proposedModel := selectedModelName(result)
+	proposed := selectedModelRefFromResult(learningCtx, result)
 	downgrade := selector.IsDowngrade(learningCtx, currentModel, proposedModel)
 
 	decision, trace, ran := r.switchGateVerdict(cfg, ctx, learningCtx, currentModel, proposedModel, downgrade)
@@ -453,7 +459,7 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 	attachSwitchGateTrace(result, trace)
 	hardReason := progressHardLock(learningCtx)
 	if hardReason == "" {
-		hardReason = r.progressCandidateReason(ctx, learningCtx, proposedModel)
+		hardReason = r.progressCandidateReason(ctx, learningCtx, proposed)
 	}
 	if hardReason != "" {
 		trace.Decision, trace.Reason = selection.GateDecisionSuppress, hardReason
@@ -462,14 +468,14 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 		finishProgressTrace(trace, proposedModel, false, "proposal_accepted")
 		return
 	}
-	if reason := r.progressCandidateReason(ctx, learningCtx, currentModel); reason != "" {
+	if reason := r.progressCandidateReason(ctx, learningCtx, current); reason != "" {
 		finishProgressTrace(trace, proposedModel, false, "current_ineligible:"+reason)
 		if hardReason != "" && ctx != nil {
 			ctx.VSRProgressGateError = fmt.Errorf("%w: %s", selection.ErrNoEligibleCandidates, hardReason)
 		}
 		return
 	}
-	if holdCurrentModelInResult(learningCtx, result, currentModel) {
+	if holdCurrentModelInResult(learningCtx, result, current) {
 		finishProgressTrace(trace, currentModel, true, "switch_suppressed")
 		logSwitchGateSuppression(ctx, currentModel, proposedModel, decision)
 	}
@@ -480,18 +486,25 @@ func (r *OpenAIRouter) applySwitchGateToResult(
 func holdCurrentModelInResult(
 	learningCtx *selection.SelectionContext,
 	result *selection.SelectionResult,
-	currentModel string,
+	current *config.ModelRef,
 ) bool {
-	if result == nil || currentModel == "" {
+	if result == nil || current == nil {
 		return false
 	}
-	if selectedModelRefFromResult(learningCtx, &selection.SelectionResult{SelectedModel: currentModel}) == nil {
+	if !selectionContextContainsCandidate(learningCtx, *current) {
 		return false
 	}
-	result.SelectedModel = currentModel
+	held := *current
+	if held.UseReasoning != nil {
+		enabled := *held.UseReasoning
+		held.UseReasoning = &enabled
+	}
+	result.SelectedCandidate = &held
+	result.SelectedModel = held.Model
+	result.LoRAName = held.LoRAName
 	result.Reasoning = "router_learning protection: progress gate suppressed switch"
 	if result.SessionPolicy != nil {
-		result.SessionPolicy.SelectedModel = currentModel
+		result.SessionPolicy.SelectedModel = held.Model
 		result.SessionPolicy.DecisionReason = "progress_gate_suppressed"
 	}
 	return true

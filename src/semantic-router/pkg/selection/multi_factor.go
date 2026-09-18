@@ -379,8 +379,10 @@ func (s *MultiFactorSelector) latencySignal(model string) (float64, bool) {
 	return 0, false
 }
 
-// CandidateEligible rechecks hard filters without invoking on_no_candidates fallbacks.
-func (s *MultiFactorSelector) CandidateEligible(selCtx *SelectionContext, model string) bool {
+// CandidateEligible rechecks hard filters without invoking on_no_candidates
+// fallbacks, for one exact candidate: a model may expose several reasoning
+// efforts with different evidence.
+func (s *MultiFactorSelector) CandidateEligible(selCtx *SelectionContext, candidate config.ModelRef) bool {
 	if selCtx == nil {
 		return false
 	}
@@ -391,7 +393,7 @@ func (s *MultiFactorSelector) CandidateEligible(selCtx *SelectionContext, model 
 	kept, signals, _ = s.applyQualityFloor(kept, signals)
 	kept, _, _, _ = s.applyQualityEvidencePolicy(kept, signals)
 	for _, ref := range kept {
-		if ref.Model == model {
+		if CandidateIdentity(ref) == CandidateIdentity(candidate) {
 			return true
 		}
 	}

@@ -297,6 +297,7 @@ func TestProgressRejectedRescueSurvivesFinalPolicy(t *testing.T) {
 	cfg := gateReplayConfig(selection.GateModeEnforce)
 	proposal := proposedSwitchResult()
 	proposal.Score = 1
+	proposal.AllScores = map[string]float64{"cheap": 0, "frontier": 1}
 	rescue, ok := router.protectionRescueDecision(routerLearningInput{ctx: ctx, baseResult: proposal}, learningCtx, routerLearningProtectionPreflight{config: cfg, mode: config.DecisionAdaptationModeApply}, routerLearningDecision{selectionResult: proposal})
 	if ok || rescue.selectionResult == nil {
 		t.Fatalf("want a rejected rescue verdict, got %+v/%t", rescue, ok)

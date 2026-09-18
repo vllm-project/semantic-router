@@ -45,11 +45,12 @@ func TestMultiFactorCandidateEligibilityDoesNotUseFallback(t *testing.T) {
 		"affordable": {Pricing: config.ModelPricing{PromptPer1M: 1, CompletionPer1M: 1}},
 	})
 	ctx := &SelectionContext{CandidateModels: candidates("expensive", "affordable")}
-	if selector.CandidateEligible(ctx, "expensive") || !selector.CandidateEligible(ctx, "affordable") {
+	if selector.CandidateEligible(ctx, config.ModelRef{Model: "expensive"}) ||
+		!selector.CandidateEligible(ctx, config.ModelRef{Model: "affordable"}) {
 		t.Fatal("override eligibility ignored the configured SLO")
 	}
 	ctx.CandidateModels = candidates("expensive")
-	if selector.CandidateEligible(ctx, "expensive") {
+	if selector.CandidateEligible(ctx, config.ModelRef{Model: "expensive"}) {
 		t.Fatal("on_no_candidates fallback cannot authorize a disqualified hold")
 	}
 }

@@ -82,6 +82,19 @@ func currentLearningModel(selCtx *selection.SelectionContext) string {
 	return strings.TrimSpace(selCtx.AgenticSession.PreviousModel)
 }
 
+func currentLearningModelRef(selCtx *selection.SelectionContext) *config.ModelRef {
+	if selCtx == nil || selCtx.AgenticSession == nil {
+		return nil
+	}
+	current := currentLearningModel(selCtx)
+	if current == "" {
+		return nil
+	}
+	base := &selection.SelectionResult{SelectedModel: current}
+	base.SelectedCandidate = selCtx.AgenticSession.PreviousCandidate
+	return selection.CurrentSessionCandidate(selCtx, base, current)
+}
+
 func selectionContextContainsModel(selCtx *selection.SelectionContext, model string) bool {
 	if selCtx == nil || model == "" {
 		return false

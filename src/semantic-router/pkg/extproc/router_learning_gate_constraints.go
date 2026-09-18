@@ -6,19 +6,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
-// progressCandidateReason reuses the request's candidate boundary and hard filters.
-func (r *OpenAIRouter) progressCandidateReason(ctx *RequestContext, selCtx *selection.SelectionContext, model string) string {
-	if selCtx == nil || !selectionContextContainsModel(selCtx, model) {
+// progressCandidateReason applies the request's candidate boundary and hard
+// filters to one exact candidate, so duplicate model names cannot collapse
+// into an ambiguous model-only lookup.
+func (r *OpenAIRouter) progressCandidateReason(ctx *RequestContext, selCtx *selection.SelectionContext, candidate *config.ModelRef) string {
+	if selCtx == nil || candidate == nil || !selectionContextContainsCandidate(selCtx, *candidate) {
 		return "candidate_set"
 	}
-	ref := selectedModelRefFromResult(selCtx, &selection.SelectionResult{SelectedModel: model})
-	if ref == nil || !r.configuredBackendModel(ref.Model) {
+	ref := *candidate
+	if !r.configuredBackendModel(ref.Model) {
 		return "model_unavailable"
 	}
 	if ctx == nil {
 		return "request_context_missing"
 	}
-	if r.modelRefExceedsContextWindow(*ref, ctx.VSRContextTokenCount) {
+	if r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount) {
 		return "context_limit"
 	}
 	if ctx.SemanticRequest != nil && !r.modelCanServeCapabilities(ref.Model, llmprotocol.RequiredCapabilities(*ctx.SemanticRequest)) {
@@ -28,7 +30,7 @@ func (r *OpenAIRouter) progressCandidateReason(ctx *RequestContext, selCtx *sele
 		method := r.getSelectionMethod(decision.Algorithm)
 		if method == selection.MethodMultiFactor {
 			selector, ok := r.selectorForDecisionMethod(method, decision.Algorithm, ctx).(*selection.MultiFactorSelector)
-			if !ok || !selector.CandidateEligible(selCtx, ref.Model) {
+			if !ok || !selector.CandidateEligible(selCtx, ref) {
 				return "slo_or_quality"
 			}
 		}
@@ -66,11 +68,23 @@ func (r *OpenAIRouter) progressEligibleContext(ctx *RequestContext, selCtx *sele
 	out := *selCtx
 	out.CandidateModels = make([]config.ModelRef, 0, len(selCtx.CandidateModels))
 	for _, ref := range selCtx.CandidateModels {
-		if r.progressCandidateReason(ctx, selCtx, ref.Model) == "" {
+		if r.progressCandidateReason(ctx, selCtx, &ref) == "" {
 			out.CandidateModels = append(out.CandidateModels, ref)
 		}
 	}
 	return &out
+}
+
+func selectionContextContainsCandidate(selCtx *selection.SelectionContext, candidate config.ModelRef) bool {
+	if selCtx == nil {
+		return false
+	}
+	for _, ref := range selCtx.CandidateModels {
+		if selection.CandidateIdentity(ref) == selection.CandidateIdentity(candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func attachRejectedRescue(result, rejected *selection.SelectionResult) {
