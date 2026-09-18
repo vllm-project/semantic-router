@@ -172,7 +172,7 @@ func TestWorkerHTTPBrokerRejectsDuplicateRequestKeys(t *testing.T) {
 		Concurrency: 1,
 		Target:      ManifestTarget{RouterAPIURL: "http://router.invalid"},
 	}, workerBrokerCredentials{})
-	frame := []byte(`{"id":1,"id":1,"operation":"router.evaluate","track_id":"routing","case_id":"case-1","attempt_id":"attempt-1","payload":{},"timeout_ms":1000}`)
+	frame := []byte(`{"id":1,"id":1,"operation":"routing.preview","track_id":"routing","case_id":"case-1","attempt_id":"attempt-1","payload":{},"timeout_ms":1000}`)
 	if _, err := decodeWorkerBrokerRequest(frame, 0, broker.operations); err == nil {
 		t.Fatal("broker request with duplicate keys was accepted")
 	}
@@ -181,8 +181,8 @@ func TestWorkerHTTPBrokerRejectsDuplicateRequestKeys(t *testing.T) {
 func TestWorkerHTTPBrokerRejectsDuplicateOperationPayloadKeys(t *testing.T) {
 	broker := newWorkerHTTPBroker(RunManifest{Concurrency: 1}, workerBrokerCredentials{})
 	_, err := broker.validatedPayload(
-		workerBrokerRouterEvaluate,
-		json.RawMessage(`{"model":"entrypoint","model":"other","messages":[],"evaluate_all_signals":true}`),
+		workerBrokerRoutingPreview,
+		json.RawMessage(`{"model":"entrypoint","model":"other","messages":[]}`),
 	)
 	if err == nil {
 		t.Fatal("broker operation payload with duplicate keys was accepted")
@@ -260,7 +260,7 @@ func TestWorkerHTTPBrokerNeverFollowsRedirects(t *testing.T) {
 func TestWorkerHTTPBrokerRejectsDuplicateUpstreamResponseKeys(t *testing.T) {
 	broker := newWorkerHTTPBroker(RunManifest{Concurrency: 1}, workerBrokerCredentials{})
 	response, _ := broker.readUpstreamResponse(
-		workerBrokerRouterEvaluate,
+		workerBrokerRoutingPreview,
 		&http.Response{
 			StatusCode: http.StatusOK,
 			Header:     make(http.Header),
@@ -330,7 +330,7 @@ func TestBrokerMixtureBindingRejectsOutOfDecisionArm(t *testing.T) {
 	algorithm := "static"
 	decision := "quality"
 	entry := executionAttestationEntry{
-		Operation: workerBrokerRouterEvaluate, TrackID: "routing", Success: true,
+		Operation: workerBrokerRoutingPreview, TrackID: "routing", Success: true,
 		RequestedModel: &entrypoint, SelectedModel: &selected, ArmID: &armID,
 		Recipe: &recipe, Algorithm: &algorithm, DecisionName: &decision, Headers: map[string]string{},
 	}
@@ -396,9 +396,9 @@ func TestRoutingBrokerAttestationBindsRealizedSelectionMethod(t *testing.T) {
 				},
 			}})
 			response := broker.execute(context.Background(), workerBrokerRequest{
-				ID: 1, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+				ID: 1, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 				CaseID: "case-1", AttemptID: "attempt-1",
-				Payload:   json.RawMessage(`{"model":"virtual-entrypoint","messages":[{"role":"user","content":"hello"}],"evaluate_all_signals":true}`),
+				Payload:   json.RawMessage(`{"model":"virtual-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
 				TimeoutMS: 1_000,
 			})
 			if !response.Success {
@@ -443,8 +443,12 @@ func TestRoutingBrokerAttestationBindsRealizedSelectionMethod(t *testing.T) {
 	}
 }
 
-func newTypedChatBroker(t *testing.T, chatCalls *atomic.Int64) *workerHTTPBroker {
+func newTypedChatBroker(t *testing.T, chatCalls *atomic.Int64, responseBodies ...string) *workerHTTPBroker {
 	t.Helper()
+	responseBody := `{"choices":[{"message":{"role":"assistant","content":"  exact   answer "},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`
+	if len(responseBodies) > 0 {
+		responseBody = responseBodies[0]
+	}
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch request.URL.Path {
@@ -472,7 +476,7 @@ func newTypedChatBroker(t *testing.T, chatCalls *atomic.Int64) *workerHTTPBroker
 			writer.Header().Set("x-vsr-selected-model", "arm-fast")
 			writer.Header().Set("x-vsr-selected-algorithm", "static")
 			writer.Header().Set("x-vsr-selected-decision", "quality")
-			_, _ = writer.Write([]byte(`{"choices":[{"message":{"content":"  exact   answer "}}],"usage":{"prompt_tokens":3,"completion_tokens":2}}`))
+			_, _ = writer.Write([]byte(responseBody))
 		default:
 			http.NotFound(writer, request)
 		}
@@ -603,13 +607,13 @@ func TestWorkerHTTPBrokerPublishesOnlyBoundedTypedChatRequests(t *testing.T) {
 
 func TestWorkerHTTPBrokerRequiresExactEvidenceIdentityForEveryPOST(t *testing.T) {
 	operations := map[string]workerBrokerOperation{
-		workerBrokerRouterEvaluate:       {method: http.MethodPost, url: "http://router/api/v1/eval"},
+		workerBrokerRoutingPreview:       {method: http.MethodPost, url: "http://router/api/v1/routing/preview"},
 		workerBrokerRoutedChatCompletion: {method: http.MethodPost, url: "http://envoy/v1/chat/completions"},
 		workerBrokerArmChatCompletion:    {method: http.MethodPost, url: "http://envoy/v1/chat/completions"},
 	}
-	payload := json.RawMessage(`{"model":"entrypoint","messages":[{"role":"user","content":"hello"}],"evaluate_all_signals":true}`)
+	payload := json.RawMessage(`{"model":"entrypoint","messages":[{"role":"user","content":"hello"}]}`)
 	valid := workerBrokerRequest{
-		ID: 1, Operation: workerBrokerRouterEvaluate, TrackID: "routing",
+		ID: 1, Operation: workerBrokerRoutingPreview, TrackID: "routing",
 		CaseID: "case-1", AttemptID: "attempt-1", Payload: payload, TimeoutMS: 1_000,
 	}
 	encoded, _ := json.Marshal(valid)

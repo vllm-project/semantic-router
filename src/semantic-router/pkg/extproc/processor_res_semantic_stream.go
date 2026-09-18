@@ -173,7 +173,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	if ctx.ProtocolResponseStream != nil {
 		return nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return err
 	}
@@ -378,6 +378,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		})
 		return
 	}
+	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
 		logging.ComponentWarnEvent("extproc", "neutral_stream_replay_encode_failed", map[string]interface{}{

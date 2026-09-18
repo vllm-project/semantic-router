@@ -12,6 +12,7 @@ export interface FieldSchema {
     | 'object'
     | 'object[]'
     | 'key-value'
+    | 'json'
     | 'rule'
   options?: string[]
   required?: boolean

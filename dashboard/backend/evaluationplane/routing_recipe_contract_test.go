@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestRoutingRecipePlanDigestBindsCanonicalBody(t *testing.T) {
@@ -81,12 +83,15 @@ func TestRoutingRecipeInputIDsUseBoundedTypedRuntimeKeys(t *testing.T) {
 		valid      bool
 	}{
 		{id: "domain:reasoning", valid: true},
+		{id: "input_modality:image", valid: true},
 		{id: "classifier:risk:RISKY", valid: true},
 		{id: "complexity:needs_reasoning:hard", valid: true},
 		{id: "kb_metric:docs:best_score", valid: true},
 		{id: "projection:quality", projection: true, valid: true},
 		{id: "case-id", valid: false},
 		{id: "metadata:source:trusted", valid: false},
+		{id: "hallucination:response", valid: false},
+		{id: "complexity:needs_reasoning:extreme", valid: false},
 		{id: "unknown:signal", valid: false},
 		{id: "DOMAIN:reasoning", valid: false},
 		{id: "domain:bad/value", valid: false},
@@ -103,6 +108,24 @@ func TestRoutingRecipeInputIDsUseBoundedTypedRuntimeKeys(t *testing.T) {
 	}
 	if validRoutingRecipeID("domain:reasoning") || !validRoutingRecipeID("case-id") || !validRoutingRecipeID("arm-A") {
 		t.Fatal("runtime input grammar leaked into generic case/arm ID validation")
+	}
+}
+
+func TestRoutingRecipeSignalCollectionsFollowRouterCatalog(t *testing.T) {
+	for _, signal := range routerconfig.SignalCatalog() {
+		collection, present := routingRecipeSignalCollectionKeys[signal.Type]
+		if signal.DecisionReferenceable {
+			if !present || collection != signal.ObservationKey {
+				t.Fatalf("routing recipe collection for %q = %q, want %q", signal.Type, collection, signal.ObservationKey)
+			}
+			continue
+		}
+		if present {
+			t.Fatalf("response-only signal %q leaked into routing recipe inputs", signal.Type)
+		}
+	}
+	if routingRecipeSignalCollectionKeys[routerconfig.SignalTypeProjection] != "projection" {
+		t.Fatal("projection observation collection is missing")
 	}
 }
 

@@ -9,9 +9,11 @@ import (
 
 func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutionConfig {
 	cfg := fusionExecutionConfig{
+		AnalysisMode:                 config.FusionAnalysisModeSeparate,
 		IncludeAnalysis:              true,
 		IncludeIntermediateResponses: true,
 	}
+	recipeOwnsExecution := req.Algorithm != nil && req.Algorithm.Type == config.DecisionAlgorithmFusion
 
 	algorithmHasAnalysisModels := req.Algorithm != nil &&
 		req.Algorithm.Fusion != nil &&
@@ -26,15 +28,29 @@ func (l *FusionLooper) resolveFusionExecutionConfig(req *Request) fusionExecutio
 		cfg.AnalysisModels = modelRefsToNames(req.ModelRefs)
 	}
 	if req.Fusion != nil && fusionRequestEnabled(req.Fusion) {
-		mergeFusionRequestConfig(&cfg, req.Fusion)
+		if recipeOwnsExecution {
+			// The selected decision owns every execution control. Requests may
+			// carry only call-level choices for exposing existing trace data.
+			mergeFusionTraceVisibility(
+				&cfg,
+				req.Fusion.IncludeAnalysis,
+				req.Fusion.IncludeIntermediateResponses,
+			)
+		} else {
+			mergeFusionRequestConfig(&cfg, req.Fusion)
+		}
 	}
 	return normalizeFusionExecutionConfig(cfg)
 }
 
 func normalizeFusionExecutionConfig(cfg fusionExecutionConfig) fusionExecutionConfig {
+	cfg.AnalysisMode = config.EffectiveFusionAnalysisMode(cfg.AnalysisMode)
 	cfg.OnError = strings.TrimSpace(cfg.OnError)
 	if cfg.OnError == "" {
 		cfg.OnError = config.FusionOnErrorSkip
+	}
+	if cfg.QuorumFailurePolicy == "" {
+		cfg.QuorumFailurePolicy = config.FusionQuorumFailurePolicyFail
 	}
 	if cfg.JudgePromptVersion == "" {
 		cfg.JudgePromptVersion = config.DefaultFusionJudgePromptVersion
@@ -85,6 +101,20 @@ func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
 			len(cfg.AnalysisModels),
 		)
 	}
+	switch cfg.AnalysisMode {
+	case config.FusionAnalysisModeSeparate, config.FusionAnalysisModeOneCall, config.FusionAnalysisModeNone:
+	default:
+		return fmt.Errorf(
+			"fusion analysis_mode must be %q, %q, or %q, got %q",
+			config.FusionAnalysisModeSeparate,
+			config.FusionAnalysisModeOneCall,
+			config.FusionAnalysisModeNone,
+			cfg.AnalysisMode,
+		)
+	}
+	if cfg.AnalysisMode != config.FusionAnalysisModeSeparate && strings.TrimSpace(cfg.AnalysisTemplate) != "" {
+		return fmt.Errorf("fusion analysis_template requires analysis_mode=%q", config.FusionAnalysisModeSeparate)
+	}
 	switch cfg.OnError {
 	case config.FusionOnErrorSkip, config.FusionOnErrorFail:
 		return nil
@@ -95,11 +125,31 @@ func validateFusionExecutionConfig(cfg fusionExecutionConfig) error {
 
 func mergeFusionAlgorithmConfig(dst *fusionExecutionConfig, src *config.FusionAlgorithmConfig) {
 	mergeFusionModels(dst, src.Model, src.AnalysisModels)
+	if src.AnalysisMode != "" {
+		dst.AnalysisMode = src.AnalysisMode
+	}
 	mergeFusionAnalysisOverrides(dst, src.AnalysisOverrides)
 	mergeFusionLimits(dst, src.MaxConcurrent, src.MaxCompletionTokens, src.RoundTimeoutSeconds, src.MinSuccessfulResponses)
 	mergeFusionControls(dst, src.Temperature, src.IncludeAnalysis, src.IncludeIntermediateResponses, src.OnError)
 	mergeFusionPrompts(dst, src.AnalysisTemplate, src.SynthesisTemplate, src.JudgePromptVersion)
+	mergeFusionQuorumFailure(dst, src.QuorumFailurePolicy, src.QuorumFallbackTarget)
 	mergeFusionGroundingConfig(dst, src.Grounding)
+}
+
+// mergeFusionQuorumFailure copies the recipe-owned below-quorum policy. There is
+// deliberately no request-level counterpart: request input must not weaken the
+// operator's configured quality boundary.
+func mergeFusionQuorumFailure(
+	dst *fusionExecutionConfig,
+	policy config.FusionQuorumFailurePolicy,
+	fallbackTarget string,
+) {
+	if policy != "" {
+		dst.QuorumFailurePolicy = policy
+	}
+	if trimmed := strings.TrimSpace(fallbackTarget); trimmed != "" {
+		dst.QuorumFallbackTarget = trimmed
+	}
 }
 
 func mergeFusionModels(dst *fusionExecutionConfig, judgeModel string, analysisModels []string) {
@@ -142,14 +192,22 @@ func mergeFusionControls(
 	if temperature != nil {
 		dst.Temperature = temperature
 	}
+	mergeFusionTraceVisibility(dst, includeAnalysis, includeIntermediateResponses)
+	if onError != "" {
+		dst.OnError = onError
+	}
+}
+
+func mergeFusionTraceVisibility(
+	dst *fusionExecutionConfig,
+	includeAnalysis *bool,
+	includeIntermediateResponses *bool,
+) {
 	if includeAnalysis != nil {
 		dst.IncludeAnalysis = *includeAnalysis
 	}
 	if includeIntermediateResponses != nil {
 		dst.IncludeIntermediateResponses = *includeIntermediateResponses
-	}
-	if onError != "" {
-		dst.OnError = onError
 	}
 }
 
@@ -222,9 +280,9 @@ func normalizeModelNames(names []string) []string {
 	return result
 }
 
-// mergeFusionAnalysisOverrides layers per-model overrides field-wise, so a
-// request that sets only one sampling field keeps the decision-level value for
-// every other field of the same model.
+// mergeFusionAnalysisOverrides accumulates sparse per-model overrides
+// field-wise, preserving an existing sampling field when an incoming entry
+// omits it.
 func mergeFusionAnalysisOverrides(dst *fusionExecutionConfig, overrides []config.FusionModelOverride) {
 	if len(overrides) == 0 {
 		return

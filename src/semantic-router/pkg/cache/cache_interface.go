@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // CacheEntry represents a complete cached request-response pair with associated metadata
@@ -196,6 +197,9 @@ const (
 
 // CacheConfig contains configuration settings shared across all cache backends
 type CacheConfig struct {
+	// EmbeddingProvider is prepared by the generation owner and is never serialized.
+	EmbeddingProvider embedding.Provider `yaml:"-" json:"-"`
+
 	// BackendType specifies which cache implementation to use
 	BackendType CacheBackendType `yaml:"backend_type"`
 

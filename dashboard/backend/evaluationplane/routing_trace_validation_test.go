@@ -88,16 +88,7 @@ func assertAuthenticatedRoutingPublication(
 }
 
 func TestRealWorkerAuthenticatedRoutingUsesServerBrokeredCredential(t *testing.T) {
-	python := os.Getenv("VLLM_SR_EVALUATION_TEST_PYTHON")
-	if python == "" {
-		t.Skip("set VLLM_SR_EVALUATION_TEST_PYTHON to run the real Python worker")
-	}
-	pythonRoot, err := filepath.Abs("../../../src/vllm-sr")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PYTHONPATH", pythonRoot)
-	t.Setenv("TMPDIR", "/tmp")
+	python := realEvaluationWorkerPython(t)
 	const routerAccessEnv = "ROUTER_EVAL_TOKEN"
 	const routerAccessValue = "server-owned-router-evaluation-secret"
 	t.Setenv(routerAccessEnv, routerAccessValue)
@@ -107,7 +98,7 @@ func TestRealWorkerAuthenticatedRoutingUsesServerBrokeredCredential(t *testing.T
 		switch request.URL.Path {
 		case "/v1/models":
 			_, _ = writer.Write([]byte(`{"data":[{"id":"entrypoint-a","routing":{"resolution":"virtual","selectable":true,"default_route":true,"recipe":"default"}}]}`))
-		case "/api/v1/eval":
+		case "/api/v1/routing/preview":
 			if request.Header.Get("Authorization") == "Bearer "+routerAccessValue {
 				authenticatedRouterRequests.Add(1)
 			}

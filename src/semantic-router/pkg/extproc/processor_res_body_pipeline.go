@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,16 +20,20 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	ctx *RequestContext,
 	completionLatency time.Duration,
 ) *ext_proc.ProcessingResponse {
-	usage := invalidResponseTerminalUsage("authoritative_usage_missing")
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", map[string]interface{}{
+		decodeEvent := map[string]interface{}{
 			"request_id":     ctx.RequestID,
 			"backend_format": ctx.TargetFormat,
 			"client_format":  ctx.SourceFormat,
 			"error":          err.Error(),
-		})
+		}
+		// Log the private cause while keeping the client-facing message generic.
+		if cause := errors.Unwrap(err); cause != nil {
+			decodeEvent["cause"] = cause.Error()
+		}
+		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
 	clientBody := responseBody
@@ -38,25 +44,20 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			return r.createErrorResponse(502, "The selected model returned an incompatible response")
 		}
 	}
-	usage = r.takeNeutralResponseUsage(ctx)
+	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
-	r.updateResponseCache(ctx, clientBody)
+	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
-	// decision carries a plugin; the plugins below then consume it.
-	assistantContent := semanticAssistantContent(semanticResponse)
-	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
-	r.evaluateHallucinationSignal(ctx, assistantContent)
+	// decision carries a plugin; the plugins below then consume it. Recorded
+	// before a block returns, so a blocked response leaves the same evidence in
+	// Router Replay as a delivered one.
+	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 
-	jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse)
-	// Recorded before a block returns, so a blocked response leaves the same
-	// evidence in Router Replay as a delivered one.
-	r.recordRouterReplayResponseJailbreak(ctx)
-	r.recordRouterReplayHallucination(ctx)
-	if jailbreakResponse != nil {
+	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
 		return jailbreakResponse
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
@@ -67,6 +68,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.markUnverifiedFactualResponse(ctx)
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
+	addResponseCostHeaders(ctx, response)
 	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, clientBody)
 	}
@@ -74,6 +76,21 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.updateRouterReplayHallucinationStatus(ctx)
 	r.attachRouterReplayResponse(ctx, finalBody, true)
 	return response
+}
+
+// observeResponseStageSignals scores the response-stage rules against the
+// answer and records the observation in Router Replay. Both response paths
+// share it, so a streamed response leaves the evidence a buffered one leaves.
+//
+// Only the buffered path goes on to enforce. A streamed answer exists as a
+// whole for the first time when its bytes are already with the client, so no
+// plugin can block or rewrite it and none runs; the observation is all that is
+// still possible, and the record says so.
+func (r *OpenAIRouter) observeResponseStageSignals(ctx *RequestContext, assistantContent string) {
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.recordRouterReplayResponseJailbreak(ctx)
+	r.recordRouterReplayHallucination(ctx)
 }
 
 func (r *OpenAIRouter) applySemanticResponseWarnings(
@@ -160,6 +177,18 @@ func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []st
 	setResponseBodyHeader(response, headers.VSRResponseWarnings, strings.Join(codes, ","))
 }
 
+// addResponseCostHeaders reports the priced cost of a buffered response. A
+// streamed response has already sent its headers by the time usage arrives.
+func addResponseCostHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || !ctx.RequestCostPriced {
+		return
+	}
+	setResponseBodyHeader(response, headers.VSRCost, strconv.FormatFloat(ctx.RequestCost, 'f', -1, 64))
+	if ctx.RequestCostCurrency != "" {
+		setResponseBodyHeader(response, headers.VSRCostCurrency, ctx.RequestCostCurrency)
+	}
+}
+
 // setResponseBodyHeader sets one response header from the body phase, merging
 // with any header mutation the response already carries.
 func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value string) {
@@ -238,4 +267,39 @@ func setResponseContentType(response *ext_proc.ProcessingResponse, contentType s
 
 func isResponseAPIRequest(ctx *RequestContext) bool {
 	return ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1
+}
+
+// cacheableClientResponse returns the bytes that may be persisted as the public
+// response. The cache is read back under the strict canonical contract by
+// decodeCachedClientResponse, deliberately without a backend vendor allowance,
+// because a cache partition is keyed on the ingress protocol and may be served
+// to a request that never touches the same backend.
+//
+// A same-format response is forwarded to the client verbatim, so on a backend
+// with a vendor allowance those bytes still carry the provider's decorations.
+// Persisting them would store an entry the strict reader rejects: the first
+// Azure response would poison its own partition and every later hit would fail.
+// Re-encoding from the neutral response yields the canonical equivalent. When
+// that encode fails, nothing is cached - a miss is recoverable, a poisoned
+// entry is not.
+func (r *OpenAIRouter) cacheableClientResponse(
+	clientBody []byte,
+	rewritten bool,
+	response llmprotocol.Response,
+	ctx *RequestContext,
+) []byte {
+	if rewritten || ctx == nil || !ctx.ResponseVendorExtensions {
+		return clientBody
+	}
+	canonical, err := r.encodeClientResponse(response, ctx)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "cache_write_skipped_noncanonical_response", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"format":     ctx.SourceFormat,
+			"vendor":     string(ctx.ResponseVendor),
+			"error":      err.Error(),
+		})
+		return nil
+	}
+	return canonical
 }

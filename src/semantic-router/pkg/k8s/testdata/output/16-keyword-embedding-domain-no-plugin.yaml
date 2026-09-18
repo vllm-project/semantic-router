@@ -172,11 +172,13 @@ global:
     management_api: {}
     router_replay:
       enabled: false
+      ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       enabled: false
+      ttl_seconds: 0
     memory: {}
   integrations:
     tools:
@@ -208,6 +210,11 @@ global:
       domain_classifier: models/mmbert32k-intent-classifier-merged
       pii_classifier: models/mmbert32k-pii-detector-merged
     modules:
+      safety:
+        safety:
+          use_cpu: false
+        hazard:
+          use_cpu: false
       prompt_compression:
         enabled: false
         max_tokens: 0
@@ -250,6 +257,7 @@ global:
           model_id: ""
           threshold: 0
           use_cpu: false
+          enable_nli_filtering: false
         explainer:
           model_id: ""
           threshold: 0

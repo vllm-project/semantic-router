@@ -1,4 +1,4 @@
-import type { RouterSystemKey } from './configPageRouterDefaultsSupport'
+import type { RouterSystemKey } from './configPageRouterSectionCatalog'
 import type {
   APIConfig,
   AuthzConfig,
@@ -14,40 +14,13 @@ import type {
   PromptCompressionConfig,
   RateLimitConfig,
   ResponseAPIConfig,
+  RouterLearningConfig,
   RouterCoreConfig,
   RouterReplayConfig,
   SemanticCacheConfig,
   ToolIntegrationConfig,
   VectorStoreConfig,
 } from './configPageSupport'
-
-export const PYTHON_ROUTER_KEYS: RouterSystemKey[] = [
-  'router_core',
-  'response_api',
-  'router_replay',
-  'authz',
-  'ratelimit',
-  'memory',
-  'response_cache',
-  'vector_store',
-  'tools',
-  'prompt_guard',
-  'classifier',
-  'hallucination_mitigation',
-  'feedback_detector',
-  'external_models',
-  'system_models',
-  'embedding_models',
-  'prompt_compression',
-  'modality_detector',
-  'observability',
-  'looper',
-  'clear_route_cache',
-  'model_selection',
-  'api',
-]
-
-export const OPTIONAL_ROUTER_KEYS: RouterSystemKey[] = []
 
 export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
   router_core: {
@@ -61,6 +34,28 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       method: 'knn',
     },
   } satisfies RouterCoreConfig,
+  learning: {
+    enabled: false,
+    adaptation: {
+      enabled: true,
+      candidate_set: 'decision',
+      strategy: 'routing_sampling',
+    },
+    protection: {
+      enabled: true,
+      scope: 'conversation',
+      identity: {
+        headers: {
+          session: 'x-session-id',
+          conversation: 'x-conversation-id',
+        },
+      },
+      tuning: {},
+    },
+    state_store: {
+      backend: 'local',
+    },
+  } satisfies RouterLearningConfig,
   response_api: {
     enabled: true,
     store_backend: 'memory',
@@ -85,6 +80,8 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     fail_open: false,
     providers: [],
   } satisfies RateLimitConfig,
+  management_api: {},
+  startup_status: {},
   memory: {
     enabled: false,
     auto_store: false,
@@ -137,14 +134,14 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
       threshold: 0.5,
       use_cpu: true,
       use_mmbert_32k: true,
-      category_mapping_path: 'models/mmbert32k-intent-classifier-merged/category_mapping.json',
+      category_mapping_path: 'models/Vela-1.0-Encoder-307M-Domain/category_mapping.json',
     },
     pii: {
       model_ref: 'pii_classifier',
       threshold: 0.9,
       use_cpu: true,
       use_mmbert_32k: true,
-      pii_mapping_path: 'models/mmbert32k-pii-detector-merged/pii_type_mapping.json',
+      pii_mapping_path: 'models/Vela-1.0-Encoder-307M-PII/pii_mapping.json',
     },
     preference: {
       use_contrastive: false,
@@ -154,7 +151,7 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     enabled: false,
     fact_check: {
       model_ref: 'fact_check_classifier',
-      threshold: 0.6,
+      threshold: 0.85,
       use_cpu: true,
       use_mmbert_32k: true,
     },
@@ -181,20 +178,23 @@ export const DEFAULT_SECTIONS: Record<RouterSystemKey, unknown> = {
     use_cpu: true,
     use_mmbert_32k: true,
   } satisfies FeedbackDetectorConfig & { model_ref?: string },
+  complexity: {},
   external_models: [],
+  knowledge_bases: [],
+  admission: {},
   system_models: {
     prompt_guard: 'models/mmbert32k-jailbreak-detector-merged',
-    domain_classifier: 'models/mmbert32k-intent-classifier-merged',
-    pii_classifier: 'models/mmbert32k-pii-detector-merged',
-    fact_check_classifier: 'models/mmbert32k-factcheck-classifier-merged',
+    domain_classifier: 'models/Vela-1.0-Encoder-307M-Domain',
+    pii_classifier: 'models/Vela-1.0-Encoder-307M-PII',
+    fact_check_classifier: 'models/Vela-1.0-Encoder-307M-FactCheck',
     hallucination_detector: 'models/mom-halugate-detector',
     hallucination_explainer: 'models/mom-halugate-explainer',
-    feedback_detector: 'models/mmbert32k-feedback-detector-merged',
+    feedback_detector: 'models/Vela-1.0-Encoder-307M-Feedback',
   } satisfies CanonicalSystemModels,
   embedding_models: {
     qwen3_model_path: '',
     gemma_model_path: '',
-    mmbert_model_path: 'models/mmbert-embed-32k-2d-matryoshka',
+    mmbert_model_path: 'models/Vela-1.0-Encoder-307M-Embedding',
     multimodal_model_path: '',
     bert_model_path: '',
     use_cpu: true,
@@ -266,6 +266,12 @@ export const SECTION_META: Record<
     description:
       'Core router behavior, config source, startup cache handling, and model selection strategy.',
   },
+  learning: {
+    title: 'Router Learning',
+    eyebrow: 'Router',
+    description:
+      'Online model-choice adaptation, conversation stability protection, and shared learning state.',
+  },
   response_api: {
     title: 'Response API',
     eyebrow: 'Services',
@@ -287,6 +293,16 @@ export const SECTION_META: Record<
     title: 'Rate Limiting',
     eyebrow: 'Services',
     description: 'Per-user, group, and model request throttling rules enforced by the router.',
+  },
+  management_api: {
+    title: 'Management API',
+    eyebrow: 'Services',
+    description: 'Management endpoint access, transport, and runtime controls.',
+  },
+  startup_status: {
+    title: 'Startup Status',
+    eyebrow: 'Services',
+    description: 'Startup readiness and status-reporting behavior exposed by the router.',
   },
   memory: {
     title: 'Agentic Memory',
@@ -331,10 +347,25 @@ export const SECTION_META: Record<
     eyebrow: 'Model Catalog',
     description: 'Feedback classification defaults for routing-aware user correction flows.',
   },
+  complexity: {
+    title: 'Complexity Model',
+    eyebrow: 'Model Catalog',
+    description: 'Model-backed request-complexity classification used by routing signals.',
+  },
   external_models: {
     title: 'External Models',
     eyebrow: 'Model Catalog',
     description: 'Optional external LLM integrations used by router-owned auxiliary workflows.',
+  },
+  knowledge_bases: {
+    title: 'Knowledge Bases',
+    eyebrow: 'Model Catalog',
+    description: 'Canonical knowledge-base definitions available to KB-aware routing signals.',
+  },
+  admission: {
+    title: 'Model Admission',
+    eyebrow: 'Model Catalog',
+    description: 'Named admission policies used to qualify models before routing.',
   },
   system_models: {
     title: 'System Model Bindings',

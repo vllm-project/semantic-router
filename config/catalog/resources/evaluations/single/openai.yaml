@@ -55,7 +55,7 @@
 - id: independent/gpt-5-4-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.4 (none)
@@ -145,7 +145,7 @@
 - id: independent/gpt-5-4-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.4 (low)
@@ -253,7 +253,7 @@
 - id: independent/gpt-5-4-humanitys-last-exam@1.0.0
   model: openai/gpt-5.4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.4 (xhigh)
@@ -415,7 +415,7 @@
 - id: independent/gpt-5-6-sol-high-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-5.6 Sol (high)
@@ -577,7 +577,7 @@
 - id: independent/gpt-5-6-sol-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.6 Sol (low)
@@ -779,7 +779,7 @@
 - id: independent/gpt-5-6-sol-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GPT-5.6 Sol (max)
@@ -941,7 +941,7 @@
 - id: independent/gpt-5-6-sol-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-5.6 Sol (medium)
@@ -1103,7 +1103,7 @@
 - id: independent/gpt-5-6-sol-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.6 Sol (Non-reasoning)
@@ -1281,7 +1281,7 @@
 - id: independent/gpt-5-6-sol-xhigh-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-sol
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.6 Sol (xhigh)
@@ -1443,7 +1443,7 @@
 - id: independent/gpt-5-6-terra-high-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-5.6 Terra (high)
@@ -1605,7 +1605,7 @@
 - id: independent/gpt-5-6-terra-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.6 Terra (low)
@@ -1789,7 +1789,7 @@
 - id: independent/gpt-5-6-terra-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GPT-5.6 Terra (max)
@@ -1951,7 +1951,7 @@
 - id: independent/gpt-5-6-terra-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-5.6 Terra (medium)
@@ -2095,7 +2095,7 @@
 - id: independent/gpt-5-6-terra-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.6 Terra (Non-reasoning)
@@ -2273,7 +2273,7 @@
 - id: independent/gpt-5-6-terra-xhigh-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-terra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.6 Terra (xhigh)
@@ -2435,7 +2435,7 @@
 - id: independent/gpt-5-6-luna-high-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-5.6 Luna (high)
@@ -2579,7 +2579,7 @@
 - id: independent/gpt-5-6-luna-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.6 Luna (low)
@@ -2763,7 +2763,7 @@
 - id: independent/gpt-5-6-luna-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GPT-5.6 Luna (max)
@@ -2925,7 +2925,7 @@
 - id: independent/gpt-5-6-luna-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-5.6 Luna (medium)
@@ -3069,7 +3069,7 @@
 - id: independent/gpt-5-6-luna-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.6 Luna (Non-reasoning)
@@ -3247,7 +3247,7 @@
 - id: independent/gpt-5-6-luna-xhigh-humanitys-last-exam@1.0.0
   model: openai/gpt-5.6-luna
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.6 Luna (xhigh)
@@ -3409,7 +3409,7 @@
 - id: independent/gpt-5-5-high-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-5.5 (high)
@@ -3553,7 +3553,7 @@
 - id: independent/gpt-5-5-low-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-5.5 (low)
@@ -3697,7 +3697,7 @@
 - id: independent/gpt-5-5-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-5.5 (medium)
@@ -3841,7 +3841,7 @@
 - id: independent/gpt-5-5-non-reasoning-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: none
   subject:
     source_model: GPT-5.5 (Non-reasoning)
@@ -3913,7 +3913,7 @@
 - id: openai/gpt-5.5-launch-evals-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: GPT-5.5
@@ -4040,7 +4040,7 @@
 - id: independent/gpt-5-5-humanitys-last-exam@1.0.0
   model: openai/gpt-5.5
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-5.5 (xhigh)
@@ -4112,7 +4112,7 @@
 - id: openai/gpt-5.4-comparison-humanitys-last-exam@1.0.0
   model: openai/gpt-5.4
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: unspecified
   subject:
     variant: GPT-5.4 Thinking
@@ -4278,7 +4278,7 @@
 - id: independent/gpt-oss-120b-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-120b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: gpt-oss-120b (high)
@@ -4440,7 +4440,7 @@
 - id: independent/gpt-oss-120b-low-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-120b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: gpt-oss-120b (low)
@@ -4584,7 +4584,7 @@
 - id: independent/gpt-oss-20b-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-20b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: gpt-oss-20b (high)
@@ -4710,7 +4710,7 @@
 - id: independent/gpt-oss-20b-low-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-20b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: gpt-oss-20b (low)
@@ -4803,7 +4803,7 @@
 - id: openai/gpt-oss-120b-model-card-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-120b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: medium
   subject:
     variant: gpt-oss-120b
@@ -4897,7 +4897,7 @@
 - id: openai/gpt-oss-20b-model-card-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-oss-20b
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: no-tools
+  benchmark_profile: published-no-tools
   reasoning_effort: medium
   subject:
     variant: gpt-oss-20b
@@ -4934,7 +4934,7 @@
 - id: independent/gpt-6-astra-low-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: low
   subject:
     source_model: GPT-6 Astra (low)
@@ -5016,7 +5016,7 @@
 - id: independent/gpt-6-astra-medium-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: medium
   subject:
     source_model: GPT-6 Astra (medium)
@@ -5098,7 +5098,7 @@
 - id: independent/gpt-6-astra-high-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: high
   subject:
     source_model: GPT-6 Astra (high)
@@ -5180,7 +5180,7 @@
 - id: independent/gpt-6-astra-xhigh-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: xhigh
   subject:
     source_model: GPT-6 Astra (xhigh)
@@ -5262,7 +5262,7 @@
 - id: independent/gpt-6-astra-max-humanitys-last-exam@1.0.0
   model: openai/gpt-6-astra
   benchmark: cais/humanitys-last-exam@1.0.0
-  benchmark_profile: independent-standard
+  benchmark_profile: independent-text-only
   reasoning_effort: max
   subject:
     source_model: GPT-6 Astra (max)

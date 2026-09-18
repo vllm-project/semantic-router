@@ -100,6 +100,6 @@ are entries under `providers.models`.
 - heterogeneous Providers, protocols, credentials, native IDs, paths, or TLS
   semantics inside one replica pool.
 
-Run `vllm-sr validate --config config.yaml` after composing a pattern. See
+Run `vllm-sr config validate --config config.yaml` after composing a pattern. See
 [Configure models](model-configuration) for the identity model and
 [Reasoning configuration](model-reasoning) for the complete reasoning fields.

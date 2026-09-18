@@ -1,6 +1,46 @@
 {
   "cases": [
     {
+      "name": "cache_salt",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "min_p",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "repetition_penalty",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
+      "name": "top_k",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_capability"
+        }
+      }
+    },
+    {
       "name": "audio",
       "outcome": {
         "status": "error",
@@ -13,22 +53,10 @@
     {
       "name": "chat_template_kwargs",
       "outcome": {
-        "status": "ok",
-        "body": {
-          "input": [
-            {
-              "content": [
-                {
-                  "text": "hello",
-                  "type": "input_text"
-                }
-              ],
-              "id": "item_6a32e29c376158d871e9638e",
-              "role": "user",
-              "type": "message"
-            }
-          ],
-          "model": "routed-model"
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "unsupported_chat_template_kwargs"
         }
       }
     },

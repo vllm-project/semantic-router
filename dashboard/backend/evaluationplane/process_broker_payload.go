@@ -39,9 +39,8 @@ type brokerPublishedChatPayload struct {
 }
 
 type brokerRouterPayload struct {
-	Model              string          `json:"model"`
-	Messages           []brokerMessage `json:"messages"`
-	EvaluateAllSignals *bool           `json:"evaluate_all_signals"`
+	Model    string          `json:"model"`
+	Messages []brokerMessage `json:"messages"`
 }
 
 type brokerMessage struct {
@@ -96,13 +95,10 @@ func (broker *workerHTTPBroker) validatedPayload(operation string, raw json.RawM
 			Temperature: 0, TopP: 1, PresencePenalty: 0, FrequencyPenalty: 0,
 			Seed: broker.manifest.Seed, Stream: false, MaxTokens: workerBrokerMaxOutputTokens,
 		})
-	case workerBrokerRouterEvaluate:
+	case workerBrokerRoutingPreview:
 		var payload brokerRouterPayload
 		if err := decodeBrokerPayload(raw, &payload); err != nil {
 			return nil, err
-		}
-		if payload.EvaluateAllSignals == nil || !*payload.EvaluateAllSignals {
-			return nil, fmt.Errorf("router trace policy is invalid")
 		}
 		if err := broker.validateRoutedModel(payload.Model); err != nil {
 			return nil, err
@@ -127,9 +123,9 @@ func brokerRequestSemanticDigest(operation string, payload []byte) (string, erro
 			return "", fmt.Errorf("broker GET request digest payload is invalid")
 		}
 		return digestBytes(nil), nil
-	case workerBrokerRouterEvaluate:
+	case workerBrokerRoutingPreview:
 		var request brokerRouterPayload
-		if err := decodeBrokerPayload(payload, &request); err != nil || request.EvaluateAllSignals == nil || !*request.EvaluateAllSignals {
+		if err := decodeBrokerPayload(payload, &request); err != nil {
 			return "", fmt.Errorf("broker Router request digest payload is invalid")
 		}
 		messagesDigest, err := canonicalMessageListDigest(request.Messages)
@@ -170,8 +166,9 @@ func brokerRequestDigestForMessages(operation, model, messagesDigest string, req
 		"messages_digest":  messagesDigest,
 	}
 	switch operation {
-	case workerBrokerRouterEvaluate:
-		subject["evaluate_all_signals"] = true
+	case workerBrokerRoutingPreview:
+		// The routing-preview operation itself guarantees full signal
+		// evaluation; no client-controlled policy flag belongs in the digest.
 	case workerBrokerRoutedChatCompletion, workerBrokerArmChatCompletion:
 		subject["temperature"] = float64(0)
 		subject["top_p"] = float64(1)

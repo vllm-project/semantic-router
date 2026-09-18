@@ -72,7 +72,7 @@ identity must agree in four places:
 Validate the complete Router document before deployment:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 ## 3. Deploy Semantic Router and the Gateway policy

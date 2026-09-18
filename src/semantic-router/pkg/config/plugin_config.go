@@ -22,10 +22,10 @@ const (
 // Type is the plugin identifier; the authoritative supported set is registered in
 // routing_surface_catalog (and DSL/compiler surfaces), not duplicated here.
 type DecisionPlugin struct {
-	Type string `yaml:"type" json:"type"`
+	Type string `yaml:"type" json:"type" jsonschema:"required"`
 
 	// Configuration stores the plugin payload as normalized structured bytes.
-	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty"`
+	Configuration *StructuredPayload `yaml:"configuration,omitempty" json:"configuration,omitempty" jsonschema:"required"`
 }
 
 // ResponseCacheSemanticConfig controls the semantic lookup tier.
@@ -185,6 +185,8 @@ type FastResponsePluginConfig struct {
 // RequestParamsPluginConfig represents configuration for request_params plugin.
 // This plugin validates and strips request body parameters per decision.
 type RequestParamsPluginConfig struct {
+	// DefaultMaxTokens supplies an output bound only when the caller omits it.
+	DefaultMaxTokens *OutputTokenDefault `json:"default_max_tokens,omitempty" yaml:"default_max_tokens,omitempty"`
 	// BlockedParams is a list of parameters that should be blocked/stripped.
 	BlockedParams []string `json:"blocked_params,omitempty" yaml:"blocked_params,omitempty"`
 	// MaxTokensLimit sets the maximum allowed value for max_tokens.
@@ -200,6 +202,24 @@ type SystemPromptPluginConfig struct {
 	Enabled      *bool  `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 	SystemPrompt string `json:"system_prompt,omitempty" yaml:"system_prompt,omitempty"`
 	Mode         string `json:"mode,omitempty" yaml:"mode,omitempty"`
+}
+
+// IsEnabled preserves the implicit activation of a nonempty system prompt.
+func (c *SystemPromptPluginConfig) IsEnabled() bool {
+	if c == nil {
+		return false
+	}
+	if c.Enabled != nil {
+		return *c.Enabled
+	}
+	return c.SystemPrompt != ""
+}
+
+func (c *SystemPromptPluginConfig) EffectiveMode() string {
+	if c == nil || c.Mode == "" {
+		return "insert"
+	}
+	return c.Mode
 }
 
 // HeaderMutationPluginConfig represents configuration for header_mutation plugin.
@@ -328,6 +348,7 @@ func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
 }
 
 // GetSemanticCacheConfig is retained for source compatibility.
+//
 // Deprecated: use GetResponseCacheConfig.
 func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
 	return d.GetResponseCacheConfig()

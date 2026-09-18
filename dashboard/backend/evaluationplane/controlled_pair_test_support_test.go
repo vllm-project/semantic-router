@@ -451,7 +451,7 @@ func newControlledPairExecutionTestService(
 	maxConcurrent int,
 ) (*Service, string, string) {
 	t.Helper()
-	root := t.TempDir()
+	root := deploymentRegistryTestRoot(t)
 	storeRoot := filepath.Join(root, "evaluation")
 	if err := os.Mkdir(storeRoot, 0o700); err != nil {
 		t.Fatalf("create controlled pair store: %v", err)
@@ -625,7 +625,7 @@ func controlledPairRoutingRecipeReport(
 		SelectionStatus: "error",
 	}
 	attestation.Entries = append(attestation.Entries, executionAttestationEntry{
-		RequestID: requestID, Operation: workerBrokerRouterEvaluate,
+		RequestID: requestID, Operation: workerBrokerRoutingPreview,
 		TrackID: "routing", CaseID: "case-1", AttemptID: "attempt-case-1",
 		RequestDigest:     digestString("controlled-pair-routing-request:" + manifest.RunID),
 		ResponseDigest:    digestString("controlled-pair-routing-response:" + manifest.RunID),

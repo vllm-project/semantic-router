@@ -77,8 +77,9 @@ type responsesUsageWire struct {
 }
 
 type responsesInputUsageDetails struct {
-	CachedTokens     int64 `json:"cached_tokens"`
-	CacheWriteTokens int64 `json:"cache_write_tokens"`
+	CachedTokens       *int64 `json:"cached_tokens"`
+	CacheWriteTokens   *int64 `json:"cache_write_tokens"`
+	CreatedCacheTokens *int64 `json:"created_cache_tokens,omitempty"`
 }
 
 type responsesOutputUsageDetails struct {
@@ -107,18 +108,26 @@ func responsesErrorCode(protocolError *llmprotocol.ProtocolError) string {
 
 func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire responsesResponseWire
-	if err := decodeProviderWire(body, &wire, policy); err != nil {
+	canonicalBody, vendorExtensions, err := decodeProviderWireVendorAware(body, &wire, policy)
+	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	if err := validateResponsesResponseResource(wire, false); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	diagnostics := responsesResponseMetadataDiagnostics(wire, policy)
+	nestedVendorExtensions, err := responsesOutputVendorExtensions(wire.Output, policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	vendorExtensions = append(vendorExtensions, nestedVendorExtensions...)
+	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, vendorExtensions)
+	diagnostics = appendDiagnostics(diagnostics, responsesResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeResponsesResponseResource(wire, policy, &diagnostics)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, body, response.Generation, wire.Status, policy), diagnostics, nil
+	return response, responseEnvelope(llmprotocol.OpenAIResponsesV1, canonicalBody, response.Generation, wire.Status, policy), diagnostics, nil
 }
 
 func responsesResponseMetadataDiagnostics(wire responsesResponseWire, policy llmprotocol.Policy) llmprotocol.Diagnostics {
@@ -164,7 +173,10 @@ func decodeResponsesResponseResource(
 	}
 	response.Output = output
 	if wire.Usage != nil {
-		response.Usage = decodeResponsesUsage(*wire.Usage)
+		response.Usage, err = decodeResponsesUsage(*wire.Usage)
+		if err != nil {
+			return llmprotocol.Response{}, err
+		}
 		appendProviderFieldOmissions(diagnostics, policy, llmprotocol.OpenAIResponsesV1, map[string]bool{
 			"usage.compute_units": len(wire.Usage.ComputeUnits) > 0,
 		}, "compute-unit accounting has no protocol-neutral token representation")
@@ -344,30 +356,28 @@ func responsesContentFieldPresent(raw json.RawMessage, field string) bool {
 	return false
 }
 
-func decodeResponsesUsage(wire responsesUsageWire) llmprotocol.Usage {
-	cached, cacheWrite := int64(0), int64(0)
-	if wire.InputTokensDetails != nil {
-		cached = wire.InputTokensDetails.CachedTokens
-		cacheWrite = wire.InputTokensDetails.CacheWriteTokens
-	}
+func decodeResponsesUsage(wire responsesUsageWire) (llmprotocol.Usage, error) {
 	reasoning := int64(0)
 	if wire.OutputTokensDetails != nil {
 		reasoning = wire.OutputTokensDetails.ReasoningTokens
-	}
-	uncached := int64(-1)
-	if cached >= 0 && cacheWrite >= 0 && wire.InputTokens >= cached && cacheWrite <= wire.InputTokens-cached {
-		uncached = wire.InputTokens - cached - cacheWrite
 	}
 	other := int64(-1)
 	if reasoning >= 0 && wire.OutputTokens >= reasoning {
 		other = wire.OutputTokens - reasoning
 	}
-	return llmprotocol.Usage{
+	usage := llmprotocol.Usage{
 		State:         llmprotocol.UsageAvailable,
-		InputUncached: authoritative(uncached), InputCacheRead: authoritative(cached), InputCacheWrite: authoritative(cacheWrite),
+		InputUncached: unknownCount(), InputCacheRead: unknownCount(), InputCacheWrite: unknownCount(),
 		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
 		InputTotal: authoritative(wire.InputTokens), OutputTotal: authoritative(wire.OutputTokens), Total: authoritative(wire.TotalTokens),
 	}
+	if wire.InputTokensDetails != nil {
+		details := wire.InputTokensDetails
+		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens); err != nil {
+			return llmprotocol.Usage{}, err
+		}
+	}
+	return usage, nil
 }
 
 func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {
@@ -498,7 +508,7 @@ func encodeResponsesUsage(usage llmprotocol.Usage) *responsesUsageWire {
 		OutputTokens: tokenValue(usage.OutputTotal),
 		TotalTokens:  tokenValue(usage.Total),
 		InputTokensDetails: &responsesInputUsageDetails{
-			CachedTokens: tokenValue(usage.InputCacheRead), CacheWriteTokens: tokenValue(usage.InputCacheWrite),
+			CachedTokens: usage.InputCacheRead.Value, CacheWriteTokens: usage.InputCacheWrite.Value,
 		},
 		OutputTokensDetails: &responsesOutputUsageDetails{ReasoningTokens: tokenValue(usage.OutputReasoning)},
 	}
@@ -512,7 +522,7 @@ func (OpenAIResponsesCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
-	return decodeOpenAITransportError(body, policy)
+	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIResponsesV1)
 }
 
 func (OpenAIResponsesCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {

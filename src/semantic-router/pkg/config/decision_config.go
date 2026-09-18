@@ -35,8 +35,8 @@ const DecisionActionRoute = "route"
 // cannot bypass the guard by naming a model. Destination must resolve in
 // model_config and the decision's rules must reference a jailbreak signal.
 type DecisionAction struct {
-	Type        string `yaml:"type" json:"type"`
-	Destination string `yaml:"destination" json:"destination"`
+	Type        string `yaml:"type" json:"type" jsonschema:"required"`
+	Destination string `yaml:"destination" json:"destination" jsonschema:"required"`
 }
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.
@@ -71,11 +71,13 @@ type EmitDirective struct {
 }
 
 // RetentionDirective expresses keep / drop / prefer-retain semantics over the
-// response/cache surface. All fields are tri-state pointers so we can
+// Router-owned response content. All fields are tri-state pointers so we can
 // distinguish "unset" from an explicit zero value.
 //
-// Runtime consumes Drop (semantic-cache write skip), TTLTurns (per-entry
-// cache TTL override), and KeepCurrentModel (model-switch-gate forced stay).
+// Runtime consumes Drop (response-cache, memory, and Responses-object write
+// suppression), TTLTurns (per-entry cache TTL override), and KeepCurrentModel
+// (model-switch-gate forced stay). Drop does not delete existing objects or
+// disable explicit history reads, telemetry, or backend-side persistence.
 // PreferPrefixRetention is emitted to the pool as an x-vsr-retention-prefer-prefix
 // header; its session-aware scoring bias and KV-cache eviction integration are
 // follow-up work. All set fields are also observed via log + trace attributes
@@ -189,7 +191,7 @@ type ReMoMAlgorithmConfig struct {
 }
 
 type ModelReasoningControl struct {
-	UseReasoning         *bool  `yaml:"use_reasoning"`
+	UseReasoning         *bool  `yaml:"use_reasoning,omitempty"`
 	ReasoningDescription string `yaml:"reasoning_description,omitempty"`
 	ReasoningMode        string `yaml:"reasoning_mode,omitempty"`
 	ReasoningEffort      string `yaml:"reasoning_effort,omitempty"`

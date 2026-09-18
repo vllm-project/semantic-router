@@ -58,10 +58,14 @@ func validatePolarityGuard(cfg *RouterConfig) error {
 	if t := guard.NLI.ContradictionThreshold; t != nil && (*t < 0.0 || *t > 1.0) {
 		return fmt.Errorf("%s nli.contradiction_threshold must be between 0.0 and 1.0, got %.2f", scope, *t)
 	}
-	if cfg.SemanticCache.Enabled && guard.UsesNLI() &&
+	if cfg.NeedsSemanticResponseCache() && guard.UsesNLI() && cfg.SemanticCache.BackendType != "" && cfg.SemanticCache.BackendType != "memory" {
+		return fmt.Errorf("%s NLI verification requires the memory backend", scope)
+	}
+	if cfg.NeedsSemanticResponseCache() && guard.UsesNLI() &&
+		cfg.GlobalModelBindings["hallucination_explainer"].Deployment == "" &&
 		strings.TrimSpace(cfg.HallucinationMitigation.NLIModel.ModelID) == "" {
 		return fmt.Errorf(
-			"%s mode %q requires an NLI model: configure global.model_catalog.modules.hallucination_mitigation.explainer (model_ref or model_id)",
+			"%s mode %q requires an NLI model: configure global.model_catalog.bindings.hallucination_explainer or global.model_catalog.modules.hallucination_mitigation.explainer (model_ref or model_id)",
 			scope, mode,
 		)
 	}

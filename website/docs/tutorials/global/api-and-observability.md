@@ -36,15 +36,15 @@ The management API validates and normalizes a candidate config without writing
 it:
 
 ```http
-POST /config/router/validate
+POST /api/v1/config/validate
 Content-Type: application/json
 
 {"yaml":"version: v0.3\n..."}
 ```
 
 Successful responses include `valid: true` and the normalized canonical YAML.
-Validation uses the same parser and semantic checks as `PATCH /config/router`
-and `PUT /config/router`, but preserves `${ENV_VAR}` references verbatim rather
+Validation uses the same parser and semantic checks as `PATCH /api/v1/config`
+and `PUT /api/v1/config`, but preserves `${ENV_VAR}` references verbatim rather
 than reading process secrets. The endpoint requires `config.read`; plaintext
 secret viewing is not implied.
 
@@ -54,12 +54,36 @@ secret viewing is not implied.
 global:
   services:
     api:
+      routing_preview:
+        request_timeout_seconds: 120
+        max_concurrency: 16
       batch_classification:
         max_batch_size: 100
 ```
 
-`max_batch_size` bounds `texts` per `/api/v1/classify/batch` request. Larger
+`max_batch_size` bounds `texts` per `/api/v1/diagnostics/classify/batch` request. Larger
 batches return `400 INVALID_INPUT`.
+
+`routing_preview` applies to `POST /api/v1/routing/preview`. Its inference
+deadline starts after the request body is decoded and defaults to 120 seconds.
+Set `request_timeout_seconds` between 1 and 3600 using measured inference times
+for the intended input lengths and deployment hardware. This setting can be
+updated through config hot reload;
+other HTTP routes keep their existing timeouts.
+
+A deadline returns `504 REQUEST_TIMEOUT` and cancels queued or cancellable
+inference. Native inference already running may finish later. Its model resources
+and admission slot remain held until it finishes, including during shutdown.
+`max_concurrency` is a positive worker limit, defaults to 16, and has no wait
+queue: when all slots are occupied, new previews return `429 OVERLOADED`.
+Changing this limit requires a deployment restart; hot reload rejects the change.
+
+The response writer has five additional seconds to send the result or timeout
+response. Dashboard Topology uses the configured Preview budget plus this
+allowance and propagates client cancellation. Recipe probes retain their own
+`evaluation.request_timeout_seconds` caller budget in `probes.yaml`; configure
+it for the intended run, and allow at least five extra seconds in external HTTP
+clients or proxies when they need to receive the Router's timeout response.
 
 ### Response API
 

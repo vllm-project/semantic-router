@@ -6,7 +6,6 @@ import {
   buildExactChatRequestBody,
   buildPlaygroundRequestHeaders,
   collectResponseHeaders,
-  PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
   PLAYGROUND_MAX_REQUEST_BYTES,
 } from './chatRequestSupport'
 
@@ -224,7 +223,6 @@ describe('buildExactChatRequestBody', () => {
       temperature: 0,
       model: 'team/custom-balanced',
       stream: true,
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
     })
   })
 
@@ -255,12 +253,6 @@ describe('buildExactChatRequestBody', () => {
 })
 
 describe('playground request stability', () => {
-  it('sets a bounded completion default for ordinary chat requests', () => {
-    expect(buildChatRequestBody('vllm-sr/auto', [], [])).toMatchObject({
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
-    })
-  })
-
   it('rejects an encoded request larger than the Router request envelope', () => {
     expect(() =>
       buildExactChatRequestBody(
@@ -277,7 +269,6 @@ describe('playground request stability', () => {
       model: 'vllm-sr/test',
       messages: [{ role: 'user', content: '' }],
       stream: true,
-      max_completion_tokens: PLAYGROUND_DEFAULT_MAX_COMPLETION_TOKENS,
     }
     const emptyBytes = new TextEncoder().encode(JSON.stringify(emptyRequest)).byteLength
     const exactRequest = {
@@ -305,10 +296,41 @@ describe('playground request stability', () => {
     ).toThrow('exceeds the 10 MB request limit')
   })
 
-  it('pins every turn in one conversation to the same Router session', () => {
-    expect(buildPlaygroundRequestHeaders('conv-demo')).toMatchObject({
-      'x-session-id': 'conv-demo',
-      'x-vsr-debug': 'true',
-    })
+  it('keeps both Router identities stable within a conversation and separate across conversations', () => {
+    for (const conversationId of ['conv-first', 'conv-second']) {
+      const headers = buildPlaygroundRequestHeaders(conversationId)
+      expect(headers).toMatchObject({
+        'x-session-id': conversationId,
+        'x-conversation-id': conversationId,
+        'x-vsr-debug': 'true',
+      })
+      expect(buildPlaygroundRequestHeaders(conversationId)).toEqual(headers)
+    }
+    expect(buildPlaygroundRequestHeaders('conv-first')).not.toEqual(
+      buildPlaygroundRequestHeaders('conv-second'),
+    )
   })
+})
+
+describe('backend generation limits', () => {
+  it('omits both token limit fields for ordinary and unspecified exact requests', () => {
+    for (const result of [
+      buildChatRequestBody('balance', [], []),
+      buildExactChatRequestBody({ messages: [] }, 'balance'),
+    ]) {
+      expect(result).not.toHaveProperty('max_completion_tokens')
+      expect(result).not.toHaveProperty('max_tokens')
+    }
+  })
+
+  it.each(['max_tokens', 'max_completion_tokens'])(
+    'preserves an exact %s without adding another limit',
+    (key) => {
+      const result = buildExactChatRequestBody({ messages: [], [key]: 512 }, 'balance')
+      expect(result[key]).toBe(512)
+      expect(result).not.toHaveProperty(
+        key === 'max_tokens' ? 'max_completion_tokens' : 'max_tokens',
+      )
+    },
+  )
 })

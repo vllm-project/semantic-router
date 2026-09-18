@@ -122,7 +122,45 @@ config:
             threshold: 0.72
             on_error: skip
             escalation_order: small_to_large
-      - name: tool_selection_add_weather_decision
+      - &plugin_request_mutations_decision
+        name: plugin_request_mutations_decision
+        description: Deterministic route for provider-boundary plugin mutation coverage (issue #3180).
+        priority: 550
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: plugin_request_mutations
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: system_prompt
+            configuration:
+              enabled: true
+              system_prompt: "E2E plugin contract: system prompt applied."
+              mode: replace
+          - type: request_params
+            configuration:
+              blocked_params:
+                - frequency_penalty
+                - presence_penalty
+              max_tokens_limit: 64
+              max_n: 1
+              strip_unknown: true
+          - type: header_mutation
+            configuration:
+              add:
+                - name: x-vsr-e2e-added
+                  value: added-by-router
+              update:
+                - name: x-vsr-e2e-updated
+                  value: updated-by-router
+              delete:
+                - x-vsr-e2e-deleted
+      - &tool_selection_add_weather_decision
+        name: tool_selection_add_weather_decision
         description: Contract route for tool_selection add mode (weather-aligned retrieval)
         priority: 500
         rules:
@@ -147,7 +185,8 @@ config:
               top_k: 3
               similarity_threshold: 0.01
               strategy: default
-      - name: tool_selection_add_calc_decision
+      - &tool_selection_add_calc_decision
+        name: tool_selection_add_calc_decision
         description: Contract route for tool_selection add mode (math-aligned retrieval)
         priority: 500
         rules:
@@ -172,7 +211,8 @@ config:
               top_k: 3
               similarity_threshold: 0.01
               strategy: default
-      - name: tool_selection_filter_decision
+      - &tool_selection_filter_decision
+        name: tool_selection_filter_decision
         description: Contract route for tool_selection filter mode
         priority: 500
         rules:
@@ -196,7 +236,8 @@ config:
               mode: filter
               relevance_threshold: 0.22
               preserve_count: 2
-      - name: tool_selection_filter_threshold_decision
+      - &tool_selection_filter_threshold_decision
+        name: tool_selection_filter_threshold_decision
         description: Contract route for tool_selection filter mode with strict relevance threshold
         priority: 500
         rules:
@@ -220,7 +261,8 @@ config:
               mode: filter
               relevance_threshold: 0.95
               preserve_count: 1
-      - name: tool_selection_add_topk_one_decision
+      - &tool_selection_add_topk_one_decision
+        name: tool_selection_add_topk_one_decision
         description: Contract route for tool_selection add mode with alternate top_k
         priority: 500
         rules:
@@ -245,7 +287,8 @@ config:
               top_k: 1
               similarity_threshold: 0.01
               strategy: default
-      - name: tool_selection_with_system_prompt_decision
+      - &tool_selection_with_system_prompt_decision
+        name: tool_selection_with_system_prompt_decision
         description: Contract route for tool_selection stacked with system_prompt plugin
         priority: 500
         rules:
@@ -275,7 +318,8 @@ config:
               enabled: true
               system_prompt: "Contract route: system_prompt + tool_selection (non-PII path)."
               mode: append
-      - name: business_decision
+      - &business_decision
+        name: business_decision
         description: Business and management related queries
         priority: 10
         rules:
@@ -293,7 +337,8 @@ config:
               enabled: true
               system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations.
               mode: replace
-      - name: law_decision
+      - &law_decision
+        name: law_decision
         description: Legal questions and law-related topics
         priority: 10
         rules:
@@ -311,7 +356,8 @@ config:
               enabled: true
               system_prompt: You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters.
               mode: replace
-      - name: psychology_decision
+      - &psychology_decision
+        name: psychology_decision
         description: Psychology and mental health topics
         priority: 10
         rules:
@@ -329,7 +375,8 @@ config:
               enabled: true
               scope: global
               similarity_threshold: 0.8
-      - name: biology_decision
+      - &biology_decision
+        name: biology_decision
         description: Biology and life sciences questions
         priority: 10
         rules:
@@ -347,7 +394,8 @@ config:
               enabled: true
               system_prompt: You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems.
               mode: replace
-      - name: chemistry_decision
+      - &chemistry_decision
+        name: chemistry_decision
         description: Chemistry and chemical sciences questions
         priority: 10
         rules:
@@ -365,7 +413,8 @@ config:
               enabled: true
               system_prompt: You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations.
               mode: replace
-      - name: history_decision
+      - &history_decision
+        name: history_decision
         description: Historical questions and cultural topics
         priority: 10
         rules:
@@ -383,7 +432,8 @@ config:
               enabled: true
               system_prompt: You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis.
               mode: replace
-      - name: health_decision
+      - &health_decision
+        name: health_decision
         description: Health and medical information queries
         priority: 10
         rules:
@@ -401,7 +451,8 @@ config:
               enabled: true
               scope: global
               similarity_threshold: 0.8
-      - name: economics_decision
+      - &economics_decision
+        name: economics_decision
         description: Economics and financial topics
         priority: 10
         rules:
@@ -419,7 +470,8 @@ config:
               enabled: true
               system_prompt: You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses.
               mode: replace
-      - name: math_decision
+      - &math_decision
+        name: math_decision
         description: Mathematics and quantitative reasoning
         priority: 10
         rules:
@@ -437,7 +489,8 @@ config:
               enabled: true
               system_prompt: You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way.
               mode: replace
-      - name: physics_decision
+      - &physics_decision
+        name: physics_decision
         description: Physics and physical sciences
         priority: 10
         rules:
@@ -455,7 +508,8 @@ config:
               enabled: true
               system_prompt: You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate.
               mode: replace
-      - name: computer_science_decision
+      - &computer_science_decision
+        name: computer_science_decision
         description: Computer science and programming
         priority: 10
         rules:
@@ -473,7 +527,8 @@ config:
               enabled: true
               system_prompt: You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful.
               mode: replace
-      - name: philosophy_decision
+      - &philosophy_decision
+        name: philosophy_decision
         description: Philosophy and ethical questions
         priority: 10
         rules:
@@ -491,7 +546,8 @@ config:
               enabled: true
               system_prompt: You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates.
               mode: replace
-      - name: engineering_decision
+      - &engineering_decision
+        name: engineering_decision
         description: Engineering and technical problem-solving
         priority: 10
         rules:
@@ -617,7 +673,8 @@ config:
               enabled: true
               system_prompt: The user has asked a similar question multiple times without a resolution. Acknowledge this and provide a definitive, complete answer.
               mode: replace
-      - name: other_decision
+      - &other_decision
+        name: other_decision
         description: General knowledge and miscellaneous topics
         priority: 1
         rules:
@@ -629,7 +686,7 @@ config:
           - model: base-model
             lora_name: general-expert
             use_reasoning: false
-        plugins:
+        plugins: &baseline_response_cache_plugins
           - type: response_cache
             configuration:
               enabled: true
@@ -657,36 +714,48 @@ config:
             - SSN
             - credit card
           case_sensitive: false
-        - name: tool_selection_add_weather
+        - &tool_selection_add_weather
+          name: tool_selection_add_weather
           operator: OR
           keywords:
             - __TOOL_SELECTION_ADD_WEATHER__
           case_sensitive: false
-        - name: tool_selection_add_calc
+        - &tool_selection_add_calc
+          name: tool_selection_add_calc
           operator: OR
           keywords:
             - __TOOL_SELECTION_ADD_CALC__
           case_sensitive: false
-        - name: tool_selection_filter
+        - &tool_selection_filter
+          name: tool_selection_filter
           operator: OR
           keywords:
             - __TOOL_SELECTION_FILTER__
           case_sensitive: false
-        - name: tool_selection_filter_threshold
+        - &tool_selection_filter_threshold
+          name: tool_selection_filter_threshold
           operator: OR
           keywords:
             - __TOOL_SELECTION_FILTER_THRESHOLD__
           case_sensitive: false
-        - name: tool_selection_add_topk_one
+        - &tool_selection_add_topk_one
+          name: tool_selection_add_topk_one
           operator: OR
           keywords:
             - __TOOL_SELECTION_ADD_TOPK_ONE__
           case_sensitive: false
-        - name: tool_selection_with_system_prompt
+        - &tool_selection_with_system_prompt
+          name: tool_selection_with_system_prompt
           operator: OR
           keywords:
             - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
           case_sensitive: false
+        - &plugin_request_mutations
+          name: plugin_request_mutations
+          operator: OR
+          keywords:
+            - __PLUGIN_REQUEST_MUTATIONS__
+          case_sensitive: true
         - name: retention_probe_keywords
           operator: OR
           keywords:
@@ -713,7 +782,7 @@ config:
           description: Current user turn closely repeats the last two billing complaints.
           threshold: 0.8
           lookback_turns: 2
-      domains:
+      domains: &baseline_domain_signals
         - name: business
           description: Business, corporate strategy, management, finance, marketing
         - name: law
@@ -744,7 +813,8 @@ config:
           description: General knowledge and miscellaneous topics
       jailbreak:
         - name: jailbreak_standard
-          threshold: 0.65
+          # Match the published Guard operating point in canonical defaults.
+          threshold: 0.5
           include_history: false
           description: Standard jailbreak detection
       pii:
@@ -781,6 +851,16 @@ config:
             description: General-purpose adapter for diverse topics
       - name: general-expert
   entrypoints:
+    - model_names: ["e2e-domain"]
+      recipe: e2e-domain
+    - model_names: ["e2e-fallback"]
+      recipe: e2e-fallback
+    - model_names: ["e2e-protocol"]
+      recipe: e2e-protocol
+    - model_names: ["e2e-plugins"]
+      recipe: e2e-plugins
+    - model_names: ["e2e-cache"]
+      recipe: e2e-cache
     - model_names: ["vllm-sr/e2e-recipe-probe"]
       recipe: entrypoint-probe
     - model_names: ["vllm-sr/metadata-policy"]
@@ -788,6 +868,112 @@ config:
     - model_names: ["vllm-sr/e2e-default-alias"]
       recipe: default
   recipes:
+    - name: e2e-domain
+      description: Domain classification using the unchanged baseline labels and model selections.
+      routing:
+        strategy: priority
+        signals:
+          domains: *baseline_domain_signals
+        decisions:
+          - <<: *business_decision
+            plugins: []
+          - <<: *law_decision
+            plugins: []
+          - <<: *psychology_decision
+            plugins: []
+          - <<: *biology_decision
+            plugins: []
+          - <<: *chemistry_decision
+            plugins: []
+          - <<: *history_decision
+            plugins: []
+          - <<: *health_decision
+            plugins: []
+          - <<: *economics_decision
+            plugins: []
+          - <<: *math_decision
+            plugins: []
+          - <<: *physics_decision
+            plugins: []
+          - <<: *computer_science_decision
+            plugins: []
+          - <<: *philosophy_decision
+            plugins: []
+          - <<: *engineering_decision
+            plugins: []
+          - <<: *other_decision
+            plugins: []
+    - name: e2e-fallback
+      description: Explicit matching policy and the declared provider default for unmatched requests.
+      routing:
+        strategy: priority
+        signals:
+          keywords:
+            - name: fallback_contract_keyword
+              operator: OR
+              keywords: ["__E2E_FALLBACK_MATCH__"]
+              case_sensitive: true
+        decisions:
+          - name: fallback_contract_match
+            priority: 1
+            rules:
+              operator: OR
+              conditions:
+                - type: keyword
+                  name: fallback_contract_keyword
+            modelRefs:
+              - model: base-model
+                use_reasoning: false
+    # Feature probes select the policy they exercise explicitly. The default
+    # recipe retains its learned security signals and their precedence tests.
+    - name: e2e-protocol
+      description: Upstream protocol translation without cache or security short circuits.
+      routing:
+        strategy: priority
+        decisions:
+          - name: e2e_protocol_upstream
+            priority: 1
+            rules:
+              operator: AND
+            modelRefs:
+              - model: base-model
+                lora_name: general-expert
+                use_reasoning: false
+    - name: e2e-plugins
+      description: Provider-boundary mutation and tool selection using the baseline plugin definitions.
+      routing:
+        strategy: priority
+        signals:
+          keywords:
+            - *plugin_request_mutations
+            - *tool_selection_add_weather
+            - *tool_selection_add_calc
+            - *tool_selection_filter
+            - *tool_selection_filter_threshold
+            - *tool_selection_add_topk_one
+            - *tool_selection_with_system_prompt
+        decisions:
+          - *plugin_request_mutations_decision
+          - *tool_selection_add_weather_decision
+          - *tool_selection_add_calc_decision
+          - *tool_selection_filter_decision
+          - *tool_selection_filter_threshold_decision
+          - *tool_selection_add_topk_one_decision
+          - *tool_selection_with_system_prompt_decision
+    - name: e2e-cache
+      description: Cache hit, paraphrase, and contradiction probes independent of domain routing.
+      routing:
+        strategy: priority
+        decisions:
+          - name: e2e_cache_decision
+            priority: 1
+            rules:
+              operator: AND
+            modelRefs:
+              - model: base-model
+                lora_name: general-expert
+                use_reasoning: false
+            plugins: *baseline_response_cache_plugins
     - name: entrypoint-probe
       description: "Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331)."
       routing:

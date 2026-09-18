@@ -29,14 +29,10 @@ func init() {
 // cachePolarityCase pairs a primed question with an opposite-meaning variant
 // that must miss and a paraphrase that must still hit.
 //
-// Every question in a case must classify to a decision that carries the
-// response_cache plugin and the pair must clear similarity_threshold on the
-// profile's embedding model. The shipped cases use everyday wording that the
-// envoy-ai-gateway baseline profile classifies as "other" (other_decision,
-// which carries the plugin) and were calibrated against a live deployment of
-// that profile (mmbert). Domain-flavoured wording such as files, timers, or
-// notifications routes to decisions without a cache plugin and would make the
-// case vacuous.
+// These requests use the explicit cache feature recipe, so every question
+// reaches the same response_cache policy independently of domain classification.
+// The original text pairs must still clear the unchanged embedding threshold,
+// and the production NLI guard must distinguish contradictions from paraphrases.
 type cachePolarityCase struct {
 	Description      string `json:"description"`
 	OriginalQuestion string `json:"original_question"`
@@ -125,13 +121,18 @@ func runCachePolarityCase(ctx context.Context, tc cachePolarityCase, localPort s
 	// The in-memory cache is per router replica and the gateway spreads
 	// requests across replicas, so a single priming request only warms the
 	// replica that happened to serve it. Prime repeatedly to cover them all.
+	primed := false
 	for i := 0; i < cachePolarityPrimeAttempts; i++ {
-		resp, err := sendChatRequest(ctx, tc.OriginalQuestion, localPort, verbose)
-		if err != nil {
-			out.failures = append(out.failures, fmt.Sprintf("priming %q: %v", tc.OriginalQuestion, err))
+		result := requestCachePolarity(ctx, primeCase, tc.OriginalQuestion, localPort, verbose)
+		if result.Error != "" {
+			out.failures = append(out.failures, fmt.Sprintf("priming %q: %s", tc.OriginalQuestion, result.Error))
 			return out
 		}
-		resp.Body.Close()
+		primed = primed || (result.CacheHit && result.Similarity >= cachePolarityExactMatch)
+	}
+	if !primed {
+		out.failures = append(out.failures, fmt.Sprintf("priming %q: cache policy %q never served the original question after %d requests", tc.OriginalQuestion, cachePolarityDecision, cachePolarityPrimeAttempts))
+		return out
 	}
 	time.Sleep(1 * time.Second) // same settling time as the cache hit-rate case
 
@@ -151,16 +152,23 @@ func runCachePolarityCase(ctx context.Context, tc cachePolarityCase, localPort s
 	return out
 }
 
-// probeCachePolarity sends one probe. A miss that carries no similarity at all
-// means the request reached a replica whose cache holds no candidate — not a
-// guard decision — so it is retried once before being judged.
+func requestCachePolarity(ctx context.Context, primeCase CacheTestCase, question, localPort string, verbose bool) CacheResult {
+	r := testSingleCacheRequestForModel(ctx, primeCase, question, localPort, cachePolarityModel, verbose)
+	if r.Error == "" && (r.SelectedRecipe != cachePolarityModel || r.SelectedDecision != cachePolarityDecision) {
+		r.Error = fmt.Sprintf("cache policy was not selected: recipe=%q decision=%q; require recipe=%q decision=%q with response_cache enabled", r.SelectedRecipe, r.SelectedDecision, cachePolarityModel, cachePolarityDecision)
+	}
+	return r
+}
+
+// An otherwise valid policy response without a candidate score may have reached
+// an unprimed replica. Retry once, then report the missing evidence explicitly.
 func probeCachePolarity(ctx context.Context, primeCase CacheTestCase, question, localPort string, verbose bool) CacheResult {
-	r := testSingleCacheRequest(ctx, primeCase, question, localPort, verbose)
-	if r.Error == "" && !r.CacheHit && r.Similarity == 0 {
+	r := requestCachePolarity(ctx, primeCase, question, localPort, verbose)
+	if r.Error == "" && !r.CacheHit && !r.SimilarityReported {
 		if verbose {
-			fmt.Printf("[Test] probe %q reached an unprimed replica (no similarity reported); retrying once\n", question)
+			fmt.Printf("[Test] probe %q returned no cache candidate score; retrying once\n", question)
 		}
-		r = testSingleCacheRequest(ctx, primeCase, question, localPort, verbose)
+		r = requestCachePolarity(ctx, primeCase, question, localPort, verbose)
 	}
 	return r
 }
@@ -173,6 +181,8 @@ func assertPolarityContradictionRejected(tc cachePolarityCase, r CacheResult) st
 	switch {
 	case r.Error != "":
 		return fmt.Sprintf("%q: %s", tc.Contradiction, r.Error)
+	case !r.SimilarityReported:
+		return fmt.Sprintf("%q returned no cache candidate score under policy %q; the polarity guard was not exercised", tc.Contradiction, cachePolarityDecision)
 	case r.CacheHit && r.Similarity >= cachePolarityExactMatch:
 		// An identical entry can only come from an earlier run that answered
 		// the contradiction itself (a kept cluster); serving it is correct
@@ -196,6 +206,8 @@ func assertPolarityParaphraseServed(tc cachePolarityCase, r CacheResult) string 
 	switch {
 	case r.Error != "":
 		return fmt.Sprintf("%q: %s", tc.Paraphrase, r.Error)
+	case !r.SimilarityReported:
+		return fmt.Sprintf("paraphrase %q returned no cache candidate score under policy %q; cache recall was not exercised", tc.Paraphrase, cachePolarityDecision)
 	case !r.CacheHit:
 		return fmt.Sprintf("paraphrase %q missed (similarity=%.4f); the guard rejected a genuine match",
 			tc.Paraphrase, r.Similarity)
@@ -207,6 +219,11 @@ func assertPolarityParaphraseServed(tc cachePolarityCase, r CacheResult) string 
 // cachePolarityPrimeAttempts is how many times the original question is sent
 // before probing; see runCachePolarityCase.
 const cachePolarityPrimeAttempts = 4
+
+const (
+	cachePolarityModel    = "e2e-cache"
+	cachePolarityDecision = "e2e_cache_decision"
+)
 
 // cachePolarityExactMatch is the similarity of an identical cached query.
 const cachePolarityExactMatch = 0.999

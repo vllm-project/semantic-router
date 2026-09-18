@@ -42,10 +42,13 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 			Name:        RecipeName(recipe.Name),
 			Description: recipe.Description,
 			Profile: RoutingProfile{
-				Signals:     normalizeSignals(recipe.Routing.Signals, decisions),
-				Projections: normalizeProjections(recipe.Routing.Projections),
-				Decisions:   decisions,
-				Strategy:    strategy,
+				ModelBindings:         cloneModelMap(recipe.Routing.ModelBindings),
+				CandidateRequirements: recipe.Routing.CandidateRequirements.Clone(),
+				DataPolicy:            recipe.Routing.DataPolicy.Clone(),
+				Signals:               normalizeSignals(recipe.Routing.Signals, decisions),
+				Projections:           normalizeProjections(recipe.Routing.Projections),
+				Decisions:             decisions,
+				Strategy:              strategy,
 			},
 		})
 	}
@@ -57,15 +60,21 @@ func applyCanonicalRecipeState(cfg *RouterConfig, canonical *CanonicalConfig) er
 		cfg.Projections = explicitDefault.Profile.Projections
 		cfg.Decisions = explicitDefault.Profile.Decisions
 		cfg.Strategy = explicitDefault.Profile.Strategy
+		cfg.ModelBindings = cloneModelMap(explicitDefault.Profile.ModelBindings)
+		cfg.CandidateRequirements = explicitDefault.Profile.CandidateRequirements.Clone()
+		cfg.DataPolicy = explicitDefault.Profile.DataPolicy.Clone()
 	} else {
 		// The top-level routing profile is the default recipe.
 		recipes = append([]RoutingRecipe{{
 			Name: DefaultRecipeName,
 			Profile: RoutingProfile{
-				Signals:     cfg.Signals,
-				Projections: cfg.Projections,
-				Decisions:   cfg.Decisions,
-				Strategy:    cfg.Strategy,
+				ModelBindings:         cloneModelMap(cfg.ModelBindings),
+				CandidateRequirements: cfg.CandidateRequirements.Clone(),
+				DataPolicy:            cfg.DataPolicy.Clone(),
+				Signals:               cfg.Signals,
+				Projections:           cfg.Projections,
+				Decisions:             cfg.Decisions,
+				Strategy:              cfg.Strategy,
 			},
 		}}, recipes...)
 	}
@@ -92,9 +101,15 @@ func validateCanonicalRecipes(canonical *CanonicalConfig) error {
 
 	seen := make(map[RecipeName]struct{}, len(canonical.Recipes))
 	for _, recipe := range canonical.Recipes {
+		if err := recipe.Routing.CandidateRequirements.Validate(); err != nil {
+			return fmt.Errorf("recipes[%s]: %w", recipe.Name, err)
+		}
 		name := RecipeName(strings.TrimSpace(recipe.Name))
 		if name == "" {
 			return fmt.Errorf("recipes[].name cannot be empty")
+		}
+		if name == GlobalModelScope {
+			return fmt.Errorf("recipes[%s]: name is reserved for shared model services", name)
 		}
 		if string(name) != recipe.Name {
 			return fmt.Errorf(
@@ -224,10 +239,13 @@ func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []CanonicalRecipe {
 			Name:        string(recipe.Name),
 			Description: recipe.Description,
 			Routing: CanonicalRouting{
-				Signals:     canonicalSignalsFromSignals(recipe.Profile.Signals),
-				Projections: canonicalProjectionsFromProjections(recipe.Profile.Projections),
-				Decisions:   copyDecisions(recipe.Profile.Decisions),
-				Strategy:    recipe.Profile.Strategy,
+				ModelBindings:         cloneModelMap(recipe.Profile.ModelBindings),
+				CandidateRequirements: recipe.Profile.CandidateRequirements.Clone(),
+				DataPolicy:            recipe.Profile.DataPolicy.Clone(),
+				Signals:               canonicalSignalsFromSignals(recipe.Profile.Signals),
+				Projections:           canonicalProjectionsFromProjections(recipe.Profile.Projections),
+				Decisions:             copyDecisions(recipe.Profile.Decisions),
+				Strategy:              recipe.Profile.Strategy,
 			},
 		})
 	}
@@ -265,6 +283,12 @@ func findRecipe(recipes []RoutingRecipe, name RecipeName) *RoutingRecipe {
 // content (signals, projections, or decisions). modelCards do not count: they
 // are the shared model catalog, not part of any one profile.
 func canonicalRoutingHasProfile(routing CanonicalRouting) bool {
+	if routing.CandidateRequirements != nil || routing.DataPolicy != nil {
+		return true
+	}
+	if len(routing.ModelBindings) > 0 {
+		return true
+	}
 	if routing.Strategy != "" {
 		return true
 	}

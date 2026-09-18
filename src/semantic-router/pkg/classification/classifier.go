@@ -3,9 +3,11 @@ package classification
 import (
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // PreloadKnowledgeBases materializes every KB referenced by this classifier.
@@ -29,6 +31,13 @@ func (c *Classifier) PreloadKnowledgeBases() error {
 
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
+	closeOnce         sync.Once
+	closeErr          error
+	modalityInference *ownedModalityClassifier
+	embeddingProvider embedding.Provider
+	embeddingSet      *embedding.Set
+	ownsEmbeddingSet  bool
+	models            *classifierModelRuntime
 	// Dependencies - In-tree classifiers
 	categoryInitializer         CategoryInitializer
 	categoryInference           CategoryInference
@@ -89,6 +98,7 @@ type Classifier struct {
 	// Knowledge-base classifiers keyed by configured KB name.
 	kbClassifiers      map[string]*KnowledgeBaseClassifier
 	genericClassifiers map[string]labelClassifier
+	safetyClassifiers  map[string]*safetyDetector
 	// Identity header names resolved from authz.identity config (or defaults).
 	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
 	authzUserIDHeader     string

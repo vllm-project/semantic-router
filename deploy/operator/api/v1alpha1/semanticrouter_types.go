@@ -268,6 +268,20 @@ type ConfigSpec struct {
 	// +kubebuilder:validation:Type=object
 	Routing *apiextensionsv1.JSON `json:"routing,omitempty" yaml:"routing,omitempty"`
 
+	// ModelDeployments contains canonical global.model_catalog.deployments.
+	// The router validates provider, device, precision and task compatibility.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelDeployments *apiextensionsv1.JSON `json:"model_deployments,omitempty" yaml:"model_deployments,omitempty"`
+
+	// ModelAdmission contains canonical global.model_catalog.admission budgets.
+	// Keys name deployments or the router's existing admission consumers.
+	// +optional
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	ModelAdmission *apiextensionsv1.JSON `json:"model_admission,omitempty" yaml:"model_admission,omitempty"`
+
 	// Embedding models configuration (qwen3, gemma, mmbert)
 	// +optional
 	EmbeddingModels *EmbeddingModelsConfig `json:"embedding_models,omitempty"`
@@ -303,6 +317,14 @@ type ConfigSpec struct {
 	// global.model_catalog.modules.complexity in the router config.
 	// +optional
 	ComplexityModel *ComplexityModelConfig `json:"complexity_model,omitempty"`
+
+	// ExternalModels declares the remote models that classifier backends
+	// (`classifier.pii.backend.model`, `complexity_model.backend.model`) and
+	// the prompt guard protocol refer to by name. Mirrors
+	// global.model_catalog.external[] in the router config field for field;
+	// the router's own validator decides whether a backend resolves against it.
+	// +optional
+	ExternalModels []ExternalModelConfig `json:"external_models,omitempty"`
 
 	// Decision routing strategy ("priority" for priority-based matching)
 	// +kubebuilder:validation:Enum=priority
@@ -1058,8 +1080,8 @@ type HNSWEmbeddingConfig struct {
 	// +optional
 	TargetLayer int `json:"target_layer,omitempty"`
 
-	// EnableSoftMatching enables soft matching mode
-	// +kubebuilder:default=true
+	// EnableSoftMatching allows below-threshold matches when no rule meets its threshold.
+	// +kubebuilder:default=false
 	// +optional
 	EnableSoftMatching bool `json:"enable_soft_matching,omitempty"`
 
@@ -1105,6 +1127,39 @@ type EmbeddingEndpointConfig struct {
 	Dimensions int `json:"dimensions,omitempty"`
 }
 
+// PrototypeScoringConfig overrides prototype-bank construction and scoring for
+// one embedding-backed signal rule. Router-owned defaults apply only after
+// translation; the operator preserves an absent override and an empty object.
+type PrototypeScoringConfig struct {
+	// Enabled controls prototype clustering. False retains every candidate.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// ClusterSimilarityThreshold is the clustering similarity threshold.
+	// Stored as a numeric string, like other fractional operator config fields.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	ClusterSimilarityThreshold string `json:"cluster_similarity_threshold,omitempty"`
+
+	// MaxPrototypes caps the number of cluster representatives.
+	// +optional
+	MaxPrototypes int `json:"max_prototypes,omitempty"`
+
+	// BestWeight weights the best prototype against the top-M mean.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	BestWeight string `json:"best_weight,omitempty"`
+
+	// TopM is the number of highest-scoring prototypes included in the mean.
+	// +optional
+	TopM int `json:"top_m,omitempty"`
+
+	// MarginThreshold is the minimum winner-versus-runner-up score margin.
+	// +kubebuilder:validation:Pattern=`^-?[0-9]+(\.[0-9]+)?$`
+	// +optional
+	MarginThreshold string `json:"margin_threshold,omitempty"`
+}
+
 // ComplexityRulesConfig defines complexity-based signal classification.
 //
 // The CEL rules below reject at admission the boundary combinations the Router
@@ -1121,6 +1176,12 @@ type EmbeddingEndpointConfig struct {
 // +kubebuilder:validation:XValidation:rule="!(has(self.hard_above) && has(self.easy_below)) || double(self.easy_below) < double(self.hard_above)",message="easy_below must be below hard_above; the band between them is medium"
 // +kubebuilder:validation:XValidation:rule="!(has(self.hard_below) && has(self.easy_above)) || double(self.hard_below) < double(self.easy_above)",message="hard_below must be below easy_above; the band between them is medium"
 type ComplexityRulesConfig struct {
+	// PrototypeScoring replaces the family prototype-scoring configuration for
+	// this rule. Absence inherits the family; a present object is a complete
+	// override, including an empty object. Defaults remain Router-owned.
+	// +optional
+	PrototypeScoring *PrototypeScoringConfig `json:"prototype_scoring,omitempty"`
+
 	// Name of the complexity rule (e.g., "code-complexity", "reasoning-complexity")
 	Name string `json:"name"`
 
@@ -1202,6 +1263,7 @@ type ComplexityCandidates struct {
 // - categories does - keeps the field optional and defaults it.
 //
 // +kubebuilder:validation:XValidation:rule="!has(self.backend) || has(self.backend.contract)",message="complexity reads two response shapes, so backend.contract must be stated: score.v1 or label_distribution.v1"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract in ['score.v1', 'label_distribution.v1']",message="complexity reads score.v1 or label_distribution.v1; token_spans.v1 is the PII contract"
 type ComplexityModelConfig struct {
 	// Backend names a remote scoring model. Its absence keeps local prototype
 	// scoring; when set, the signal never reads the rules' hard/easy
@@ -1212,6 +1274,46 @@ type ComplexityModelConfig struct {
 	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
 }
 
+// ExternalModelConfig is one entry of global.model_catalog.external[]: a
+// remote model a classifier backend or the prompt guard can name. Field names
+// are the router's YAML keys so the generic typed conversion carries them
+// unchanged.
+type ExternalModelConfig struct {
+	// Name is the catalog name a backend block refers to in its model field.
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name"`
+
+	// ModelRole is what the model is used for; classifier backends require
+	// "classification", the prompt guard protocol requires "guardrail".
+	// +kubebuilder:validation:MinLength=1
+	ModelRole string `json:"model_role"`
+
+	// ModelName is the model identifier the remote service expects, and the
+	// value a token_spans.v1 envelope's model member must equal.
+	// +kubebuilder:validation:MinLength=1
+	ModelName string `json:"llm_model_name"`
+
+	// Endpoint is where the remote model is reached.
+	Endpoint ExternalModelEndpoint `json:"llm_endpoint"`
+
+	// TimeoutSeconds bounds one call when the backend block sets no deadline.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	TimeoutSeconds int `json:"llm_timeout_seconds,omitempty"`
+}
+
+// ExternalModelEndpoint is the address of a remote classification model.
+type ExternalModelEndpoint struct {
+	// +kubebuilder:validation:MinLength=1
+	Address string `json:"address"`
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port int `json:"port"`
+	// +kubebuilder:validation:Enum=http;https
+	// +optional
+	Protocol string `json:"protocol,omitempty"`
+}
+
 // RemoteClassifierBackendConfig is the shared remote-classifier block. How
 // the remote is called (protocol), what shape it answers with (contract),
 // which catalog entry it is (model) and how long to wait (deadline) are
@@ -1219,14 +1321,16 @@ type ComplexityModelConfig struct {
 // backend block field for field so the operator passes it through unchanged.
 type RemoteClassifierBackendConfig struct {
 	// Protocol is how the remote is called.
-	// +kubebuilder:validation:Enum=http_classify
+	// +kubebuilder:validation:Enum=http_classify;http_chat
 	Protocol string `json:"protocol"`
 
 	// Contract is the response shape the signal reads. Complexity reads two -
 	// score.v1, one regression number interpreted through each rule's
 	// boundaries, and label_distribution.v1, hard/easy/medium probabilities -
-	// so the router requires it there rather than guessing per request.
-	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1
+	// so the router requires it there rather than guessing per request. PII
+	// reads token_spans.v1, entity spans with code-point offsets. Prompt guard
+	// http_chat reads label_decision.v1, a verdict without invented probability.
+	// +kubebuilder:validation:Enum=score.v1;label_distribution.v1;token_spans.v1;label_decision.v1
 	// +optional
 	Contract string `json:"contract,omitempty"`
 
@@ -1367,28 +1471,44 @@ type ToolsConfig struct {
 	FallbackToEmpty bool `json:"fallback_to_empty,omitempty"`
 }
 
-// PromptGuardConfig defines prompt guard configuration
+// PromptGuardConfig defines prompt guard configuration.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PromptGuardConfig struct {
+	// Backend selects a named external classifier and its typed result contract.
+	// +optional
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+	// MaxSequenceLength limits the total tokenized input, including special
+	// tokens. Omission or zero retains the 512-token budget. The model loader
+	// validates the requested budget against the loaded model's capacity.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
+	// Window enables explicit scanning of all input tokens. Omission or null
+	// keeps whole-input inference. Only the local mmbert32k variant supports it.
+	// +nullable
+	// +optional
+	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 	// Variant selects a local Candle-backed model variant. It is mutually
-	// exclusive with Protocol. When both fields are omitted, the operator uses
-	// mmbert32k.
+	// exclusive with Backend. When both are omitted, the operator uses mmbert32k.
 	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
 	Variant string `json:"variant,omitempty"`
-	// Protocol selects a remote HTTP backend's wire contract. Mutually
-	// exclusive with Variant. Requires an external model configured via a
-	// vllmEndpoints/externalModels entry with model_role="guardrail".
+	// Protocol is retired and rejected at admission. Configure Backend with
+	// the protocol, contract and explicit external model name instead.
 	// +kubebuilder:validation:Enum=http_chat;http_classify
 	// +optional
 	Protocol string `json:"protocol,omitempty"`
-	// +kubebuilder:default="models/mmbert32k-jailbreak-detector-merged"
+	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues.
-	// +kubebuilder:default="0.7"
+	// +kubebuilder:default="0.5"
 	// +kubebuilder:validation:Pattern=`^0(\.[0-9]+)?$|^1(\.0+)?$`
 	// +optional
 	Threshold string `json:"threshold,omitempty"`
@@ -1411,6 +1531,20 @@ type PromptGuardConfig struct {
 	// +kubebuilder:validation:Enum=allow;block
 	// +optional
 	OnError string `json:"on_error,omitempty"`
+}
+
+// PromptGuardWindowConfig scans original content tokens with overlap. The
+// native tokenizer also checks that special tokens leave enough content room.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.overlap) || self.overlap < self.size",message="window.overlap must be smaller than window.size"
+type PromptGuardWindowConfig struct {
+	// Size is the inference window budget, including special tokens.
+	// +kubebuilder:validation:Minimum=1
+	Size int `json:"size"`
+	// Overlap counts content tokens shared by consecutive windows.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	Overlap int `json:"overlap,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration
@@ -1437,8 +1571,32 @@ type CategoryModelConfig struct {
 	CategoryMappingPath string `json:"category_mapping_path,omitempty"`
 }
 
-// PIIModelConfig defines PII model configuration
+// PIIModelConfig defines PII model configuration.
+//
+// The contract rule sits on the consumer, as on ComplexityModelConfig: the
+// shared backend block lists every contract any consumer reads, and each
+// consumer narrows it to what it can parse, so a mismatch is refused at
+// admission instead of by the router at load.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.backend.contract) || self.backend.contract == 'token_spans.v1'",message="PII reads token_spans.v1 only; omit backend.contract or set it to token_spans.v1"
+// +kubebuilder:validation:XValidation:rule="!has(self.backend) || !has(self.use_mmbert_32k) || !self.use_mmbert_32k",message="backend cannot be combined with local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="max_sequence_length requires local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && has(self.use_mmbert_32k) && self.use_mmbert_32k)",message="window requires local use_mmbert_32k"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PIIModelConfig struct {
+	// MaxSequenceLength is the total tokenized input budget, including special
+	// tokens. Omission or zero preserves the 512-token legacy limit.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxSequenceLength int `json:"max_sequence_length,omitempty"`
+	// UseMmBERT32K selects the local model that supports token windows.
+	// +optional
+	UseMmBERT32K bool `json:"use_mmbert_32k,omitempty"`
+	// Window scans original content tokens with explicit overlap. Omission or
+	// null leaves window selection unchanged; no CRD defaults are injected.
+	// +nullable
+	// +optional
+	Window *PromptGuardWindowConfig `json:"window,omitempty"`
 	// +optional
 	ModelID string `json:"model_id,omitempty"`
 	// +optional
@@ -1451,6 +1609,18 @@ type PIIModelConfig struct {
 	UseCPU bool `json:"use_cpu,omitempty"`
 	// +optional
 	PIIMappingPath string `json:"pii_mapping_path,omitempty"`
+	// Backend names a remote token classifier speaking token_spans.v1. Its
+	// absence keeps local PII inference. The local selectors this replaces are
+	// model_id, use_modernbert, use_mmbert_32k and use_cpu above. Explicit
+	// token windows are only supported by the local mmbert32k model.
+	// +optional
+	Backend *RemoteClassifierBackendConfig `json:"backend,omitempty"`
+	// OnError selects what a PII backend failure, or a provider-declared
+	// truncation, does to the rule that consumed it: allow (default) treats the
+	// content as not matching, block matches it as classification_error.
+	// +kubebuilder:validation:Enum=allow;block
+	// +optional
+	OnError string `json:"on_error,omitempty"`
 }
 
 // APIConfig defines API configuration

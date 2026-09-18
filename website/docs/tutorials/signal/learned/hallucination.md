@@ -90,7 +90,13 @@ and the request carried context to ground them against:
   left unpublished; Router Replay records it as `not_applicable`
 
 With `x-vsr-debug`, the `x-vsr-matched-hallucination` header carries the rules
-that matched. Streaming responses are not checked.
+that matched.
+
+A streamed answer is checked once the stream ends and recorded with
+`enforcement: not_enforced_streaming` in place of an action. Its bytes are
+already with the client by then, so the `hallucination` plugin does not run and
+neither `hallucination_action` nor `unverified_factual_action` applies. A stream
+that never reaches a terminal answer is not checked, and nothing is recorded.
 
 Declaring a rule is enough to provision the detector for the recipe, and
 `use_nli: true` the explainer, even when no decision enables the plugin. A
