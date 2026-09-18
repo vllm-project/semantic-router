@@ -180,7 +180,9 @@ test('live inventory, frozen dataset and persisted CLI run are visible', async (
     ).toHaveCount(1)
     await screenshot(page, testInfo, 'live-frozen-dataset.png')
     await page.getByRole('button', { name: 'Evaluate this dataset', exact: true }).click()
-    await expect(page.getByLabel('Prepared dataset', { exact: true })).toHaveValue(plan!.dataset_id)
+    await expect(page.getByRole('combobox', { name: 'Prepared dataset', exact: true })).toHaveValue(
+      plan!.dataset_id,
+    )
     await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
   }
   if (plan!.baseline_run_id) {
@@ -207,13 +209,17 @@ test('live comparison retains current Balance and two optimization revisions', a
   )
   const blocked = await openAcceptance(page)
   await page.getByRole('button', { name: 'Compare iterations', exact: true }).click()
-  await page.getByLabel('Baseline run', { exact: true }).selectOption(plan!.baseline_run_id!)
+  await page
+    .getByRole('combobox', { name: 'Baseline run', exact: true })
+    .selectOption(plan!.baseline_run_id!)
   for (const [index, label] of [
     'Current Balance run',
     'Optimization 1 run',
     'Optimization 2 run',
   ].entries())
-    await page.getByLabel(label, { exact: true }).selectOption(plan!.balance_run_ids![index])
+    await page
+      .getByRole('combobox', { name: label, exact: true })
+      .selectOption(plan!.balance_run_ids![index])
   await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Balance optimization trajectory', exact: true }),

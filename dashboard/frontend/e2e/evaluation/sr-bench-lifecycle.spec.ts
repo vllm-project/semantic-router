@@ -225,9 +225,15 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
       'This dataset must have no previous evaluation attempt',
     ).toBe(false)
     await page.getByLabel('Run name', { exact: true }).fill(approved.run_name)
-    await page.getByLabel('Profile', { exact: true }).selectOption(approved.profile)
-    await page.getByLabel('Prepared dataset', { exact: true }).selectOption(approved.dataset_id)
-    await page.getByLabel('Add configured target', { exact: true }).selectOption(approved.target_id)
+    await page
+      .getByRole('combobox', { name: 'Profile', exact: true })
+      .selectOption(approved.profile)
+    await page
+      .getByRole('combobox', { name: 'Prepared dataset', exact: true })
+      .selectOption(approved.dataset_id)
+    await page
+      .getByRole('combobox', { name: 'Add configured target', exact: true })
+      .selectOption(approved.target_id)
     for (const [label, value] of [
       ['Budget (USD)', approved.limits.max_cost_usd],
       ['Run deadline (seconds)', approved.limits.max_run_seconds],
@@ -318,7 +324,9 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
     save()
     await page.getByRole('button', { name: 'Refresh evidence', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'Recover unfinished work' })).toBeVisible()
-    await page.getByLabel('Recovery scope', { exact: true }).selectOption('undispatched')
+    await page
+      .getByRole('combobox', { name: 'Recovery scope', exact: true })
+      .selectOption('undispatched')
     const recoveryPlanResponse = page.waitForResponse(responseFor(`/runs/${parentID}/recover-plan`))
     await page.getByRole('button', { name: 'Review recovery plan', exact: true }).click()
     const recoveryPlanHTTP = await recoveryPlanResponse
