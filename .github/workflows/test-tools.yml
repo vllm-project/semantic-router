@@ -20,7 +20,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - uses: ./.github/actions/setup-go-ci\n        if: fromJSON(inputs.batch).go\n      - name: Prepare Shared Python Environment
+      - uses: ./.github/actions/setup-go-ci
+        if: fromJSON(inputs.batch).go
+      - name: Prepare Shared Python Environment
         run: make harness-venv-install
       - name: Execute Selected Component Contracts
         env:
