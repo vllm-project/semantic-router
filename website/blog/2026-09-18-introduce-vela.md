@@ -77,18 +77,20 @@ Embedding and Reranker also offer **Matryoshka configurations across multiple wi
 
 ## Omni: three modalities, a smaller footprint
 
-We're also bringing Vela beyond text. **Omni Nano (134M)** and **Omni Mini (1.04B)** encode text, images, and audio into shared spaces for cross-modal search and matching.
+We're also bringing Vela beyond text. **Omni Nano (135.4M)** and **Omni Mini (1.33B)** encode text, images, and audio into shared spaces for cross-modal search and matching.
 
-The result: **Nano and Mini each earn a place on the observed size–quality frontier in selected evaluations.** Useful multimodal representations, with more choice over the footprint.
+The updated text backbones are GIST-small for Nano and Qwen3-Embedding-0.6B for Mini. Nano produces 384-dimensional vectors with a 512-token text limit; Mini produces 768-dimensional vectors with a 32,768-token limit. Both sizes count all three modality branches.
+
+**Nano reaches the observed size–quality frontier on NMSQA; Mini reaches it on SIBFLEURS.** The updated peer comparisons also show where smaller specialists lead: Nano is no longer on the ArXiv or VehicleSoundClustering frontier.
 
 <ArticleChartGallery charts={[
-  { label: 'Text · ArXiv', src: '/img/blog/vela-1-0/omni-nano-pareto-arxiv.png', width: 2448, height: 1496, alt: 'ArXiv clustering: Vela Omni Nano at 134M total parameters and 65.25 V-measure lies on the observed size-quality Pareto frontier.', children: 'Nano: 65.25 V-measure on ArXiv clustering, with 134M parameters across all three modalities.' },
-  { label: 'Audio · NMSQA', src: '/img/blog/vela-1-0/omni-nano-pareto-nmsqa.png', width: 2448, height: 1496, alt: 'NMSQA audio pair classification: Vela Omni Nano reaches 63.44 max average precision at 134M total parameters on the observed frontier.', children: 'Nano: 63.44 max average precision on NMSQA audio pair classification.' },
-  { label: 'Audio · Vehicle sounds', src: '/img/blog/vela-1-0/omni-nano-pareto-vehicle-sounds.png', width: 2448, height: 1496, alt: 'VehicleSoundClustering: Vela Omni Nano reaches 13.80 V-measure at 134M total parameters on the observed size-quality Pareto frontier.', children: 'Nano: 13.80 V-measure on VehicleSoundClustering, joining the observed size–quality frontier at 134M total parameters.' },
-  { label: 'Audio · SIBFLEURS', src: '/img/blog/vela-1-0/omni-mini-pareto-sibfleurs.png', width: 2448, height: 1496, alt: 'SIBFLEURS audio classification: Vela Omni Mini reaches 39.43 accuracy at 1.04B total parameters on the observed frontier.', children: 'Mini: 39.43 accuracy on SIBFLEURS audio classification, at 1.04B total parameters.' },
+  { label: 'Text · ArXiv', src: '/img/blog/vela-1-0/omni-nano-pareto-arxiv.png', width: 2448, height: 1496, alt: 'ArXiv clustering: Vela Omni Nano scores 64.89 V-measure at 135.4M total parameters; the smaller independently evaluated F2 80M scores 69.74, placing Nano below the updated frontier.', children: 'Nano: 64.89 V-measure on ArXiv clustering. The smaller F2 80M scores 69.74 in an independent evaluation; Nano is below this updated frontier.' },
+  { label: 'Audio · NMSQA', src: '/img/blog/vela-1-0/omni-nano-pareto-nmsqa.png', width: 2448, height: 1496, alt: 'NMSQA audio pair classification: Vela Omni Nano reaches 63.28 max average precision at 135.4M total parameters on the observed frontier; Mini scores 87.77 at 1.33B.', children: 'Nano: 63.28 max average precision on NMSQA at 135.4M total parameters, on the observed frontier. Mini scores 87.77 at 1.33B.' },
+  { label: 'Audio · Vehicle sounds', src: '/img/blog/vela-1-0/omni-nano-pareto-vehicle-sounds.png', width: 2448, height: 1496, alt: 'VehicleSoundClustering: Vela Omni Nano scores 13.80 V-measure at 135.4M total parameters; the smaller independently evaluated AST 86.59M scores 14.34, placing Nano below the updated frontier.', children: 'Nano: 13.80 V-measure on VehicleSoundClustering. AST 86.59M scores 14.34 in an independent evaluation; Nano is below this updated frontier.' },
+  { label: 'Audio · SIBFLEURS', src: '/img/blog/vela-1-0/omni-mini-pareto-sibfleurs.png', width: 2448, height: 1496, alt: 'SIBFLEURS audio classification: Vela Omni Mini reaches 40.06 accuracy at 1.33B total parameters on the observed frontier.', children: 'Mini: 40.06 accuracy on SIBFLEURS audio classification, on the observed frontier at 1.33B total parameters.' },
 ]} />
 
-*Original plots from the [Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/c08d5d207a69a718ca74f0e081f7565877046045/README.md) and [Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/662d4e53c52d22da6430b0ac316360d41028374d/README.md) model cards. September 17 snapshot; peer evaluation protocols vary. These compare task quality with total parameters, not speed or overall model quality.*
+*September 18 release results from the [Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/README.md) and [Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/README.md) model cards. All four plots use the [updated Nano snapshot](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/pareto-gallery.md), which includes both current model sizes, the September 17 peer registry and separate measured peer observations. Nano’s smaller inference package retains its scores through [documented weight and computation equivalence](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/inference-equivalence.json), not a new benchmark run. Protocols vary. The logarithmic size axis counts total parameters; these are task-level comparisons, not speed measurements or overall model rankings.*
 
 ## Where Vela goes next
 
@@ -139,11 +141,11 @@ For a closer look, expand the computation graphs below. All nine diagrams follow
 <details>
 <summary>Omni Nano and Omni Mini</summary>
 
-<ArticleFigure src="/img/blog/vela-1-0/07-omni-nano.png" width={3600} height={4240} alt="Omni Nano's BERT, SigLIP, and Whisper encoders produce independent 384-dimensional vectors.">
-  Nano combines three encoders in a shared 384-dimensional space.
+<ArticleFigure src="/img/blog/vela-1-0/07-omni-nano.png" width={3600} height={4240} alt="Omni Nano combines a twelve-layer GIST-small BERT with CLS readout, SigLIP, and Whisper to produce independent 384-dimensional vectors.">
+  Nano uses a frozen GIST-small text backbone with CLS readout and an identity text projection, alongside SigLIP and Whisper. Total size: 135.4M.
 </ArticleFigure>
-<ArticleFigure src="/img/blog/vela-1-0/08-omni-mini.png" width={3600} height={4310} alt="Omni Mini's ModernBERT, SigLIP, and Whisper encoders with rank-64 residual text projection and learned visual pooling.">
-  Mini uses 768-dimensional outputs, a residual text projection, and learned visual pooling. Both diagrams reflect the September 18 release revisions.
+<ArticleFigure src="/img/blog/vela-1-0/08-omni-mini.png" width={3600} height={4310} alt="Omni Mini combines a twenty-eight-layer Qwen3 text backbone with causal grouped-query attention and last-token Matryoshka readout, SigLIP, and Whisper.">
+  Mini normalizes the last text token across 1024 dimensions, selects its 768-dimensional prefix, then normalizes again. SigLIP uses learned visual pooling; Whisper uses frame averaging. Total size: 1.33B. Both diagrams reflect the pinned September 18 revisions linked above.
 </ArticleFigure>
 
 </details>

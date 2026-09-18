@@ -1,0 +1,44 @@
+{
+  "upstream_repository": "llm-semantic-router/Vela-1.0-Omni-Nano",
+  "revision": "d8ac5b5ac2274a501fc61aeb5be70cec1855a806",
+  "companion_mini_revision": "2aecd547915f5cffe68ba3c2e2c3a678de8b193e",
+  "retrieved_utc": "2026-09-18",
+  "reason": "Both current repositories agree on Nano\u2019s 135,383,808 and Mini\u2019s 1,332,891,200 total parameters and all plotted scores. The latest Nano revision supplies one consistent set of all four chart sources and data.",
+  "files": [
+    {
+      "file": "omni-mini-pareto-sibfleurs.svg",
+      "sha256": "a35c84acbace163177c606ba63d5a575b245c9b258e361437ae8ee473f225972",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/assets/pareto-sibfleurs.svg"
+    },
+    {
+      "file": "omni-nano-pareto-arxiv.svg",
+      "sha256": "a2eb46f23a60e9d34693cdab81378ede62ec02f6817d19eea7088e1b49eb48a9",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/assets/pareto-arxiv.svg"
+    },
+    {
+      "file": "omni-nano-pareto-nmsqa.svg",
+      "sha256": "5c374366153821683d36b35436eab6119cb685b610393246a0bba392e50d771b",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/assets/pareto-nmsqa.svg"
+    },
+    {
+      "file": "omni-nano-pareto-vehicle-sounds.svg",
+      "sha256": "7687d099799b75266ba374e395d2c84c8be21bbe92e90aca9cc598031a875803",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/assets/pareto-vehiclesoundclustering.svg"
+    },
+    {
+      "file": "pareto-data.json",
+      "sha256": "f380951784d31c56987edff260ff88b1973826d76f3cdf8c9bdba6d8ad67c845",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/pareto-data.json"
+    },
+    {
+      "file": "pareto-methodology.md",
+      "sha256": "2d947002cfe566e6fa6f5cb90fd4e96acfbcc7e5498a275aefe528f31ddbd366",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/pareto-methodology.md"
+    },
+    {
+      "file": "pareto-points.csv",
+      "sha256": "e454310100d7855923965d899439a8e59d44416a8be932b9e54b424436613824",
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/pareto-points.csv"
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+{
+  "source_revision": "d8ac5b5ac2274a501fc61aeb5be70cec1855a806",
+  "tasks": {
+    "arxiv": {
+      "task": "ArXivHierarchicalClusteringP2P",
+      "metric": "v_measure",
+      "observation_count": 213,
+      "frontier_count": 7,
+      "vela": [
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.135383808,
+          "score": 64.88847259326147,
+          "on_displayed_frontier": false,
+          "evidence_type": "exact_public_inference_applicability"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.3328912,
+          "score": 62.00989328478093,
+          "on_displayed_frontier": false,
+          "evidence_type": "exact_text_component_applicability"
+        }
+      ],
+      "frontier": [
+        {
+          "model": "minishlab/potion-base-2M",
+          "parameters_billion": 0.002,
+          "score": 51.5629
+        },
+        {
+          "model": "minishlab/potion-base-4M",
+          "parameters_billion": 0.004,
+          "score": 53.420100000000005
+        },
+        {
+          "model": "minishlab/potion-base-8M",
+          "parameters_billion": 0.008,
+          "score": 55.0836
+        },
+        {
+          "model": "Mihaiii/Wartortle",
+          "parameters_billion": 0.017,
+          "score": 55.6376
+        },
+        {
+          "model": "MongoDB/mdbr-leaf-mt",
+          "parameters_billion": 0.023,
+          "score": 60.2909
+        },
+        {
+          "model": "abhinand/MedEmbed-small-v0.1",
+          "parameters_billion": 0.033,
+          "score": 60.553599999999996
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-80M",
+          "parameters_billion": 0.080084288,
+          "score": 69.74221347455739
+        }
+      ]
+    },
+    "nmsqa": {
+      "task": "NMSQAPairClassification",
+      "metric": "max_ap",
+      "observation_count": 68,
+      "frontier_count": 7,
+      "vela": [
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.135383808,
+          "score": 63.28340215485784,
+          "on_displayed_frontier": true,
+          "evidence_type": "exact_public_inference_applicability"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.3328912,
+          "score": 87.77176044610992,
+          "on_displayed_frontier": false,
+          "evidence_type": "exact_metadata_only_applicability"
+        }
+      ],
+      "frontier": [
+        {
+          "model": "google/yamnet",
+          "parameters_billion": 0.004,
+          "score": 58.2803
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.135383808,
+          "score": 63.28340215485784
+        },
+        {
+          "model": "microsoft/speecht5_multimodal",
+          "parameters_billion": 0.298,
+          "score": 66.2751
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-omni-nano",
+          "parameters_billion": 0.986,
+          "score": 93.92026751895308
+        },
+        {
+          "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+          "parameters_billion": 2.445,
+          "score": 95.9874
+        },
+        {
+          "model": "LCO-Embedding/LCO-Embedding-Omni-3B",
+          "parameters_billion": 4.703,
+          "score": 96.9203
+        },
+        {
+          "model": "LCO-Embedding/LCO-Embedding-Omni-7B",
+          "parameters_billion": 8.932,
+          "score": 97.6016
+        }
+      ]
+    },
+    "sibfleurs": {
+      "task": "SIBFLEURS",
+      "metric": "accuracy",
+      "observation_count": 69,
+      "frontier_count": 7,
+      "vela": [
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.135383808,
+          "score": 18.304657831512046,
+          "on_displayed_frontier": false,
+          "evidence_type": "exact_public_inference_applicability"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.3328912,
+          "score": 40.06316360536309,
+          "on_displayed_frontier": true,
+          "evidence_type": "exact_metadata_only_applicability"
+        }
+      ],
+      "frontier": [
+        {
+          "model": "google/yamnet",
+          "parameters_billion": 0.004,
+          "score": 13.906064705882354
+        },
+        {
+          "model": "asapp/sew-d-tiny-100k-ft-ls100h",
+          "parameters_billion": 0.02,
+          "score": 14.000233333333334
+        },
+        {
+          "model": "matthewagi/HeAR-s1.1",
+          "parameters_billion": 0.022,
+          "score": 27.89854901960784
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-omni-nano",
+          "parameters_billion": 0.986,
+          "score": 30.306906862745098
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.3328912,
+          "score": 40.06316360536309
+        },
+        {
+          "model": "facebook/seamless-m4t-v2-large",
+          "parameters_billion": 2.3,
+          "score": 41.91544607843137
+        },
+        {
+          "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+          "parameters_billion": 2.445,
+          "score": 47.532355882352945
+        }
+      ]
+    },
+    "vehiclesoundclustering": {
+      "task": "VehicleSoundClustering",
+      "metric": "v_measure",
+      "observation_count": 70,
+      "frontier_count": 4,
+      "vela": [
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.135383808,
+          "score": 13.800701178563807,
+          "on_displayed_frontier": false,
+          "evidence_type": "exact_public_inference_applicability"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.3328912,
+          "score": 9.001091019154014,
+          "on_displayed_frontier": false,
+          "evidence_type": "exact_metadata_only_applicability"
+        }
+      ],
+      "frontier": [
+        {
+          "model": "google/yamnet",
+          "parameters_billion": 0.004,
+          "score": 0.35100000000000003
+        },
+        {
+          "model": "matthewagi/HeAR-s1.1",
+          "parameters_billion": 0.022,
+          "score": 3.8280000000000003
+        },
+        {
+          "model": "openai/whisper-tiny",
+          "parameters_billion": 0.039,
+          "score": 12.3883
+        },
+        {
+          "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+          "parameters_billion": 0.086594063,
+          "score": 14.342872113086985
+        }
+      ]
+    }
+  }
+}
