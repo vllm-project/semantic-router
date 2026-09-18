@@ -196,8 +196,8 @@ class ComponentBatchTests(unittest.TestCase):
         self.assertTrue(uploads[0]["with"]["path"].endswith("/results/*.json"))
         parent = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
         self.assertEqual(
-            parent["tools"]["strategy"]["matrix"]["batch"],
-            "${{ fromJSON(needs.plan.outputs.component_batches) }}",
+            parent["tools"]["strategy"]["matrix"]["label"],
+            "${{ fromJSON(needs.plan.outputs.component_batches).*.display_name }}",
         )
         self.assertEqual(parent["gate"]["if"], "always()")
         self.assertIn("tools", parent["gate"]["needs"])

@@ -162,7 +162,7 @@ func TestCapabilitiesPreviewRequestParamsWithoutExecutingPluginTwice(t *testing.
 		router.Config.ModelConfig[model] = params
 	}
 	payload, err := config.NewStructuredPayload(config.RequestParamsPluginConfig{
-		BlockedParams: []string{"top_k"}, MaxN: extprocIntPtr(1), DefaultMaxTokens: extprocIntPtr(64),
+		BlockedParams: []string{"top_k"}, MaxN: extprocIntPtr(1), DefaultMaxTokens: config.FixedOutputTokenDefault(64),
 	})
 	require.NoError(t, err)
 	decision.Plugins = []config.DecisionPlugin{{Type: "request_params", Configuration: payload}}
