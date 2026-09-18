@@ -19,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/cluster"
 	"github.com/vllm-project/semantic-router/e2e/pkg/docker"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testcases"
+	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 )
 
 // Runner orchestrates the E2E test execution
@@ -85,11 +86,29 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 		BuildArgs:    localDockerBuildArgs(),
 	}
 
-	if err := r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts); err != nil {
+	prebuilt := os.Getenv("E2E_PREBUILT_EXT_PROC_IMAGE")
+	if os.Getenv("PREBUILT_RUNTIME_IMAGES") == "1" && prebuilt == "" {
+		return fmt.Errorf("prebuilt execution requires E2E_PREBUILT_EXT_PROC_IMAGE")
+	}
+	if prebuilt != "" {
+		if err := r.builder.LoadPrebuilt(ctx, r.opts.ClusterName, prebuilt, buildOpts.Tag); err != nil {
+			return err
+		}
+	} else if err := r.builder.BuildAndLoad(ctx, r.opts.ClusterName, buildOpts); err != nil {
 		return err
 	}
 
 	for _, image := range r.profileCapabilities.LocalImages {
+		prebuilt := prebuiltFixtureImage(image.Dockerfile)
+		if prebuilt != "" {
+			if err := r.builder.LoadPrebuilt(ctx, r.opts.ClusterName, prebuilt, image.Tag); err != nil {
+				return err
+			}
+			continue
+		}
+		if os.Getenv("PREBUILT_RUNTIME_IMAGES") == "1" {
+			return fmt.Errorf("required prebuilt fixture missing for %s", image.Dockerfile)
+		}
 		buildArgs, err := localImageDockerBuildArgs(image)
 		if err != nil {
 			return err
@@ -133,6 +152,12 @@ func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset)
 	} else {
 		// Run all test cases for the profile
 		profileTestCases := r.profile.GetTestCases()
+		if r.opts.Profile == "envoy-ai-gateway" {
+			profileTestCases, err = testmatrix.BaselineCases(r.opts.BaselineSuite)
+			if err != nil {
+				return nil, err
+			}
+		}
 		r.log("Profile test cases: %v", profileTestCases)
 		testCasesToRun, err = testcases.ListByNames(profileTestCases...)
 		if err != nil {
@@ -140,6 +165,14 @@ func (r *Runner) runTests(ctx context.Context, kubeClient *kubernetes.Clientset)
 		}
 	}
 
+	inventory := make([]string, 0, len(testCasesToRun))
+	for _, tc := range testCasesToRun {
+		inventory = append(inventory, tc.Name)
+	}
+	if err := validateCaseInventory(inventory); err != nil {
+		return nil, err
+	}
+	r.reporter.report.ExpectedCases = inventory
 	r.log("Running %d test cases", len(testCasesToRun))
 
 	results := make([]TestResult, 0, len(testCasesToRun))
@@ -404,4 +437,33 @@ func getPodReadyStatus(pod corev1.Pod) string {
 		}
 	}
 	return fmt.Sprintf("%d/%d", readyCount, totalCount)
+}
+
+func validateCaseInventory(names []string) error {
+	if len(names) == 0 {
+		return fmt.Errorf("selected E2E case inventory is empty")
+	}
+	seen := make(map[string]bool, len(names))
+	for _, name := range names {
+		if name == "" || seen[name] {
+			return fmt.Errorf("invalid or duplicate E2E case %q", name)
+		}
+		seen[name] = true
+	}
+	return nil
+}
+
+func prebuiltFixtureImage(dockerfile string) string {
+	switch dockerfile {
+	case "tools/test/services/mock-vllm/Dockerfile":
+		return os.Getenv("E2E_PREBUILT_MOCK_VLLM_IMAGE")
+	case "dashboard/backend/Dockerfile":
+		return os.Getenv("VLLM_SR_DASHBOARD_IMAGE")
+	case "e2e/testing/llm-katan/Dockerfile":
+		return os.Getenv("E2E_PREBUILT_LLM_KATAN_IMAGE")
+	case "e2e/testing/anthropic-shim/Dockerfile":
+		return os.Getenv("E2E_PREBUILT_ANTHROPIC_SHIM_IMAGE")
+	default:
+		return ""
+	}
 }

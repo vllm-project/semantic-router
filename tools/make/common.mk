@@ -17,6 +17,8 @@ DATETIME = $(shell date +"%Y%m%d%H%M%S")
 
 # REV is the short git sha of latest commit.
 REV=$(shell git rev-parse --short HEAD)
+PREBUILT_NATIVE_LIBS ?= 0
+NATIVE_ARTIFACT_DIR ?= $(CURDIR)/.agent-harness/native-input
 
 # Shared golangci-lint configuration for every Go module.
 GOLANGCI_LINT_CONFIG ?= $(CURDIR)/tools/linter/go/.golangci.yml

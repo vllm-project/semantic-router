@@ -12,7 +12,16 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
+)
+
+const (
+	fallbackEntrypoint    = "e2e-fallback"
+	fallbackMatchMarker   = "__E2E_FALLBACK_MATCH__"
+	fallbackMatchDecision = "fallback_contract_match"
+	fallbackMatchedModel  = "base-model"
+	fallbackDefaultModel  = "general-expert"
 )
 
 //go:embed testdata/decision_fallback_cases.json
@@ -20,7 +29,7 @@ var decisionFallbackCasesJSON []byte
 
 func init() {
 	pkgtestcases.Register("decision-fallback-behavior", pkgtestcases.TestCase{
-		Description: "Test decision fallback behavior when no specific decision matches",
+		Description: "Test explicit keyword matches and genuine no-match default-provider dispatch",
 		Tags:        []string{"signal-decision", "fallback", "routing"},
 		Fn:          testDecisionFallback,
 	})
@@ -63,6 +72,16 @@ func testDecisionFallback(ctx context.Context, client *kubernetes.Clientset, opt
 	}
 	defer stopPortForward()
 
+	backendOpts := opts
+	backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
+		Namespace: "default", Name: "vllm-llama3-8b-instruct", ServicePort: "8000",
+	}
+	backendSession, err := fixtures.OpenServiceSession(ctx, client, backendOpts)
+	if err != nil {
+		return err
+	}
+	defer backendSession.Close()
+
 	// Load test cases from embedded JSON
 	var testData DecisionFallbackTestData
 	if err := json.Unmarshal(decisionFallbackCasesJSON, &testData); err != nil {
@@ -81,7 +100,7 @@ func testDecisionFallback(ctx context.Context, client *kubernetes.Clientset, opt
 
 	for _, testCase := range testCases {
 		totalTests++
-		result := testSingleFallback(ctx, testCase, localPort, opts.Verbose)
+		result := testSingleFallback(ctx, testCase, localPort, backendSession, opts.Verbose)
 		results = append(results, result)
 		if result.Correct {
 			correctTests++
@@ -120,20 +139,17 @@ func testDecisionFallback(ctx context.Context, client *kubernetes.Clientset, opt
 	return nil
 }
 
-func testSingleFallback(ctx context.Context, testCase DecisionFallbackCase, localPort string, verbose bool) DecisionFallbackResult {
+func testSingleFallback(ctx context.Context, testCase DecisionFallbackCase, localPort string, backend *fixtures.ServiceSession, verbose bool) DecisionFallbackResult {
 	result := DecisionFallbackResult{
 		Query:            testCase.Query,
 		ExpectedDecision: testCase.ExpectedDecision,
 		ShouldFallback:   testCase.ShouldFallback,
 	}
 
-	// Create chat completion request
-	requestBody := map[string]interface{}{
-		"model": "MoM", // Use Mixture of Models to trigger decision engine
-		"messages": []map[string]string{
-			{"role": "user", "content": testCase.Query},
-		},
-	}
+	// The explicit fixture trigger controls match/no-match; the unchanged
+	// question corpus is not used as a learned-category fallback oracle.
+	requestBody := buildFallbackRequest(testCase)
+	sessionID := fmt.Sprintf("decision-fallback-%d", time.Now().UnixNano())
 
 	jsonData, err := json.Marshal(requestBody)
 	if err != nil {
@@ -149,6 +165,7 @@ func testSingleFallback(ctx context.Context, testCase DecisionFallbackCase, loca
 		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-vsr-test-session-id", sessionID)
 
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	resp, err := httpClient.Do(req)
@@ -172,16 +189,27 @@ func testSingleFallback(ctx context.Context, testCase DecisionFallbackCase, loca
 		return result
 	}
 
-	// Extract VSR decision headers
 	result.ActualDecision = resp.Header.Get("x-vsr-selected-decision")
-
-	// Determine if fallback occurred
-	// "other_decision" or "general_decision" indicates fallback
-	result.DidFallback = (result.ActualDecision == "other_decision" ||
-		result.ActualDecision == "general_decision")
-
-	// Check if the result matches expectations
-	result.Correct = (result.ActualDecision == testCase.ExpectedDecision)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		result.Error = fmt.Sprintf("read fallback response: %v", err)
+		return result
+	}
+	if validationErr := validateFallbackResponse(testCase, resp.Header, body); validationErr != nil {
+		result.Error = validationErr.Error()
+		return result
+	}
+	observed, err := lastProviderSimulatorRequest(ctx, backend, sessionID)
+	if err != nil {
+		result.Error = fmt.Sprintf("observe fallback provider dispatch: %v", err)
+		return result
+	}
+	if validationErr := validateFallbackProviderRequest(testCase, observed); validationErr != nil {
+		result.Error = validationErr.Error()
+		return result
+	}
+	result.DidFallback = result.ActualDecision == ""
+	result.Correct = result.DidFallback == testCase.ShouldFallback
 
 	if verbose {
 		if result.Correct {

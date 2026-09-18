@@ -24,8 +24,9 @@ type ModelDeployment struct {
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
-// capability. The provider additionally enforces its actual task/tokenizer
-// limit. An explicit larger budget requires a checkpoint with that capacity.
+// capability. With window overflow, MaxTokens admits the complete document;
+// the consumer's window must fit the provider's actual task/tokenizer limit.
+// Other overflow policies require the budget to fit that single-forward limit.
 type ModelInputBudget struct {
 	MaxTokens int    `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
 	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`

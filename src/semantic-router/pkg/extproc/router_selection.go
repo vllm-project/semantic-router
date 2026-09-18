@@ -386,6 +386,7 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 		return result
 	}
 
+	result.ExpectedOutputTokens = decisionCfg.ExpectedOutputTokens
 	if decisionCfg.Weights != nil {
 		result.Weights = selection.MultiFactorWeights{
 			Quality: decisionCfg.Weights.Quality,

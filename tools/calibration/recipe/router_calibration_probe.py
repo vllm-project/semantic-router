@@ -97,7 +97,7 @@ VARIANT_FIELDS = frozenset(
 )
 PADDING_FIELDS = frozenset({"text", "repeat", "placement"})
 GENERATED_TEXT_FIELDS = frozenset(
-    {"message_index", "content_index", "target_text_bytes", "character"}
+    {"message_index", "content_index", "target_text_bytes", "character", "text"}
 )
 PLAYGROUND_FIELDS = frozenset({"enabled", "reason"})
 ROBUSTNESS_FIELDS = frozenset({"min_pass_rate"})
@@ -119,7 +119,8 @@ class ProbeGeneratedText:
     message_index: int
     content_index: int
     target_text_bytes: int
-    character: str = "x"
+    character: str | None = "x"
+    text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -673,14 +674,13 @@ def _normalize_generated_text(
         raise ValueError(
             f"{label}.target_text_bytes must not exceed {MAX_GENERATED_TEXT_BYTES}"
         )
-    character = raw_generated_text.get("character", "x")
-    if (
-        not isinstance(character, str)
-        or len(character) != 1
-        or not character.isascii()
-        or not character.isprintable()
-    ):
-        raise ValueError(f"{label}.character must be one printable ASCII character")
+    if "text" in raw_generated_text and "character" in raw_generated_text:
+        raise ValueError(f"{label}.text and .character are mutually exclusive")
+    text = raw_generated_text.get("text")
+    character = raw_generated_text.get(
+        "character", None if "text" in raw_generated_text else "x"
+    )
+    generated_text_pattern(character, text, label)
     if message_index >= len(messages):
         raise ValueError(
             f"{label}.message_index must reference one of {len(messages)} messages"
@@ -701,7 +701,34 @@ def _normalize_generated_text(
         content_index=content_index,
         target_text_bytes=target_text_bytes,
         character=character,
+        text=text,
     )
+
+
+def generated_text_pattern(character: str | None, text: str | None, label: str) -> str:
+    """Validate compact ASCII input before allocating its repeated expansion."""
+    if text is not None:
+        if character is not None:
+            raise ValueError(f"{label}.text and .character are mutually exclusive")
+        if (
+            not isinstance(text, str)
+            or not text
+            or not text.isascii()
+            or any(not char.isprintable() and char not in "\t\n\r" for char in text)
+        ):
+            raise ValueError(
+                f"{label}.text must be non-empty printable ASCII text "
+                "with optional tabs and line breaks"
+            )
+        return text
+    if (
+        not isinstance(character, str)
+        or len(character) != 1
+        or not character.isascii()
+        or not character.isprintable()
+    ):
+        raise ValueError(f"{label}.character must be one printable ASCII character")
+    return character
 
 
 def _required_non_negative_int(value: Any, label: str) -> int:

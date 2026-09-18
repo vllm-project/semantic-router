@@ -234,6 +234,11 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
         self.milvus = MilvusVerifier(
             address=milvus_address, collection=milvus_collection
         )
+        if os.environ.get("CI_REQUIRE_MEMORY_TESTS") == "1":
+            self.assertTrue(
+                self.milvus.is_available(),
+                "Required memory integration cannot verify its Milvus store",
+            )
 
     def send_memory_request(
         self,

@@ -182,6 +182,7 @@ func sendProtocolMatrixRequestWithHeaders(
 type protocolMatrixHTTPResult struct {
 	StatusCode int
 	Body       []byte
+	Headers    http.Header
 }
 
 func sendProtocolMatrixRaw(
@@ -219,7 +220,7 @@ func sendProtocolMatrixRaw(
 	if readErr != nil {
 		return protocolMatrixHTTPResult{}, readErr
 	}
-	return protocolMatrixHTTPResult{StatusCode: resp.StatusCode, Body: responseBody}, nil
+	return protocolMatrixHTTPResult{StatusCode: resp.StatusCode, Body: responseBody, Headers: resp.Header.Clone()}, nil
 }
 
 func assertChatCompletionBody(body []byte, expectedText string) error {

@@ -43,6 +43,21 @@ def local_hook(hook_id: str) -> dict:
 
 
 class HarnessMakeContractTests(unittest.TestCase):
+    def test_cli_unit_target_includes_upstream_embedding_and_runtime_image_contracts(
+        self,
+    ):
+        source = (REPO_ROOT / "tools/make/docker.mk").read_text()
+        unit = source.split("vllm-sr-test: vllm-sr-install-cli", 1)[1].split(
+            "vllm-sr-test-integration:", 1
+        )[0]
+        for name in (
+            "test_embedding_api_config.py",
+            "test_model_binding_contract.py",
+            "test_dashboard_dockerfile_surface.py",
+        ):
+            self.assertEqual(unit.count(f"src/vllm-sr/tests/{name}"), 1)
+        self.assertIn("run_cli_tests.py --verbose", unit)
+
     def test_daily_interface_is_small_and_direct(self) -> None:
         for target in ("impact", "check", "verify", "ci-full", "harness-check"):
             self.assertIn(f"{target}:", HARNESS_MAKE)
@@ -79,25 +94,52 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertLess(
             generate.index("api-docs-generate"), generate.index("agent-skill-sync")
         )
-        workflow = yaml.safe_load(
-            (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text()
+        quality = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/pre-commit.yml").read_text()
         )
-        steps = workflow["jobs"]["test-and-build"]["steps"]
+        generated = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/check-generated.yml").read_text()
+        )
+        commands = "\n".join(
+            step.get("run", "")
+            for workflow in (quality, generated)
+            for job in workflow["jobs"].values()
+            for step in job["steps"]
+        )
+        for target in (
+            "docs-generated-check",
+            "config-schema-check",
+            "api-docs-check",
+            "docs-crd-check",
+        ):
+            self.assertIn(target, commands)
         self.assertTrue(
             any(
-                "make generated-contract-check" in step.get("run", "") for step in steps
+                line.startswith("docs-generated-check:") and "agent-skill-check" in line
+                for line in docs_make.splitlines()
             )
+        )
+        core = yaml.safe_load(
+            (REPO_ROOT / ".github/workflows/test-and-build.yml").read_text()
+        )
+        self.assertFalse(
+            any(
+                "generated-contract-check" in step.get("run", "")
+                for step in core["jobs"]["test-and-build"]["steps"]
+            ),
+            "generated contracts have one quality owner; core must not rerun them",
         )
 
     def test_reference_drift_is_checked_even_for_docs_only_changes(self) -> None:
         workflow = yaml.safe_load(
             (REPO_ROOT / ".github/workflows/pre-commit.yml").read_text()
         )
-        job = workflow["jobs"]["generated-docs"]
-        self.assertNotIn("if", job)
+        job = workflow["jobs"]["quality"]
+        self.assertNotIn("docs_only", job.get("if", ""))
         commands = [step.get("run", "") for step in job["steps"]]
         self.assertIn(
-            "make docs-generated-check docs-cli-test docs-community-test", commands
+            "make docs-generated-check docs-cli-test docs-community-test docs-check-translation-coverage",
+            commands,
         )
         self.assertFalse(any("pip install -e" in command for command in commands))
 
@@ -162,11 +204,32 @@ class HarnessMakeContractTests(unittest.TestCase):
         ):
             with self.subTest(target=target):
                 block = target_block(target, DASHBOARD_MAKE)
-                self.assertIn("npm ci", block)
+                self.assertIn("dashboard-frontend-deps", block.splitlines()[0])
+                self.assertNotIn("npm ci", block)
                 self.assertNotIn("npm install", block)
                 for line in block.splitlines():
                     if "npm " in line:
                         self.assertNotIn("2>/dev/null", line)
+
+        for target in ("dashboard-frontend-deps", "dashboard-wizmap-deps"):
+            block = target_block(target, DASHBOARD_MAKE)
+            self.assertIn("npm ci", block)
+            self.assertNotIn("npm install", block)
+        combined = subprocess.run(
+            [
+                "make",
+                "-n",
+                "dashboard-check",
+                "dashboard-test-e2e-evaluation",
+                "dashboard-build",
+            ],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        self.assertEqual(combined.count("npm ci"), 2)
+        self.assertNotIn("npm install", combined)
 
     def test_dashboard_workers_use_the_installed_cli_environment_by_default(
         self,

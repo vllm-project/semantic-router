@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:e640fd3baa413c1b0e8499a0a528c49c6e1f81227c246a8830fdb656e17c6c59"
+const builtInCatalogDigest = "sha256:e339fe3065e4242fb070d0c51ee36390d744db4653d6c4521879af54046353bb"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -91360,7 +91360,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91450,7 +91450,7 @@ const builtInCatalogJSON = `{
         "tools"
       ],
       "verification": {
-        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91543,7 +91543,7 @@ const builtInCatalogJSON = `{
         "multimodal"
       ],
       "verification": {
-        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91655,7 +91655,7 @@ const builtInCatalogJSON = `{
         "orchestration"
       ],
       "verification": {
-        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }
@@ -91725,7 +91725,7 @@ const builtInCatalogJSON = `{
         "private_deployment"
       ],
       "verification": {
-        "asset_sha256": "sha256:4faded3501339a1c4bb1bac757ddbd92e51b6a9e1b5980f8b03274ee0cea2e60",
+        "asset_sha256": "sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71",
         "authority": "vllm-sr-maintainers",
         "status": "claimed"
       }

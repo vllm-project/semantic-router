@@ -25,10 +25,11 @@ type TestReport struct {
 	KindVersion string    `json:"kind_version,omitempty"`
 
 	// Test Results
-	TestResults []TestResult `json:"test_results"`
-	TotalTests  int          `json:"total_tests"`
-	PassedTests int          `json:"passed_tests"`
-	FailedTests int          `json:"failed_tests"`
+	ExpectedCases []string     `json:"expected_cases"`
+	TestResults   []TestResult `json:"test_results"`
+	TotalTests    int          `json:"total_tests"`
+	PassedTests   int          `json:"passed_tests"`
+	FailedTests   int          `json:"failed_tests"`
 
 	// Cluster Information
 	ClusterInfo ClusterInfo `json:"cluster_info"`
