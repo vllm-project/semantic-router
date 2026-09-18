@@ -28,6 +28,8 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark export`](#vllm-sr-benchmark-export) | Export a dev response matrix for training; holdout export is rejected. |
 | [`vllm-sr benchmark plan`](#vllm-sr-benchmark-plan) | Validate and freeze all cases, targets, profiles, and limits without inference. |
 | [`vllm-sr benchmark preview`](#vllm-sr-benchmark-preview) | Inspect routing decisions without producing quality scores. |
+| [`vllm-sr benchmark recover`](#vllm-sr-benchmark-recover) | Create a separate attempt from a reviewed recovery plan; never auto-retry. |
+| [`vllm-sr benchmark recover-plan`](#vllm-sr-benchmark-recover-plan) | Inspect eligible continuation cells without making model requests. |
 | [`vllm-sr benchmark regrade`](#vllm-sr-benchmark-regrade) | Regrade saved MCQ/grid final outputs without mutating original evidence. |
 | [`vllm-sr benchmark replay`](#vllm-sr-benchmark-replay) | Estimate eligible static routes from saved answers without inference. |
 | [`vllm-sr benchmark report`](#vllm-sr-benchmark-report) | Show quality, four-bucket usage, cost, latency, time, and limitations. |
@@ -247,6 +249,37 @@ Inspect routing decisions without producing quality scores.
 | `--idempotency-key TEXT` | Bind repeated submissions to the same frozen plan, without reissuing calls. |
 | `--detach` | Return immediately with a durable run ID. Default: false. |
 | `--manifest PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark recover` {#vllm-sr-benchmark-recover}
+
+```text
+Usage: vllm-sr benchmark recover [OPTIONS] RUN_ID
+```
+
+Create a separate attempt from a reviewed recovery plan; never auto-retry.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
+| `--plan PATH` | [required] |
+| `--idempotency-key TEXT` | [required] |
+| `--acknowledge-new-attempt` | Authorize new paid attempts for the exact reviewed failed cells. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark recover-plan` {#vllm-sr-benchmark-recover-plan}
+
+```text
+Usage: vllm-sr benchmark recover-plan [OPTIONS] RUN_ID
+```
+
+Inspect eligible continuation cells without making model requests.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
+| `--mode CHOICE` | Choices: undispatched, failed. Default: undispatched. |
+| `--output PATH` | — |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark regrade` {#vllm-sr-benchmark-regrade}

@@ -1,10 +1,15 @@
 import { useState } from 'react'
 import { benchApi, SR_BENCH_API } from './api'
 import { active, reportDistribution, money, number, percent, seconds, tokenTotal } from './model'
-import type { CaseResult, TargetMetrics } from './types'
+import type { CaseResult, Run, TargetMetrics } from './types'
 import { useRunEvidence } from './useRunEvidence'
 import RunArtifacts from './RunArtifacts'
 import CallEvidence from './CallEvidence'
+import PreviewEvidence from './PreviewEvidence'
+import RunRecovery from './RunRecovery'
+import RunLineage from './RunLineage'
+import RecipeEvidence from './RecipeEvidence'
+import { RunStatus } from './RunList'
 import styles from './SrBench.module.css'
 
 function MetricsTable({
@@ -91,10 +96,12 @@ export default function RunDetails({
   id,
   canRun,
   onChanged,
+  onRecovered,
 }: {
   id: string
   canRun: boolean
   onChanged: () => void
+  onRecovered: (run: Run) => void
 }) {
   const [pending, setPending] = useState(false)
   const [filter, setFilter] = useState('')
@@ -102,8 +109,10 @@ export default function RunDetails({
   const [selected, setSelected] = useState<CaseResult | null>(null)
   const [revision, setRevision] = useState(0)
   const [actionError, setActionError] = useState('')
+  const [eventLimit, setEventLimit] = useState(100)
   const {
     run,
+    readAt,
     report,
     results,
     events,
@@ -183,7 +192,9 @@ export default function RunDetails({
           <div className={styles.metricGrid}>
             <div>
               <span>Status</span>
-              <strong>{run.status}</strong>
+              <strong>
+                <RunStatus status={run.status} />
+              </strong>
             </div>
             <div>
               <span>Completed</span>
@@ -206,12 +217,37 @@ export default function RunDetails({
             value={percentage}
             aria-label="Evaluation progress"
           />
+          <p className={styles.muted}>
+            Last synchronized {readAt ?? '—'} · Last persisted update{' '}
+            <time dateTime={run.updated_at}>{new Date(run.updated_at).toLocaleString()}</time>.
+            Closing this page does not stop the worker.
+          </p>
+          <nav className={styles.detailNav} aria-label="Run sections">
+            <a href="#run-targets">Results</a>
+            {run.manifest.targets.some((target) => target.kind === 'mom') && (
+              <a href="#run-recipe">Recipe</a>
+            )}
+            <a href="#run-cases">Cases and calls</a>
+            <a href="#run-events">Events</a>
+            <a href="#run-provenance">Provenance</a>
+          </nav>
           {run.status !== 'completed' && (
             <p className={styles.notice}>
               This run is {run.status}. Partial results are not a completed evaluation.
             </p>
           )}
-          {run.error && <p className={styles.error}>{run.error}</p>}
+          {(run.error || report?.failure) && (
+            <div className={styles.error} role="alert">
+              <p>{run.error || report?.failure?.reason}</p>
+              {!run.error && report?.failure && (
+                <p>
+                  Target {report.failure.target_id} · case {report.failure.case_id}
+                  {report.failure.inferred_from_saved_results ? ' · from saved case evidence' : ''}
+                </p>
+              )}
+            </div>
+          )}
+          <RunLineage report={report} />
           {run.manifest.mode === 'preview' && (
             <p className={styles.notice}>
               Route preview only. This run provides routing diagnostics, not a capability score.
@@ -248,7 +284,7 @@ export default function RunDetails({
               </div>
             </section>
           )}
-          <h3>Target comparison</h3>
+          <h3 id="run-targets">Target comparison</h3>
           {metrics.length ? (
             <MetricsTable targets={metrics} preview={run.manifest.mode === 'preview'} summary />
           ) : (
@@ -321,6 +357,7 @@ export default function RunDetails({
               </table>
             </div>
           </details>
+          <RecipeEvidence report={report} targets={run.manifest.targets} />
           <div className={styles.twoColumns}>
             <Distribution
               title="Selected models"
@@ -331,6 +368,28 @@ export default function RunDetails({
               entries={reportDistribution(metrics, 'decisions')}
             />
           </div>
+          {run.manifest.mode !== 'live' && (
+            <>
+              {metrics.some(
+                (target) => (target.selection_statuses?.execution_required ?? 0) > 0,
+              ) && (
+                <p className={styles.notice}>
+                  Some model selections require live execution. Preview can identify the matched
+                  decision, but does not determine the model for these cases.
+                </p>
+              )}
+              <div className={styles.twoColumns}>
+                <Distribution
+                  title="Selection status"
+                  entries={reportDistribution(metrics, 'selection_statuses')}
+                />
+                <Distribution
+                  title="Selection explanation"
+                  entries={reportDistribution(metrics, 'selection_reasons')}
+                />
+              </div>
+            </>
+          )}
           {!!report?.limitations.length && (
             <aside className={styles.notice}>
               <h3>Interpretation and limitations</h3>
@@ -342,7 +401,7 @@ export default function RunDetails({
             </aside>
           )}
           <div className={styles.sectionHeading}>
-            <h3>Case results</h3>
+            <h3 id="run-cases">Case results</h3>
             <label className={styles.inlineLabel}>
               Filter loaded results
               <input
@@ -431,8 +490,14 @@ export default function RunDetails({
                 <button onClick={() => setSelected(null)}>Close case</button>
               </div>
               {selected.error && <p className={styles.error}>{selected.error}</p>}
-              <h4>Final answer</h4>
-              <pre>{selected.answer || 'No final answer recorded.'}</pre>
+              {run.manifest.mode === 'preview' ? (
+                <PreviewEvidence routing={selected.details?.routing} />
+              ) : (
+                <>
+                  <h4>Final answer</h4>
+                  <pre>{selected.answer || 'No final answer recorded.'}</pre>
+                </>
+              )}
               <details>
                 <summary>Usage, trace and grading evidence</summary>
                 <pre>{JSON.stringify(selected, null, 2)}</pre>
@@ -441,9 +506,17 @@ export default function RunDetails({
           )}
           <CallEvidence id={id} calls={calls} page={callsPage} loadMore={loadMoreCalls} />
           <details className={styles.details}>
-            <summary>Run events ({events.length})</summary>
+            <summary id="run-events">Run events ({events.length})</summary>
+            {events.length > eventLimit && (
+              <button onClick={() => setEventLimit((value) => value + 100)}>
+                Show 100 earlier events
+              </button>
+            )}
+            <p className={styles.muted}>
+              Showing the latest {Math.min(eventLimit, events.length)} saved events.
+            </p>
             <ol className={styles.events}>
-              {events.map((event, i) => (
+              {events.slice(-eventLimit).map((event, i) => (
                 <li key={event.seq ?? event.sequence ?? i}>
                   <strong>{event.kind ?? event.type ?? event.event ?? 'Event'}</strong>{' '}
                   <time>{event.at ?? event.timestamp}</time>
@@ -453,10 +526,13 @@ export default function RunDetails({
             </ol>
           </details>
           <details className={styles.details}>
-            <summary>Frozen manifest and provenance</summary>
+            <summary id="run-provenance">Frozen manifest and provenance</summary>
             <pre>{JSON.stringify(run.manifest, null, 2)}</pre>
             <pre>{JSON.stringify(report?.provenance ?? {}, null, 2)}</pre>
           </details>
+          {run.manifest.mode === 'live' && !active(run.status) && run.status !== 'completed' && (
+            <RunRecovery run={run} canRun={canRun} onRecovered={onRecovered} />
+          )}
           {run.status === 'completed' && run.manifest.mode === 'live' && (
             <RunArtifacts id={id} canRun={canRun} />
           )}

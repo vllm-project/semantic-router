@@ -1,4 +1,7 @@
 .page {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   max-width: 1500px;
   margin: 0 auto;
   padding: 2rem;
@@ -87,8 +90,8 @@
   outline-offset: 3px;
 }
 .page .primary {
-  background: var(--color-primary, #d52d3c);
-  color: white;
+  background: var(--action-primary-bg, #f5f5f7);
+  color: var(--surface-canvas, #050505);
   border-color: transparent;
 }
 .page .danger {
@@ -113,6 +116,8 @@
   font-weight: 600;
 }
 .panel {
+  min-width: 0;
+  box-sizing: border-box;
   padding: 1.5rem;
   border: 1px solid var(--border-color, #38383e);
   border-radius: 12px;
@@ -477,5 +482,122 @@
   }
   .metricGrid strong {
     font-size: 1.1rem;
+  }
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+}
+.status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.status.success {
+  color: var(--color-success, #67b993);
+}
+.status.active {
+  color: var(--color-primary, #ff565e);
+}
+.status.attention {
+  color: var(--color-warning, #d4a968);
+}
+.runFilters {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.targetChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.45rem;
+}
+.datasetGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.datasetCard {
+  border: 1px solid var(--border-color);
+  border-radius: 9px;
+  padding: 1.2rem;
+  min-width: 0;
+}
+.datasetCard h3 {
+  margin-top: 0.7rem;
+  overflow-wrap: anywhere;
+}
+.datasetCard p {
+  color: var(--text-secondary);
+}
+.emptyState {
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.identity {
+  margin: 0.7rem 0;
+  font-size: 12px;
+}
+.identity dt {
+  color: var(--text-secondary);
+  margin-top: 0.45rem;
+}
+.identity dd {
+  margin: 0.15rem 0 0;
+  overflow-wrap: anywhere;
+}
+.recovery {
+  border-top: 1px solid var(--border-color);
+  margin-top: 1.5rem;
+  padding-top: 0.6rem;
+}
+.recovery input[type='checkbox'] {
+  width: auto;
+}
+.detailNav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 12px;
+  border-bottom: 1px solid var(--border-color);
+  padding: 0.7rem 0;
+  margin-bottom: 1rem;
+}
+.page [id] {
+  scroll-margin-top: 1.2rem;
+}
+.page th small {
+  display: block;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+@media (max-width: 700px) {
+  .runFilters,
+  .datasetGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.mobileHint {
+  display: none;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+@media (max-width: 700px) {
+  .mobileHint {
+    display: block;
   }
 }

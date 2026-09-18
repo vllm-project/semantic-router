@@ -7,9 +7,14 @@ from the selected deployment. Do not copy a model name from an example.
 ## Routing evidence and branch coverage
 
 `route preview` evaluates Router signals and decisions without a generation
-backend call. It can use learned signals or stateful selection; do not assume
-all previews are deterministic. Request a trace and assert the expected Recipe,
-decision, and algorithm for representative inputs.
+backend call. Learning-enabled selection uses a read-only snapshot of the active
+learning state; keep Learning enabled when validating its behavior. Inspect the
+concrete `selected_model`, selection status/reason and `selection_provenance`
+config/state hashes, capture time and sampling seed. A locally sampled preview
+choice may differ from a later live request as state or sampling changes; it
+does not update learning counters or qualify for saved-answer replay. Unresolved
+execution-required paths retain their explanation. Request a trace and assert
+the expected Recipe, decision and algorithm for representative inputs.
 
 The installed CLI can verify ordinary branches without a source checkout. For
 example, after checking the exported `mom-v1` manifest still declares this

@@ -6,10 +6,11 @@ import math
 import random
 from collections import Counter
 from datetime import datetime
+from fractions import Fraction
 from statistics import mean
 
 from . import VERSION
-from .contracts import BENCHMARK_WEIGHTS
+from .contracts import BENCHMARK_WEIGHTS, planned_cells
 from .failures import first_saved_failure
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
@@ -122,12 +123,22 @@ def make_report(store, run_id):
     calls = store.calls(run_id, summary=True)
     metrics = []
     benchmarks = []
+    cells = planned_cells(manifest)
     for target in manifest["targets"]:
+        selected_ids = {
+            cell["case_id"] for cell in cells if cell["target_id"] == target["id"]
+        }
         rows = [r for r in results if r["target_id"] == target["id"]]
         tcalls = [c for c in calls if c["target_id"] == target["id"]]
-        metrics.append(metric(target["id"], rows, tcalls, len(manifest["cases"])))
+        metrics.append(metric(target["id"], rows, tcalls, len(selected_ids)))
         for benchmark in sorted({c["benchmark"] for c in manifest["cases"]}):
-            ids = {c["id"] for c in manifest["cases"] if c["benchmark"] == benchmark}
+            ids = {
+                c["id"]
+                for c in manifest["cases"]
+                if c["benchmark"] == benchmark and c["id"] in selected_ids
+            }
+            if not ids:
+                continue
             benchmarks.append(
                 {
                     "benchmark": benchmark,
@@ -140,24 +151,32 @@ def make_report(store, run_id):
                     ),
                 }
             )
-    present = {c["benchmark"] for c in manifest["cases"]}
-    full_suite = present == set(BENCHMARK_WEIGHTS)
+    selected_ids = {cell["case_id"] for cell in cells}
+    present = {c["benchmark"] for c in manifest["cases"] if c["id"] in selected_ids}
     weights = manifest["benchmark_weights"]
-    custom_subset = bool((manifest.get("dataset") or {}).get("custom_subset", True))
+    custom_subset = bool(
+        "execution_cells" in manifest
+        or (manifest.get("dataset") or {}).get("custom_subset", True)
+    )
     extension_subset = not present.issubset(BENCHMARK_WEIGHTS)
     for item in metrics:
         rows = [row for row in benchmarks if row["target_id"] == item["id"]]
+        target_full_suite = {row["benchmark"] for row in rows} == set(BENCHMARK_WEIGHTS)
         weight_sum = sum(weights[row["benchmark"]] for row in rows)
         macro = (
             sum(weights[row["benchmark"]] * row["accuracy"] for row in rows)
             / weight_sum
         )
         item["macro_accuracy"] = macro
-        item["sr_bench_score"] = macro if full_suite and item["complete"] else None
+        item["sr_bench_score"] = (
+            macro
+            if target_full_suite and item["complete"] and not manifest.get("recovery")
+            else None
+        )
         item["score_scope"] = (
             (
                 "full sr-bench 1.0"
-                if full_suite
+                if target_full_suite
                 else (
                     "extension diagnostic; normalized adapter weights"
                     if extension_subset
@@ -254,6 +273,10 @@ def make_report(store, run_id):
         limitations.append(
             "Run is incomplete; planned denominators include missing cases."
         )
+    if manifest.get("recovery"):
+        limitations.append(
+            "This is a separate recovery subset attempt. Parent measurements and spend are inherited context only; child completion does not complete the original benchmark."
+        )
     if manifest["cost_policy"] == "capability_only":
         limitations.append(
             "Capability-only protocol: USD budget cannot bound missing or unpriced usage; wall time, output and call caps still apply."
@@ -287,6 +310,15 @@ def make_report(store, run_id):
         "mode": manifest["mode"],
         "cost_policy": manifest["cost_policy"],
         "failure": store.first_failure(run_id) or first_saved_failure(results),
+        "recovery": manifest.get("recovery"),
+        "child_attempts": [
+            {
+                "id": child["id"],
+                "status": child["status"],
+                "progress": child["progress"],
+            }
+            for child in store.children(run_id)
+        ],
         "summary": {
             "targets": metrics,
             "wall_time_s": wall,
@@ -373,6 +405,43 @@ def _comparison_protocol(baseline, candidate):
                 profiles[model] = profile
 
 
+def _exact_quality(report, target, weights):
+    rows = [row for row in report["benchmarks"] if row["target_id"] == target]
+    weighted = [
+        (
+            Fraction(str(weights[row["benchmark"]])),
+            Fraction(row["correct"], row["total"]),
+        )
+        for row in rows
+    ]
+    return sum(w * score for w, score in weighted) / sum(w for w, _ in weighted)
+
+
+def _strongest_single(singles, report, weights):
+    """Compare frozen weighted counts exactly; never favor a costly quality tie."""
+    metrics = {row["id"]: row for row in report["summary"]["targets"]}
+    quality = {
+        target["id"]: _exact_quality(report, target["id"], weights)
+        for target in singles
+    }
+    maximum = max(quality.values())
+    tied = sorted(target for target, score in quality.items() if score == maximum)
+
+    def priced(target):
+        item = metrics[target]
+        return item["cost_complete"] and item["cost_usd"] is not None
+
+    best = min(
+        tied,
+        key=lambda target: (
+            not priced(target),
+            metrics[target]["cost_usd"] if priced(target) else math.inf,
+            target,
+        ),
+    )
+    return best, tied, all(priced(target) for target in tied)
+
+
 def compare(store, baseline_id, candidate_id):
     baseline = store.get(baseline_id)
     candidate = store.get(candidate_id)
@@ -388,7 +457,15 @@ def compare(store, baseline_id, candidate_id):
     singles = [t for t in bm["targets"] if t["kind"] == "single"]
     if not singles:
         raise ValueError("Baseline must contain a single-model target")
-    case_ids = [c["id"] for c in bm["cases"]]
+    planned = planned_cells(bm)
+    selected = {
+        target["id"]: {c["case_id"] for c in planned if c["target_id"] == target["id"]}
+        for target in singles
+    }
+    expected = selected[singles[0]["id"]]
+    if any(ids != expected for ids in selected.values()):
+        raise ValueError("Baseline targets must cover identical selected cases")
+    case_ids = [c["id"] for c in bm["cases"] if c["id"] in expected]
     by_target = {
         t["id"]: {r["case_id"]: r for r in br if r["target_id"] == t["id"]}
         for t in singles
@@ -402,9 +479,11 @@ def compare(store, baseline_id, candidate_id):
     report_b = make_report(store, baseline_id)
     report_c = make_report(store, candidate_id)
     metric_by_id = {t["id"]: t for t in report_b["summary"]["targets"]}
-    best = max(singles, key=lambda t: metric_by_id[t["id"]]["macro_accuracy"])["id"]
+    best, tied, tied_costs_complete = _strongest_single(
+        singles, report_b, bm["benchmark_weights"]
+    )
     base = by_target[best]
-    base_metric = next(t for t in report_b["summary"]["targets"] if t["id"] == best)
+    base_metric = metric_by_id[best]
     comparisons = []
     for target in cm["targets"]:
         rows = {r["case_id"]: r for r in cr if r["target_id"] == target["id"]}
@@ -417,16 +496,21 @@ def compare(store, baseline_id, candidate_id):
             b: [
                 int(rows[c["id"]]["correct"]) - int(base[c["id"]]["correct"])
                 for c in bm["cases"]
-                if c["benchmark"] == b
+                if c["benchmark"] == b and c["id"] in expected
             ]
-            for b in sorted({c["benchmark"] for c in bm["cases"]})
+            for b in sorted(
+                {c["benchmark"] for c in bm["cases"] if c["id"] in expected}
+            )
         }
         weights = {
             b: bm["benchmark_weights"][b]
             / sum(bm["benchmark_weights"][k] for k in groups)
             for b in groups
         }
-        macro_delta = sum(weights[b] * mean(values) for b, values in groups.items())
+        macro_delta = float(
+            _exact_quality(report_c, target["id"], cm["benchmark_weights"])
+            - _exact_quality(report_b, best, bm["benchmark_weights"])
+        )
         rng = random.Random(20260918)
         samples = sorted(
             sum(
@@ -445,6 +529,7 @@ def compare(store, baseline_id, candidate_id):
             if bc is not None
             and bc > 0
             and cc is not None
+            and tied_costs_complete
             and bm["cost_policy"] == cm["cost_policy"] == "require_priced"
             else None
         )
@@ -470,5 +555,14 @@ def compare(store, baseline_id, candidate_id):
         "baseline_run_id": baseline_id,
         "candidate_run_id": candidate_id,
         "baseline_selection": "best observed single model on identical cases; selection uncertainty is not included",
+        "baseline_selected_target_id": best,
+        "baseline_tied_best_target_ids": tied,
+        "baseline_tie_policy": "Exact frozen weighted quality; ties prefer the lowest complete known subject cost, then stable target ID. Unknown-cost ties rank after known costs and suppress savings claims.",
+        "baseline_cost_comparison_eligible": tied_costs_complete,
+        "baseline_cost_comparison_reason": (
+            None
+            if tied_costs_complete
+            else "At least one quality-tied best single has incomplete cost; the cheapest strongest baseline cannot be established."
+        ),
         "comparisons": comparisons,
     }

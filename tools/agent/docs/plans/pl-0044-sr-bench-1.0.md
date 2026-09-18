@@ -117,6 +117,15 @@ configuration change creates a new run. MoM requests bind to the request's actua
 configuration snapshot and reject a mismatched expected revision. A management
 hash read before and after a request alone cannot establish this guarantee.
 
+Operators can enable recipe capture on a registered MoM target. The worker
+captures the Router's canonical source document between two matching
+source/generated/active hash observations, requiring the generated and active
+hashes to match the run's frozen runtime identity. The stored routing snapshot
+omits deployment wiring and redacts credentials. Reports expose its separate
+content digest and verification scope; historical runs without a captured
+snapshot remain explicitly unavailable. Every live call still verifies its own
+runtime acknowledgement.
+
 `BenchmarkAdapter` prepares/preflights tasks, executes the problem's interaction
 protocol and grades saved final responses or sandbox outcomes. The shared target client
 provides actual calls, identity, routing trace, streaming and usage. Their
@@ -176,6 +185,15 @@ retain artifacts. Regrading saved answers is a separate operation with a new
 grader identity and zero subject calls. Request retries default to zero and are
 not an automatic recovery path in 1.0.
 
+An explicit recovery plan shows eligible and excluded case/target cells. The
+default continues only undispatched cells. Retrying a failed cell requires a
+known terminal outcome, complete usage/cost evidence and acknowledgement of a
+new paid attempt; ambiguous dispatch or unknown billing is excluded. Recovery
+creates a linked child run with atomically claimed cells and its own idempotency
+key, denominator and spending. It preserves the parent and does not relabel a
+partial recovery subset as a complete benchmark. UI reloads retain the submitted
+recovery intent so a lost response cannot cause a duplicate attempt.
+
 Plan and preflight detect inaccessible datasets, missing judge/simulator settings,
 unavailable sandboxes, missing prices and incompatible protocol options before
 paid work. Missing prices permit a capability-only run only when selected
@@ -214,6 +232,9 @@ delta and paired uncertainty. Small quick samples diagnose direction; they do
 not prove equivalence. A release claim needs the prespecified holdout comparison,
 a quality non-inferiority margin and its confidence interval. The report records
 how the baseline was selected to expose winner-selection effects.
+Exact quality ties choose the cheapest fully accounted single model, then a
+stable target ID. All tied models remain visible. Unknown cost for a tied best
+model prevents a cheapest-best savings claim.
 
 ## CLI and Dashboard experience
 

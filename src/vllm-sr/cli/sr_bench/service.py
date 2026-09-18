@@ -17,9 +17,10 @@ from urllib.parse import parse_qs, urlparse
 from cli.runtime_env_names import runtime_env_name_is_allowed
 
 from . import VERSION
-from .contracts import catalog, plan
+from .contracts import catalog, plan, planned_cells
 from .engine import Engine
 from .offline import export_training, regrade, replay
+from .recovery import RecoveryPlanError, recover, recovery_plan
 from .report import compare, make_report
 from .store import Store
 
@@ -137,6 +138,7 @@ class Handler(BaseHTTPRequestHandler):
             "max_inference_calls",
             "preview_api_key_env",
             "request_params",
+            "capture_recipe",
         }
         if any(set(t) - safe for t in data):
             raise ValueError("Server target registry contains unsupported fields")
@@ -226,7 +228,7 @@ class Handler(BaseHTTPRequestHandler):
                     {
                         "manifest": frozen,
                         "plan_sha256": frozen["plan_sha256"],
-                        "total": len(frozen["cases"]) * len(frozen["targets"]),
+                        "total": len(planned_cells(frozen)),
                         "status": "validated",
                     },
                 )
@@ -284,6 +286,20 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, self.server.store.call(run_id, route[3]))
                 if len(route) == RUN_ACTION_ROUTE_PARTS:
                     action = route[2]
+                    if action in {"recover-plan", "recover"} and method == "POST":
+                        body = self._body()
+                        result = (
+                            recovery_plan(
+                                self.server.store,
+                                run_id,
+                                body.get("mode", "undispatched"),
+                            )
+                            if action == "recover-plan"
+                            else recover(self.server.engine, run_id, body, actor)
+                        )
+                        return self._send(
+                            200 if action == "recover-plan" else 201, result
+                        )
                     if action in {"regrade", "export"} and method == "POST":
                         return self._send(
                             200,
@@ -308,6 +324,15 @@ class Handler(BaseHTTPRequestHandler):
                     if action == "cancel" and method == "POST":
                         return self._send(200, self.server.engine.cancel(run_id))
             self._send(404, {"error": "not found"})
+        except RecoveryPlanError as exc:
+            self._send(
+                400,
+                {
+                    "error": str(exc),
+                    "code": "recovery_plan_required",
+                    "dispatch_started": False,
+                },
+            )
         except PermissionError as exc:
             self._send(403, {"error": str(exc)})
         except KeyError:

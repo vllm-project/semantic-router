@@ -10,6 +10,7 @@ interface Props {
   targets: Target[]
   canRun: boolean
   initialModel?: string
+  initialDataset?: string
   onStarted: (run: Run) => void
 }
 
@@ -19,6 +20,7 @@ export default function RunComposer({
   targets: registeredTargets,
   canRun,
   initialModel,
+  initialDataset,
   onStarted,
 }: Props) {
   const [name, setName] = useState('Balance comparison')
@@ -26,8 +28,10 @@ export default function RunComposer({
   const [costPolicy, setCostPolicy] = useState<'require_priced' | 'capability_only'>(
     'require_priced',
   )
-  const [profile, setProfile] = useState('quick')
-  const [datasetID, setDatasetID] = useState('')
+  const [profile, setProfile] = useState(
+    datasets.find((item) => item.id === initialDataset)?.profile ?? 'quick',
+  )
+  const [datasetID, setDatasetID] = useState(initialDataset ?? '')
   const [targets, setTargets] = useState<Target[]>(() =>
     registeredTargets.filter((target) => target.model === initialModel),
   )
@@ -234,6 +238,10 @@ export default function RunComposer({
                 {target.prices
                   ? ' Configured prices included.'
                   : ' Unpriced usage will remain unknown.'}
+                {target.kind === 'mom' &&
+                  (target.capture_recipe
+                    ? ' A matching recipe snapshot will be captured.'
+                    : ' Recipe capture is not enabled for this target.')}
               </span>
               <button
                 type="button"

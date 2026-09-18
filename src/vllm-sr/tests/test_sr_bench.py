@@ -280,6 +280,7 @@ def test_shared_api_enforces_actor_scope(tmp_path, target):
             "reasoning_effort": "xhigh",
             "max_tokens": 64,
         }
+        registered[0]["capture_recipe"] = False
         (tmp_path / "targets.json").write_text(json.dumps(registered))
         frozen = requests.post(
             url + "/plans",
@@ -288,12 +289,21 @@ def test_shared_api_enforces_actor_scope(tmp_path, target):
             timeout=2,
         )
         assert frozen.status_code == 200
+        assert frozen.json()["manifest"]["targets"][0]["capture_recipe"] is False
         assert (
             frozen.json()["manifest"]["targets"][0]["request_params"]
             == registered[0]["request_params"]
         )
         override = manifest(target)
         override["targets"][0]["request_params"] = {"reasoning_effort": "low"}
+        assert (
+            requests.post(
+                url + "/plans", headers=headers, json={"manifest": override}, timeout=2
+            ).status_code
+            == 403
+        )
+        override = manifest(target)
+        override["targets"][0]["capture_recipe"] = True
         assert (
             requests.post(
                 url + "/plans", headers=headers, json={"manifest": override}, timeout=2

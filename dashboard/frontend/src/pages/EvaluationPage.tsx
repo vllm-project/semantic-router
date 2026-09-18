@@ -4,11 +4,13 @@ import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canRunEvaluation, canWriteEvaluation } from '../utils/accessControl'
 import { benchApi } from '../components/sr-bench/api'
-import { active, number } from '../components/sr-bench/model'
+import { active } from '../components/sr-bench/model'
 import RunComposer from '../components/sr-bench/RunComposer'
 import RunDetails from '../components/sr-bench/RunDetails'
 import RunComparison from '../components/sr-bench/RunComparison'
 import ReplayComposer from '../components/sr-bench/ReplayComposer'
+import RunList from '../components/sr-bench/RunList'
+import DatasetInventory from '../components/sr-bench/DatasetInventory'
 import type { Catalog, Dataset, Run, Target } from '../components/sr-bench/types'
 import styles from '../components/sr-bench/SrBench.module.css'
 
@@ -19,7 +21,7 @@ export default function EvaluationPage() {
     !settingsLoading && !serverReadonly && canRunEvaluation(user) && canWriteEvaluation(user)
   const [search, setSearch] = useSearchParams()
   const selectedID = search.get('run')
-  const view = search.get('view') ?? (selectedID ? 'runs' : 'new')
+  const view = search.get('view') ?? (search.has('model') ? 'new' : 'runs')
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [targets, setTargets] = useState<Target[]>([])
@@ -27,6 +29,7 @@ export default function EvaluationPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [revision, setRevision] = useState(0)
+  const [lastRead, setLastRead] = useState<string | null>(null)
   const refresh = useCallback(() => setRevision((value) => value + 1), [])
 
   useEffect(() => {
@@ -45,7 +48,10 @@ export default function EvaluationPage() {
         if (responses[0].status === 'fulfilled') setCatalog(responses[0].value)
         if (responses[1].status === 'fulfilled') setDatasets(responses[1].value.datasets)
         if (responses[2].status === 'fulfilled') setTargets(responses[2].value.targets)
-        if (responses[3].status === 'fulfilled') setRuns(responses[3].value.runs)
+        if (responses[3].status === 'fulfilled') {
+          setRuns(responses[3].value.runs)
+          setLastRead(new Date().toLocaleTimeString())
+        }
         const failure = responses.find((response) => response.status === 'rejected')
         setError(
           failure?.status === 'rejected'
@@ -54,11 +60,12 @@ export default function EvaluationPage() {
               : 'sr-bench service could not be reached.'
             : '',
         )
-        if (
+        // Retry reads after a disconnect and discover runs started from the CLI.
+        // This timer never submits, resumes or retries an evaluation.
+        const running =
           responses[3].status === 'fulfilled' &&
           responses[3].value.runs.some((run) => active(run.status))
-        )
-          timer = setTimeout(() => void load(), 5000)
+        timer = setTimeout(() => void load(), failure || running ? 5000 : 15000)
       } finally {
         if (!controller.signal.aborted) setLoading(false)
       }
@@ -71,7 +78,7 @@ export default function EvaluationPage() {
   }, [revision])
 
   return (
-    <main className={styles.page}>
+    <section className={styles.page} aria-label="sr-bench workspace">
       <header className={styles.hero}>
         <div>
           <p className={styles.eyebrow}>Evaluation</p>
@@ -88,8 +95,9 @@ export default function EvaluationPage() {
       </header>
       <nav className={styles.tabs} aria-label="Evaluation views">
         {[
-          ['new', 'Create evaluation'],
           ['runs', 'Runs'],
+          ['new', 'Create evaluation'],
+          ['datasets', 'Datasets'],
           ['compare', 'Compare iterations'],
           ['catalog', 'Benchmarks'],
         ].map(([key, label]) => (
@@ -103,6 +111,11 @@ export default function EvaluationPage() {
           </button>
         ))}
       </nav>
+      {lastRead && (
+        <p className={styles.muted} role="status">
+          Last synchronized {lastRead} · Read-only updates continue automatically.
+        </p>
+      )}
       {error && (
         <div className={styles.error} role="alert">
           <strong>sr-bench needs attention.</strong> {error}
@@ -119,7 +132,9 @@ export default function EvaluationPage() {
           datasets={datasets}
           targets={targets}
           canRun={canRun}
+          key={search.get('dataset') ?? 'new'}
           initialModel={search.get('model') ?? undefined}
+          initialDataset={search.get('dataset') ?? undefined}
           onStarted={(run) => {
             setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)])
             setSearch({ view: 'runs', run: run.id })
@@ -129,58 +144,32 @@ export default function EvaluationPage() {
       )}
       {view === 'runs' && (
         <>
-          <section className={styles.panel}>
-            <div className={styles.sectionHeading}>
-              <h2>Evaluation runs</h2>
-              <span>{runs.filter((run) => active(run.status)).length} active</span>
-            </div>
-            {runs.length ? (
-              <div className={styles.tableScroll}>
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Run</th>
-                      <th>Mode / profile</th>
-                      <th>Status</th>
-                      <th>Completed / total</th>
-                      <th>Failures</th>
-                      <th>Created</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runs.map((run) => (
-                      <tr key={run.id} aria-selected={run.id === selectedID}>
-                        <td>
-                          <button
-                            className={styles.linkButton}
-                            onClick={() => setSearch({ view: 'runs', run: run.id })}
-                          >
-                            {run.manifest.name}
-                          </button>
-                          <small>{run.id}</small>
-                        </td>
-                        <td>
-                          {run.manifest.mode} / {run.manifest.profile}
-                        </td>
-                        <td>{run.status}</td>
-                        <td>
-                          {number(run.progress.completed)} / {number(run.progress.total)}
-                        </td>
-                        <td>{number(run.progress.failed)}</td>
-                        <td>{new Date(run.created_at).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p>No runs yet. Create an evaluation using a prepared dataset.</p>
-            )}
-          </section>
+          <RunList
+            runs={runs}
+            selectedID={selectedID}
+            onSelect={(id) => setSearch({ view: 'runs', run: id })}
+          />
           {selectedID && (
-            <RunDetails key={selectedID} id={selectedID} canRun={canRun} onChanged={refresh} />
+            <RunDetails
+              key={selectedID}
+              id={selectedID}
+              canRun={canRun}
+              onChanged={refresh}
+              onRecovered={(run) => {
+                setSearch({ view: 'runs', run: run.id })
+                refresh()
+              }}
+            />
           )}
         </>
+      )}
+      {view === 'datasets' && (
+        <DatasetInventory
+          datasets={datasets}
+          runs={runs}
+          canRun={canRun}
+          onUse={(dataset) => setSearch({ view: 'new', dataset: dataset.id })}
+        />
       )}
       {view === 'compare' && (
         <>
@@ -218,6 +207,6 @@ export default function EvaluationPage() {
           </div>
         </section>
       )}
-    </main>
+    </section>
   )
 }

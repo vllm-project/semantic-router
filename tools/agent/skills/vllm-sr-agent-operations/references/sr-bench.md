@@ -84,6 +84,24 @@ a fresh key, retry a generation, resume an interrupted run or restart a stopped
 worker as automatic recovery. `Ctrl-C` stops the CLI wait; `benchmark cancel
 RUN_ID` stops actual work and retains partial evidence.
 
+Explicit recovery is a new child attempt, not mutation of a failed parent. Use
+`benchmark recover-plan RUN_ID --mode undispatched --output recovery.json` to
+inspect never-dispatched cells. `--mode failed` additionally excludes unknown
+billing, ambiguous or completed generations and requires deliberate new-attempt
+authorization. Review `eligible_cells` and `excluded`; use `selected_cells` for an
+explicit subset, then `benchmark recover RUN_ID --plan recovery.json
+--idempotency-key KEY`. Failed-case recovery also requires
+`--acknowledge-new-attempt`. Preserve this exact request/key after lost responses.
+The child reports only its execution cells; inherited parent progress and spend
+stay separate. A completed child does not qualify an incomplete parent.
+
+For frozen recipe artifacts, register MoM targets with `capture_recipe: true` and
+the expected config hash/canonical preview URL. The server captures a redacted
+projection only when generated/active runtime hashes match the target before and
+after capture, with an unchanged source config ETag. Preserve this snapshot
+and the separate runtime-call hash acknowledgements; never substitute the latest
+configuration for missing historical evidence.
+
 Absolute/idle deadlines, output/repetition guards and task/run call/time limits
 bound work. Spend reservations and reported actual-cost stopping are not a
 provider-enforced universal hard USD cap. Unknown usage remains unknown; do not
@@ -97,11 +115,16 @@ silently substitute zero or continue a cost-qualified claim through it.
    plan and apply flow. Wait for the expected active runtime hash. Restart-required
    changes use the authorized `serve --replace-active-config` path.
 3. Bind a new manifest to that hash and run `benchmark preview`. Preview checks
-   actual Router decisions but has no capability score. Preserve unresolved
-   execution-required selections.
+   actual Router decisions and selections but has no capability score. Keep
+   Learning enabled: its preview selects against a read-only snapshot of the
+   active learning state without updating it. Inspect `selection_provenance`
+   for the config/state hashes, capture time and sampling seed. A sampled
+   snapshot choice is not a promise of the later live choice. Preserve unresolved
+   `execution_required` selections with their reasons.
 4. For eligible direct/static routing, use `benchmark replay --baseline BASELINE_ID
    --preview PREVIEW_ID`. It reuses saved matrix cells and makes no model calls.
-   Plugin, agent, changed-prompt and compound paths require live evaluation.
+   State-dependent Learning previews, plugin, agent, changed-prompt and compound
+   paths require live evaluation.
 5. Run the candidate live on the same dev cases and use `benchmark compare
    BASELINE_ID CANDIDATE_ID`. Expand to the untouched standard split only for
    the prespecified acceptance decision; never tune against its failures.
@@ -122,14 +145,23 @@ separate from measured live metrics. Regrading does not erase the prior grader.
 The full score requires all nine complete benchmarks with fixed versioned
 weights. Show per-benchmark denominators and uncertainty with every aggregate.
 The baseline is the best observed single by the stated aggregate over identical
-cases, not a per-question oracle. Savings use complete compatible subject costs:
+cases, not a per-question oracle. Exact weighted-quality ties choose the lowest
+complete known subject cost, then stable target ID. Show all tied-best IDs and
+suppress savings when any tied-best single has incomplete cost. Never choose an
+expensive quality tie to inflate savings. Savings use complete compatible subject costs:
 `100 * (1 - candidate_cost / baseline_cost)`. Small quick results show direction;
 quality equivalence requires a prespecified margin and holdout interval. Token
 prices for self-hosted inference are not GPU invoice savings.
 
 For requested Dashboard acceptance, verify the same service/run IDs, launch a
 bounded run, inspect metrics and case artifacts, compare, cancel and reload the
-page. A page load or mocked browser test alone is not live acceptance.
+page. Verify task filters, data-set identity, read reconnection, explicit recovery
+scope/lineage, and same-key reconciliation after a lost recovery response. Compare
+current Balance plus both optimization revisions against a compatible single-model
+baseline using the URL-persisted selections. Inspect/download the captured recipe
+and verify cost/quality uncertainty and full denominators. Review narrow-screen
+layout and avoid clipping controls or claiming gains from incompatible datasets.
+A page load or mocked browser test alone is not live acceptance.
 
 Periodic follow-ups observe durable status and deadlines. Notify on meaningful
 stage completion, a failure or required action; ordinary counter changes need no

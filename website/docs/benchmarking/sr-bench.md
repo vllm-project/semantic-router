@@ -214,7 +214,16 @@ vllm-sr benchmark regrade RUN_ID --output regrade.json
 vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
 ```
 
-Preview has no answer-quality score. Replay rejects unsupported plugin, agent
+Preview has no answer-quality score. With Learning enabled, model selection runs
+against a read-only snapshot of active learning state. It returns a concrete
+model when selection is resolvable, plus selection status/reason and
+`selection_provenance`: config/state hashes, capture time, whether local sampling
+occurred and its seed. The snapshot does not update learning state, and a later
+live request can differ as state or sampling changes. Keep Learning enabled
+during this check; disabling it would test a different policy. The Dashboard
+shows these fields beside each preview case and explains unresolved selections.
+
+Replay rejects state-dependent Learning snapshots, unsupported plugin, agent
 or compound execution and missing matrix cells instead of calling a model.
 Only live runs support measured capability and savings claims. Offline regrade
 currently supports saved multiple-choice/grid final answers, preserves the
@@ -236,16 +245,70 @@ GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% a
 its subset label and is not the full score.
 
 Paired comparison selects the strongest observed single model by the same
-aggregate over identical cases and records that selection. Savings are
+aggregate over identical cases and records that selection.
+Exact weighted-quality ties prefer the single with the lowest complete known
+subject cost, then a stable target ID. The report lists every tied-best single.
+If any tied-best single has incomplete cost, savings remain unknown. Savings are
 `100 × (1 − candidate subject cost / baseline subject cost)` with complete,
 compatible accounting. A small dev sample shows direction; a quality
 non-inferiority claim needs a prespecified margin and a holdout confidence
 interval. Token-equivalent self-hosted prices do not establish GPU invoice savings.
 
-Dashboard exposes the same workflow through prepared dataset/target selectors,
-a frozen plan review, run progress/cancel controls, comparison, diagnostic replay,
-case inspection and regrade/export actions. Calls and results load in pages of
-100; full call bodies load on inspection. Metrics and routing distributions come
-from the complete report, independently of loaded detail pages. Refreshing the page cannot restart a
-run. If a worker stops, inspect its saved events and unresolved dispatches before
-an explicit recovery; no automatic generation retry or worker restart occurs.
+Dashboard opens on **Runs**, with filters for name/model, status and mode. Each
+row shows the completed denominator, failures, persisted update time and target
+kind. Read-only polling reconnects after a temporary network failure and discovers
+CLI-created runs. Closing or refreshing the page does not restart a run.
+**Datasets** lists frozen case counts, profiles, benchmark scope and case hashes;
+choose **Evaluate this dataset** to reuse that exact identity.
+
+**Compare iterations** presents a single-model baseline and three explicit
+selections: current Balance, optimization 1 and optimization 2. The selected run
+IDs are preserved in the URL. It shows paired quality differences and confidence
+intervals alongside cost savings, tokens, latency, wall time and frozen config
+hashes. Incompatible or incomplete scopes cannot become a comparison row. A
+positive point estimate with an interval spanning zero is not proof of a gain.
+
+For a MoM target, the operator can register `capture_recipe: true` with its
+`config_hash` and canonical `preview_url`. The worker captures a redacted recipe
+projection from the Router config API only when the generated and active runtime
+hashes match the frozen target before and after capture, and the source config
+ETag stays unchanged. **Frozen
+recipes** displays and downloads that server-observed snapshot, its capture time
+and projection hash. Runtime calls separately acknowledge the active config hash.
+Deployment wiring and secrets are omitted; the download is a recipe artifact,
+not a complete deployable configuration. Existing runs without a snapshot show
+that it is unavailable rather than borrowing a later recipe.
+
+Calls and results load in pages of 100; full call bodies load on inspection.
+Metrics and routing distributions come from the complete report independently of
+loaded detail pages. Events show the latest 100 entries with access to older
+pages. Regrade and training export reuse saved evidence without new model calls.
+
+### Recover unfinished work explicitly
+
+A stopped worker or lost acknowledgement is not permission to retry generation.
+Inspect saved dispatches and calls first. On a terminal run, **Review recovery
+plan** separates two scopes:
+
+- **Continue undispatched cases** selects cells that have never dispatched a
+  model call.
+- **Retry known failed cases as new attempts** requires explicit cell selection
+  and acknowledgement of additional attempts and spend. Ambiguous calls, unknown
+  billing, completed answers and already-claimed cells are excluded.
+
+Both create a separate child run and preserve the parent. Progress, denominator
+and costs belong to the child scope; parent spend remains separate in the lineage
+panel. A recovery child does not turn a partial parent into a completed benchmark.
+The Dashboard saves the exact pending recovery submission in the current tab and
+reuses its idempotency key after a lost response. There is no automatic generation
+retry or worker restart.
+
+```bash
+vllm-sr benchmark recover-plan RUN_ID --mode undispatched --output recovery.json
+# Review eligible/excluded cells. Optionally set selected_cells to a reviewed subset.
+vllm-sr benchmark recover RUN_ID --plan recovery.json --idempotency-key recovery-1
+```
+
+For `--mode failed`, the final command additionally requires
+`--acknowledge-new-attempt`. Reuse the same plan, cells and idempotency key when
+reconciling an uncertain submission.

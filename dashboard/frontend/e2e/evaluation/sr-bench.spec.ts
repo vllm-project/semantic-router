@@ -107,7 +107,7 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
         runs: [run, { ...run, id: 'run-2', manifest: { ...manifest, name: 'Candidate test' } }],
       }
     else if (path === '/runs/run-1') body = run
-    else if (path === '/runs/run-1/report') body = report
+    else if (/^\/runs\/[^/]+\/report$/.test(path)) body = report
     else if (path === '/runs/run-1/results')
       body = {
         total: 1,
@@ -133,6 +133,8 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
     else if (path === '/comparisons')
       body = {
         baseline_selection: 'Best observed single model on identical cases.',
+        baseline_tied_best_target_ids: ['single', 'another-single'],
+        baseline_tie_policy: 'Lowest complete known subject cost, then stable target ID.',
         comparisons: [
           {
             baseline_target_id: 'single',
@@ -160,7 +162,7 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
 
 test('plans and launches a reusable frozen dataset from the normal form', async ({ page }) => {
   const requests = await mockBench(page)
-  await page.goto('/evaluation')
+  await page.goto('/evaluation?view=new')
   await expect(page.getByRole('heading', { name: 'sr-bench 1.0' })).toBeVisible()
   await page.getByLabel('Prepared dataset').selectOption('quick-v1')
   await page.getByLabel('Add configured target').selectOption('single')
@@ -195,6 +197,138 @@ test('shows truthful metrics, routing distribution and case evidence', async ({ 
     'href',
     '/api/sr-bench/v1/runs/run-1/report',
   )
+})
+
+test('shows learning preview selection and snapshot evidence without a capability score', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({ json: { ...run, manifest: { ...manifest, mode: 'preview' } } }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        summary: {
+          targets: [
+            {
+              id: 'balance',
+              total: 2,
+              completed: 2,
+              failed: 0,
+              selected_models: { 'model-a': 1 },
+              decisions: { learned: 2 },
+              selection_statuses: { selected: 1, execution_required: 1 },
+              selection_reasons: {
+                'Selected from captured state': 1,
+                'Execution is still required': 1,
+              },
+            },
+          ],
+        },
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/results?*', (route) =>
+    route.fulfill({
+      json: {
+        total: 2,
+        limit: 100,
+        next_cursor: null,
+        results: [
+          {
+            case_id: 'learned-case',
+            target_id: 'balance',
+            benchmark: 'mmlu-pro',
+            status: 'completed',
+            details: {
+              routing: {
+                selected_model: 'model-a',
+                selection_status: 'selected',
+                selection_method: 'learning',
+                selection_reason: 'Selected from captured state',
+                decision_result: { decision_name: 'learned' },
+                selection_provenance: {
+                  mode: 'read_only_snapshot',
+                  config_hash: 'c'.repeat(64),
+                  state_hash: 'd'.repeat(64),
+                  state_dependent: true,
+                  captured_at: '2026-09-18T00:00:00Z',
+                  sampled: true,
+                  sampling_seed: 42,
+                  caveat: 'This sampled choice is not a guarantee of a later live selection.',
+                },
+              },
+            },
+          },
+          {
+            case_id: 'unresolved-case',
+            target_id: 'balance',
+            benchmark: 'mmlu-pro',
+            status: 'completed',
+            details: {
+              routing: {
+                selection_status: 'execution_required',
+                selection_reason: 'Execution is still required',
+                decision_result: { decision_name: 'learned' },
+              },
+            },
+          },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(page.getByRole('heading', { name: 'Selection status', exact: true })).toBeVisible()
+  await expect(
+    page.getByText('Some model selections require live execution.', { exact: false }),
+  ).toBeVisible()
+  await expect(page.getByRole('cell', { name: '50%', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'learned-case', exact: true }).click()
+  const evidence = page.getByRole('region', { name: 'Routing preview evidence' })
+  await expect(evidence.getByText('model-a', { exact: true })).toBeVisible()
+  await expect(evidence.getByText('c'.repeat(64), { exact: true })).toBeVisible()
+  await expect(evidence.getByText('d'.repeat(64), { exact: true })).toBeVisible()
+  await expect(evidence.getByText('Yes · not eligible for replay', { exact: true })).toBeVisible()
+  await expect(evidence.getByText('42', { exact: true })).toBeVisible()
+  await expect(
+    evidence.getByText('This sampled choice is not a guarantee of a later live selection.'),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'unresolved-case', exact: true }).click()
+  await expect(evidence.getByText('Execution is still required', { exact: true })).toBeVisible()
+  await expect(evidence.getByText('model-a', { exact: true })).toHaveCount(0)
+})
+
+test('recovers every event page after a temporary read failure', async ({ page }) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({ json: { ...run, status: 'running' } }),
+  )
+  const cursors: number[] = []
+  let failed = false
+  await page.route('**/api/sr-bench/v1/runs/run-1/events?*', async (route) => {
+    const cursor = Number(new URL(route.request().url()).searchParams.get('after'))
+    cursors.push(cursor)
+    if (cursor === 1000 && !failed) {
+      failed = true
+      await route.fulfill({ status: 503, json: { error: 'Event page unavailable' } })
+      return
+    }
+    await route.fulfill({
+      json: {
+        events:
+          cursor === 0
+            ? Array.from({ length: 1000 }, (_, index) => ({ seq: index + 1, type: 'progress' }))
+            : [{ seq: 1001, type: 'recovered' }],
+      },
+    })
+  })
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(page.getByRole('alert')).toContainText('Event page unavailable')
+  await expect(page.getByText('Run events (1001)', { exact: true })).toBeVisible({ timeout: 10000 })
+  expect(cursors.slice(0, 4)).toEqual([0, 1000, 0, 1000])
+  await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
 test('loads bounded evidence pages on demand and keeps full report aggregates', async ({
@@ -329,15 +463,18 @@ test('compares complete runs using paired results', async ({ page }) => {
   await mockBench(page)
   await page.goto('/evaluation?view=compare')
   await page.getByLabel('Baseline run').selectOption('run-1')
-  await page.getByLabel('Candidate run').selectOption('run-2')
+  await page.getByLabel('Current Balance run').selectOption('run-2')
   await page.getByRole('button', { name: 'Compare runs' }).click()
-  await expect(page.getByRole('heading', { name: 'Paired comparison' })).toBeVisible()
-  await expect(page.getByText('95% interval: -10% to 30%')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Balance optimization trajectory' })).toBeVisible()
+  await expect(
+    page.getByText('Tied best single models: single, another-single.', { exact: false }),
+  ).toBeVisible()
+  await expect(page.getByRole('cell', { name: '-10 pp to 30 pp', exact: false })).toBeVisible()
 })
 
 test('keeps actions disabled in a server readonly session', async ({ page }) => {
   await mockBench(page, { serverReadonly: true })
-  await page.goto('/evaluation')
+  await page.goto('/evaluation?view=new')
   await expect(page.getByRole('button', { name: 'Review plan' })).toBeDisabled()
   await expect(
     page.getByText('Run controls require evaluation permissions and a writable Dashboard session.'),
@@ -352,6 +489,37 @@ test('explains an unavailable worker without exposing a broken workspace', async
   await page.goto('/evaluation')
   await expect(page.getByText('Start the sr-bench service.')).toBeVisible()
   await expect(page.getByRole('button', { name: 'Start evaluation' })).toHaveCount(0)
+})
+
+test('explains a failed run from saved case evidence when its terminal error is absent', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({ json: { ...run, status: 'failed', error: null } }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        status: 'failed',
+        failure: {
+          case_id: 'case-a',
+          target_id: 'balance',
+          reason: 'Runtime identity acknowledgement mismatched',
+          inferred_from_saved_results: true,
+        },
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(page.getByRole('alert')).toContainText('Runtime identity acknowledgement mismatched')
+  await expect(page.getByRole('alert')).toContainText(
+    'Target balance · case case-a · from saved case evidence',
+  )
+  await expect(
+    page.getByText('This run is failed. Partial results are not a completed evaluation.'),
+  ).toBeVisible()
 })
 
 test('catalog renders every registered adapter and fits mobile width', async ({ page }) => {
@@ -457,4 +625,281 @@ test('regrades saved answers and exports development evidence with holdout error
   await expect(page.getByRole('alert')).toContainText(
     'Holdout rows cannot be exported for training',
   )
+})
+
+test('manages long-lived runs and uses a dataset from its frozen inventory', async ({ page }) => {
+  await mockBench(page)
+  await page.goto('/evaluation')
+  await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
+  await page.getByLabel('Search runs').fill('Candidate')
+  await expect(page.getByRole('button', { name: 'Baseline test', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Candidate test', exact: true })).toBeVisible()
+  await page.getByLabel('Run status').selectOption('failed')
+  await expect(page.getByText('No runs match these filters.')).toBeVisible()
+  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Prepared datasets' })).toBeVisible()
+  await page.getByRole('button', { name: 'Evaluate this dataset' }).click()
+  await expect(page.getByLabel('Prepared dataset')).toHaveValue('quick-v1')
+  await expect(page).toHaveURL(/dataset=quick-v1/)
+})
+
+test('automatically reconnects the task list without submitting evaluations', async ({ page }) => {
+  const requests = await mockBench(page)
+  let reads = 0
+  let recovered = false
+  await page.route('**/api/sr-bench/v1/runs', async (route) => {
+    reads++
+    await route.fulfill(
+      !recovered
+        ? { status: 503, json: { error: 'Temporary disconnect' } }
+        : { json: { runs: [run] } },
+    )
+  })
+  await page.goto('/evaluation')
+  await expect(page.getByRole('alert')).toContainText('Temporary disconnect')
+  recovered = true
+  await expect(page.getByRole('button', { name: 'Baseline test', exact: true })).toBeVisible({
+    timeout: 10000,
+  })
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  expect(requests).toHaveLength(0)
+  expect(reads).toBeGreaterThan(1)
+})
+
+test('reopens all three optimization comparisons from the saved URL', async ({
+  page,
+}, testInfo) => {
+  await mockBench(page)
+  const iterations = ['Current Balance', 'Balance round 1', 'Balance round 2'].map(
+    (name, index) => ({
+      ...run,
+      id: `balance-${index}`,
+      manifest: {
+        ...manifest,
+        name,
+        targets: [{ ...target, id: 'balance', kind: 'mom', config_hash: String(index).repeat(64) }],
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs', (route) =>
+    route.fulfill({ json: { runs: [run, ...iterations] } }),
+  )
+  await page.goto('/evaluation?view=compare')
+  await page.getByLabel('Baseline run').selectOption('run-1')
+  await page.getByLabel('Current Balance run').selectOption('balance-0')
+  await page.getByLabel('Optimization 1 run').selectOption('balance-1')
+  await page.getByLabel('Optimization 2 run').selectOption('balance-2')
+  await page.getByRole('button', { name: 'Compare runs' }).click()
+  await expect(page.getByRole('cell', { name: '20% saving', exact: false })).toHaveCount(3)
+  await expect(page).toHaveURL(/iteration2=balance-2/)
+  await page.reload()
+  await expect(
+    page.getByRole('heading', { name: 'Optimization 2 · Balance round 2' }),
+  ).toBeVisible()
+  await expect(page.getByText('2'.repeat(64), { exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '20% saving', exact: false })).toHaveCount(3)
+  await page.screenshot({
+    path: testInfo.outputPath('optimization-comparison-desktop.png'),
+    fullPage: true,
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true)
+  await expect
+    .poll(() =>
+      page
+        .getByRole('region', { name: 'sr-bench workspace' })
+        .evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth),
+    )
+    .toBe(true)
+  await page.screenshot({
+    path: testInfo.outputPath('optimization-comparison-mobile.png'),
+    fullPage: true,
+  })
+})
+
+test('requires explicit recovery scope and reuses a lost-response submission after reload', async ({
+  page,
+}) => {
+  await mockBench(page)
+  const failedRun = { ...run, status: 'failed', progress: { total: 2, completed: 1, failed: 1 } }
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) => route.fulfill({ json: failedRun }))
+  const submissions: Record<string, unknown>[] = []
+  await page.route('**/api/sr-bench/v1/runs/run-1/recover-plan', (route) =>
+    route.fulfill({
+      json: {
+        parent_run_id: 'run-1',
+        mode: route.request().postDataJSON().mode,
+        eligible_cells: [{ target_id: 'single', case_id: 'failed-case' }],
+        excluded: [{ target_id: 'single', case_id: 'complete-case', reason: 'already completed' }],
+        counts: { eligible: 1, excluded: 1 },
+        parent: {
+          status: 'failed',
+          progress: failedRun.progress,
+          known_spend_usd: 0.2,
+          spend_complete: true,
+        },
+        plan_sha256: 'f'.repeat(64),
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/recover', async (route) => {
+    submissions.push(route.request().postDataJSON())
+    await route.fulfill(
+      submissions.length === 1
+        ? { status: 503, json: { error: 'Response unavailable' } }
+        : { json: { ...run, id: 'child-1' } },
+    )
+  })
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.getByLabel('Recovery scope').selectOption('failed')
+  await page.getByRole('button', { name: 'Review recovery plan' }).click()
+  await page.getByLabel('Recover single failed-case', { exact: true }).check()
+  await expect(page.getByRole('button', { name: 'Create recovery run (1 cases)' })).toBeDisabled()
+  await page.getByLabel('I acknowledge these are new model attempts', { exact: false }).check()
+  await page.getByRole('button', { name: 'Create recovery run (1 cases)' }).click()
+  await expect(page.getByText('Recovery submission needs reconciliation')).toBeVisible()
+  await page.reload()
+  await expect(page.getByText('Recovery submission needs reconciliation')).toBeVisible()
+  await page.getByRole('button', { name: 'Check or submit same recovery' }).click()
+  await expect(page).toHaveURL(/run=child-1/)
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1]).toEqual(submissions[0])
+  expect(submissions[0]).toMatchObject({
+    mode: 'failed',
+    acknowledge_new_attempt: true,
+    cells: [{ case_id: 'failed-case', target_id: 'single' }],
+  })
+})
+
+test('displays and downloads a matching server-captured recipe', async ({ page }) => {
+  await mockBench(page)
+  const configHash = 'c'.repeat(64)
+  let activeHash = configHash
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({
+      json: {
+        ...run,
+        manifest: {
+          ...manifest,
+          targets: [{ ...target, id: 'balance', kind: 'mom', config_hash: configHash }],
+        },
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        provenance: {
+          runner: {
+            recipe_snapshots: {
+              balance: {
+                source: 'router_config_api_bracketed_hashes',
+                source_config_hash: 'e'.repeat(64),
+                generated_runtime_hash: configHash,
+                active_runtime_hash: activeHash,
+                config_hash: configHash,
+                captured_at: '2026-09-18T00:00:00Z',
+                recipe_sha256: 'd'.repeat(64),
+                recipes: { balance: { decisions: [] } },
+                redacted: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(
+    page.getByRole('heading', { name: 'balance · Verified config snapshot' }),
+  ).toBeVisible()
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Download balance recipe' }).click()
+  expect((await download).suggestedFilename()).toBe('run-1-balance-recipe.json')
+  activeHash = 'f'.repeat(64)
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'balance · Snapshot unavailable' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Download balance recipe' })).toHaveCount(0)
+})
+
+test('replans a definitely undispatched recovery after eligibility changes', async ({ page }) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({ json: { ...run, status: 'failed' } }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/recover-plan', (route) =>
+    route.fulfill({
+      json: {
+        parent_run_id: 'run-1',
+        mode: 'undispatched',
+        eligible_cells: [{ target_id: 'single', case_id: 'unstarted' }],
+        excluded: [],
+        counts: { eligible: 1, excluded: 0 },
+        parent: {
+          status: 'failed',
+          progress: run.progress,
+          known_spend_usd: 0,
+          spend_complete: true,
+        },
+        plan_sha256: 'f'.repeat(64),
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/recover', (route) =>
+    route.fulfill({
+      status: 400,
+      json: {
+        error: 'Recovery eligibility changed; inspect a fresh recovery plan',
+        code: 'recovery_plan_required',
+        dispatch_started: false,
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await page.getByRole('button', { name: 'Review recovery plan' }).click()
+  await page.getByLabel('Recover single unstarted', { exact: true }).check()
+  await page.getByRole('button', { name: 'Create recovery run (1 cases)' }).click()
+  await expect(page.getByRole('alert')).toContainText('Recovery eligibility changed')
+  await expect(page.getByRole('button', { name: 'Review recovery plan' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Check or submit same recovery' })).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Review recovery plan' })).toBeEnabled()
+})
+
+test('keeps recovery lineage separate from the child denominator and spend', async ({ page }) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        recovery: {
+          parent_run_id: 'parent-1',
+          mode: 'undispatched',
+          parent_snapshot: {
+            progress: { completed: 30, total: 50 },
+            known_spend_usd: 2.5,
+            spend_complete: false,
+          },
+        },
+        child_attempts: [
+          { id: 'child-1', status: 'completed', progress: { completed: 1, total: 1, failed: 0 } },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(page.getByRole('heading', { name: 'Recovery lineage' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Open parent run' })).toHaveAttribute(
+    'href',
+    '?view=runs&run=parent-1',
+  )
+  await expect(
+    page.getByText('Parent snapshot: 30 / 50 completed', { exact: false }),
+  ).toContainText('$2.50000 (incomplete accounting)')
+  await expect(page.getByRole('link', { name: 'child-1', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '1 / 2', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '1 / 1', exact: true })).toBeVisible()
 })

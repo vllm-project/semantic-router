@@ -95,6 +95,132 @@ def test_comparison_resolves_equivalent_auxiliary_placement(tmp_path):
     assert result["comparisons"][0]["cost_saving_percent"] == 0
 
 
+def _weighted_matrix(store, order, costs, correct, candidate=False):
+    manifest = _manifest()
+    prototype = manifest["targets"][0]
+    manifest["benchmark_options"] = {}
+    manifest["targets"] = [
+        {
+            **prototype,
+            "id": target,
+            "model": target,
+            "prices": {target: prototype["prices"]["flash"]},
+            **(
+                {"kind": "mom", "config_hash": "frozen", "max_inference_calls": 1}
+                if candidate
+                else {}
+            ),
+        }
+        for target in order
+    ]
+    manifest["cases"] = [
+        {**manifest["cases"][0], "id": str(i), "benchmark": benchmark}
+        for i, benchmark in enumerate(
+            ["mmlu-pro", "mmlu-pro", "gpqa-diamond", "gpqa-diamond", "gpqa-diamond"]
+        )
+    ]
+    # One MMLU success and one GPQA success have exactly equal weighted value,
+    # despite different binary float arithmetic paths for 0.1*(1/2) and 0.15*(1/3).
+    run, _ = store.create(plan(manifest))
+    for target in order:
+        for case in manifest["cases"]:
+            passed = case["id"] in correct[target]
+            store.result(
+                run["id"],
+                case["id"],
+                target,
+                "completed",
+                {
+                    "correct": passed,
+                    "score": int(passed),
+                    "benchmark": case["benchmark"],
+                },
+            )
+            call = store.start_call(run["id"], case["id"], target, "subject", {})
+            store.finish_call(
+                call,
+                "completed",
+                {
+                    "cost_usd": (
+                        None
+                        if costs[target] is None
+                        else costs[target] / len(manifest["cases"])
+                    )
+                },
+            )
+    store.status(run["id"], "completed")
+    return run["id"]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_best_single_quality_tie_uses_cheapest_independent_of_manifest_order(
+    tmp_path, reverse
+):
+    store = Store(tmp_path)
+    order = ["expensive", "cheap"]
+    if reverse:
+        order.reverse()
+    baseline = _weighted_matrix(
+        store,
+        order,
+        {"expensive": 8, "cheap": 2},
+        {"expensive": {"3"}, "cheap": {"0"}},
+    )
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"3"}}, candidate=True
+    )
+    result = compare(store, baseline, candidate)
+    assert result["baseline_tied_best_target_ids"] == ["cheap", "expensive"]
+    assert result["baseline_selected_target_id"] == "cheap"
+    assert result["baseline_cost_comparison_eligible"] is True
+    assert result["baseline_cost_comparison_reason"] is None
+    paired = result["comparisons"][0]
+    assert paired["baseline_target_id"] == "cheap"
+    assert paired["quality_delta"] == 0
+    assert paired["cost_saving_percent"] == 50
+
+
+@pytest.mark.parametrize(
+    "costs,selected,eligible",
+    [
+        ({"a": 2, "z": 2}, "a", True),
+        ({"a": None, "z": 2}, "z", False),
+        ({"a": None, "z": None}, "a", False),
+    ],
+)
+def test_tied_baseline_has_stable_id_and_explicit_unknown_cost_policy(
+    tmp_path, costs, selected, eligible
+):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(store, ["z", "a"], costs, {"a": {"0"}, "z": {"0"}})
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"0"}}, candidate=True
+    )
+    result = compare(store, baseline, candidate)
+    assert result["baseline_selected_target_id"] == selected
+    assert result["baseline_cost_comparison_eligible"] is eligible
+    assert result["baseline_tied_best_target_ids"] == ["a", "z"]
+    if not eligible:
+        assert "incomplete cost" in result["baseline_cost_comparison_reason"]
+        assert result["comparisons"][0]["cost_saving_percent"] is None
+
+
+def test_stronger_quality_is_not_replaced_by_cheaper_lower_quality(tmp_path):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(
+        store,
+        ["cheap", "best"],
+        {"cheap": 1, "best": 8},
+        {"cheap": {"0"}, "best": {"0", "1"}},
+    )
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 2}, {"balance": {"0", "1"}}, candidate=True
+    )
+    result = compare(store, baseline, candidate)
+    assert result["baseline_selected_target_id"] == "best"
+    assert result["baseline_tied_best_target_ids"] == ["best"]
+
+
 @pytest.mark.parametrize("change", ["prices", "limits", "native-profile", "judge"])
 def test_comparison_rejects_incompatible_protocol(tmp_path, change):
     store = Store(tmp_path)

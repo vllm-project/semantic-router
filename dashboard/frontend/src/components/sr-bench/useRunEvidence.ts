@@ -14,6 +14,7 @@ export function useRunEvidence(id: string, revision: number) {
   const [resultsPage, setResultsPage] = useState<PageState>(emptyPage)
   const [callsPage, setCallsPage] = useState<PageState>(emptyPage)
   const [error, setError] = useState('')
+  const [readAt, setReadAt] = useState<string | null>(null)
   const control = useRef<{
     controller: AbortController
     resultsExpanded: boolean
@@ -38,26 +39,32 @@ export function useRunEvidence(id: string, revision: number) {
 
     async function readEvents() {
       const all: RunEvent[] = []
+      let cursor = eventCursor
       // The service limits event pages to 1,000. Drain saved pages in order,
       // including terminal runs, without ever replaying a model request.
       while (!controller.signal.aborted) {
-        const page = await benchApi.events(id, eventCursor, controller.signal)
+        const page = await benchApi.events(id, cursor, controller.signal)
         if (!page.events.length) break
         all.push(...page.events)
         const next = Math.max(...page.events.map((event) => event.seq ?? 0))
-        if (next <= eventCursor) break
-        eventCursor = next
+        if (next <= cursor) break
+        cursor = next
         if (page.events.length < 1000) break
       }
+      // Commit only the events this read can display. A later page failure must
+      // leave the cursor unchanged so the next read also recovers earlier pages.
+      eventCursor = cursor
       return all
     }
 
     async function load() {
       let terminal = false
+      let evidenceIncomplete = false
       try {
         const current = await benchApi.run(id, controller.signal)
         if (controller.signal.aborted) return
         setRun(current)
+        setReadAt(new Date().toLocaleTimeString())
         terminal = !active(current.status)
         if (current.updated_at !== lastUpdated) {
           const responses = await Promise.allSettled([
@@ -105,6 +112,7 @@ export function useRunEvidence(id: string, revision: number) {
             setEvents((previous) => [...previous, ...newEvents])
           }
           const failed = responses.find((response) => response.status === 'rejected')
+          evidenceIncomplete = !!failed
           setError(
             failed?.status === 'rejected'
               ? `Some run evidence is unavailable: ${failed.reason instanceof Error ? failed.reason.message : 'Refresh to retry the read.'}`
@@ -114,9 +122,11 @@ export function useRunEvidence(id: string, revision: number) {
         }
       } catch (cause) {
         if (controller.signal.aborted) return
+        evidenceIncomplete = true
         setError(cause instanceof Error ? cause.message : 'Run could not be loaded.')
       }
-      if (!controller.signal.aborted && !terminal) timer = setTimeout(() => void load(), 2500)
+      if (!controller.signal.aborted && (!terminal || evidenceIncomplete))
+        timer = setTimeout(() => void load(), evidenceIncomplete ? 5000 : 2500)
     }
     void load()
     return () => {
@@ -192,6 +202,7 @@ export function useRunEvidence(id: string, revision: number) {
     events,
     calls,
     error,
+    readAt,
     resultsPage,
     callsPage,
     loadMoreResults,

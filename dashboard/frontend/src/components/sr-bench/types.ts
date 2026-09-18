@@ -11,6 +11,7 @@ export interface Dataset {
   path: string
   sha256: string
   case_count: number
+  seed?: number
   profile?: string
   benchmarks?: string[]
   name?: string
@@ -23,6 +24,7 @@ export interface Target {
   model: string
   api_key_env?: string
   config_hash?: string
+  capture_recipe?: boolean
   preview_url?: string
   max_inference_calls?: number
   prices?: Record<
@@ -77,6 +79,8 @@ export interface TargetMetrics {
   ttft_p50_s?: number | null
   selected_models?: Record<string, number>
   decisions?: Record<string, number>
+  selection_statuses?: Record<string, number>
+  selection_reasons?: Record<string, number>
   [key: string]: unknown
 }
 
@@ -134,6 +138,12 @@ export interface Report {
   benchmarks: Array<Record<string, unknown>>
   limitations: string[]
   provenance: Record<string, unknown>
+  failure?: {
+    case_id: string
+    target_id: string
+    reason: string
+    inferred_from_saved_results?: boolean
+  } | null
   [key: string]: unknown
 }
 
@@ -172,6 +182,10 @@ export interface Comparison {
   baseline_run_id: string
   candidate_run_id: string
   baseline_selection: string
+  baseline_tied_best_target_ids?: string[]
+  baseline_tie_policy?: string
+  baseline_cost_comparison_eligible?: boolean
+  baseline_cost_comparison_reason?: string | null
   comparisons: Array<{
     baseline_target_id: string
     candidate_target_id: string
@@ -185,4 +199,33 @@ export interface Comparison {
     losses: number
     ties: number
   }>
+}
+
+export interface RecoveryCell {
+  case_id: string
+  target_id: string
+}
+export interface RecoveryPlan {
+  parent_run_id: string
+  mode: 'undispatched' | 'failed'
+  eligible_cells: RecoveryCell[]
+  excluded: Array<RecoveryCell & { reason: string }>
+  counts: { eligible: number; excluded: number }
+  parent: {
+    status: string
+    progress: Run['progress']
+    known_spend_usd: number | null
+    spend_complete: boolean
+  }
+  plan_sha256: string
+  new_attempt_budget_usd?: number
+  requires_new_attempt_acknowledgment?: boolean
+  scope?: string
+}
+export interface RecoveryRequest {
+  mode: RecoveryPlan['mode']
+  plan_sha256: string
+  cells: RecoveryCell[]
+  idempotency_key: string
+  acknowledge_new_attempt?: boolean
 }

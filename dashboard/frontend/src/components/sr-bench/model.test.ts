@@ -34,6 +34,18 @@ describe('sr-bench run contract', () => {
     expect(manifest.sampling.max_tokens).toBe(DEFAULT_LIMITS.max_output_tokens)
     expect(validateManifest(manifest)).toBeNull()
   })
+  it('preserves the registered dataset sampling seed instead of substituting a default', () => {
+    const manifest = makeManifest(
+      'Seeded',
+      'live',
+      'quick',
+      { ...dataset, seed: 73 },
+      [single],
+      DEFAULT_LIMITS,
+    )
+    expect(manifest.seed).toBe(73)
+    expect(manifest.sampling.seed).toBe(73)
+  })
   it('rejects invalid limits, duplicate identities and non-MoM preview', () => {
     const manifest = makeManifest('Review', 'live', 'quick', dataset, [single], DEFAULT_LIMITS)
     expect(validateManifest({ ...manifest, targets: [single, single] })).toContain('unique')

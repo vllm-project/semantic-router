@@ -73,6 +73,10 @@ def export_training(store, run_id):
     if run["status"] != "completed" or run["manifest"]["mode"] != "live":
         raise ValueError("Training export requires a completed live run")
     manifest = run["manifest"]
+    if manifest.get("recovery") or manifest.get("execution_cells"):
+        raise ValueError(
+            "Training export requires a complete rectangular matrix; recovery subsets stay separate"
+        )
     if manifest["profile"] == "standard" or any(
         c.get("metadata", {}).get("split") != "dev" for c in manifest["cases"]
     ):

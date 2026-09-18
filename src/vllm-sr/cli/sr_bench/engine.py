@@ -13,7 +13,7 @@ from http import HTTPStatus
 import requests
 
 from .adapters import get_adapter
-from .contracts import digest, plan
+from .contracts import digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
 from .provenance import capture_runner
 from .report import BUCKETS, make_report
@@ -259,8 +259,14 @@ class Engine:
         self.first_failures = {}
         self.store.recover()
 
-    def start(self, manifest, owner="local", request_key=None):
+    def start(self, manifest, owner="local", request_key=None, recovery=False):
+        if manifest.get("recovery") and not recovery:
+            raise ValueError("Recovery lineage requires the explicit recovery endpoint")
         frozen = plan(manifest)
+        if request_key and (existing := self.store.request(owner, request_key)):
+            if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
+                raise ValueError("idempotency key is already bound to a different plan")
+            return existing
         run, created = self.store.create(
             frozen, owner, request_key, provenance=capture_runner(frozen)
         )
@@ -460,7 +466,12 @@ class Engine:
         self.store.status(run_id, "running")
         enqueued_at = time.monotonic()
         deadline = enqueued_at + manifest["limits"]["max_run_seconds"]
-        pending = iter((c, t) for c in manifest["cases"] for t in manifest["targets"])
+        cases = {case["id"]: case for case in manifest["cases"]}
+        targets = {target["id"]: target for target in manifest["targets"]}
+        pending = iter(
+            (cases[cell["case_id"]], targets[cell["target_id"]])
+            for cell in planned_cells(manifest)
+        )
         try:
             with concurrent.futures.ThreadPoolExecutor(
                 max_workers=manifest["limits"]["concurrency"]

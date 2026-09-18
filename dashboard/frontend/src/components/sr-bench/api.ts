@@ -8,6 +8,8 @@ import type {
   Manifest,
   Plan,
   Report,
+  RecoveryPlan,
+  RecoveryRequest,
   Run,
   RunEvent,
   Target,
@@ -19,6 +21,8 @@ export class SrBenchRequestError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code?: string,
+    readonly dispatchStarted?: boolean,
   ) {
     super(message)
     this.name = 'SrBenchRequestError'
@@ -44,6 +48,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
           ? payload.message
           : `sr-bench request failed (HTTP ${response.status}).`,
       response.status,
+      typeof payload.code === 'string' ? payload.code : undefined,
+      typeof payload.dispatch_started === 'boolean' ? payload.dispatch_started : undefined,
     )
   }
   if (value === null)
@@ -64,6 +70,9 @@ export const benchApi = {
   plan: (manifest: Manifest) => post<Plan>('/plans', { manifest }),
   start: (manifest: Manifest, idempotencyKey: string) =>
     post<Run>('/runs', { manifest, idempotency_key: idempotencyKey }),
+  recoveryPlan: (id: string, mode: RecoveryPlan['mode']) =>
+    post<RecoveryPlan>(`${runPath(id)}/recover-plan`, { mode }),
+  recover: (id: string, recovery: RecoveryRequest) => post<Run>(`${runPath(id)}/recover`, recovery),
   cancel: (id: string) => post<Run>(`${runPath(id)}/cancel`, {}),
   calls: (id: string, after = 0, signal?: AbortSignal) =>
     request<EvidencePage & { calls: CallRecord[] }>(

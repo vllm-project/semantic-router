@@ -26,11 +26,16 @@ export function makeManifest(
     name: name.trim(),
     mode,
     profile,
-    seed: 20260918,
+    seed: dataset?.seed ?? 20260918,
     ...(dataset ? { dataset: { path: dataset.path, sha256: dataset.sha256 } } : {}),
     targets: targets.map((target) => ({ ...target })),
     limits: { ...limits },
-    sampling: { temperature: 0, top_p: 1, max_tokens: limits.max_output_tokens, seed: 20260918 },
+    sampling: {
+      temperature: 0,
+      top_p: 1,
+      max_tokens: limits.max_output_tokens,
+      seed: dataset?.seed ?? 20260918,
+    },
   }
 }
 
@@ -78,7 +83,7 @@ export const active = (status: string) => status === 'queued' || status === 'run
 
 export function reportDistribution(
   targets: TargetMetrics[],
-  field: 'selected_models' | 'decisions',
+  field: 'selected_models' | 'decisions' | 'selection_statuses' | 'selection_reasons',
 ): Array<[string, number]> {
   return targets
     .flatMap((target) =>

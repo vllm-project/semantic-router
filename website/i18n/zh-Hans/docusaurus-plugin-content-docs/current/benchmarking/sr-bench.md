@@ -103,7 +103,9 @@ vllm-sr benchmark regrade RUN_ID --output regrade.json
 vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
 ```
 
-Replay 是答案复用产生的诊断估计，不是实测能力、延迟或节省结果。离线 regrade 目前只支持选择题/网格最终答案，零模型调用且不改写原始结果。Export 仅允许明确标记的 dev 数据，拒绝 holdout 和未知 split；它不会启动训练。
+启用 Learning 时，preview 在当前学习状态的只读快照上执行模型选择；可解析时返回具体模型，并保留选择状态、原因和 `selection_provenance` 中的配置/状态哈希、采集时间、是否使用本地采样及种子。预览不更新学习状态，后续真实请求也可能因状态或采样变化而选择不同模型。不要通过关闭 Learning 来验证它；那会测到另一套策略。Dashboard 在每题预览详情中显示这些依据，并解释尚需真实执行的选择。
+
+Replay 是答案复用产生的诊断估计，不是实测能力、延迟或节省结果；依赖学习状态的快照不允许 replay。离线 regrade 目前只支持选择题/网格最终答案，零模型调用且不改写原始结果。Export 仅允许明确标记的 dev 数据，拒绝 holdout 和未知 split；它不会启动训练。
 
 ## 阅读报告和 Dashboard
 
@@ -111,6 +113,29 @@ Replay 是答案复用产生的诊断估计，不是实测能力、延迟或节�
 
 完整 sr-bench 权重为 MMLU-Pro 10%、SimpleQA 10%、GPQA 15%、HLE 15%、ARC 10%、LiveCodeBench 10%、SciCode 10%、Terminal-Bench 10%、τ³ 10%。九项都完整时才输出总分；子集宏平均仍是子集结果。
 
-基线是在相同完整题集上按相同汇总规则选出的最强已测单模型，不是逐题选优 oracle。节省率为 `100 × (1 − 候选主体成本 / 基线主体成本)`，要求完整兼容的计量。小样本用于判断方向；质量持平需要预先确定的非劣界值和保留集置信区间。自托管 token 等价价格不是 GPU 账单节省。
+基线是在相同完整题集上按相同汇总规则选出的最强已测单模型，不是逐题选优 oracle。精确加权质量相同时，优先选择主体费用完整且最低的单模型，再按固定目标 ID 排序；报告列出全部并列最强模型。任一并列最强模型费用不完整时，节省率保持未知。节省率为 `100 × (1 − 候选主体成本 / 基线主体成本)`，要求完整兼容的计量。小样本用于判断方向；质量持平需要预先确定的非劣界值和保留集置信区间。自托管 token 等价价格不是 GPU 账单节省。
 
-Dashboard 提供数据集/目标选择、冻结计划、启动/取消、实时进度、成对比较、诊断回放、题目证据、重评分和训练矩阵导出。CLI 创建的运行也在同一界面可见。刷新页面不会重启任务。
+Dashboard 默认进入 **Runs**，按名称、模型、状态和模式筛选任务，展示完成分母、失败数、持久化更新时间和目标类型。只读轮询会在断网后恢复，并发现 CLI 新建的任务；关闭或刷新页面不会重启任务。**Datasets** 展示冻结题量、profile、benchmark 范围与题目哈希，点击 **Evaluate this dataset** 可复用同一数据集。
+
+**Compare iterations** 同屏展示单模型基线、当前 Balance、优化 1、优化 2。所选运行 ID 保存在 URL 中，重新打开即可查看同一组结果。质量差值和置信区间与成本节省率、token、延迟、wall time、配置哈希一起展示。范围不兼容或未完成的运行不能生成对比结果；点估计为正但区间跨零时，不能认定已经提升。
+
+MoM 目标可由运维人员在注册信息中设置 `capture_recipe: true`，并固定 `config_hash` 和规范的 `preview_url`。worker 仅在捕获前后生成配置和生效运行时哈希均匹配目标、源配置 ETag 保持不变时，捕获脱敏 recipe；**Frozen recipes** 支持查看、下载及核对采集时间、投影哈希。真实调用独立确认实际配置哈希。下载省略部署连接信息和凭据，是 recipe 产物，不是完整可部署配置。旧运行没有快照时明确显示不可用，不借用后续配置。
+
+题目结果和调用列表按 100 条分页，完整调用内容按需读取；汇总指标始终来自完整报告，不受已加载详情条数影响。事件默认展示最近 100 条，可继续读取更早记录。重评分和训练矩阵导出复用已保存证据，不产生模型调用。
+
+### 显式恢复未完成任务
+
+worker 停止或响应丢失后，先核对持久化派发与调用记录。在已终止任务中使用 **Review recovery plan**：
+
+- **Continue undispatched cases** 只允许继续从未派发模型调用的单元格。
+- **Retry known failed cases as new attempts** 需要明确选择单元格，并确认新尝试及额外费用。调用状态或费用不明确、已有完整答案、已被其他恢复任务领取的单元格均排除。
+
+恢复创建独立子任务，保留原任务。子任务分母、进度和成本只覆盖本次选择的范围；原任务已知费用单独显示在 lineage 中。子任务完成不等于原 benchmark 已全量完成。Dashboard 在当前标签页保存待确认的完整恢复请求，响应丢失时复用同一幂等键；不会自动重试模型生成或重启 worker。
+
+```bash
+vllm-sr benchmark recover-plan RUN_ID --mode undispatched --output recovery.json
+# 核对可继续/排除的单元格；可用 selected_cells 指定已审核的子集。
+vllm-sr benchmark recover RUN_ID --plan recovery.json --idempotency-key recovery-1
+```
+
+若使用 `--mode failed`，最后一步还需 `--acknowledge-new-attempt`。对账不确定的提交时，必须复用相同计划、单元格和幂等键。

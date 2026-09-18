@@ -10,11 +10,15 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .contracts import canonical
+from .contracts import canonical, planned_cells
 
 MAX_PAGE_SIZE = 500
 
 TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
+
+
+class RecoveryClaimError(ValueError):
+    """The transaction rolled back because another child already owns a cell."""
 
 
 def now():
@@ -37,6 +41,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS calls(id TEXT PRIMARY KEY,run_id TEXT,case_id TEXT,target_id TEXT,role TEXT,status TEXT,data TEXT);
         CREATE TABLE IF NOT EXISTS events(seq INTEGER PRIMARY KEY AUTOINCREMENT,run_id TEXT,at TEXT,kind TEXT,data TEXT);
         CREATE TABLE IF NOT EXISTS run_provenance(run_id TEXT PRIMARY KEY,data TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS recovery_claims(parent_run_id TEXT,case_id TEXT,target_id TEXT,child_run_id TEXT,PRIMARY KEY(parent_run_id,case_id,target_id));
         """)
         self.db.commit()
 
@@ -71,6 +76,24 @@ class Store:
                     "INSERT INTO run_provenance VALUES(?,?)",
                     (run_id, canonical(provenance)),
                 )
+            if recovery := manifest.get("recovery"):
+                try:
+                    self.db.executemany(
+                        "INSERT INTO recovery_claims VALUES(?,?,?,?)",
+                        [
+                            (
+                                recovery["parent_run_id"],
+                                cell["case_id"],
+                                cell["target_id"],
+                                run_id,
+                            )
+                            for cell in planned_cells(manifest)
+                        ],
+                    )
+                except sqlite3.IntegrityError as exc:
+                    raise RecoveryClaimError(
+                        "Recovery cells were already claimed by another child"
+                    ) from exc
             self.event(run_id, "created", {"plan_sha256": manifest["plan_sha256"]})
             return self.get(run_id), True
 
@@ -117,7 +140,7 @@ class Store:
                 "manifest": m,
                 "error": row[6],
                 "progress": {
-                    "total": len(m["cases"]) * len(m["targets"]),
+                    "total": len(planned_cells(m)),
                     "completed": completed,
                     "failed": failed,
                     "running": counts.get("running", 0),
@@ -133,6 +156,32 @@ class Store:
                 (() if owner is None else (owner,)),
             ).fetchall()
             return [self.get(row[0]) for row in rows]
+
+    def request(self, owner, request_key):
+        with self.lock:
+            row = self.db.execute(
+                "SELECT id FROM runs WHERE owner=? AND request_key=?",
+                (owner, request_key),
+            ).fetchone()
+            return self.get(row[0]) if row else None
+
+    def children(self, run_id):
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT id FROM runs WHERE json_extract(manifest,'$.recovery.parent_run_id')=? ORDER BY created_at,id",
+                (run_id,),
+            ).fetchall()
+            return [self.get(row[0]) for row in rows]
+
+    def recovery_claims(self, parent_id):
+        with self.lock:
+            return {
+                (row[0], row[1]): row[2]
+                for row in self.db.execute(
+                    "SELECT case_id,target_id,child_run_id FROM recovery_claims WHERE parent_run_id=?",
+                    (parent_id,),
+                )
+            }
 
     def status(self, run_id, status, error=None):
         with self.lock, self.db:

@@ -96,6 +96,14 @@ def digest(value):
     return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
+def planned_cells(manifest):
+    return manifest.get("execution_cells") or [
+        {"case_id": case["id"], "target_id": target["id"]}
+        for case in manifest["cases"]
+        for target in manifest["targets"]
+    ]
+
+
 def catalog():
     return {
         "version": VERSION,
@@ -351,6 +359,10 @@ def plan(manifest):
         ids.add(t["id"])
         if t.get("kind") not in {"single", "mom"} or not t.get("model"):
             raise ValueError("target requires kind single/mom and model")
+        if "capture_recipe" in t and not isinstance(t["capture_recipe"], bool):
+            raise ValueError("capture_recipe must be boolean")
+        if t.get("capture_recipe") and t["kind"] != "mom":
+            raise ValueError("Recipe capture is only available for MoM targets")
         u = urlparse(t.get("base_url", ""))
         if (
             u.scheme not in {"http", "https"}
@@ -449,6 +461,32 @@ def plan(manifest):
         validate_request_params(
             {**sampling, **params}, limits, "effective request_params"
         )
+    if "execution_cells" in m:
+        cells = m["execution_cells"]
+        valid = {(c["id"], t["id"]) for c in cases for t in targets}
+        if (
+            not isinstance(cells, list)
+            or not cells
+            or any(
+                not isinstance(cell, dict)
+                or set(cell) != {"case_id", "target_id"}
+                or not all(isinstance(value, str) for value in cell.values())
+                or (cell["case_id"], cell["target_id"]) not in valid
+                for cell in cells
+            )
+        ):
+            raise ValueError("execution_cells must select valid case/target pairs")
+        chosen = {(cell["case_id"], cell["target_id"]) for cell in cells}
+        if len(chosen) != len(cells):
+            raise ValueError("execution_cells must not contain duplicate pairs")
+        if {target for _, target in chosen} != {t["id"] for t in targets}:
+            raise ValueError("Every target must have at least one selected case")
+        m["execution_cells"] = [
+            {"case_id": c["id"], "target_id": t["id"]}
+            for c in cases
+            for t in targets
+            if (c["id"], t["id"]) in chosen
+        ]
     m["sampling"] = sampling
     m["case_sha256"] = digest(cases)
     expected_weights = {

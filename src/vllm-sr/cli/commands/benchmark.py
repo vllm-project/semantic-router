@@ -13,7 +13,7 @@ import click
 from cli.runtime_stack import resolve_runtime_stack
 from cli.sr_bench import setup, sources
 from cli.sr_bench.client import Client
-from cli.sr_bench.contracts import catalog, load_document, plan
+from cli.sr_bench.contracts import catalog, load_document, plan, planned_cells
 from cli.sr_bench.service import DEFAULT_STORE, DEFAULT_URL, serve
 from cli.sr_bench.store import TERMINAL
 
@@ -200,7 +200,7 @@ def plan_command(manifest, destination):
         {
             "manifest": frozen,
             "plan_sha256": frozen["plan_sha256"],
-            "total": len(frozen["cases"]) * len(frozen["targets"]),
+            "total": len(planned_cells(frozen)),
         }
     )
 
@@ -452,4 +452,58 @@ def export_command(client, run_id, destination):
             "case_count": len(artifact["cases"]),
             "split": artifact["split"],
         }
+    )
+
+
+@benchmark.command("recover-plan")
+@click.argument("run_id")
+@click.option(
+    "--mode", type=click.Choice(["undispatched", "failed"]), default="undispatched"
+)
+@click.option("--output", "destination", type=click.Path(path_type=Path))
+@click.pass_obj
+@guarded
+def recover_plan_command(client, run_id, mode, destination):
+    """Inspect eligible continuation cells without making model requests."""
+    proposed = client.request(
+        "POST", "/runs/" + run_id + "/recover-plan", {"mode": mode}
+    )
+    if destination:
+        with destination.open("x") as handle:
+            handle.write(json.dumps(proposed, indent=2) + "\n")
+    output(proposed)
+
+
+@benchmark.command("recover")
+@click.argument("run_id")
+@click.option(
+    "--plan", "plan_path", required=True, type=click.Path(exists=True, path_type=Path)
+)
+@click.option("--idempotency-key", required=True)
+@click.option(
+    "--acknowledge-new-attempt",
+    is_flag=True,
+    help="Authorize new paid attempts for the exact reviewed failed cells.",
+)
+@click.pass_obj
+@guarded
+def recover_command(
+    client, run_id, plan_path, idempotency_key, acknowledge_new_attempt
+):
+    """Create a separate attempt from a reviewed recovery plan; never auto-retry."""
+    proposed = load_document(plan_path)
+    if proposed.get("parent_run_id") != run_id:
+        raise click.ClickException("Recovery plan belongs to another parent run")
+    output(
+        client.request(
+            "POST",
+            "/runs/" + run_id + "/recover",
+            {
+                "mode": proposed["mode"],
+                "plan_sha256": proposed["plan_sha256"],
+                "cells": proposed.get("selected_cells", proposed["eligible_cells"]),
+                "idempotency_key": idempotency_key,
+                "acknowledge_new_attempt": acknowledge_new_attempt,
+            },
+        )
     )

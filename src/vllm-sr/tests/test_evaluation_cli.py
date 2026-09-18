@@ -31,6 +31,8 @@ def test_catalog_and_clean_command_surface():
         "target",
         "replay",
         "regrade",
+        "recover-plan",
+        "recover",
         "export",
     }
     assert runner.invoke(benchmark, ["intelligence", "--help"]).exit_code == 2
@@ -68,3 +70,9 @@ def test_plan_freezes_without_service_or_inference(tmp_path):
     assert frozen["plan_sha256"] == json.loads(result.output)["plan_sha256"]
     assert len(frozen["case_sha256"]) == 64
     assert frozen["limits"]["total_timeout_s"] < 3600
+    manifest["cases"].append({**manifest["cases"][0], "id": "q2"})
+    manifest["execution_cells"] = [{"case_id": "q1", "target_id": "single"}]
+    path.write_text(json.dumps(manifest))
+    selected = CliRunner().invoke(benchmark, ["plan", "--manifest", str(path)])
+    assert selected.exit_code == 0, selected.output
+    assert json.loads(selected.output)["total"] == 1
