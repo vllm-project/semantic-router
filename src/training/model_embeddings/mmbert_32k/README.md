@@ -219,17 +219,46 @@ Export and engine qualification remain separate from this training interface.
 
 ## Install
 
-Use a Python environment with a compatible PyTorch build, then install the
-family dependencies:
+Use Python 3.10+ and the patched PyTorch 2.13 runtime. For CPU validation,
+install `torch==2.13.0` from `https://download.pytorch.org/whl/cpu` first.
+For the pinned ROCm base in `runtime.json`, replace its old Torch stack before
+installing the family dependencies (the family does not use torchaudio):
+
+```bash
+python -m pip uninstall -y torchaudio
+python -m pip install --index-url https://download.pytorch.org/whl/rocm7.2 \
+  'torch==2.13.0+rocm7.2' 'torchvision==0.28.0+rocm7.2'
+```
+
+Then install the family dependencies:
 
 ```bash
 python -m pip install --requirement \
   src/training/model_embeddings/mmbert_32k/requirements.txt
 ```
 
-The accelerator image and Python package versions for a release run are pinned
-in `runtime.json`. Keep that environment, the resolved configuration, and
-output checksums with the run.
+Run `python -m pip check` after installation. The base-image metadata in
+`runtime.json` describes the original image; `pytorch_install` is mandatory and
+overrides its older Torch build. The safety workflow Dockerfile performs the
+same HIP-wheel installation and checks that generic requirements did not replace
+it with a CUDA wheel. CPU contract tests do not qualify a ROCm image or GPU
+training run; keep the separate accelerator validation, resolved configuration,
+and output checksums with each release run.
+
+Transformers 5 uses per-attention-type ModernBERT RoPE parameters and reports a
+normalized final hidden state. The trainer validates the shared YaRN frequencies
+and explicitly captures the pre-normalization final exit required by legacy
+reranker heads. Full task-quality retraining remains separate from these
+small-model compatibility tests.
+
+The existing Accelerate pin is retained because no patched release is available for
+[GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79).
+Even release 1.15 and upstream main still lack the checkpoint-loader fix,
+although 1.15 falls outside the advisory's current version range. The supported
+Transformers load/Trainer path is regression-tested with those Accelerate
+checkpoint APIs disabled; do not use `load_checkpoint_in_model` or
+`load_checkpoint_and_dispatch` for untrusted artifacts. This scoped avoidance
+does not fix the installed upstream library or justify dismissing its alerts.
 
 ## Configure paths
 

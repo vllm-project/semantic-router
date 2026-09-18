@@ -18,6 +18,7 @@ try:
 
     from src.training.model_embeddings.mmbert_32k.representation_outputs import (
         PhysicalPrefixEncoder,
+        forward_with_raw_hidden_states,
         masked_mean,
         select_hidden_state,
         truncate_and_normalize,
@@ -90,8 +91,11 @@ class NativeRepresentationTest(unittest.TestCase):
     def test_embedding_prefix_matches_raw_early_and_normalized_full(self):
         contract = set_vela_representation_contract(self.encoder.config, "embedding")
         with torch.inference_mode():
-            output = self.encoder(
-                self.ids, attention_mask=self.mask, output_hidden_states=True
+            output = forward_with_raw_hidden_states(
+                self.encoder,
+                self.ids,
+                attention_mask=self.mask,
+                output_hidden_states=True,
             )
             for layer in (1, 2, 3):
                 expected = (
@@ -121,8 +125,11 @@ class NativeRepresentationTest(unittest.TestCase):
     def test_reranker_normalizes_every_exit_exactly_once(self):
         contract = set_vela_representation_contract(self.encoder.config, "reranker")
         with torch.inference_mode():
-            output = self.encoder(
-                self.ids, attention_mask=self.mask, output_hidden_states=True
+            output = forward_with_raw_hidden_states(
+                self.encoder,
+                self.ids,
+                attention_mask=self.mask,
+                output_hidden_states=True,
             )
             for layer in (1, 2, 3):
                 expected = self.encoder.final_norm(output.hidden_states[layer])
@@ -175,8 +182,11 @@ class NativeRepresentationTest(unittest.TestCase):
         )
         with torch.inference_mode():
             legacy = model(self.ids, self.mask, return_all_scores=True)["all_scores"]
-            output = self.encoder(
-                self.ids, attention_mask=self.mask, output_hidden_states=True
+            output = forward_with_raw_hidden_states(
+                self.encoder,
+                self.ids,
+                attention_mask=self.mask,
+                output_hidden_states=True,
             )
             expected = model.layer_heads["3"]["8"](
                 output.hidden_states[-1][:, 0]

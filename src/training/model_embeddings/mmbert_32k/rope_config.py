@@ -1,9 +1,9 @@
 """Fail-closed ModernBERT YaRN configuration helpers.
 
-The pinned Transformers 4.57.6 implementation constructs rotary frequencies
-from ``config.rope_scaling``.  ModernBERT's Flash Attention 2 path uses a
-different unpadded rotary implementation, so a reproducible YaRN run must use
-the SDPA or eager attention path and validate the instantiated modules.
+Transformers 5 constructs shared rotary frequencies from per-attention-type
+``config.rope_parameters``. Historical configuration objects use
+``rope_scaling``. A reproducible run validates the persisted settings and the
+instantiated frequencies, using the SDPA or eager attention path.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ def build_yarn_rope_scaling(
     beta_fast: float,
     beta_slow: float,
 ) -> dict[str, float | int | str]:
-    """Build the official Transformers 4.57.6 YaRN configuration."""
+    """Build the official Transformers YaRN configuration."""
     if original_max_position_embeddings <= 0:
         raise ValueError("original_max_position_embeddings must be positive")
     if target_max_position_embeddings <= original_max_position_embeddings:
@@ -56,7 +56,7 @@ def configure_modernbert_yarn(
     if attention_implementation not in SUPPORTED_ATTENTION_IMPLEMENTATIONS:
         raise ValueError(
             "ModernBERT YaRN requires an attention implementation that consumes "
-            f"config.rope_scaling; choose one of {sorted(SUPPORTED_ATTENTION_IMPLEMENTATIONS)}"
+            f"config-driven rotary parameters; choose one of {sorted(SUPPORTED_ATTENTION_IMPLEMENTATIONS)}"
         )
     observed_native_length = getattr(config, "max_position_embeddings", None)
     if observed_native_length != original_max_position_embeddings:
@@ -66,12 +66,19 @@ def configure_modernbert_yarn(
         )
 
     config.max_position_embeddings = target_max_position_embeddings
-    config.rope_scaling = build_yarn_rope_scaling(
+    scaling = build_yarn_rope_scaling(
         original_max_position_embeddings=original_max_position_embeddings,
         target_max_position_embeddings=target_max_position_embeddings,
         beta_fast=beta_fast,
         beta_slow=beta_slow,
     )
+    if isinstance(getattr(config, "rope_parameters", None), dict):
+        config.rope_parameters = {
+            layer_type: {**parameters, **scaling}
+            for layer_type, parameters in config.rope_parameters.items()
+        }
+    else:
+        config.rope_scaling = scaling
     return config
 
 
@@ -95,7 +102,21 @@ def assert_yarn_config(
         != target_max_position_embeddings
     ):
         raise RuntimeError("model config did not retain the target context length")
-    if getattr(config, "rope_scaling", None) != expected:
+    parameters = getattr(config, "rope_parameters", None)
+    if isinstance(parameters, dict):
+        layer_types = set(getattr(config, "layer_types", ()))
+        if not layer_types or not layer_types <= parameters.keys():
+            raise RuntimeError("model config omitted attention-type RoPE parameters")
+        valid = all(
+            all(
+                parameters[layer_type].get(key) == value
+                for key, value in expected.items()
+            )
+            for layer_type in layer_types
+        )
+    else:
+        valid = getattr(config, "rope_scaling", None) == expected
+    if not valid:
         raise RuntimeError(
             "model config did not retain the exact Transformers YaRN configuration"
         )
@@ -138,6 +159,13 @@ def verify_loaded_modernbert_yarn(
         rotary_count += 1
         rotary = module.rotary_emb
         rotary_class = rotary.__class__.__name__
+        if isinstance(getattr(rotary, "rope_type", None), dict):
+            try:
+                _verify_shared_rotary(rotary, model.config)
+            except (RuntimeError, AssertionError, KeyError) as error:
+                failures.append(f"{name}.rotary_emb: {error}")
+            rotary_count += len(model.config.layer_types) - 1
+            continue
         if "Unpadded" in rotary_class or getattr(rotary, "rope_type", None) != "yarn":
             failures.append(
                 f"{name}.rotary_emb={rotary_class} does not use config-driven YaRN"
@@ -177,3 +205,29 @@ def verify_loaded_modernbert_yarn(
     if failures:
         raise RuntimeError("ModernBERT YaRN validation failed: " + "; ".join(failures))
     return rotary_count
+
+
+def _verify_shared_rotary(rotary: Any, config: Any) -> None:
+    """Validate the shared Transformers 5 rotary module for every layer type."""
+    import torch  # noqa: PLC0415 - retain import-light config validation
+    from transformers.modeling_rope_utils import (  # noqa: PLC0415
+        ROPE_INIT_FUNCTIONS,
+    )
+
+    for layer_type in set(config.layer_types):
+        if rotary.rope_type.get(layer_type) != "yarn":
+            raise RuntimeError(f"{layer_type} does not use config-driven YaRN")
+        if (
+            rotary.config.rope_parameters[layer_type]
+            != config.rope_parameters[layer_type]
+        ):
+            raise RuntimeError(f"{layer_type} rotary configuration changed")
+        actual = getattr(rotary, f"{layer_type}_inv_freq", None)
+        if actual is None:
+            raise RuntimeError(f"{layer_type} has no instantiated YaRN frequencies")
+        expected, scale = ROPE_INIT_FUNCTIONS["yarn"](
+            config, device=actual.device, layer_type=layer_type
+        )
+        torch.testing.assert_close(actual, expected, rtol=1e-6, atol=0)
+        if getattr(rotary, f"{layer_type}_attention_scaling", None) != scale:
+            raise RuntimeError(f"{layer_type} YaRN attention scaling changed")
