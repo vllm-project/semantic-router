@@ -186,6 +186,8 @@ type SelectionContext struct {
 	// Cost-aware selectors use both to compare request-shaped estimated cost.
 	InputTokens          int
 	ExpectedOutputTokens int
+	// CandidateDemands contains provider-rendered budgets for automatic output.
+	CandidateDemands map[string]CandidateDemand
 
 	// CostWeight indicates how much to weight cost in selection (0.0-1.0)
 	// Higher values prefer cheaper models
@@ -246,6 +248,10 @@ type SelectionResult struct {
 	// SelectedModel is the name of the selected model
 	SelectedModel string
 
+	// SelectedCandidate preserves the exact winning ModelRef when a model appears
+	// more than once with different candidate-level settings.
+	SelectedCandidate *config.ModelRef
+
 	// LoRAName is the LoRA adapter name to use (if applicable)
 	LoRAName string
 
@@ -270,8 +276,11 @@ type SelectionResult struct {
 	// Later learning and provider rerouting must not expand this set.
 	EligibleModels []config.ModelRef
 
-	// AllScores maps each candidate model to its computed score
-	AllScores map[string]float64
+	// CandidateScores is the typed input for composition and policy. AllScores
+	// is its compatibility/diagnostic projection, never a candidate identity.
+	CandidateScores CandidateScores
+	ScoreDirection  ScoreDirection
+	AllScores       map[string]float64
 
 	// Prompt-helper telemetry is populated only by MethodPrompt.
 	HelperModel            string

@@ -322,8 +322,18 @@ routing:
         assert re.sub(pattern, substitution, rewritten_path) == upstream_path
 
 
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "/v1/chat",
+        "/v1/provider",
+        "/v1/provider.v2",
+        "/v1/provider+api",
+        "/v1/provider/nested",
+    ],
+)
 def test_selected_model_route_does_not_rewrite_overlapping_provider_path(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, prefix
 ):
     """Do not confuse an overlapping provider prefix with an ingress path."""
     rendered = _render_envoy_config(
@@ -359,7 +369,9 @@ routing:
       modelRefs:
         - model: "provider-model"
           use_reasoning: false
-""",
+""".replace(
+            "https://api.example.com/v1/chat", "https://api.example.com" + prefix
+        ),
         extproc_host="localhost",
         router_api_host="localhost",
     )
@@ -368,15 +380,22 @@ routing:
 
     rewrite = _default_route(rendered)["route"]["regex_rewrite"]
     assert rewrite["pattern"]["regex"] == r"^/v1([/?].*)?$"
-    assert rewrite["substitution"] == "/v1/chat\\1"
-    assert (
-        re.sub(
-            rewrite["pattern"]["regex"],
-            rewrite["substitution"],
-            "/v1/chat/completions",
+    assert rewrite["substitution"] == prefix + "\\1"
+    for suffix in (
+        "",
+        "?key=value",
+        "/chat/completions",
+        "/responses?stream=true",
+        "/providers/chat",
+    ):
+        assert (
+            re.sub(
+                rewrite["pattern"]["regex"],
+                rewrite["substitution"],
+                "/v1" + suffix,
+            )
+            == prefix + suffix
         )
-        == "/v1/chat/chat/completions"
-    )
 
 
 def test_provider_reliability_renders_retry_outlier_and_least_request(

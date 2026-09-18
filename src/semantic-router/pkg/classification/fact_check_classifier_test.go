@@ -3,25 +3,33 @@ package classification
 import (
 	"context"
 	"encoding/json"
-	"os"
+	"math"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// getHalugateSentinelModelPath returns the model path from env or a default
-func getHalugateSentinelModelPath() string {
-	if path := os.Getenv("HALUGATE_SENTINEL_MODEL_PATH"); path != "" {
-		return path
+func setupRealFactCheckClassifier(t *testing.T) *FactCheckClassifier {
+	t.Helper()
+	cfg := config.DefaultGlobalConfig().HallucinationMitigation.FactCheckModel
+	cfg.ModelID = requireRealModel(t, "VLLM_SR_FACTCHECK_MODEL", cfg.ModelID)
+	classifier, err := NewFactCheckClassifier(&cfg)
+	if err != nil {
+		t.Fatalf("build fact-check classifier: %v", err)
 	}
-	// Default path - relative to pkg/classification directory (test working dir)
-	return "../../../../models/mom-halugate-sentinel"
-}
-
-// skipIfNoFactCheckModel skips the test if the halugate-sentinel model is not available
-func skipIfNoFactCheckModel(t *testing.T) {
-	modelPath := getHalugateSentinelModelPath()
-	skipTestIfModelArtifactsMissing(t, "Fact-check model", modelPath)
+	t.Cleanup(func() {
+		if err := classifier.Close(); err != nil {
+			t.Errorf("close fact-check classifier: %v", err)
+		}
+	})
+	if err := classifier.Initialize(); err != nil {
+		t.Fatalf("initialize fact-check classifier: %v", err)
+	}
+	if !classifier.IsInitialized() {
+		t.Fatal("fact-check model is not initialized")
+	}
+	assertRealModelCPU(t, classifier.backend.handle.Capability())
+	return classifier
 }
 
 // TestFactCheckClassifier_NilConfig tests that nil config returns nil classifier
@@ -58,164 +66,67 @@ func TestFactCheckClassifier_RequiresModelID(t *testing.T) {
 	}
 }
 
-// TestFactCheckClassifier_EmptyText tests handling of empty text
-func TestFactCheckClassifier_EmptyText(t *testing.T) {
-	skipIfNoFactCheckModel(t)
-
-	cfg := &config.FactCheckModelConfig{
-		ModelID:   getHalugateSentinelModelPath(),
-		Threshold: 0.7,
-		UseCPU:    true,
+// FactCheck predicts whether a request needs external factual verification;
+// it does not judge the truth of a claim or the correctness of an answer.
+func TestFactCheckPolicyRealModel(t *testing.T) {
+	classifier := setupRealFactCheckClassifier(t)
+	defaultThreshold := classifier.config.Threshold
+	cases := []struct {
+		name          string
+		text          string
+		wantFactCheck bool
+	}{
+		{"factual request", "What year did World War II end?", true},
+		{"creative request", "Write a poem about an imaginary purple dragon.", false},
 	}
-
-	classifier, err := NewFactCheckClassifier(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create classifier: %v", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw, err := classifier.backend.Classify(context.Background(), tc.text)
+			if err != nil {
+				t.Fatalf("read owned fact-check distribution: %v", err)
+			}
+			assertRealModelDistribution(t, raw.Probabilities, 2)
+			class, confidence := deriveArgmax(raw.Probabilities)
+			// Include a forced below-threshold case even for a saturated fp32
+			// prediction. The .95 operating point comes from canonical config.
+			for _, threshold := range []float32{defaultThreshold, .01, 1.01} {
+				classifier.config.Threshold = threshold
+				result, err := classifier.Classify(context.Background(), tc.text)
+				if err != nil {
+					t.Fatalf("classify fact-check request: %v", err)
+				}
+				wantClass := 0
+				if class == 1 && confidence >= threshold {
+					wantClass = 1
+				}
+				wantLabel := classifier.mapping.IdxToLabel[map[int]string{0: "0", 1: "1"}[wantClass]]
+				if result.NeedsFactCheck != (wantClass == 1) || result.Label != wantLabel ||
+					!result.ConfidenceAvailable || result.PolicyDefault != "" ||
+					math.Abs(float64(result.Confidence-raw.Probabilities[wantClass])) > 1e-5 {
+					t.Fatalf("threshold=%g result=%+v disagrees with probabilities=%v", threshold, result, raw.Probabilities)
+				}
+				if threshold == defaultThreshold && result.NeedsFactCheck != tc.wantFactCheck {
+					t.Errorf("published operating point: needs_fact_check=%v, want %v for %q; probabilities=%v", result.NeedsFactCheck, tc.wantFactCheck, tc.text, raw.Probabilities)
+				}
+				t.Logf("input=%q threshold=%g result=%+v probabilities=%v", tc.text, threshold, result, raw.Probabilities)
+			}
+		})
 	}
-	t.Cleanup(func() {
-		if closeErr := classifier.Close(); closeErr != nil {
-			t.Errorf("Failed to close classifier: %v", closeErr)
-		}
-	})
+}
 
-	err = classifier.Initialize()
-	if err != nil {
-		t.Fatalf("Failed to initialize classifier: %v", err)
-	}
-
+func TestFactCheckEmptyInputRealModel(t *testing.T) {
+	classifier := setupRealFactCheckClassifier(t)
 	result, err := classifier.Classify(context.Background(), "")
 	if err != nil {
-		t.Errorf("Unexpected error for empty text: %v", err)
+		t.Fatal(err)
 	}
-	if result.NeedsFactCheck {
-		t.Error("Empty text should not need fact checking")
+	if result.NeedsFactCheck || result.Label != FactCheckLabelNotNeeded || result.ConfidenceAvailable || result.Confidence != 0 || result.PolicyDefault != "empty_text" {
+		t.Fatalf("empty input fabricated a model prediction: %+v", result)
 	}
-	if result.ConfidenceAvailable || result.Confidence != 0 || result.PolicyDefault != "empty_text" {
-		t.Fatalf("empty input fabricated confidence: %+v", result)
-	}
-}
-
-// TestFactCheckClassifier_Initialize tests model initialization
-func TestFactCheckClassifier_Initialize(t *testing.T) {
-	skipIfNoFactCheckModel(t)
-
-	cfg := &config.FactCheckModelConfig{
-		ModelID:   getHalugateSentinelModelPath(),
-		Threshold: 0.7,
-		UseCPU:    true,
-	}
-
-	classifier, err := NewFactCheckClassifier(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create classifier: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := classifier.Close(); closeErr != nil {
-			t.Errorf("Failed to close classifier: %v", closeErr)
-		}
-	})
-
-	err = classifier.Initialize()
-	if err != nil {
-		t.Fatalf("Failed to initialize classifier: %v", err)
-	}
-
-	if !classifier.IsInitialized() {
-		t.Error("Classifier should be initialized")
-	}
-
-	t.Log("halugate-sentinel model initialized successfully")
-}
-
-// TestFactCheckClassifier_FactCheckNeeded tests classification of prompts that need fact-checking
-func TestFactCheckClassifier_FactCheckNeeded(t *testing.T) {
-	skipIfNoFactCheckModel(t)
-
-	cfg := &config.FactCheckModelConfig{
-		ModelID:   getHalugateSentinelModelPath(),
-		Threshold: 0.5, // Lower threshold for testing
-		UseCPU:    true,
-	}
-
-	classifier, err := NewFactCheckClassifier(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create classifier: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := classifier.Close(); closeErr != nil {
-			t.Errorf("Failed to close classifier: %v", closeErr)
-		}
-	})
-
-	err = classifier.Initialize()
-	if err != nil {
-		t.Fatalf("Failed to initialize classifier: %v", err)
-	}
-
-	// Test prompts that should likely need fact-checking
-	factCheckPrompts := []string{
-		"When was the Eiffel Tower built?",
-		"What is the population of Tokyo?",
-		"Who invented the telephone?",
-		"What year did World War II end?",
-		"How tall is Mount Everest?",
-	}
-
-	t.Log("Testing prompts that should need fact-checking:")
-	for _, prompt := range factCheckPrompts {
-		result, err := classifier.Classify(context.Background(), prompt)
-		if err != nil {
-			t.Errorf("Classification failed for '%s': %v", prompt, err)
-			continue
-		}
-		t.Logf("  '%s' -> needs_fact_check=%v, confidence=%.3f, label=%s",
-			prompt, result.NeedsFactCheck, result.Confidence, result.Label)
-	}
-}
-
-// TestFactCheckClassifier_NoFactCheckNeeded tests classification of prompts that don't need fact-checking
-func TestFactCheckClassifier_NoFactCheckNeeded(t *testing.T) {
-	skipIfNoFactCheckModel(t)
-
-	cfg := &config.FactCheckModelConfig{
-		ModelID:   getHalugateSentinelModelPath(),
-		Threshold: 0.5,
-		UseCPU:    true,
-	}
-
-	classifier, err := NewFactCheckClassifier(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create classifier: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := classifier.Close(); closeErr != nil {
-			t.Errorf("Failed to close classifier: %v", closeErr)
-		}
-	})
-
-	err = classifier.Initialize()
-	if err != nil {
-		t.Fatalf("Failed to initialize classifier: %v", err)
-	}
-
-	// Test prompts that should NOT need fact-checking
-	noFactCheckPrompts := []string{
-		"Write a poem about the ocean",
-		"Can you help me debug this Python code?",
-		"Calculate 15 * 7 + 3",
-		"What do you think about modern art?",
-		"Translate 'hello' to Spanish",
-	}
-
-	t.Log("Testing prompts that should NOT need fact-checking:")
-	for _, prompt := range noFactCheckPrompts {
-		result, err := classifier.Classify(context.Background(), prompt)
-		if err != nil {
-			t.Errorf("Classification failed for '%s': %v", prompt, err)
-			continue
-		}
-		t.Logf("  '%s' -> needs_fact_check=%v, confidence=%.3f, label=%s",
-			prompt, result.NeedsFactCheck, result.Confidence, result.Label)
+	// Also execute a nonempty request; this test cannot pass on policy defaults
+	// alone without the selected model performing inference.
+	if _, err := classifier.Classify(context.Background(), "Write a short poem."); err != nil {
+		t.Fatalf("nonempty model inference: %v", err)
 	}
 }
 
@@ -248,88 +159,4 @@ func TestFactCheckResult_JSONSerialization(t *testing.T) {
 	if decoded.Label != result.Label {
 		t.Error("Label mismatch after serialization")
 	}
-}
-
-// TestFactCheckClassifier_OpenAIPipeline tests the full pipeline with OpenAI-style messages
-func TestFactCheckClassifier_OpenAIPipeline(t *testing.T) {
-	skipIfNoFactCheckModel(t)
-
-	cfg := &config.FactCheckModelConfig{
-		ModelID:   getHalugateSentinelModelPath(),
-		Threshold: 0.5,
-		UseCPU:    true,
-	}
-
-	classifier, err := NewFactCheckClassifier(cfg)
-	if err != nil {
-		t.Fatalf("Failed to create classifier: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := classifier.Close(); closeErr != nil {
-			t.Errorf("Failed to close classifier: %v", closeErr)
-		}
-	})
-
-	err = classifier.Initialize()
-	if err != nil {
-		t.Fatalf("Failed to initialize classifier: %v", err)
-	}
-
-	// Simulate OpenAI-style user message
-	userMessage := "What is the current population of China and how has it changed since 2000?"
-
-	result, err := classifier.Classify(context.Background(), userMessage)
-	if err != nil {
-		t.Fatalf("Classification failed: %v", err)
-	}
-
-	t.Logf("OpenAI Pipeline test:")
-	t.Logf("  User message: %s", userMessage)
-	t.Logf("  Needs fact check: %v", result.NeedsFactCheck)
-	t.Logf("  Confidence: %.3f", result.Confidence)
-	t.Logf("  Label: %s", result.Label)
-
-	// This is a factual question about real-world data, so it should likely need fact-checking
-	if !result.NeedsFactCheck {
-		t.Log("Note: Model classified this factual question as not needing fact-check")
-	}
-}
-
-// TestFactCheckClassifier_Threshold tests threshold behavior
-func TestFactCheckClassifier_Threshold(t *testing.T) {
-	skipIfNoFactCheckModel(t)
-
-	// Test with high threshold (0.9)
-	highThresholdCfg := &config.FactCheckModelConfig{
-		ModelID:   getHalugateSentinelModelPath(),
-		Threshold: 0.9,
-		UseCPU:    true,
-	}
-
-	classifier, err := NewFactCheckClassifier(highThresholdCfg)
-	if err != nil {
-		t.Fatalf("Failed to create classifier: %v", err)
-	}
-	t.Cleanup(func() {
-		if closeErr := classifier.Close(); closeErr != nil {
-			t.Errorf("Failed to close classifier: %v", closeErr)
-		}
-	})
-
-	err = classifier.Initialize()
-	if err != nil {
-		t.Fatalf("Failed to initialize classifier: %v", err)
-	}
-
-	prompt := "When was the first iPhone released?"
-	result, err := classifier.Classify(context.Background(), prompt)
-	if err != nil {
-		t.Fatalf("Classification failed: %v", err)
-	}
-
-	t.Logf("Threshold test (threshold=0.9):")
-	t.Logf("  Prompt: %s", prompt)
-	t.Logf("  Needs fact check: %v", result.NeedsFactCheck)
-	t.Logf("  Confidence: %.3f", result.Confidence)
-	t.Logf("  Label: %s", result.Label)
 }

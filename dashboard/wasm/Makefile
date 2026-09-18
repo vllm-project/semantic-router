@@ -12,8 +12,10 @@ WASM_EXEC_JS  = $(CURDIR)/../frontend/public/wasm_exec.js
 MODULE_ROOT   = $(CURDIR)/../../src/semantic-router
 WASM_SOURCE   = $(CURDIR)/main_wasm.go
 WASM_TEST     = $(CURDIR)/wasm_test.go
+WASM_REPORT_DIR ?= $(CURDIR)/../../.agent-harness/dashboard/wasm
+PYTHON ?= python3
 
-.PHONY: build build-tiny test clean size
+.PHONY: build build-tiny test test-built clean size
 
 build:
 	@echo "Building WASM binary..."
@@ -45,10 +47,25 @@ build-tiny:
 	@echo "WASM size: $$(du -h $(WASM_OUT) | cut -f1)"
 
 test: build
-	cd $(MODULE_ROOT) && CGO_ENABLED=0 GOOS=js GOARCH=wasm go test \
-		-exec="$$(go env GOROOT)/lib/wasm/go_js_wasm_exec" \
-		$(WASM_SOURCE) $(WASM_TEST)
-	node $(CURDIR)/wasm_node_test.js $(WASM_OUT) $(WASM_EXEC_JS)
+	@$(MAKE) test-built
+
+# The root Dashboard targets share one build prerequisite across tests/builds.
+test-built:
+	@mkdir -p "$(WASM_REPORT_DIR)"
+	@rm -f "$(WASM_REPORT_DIR)/evidence.json" "$(WASM_REPORT_DIR)/node-tests.jsonl"
+	cd $(MODULE_ROOT) && CGO_ENABLED=0 GOOS=js GOARCH=wasm go test -json \
+		-exec="$(CURDIR)/go_test_exec.sh" \
+		-list '^(Test|Fuzz|Example)' $(WASM_SOURCE) $(WASM_TEST) \
+		> "$(WASM_REPORT_DIR)/inventory.jsonl"
+	@if cd $(MODULE_ROOT) && CGO_ENABLED=0 GOOS=js GOARCH=wasm go test -json -count=1 \
+		-exec="$(CURDIR)/go_test_exec.sh" \
+		$(WASM_SOURCE) $(WASM_TEST) > "$(WASM_REPORT_DIR)/go-tests.jsonl"; then \
+		cat "$(WASM_REPORT_DIR)/go-tests.jsonl"; \
+	else cat "$(WASM_REPORT_DIR)/go-tests.jsonl"; exit 1; fi
+	DASHBOARD_WASM_NODE_EVENTS="$(WASM_REPORT_DIR)/node-tests.jsonl" \
+		node $(CURDIR)/wasm_node_test.js $(WASM_OUT) $(WASM_EXEC_JS)
+	$(PYTHON) $(CURDIR)/../../tools/ci/dashboard_wasm_evidence.py \
+		--report "$(WASM_REPORT_DIR)" --node-source $(CURDIR)/wasm_node_test.js
 
 clean:
 	rm -f $(WASM_OUT) $(WASM_EXEC_JS)

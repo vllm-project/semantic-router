@@ -1401,6 +1401,7 @@ mod tests {
             artifacts: vec![],
             execution_max_input_tokens: Some(32768),
             execution_inputs: vec![],
+            input_schema: vec![],
             compilation_cache: None,
             compiler_flags: options.compiler_flags([]).unwrap(),
         };

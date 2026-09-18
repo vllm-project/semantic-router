@@ -42,7 +42,7 @@ func ortPolicyFixture(t *testing.T) (*operatingpoint.Policy, config.ResolvedMode
 			}
 			metadata["problem_type"], metadata["classifier_pooling"] = "multi_label_classification", "cls"
 			metadata["label2id"] = map[string]int{"negative": 0, "positive": 1}
-			metadata["max_position_embeddings"] = 32768
+			metadata["max_position_embeddings"] = 2048
 			data, err = json.Marshal(metadata)
 			if err != nil {
 				t.Fatal(err)

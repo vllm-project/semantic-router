@@ -10,7 +10,7 @@ import (
 func TestRequestParamsBlockedOutputIsDefaultedBeforeCap(t *testing.T) {
 	defaultTokens, maxTokens, maxN := 100, 50, 1
 	request := &llmprotocol.Request{CandidateCount: llmprotocol.Int64(3), Sampling: llmprotocol.Sampling{MaxOutputTokens: llmprotocol.Int64(1000)}}
-	result, err := ApplyRequestParams(request, &config.RequestParamsPluginConfig{BlockedParams: []string{"max_tokens"}, DefaultMaxTokens: &defaultTokens, MaxTokensLimit: &maxTokens, MaxN: &maxN})
+	result, err := ApplyRequestParams(request, &config.RequestParamsPluginConfig{BlockedParams: []string{"max_tokens"}, DefaultMaxTokens: config.FixedOutputTokenDefault(defaultTokens), MaxTokensLimit: &maxTokens, MaxN: &maxN})
 	if err != nil {
 		t.Fatal(err)
 	}

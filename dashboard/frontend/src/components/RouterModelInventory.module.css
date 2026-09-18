@@ -150,7 +150,7 @@
 }
 
 .previewGrid {
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
 }
 
 .fullGrid {
@@ -261,10 +261,9 @@
 .previewModelId {
   margin: 0;
   color: var(--color-text);
-  font-size: 1.1rem;
+  font-size: 0.98rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.35;
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
@@ -299,7 +298,8 @@
   color: var(--color-text);
   font-size: 1.02rem;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .modelSubtitle {
@@ -379,7 +379,7 @@
 
 .detailSections {
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1.15fr) minmax(0, 1.15fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.85rem;
 }
 
@@ -392,8 +392,8 @@
 }
 
 .detailSectionTitle {
-  display: inline-flex;
-  margin-bottom: 0.75rem;
+  display: block;
+  margin: 0 0 0.75rem;
   color: var(--color-text-muted);
   font-size: 0.72rem;
   font-weight: 700;
@@ -410,7 +410,7 @@
 
 .detailRow {
   display: grid;
-  grid-template-columns: minmax(6.25rem, 0.8fr) 1fr;
+  grid-template-columns: minmax(7rem, 0.9fr) minmax(0, 1fr);
   gap: 0.75rem;
   align-items: start;
 }
@@ -426,8 +426,32 @@
   color: var(--color-text);
   font-size: 0.82rem;
   line-height: 1.5;
-  text-align: right;
+  text-align: left;
   word-break: break-word;
+}
+
+.detailSectionWide {
+  grid-column: 1 / -1;
+}
+
+.detailSectionWide .detailRow {
+  grid-template-columns: minmax(10rem, 0.4fr) minmax(0, 1fr);
+}
+
+.technicalDetails > summary {
+  display: list-item;
+  margin-bottom: 0;
+  cursor: pointer;
+}
+
+.technicalDetails[open] > summary {
+  margin-bottom: 0.85rem;
+}
+
+.technicalDetails .detailValue {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
 }
 
 .detailFooter {
@@ -474,12 +498,6 @@
   text-align: center;
 }
 
-@media (max-width: 1400px) {
-  .detailSections {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 960px) {
   .detailSections {
     grid-template-columns: 1fr;
@@ -491,7 +509,8 @@
 }
 
 @media (max-width: 720px) {
-  .detailRow {
+  .detailRow,
+  .detailSectionWide .detailRow {
     grid-template-columns: 1fr;
     gap: 0.2rem;
   }

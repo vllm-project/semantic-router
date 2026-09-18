@@ -1,15 +1,22 @@
-name: Integration Test [Dashboard]
+name: Dashboard Tests
 
 on:
   workflow_call:
+    inputs:
+      native-artifact:
+        type: string
+        default: ""
+      verification:
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
   dashboard-test:
-    runs-on: ubuntu-latest
-    name: Dashboard Checks and Tests
+    name: Dashboard Tests
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Check out the repo
@@ -18,7 +25,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: "23"
+          node-version: "22"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -49,11 +56,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-dashboard-
 
-      # The dashboard backend shells out to the vllm-sr CLI to regenerate Envoy
-      # config, so its Go tests need the CLI's Python dependencies importable.
-      - name: Install vllm-sr CLI
-        run: pip install -e src/vllm-sr
-
       - name: Resolve golangci-lint version
         id: golangci_lint
         run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
@@ -65,17 +67,47 @@ jobs:
           install-mode: binary
           args: --help
 
-      - name: Run dashboard checks
-        run: make dashboard-check
+      - name: Load shared native libraries
+        if: inputs.native-artifact != ''
+        uses: ./.github/actions/load-native-artifact
+        with:
+          artifact: ${{ inputs.native-artifact }}
 
-      - name: Test the browser DSL compiler
-        run: make dashboard-test-wasm
+      - name: Check, test, and build Dashboard with one dependency installation
+        run: make dashboard-check dashboard-test-wasm dashboard-test-e2e-evaluation dashboard-build
 
-      - name: Run Evaluation browser acceptance
-        run: make dashboard-test-e2e-evaluation
+      - name: Record actual Dashboard framework evidence
+        if: inputs.verification != ''
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          python3 tools/ci/workflow_evidence.py --verification "$VERIFICATION" \
+            --go-json .agent-harness/dashboard/backend.jsonl \
+            --go-inventory .agent-harness/dashboard/inventory.jsonl \
+            --exclude-go TestEvaluationStoreOwnershipSubprocessHelper \
+            --exclude-go TestControlledPairSubprocessCrashHelper \
+            --evidence .agent-harness/dashboard/frontend.json \
+            --evidence .agent-harness/dashboard/wasm/evidence.json \
+            --junit .agent-harness/dashboard/browser.xml \
+            --output .agent-harness/dashboard/result.json
+      - uses: actions/upload-artifact@v4
+        if: inputs.verification != ''
+        with:
+          name: ci-result-dashboard
+          path: .agent-harness/dashboard/result.json
+          include-hidden-files: true
+          if-no-files-found: error
 
-      - name: Build dashboard
-        run: make dashboard-build
+      - name: Upload WASM test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-wasm-evidence
+          path: .agent-harness/dashboard/wasm/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Upload Evaluation browser diagnostics
         if: failure()
