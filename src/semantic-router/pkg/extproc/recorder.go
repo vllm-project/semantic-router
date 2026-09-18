@@ -139,6 +139,11 @@ func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord
 	if identity.conversationID != "" {
 		record.ConversationID = identity.conversationID
 	}
+	// Persist the key the gate resolved, so outcome ingest can land feedback
+	// in the same window even when the session id alone keys it wider.
+	if record.Learning != nil {
+		record.Learning.ProtectionStateKey = routingLearningStateKey(ctx)
+	}
 }
 
 func shouldStartRouterReplay(ctx *RequestContext) bool {

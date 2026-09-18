@@ -1,0 +1,118 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  tag: latest
+  pullPolicy: Never
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      model: openai/gpt-oss-20b
+    models:
+      - name: openai/gpt-oss-20b
+        backend_refs:
+          - name: primary-endpoint
+            provider: vllm
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+      - name: openai/shadow-candidate
+        backend_refs:
+          - name: secondary-endpoint
+            provider: vllm
+            endpoint: mock-vllm.default.svc.cluster.local:8000
+            weight: 1
+  routing:
+    signals:
+      keywords:
+        - {name: gate_seed, operator: OR, keywords: ["session-gate-seed"], case_sensitive: false}
+        - {name: gate_next, operator: OR, keywords: ["session-gate-next"], case_sensitive: false}
+        - {name: gate_forward, operator: OR, keywords: ["session-gate-forward"], case_sensitive: false}
+        - {name: gate_back, operator: OR, keywords: ["session-gate-back"], case_sensitive: false}
+        - {name: gate_return, operator: OR, keywords: ["session-gate-return"], case_sensitive: false}
+    modelCards:
+      - name: openai/gpt-oss-20b
+      - name: openai/shadow-candidate
+    decisions:
+      - name: gate_seed
+        priority: 100
+        rules: {operator: AND, conditions: [{type: keyword, name: gate_seed}]}
+        modelRefs: [{model: openai/gpt-oss-20b}]
+        plugins: &gate_replay
+          - type: router_replay
+            configuration: {enabled: true, max_records: 1000}
+      - name: gate_next
+        priority: 100
+        rules: {operator: AND, conditions: [{type: keyword, name: gate_next}]}
+        modelRefs: [{model: openai/shadow-candidate}, {model: openai/gpt-oss-20b}]
+        plugins: *gate_replay
+      - name: gate_forward
+        priority: 100
+        rules: {operator: AND, conditions: [{type: keyword, name: gate_forward}]}
+        modelRefs: [{model: openai/shadow-candidate}, {model: openai/gpt-oss-20b}]
+        plugins: *gate_replay
+      - name: gate_back
+        priority: 100
+        rules: {operator: AND, conditions: [{type: keyword, name: gate_back}]}
+        modelRefs: [{model: openai/gpt-oss-20b}, {model: openai/shadow-candidate}]
+        plugins: *gate_replay
+      - name: gate_return
+        priority: 100
+        rules: {operator: AND, conditions: [{type: keyword, name: gate_return}]}
+        modelRefs: [{model: openai/gpt-oss-20b}, {model: openai/shadow-candidate}]
+        plugins: *gate_replay
+  global:
+    router:
+      strategy: priority
+      learning:
+        enabled: true
+        adaptation: {enabled: false}
+        protection:
+          enabled: true
+          scope: conversation
+          identity:
+            headers: {session: x-session-id, conversation: x-conversation-id}
+          tuning:
+            min_turns_before_switch: 0
+            switch_margin: 0
+            stability_weight: 0
+            progress_gate:
+              enabled: true
+              mode: enforce
+              calibration_id: fixture/session-gate@1.0.0
+              window_size: 12
+              window_ttl_seconds: 120
+              min_window_outcomes: 3
+              min_consecutive_regressions: 2
+              min_consecutive_recoveries: 2
+              cooldown_seconds: 10
+              max_switches_per_window: 2
+    services:
+      management_api:
+        auth:
+          mode: bearer
+          tokens:
+            - env: VSR_E2E_REPLAY_DETAIL_TOKEN
+              role: operator
+      router_replay: {store_backend: memory, ttl_seconds: 86400, async_writes: false}
+      observability:
+        tracing: {enabled: false}
+    stores:
+      response_cache: {enabled: false}
+    integrations:
+      tools: {enabled: false}
+    model_catalog:
+      kbs: []
+      embeddings:
+        semantic: {mmbert_model_path: ""}
+      modules:
+        prompt_guard: {enabled: false, model_ref: "", model_id: "", jailbreak_mapping_path: ""}
+        classifier:
+          domain: {model_ref: "", model_id: "", category_mapping_path: "", use_mmbert_32k: false}
+          pii: {model_ref: "", model_id: "", pii_mapping_path: "", use_mmbert_32k: false}
+resources:
+  limits: {cpu: '2', memory: 4Gi}
+  requests: {cpu: 500m, memory: 1Gi}
+extraEnv:
+  - name: VSR_E2E_REPLAY_DETAIL_TOKEN
+    value: router-replay-e2e-operator-token
