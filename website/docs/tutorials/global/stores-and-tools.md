@@ -54,7 +54,13 @@ fix the false hit. `polarity_guard` verifies the winning candidate before the
 in-memory backend serves it:
 
 - `lexical` (default): the model-free tier that catches negation cues and
-  known antonym swaps. It is always on and needs no model.
+  known antonym swaps. It is always on and needs no model, and costs roughly
+  2 µs per verified hit. Because it cannot be switched off, cues that are
+  ambiguous in English are read in context rather than matched bare: "no" does
+  not negate in `invoice no. 123`, and `on`/`off` flip state only next to a
+  toggle verb or at the end of a query, so `based on` / `based off` stays a
+  paraphrase. Cue-less opposites, word order and non-English polarity are out
+  of its reach — use an NLI mode for those.
 - `nli` / `lexical+nli`: additionally runs the router's NLI model once per
   lookup on the single best candidate and rejects the hit when the
   contradiction probability exceeds `nli.contradiction_threshold`. The tier
@@ -67,9 +73,11 @@ in-memory backend serves it:
   time the guard fails open: the hit is served and a
   `cache_polarity_nli_skipped` warning is logged.
 
-Rejections are logged as `cache_negation_reject` with `tier: nli`, count as
-misses, and still surface the rejected score on `x-vsr-cache-similarity`. Remote
-and hybrid cache backends do not run the guard.
+Rejections are logged as `cache_negation_reject` with `tier: lexical` or
+`tier: nli`, count as misses, and still surface the rejected score on
+`x-vsr-cache-similarity`. The lexical tier runs first, so a candidate it rejects
+never reaches the NLI model. Remote and hybrid cache backends do not run the
+guard.
 
 ### Memory
 

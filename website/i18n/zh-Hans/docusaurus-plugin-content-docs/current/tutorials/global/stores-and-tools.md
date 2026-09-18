@@ -56,10 +56,10 @@ global:
 
 双编码器相似度无法区分 *“turn on dark mode”* 和 *“turn off dark mode”*：相反含义的查询常常超过 `similarity_threshold`，而真正的改写却低于它，因此提高阈值并不能修复误命中。`polarity_guard` 在内存后端返回命中之前校验获胜候选：
 
-- `lexical`（默认）：无需模型的层级，用于捕获否定线索和已知反义词替换。它始终开启，不需要模型。
+- `lexical`（默认）：无需模型的层级，用于捕获否定线索和已知反义词替换。它始终开启，不需要模型，每次校验命中约 2 µs。因为无法关闭，英文中有歧义的线索会按上下文判读，而不是直接匹配：`invoice no. 123` 中的 "no" 不构成否定；`on`/`off` 只有紧邻开关动词或位于句尾时才表示状态翻转，因此 `based on` / `based off` 仍视为改写。无线索的语义相反、仅靠语序表达的极性以及非英文极性不在其能力范围内——这些请使用 NLI 模式。
 - `nli` / `lexical+nli`：额外对唯一最佳候选运行一次路由器的 NLI 模型，并在矛盾概率超过 `nli.contradiction_threshold` 时拒绝命中。该层级复用幻觉解释器（`global.model_catalog.modules.hallucination_mitigation.explainer`，默认 `tasksource/ModernBERT-base-nli`）；原生绑定只持有一个 NLI 模型，因此防护不能绑定另一个。选择 NLI 模式但没有该模型时，配置加载会失败。CPU 上每次校验命中大约需要 70 ms；缓存命中仍能省去一次完整生成。查找时若模型出错，防护会失败开放：仍返回命中，并记录 `cache_polarity_nli_skipped` 警告。
 
-拒绝会记录为带 `tier: nli` 的 `cache_negation_reject`，计为未命中，并仍在 `x-vsr-cache-similarity` 上暴露被拒绝的分数。远程和混合缓存后端不运行该防护。
+拒绝会记录为带 `tier: lexical` 或 `tier: nli` 的 `cache_negation_reject`，计为未命中，并仍在 `x-vsr-cache-similarity` 上暴露被拒绝的分数。词汇层级先运行，被它拒绝的候选不会再送到 NLI 模型。远程和混合缓存后端不运行该防护。
 
 ### 记忆 {#memory}
 

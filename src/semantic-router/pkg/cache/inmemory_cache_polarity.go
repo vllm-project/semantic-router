@@ -20,6 +20,29 @@ type polarityNLIVerdict struct {
 	Skipped bool
 }
 
+// applyPolarityGuard runs the polarity tiers on the single winning candidate,
+// cheapest first. The lexical tier (#2691) is the unconditional floor and never
+// reaches the NLI tier when it already rejects, so an obvious negation or
+// antonym swap costs no model call. It returns handled=true with the lookup
+// outcome when the candidate must not be served.
+//
+// The incoming query is tokenized here, once per lookup: the guard sees only
+// the winner, never every above-threshold entry in the scan.
+func (c *InMemoryCache) applyPolarityGuard(
+	ctx context.Context,
+	start time.Time,
+	model, query string,
+	bestEntry CacheEntry,
+	bestSimilarity, threshold float32,
+) (LookupResult, bool, error) {
+	if polarityMismatchTokens(tokenizeForPolarity(query), bestEntry.Query) {
+		c.recordPolarityReject(start, polarityGuardTierLexical, model, query, bestEntry.Query,
+			bestSimilarity, threshold, nil)
+		return LookupResult{Similarity: bestSimilarity}, true, nil
+	}
+	return c.applyPolarityNLI(ctx, start, model, query, bestEntry, bestSimilarity, threshold)
+}
+
 // applyPolarityNLI runs the NLI tier on the winning candidate when the tier is
 // enabled. It returns handled=true with the lookup outcome when the candidate
 // must not be served — the request was cancelled, or the queries contradict —
@@ -44,7 +67,11 @@ func (c *InMemoryCache) applyPolarityNLI(
 	if !verdict.Reject {
 		return LookupResult{}, false, nil
 	}
-	c.recordPolarityReject(start, model, query, bestEntry.Query, bestSimilarity, threshold, verdict)
+	c.recordPolarityReject(start, polarityGuardTierNLI, model, query, bestEntry.Query, bestSimilarity, threshold,
+		map[string]interface{}{
+			"contradiction":           verdict.Contradiction,
+			"contradiction_threshold": c.polarityGuard.ContradictionThreshold,
+		})
 	return LookupResult{Similarity: bestSimilarity}, true, nil
 }
 
@@ -87,27 +114,31 @@ func (c *InMemoryCache) recordPolarityNLISkipped(model, reason string) {
 }
 
 // recordPolarityReject preserves caller-visible miss semantics while emitting an
-// event that distinguishes a polarity rejection from a threshold miss.
+// event that distinguishes a polarity rejection from a threshold miss. detail
+// carries the rejecting tier's own fields.
 func (c *InMemoryCache) recordPolarityReject(
 	start time.Time,
+	tier string,
 	model, query, cachedQuery string,
 	similarity, threshold float32,
-	verdict polarityNLIVerdict,
+	detail map[string]interface{},
 ) {
 	atomic.AddInt64(&c.missCount, 1)
-	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: POLARITY REJECT (nli) - similarity=%.4f >= threshold=%.4f but contradiction=%.4f > %.4f; treating as miss",
-		similarity, threshold, verdict.Contradiction, c.polarityGuard.ContradictionThreshold)
-	logging.LogEvent("cache_negation_reject", map[string]interface{}{
-		"backend":                 "memory",
-		"tier":                    polarityGuardTierNLI,
-		"similarity":              similarity,
-		"threshold":               threshold,
-		"contradiction":           verdict.Contradiction,
-		"contradiction_threshold": c.polarityGuard.ContradictionThreshold,
-		"model":                   model,
-		"query":                   logging.ContentDescriptor(query),
-		"cached_query":            logging.ContentDescriptor(cachedQuery),
-	})
+	logging.Debugf("InMemoryCache.FindSimilarWithThreshold: POLARITY REJECT (%s) - similarity=%.4f >= threshold=%.4f; treating as miss",
+		tier, similarity, threshold)
+	event := map[string]interface{}{
+		"backend":      "memory",
+		"tier":         tier,
+		"similarity":   similarity,
+		"threshold":    threshold,
+		"model":        model,
+		"query":        logging.ContentDescriptor(query),
+		"cached_query": logging.ContentDescriptor(cachedQuery),
+	}
+	for k, v := range detail {
+		event[k] = v
+	}
+	logging.LogEvent("cache_negation_reject", event)
 	metrics.RecordCacheOperation("memory", "find_similar", "miss", time.Since(start).Seconds())
 }
 
