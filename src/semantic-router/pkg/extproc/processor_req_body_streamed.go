@@ -182,5 +182,16 @@ func (h *StreamedBodyHandler) finalizeResponse(response *ext_proc.ProcessingResp
 			},
 		},
 	}
+
+	// In FULL_DUPLEX_STREAMED mode, header mutations when responding to HttpBody
+	// have no effect per the Envoy ExtProc specification and are ignored by clients
+	// (e.g. AgentGateway, Envoy). Suppress any header mutation on the body response.
+	if common.HeaderMutation != nil {
+		if len(common.HeaderMutation.GetSetHeaders()) > 0 || len(common.HeaderMutation.GetRemoveHeaders()) > 0 {
+			logging.Debugf("[StreamedBody] Omitting header mutations on body response in FULL_DUPLEX_STREAMED mode per ExtProc specification")
+		}
+		common.HeaderMutation = nil
+	}
+
 	return response
 }

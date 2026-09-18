@@ -27746,8 +27746,19 @@
                         }
                       },
                       "default_max_tokens": {
-                        "nullable": true,
-                        "type": "integer"
+                        "oneOf": [
+                          {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "auto"
+                            ]
+                          }
+                        ],
+                        "nullable": true
                       },
                       "max_n": {
                         "nullable": true,
@@ -36616,6 +36627,317 @@
         "x-vllm-sr-permission": "classify.invoke",
         "x-vllm-sr-sensitivity": "operational",
         "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
+    "/api/v1/status": {
+      "get": {
+        "summary": "Versioned replica-local startup and configuration status; not a deployment probe",
+        "description": "Versioned replica-local startup and configuration status; not a deployment probe",
+        "operationId": "get_api_v1_status",
+        "tags": [
+          "system"
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Replica-local observations; unknown readiness is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conditions": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "reason": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "status",
+                          "reason"
+                        ]
+                      }
+                    },
+                    "config": {
+                      "type": "object",
+                      "properties": {
+                        "activation_stage": {
+                          "type": "string"
+                        },
+                        "activation_status": {
+                          "type": "string"
+                        },
+                        "active_hash": {
+                          "type": "string"
+                        },
+                        "observed_attempt": {
+                          "type": "integer"
+                        },
+                        "observed_hash": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "observed_attempt"
+                      ]
+                    },
+                    "instance_id": {
+                      "type": "string"
+                    },
+                    "observed_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "schema_version": {
+                      "type": "string"
+                    },
+                    "scope": {
+                      "type": "string"
+                    },
+                    "startup": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "observed_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "phase": {
+                          "type": "string"
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "phase",
+                        "ready",
+                        "observed_at"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "schema_version",
+                    "scope",
+                    "instance_id",
+                    "observed_at",
+                    "config",
+                    "conditions"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Management authentication configuration is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "ready.read",
+        "x-vllm-sr-sensitivity": "operational",
+        "x-vllm-sr-plane": "infrastructure",
         "x-vllm-sr-audiences": [
           "agent",
           "operator"
@@ -50537,6 +50859,10 @@
                                 "nullable": true,
                                 "type": "object"
                               },
+                              "minimum": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
                               "nullable": {
                                 "type": "boolean"
                               },
@@ -50677,6 +51003,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -50748,6 +51078,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -50829,6 +51163,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -50896,6 +51234,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -51074,6 +51416,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51145,6 +51491,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -51226,6 +51576,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -51293,6 +51647,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -51471,6 +51829,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51542,6 +51904,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -51623,6 +51989,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -51690,6 +52060,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -51868,6 +52242,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51939,6 +52317,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -52020,6 +52402,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -52087,6 +52473,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -52265,6 +52655,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -52336,6 +52730,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -52417,6 +52815,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -52484,6 +52886,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"

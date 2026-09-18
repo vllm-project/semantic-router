@@ -233,8 +233,10 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	// Log routing decision
 	r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
 
-	// Capture router replay information if enabled
-	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+	// Persist the final dispatch demand, including automatic output resolved
+	// below. Defer also preserves a record when finalization fails or panics;
+	// Process owns its terminal lifecycle and response headers run afterwards.
+	defer r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)
@@ -282,8 +284,9 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
 
-	// Capture router replay information if enabled even when the client pins a model.
-	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
+	// Capture the final dispatch demand for pinned Models too, retaining a
+	// record on finalization failure before Process handles the terminal state.
+	defer r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)

@@ -172,7 +172,7 @@ run-valkey-cache-example: start-valkey rust ## Run the Valkey cache example
 		export $(NATIVE_ENV) && \
 		export VALKEY_HOST=localhost && \
 		export VALKEY_PORT=6380 && \
-		go run ../../tools/valkey/valkey-cache.go
+		go run ../../tools/dev/examples/valkey/valkey-cache.go
 	@echo ""
 	@echo "Example complete! Check Valkey using:"
 	@echo "  • docker exec -it valkey-semantic-cache valkey-cli"
@@ -186,7 +186,7 @@ run-valkey-cache-example-no-container: rust ## Run the Valkey cache example usin
 		export $(NATIVE_ENV) && \
 		export VALKEY_HOST=$${VALKEY_HOST:-localhost} && \
 		export VALKEY_PORT=$${VALKEY_PORT:-6379} && \
-		go run ../../tools/valkey/valkey-cache.go
+		go run ../../tools/dev/examples/valkey/valkey-cache.go
 	@echo ""
 	@echo "Example complete!"
 
@@ -196,7 +196,7 @@ run-valkey-vectorstore-example: start-valkey rust ## Run the Valkey vector store
 	@echo "Running Valkey vector store example..."
 	@cd src/semantic-router && \
 		export $(NATIVE_ENV) && \
-		go run ../../tools/valkey/valkey-vectorstore.go
+		go run ../../tools/dev/examples/valkey/valkey-vectorstore.go
 	@echo ""
 	@echo "Example complete! Inspect Valkey using:"
 	@echo "  • make valkey-cli"
@@ -208,7 +208,7 @@ run-valkey-vectorstore-example-no-container: rust ## Run the Valkey vector store
 	@echo "Running Valkey vector store example (using existing server)..."
 	@cd src/semantic-router && \
 		export $(NATIVE_ENV) && \
-		go run ../../tools/valkey/valkey-vectorstore.go
+		go run ../../tools/dev/examples/valkey/valkey-vectorstore.go
 
 # ---------------------------------------------------------------------------
 # Deprecated / Compatibility Aliases

@@ -23,10 +23,7 @@ func TestLocalClassifierLoadFailureDoesNotReserveGlobalSlot(t *testing.T) {
 }
 
 func TestLocalClassifierMaintainedCPU(t *testing.T) {
-	path := os.Getenv("CANDLE_GENERIC_CLASSIFIER_MODEL")
-	if path == "" {
-		t.Skip("set CANDLE_GENERIC_CLASSIFIER_MODEL to a local checkpoint")
-	}
+	path := requireRealModel(t, "CANDLE_GENERIC_CLASSIFIER_MODEL", config.DefaultGlobalConfig().CategoryModel.ModelID)
 	data, err := os.ReadFile(filepath.Join(path, "config.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -36,6 +33,9 @@ func TestLocalClassifierMaintainedCPU(t *testing.T) {
 	}
 	if err = json.Unmarshal(data, &metadata); err != nil {
 		t.Fatal(err)
+	}
+	if len(metadata.ID2Label) < 2 {
+		t.Fatal("published classifier must declare at least two classes")
 	}
 	labels := make([]string, len(metadata.ID2Label))
 	for index := range labels {
@@ -55,11 +55,13 @@ func TestLocalClassifierMaintainedCPU(t *testing.T) {
 	if !ok {
 		t.Fatalf("unexpected local classifier type %T", classifier)
 	}
-	defer local.Close()
+	t.Cleanup(func() {
+		if err := local.Close(); err != nil {
+			t.Errorf("close local classifier: %v", err)
+		}
+	})
 	capability := local.backend.handle.Capability()
-	if capability.Provider != "candle" || capability.Device != "cpu" {
-		t.Fatalf("expected Candle CPU execution, got %s/%s", capability.Provider, capability.Device)
-	}
+	assertRealModelCPU(t, capability)
 	for _, text := range []string{
 		"Please explain how solar panels produce electricity.",
 		"The meeting starts at nine tomorrow.",

@@ -28,7 +28,7 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	params := cfg.Decisions[0].GetRequestParamsConfig()
-	if params.DefaultMaxTokens == nil || *params.DefaultMaxTokens != 4096 || *params.MaxTokensLimit != 8192 {
+	if params.DefaultMaxTokens == nil || params.DefaultMaxTokens.Value != 4096 || *params.MaxTokensLimit != 8192 {
 		t.Fatal("typed payload lost output default")
 	}
 	encoded, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
@@ -39,7 +39,7 @@ func TestRequestParamsDefaultValidationAndRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *again.Decisions[0].GetRequestParamsConfig().DefaultMaxTokens != 4096 {
+	if again.Decisions[0].GetRequestParamsConfig().DefaultMaxTokens.Value != 4096 {
 		t.Fatal("canonical export lost output default")
 	}
 	legacy, err := ParseRoutingYAMLBytes([]byte(fmt.Sprintf(template, "strip_unknown: true")))

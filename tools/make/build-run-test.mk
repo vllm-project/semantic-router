@@ -42,9 +42,14 @@ run-router-e2e: build-router download-models
 ONNX_FEATURES ?= dynamic
 
 build-onnx-binding: ## Build independent ORT instances (ONNX_FEATURES=migraphx-dynamic for AMD)
+ifeq ($(PREBUILT_NATIVE_LIBS),1)
+	@test "$(ONNX_FEATURES)" = dynamic || { echo "Shared native artifact requires ONNX_FEATURES=dynamic"; exit 1; }
+	@python3 tools/ci/native_artifact.py verify --directory "$(NATIVE_ARTIFACT_DIR)"
+else
 	@echo "Building ONNX binding Rust library..."
 	@cd onnx-binding && cargo build --release --lib --locked --no-default-features --features $(ONNX_FEATURES)
 	@echo "ONNX binding built successfully"
+endif
 
 # Build the ml-binding Rust library (required by router-onnx at runtime)
 build-ml-binding: ## Build the ml-binding Rust library
@@ -81,19 +86,23 @@ test-semantic-router: build-router
 		fi && \
 		CGO_ENABLED=1 \
 		go test -v $$TEST_PACKAGES
+	@$(NATIVE_ENV) $(MAKE) go-tools-test go-tools-vet
 
-# Test the Rust library and the Go binding
-# In CI, split test-binding into two phases to save disk space:
-#   1. Run test-binding-minimal with minimal models
-#   2. Run test-semantic-router (also uses minimal models)
-#   3. Clean up minimal models, download LoRA/embedding models
-#   4. Run test-binding-lora
-# In local dev, run all tests together
-ifeq ($(CI),true)
-test: vet check-go-mod-tidy test-rust-ci test-owned-native download-models test-binding-minimal test-semantic-router clean-minimal-models download-models-lora test-binding-lora
-else
-test: vet check-go-mod-tidy download-models $(if $(CI),,test-rust) test-owned-native test-binding test-semantic-router
-endif
+# Core tests exercise deterministic contracts and service integrations. Published
+# checkpoint qualification runs through test-models; explicit legacy adapter
+# compatibility remains available through test-binding-lora.
+test: vet check-go-mod-tidy test-rust-ci test-owned-native test-binding-minimal test-semantic-router
+
+test-core-unit: $(if $(CI),rust-ci,rust) ## Run discovered Go contracts with explicit model/service profile exclusions
+	@export $(NATIVE_ENV) && python3 tools/ci/run_core_tests.py --mode unit --output .agent-harness/core/unit
+
+test-core-storage: $(if $(CI),rust-ci,rust) ## Run the complete source-owned storage inventory against required services
+	@export $(NATIVE_ENV) && python3 tools/ci/run_core_tests.py --mode storage --output .agent-harness/core/storage
+
+test-core-owned: $(if $(CI),rust-ci,rust) ## Run model-free binding and alternate provider-default contracts once
+	@export $(NATIVE_ENV) && python3 tools/ci/run_core_tests.py --mode owned --output .agent-harness/core/owned
+
+.PHONY: test-core-unit test-core-storage test-core-owned
 
 # Clean built artifacts
 clean: ## Clean built artifacts
@@ -197,6 +206,11 @@ bench-router-learning:
 	@python3 bench/agentic_routing_experiment.py \
 		--learning-architecture --profile $(PROFILE) \
 		--output-dir .agent-harness/router-learning-eval
+
+test-learning-tools: harness-venv-install ## Test the research report tool's parsing and profile contracts
+	@"$(AGENT_PYTHON)" -m pytest -q bench/test_agentic_routing_experiment.py
+
+.PHONY: test-learning-tools
 
 # Exercise production protection with maintained single-request/session fixtures.
 bench-agent-routing-protection: rust-ci ## Gate production protection and write a deterministic session report
@@ -426,7 +440,7 @@ demo-hallucination-auto: build-router download-models
 test-image-gen: ## Test image generation via vLLM-Omni (requires vLLM-Omni on localhost:8001)
 test-image-gen:
 	@echo "Testing image generation with vLLM-Omni..."
-	@./tools/smoke/test-image-gen.sh
+	@./tools/test/smoke/test-image-gen.sh
 
 # ============== Modality Routing Tests ==============
 

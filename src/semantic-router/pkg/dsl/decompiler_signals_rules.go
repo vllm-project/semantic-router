@@ -235,6 +235,9 @@ func (d *decompiler) decompileClassifierSignals() {
 		if rule.Instructions != "" {
 			d.write("  instructions: %q\n", rule.Instructions)
 		}
+		if rule.DisableRationale {
+			d.write("  disable_rationale: true\n")
+		}
 		if rule.UseCPU {
 			d.write("  use_cpu: true\n")
 		}

@@ -41,6 +41,31 @@ func TestMultiFactorLexicographicPublishesOnlyFinalSurvivors(t *testing.T) {
 	}
 }
 
+func TestMultiFactorCoverageTiePreservesLexicographicSurvivors(t *testing.T) {
+	cfg := DefaultMultiFactorConfig()
+	cfg.Objective = MultiFactorObjective{
+		Strategy:   config.MultiFactorObjectiveLexicographic,
+		Priorities: []MultiFactorPriority{{Factor: config.MultiFactorFactorQuality}},
+	}
+	params := map[string]config.ModelParams{
+		"outside": addTestEvidence(config.ModelParams{}, .6, 1, "high"),
+		"narrow":  addTestEvidence(config.ModelParams{}, .9, .6, "high"),
+		"covered": addTestEvidence(config.ModelParams{}, .9, 1, "high"),
+	}
+	refs := candidates("outside", "narrow", "covered")
+	for i := range refs {
+		refs[i].ReasoningEffort = "high"
+	}
+	selector := buildMFSelector(cfg, params, nil, nil, nil)
+	result, err := selector.Select(context.Background(), &SelectionContext{CandidateModels: refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedCandidate == nil || *result.SelectedCandidate != refs[2] || !reflect.DeepEqual(result.EligibleModels, refs[1:]) {
+		t.Fatalf("coverage comparison lost the exact winner or objective survivors: %+v", result)
+	}
+}
+
 func TestMultiFactorLexicographicMissingFactorKeepsDeclaredSurvivors(t *testing.T) {
 	cfg := DefaultMultiFactorConfig()
 	cfg.Objective = MultiFactorObjective{

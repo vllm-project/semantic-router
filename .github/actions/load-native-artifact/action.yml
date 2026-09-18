@@ -1,0 +1,19 @@
+name: Load verified CPU native libraries
+description: Load the four CPU libraries built from this exact source revision.
+inputs:
+  artifact:
+    description: Artifact produced by build-native.yml in this workflow run.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.artifact }}
+        path: .agent-harness/native-input
+    - shell: bash
+      run: |
+        python3 tools/ci/native_artifact.py load --directory .agent-harness/native-input
+        echo "PREBUILT_NATIVE_LIBS=1" >> "$GITHUB_ENV"
+        echo "NATIVE_ARTIFACT_DIR=$GITHUB_WORKSPACE/.agent-harness/native-input" >> "$GITHUB_ENV"
+        echo "CI_NATIVE_RECEIPTS=$GITHUB_WORKSPACE/.agent-harness/native-input/receipt.json" >> "$GITHUB_ENV"
