@@ -102,10 +102,13 @@ a deployment and review the exported YAML before serving it. See
 
 ## Routing capabilities
 
-Author-declared model capabilities drive capability-aware dispatch: a request
-whose required capability the originally selected backend cannot express is
-rerouted to the first qualified model in the decision whose declared
-capabilities cover it. Declare them on a model card:
+Author-declared model capabilities act as an eligibility filter before model
+selection: candidates whose declared capabilities cannot express a request are
+filtered out before the configured selection algorithm scores the survivors, so
+a compatible model with a higher score can win over one that merely appears
+first. Final dispatch only validates the chosen model: a late capability
+mismatch returns an error rather than restarting the selection or replacing the
+chosen candidate. Declare them on a model card:
 
 ```yaml
 routing:
@@ -139,9 +142,8 @@ and a declaration reaches capability-aware dispatch in one of these states:
    task bit and do not void recognized names in the same declaration, so a
    declaration of descriptive labels alone is treated as unannotated.
 
-The primary dispatch and the fallback candidates are judged by the same
-qualification, so a fallback cannot reintroduce eligibility that the selected
-model was denied.
+The pre-scoring filter and the final validation apply the same qualification,
+so validation cannot admit a model the filter would have denied.
 
 ## Validate the result
 

@@ -132,7 +132,7 @@ func TestEntrypointRoutingSurfacesCapabilityMismatchAsProtocolError(t *testing.T
 
 // When candidate modelRefs declare capabilities, a candidate is only taken if
 // its declared capabilities cover the request's task (modality) capabilities.
-func TestPrepareProviderDispatchPrefersCapabilityAnnotatedModelRef(t *testing.T) {
+func TestCapabilitySelectionPrefersCapabilityAnnotatedModelRef(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	visionOnly := "fallback-vision"
 	generator := "fallback-generator"
@@ -161,9 +161,9 @@ func TestPrepareProviderDispatchPrefersCapabilityAnnotatedModelRef(t *testing.T)
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.VSRSelectedDecision = decision
 
-	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 	if err != nil {
-		t.Fatalf("expected reroute to generator, got error: %v", err)
+		t.Fatalf("expected selection of generator, got error: %v", err)
 	}
 	if dispatch.logicalModel != generator {
 		t.Fatalf("logical model = %s, want %s (must skip declared vision-only candidate)", dispatch.logicalModel, generator)
@@ -172,7 +172,7 @@ func TestPrepareProviderDispatchPrefersCapabilityAnnotatedModelRef(t *testing.T)
 
 // A declared candidate that cannot cover the required task capability is
 // skipped, and an undeclared candidate (wire-only qualification) is taken.
-func TestPrepareProviderDispatchSkipsDeclaredMismatchAndFallsBackToWireOnly(t *testing.T) {
+func TestCapabilitySelectionSkipsDeclaredMismatchAndAllowsUnannotatedModel(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	visionOnly := "fallback-vision"
 	undeclared := "fallback-undeclared"
@@ -200,9 +200,9 @@ func TestPrepareProviderDispatchSkipsDeclaredMismatchAndFallsBackToWireOnly(t *t
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.VSRSelectedDecision = decision
 
-	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 	if err != nil {
-		t.Fatalf("expected reroute to undeclared candidate, got error: %v", err)
+		t.Fatalf("expected selection of unannotated candidate, got error: %v", err)
 	}
 	if dispatch.logicalModel != undeclared {
 		t.Fatalf("logical model = %s, want %s", dispatch.logicalModel, undeclared)
@@ -245,10 +245,9 @@ func TestPrepareProviderDispatchRejectsWhenAllDeclaredCandidatesMismatch(t *test
 	}
 }
 
-// When the selected decision offers another modelRef whose wire format can
-// express the required capabilities, dispatch must be re-routed to it instead
-// of surfacing a capability error.
-func TestPrepareProviderDispatchReroutesToCapabilityQualifiedModelRef(t *testing.T) {
+// Capability filtering admits a compatible sibling before selection. The
+// selected identity and final dispatch/accounting identity must agree.
+func TestCapabilitySelectionChoosesQualifiedModelRef(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	fallback := "fallback-responses"
 	router.Config.ModelConfig[fallback] = config.ModelParams{
@@ -268,9 +267,9 @@ func TestPrepareProviderDispatchReroutesToCapabilityQualifiedModelRef(t *testing
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.VSRSelectedDecision = decision
 
-	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 	if err != nil {
-		t.Fatalf("expected reroute to qualified modelRef, got error: %v", err)
+		t.Fatalf("expected selection of qualified modelRef, got error: %v", err)
 	}
 	if dispatch.logicalModel != fallback {
 		t.Fatalf("logical model = %s, want %s (rerouted)", dispatch.logicalModel, fallback)
@@ -320,10 +319,10 @@ func TestPrepareProviderDispatchRejectsWhenNoQualifiedModelRef(t *testing.T) {
 	}
 }
 
-// A DALL-E (images) sibling is a qualified reroute target for a hosted
+// A DALL-E (images) sibling is an eligible candidate for a hosted
 // image_generation request: its wire advertises image_generation and the
 // hosted-tool tools requirement.
-func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
+func TestCapabilitySelectionChoosesImagesWireSibling(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	imageBackend := "image-backend"
 	router.Config.ModelConfig[imageBackend] = config.ModelParams{
@@ -344,9 +343,9 @@ func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.VSRSelectedDecision = decision
 
-	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 	if err != nil {
-		t.Fatalf("expected reroute to images sibling, got error: %v", err)
+		t.Fatalf("expected selection of images sibling, got error: %v", err)
 	}
 	if dispatch.logicalModel != imageBackend {
 		t.Fatalf("logical model = %s, want %s (rerouted to images backend)", dispatch.logicalModel, imageBackend)
@@ -371,54 +370,13 @@ func TestPrepareProviderDispatchReroutesToImagesWireSibling(t *testing.T) {
 	}
 }
 
-// A capability reroute must move the in-flight admission entry with the
-// request: the entry opened under the decision-selected model is closed, the
-// rerouted model carries it, and the response path ends the entry it owns.
-func TestPrepareProviderDispatchHopsInflightToReroutedModel(t *testing.T) {
-	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
-	imageBackend := "image-backend"
-	router.Config.ModelConfig[imageBackend] = config.ModelParams{
-		PreferredEndpoints: []string{"backend"},
-		APIFormat:          config.APIFormatImages,
-		ExternalModelIDs:   map[string]string{"vllm": "provider-image"},
-	}
-	decision := &config.Decision{
-		Name: "Omni",
-		ModelRefs: []config.ModelRef{
-			{Model: primary},
-			{Model: imageBackend},
-		},
-	}
-	request := testNeutralRequest(primary, "draw a cat")
-	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}
-	request.ImageGeneration = &llmprotocol.ImageGenerationOptions{Size: "1024x1024"}
-	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
-	ctx.VSRSelectedDecision = decision
-	// The prepare phase opens the in-flight token under the decision-selected
-	// model, before any capability reroute is known.
-	ctx.InflightToken = inflight.Begin(primary)
-
-	if _, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx); err != nil {
-		t.Fatalf("expected reroute to images sibling, got error: %v", err)
-	}
-	if got := inflight.Get(primary); got != 0 {
-		t.Fatalf("inflight(%s) = %d, want 0 after the reroute hand-over", primary, got)
-	}
-	if got := inflight.Get(imageBackend); got != 1 {
-		t.Fatalf("inflight(%s) = %d, want 1 under the dispatched model", imageBackend, got)
-	}
-	inflight.End(ctx.RequestModel, ctx.InflightToken)
-	if got := inflight.Get(imageBackend); got != 0 {
-		t.Fatalf("inflight(%s) = %d, want 0 after the response ends the token", imageBackend, got)
-	}
-}
-
 // A pure image request that omits tool_choice is defaulted to auto by
 // applyRequestSemanticDefaults (engine.DecodeRequest). That default must not
 // be rejected: auto (with no function tools) may only invoke the hosted
-// image_generation operation, so the request reroutes to the images sibling
-// and the final dispatch model flows through request state.
-func TestPrepareProviderDispatchOmitsToolChoiceReroutesToImages(t *testing.T) {
+// image_generation operation, so selection chooses the images sibling
+// and the final dispatch model flows through request state (Xun review
+// 5122438902).
+func TestCapabilitySelectionOmitsToolChoiceChoosesImages(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	imageBackend := "image-backend"
 	router.Config.ModelConfig[imageBackend] = config.ModelParams{
@@ -439,9 +397,9 @@ func TestPrepareProviderDispatchOmitsToolChoiceReroutesToImages(t *testing.T) {
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.VSRSelectedDecision = decision
 
-	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 	if err != nil {
-		t.Fatalf("defaulted auto tool choice must reroute to images sibling, got error: %v", err)
+		t.Fatalf("defaulted auto tool choice must admit images sibling, got error: %v", err)
 	}
 	if dispatch.logicalModel != imageBackend {
 		t.Fatalf("logical model = %s, want %s (rerouted to images backend)", dispatch.logicalModel, imageBackend)
@@ -457,7 +415,7 @@ func TestPrepareProviderDispatchOmitsToolChoiceReroutesToImages(t *testing.T) {
 // An explicit tool_choice: none forbids all tools, including the hosted
 // image_generation operation, so the request must NOT be rerouted to an
 // images sibling: no image backend call may occur for a request whose caller
-// forbade all tools.
+// forbade all tools (Xun review 5119851642).
 func TestPrepareProviderDispatchNoneToolChoiceDoesNotRerouteToImages(t *testing.T) {
 	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	imageBackend := "image-backend"
@@ -507,5 +465,47 @@ func TestWireFormatForImagesAPIFormat(t *testing.T) {
 func TestRequestWirePathForImagesFormat(t *testing.T) {
 	if path := requestWirePath(llmprotocol.OpenAIImagesV1); path != "/v1/images/generations" {
 		t.Fatalf("wire path = %q, want /v1/images/generations", path)
+	}
+}
+
+// A capability reroute must move the in-flight admission entry with the
+// request: the entry opened under the decision-selected model is closed, the
+// rerouted model carries it, and the response path ends the entry it owns.
+func TestPrepareProviderDispatchHopsInflightToReroutedModel(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	imageBackend := "image-backend"
+	router.Config.ModelConfig[imageBackend] = config.ModelParams{
+		PreferredEndpoints: []string{"backend"},
+		APIFormat:          config.APIFormatImages,
+		ExternalModelIDs:   map[string]string{"vllm": "provider-image"},
+	}
+	decision := &config.Decision{
+		Name: "Omni",
+		ModelRefs: []config.ModelRef{
+			{Model: primary},
+			{Model: imageBackend},
+		},
+	}
+	request := testNeutralRequest(primary, "draw a cat")
+	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}
+	request.ImageGeneration = &llmprotocol.ImageGenerationOptions{Size: "1024x1024"}
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+	// The prepare phase opens the in-flight token under the decision-selected
+	// model, before any capability reroute is known.
+	ctx.InflightToken = inflight.Begin(imageBackend)
+
+	if _, err := selectCapabilityTestDispatch(router, request, decision, ctx); err != nil {
+		t.Fatalf("expected reroute to images sibling, got error: %v", err)
+	}
+	if got := inflight.Get(primary); got != 0 {
+		t.Fatalf("inflight(%s) = %d, want 0 after the reroute hand-over", primary, got)
+	}
+	if got := inflight.Get(imageBackend); got != 1 {
+		t.Fatalf("inflight(%s) = %d, want 1 under the dispatched model", imageBackend, got)
+	}
+	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	if got := inflight.Get(imageBackend); got != 0 {
+		t.Fatalf("inflight(%s) = %d, want 0 after the response ends the token", imageBackend, got)
 	}
 }

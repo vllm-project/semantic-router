@@ -138,6 +138,12 @@ describe('runToolLoop', () => {
     expect(result).toBe('Final answer from the gathered evidence.')
     expect(executeTools).toHaveBeenCalledTimes(7)
     expect(fetchMock).toHaveBeenCalledTimes(7)
+    for (const [, requestInit] of fetchMock.mock.calls as [string, RequestInit][]) {
+      expect(requestInit.headers).toMatchObject({
+        'x-session-id': 'conversation-1',
+        'x-conversation-id': 'conversation-1',
+      })
+    }
     const [, finalRequest] = fetchMock.mock.calls[6] as [string, RequestInit]
     expect(JSON.parse(String(finalRequest.body))).toMatchObject({
       model: 'vllm-sr/blend',

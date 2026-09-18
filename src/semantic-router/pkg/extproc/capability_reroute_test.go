@@ -34,33 +34,33 @@ func TestQualifiedRerouteCandidateDeclaredCapabilities(t *testing.T) {
 	audioRequired := llmprotocol.Capabilities(llmprotocol.CapabilityAudioInput)
 
 	// A model with no declaration stays eligible on wire expressibility alone.
-	if got := router.qualifiedRerouteCandidate("unannotated", imageRequired); got == "" {
+	if err := router.providerCapabilityMismatch("unannotated", llmprotocol.OpenAIChatV1, imageRequired); err != nil {
 		t.Fatal("unannotated model must stay eligible on wire expressibility for an image request")
 	}
 	// Descriptive catalog labels are metadata, not capability declarations:
 	// they leave the model unannotated instead of voiding its eligibility.
-	if got := router.qualifiedRerouteCandidate("descriptive", imageRequired); got == "" {
+	if err := router.providerCapabilityMismatch("descriptive", llmprotocol.OpenAIChatV1, imageRequired); err != nil {
 		t.Fatal("descriptive-label-only model must stay eligible on wire expressibility for an image request")
 	}
 	// A transport/accounting-only declaration is annotated yet carries no task
 	// bit, so it cannot serve a task it never declared.
-	if got := router.qualifiedRerouteCandidate("transport-only", imageRequired); got != "" {
-		t.Fatalf("transport-only declaration must not serve an image request, got format %q", got)
+	if err := router.providerCapabilityMismatch("transport-only", llmprotocol.OpenAIChatV1, imageRequired); err == nil {
+		t.Fatal("transport-only declaration must not serve an image request")
 	}
 	// A catalog alias projects onto the protocol vocabulary before the filter:
 	// "vision" describes image input.
-	if got := router.qualifiedRerouteCandidate("alias-only", imageRequired); got == "" {
+	if err := router.providerCapabilityMismatch("alias-only", llmprotocol.OpenAIChatV1, imageRequired); err != nil {
 		t.Fatal("vision-only declaration must satisfy an image request")
 	}
 	// A descriptive label alongside a recognized task bit does not void it.
-	if got := router.qualifiedRerouteCandidate("mixed-declared", imageRequired); got == "" {
+	if err := router.providerCapabilityMismatch("mixed-declared", llmprotocol.OpenAIChatV1, imageRequired); err != nil {
 		t.Fatal("mixed declaration must stay eligible for the image task it declares")
 	}
-	if got := router.qualifiedRerouteCandidate("mixed-declared", audioRequired); got != "" {
-		t.Fatalf("mixed declaration must be rejected for an audio request it never declared, got format %q", got)
+	if err := router.providerCapabilityMismatch("mixed-declared", llmprotocol.OpenAIChatV1, audioRequired); err == nil {
+		t.Fatal("mixed declaration must be rejected for an audio request it never declared")
 	}
 	// A model declaring another task does not become a candidate for this one.
-	if got := router.qualifiedRerouteCandidate("image-declared", audioRequired); got != "" {
-		t.Fatalf("image-declared model must be rejected for an audio request, got format %q", got)
+	if err := router.providerCapabilityMismatch("image-declared", llmprotocol.OpenAIChatV1, audioRequired); err == nil {
+		t.Fatal("image-declared model must be rejected for an audio request")
 	}
 }

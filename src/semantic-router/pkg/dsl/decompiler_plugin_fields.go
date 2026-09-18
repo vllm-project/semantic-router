@@ -163,7 +163,11 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 		fields["blocked_params"] = ArrayValue{Items: items}
 	}
 	if cfg.DefaultMaxTokens != nil {
-		fields["default_max_tokens"] = IntValue{V: *cfg.DefaultMaxTokens}
+		if cfg.DefaultMaxTokens.Auto {
+			fields["default_max_tokens"] = StringValue{V: "auto"}
+		} else {
+			fields["default_max_tokens"] = IntValue{V: cfg.DefaultMaxTokens.Value}
+		}
 	}
 	if cfg.MaxTokensLimit != nil {
 		fields["max_tokens_limit"] = IntValue{V: *cfg.MaxTokensLimit}

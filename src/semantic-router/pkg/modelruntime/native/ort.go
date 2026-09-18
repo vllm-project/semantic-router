@@ -132,7 +132,12 @@ func (r *Runtime) ortResourceWithExecutionLimit(ctx context.Context, spec config
 	if executionLimit < 0 || (options.MaxInputTokens > 0 && executionLimit > options.MaxInputTokens) {
 		return nil, fmt.Errorf("%w: execution window exceeds document budget", binding.ErrCapability)
 	}
-	// Include physical execution geometry in the existing resource pool identity.
+	// Window scans have independent document and physical forward budgets.
+	if executionLimit > 0 {
+		options.DocumentMaxInputTokens = options.MaxInputTokens
+		options.MaxInputTokens = executionLimit
+	}
+	// Include both budgets in the existing resource pool identity.
 	options.ExecutionMaxInputTokens = executionLimit
 	revision, err := r.artifactRevision(ctx, options.ModelPath)
 	if err != nil {

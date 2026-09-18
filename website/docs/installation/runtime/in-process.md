@@ -17,6 +17,7 @@ Install the CLI and a matching Router image using the
 | --- | --- | --- | --- |
 | CPU | Candle | Native weights | The example below |
 | CPU | ONNX Runtime | ONNX | Use `provider: ort`, `device: cpu` |
+| OpenVINO device | OpenVINO-enabled build | Exported IR | [OpenVINO models](openvino.md) |
 | AMD GPU | ONNX Runtime with ROCm or MIGraphX | ONNX | [Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md) |
 | NVIDIA GPU | Candle CUDA build | Native weights | Use `provider: candle`, `device: cuda:0`; validate on your GPU |
 | Apple GPU | Candle Metal build | Compatible native weights | Use `provider: candle`, `device: metal:0`; check model compatibility |
@@ -153,6 +154,12 @@ under `@global`; `metadata.resource_id` identifies a shared physical resource.
 Different embedding layers or dimensions can be views of that resource. Device,
 graph, precision, or input-policy differences require separate resources; they
 do not cause an automatic CPU fallback. See [embedding views](embeddings.md#share-embeddings-with-services).
+The Dashboard shows every reported physical resource and counts readiness from
+that same list. Cards use the original Hugging Face model name when source
+metadata is available. Expanded details separate execution, input limits, model
+metadata, and consumers; local artifact paths and fingerprints are available in
+the technical details. A document budget can exceed the model's forward-pass
+capacity when windowing is enabled, so these limits are displayed separately.
 
 ## Run Vela on AMD
 

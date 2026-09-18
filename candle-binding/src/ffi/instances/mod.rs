@@ -52,6 +52,8 @@ struct Options {
     #[serde(default)]
     max_input_tokens: usize,
     #[serde(default)]
+    document_max_input_tokens: usize,
+    #[serde(default)]
     overflow: String,
     #[serde(default)]
     adapters: Vec<AdapterSpec>,
@@ -74,6 +76,7 @@ struct Info {
     precision: String,
     architectural_max_tokens: usize,
     max_input_tokens: usize,
+    document_max_input_tokens: usize,
     overflow: String,
     labels: Vec<String>,
     modalities: Vec<String>,
@@ -249,6 +252,19 @@ fn load_selected(
         max_input_tokens > 0 && max_input_tokens <= limit,
         "capability: input budget exceeds the task limit ({limit})"
     );
+    let document_max_input_tokens = if options.document_max_input_tokens == 0 {
+        max_input_tokens
+    } else {
+        ensure!(
+            modern && matches!(task, "backbone" | "sequence" | "label_scores" | "token"),
+            "capability: document_max_input_tokens requires a typed ModernBERT window task"
+        );
+        ensure!(
+            options.document_max_input_tokens >= max_input_tokens,
+            "capability: document budget is smaller than the physical input budget"
+        );
+        options.document_max_input_tokens
+    };
     let tokenizer = if task == "backbone" {
         None
     } else {
@@ -522,6 +538,7 @@ fn load_selected(
             precision: precision.to_owned(),
             architectural_max_tokens,
             max_input_tokens,
+            document_max_input_tokens,
             overflow,
             labels,
             modalities,

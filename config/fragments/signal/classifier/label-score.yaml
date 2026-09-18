@@ -19,6 +19,7 @@ routing:
         type: llm
         model: risk-judge
         labels: [SAFE, RISKY]
+        disable_rationale: true
         instructions: >-
           Choose RISKY only for destructive, privileged, or irreversible tool
           operations.

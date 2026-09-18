@@ -18,9 +18,13 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 		}
 		applyResponsesStart(&event, wire)
 	case "response.completed", "response.incomplete":
-		decoder.applyResponsesCompletion(&event, wire)
+		if err := decoder.applyResponsesCompletion(&event, wire); err != nil {
+			return nil, nil, err
+		}
 	case "response.failed":
-		applyResponseFailure(&event, wire)
+		if err := applyResponseFailure(&event, wire); err != nil {
+			return nil, nil, err
+		}
 	case "error":
 		applyResponsesTransportFailure(&event, wire)
 	case "response.content_part.added", "response.content_part.done",
@@ -128,7 +132,7 @@ func (decoder *responsesStreamDecoder) applyResponsesToolDelta(event *llmprotoco
 	return nil
 }
 
-func (decoder *responsesStreamDecoder) applyResponsesCompletion(event *llmprotocol.Event, wire responsesEventWire) {
+func (decoder *responsesStreamDecoder) applyResponsesCompletion(event *llmprotocol.Event, wire responsesEventWire) error {
 	event.Type = llmprotocol.EventResponseCompleted
 	event.StopReason = llmprotocol.StopEndTurn
 	if wire.Type == "response.completed" && decoder.hasCompletedToolCall() {
@@ -146,9 +150,13 @@ func (decoder *responsesStreamDecoder) applyResponsesCompletion(event *llmprotoc
 		}
 	}
 	if wire.Response != nil && wire.Response.Usage != nil {
-		usage := decodeResponsesUsage(*wire.Response.Usage)
+		usage, err := decodeResponsesUsage(*wire.Response.Usage)
+		if err != nil {
+			return err
+		}
 		event.Usage = &usage
 	}
+	return nil
 }
 
 func (decoder *responsesStreamDecoder) hasCompletedToolCall() bool {
@@ -277,7 +285,7 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItemKind(
 	return nil
 }
 
-func applyResponseFailure(event *llmprotocol.Event, wire responsesEventWire) {
+func applyResponseFailure(event *llmprotocol.Event, wire responsesEventWire) error {
 	event.Type = llmprotocol.EventResponseFailed
 	event.StopReason = llmprotocol.StopError
 	event.Failure = llmprotocol.FailureResponse
@@ -287,7 +295,10 @@ func applyResponseFailure(event *llmprotocol.Event, wire responsesEventWire) {
 		event.ResponseID, event.Model = wire.Response.ID, wire.Response.Model
 		upstreamError = wire.Response.Error
 		if wire.Response.Usage != nil {
-			usage := decodeResponsesUsage(*wire.Response.Usage)
+			usage, err := decodeResponsesUsage(*wire.Response.Usage)
+			if err != nil {
+				return err
+			}
 			event.Usage = &usage
 		}
 	}
@@ -295,6 +306,7 @@ func applyResponseFailure(event *llmprotocol.Event, wire responsesEventWire) {
 		event.Error.Category = decodeProviderErrorCategory(upstreamError.Code)
 		event.Error.Code, event.Error.Message = upstreamError.Code, upstreamError.Message
 	}
+	return nil
 }
 
 func applyResponsesTransportFailure(event *llmprotocol.Event, wire responsesEventWire) {

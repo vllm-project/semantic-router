@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelpricing"
 )
 
@@ -25,9 +26,10 @@ type RouterSessionSnapshot struct {
 	SessionID string
 	UserID    string
 
-	CurrentModel string
-	LastSeen     time.Time
-	IdleFor      time.Duration
+	CurrentModel     string
+	CurrentCandidate *config.ModelRef `json:"current_candidate,omitempty"`
+	LastSeen         time.Time
+	IdleFor          time.Duration
 
 	TurnCount   int
 	SwitchCount int
@@ -51,15 +53,16 @@ type RouterSessionSnapshot struct {
 // SessionDecisionParams records the pre-dispatch policy result for one session
 // turn. Usage and response-side costs are attached later by RecordSessionUsage.
 type SessionDecisionParams struct {
-	SessionID      string
-	UserID         string
-	PreviousModel  string
-	SelectedModel  string
-	DecisionName   string
-	TurnIndex      int
-	ActiveToolLoop bool
-	Policy         map[string]interface{}
-	Timestamp      time.Time
+	SessionID         string
+	UserID            string
+	PreviousModel     string
+	SelectedModel     string
+	SelectedCandidate *config.ModelRef
+	DecisionName      string
+	TurnIndex         int
+	ActiveToolLoop    bool
+	Policy            map[string]interface{}
+	Timestamp         time.Time
 }
 
 // SessionUsageParams records response-side usage into router-owned session
@@ -82,8 +85,9 @@ type routerSessionState struct {
 	sessionID string
 	userID    string
 
-	currentModel string
-	lastSeen     time.Time
+	currentModel     string
+	currentCandidate *config.ModelRef
+	lastSeen         time.Time
 
 	turnCount   int
 	switchCount int
@@ -113,6 +117,18 @@ type routerSessionMemoryStore struct {
 var globalRouterSessionMemory = &routerSessionMemoryStore{
 	sessions: make(map[string]*routerSessionState),
 	nowFn:    time.Now,
+}
+
+func cloneSessionCandidate(ref *config.ModelRef) *config.ModelRef {
+	if ref == nil {
+		return nil
+	}
+	copy := *ref
+	if ref.UseReasoning != nil {
+		enabled := *ref.UseReasoning
+		copy.UseReasoning = &enabled
+	}
+	return &copy
 }
 
 // RecordSessionDecision updates router-owned session memory from the policy
@@ -145,6 +161,7 @@ func RecordSessionDecision(p SessionDecisionParams) {
 		st.switchCount++
 	}
 	st.currentModel = p.SelectedModel
+	st.currentCandidate = cloneSessionCandidate(p.SelectedCandidate)
 	st.lastSeen = now
 	if p.TurnIndex+1 > st.turnCount {
 		st.turnCount = p.TurnIndex + 1
@@ -231,6 +248,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		SessionID:                       st.sessionID,
 		UserID:                          st.userID,
 		CurrentModel:                    st.currentModel,
+		CurrentCandidate:                cloneSessionCandidate(st.currentCandidate),
 		LastSeen:                        st.lastSeen,
 		IdleFor:                         idleFor,
 		TurnCount:                       st.turnCount,

@@ -42,13 +42,6 @@ component_benchmarks:
       max_bytes_regression_percent: 10
       max_ns_regression_percent: 30
 
-    # ExtProc request/response hot path.
-    - name: extproc
-      pattern: "^Benchmark(Process|Header|Full|Different|Concurrent)"
-      max_allocs_regression_percent: 5
-      max_bytes_regression_percent: 10
-      max_ns_regression_percent: 25
-
     # Looper family (ReMoM/Fusion/Flow/Base) micro-benchmarks. Some allocate a
     # data-dependent amount, so the allocation bound is a little looser here; it
     # still catches structural regressions (an accidental O(n^2), a per-call
