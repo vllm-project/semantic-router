@@ -45,7 +45,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go\n        uses: ./.github/actions/setup-go-ci\n        with:\n          cache-dependency-path: deploy/operator/go.sum\n
+      - name: Set up Go
+        uses: ./.github/actions/setup-go-ci
+        with:
+          cache-dependency-path: deploy/operator/go.sum
+
       - name: Download dependencies
         id: dependencies
         run: go mod download
@@ -216,7 +220,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go\n        uses: ./.github/actions/setup-go-ci\n        with:\n          cache-dependency-path: deploy/operator/go.sum\n
+      - name: Set up Go
+        uses: ./.github/actions/setup-go-ci
+        with:
+          cache-dependency-path: deploy/operator/go.sum
+
       - name: Regenerate bundle
         # 'make bundle' installs pinned controller-gen/kustomize/operator-sdk into
         # bin/, regenerates the manifests and OLM bundle, and runs
@@ -249,7 +257,8 @@ jobs:
         env:
           PREBUILT: ${{ inputs.prebuilt-images }}
         run: |
-          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
+          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]
+' > artifacts.json; fi
       - uses: actions/upload-artifact@v4
         with:
           name: operator-bundle
@@ -271,7 +280,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Go\n        uses: ./.github/actions/setup-go-ci\n        with:\n          cache-dependency-path: deploy/operator/go.sum\n
+      - name: Set up Go
+        uses: ./.github/actions/setup-go-ci
+        with:
+          cache-dependency-path: deploy/operator/go.sum
+
       - name: Set up Kind
         uses: ./.github/actions/setup-kind
 
@@ -1062,7 +1075,8 @@ jobs:
         env:
           PREBUILT: ${{ inputs.prebuilt-images }}
         run: |
-          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
+          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]
+' > artifacts.json; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
