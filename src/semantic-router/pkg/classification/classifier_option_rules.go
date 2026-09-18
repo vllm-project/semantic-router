@@ -160,6 +160,16 @@ func (b *classifierOptionBuilder) buildComplexityClassifierOption() (option, err
 }
 
 func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (option, error) {
+	var contrastiveRules []config.JailbreakRule
+	for _, rule := range b.cfg.JailbreakRules {
+		if rule.Method == "contrastive" {
+			contrastiveRules = append(contrastiveRules, rule)
+		}
+	}
+	if len(contrastiveRules) == 0 {
+		return nil, nil
+	}
+
 	contrastiveClassifiers := make(map[string]*ContrastiveJailbreakClassifier)
 	defaultModelType := b.cfg.EmbeddingConfig.ModelType
 	if strings.EqualFold(strings.TrimSpace(defaultModelType), "multimodal") {
@@ -170,12 +180,9 @@ func (b *classifierOptionBuilder) buildContrastiveJailbreakClassifiersOption() (
 
 	var mu sync.Mutex
 	var group errgroup.Group
-	group.SetLimit(classifierBuildParallelism(len(b.cfg.JailbreakRules)))
+	group.SetLimit(classifierBuildParallelism(len(contrastiveRules)))
 
-	for _, rule := range b.cfg.JailbreakRules {
-		if rule.Method != "contrastive" {
-			continue
-		}
+	for _, rule := range contrastiveRules {
 		group.Go(func() error {
 			provider, err := b.embeddingProviderForRules()
 			if err != nil {
