@@ -76,6 +76,8 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 		return nil, protocolErr
 	}
 	ctx.TargetFormat = dispatch.targetFormat
+	// Bind response policy where the backend is selected.
+	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticRequest = request
 	// Per-model accounting keys off the validated concrete dispatch model.
 	ctx.RequestModel = dispatch.logicalModel
