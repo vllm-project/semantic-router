@@ -71,6 +71,7 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-edge-special-characters",
 		"response-api-edge-concurrent-requests",
 		"response-api-image-file-id",
+		"response-api-image-generation",
 		"input-modality-cross-protocol",
 		"model-catalog-astra",
 		"protocol-codec-chat-backend-buffered-matrix",
