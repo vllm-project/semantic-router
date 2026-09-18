@@ -729,8 +729,9 @@ pages of the 136-question dataset with coverage and question details, separate
 112-case single-model and MoM plan reviews, and the completed 136-case comparison.
 Desktop and mobile screenshots were reviewed. The tests observed no failed API
 or asset requests, page errors, or unrelated configuration-compiler downloads.
-Two conditional active-run reload scenarios were skipped because their runs
-were already terminal; they are not reported as successful active-run tests.
+Two conditional active-run reload scenarios were skipped: one had no configured
+active run, and the other run was already terminal. Neither is reported as a
+successful active-run test.
 
 A separate synthetic lifecycle exercised the real create/review/start UI with
 one Flash target, concurrency one and a 512-token output bound. The user-visible

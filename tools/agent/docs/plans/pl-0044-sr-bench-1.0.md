@@ -337,9 +337,9 @@ dispatch, then continued one previously undispatched cell in a separate child.
 An overly strict test assertion stopped after the child completed; the failure
 was retained, the assertion corrected, and the remaining UI and accounting
 checks completed read-only against those same runs. No generation was retried.
-Cancelled-parent and completed-child reloads passed; the two conditional
-active-run reload scenarios were skipped because their observed runs were
-already terminal. The study records these boundaries and excludes UI expenses
+Cancelled-parent and completed-child reloads passed; two conditional active-run
+reload scenarios were skipped: one had no configured active run, and the other
+run was already terminal. The study records these boundaries and excludes UI expenses
 from capability comparisons.
 
 Real acceptance uses new bounded runs and a new evidence namespace. It never
