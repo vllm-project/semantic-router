@@ -7,7 +7,7 @@ import re
 import warnings
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from .models_safety import SafetyRule
 
@@ -955,7 +955,9 @@ class RequestParamsPluginConfig(BaseModel):
     """Configuration for request_params plugin."""
 
     blocked_params: Optional[List[str]] = None
-    default_max_tokens: Optional[int] = Field(default=None, ge=1, strict=True)
+    default_max_tokens: Optional[
+        Annotated[int, Field(ge=1, strict=True)] | Literal["auto"]
+    ] = None
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
     strip_unknown: Optional[bool] = None

@@ -110,3 +110,29 @@ func TestORTROCmOptionsAndObservedExecutionMustAgree(t *testing.T) {
 		t.Fatal("silently enabled ROCm graph conversion")
 	}
 }
+
+func TestORTWindowResourcesSeparatePhysicalAndDocumentBudgets(t *testing.T) {
+	artifact := t.TempDir()
+	if err := os.WriteFile(filepath.Join(artifact, "model.onnx"), []byte("identity fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	spec := config.ResolvedModelBinding{Binding: config.ModelBinding{Adapter: "modernbert"}, Deployment: config.ModelDeployment{Artifact: artifact, Provider: "ort", Device: "cpu", Precision: "native", Input: config.ModelInputBudget{MaxTokens: 65536, Overflow: "reject"}}}
+	runtime, loads := New(nil), 0
+	for _, budget := range []int{65536, 65536, 262144} {
+		spec.Deployment.Input.MaxTokens = budget
+		resource, err := runtime.ortResourceWithExecutionLimit(context.Background(), spec, "sequence", 32768, func(options ort.Options) (io.Closer, error) {
+			loads++
+			if options.MaxInputTokens != 32768 || options.ExecutionMaxInputTokens != 32768 || options.DocumentMaxInputTokens != budget || options.Overflow != "reject" {
+				t.Fatalf("mixed physical and document limits: %+v", options)
+			}
+			return io.NopCloser(strings.NewReader("")), nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = resource.Close() })
+	}
+	if loads != 2 {
+		t.Fatalf("document budget must separate native ownership, loads=%d", loads)
+	}
+}

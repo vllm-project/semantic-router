@@ -1,8 +1,18 @@
-name: Integration Test [Kubernetes]
+name: Kubernetes Integration
 
 on:
   workflow_call:
     inputs:
+      verification:
+        type: string
+        default: '{}'
+      prebuilt-images:
+        type: boolean
+        default: false
+      baseline-suite:
+        description: standard runs every non-stress baseline case; full includes pressure cases.
+        type: string
+        default: standard
       profiles:
         description: JSON array of E2E profile names.
         required: true
@@ -10,13 +20,16 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   integration-test:
-    runs-on: ubuntu-latest
+    name: ${{ fromJSON(inputs.verification).display_name || format('Kubernetes ({0})', matrix.profile) }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
       E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
+      E2E_BASELINE_SUITE: ${{ inputs.baseline-suite }}
       # Pipe falls back to direct on any proxy error; comma only on 404 and 410
       GOPROXY: 'https://proxy.golang.org|direct'
     strategy:
@@ -33,6 +46,12 @@ jobs:
         with:
           show-usage: "true"
           relocate-docker: "true"
+
+      - name: Load verified extproc image
+        if: inputs.prebuilt-images
+        uses: ./.github/actions/load-ci-images
+        with:
+          images: ${{ toJSON(fromJSON(inputs.verification).images) }}
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -85,16 +104,6 @@ jobs:
           trap cleanup_router_log_stream EXIT
 
           set +e
-          if [ "${{ matrix.profile }}" = "envoy-ai-gateway" ]; then
-            # Temporarily skip the stress / pressure coverage until the suite is stable again.
-            ENVOY_AI_GATEWAY_CI_TESTS="chat-completions-request,apiserver-runtime-config-endpoints,domain-classify,semantic-cache,semantic-cache-polarity,pii-detection,pii-entity-offsets,pii-long-text,jailbreak-detection,security-long-text,decision-priority-selection,plugin-chain-execution,plugin-request-mutations,tool-selection,rule-condition-logic,decision-fallback-behavior,plugin-config-variations,event-routing,plugin-short-circuit-no-dispatch,language-routing,reask-routing,llm-classifier-distribution-routing,sequence-classifier-routing"
-            make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_TESTS="${ENVOY_AI_GATEWAY_CI_TESTS}" E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
-            TEST_EXIT_CODE=$?
-            set -e
-            echo "test_exit_code=${TEST_EXIT_CODE}" >> $GITHUB_OUTPUT
-            exit ${TEST_EXIT_CODE}
-          fi
-
           make e2e-test E2E_PROFILE=${{ matrix.profile }} E2E_VERBOSE=true E2E_KEEP_CLUSTER=false
           TEST_EXIT_CODE=$?
           set -e
@@ -124,6 +133,21 @@ jobs:
           else
             echo "✅ semantic-router-logs.txt already exists (collected by Go framework)"
           fi
+
+      - name: Record complete Kubernetes test inventory
+        if: always() && inputs.verification != '{}'
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+          PROFILE: ${{ matrix.profile }}
+        run: |
+          python3 tools/ci/deployment_test_results.py kubernetes --report test-report.json --profile "$PROFILE" --output e2e-evidence.json
+          python3 tools/ci/ci_results.py record --verification "$VERIFICATION" --evidence e2e-evidence.json --output e2e-result.json
+      - uses: actions/upload-artifact@v4
+        if: always() && inputs.verification != '{}'
+        with:
+          name: ci-result-${{ fromJSON(inputs.verification).id }}
+          path: e2e-result.json
+          if-no-files-found: error
 
       - name: Upload test reports
         if: always()

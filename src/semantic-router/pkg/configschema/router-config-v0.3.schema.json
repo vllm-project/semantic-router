@@ -3193,6 +3193,12 @@
         },
         "timeout": {
           "type": "string"
+        },
+        "api_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -4189,6 +4195,10 @@
         },
         "quality": {
           "$ref": "#/$defs/QualityEvidenceConfig"
+        },
+        "expected_output_tokens": {
+          "type": "integer",
+          "minimum": 1
         },
         "latency_percentile": {
           "type": "integer"
@@ -5253,8 +5263,16 @@
     "RequestParamsPluginConfig": {
       "properties": {
         "default_max_tokens": {
-          "type": "integer",
-          "minimum": 1
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ]
         },
         "blocked_params": {
           "items": {

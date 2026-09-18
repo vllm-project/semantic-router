@@ -12,8 +12,21 @@ func DefaultOutputTokens(request *Request, value *int) bool {
 	return true
 }
 
+// DefaultAutomaticOutput preserves caller limits and defers a missing bound
+// until the provider has rendered the complete model-specific input.
+func DefaultAutomaticOutput(request *Request) bool {
+	if request == nil || request.Sampling.MaxOutputTokens != nil || request.Sampling.AutomaticOutput {
+		return false
+	}
+	request.Sampling.AutomaticOutput = true
+	return true
+}
+
 // CapOutputTokens clamps an explicit request value; it never invents a limit.
 func CapOutputTokens(request *Request, limit *int) bool {
+	if request != nil && request.Sampling.AutomaticOutput && limit != nil {
+		request.Sampling.AutomaticOutputCap = Int64(int64(*limit))
+	}
 	if limit == nil || request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens <= int64(*limit) {
 		return false
 	}

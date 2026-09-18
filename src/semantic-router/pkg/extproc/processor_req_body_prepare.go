@@ -74,6 +74,9 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 			logging.Warnf("[Request Body] Selection policy rejected all candidates: %v", decisionErr)
 			return requestDecisionState{}, r.respondSelectionRejected(ctx, originalModel, decisionErr)
 		}
+		if response, handled := r.processBodyRoutingError(decisionErr, ctx); handled {
+			return requestDecisionState{}, response
+		}
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		if errors.Is(decisionErr, decision.ErrDecisionUnresolved) {
 			return requestDecisionState{}, r.respondDecisionUnresolved(ctx, originalModel, decisionErr)

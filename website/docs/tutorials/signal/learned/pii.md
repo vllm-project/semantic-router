@@ -60,7 +60,8 @@ tokens, not detection accuracy or the quality of a single 32K forward.
 
 An explicit module budget, backend, window, or recipe binding keeps its own
 policy. For example, a deployment with `input: {max_tokens: 8192, overflow: reject}`
-still rejects an oversized input. To request windows explicitly, use:
+still rejects an oversized input. For a checkpoint and graph qualified for 32K
+forwards, a 64K document budget can use:
 
 ```yaml
 global:
@@ -69,15 +70,18 @@ global:
       classifier:
         pii:
           use_mmbert_32k: true
-          max_sequence_length: 32768  # Complete text budget, including special tokens.
-          window: {size: 512, overlap: 255}
+          max_sequence_length: 65536  # Complete text budget, including special tokens.
+          window: {size: 32768, overlap: 256}
 ```
 
 With a named binding, declare `input.overflow: window` and a positive
 `input.max_tokens` on its deployment; that limit replaces the module budget.
-The same `window` block supplies the geometry. Unsupported adapters, missing
-window geometry, and limits beyond the loaded model's capacity are errors.
-Window size includes the tokenizer's special tokens; overlap counts content only.
+The same `window` block supplies the geometry. The document budget can exceed
+the loaded model's single-forward capacity; each window must fit that capacity
+and the document budget. Unsupported adapters, missing window geometry, and
+oversized windows are errors. Window size includes the classifier tokenizer's
+special tokens; overlap counts content only. These token counts need not match
+the downstream generative model's tokenizer.
 
 A text beyond the document limit or a failed window produces a classifier error,
 not a successful partial scan. Existing `on_error` and decision `rules.on_unknown`

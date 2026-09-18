@@ -1,6 +1,7 @@
 #include "../../include/embeddings/embedding_generator.h"
 #include "../../include/core/model_manager.h"
 #include "../../include/utils/math_utils.h"
+#include "../../include/utils/preprocessing.h"
 #include <iostream>
 #include <algorithm>
 #include <cstdlib>
@@ -149,12 +150,13 @@ std::vector<float> EmbeddingGenerator::generateEmbedding(
         }
         
         // Set token_type_ids (all zeros for single sentence)
-        if (inputs.size() > 2) {
+        if (inputs.size() > 2 && inputs[2].get_names().count("token_type_ids") != 0) {
             auto token_type_tensor = ov::Tensor(ov::element::i64, input_shape);
             auto type_data = token_type_tensor.data<int64_t>();
             std::fill(type_data, type_data + seq_len, 0);
             slot->request.set_input_tensor(2, token_type_tensor);
         }
+        utils::setPositionIds(slot->request, *model_->compiled_model, seq_len);
         
         // Run inference
         slot->request.start_async();
@@ -333,4 +335,3 @@ std::vector<core::SimilarityMatch> EmbeddingGenerator::findTopKSimilar(
 
 } // namespace embeddings
 } // namespace openvino_sr
-
