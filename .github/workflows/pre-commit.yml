@@ -48,6 +48,17 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y make build-essential pkg-config shellcheck
+      - name: Resolve Go Linter Version
+        if: ${{ !inputs.docs_only }}
+        id: golangci_lint
+        run: echo "version=v$(cat tools/linter/go/golangci-lint.version)" >> "$GITHUB_OUTPUT"
+      - name: Set Up Go Linter
+        if: ${{ !inputs.docs_only }}
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: ${{ steps.golangci_lint.outputs.version }}
+          install-mode: binary
+          args: --help
       - name: Cache Rust Dependencies
         if: ${{ !inputs.docs_only }}
         uses: actions/cache@v4
