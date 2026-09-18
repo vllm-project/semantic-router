@@ -153,9 +153,25 @@ func TestURLAndIPSecurityPolicy(t *testing.T) {
 	}
 }
 
+// unwrapTransport finds the *http.Transport underneath safefetch's own
+// wrapping RoundTripper, the way errors.Unwrap chains through wrapped errors.
+func unwrapTransport(rt http.RoundTripper) (*http.Transport, bool) {
+	for {
+		if transport, ok := rt.(*http.Transport); ok {
+			return transport, true
+		}
+		unwrapper, ok := rt.(interface{ Unwrap() http.RoundTripper })
+		if !ok {
+			return nil, false
+		}
+		rt = unwrapper.Unwrap()
+	}
+}
+
 func TestPackageRedirectPolicyAllowsPublicGitHubReleaseAndRejectsUnsafeRedirects(t *testing.T) {
 	client := newPackageHTTPClient(staticIPResolver{addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}})
-	if transport, ok := client.Transport.(*http.Transport); !ok || transport.Proxy != nil {
+	transport, ok := unwrapTransport(client.Transport)
+	if !ok || transport.Proxy != nil {
 		t.Fatalf("package transport proxy = %#v", client.Transport)
 	}
 	allowed, _ := http.NewRequest(http.MethodGet, "https://release-assets.githubusercontent.com/github-production-release-asset/file.zip?token=redacted", nil)

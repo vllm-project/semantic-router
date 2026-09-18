@@ -321,12 +321,12 @@ func loopbackClient(t *testing.T, host string) *http.Client {
 		addresses: []netip.Addr{netip.MustParseAddr(host)},
 	})
 	client := policy.NewClient()
-	transport, ok := client.Transport.(*http.Transport)
+	wrapped, ok := client.Transport.(idleClosingTransport)
 	if !ok {
-		t.Fatal("transport is not an *http.Transport")
+		t.Fatal("transport is not an idleClosingTransport")
 	}
 	dialer := &net.Dialer{Timeout: policy.DialTimeout}
-	transport.DialContext = dialer.DialContext
+	wrapped.DialContext = dialer.DialContext
 	return client
 }
 
@@ -412,6 +412,127 @@ func TestClientFailsWhenEveryValidatedAddressIsUnreachable(t *testing.T) {
 	closeResponse(resp)
 	if dialErr == nil {
 		t.Fatal("expected an error when no validated address accepts a connection")
+	}
+}
+
+// closeTrackingConn signals on closed when Close is called, so a test can
+// tell whether the real network connection was actually torn down rather
+// than left open in the transport's idle pool.
+type closeTrackingConn struct {
+	net.Conn
+	closed chan struct{}
+}
+
+func (c *closeTrackingConn) Close() error {
+	select {
+	case <-c.closed:
+	default:
+		close(c.closed)
+	}
+	return c.Conn.Close()
+}
+
+// NewClient builds a fresh Transport for every call and nothing else will
+// ever reuse it, so a connection left in its idle pool after a successful
+// fetch only wastes a socket and a read goroutine until the default 90s idle
+// timeout reaps it. The transport must close it as soon as the caller closes
+// the response body instead (review on #3617).
+func TestClientClosesConnectionAfterBodyClose(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer server.Close()
+
+	host, port := splitHostPort(t, server.Listener.Addr().String())
+	closed := make(chan struct{})
+	realDial := (&net.Dialer{}).DialContext
+	policy := DefaultPolicy().
+		WithResolver(staticResolver{addresses: []netip.Addr{netip.MustParseAddr(host)}}).
+		AllowingPrivate(netip.MustParsePrefix("127.0.0.0/8"))
+	policy.dialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, err := realDial(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		return &closeTrackingConn{Conn: conn, closed: closed}, nil
+	}
+
+	resp, err := policy.NewClient().Get(fmt.Sprintf("http://server.invalid:%s/", port))
+	if err != nil {
+		t.Fatalf("Get() = %v", err)
+	}
+	if _, err := ReadBounded(resp.Body, 1024); err != nil {
+		t.Fatalf("ReadBounded() = %v", err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		t.Fatalf("Body.Close() = %v", err)
+	}
+
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("connection was still open after the response body was closed, want it swept immediately rather than left for the transport's idle timeout")
+	}
+}
+
+// hostResolver answers per-hostname, standing in for DNS when a test's
+// redirect chain needs different hosts to resolve to different addresses.
+type hostResolver map[string][]netip.Addr
+
+func (r hostResolver) LookupNetIP(_ context.Context, _ string, host string) ([]netip.Addr, error) {
+	if addrs, ok := r[host]; ok {
+		return addrs, nil
+	}
+	return nil, fmt.Errorf("no such host: %s", host)
+}
+
+// A redirect's first hop can already have pooled a connection on this
+// transport by the time a later hop fails outright and Client.Do returns an
+// error with no response for the caller to close. Nothing else will ever
+// reuse this transport either, so that pooled connection must be closed
+// right then, not left for the idle timeout (review on #3617).
+func TestClientClosesPooledConnectionWhenALaterHopFails(t *testing.T) {
+	// Bind then release, so the redirect target refuses the connection.
+	probe, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	deadHost, deadPort := splitHostPort(t, probe.Addr().String())
+	_ = probe.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, fmt.Sprintf("http://dead.invalid:%s/", deadPort), http.StatusFound)
+	}))
+	defer server.Close()
+	host, port := splitHostPort(t, server.Listener.Addr().String())
+
+	closed := make(chan struct{})
+	realDial := (&net.Dialer{}).DialContext
+	policy := DefaultPolicy().
+		WithResolver(hostResolver{
+			"redirector.invalid": {netip.MustParseAddr(host)},
+			"dead.invalid":       {netip.MustParseAddr(deadHost)},
+		}).
+		AllowingPrivate(netip.MustParsePrefix("127.0.0.0/8"))
+	policy.dialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, dialErr := realDial(ctx, network, address)
+		if dialErr != nil {
+			// Only the redirecting server's hop should ever succeed here.
+			return nil, dialErr
+		}
+		return &closeTrackingConn{Conn: conn, closed: closed}, nil
+	}
+
+	resp, err := policy.NewClient().Get(fmt.Sprintf("http://redirector.invalid:%s/", port))
+	closeResponse(resp)
+	if err == nil {
+		t.Fatal("expected an error when the redirect target refuses the connection")
+	}
+
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("the redirecting hop's connection was not closed after the later hop failed")
 	}
 }
 

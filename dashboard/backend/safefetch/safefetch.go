@@ -200,7 +200,14 @@ func (p Policy) NewClient() *http.Client {
 	}
 
 	return &http.Client{
-		Transport: transport,
+		// This transport is built fresh for this client alone and nothing
+		// else will ever reuse it, so a connection it keeps pooled after use
+		// only holds a socket and a read goroutine open until the default
+		// 90s idle timeout reaps them. idleClosingTransport closes them as
+		// soon as this client is done with them instead: on every request
+		// that fails outright, and the moment the caller closes a
+		// successful response's body.
+		Transport: idleClosingTransport{transport},
 		Timeout:   p.Timeout,
 		CheckRedirect: func(request *http.Request, via []*http.Request) error {
 			if len(request.URL.Scheme) == 0 || len(via) >= p.MaxRedirects {
@@ -213,6 +220,47 @@ func (p Policy) NewClient() *http.Client {
 			return err
 		},
 	}
+}
+
+// idleClosingTransport closes its transport's idle connections once a
+// request either fails outright or its response body is closed.
+type idleClosingTransport struct {
+	*http.Transport
+}
+
+// Unwrap exposes the underlying *http.Transport, following the same
+// convention as errors.Unwrap, for callers that need to inspect transport
+// settings this type does not itself expose a check for.
+func (t idleClosingTransport) Unwrap() http.RoundTripper { return t.Transport }
+
+func (t idleClosingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.Transport.RoundTrip(req)
+	if err != nil {
+		// A redirect chain's earlier hop can have already pooled a
+		// connection on this transport before a later hop fails outright;
+		// nothing will ever reuse it, so close it now rather than at the
+		// idle timeout.
+		t.CloseIdleConnections()
+		return resp, err
+	}
+	if resp.Body != nil {
+		resp.Body = idleClosingBody{ReadCloser: resp.Body, transport: t.Transport}
+	}
+	return resp, nil
+}
+
+// idleClosingBody closes its transport's idle connections after the body it
+// wraps is closed, sweeping the connection that body's request used the
+// moment it is returned to the pool.
+type idleClosingBody struct {
+	io.ReadCloser
+	transport *http.Transport
+}
+
+func (b idleClosingBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.transport.CloseIdleConnections()
+	return err
 }
 
 func (p Policy) dial(
