@@ -10,8 +10,14 @@ import (
 func TestStickyProviderPrefixUsesStableAuthorizedCatalog(t *testing.T) {
 	first := stickyProviderPrefixTools()
 	second := stickyProviderPrefixTools()
-	if len(first) != 2 || first[0].Name != "calculate" || first[1].Name != "get_weather" {
+	if len(first) != 2 {
+		t.Fatalf("provider-prefix catalog length = %d, want 2", len(first))
+	}
+	if first[0].Name != "calculate" || first[1].Name != "get_weather" {
 		t.Fatalf("provider-prefix catalog = %v, want [calculate get_weather]", []string{first[0].Name, first[1].Name})
+	}
+	if first[1].CacheControl["type"] != "ephemeral" {
+		t.Fatalf("weather cache control = %v, want ephemeral", first[1].CacheControl)
 	}
 	firstJSON, err := json.Marshal(first)
 	if err != nil {
