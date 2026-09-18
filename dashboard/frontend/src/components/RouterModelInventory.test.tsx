@@ -12,39 +12,54 @@ import {
 import RouterModelInventory from './RouterModelInventory'
 import {
   getRouterModelArtifactPath,
-  getRouterModelContext,
   getRouterModelDevice,
   getRouterModelDisplayName,
+  getRouterModelInputLimits,
   getRouterModelPreviewName,
-  isLocalDerivedRouterModel,
 } from './routerModelPresentation'
 import { filterAndSortRouterModels } from './routerModelInventorySupport'
 
-// Public names and synthetic artifact hashes with the native inventory shape.
+// Public repository identities and synthetic local derivation paths; no fleet data.
 const models: RouterModelInfo[] = [
   ['category_classifier', 'intent_classification', 'Domain'],
   ['feedback_detector', 'feedback_detection', 'Feedback'],
   ['fact_check_classifier', 'fact_check_classification', 'FactCheck'],
   ['mmbert_embedding_model', 'embedding', 'Embedding'],
+  ['prompt_guard', 'jailbreak_detection', 'Guard'],
+  ['pii_classifier', 'pii_detection', 'PII'],
+  ['safety_unsafe', 'safety_detection', 'Safety'],
+  ['classifier_content_risk', 'label_scores', 'Hazard'],
 ].map(([name, type, task]) => ({
   name,
   type,
   recipe: 'example',
   loaded: true,
-  model_path: `models/Vela-1.0-Encoder-307M-${task}${task === 'Embedding' ? '' : '-CK-32K-local-0123456789ab'}`,
+  model_path: `models/local-ckfa/${task}-0123456789ab`,
+  registry: {
+    repo_id: `llm-semantic-router/Vela-1.0-Encoder-307M-${task}`,
+    revision: 'test-registry-revision',
+    max_context_length: 32768,
+    model_card_url: `https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-${task}`,
+  },
   metadata: {
     binding: name,
+    resource_id: `resource-${task.toLowerCase()}`,
     contract: task === 'Embedding' ? 'embedding.v1' : 'label_distribution.v1',
     deployment: `${task.toLowerCase()}-gpu`,
     device: 'rocm:0',
     max_sequence_length: '32768',
+    input_max_tokens: '32768',
+    forward_max_tokens: '32768',
     overflow: 'truncate',
     precision: 'native',
     provider: 'ort',
   },
 }))
 
-function render(modelList: RouterModelInfo[], mode: 'preview' | 'detail' = 'preview'): string {
+function render(
+  modelList: RouterModelInfo[],
+  mode: 'preview' | 'detail' | 'full' = 'preview',
+): string {
   return renderToStaticMarkup(
     <RouterModelInventory modelsInfo={{ models: modelList }} mode={mode} />,
   )
@@ -55,132 +70,153 @@ function headings(markup: string): string[] {
 }
 
 describe('router model presentation', () => {
-  it('shows clean Vela names and exact token windows for all four native model cards', () => {
+  it('shows all eight canonical HF model names, including PII, Safety and Embedding', () => {
     const markup = render(models)
-    expect(headings(markup).sort()).toEqual([
-      'Vela Domain',
-      'Vela Embedding',
-      'Vela Fact Check',
-      'Vela Feedback',
-    ])
-    expect(markup.match(/v1.0 · 307M encoder/g)).toHaveLength(4)
-    expect(markup.match(/Context window: 32,768 tokens/g)).toHaveLength(4)
-    expect(markup).not.toContain('CK-32K-local')
+    expect(headings(markup).sort()).toEqual(
+      models.map((model) => model.registry!.repo_id!.split('/')[1]).sort(),
+    )
+    expect(headings(markup)).toHaveLength(8)
+    expect(markup.match(/>llm-semantic-router<\/p>/g)).toHaveLength(8)
+    expect(markup).not.toContain('Vela Embedding')
     expect(markup).not.toContain('0123456789ab')
-    expect(markup).not.toContain('models/')
+    expect(markup).not.toContain('models/local-ckfa')
+    expect(getPreviewRouterModels({ models })).toHaveLength(8)
   })
 
-  it('retains local provenance and runtime settings in details without inventing a registry', () => {
-    const model = models[0]
-    const markup = render([model], 'detail')
-    expect(headings(markup)).toEqual(['Vela-1.0-Encoder-307M-Domain'])
-    for (const value of [
-      model.model_path,
-      'Local derived artifact',
-      'example',
-      'domain-gpu',
-      'rocm:0',
-      '32768',
-      'truncate',
-      'Context Window',
-      '32,768 tokens',
-    ]) {
-      expect(markup).toContain(value)
+  it('prefers the reported repository over even a recognizable local derivation name', () => {
+    const model = {
+      ...models[0],
+      model_path: 'models/Vela-1.0-Encoder-307M-Feedback-CK-32K-local-0123456789ab',
     }
-    expect(markup).not.toContain('Open model card')
-    expect(markup).not.toContain('huggingface.co')
-  })
-
-  it('shows the actual input budget separately from available registry capacity and source', () => {
-    const model: RouterModelInfo = {
-      ...models[3],
-      metadata: { ...models[3].metadata, max_sequence_length: '8192' },
-      registry: {
-        repo_id: 'llm-semantic-router/Vela-1.0-Encoder-307M-Embedding',
-        revision: 'test-registry-revision',
-        max_context_length: 32768,
-        model_card_url:
-          'https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Embedding',
-      },
-    }
-    expect(render([model])).toContain('Context window: 8,192 tokens')
+    expect(getRouterModelDisplayName(model)).toBe(models[0].registry?.repo_id)
+    expect(headings(render([model]))).toEqual(['Vela-1.0-Encoder-307M-Domain'])
     const detail = render([model], 'detail')
-    expect(detail).toMatch(/Context Window<\/dt><dd[^>]*>8,192 tokens/)
-    expect(detail).toMatch(/Registry Context<\/dt><dd[^>]*>32,768 tokens/)
+    expect(detail).toContain(model.model_path)
     expect(detail).toContain('test-registry-revision')
     expect(detail).toContain('Open model card')
   })
 
-  it('keeps device labels in details and off the compact homepage cards', () => {
-    const cpu = {
-      ...models[3],
-      recipe: 'cpu-example',
-      metadata: { ...models[3].metadata, device: 'cpu' },
+  it('explicitly identifies unknown local models instead of inventing HF identity from hash paths', () => {
+    const model: RouterModelInfo = { ...models[0], registry: undefined }
+    expect(getRouterModelPreviewName(model)).toEqual({
+      title: model.name,
+      subtitle: 'Runtime identity · repository not reported',
+    })
+    expect(headings(render([model]))).toEqual([model.name])
+    expect(render([model])).not.toContain('Vela-')
+    const detail = render([model], 'detail')
+    expect(detail).toContain(model.model_path)
+    expect(detail).not.toContain('Open model card')
+    const resolved = { ...model, resolved_model_path: '/models/derived/current' }
+    expect(getRouterModelArtifactPath(resolved)).toBe('/models/derived/current')
+  })
+
+  it('separates a 262K document budget from the actual 32K physical window', () => {
+    const model: RouterModelInfo = {
+      ...models[5],
+      metadata: {
+        ...models[5].metadata,
+        max_sequence_length: '262144',
+        input_max_tokens: '262144',
+        document_max_tokens: '262144',
+        forward_max_tokens: '32768',
+        window_size: '32768',
+        window_overlap: '256',
+        overflow: 'window',
+      },
     }
-    const markup = render([models[3], cpu])
-    expect(markup).not.toContain('AMD GPU')
-    expect(markup).not.toContain('ROCm 0')
-    expect(markup).not.toContain('CPU')
-    const details = render([models[3], cpu], 'detail')
-    expect(details.match(/alt="AMD GPU"/g)).toHaveLength(1)
-    expect(details).toContain('ROCm 0')
-    expect(details).toContain('CPU')
+    expect(render([model])).toContain('Window: 32,768 tokens')
+    expect(render([model])).toContain('Document budget: 262,144 tokens')
+    const detail = render([model], 'detail')
+    expect(detail).toMatch(/Document budget<\/dt><dd[^>]*>262,144 tokens/)
+    expect(detail).toMatch(/Physical token window<\/dt><dd[^>]*>32,768 tokens/)
+    expect(detail).toMatch(/Window overlap<\/dt><dd[^>]*>256 tokens/)
+    expect(detail).toMatch(/Published model context<\/dt><dd[^>]*>32,768 tokens/)
+    expect(detail).not.toContain('Max Sequence Length')
+    expect(detail).not.toContain('Context Window')
+  })
+
+  it('keeps input limits, smaller configured windows and forward capacity distinct', () => {
+    const limited: RouterModelInfo = {
+      ...models[3],
+      metadata: { ...models[3].metadata, input_max_tokens: '8192' },
+    }
+    const detail = render([limited], 'detail')
+    expect(detail).toMatch(/Input budget<\/dt><dd[^>]*>8,192 tokens/)
+    expect(detail).toMatch(/Single-forward capacity<\/dt><dd[^>]*>32,768 tokens/)
+    const windowed = {
+      ...limited,
+      metadata: {
+        ...limited.metadata,
+        overflow: 'window',
+        document_max_tokens: '262144',
+        window_size: '2048',
+        window_overlap: '0',
+      },
+    }
+    expect(render([windowed], 'detail')).toMatch(/Physical token window<\/dt><dd[^>]*>2,048 tokens/)
+    expect(getRouterModelInputLimits(windowed).overlap).toBe(0)
+    expect(render([windowed], 'detail')).toMatch(/Window overlap<\/dt><dd[^>]*>0 tokens/)
+  })
+
+  it('does not reinterpret a legacy document budget or published context as a physical window', () => {
+    const legacy: RouterModelInfo = {
+      ...models[0],
+      metadata: { max_sequence_length: '262144', overflow: 'window' },
+    }
+    expect(getRouterModelInputLimits(legacy).window).toBeUndefined()
+    expect(render([legacy], 'detail')).toMatch(/Physical token window<\/dt><dd[^>]*>Not reported/)
+    expect(render([legacy])).toContain('Document budget: 262,144 tokens')
+    const registryOnly = { ...models[0], metadata: {} }
+    expect(render([registryOnly])).toContain('Published model context: 32,768 tokens')
+    expect(getRouterModelInputLimits(registryOnly).forward).toBeUndefined()
+    for (const value of ['0', '-1', 'Infinity', 'NaN', '32K', '12.5']) {
+      const limits = getRouterModelInputLimits({
+        ...models[0],
+        metadata: { input_max_tokens: value, window_size: value },
+      })
+      expect(limits.input).toBeUndefined()
+      expect(limits.window).toBeUndefined()
+    }
+  })
+
+  it('groups details and keeps full provenance in a collapsed technical section', () => {
+    const detail = render([models[0]], 'detail')
+    for (const section of ['Execution', 'Input limits', 'Model metadata', 'Consumer']) {
+      expect(detail).toMatch(new RegExp(`<h4[^>]*>${section}</h4>`))
+    }
+    expect(detail).toMatch(/<details[^>]*><summary[^>]*>Technical details<\/summary>/)
+    expect(detail).not.toMatch(/<details[^>]*\bopen\b/)
+    expect(detail).toContain(models[0].model_path)
+    expect(detail).toContain('resource-domain')
+    expect(detail).toContain('example / category_classifier')
+    const marketing = {
+      ...models[0],
+      registry: { ...models[0].registry, description: '<div>Promotional model card</div>' },
+    }
+    expect(render([marketing], 'detail')).not.toContain('Promotional model card')
+  })
+
+  it('shows only the model actual device and searches canonical names and provenance', () => {
+    const cpu = { ...models[3], metadata: { ...models[3].metadata, device: 'cpu' } }
+    expect(render([cpu], 'detail')).toContain('CPU')
     expect(render([cpu], 'detail')).not.toContain('amd-logo.png')
+    expect(render([models[3]], 'detail')).toContain('ROCm 0')
+    expect(render([models[3]])).not.toContain('AMD GPU')
     expect(getRouterModelDevice({ ...cpu, metadata: { device: 'migraphx:2' } })).toEqual({
       label: 'MIGraphX 2',
       isAmd: true,
-    })
-    expect(getRouterModelDevice({ ...cpu, metadata: { device: 'cuda:0' } })).toEqual({
-      label: 'CUDA 0',
-      isAmd: false,
     })
     expect(getRouterModelDevice({ ...cpu, metadata: {} })).toEqual({
       label: 'Device not reported',
       isAmd: false,
     })
-  })
-
-  it('does not guess a Vela identity from arbitrary local paths or unrecognized suffixes', () => {
-    const other = { ...models[0], model_path: 'models/custom-export-local-0123456789ab' }
-    expect(getRouterModelDisplayName(other)).toBe('custom-export-local-0123456789ab')
-    expect(isLocalDerivedRouterModel(other)).toBe(false)
-    const unrecognized = { ...other, model_path: 'models/Vela-1.0-Encoder-307M-Domain-custom' }
-    expect(getRouterModelDisplayName(unrecognized)).toBe('Vela-1.0-Encoder-307M-Domain-custom')
-    expect(isLocalDerivedRouterModel(unrecognized)).toBe(false)
-    expect(getRouterModelPreviewName(unrecognized)).toEqual({
-      title: 'Vela-1.0-Encoder-307M-Domain-custom',
-    })
-    expect(headings(render([other]))).toEqual(['custom-export-local-0123456789ab'])
-    const resolved = {
-      ...models[0],
-      resolved_model_path: '/models/Vela-1.0-Encoder-307M-Domain-CK-32768-local-abcdef012345/',
-      registry: { local_path: 'models/old-cache' },
-    }
-    expect(getRouterModelDisplayName(resolved)).toBe('Vela-1.0-Encoder-307M-Domain')
-    expect(getRouterModelArtifactPath(resolved)).toBe(resolved.resolved_model_path)
-  })
-
-  it('distinguishes registry-only context and unknown runtime metadata', () => {
-    const model = { ...models[0], metadata: {}, registry: { max_context_length: 32768 } }
-    expect(render([model])).toContain('Registry context: 32,768 tokens')
-    expect(render([model], 'detail')).toMatch(/Context Window<\/dt><dd[^>]*>Not reported/)
-    for (const value of ['0', '-1', 'Infinity', 'NaN', '32K', '12.5']) {
-      expect(
-        getRouterModelContext({ ...models[0], metadata: { max_sequence_length: value } }).source,
-      ).toBe('unknown')
-    }
-    expect(render([{ ...models[0], metadata: {} }])).toContain('Context window: Not reported')
-  })
-
-  it('searches and sorts the same clean model names shown in cards', () => {
-    const sorted = filterAndSortRouterModels(models, '', 'all', 'name')
-    expect(sorted.map(getRouterModelDisplayName)).toEqual(
-      [...models.map(getRouterModelDisplayName)].sort(),
-    )
-    expect(
-      filterAndSortRouterModels(models, 'Vela-1.0-Encoder-307M-Domain', 'all', 'name'),
-    ).toEqual([models[0]])
-    expect(filterAndSortRouterModels(models, 'Vela Domain', 'all', 'name')).toEqual([models[0]])
+    expect(filterAndSortRouterModels(models, models[0].registry!.repo_id!, 'all', 'name')).toEqual([
+      models[0],
+    ])
+    expect(filterAndSortRouterModels(models, 'Domain-0123456789ab', 'all', 'name')).toEqual([
+      models[0],
+    ])
   })
 })
 
@@ -209,14 +245,18 @@ describe('shared runtime resource inventory', () => {
     },
   }
 
-  it('shows one card per reported shared resource and retains both consumer views in details', () => {
-    const inventory = [...models.slice(0, 3), cache, routing]
-    expect(headings(render(inventory))).toHaveLength(4)
+  it('counts and displays the same complete resource set without dropping consumers', () => {
+    const inventory = [...models.filter((model) => model !== embedding), cache, routing]
+    const info = { models: inventory, summary: { loaded_models: 9, total_models: 9 } }
+    expect(getLoadedModelCount(info)).toBe(8)
+    expect(getTotalKnownModelCount(info)).toBe(8)
+    expect(headings(render(inventory))).toHaveLength(8)
+    expect(getPreviewRouterModels(info)).toHaveLength(8)
+    expect(getPreviewRouterModels(info, 6)).toHaveLength(6)
     expect(render(inventory)).toContain('Shared by 2 consumers')
     const detail = render([cache, routing], 'detail')
-    expect(headings(detail)).toEqual(['Vela-1.0-Encoder-307M-Embedding'])
     for (const value of [
-      'Consumers',
+      'Consumers (2)',
       '@global / response_cache.embedding',
       'balance / embedding',
       'Layer 6',
@@ -228,23 +268,49 @@ describe('shared runtime resource inventory', () => {
       expect(detail).toContain(value)
     }
     expect(getRouterModelConsumers(inventory, cache)).toEqual([cache, routing])
-    expect(cache.metadata?.default_layer).toBe('6')
-    expect(routing.metadata?.default_layer).toBe('22')
   })
 
-  it('adjusts binding summary counts and preview limits by actual resource identity', () => {
-    const info = {
-      models: [cache, routing, ...models.slice(0, 3)],
-      summary: { loaded_models: 5, total_models: 5 },
+  it('does not invent cards or ready resources from a stale binding summary', () => {
+    const info = { models: [cache, routing], summary: { loaded_models: 10, total_models: 12 } }
+    expect(getLoadedModelCount(info)).toBe(1)
+    expect(getTotalKnownModelCount(info)).toBe(1)
+    expect(headings(render(info.models))).toHaveLength(1)
+    expect(getTotalKnownModelCount({ models: null, summary: { total_models: 8 } })).toBe(8)
+    expect(getLoadedModelCount({ models: [{ ...cache, state: 'initializing' }] })).toBe(0)
+  })
+
+  it('exposes different consumer input budgets without assigning one to the shared engine', () => {
+    const limited = {
+      ...routing,
+      metadata: { ...routing.metadata, input_max_tokens: '8192' },
     }
-    expect(getLoadedModelCount(info)).toBe(4)
-    expect(getTotalKnownModelCount(info)).toBe(4)
-    expect(getPreviewRouterModels(info, 4)).toHaveLength(4)
-    expect(new Set(getPreviewRouterModels(info, 4).map((model) => model.type)).size).toBe(4)
-    expect(getTotalKnownModelCount({ ...info, summary: { total_models: 7 } })).toBe(6)
+    const detail = render([cache, limited], 'detail')
+    expect(detail).toMatch(/Input budget<\/dt><dd[^>]*>Varies by consumer/)
+    expect(detail).toContain('Input budget 8,192 tokens')
+    expect(detail).toContain('Input budget 32,768 tokens')
+    expect(render([cache, limited])).toContain('Input budget: Varies by consumer')
   })
 
-  it('does not deduplicate by matching model names or paths, or merge different serving resources', () => {
+  it('includes failed and loading models beside ready cards and never hides a failed shared consumer', () => {
+    const failed = { ...routing, loaded: false, state: 'not_loaded' }
+    const loading = { ...models[5], loaded: false, state: 'initializing' }
+    const info = {
+      models: [cache, failed, models[0], loading],
+      summary: { loaded_models: 2, total_models: 4 },
+    }
+    const [resource] = getRouterModelResources(info.models)
+    expect(resource.model.loaded).toBe(false)
+    expect(resource.model.state).toBe('not_loaded')
+    expect(getLoadedModelCount(info)).toBe(1)
+    expect(getTotalKnownModelCount(info)).toBe(3)
+    expect(getPreviewRouterModels(info)).toHaveLength(3)
+    expect(headings(render(info.models))).toHaveLength(3)
+    expect(render(info.models)).toContain('Not Loaded')
+    expect(render(info.models)).toContain('Initializing')
+    expect(render([cache, failed], 'detail')).toContain('Ready')
+  })
+
+  it('never merges separate resources just because their names, paths or HF repository match', () => {
     const cpu = {
       ...routing,
       metadata: { ...routing.metadata, resource_id: 'separate-cpu-resource', device: 'cpu' },
@@ -252,21 +318,5 @@ describe('shared runtime resource inventory', () => {
     expect(getRouterModelResources([cache, cpu])).toHaveLength(2)
     const unknown = { ...routing, metadata: { ...routing.metadata, resource_id: '' } }
     expect(getRouterModelResources([unknown, { ...unknown, recipe: 'other' }])).toHaveLength(2)
-    expect(getRouterModelConsumers([cache], unknown)).toEqual([unknown])
-    expect(render([cache, cpu], 'detail').match(/alt="AMD GPU"/g)).toHaveLength(1)
-  })
-
-  it('does not conceal a failed consumer behind a ready consumer or inflate readiness', () => {
-    const failed = { ...routing, loaded: false, state: 'not_loaded' }
-    const info = { models: [cache, failed], summary: { loaded_models: 1, total_models: 2 } }
-    const [resource] = getRouterModelResources(info.models)
-    expect(resource.model.loaded).toBe(false)
-    expect(resource.model.state).toBe('not_loaded')
-    expect(resource.consumers).toEqual([cache, failed])
-    expect(getLoadedModelCount(info)).toBe(0)
-    expect(getTotalKnownModelCount(info)).toBe(1)
-    const detail = render(info.models, 'detail')
-    expect(detail).toContain('Not Loaded')
-    expect(detail).toContain('Ready')
   })
 })
