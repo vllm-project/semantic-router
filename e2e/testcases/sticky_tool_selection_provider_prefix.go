@@ -42,6 +42,11 @@ type stickyPrefixCycle struct {
 	SecondTools stickyToolSnapshot
 }
 
+const (
+	stickyProviderPrefixFirstPrompt  = "What is the weather forecast?"
+	stickyProviderPrefixGrowthPrompt = " "
+)
+
 func testStickyToolSelectionProviderPrefix(
 	ctx context.Context,
 	client *kubernetes.Clientset,
@@ -120,7 +125,8 @@ func runStickyProviderPrefixCycle(
 		sessions,
 		sessionID,
 		headers,
-		[]stickyAnthropicTool{stickyCachedWeatherTool()},
+		stickyProviderPrefixFirstPrompt,
+		stickyProviderPrefixTools(),
 	)
 	if err != nil {
 		return stickyPrefixCycle{}, err
@@ -130,7 +136,8 @@ func runStickyProviderPrefixCycle(
 		sessions,
 		sessionID,
 		headers,
-		[]stickyAnthropicTool{stickyCalculateTool(), stickyCachedWeatherTool()},
+		stickyProviderPrefixGrowthPrompt,
+		stickyProviderPrefixTools(),
 	)
 	if err != nil {
 		return stickyPrefixCycle{}, err
@@ -148,6 +155,7 @@ func runStickyProviderPrefixTurn(
 	sessions *stickySessionPair,
 	sessionID string,
 	headers map[string]string,
+	prompt string,
 	tools []stickyAnthropicTool,
 ) (anthropicCacheUsage, stickyToolSnapshot, error) {
 	body, err := sendProtocolMatrixRequestWithHeaders(
@@ -158,7 +166,7 @@ func runStickyProviderPrefixTurn(
 			Model:     "MoM",
 			MaxTokens: 8,
 			Metadata:  map[string]string{"user_id": "sticky-prefix-contract"},
-			Messages:  []anthropicMessage{{Role: "user", Content: " "}},
+			Messages:  []anthropicMessage{{Role: "user", Content: prompt}},
 			Tools:     tools,
 		},
 		false,
@@ -190,12 +198,6 @@ func assertStickyProviderPrefixCycle(trusted, stateless stickyPrefixCycle) error
 }
 
 func assertStickyTrustedProviderPrefix(cycle stickyPrefixCycle) error {
-	if cycle.FirstUsage.CacheCreationInputTokens <= 0 || cycle.FirstUsage.CacheReadInputTokens != 0 {
-		return fmt.Errorf("trusted first turn did not create a provider prefix: %+v", cycle.FirstUsage)
-	}
-	if cycle.SecondUsage.CacheReadInputTokens <= 0 || cycle.SecondUsage.CacheCreationInputTokens != 0 {
-		return fmt.Errorf("trusted growth turn did not reuse the provider prefix: %+v", cycle.SecondUsage)
-	}
 	if len(cycle.FirstTools.Tools) != 1 || cycle.FirstTools.Names[0] != "get_weather" {
 		return fmt.Errorf("trusted first provider tools = %v, want [get_weather]", cycle.FirstTools.Names)
 	}
@@ -206,21 +208,34 @@ func assertStickyTrustedProviderPrefix(cycle stickyPrefixCycle) error {
 	if !bytes.Equal(cycle.FirstTools.Tools[0], cycle.SecondTools.Tools[0]) {
 		return fmt.Errorf("retained provider definition changed bytes for %q", "get_weather")
 	}
+	if cycle.FirstUsage.CacheCreationInputTokens <= 0 || cycle.FirstUsage.CacheReadInputTokens != 0 {
+		return fmt.Errorf("trusted first turn did not create a provider prefix: %+v", cycle.FirstUsage)
+	}
+	if cycle.SecondUsage.CacheReadInputTokens <= 0 || cycle.SecondUsage.CacheCreationInputTokens != 0 {
+		return fmt.Errorf("trusted growth turn did not reuse the provider prefix: %+v", cycle.SecondUsage)
+	}
 	return nil
 }
 
 func assertStickyStatelessProviderPrefix(cycle stickyPrefixCycle) error {
+	if len(cycle.FirstTools.Tools) != 1 || cycle.FirstTools.Names[0] != "get_weather" {
+		return fmt.Errorf("stateless first provider tools = %v, want [get_weather]", cycle.FirstTools.Names)
+	}
+	if len(cycle.SecondTools.Tools) != 2 ||
+		cycle.SecondTools.Names[0] != "calculate" || cycle.SecondTools.Names[1] != "get_weather" {
+		return fmt.Errorf("stateless provider tools = %v, want [calculate get_weather]", cycle.SecondTools.Names)
+	}
 	if cycle.FirstUsage.CacheCreationInputTokens <= 0 || cycle.FirstUsage.CacheReadInputTokens != 0 {
 		return fmt.Errorf("stateless first turn did not create its provider prefix: %+v", cycle.FirstUsage)
 	}
 	if cycle.SecondUsage.CacheCreationInputTokens <= 0 || cycle.SecondUsage.CacheReadInputTokens != 0 {
 		return fmt.Errorf("stateless baseline unexpectedly reused the old provider prefix: %+v", cycle.SecondUsage)
 	}
-	if len(cycle.SecondTools.Tools) != 2 ||
-		cycle.SecondTools.Names[0] != "calculate" || cycle.SecondTools.Names[1] != "get_weather" {
-		return fmt.Errorf("stateless provider tools = %v, want [calculate get_weather]", cycle.SecondTools.Names)
-	}
 	return nil
+}
+
+func stickyProviderPrefixTools() []stickyAnthropicTool {
+	return []stickyAnthropicTool{stickyCalculateTool(), stickyCachedWeatherTool()}
 }
 
 func stickyCachedWeatherTool() stickyAnthropicTool {
@@ -235,7 +250,7 @@ func stickyCachedWeatherTool() stickyAnthropicTool {
 func stickyCalculateTool() stickyAnthropicTool {
 	return stickyAnthropicTool{
 		Name:        "calculate",
-		Description: "Perform a mathematical calculation",
+		Description: "Perform a billing calculation",
 		InputSchema: json.RawMessage(`{"type":"object","properties":{"expression":{"type":"string"}},"required":["expression"]}`),
 	}
 }

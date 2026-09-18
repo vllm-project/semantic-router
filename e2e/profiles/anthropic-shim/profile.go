@@ -2,6 +2,8 @@ package anthropicshim
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
@@ -11,7 +13,14 @@ import (
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
-const valuesFile = "e2e/profiles/anthropic-shim/values.yaml"
+const (
+	valuesFile                 = "e2e/profiles/anthropic-shim/values.yaml"
+	mockEmbeddingManifest      = "e2e/profiles/remote-embedding/manifests/mock-embedding.yaml"
+	mockEmbeddingNamespace     = "default"
+	mockEmbeddingDeployment    = "mock-embedding"
+	mockEmbeddingReadyTimeout  = 5 * time.Minute
+	mockEmbeddingReadyInterval = 2 * time.Second
+)
 
 var (
 	resourceManifests = []string{
@@ -39,6 +48,7 @@ func NewProfile() *Profile {
 		stack: gatewaystack.New(gatewaystack.Config{
 			Name:                     "anthropic-shim",
 			SemanticRouterValuesFile: valuesFile,
+			PrerequisiteManifests:    []string{mockEmbeddingManifest},
 			ResourceManifests:        resourceManifests,
 			WaitDeployments:          waitDeployments,
 		}),
@@ -55,9 +65,33 @@ func (p *Profile) Description() string {
 	return "Tests Anthropic /v1/messages response shape and cache-cycle behaviour against the llama.cpp anthropic-shim backend"
 }
 
-// Setup deploys the shared gateway stack and anthropic-shim backend.
+// Setup deploys the embedding fixture before the Router because startup probes
+// call the configured provider immediately.
 func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error {
-	return p.stack.Setup(ctx, opts)
+	if err := p.stack.ApplyPrerequisites(ctx, opts); err != nil {
+		return err
+	}
+	if opts.KubeClient == nil {
+		return fmt.Errorf("kube client is required to verify the mock embedding provider")
+	}
+	if err := helpers.WaitForDeploymentReady(
+		ctx,
+		opts.KubeClient,
+		mockEmbeddingNamespace,
+		mockEmbeddingDeployment,
+		mockEmbeddingReadyTimeout,
+		mockEmbeddingReadyInterval,
+		opts.Verbose,
+	); err != nil {
+		return fmt.Errorf("wait for mock embedding provider: %w", err)
+	}
+	if err := p.stack.DeployCore(ctx, opts); err != nil {
+		return err
+	}
+	if err := p.stack.ApplyResources(ctx, opts); err != nil {
+		return err
+	}
+	return p.stack.Verify(ctx, opts)
 }
 
 // Teardown removes the shared gateway stack and anthropic-shim backend.

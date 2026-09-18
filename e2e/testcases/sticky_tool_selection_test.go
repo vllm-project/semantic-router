@@ -1,9 +1,51 @@
 package testcases
 
 import (
+	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 )
+
+func TestStickyProviderPrefixUsesStableAuthorizedCatalog(t *testing.T) {
+	first := stickyProviderPrefixTools()
+	second := stickyProviderPrefixTools()
+	if len(first) != 2 || first[0].Name != "calculate" || first[1].Name != "get_weather" {
+		t.Fatalf("provider-prefix catalog = %v, want [calculate get_weather]", []string{first[0].Name, first[1].Name})
+	}
+	firstJSON, err := json.Marshal(first)
+	if err != nil {
+		t.Fatalf("marshal first catalog: %v", err)
+	}
+	secondJSON, err := json.Marshal(second)
+	if err != nil {
+		t.Fatalf("marshal second catalog: %v", err)
+	}
+	if !bytes.Equal(firstJSON, secondJSON) {
+		t.Fatalf("provider-prefix catalogs differ:\nfirst:  %s\nsecond: %s", firstJSON, secondJSON)
+	}
+	if strings.TrimSpace(stickyProviderPrefixFirstPrompt) == "" {
+		t.Fatal("provider-prefix first prompt must select one relevant tool")
+	}
+	if strings.TrimSpace(stickyProviderPrefixGrowthPrompt) != "" {
+		t.Fatal("provider-prefix growth prompt must pass through the full authorized catalog")
+	}
+}
+
+func TestAssertStickyTrustedProviderPrefixReportsStructureBeforeUsage(t *testing.T) {
+	cycle := stickyPrefixCycle{
+		FirstTools: stickyTestSnapshot(`{"name":"get_weather"}`),
+		SecondTools: stickyTestSnapshot(
+			`{"name":"calculate"}`,
+			`{"name":"get_weather"}`,
+		),
+	}
+
+	err := assertStickyTrustedProviderPrefix(cycle)
+	if err == nil || !strings.Contains(err.Error(), "trusted growth reordered") {
+		t.Fatalf("assertStickyTrustedProviderPrefix() error = %v, want tool-order failure", err)
+	}
+}
 
 func TestAssertStickyInvalidationAllowsStatelessToolChoice(t *testing.T) {
 	previous := stickyTestSnapshot(

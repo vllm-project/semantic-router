@@ -49,7 +49,8 @@ config:
             configuration:
               enabled: true
               mode: filter
-              preserve_count: 2
+              relevance_threshold: 0.9
+              preserve_count: 1
               sticky:
                 enabled: true
                 max_tools: 2
@@ -92,6 +93,28 @@ config:
   global:
     model_catalog:
       kbs: []
+      embeddings:
+        semantic:
+          qwen3_model_path: ""
+          gemma_model_path: ""
+          mmbert_model_path: ""
+          multimodal_model_path: ""
+          bert_model_path: ""
+          use_cpu: true
+          embedding_config:
+            backend: openai_compatible
+            model_type: remote
+            preload_embeddings: false
+            target_dimension: 4
+            top_k: 1
+            min_score_threshold: 0.9
+          endpoint:
+            base_url: http://mock-embedding.default.svc.cluster.local:8000/v1
+            model: e2e-remote-embedding
+            api_key_env: REMOTE_EMBEDDING_E2E_KEY
+            timeout_seconds: 5
+            max_retries: 1
+            dimensions: 4
     router:
       clear_route_cache: true
       strategy: priority
@@ -138,3 +161,5 @@ resources:
 extraEnv:
   - name: USER_SCOPE_NAMESPACE_SECRET
     value: e2e-sticky-provider-prefix-secret
+  - name: REMOTE_EMBEDDING_E2E_KEY
+    value: e2e-embedding-key
