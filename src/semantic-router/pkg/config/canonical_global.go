@@ -29,7 +29,6 @@ type CanonicalRouterGlobal struct {
 	SkipProcessing            SkipProcessingConfig   `yaml:"skip_processing"`
 	ModelSelection            ModelSelectionConfig   `yaml:"model_selection"`
 	Learning                  RouterLearningConfig   `yaml:"learning,omitempty"`
-	ShadowComparison          ShadowComparisonConfig `yaml:"shadow_comparison,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -359,7 +358,6 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.SkipProcessing = router.SkipProcessing
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
-	cfg.ShadowComparison = router.ShadowComparison
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {

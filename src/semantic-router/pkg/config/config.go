@@ -282,7 +282,6 @@ type IntelligentRouting struct {
 	Decisions             []Decision             `yaml:"decisions,omitempty"`
 	Strategy              RoutingStrategy        `yaml:"strategy,omitempty"`
 	ModelSelection        ModelSelectionConfig   `yaml:"model_selection,omitempty"`
-	ShadowComparison      ShadowComparisonConfig `yaml:"shadow_comparison,omitempty"`
 	ReasoningConfig       `yaml:",inline"`
 }
 
