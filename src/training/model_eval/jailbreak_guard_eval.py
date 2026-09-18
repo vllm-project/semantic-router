@@ -194,7 +194,7 @@ def choose_threshold(args: argparse.Namespace) -> tuple[float, str]:
             f"no threshold on {args.dev_dataset} stays inside a "
             f"{args.budget:g} benign false-positive budget"
         )
-    return reached["threshold"], f"{args.dev_dataset} at {args.budget:g} fpr"
+    return reached["threshold"], f"{args.dev_dataset} at {args.budget:g} FPR"
 
 
 def main() -> None:
@@ -239,9 +239,9 @@ def main() -> None:
     reached = pooled.get(key) or {}
     print(
         f"  auc {_number(pooled.get('auc'))}"
-        f"  recall at {budget:g} fpr {_number(reached.get('recall'))}"
+        f"  recall at {budget:g} FPR {_number(reached.get('recall'))}"
         f"  band macro {_number(report.get(f'band_macro_{key}'))}"
-        f"  fpr at {threshold:.4f} {_number(pooled['false_positive_rate'])}"
+        f"  FPR at {threshold:.4f} {_number(pooled['false_positive_rate'])}"
     )
     print(f"[saved] {args.output}")
 
