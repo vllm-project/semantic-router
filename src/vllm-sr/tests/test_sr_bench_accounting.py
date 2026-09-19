@@ -301,8 +301,9 @@ def test_recovery_snapshots_corrected_parent_spend_without_rewriting_history(
     with pytest.raises(RecoveryPlanError, match="eligibility changed"):
         recover(engine, parent, body, owner="alice")
 
-    def save_child(manifest, owner, key, *, recovery):
+    def save_child(manifest, owner, key, *, recovery, actor_role):
         assert recovery is True
+        assert actor_role == "local"
         return store.create(plan(manifest), owner, key)[0]
 
     monkeypatch.setattr(engine, "start", save_child)
