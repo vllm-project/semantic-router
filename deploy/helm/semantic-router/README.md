@@ -273,11 +273,11 @@ the locked chart dependencies.
 | observability.alerts.labels | object | `{}` | Additional labels added to the PrometheusRule. |
 | observability.alerts.thresholds.cacheHitRate | float | `0.2` |  |
 | observability.alerts.thresholds.completionLatencyP95Seconds | int | `30` |  |
+| observability.alerts.thresholds.firstResponseObservationP95Seconds | int | `5` |  |
 | observability.alerts.thresholds.inflightRequests | int | `50` |  |
 | observability.alerts.thresholds.requestErrorRate | float | `0.05` |  |
+| observability.alerts.thresholds.responseDurationPerOutputTokenP95Seconds | float | `0.25` |  |
 | observability.alerts.thresholds.routingLatencyP95Seconds | float | `0.1` |  |
-| observability.alerts.thresholds.tpotP95Seconds | float | `0.25` |  |
-| observability.alerts.thresholds.ttftP95Seconds | int | `5` |  |
 | persistence.accessMode | string | `"ReadWriteOnce"` | Access mode |
 | persistence.annotations | object | `{}` | Annotations for PVC |
 | persistence.enabled | bool | `true` | Enable persistent volume |

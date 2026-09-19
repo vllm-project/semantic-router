@@ -522,6 +522,7 @@ vllm-sr-sim-start: vllm-sr-sim-build
 vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
 vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[bench]"
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
 		src/vllm-sr/tests/test_container_images.py \
@@ -529,9 +530,28 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
 		src/vllm-sr/tests/test_embedding_api_config.py \
 		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
-		src/vllm-sr/tests/test_evaluation_live.py \
-		src/vllm-sr/tests/test_evaluation_worker_task_limit.py \
-		src/vllm-sr/tests/test_evaluation_worker_sandbox.py \
+		src/vllm-sr/tests/test_evaluation_cli.py \
+		src/vllm-sr/tests/test_sr_bench.py \
+		src/vllm-sr/tests/test_sr_bench_accounting.py \
+		src/vllm-sr/tests/test_sr_bench_client.py \
+		src/vllm-sr/tests/test_sr_bench_collection.py \
+		src/vllm-sr/tests/test_sr_bench_datasets.py \
+		src/vllm-sr/tests/test_sr_bench_dataset_validation.py \
+		src/vllm-sr/tests/test_sr_bench_dataset_fingerprints.py \
+		src/vllm-sr/tests/test_sr_bench_experiments.py \
+		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
+		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
+		src/vllm-sr/tests/test_routing_preview.py \
+		src/vllm-sr/tests/test_sr_bench_harness.py \
+		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
+		src/vllm-sr/tests/test_sr_bench_recovery.py \
+		src/vllm-sr/tests/test_sr_bench_replay.py \
+		src/vllm-sr/tests/test_sr_bench_reporting.py \
+		src/vllm-sr/tests/test_sr_bench_run_options.py \
+		src/vllm-sr/tests/test_sr_bench_setup.py \
+		src/vllm-sr/tests/test_sr_bench_snapshots.py \
+		src/vllm-sr/tests/test_sr_bench_sources.py \
+		src/vllm-sr/tests/test_sr_bench_runtime.py \
 		src/vllm-sr/tests/test_install_package_resolution.py \
 		src/vllm-sr/tests/test_install_runtime_behavior.py \
 		src/vllm-sr/tests/test_install_script_surface.py \

@@ -23,6 +23,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -86,10 +87,11 @@ func (r *OpenAIRouter) createLooper(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (looper.Looper, error) {
-	l, err := looper.FactoryWithClient(
+	l, err := looper.FactoryWithClientAndWorkflowState(
 		&r.Config.Looper,
 		decision.Algorithm.Type,
 		r.looperModelClient(),
+		r.WorkflowStateService,
 	)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "looper_construction_failed", map[string]interface{}{
@@ -117,6 +119,14 @@ func (r *OpenAIRouter) handleLooperExecution(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
+	ctx = looper.WithExpectedConfigHash(ctx, headerValueCI(reqCtx, headers.SRBenchExpectedConfigHash))
+	if r.WorkflowStateService != nil && decision != nil && decision.Algorithm != nil &&
+		decision.Algorithm.Type == config.DecisionAlgorithmWorkflows {
+		if !r.WorkflowStateService.Acquire() {
+			return r.createErrorResponse(503, "Router is shutting down"), nil
+		}
+		defer r.WorkflowStateService.Release()
+	}
 	// Create looper based on algorithm type
 	l, err := r.createLooper(decision, reqCtx)
 	if err != nil {

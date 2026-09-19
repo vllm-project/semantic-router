@@ -198,6 +198,7 @@ func (c *QdrantCache) AddPendingRequest(requestID, model, query string, requestB
 	if !c.enabled || ttlSeconds == 0 {
 		return nil
 	}
+	start := time.Now()
 	ctx := context.Background()
 
 	emb, err := c.getEmbedding(ctx, query)
@@ -225,10 +226,10 @@ func (c *QdrantCache) AddPendingRequest(requestID, model, query string, requestB
 		}},
 	})
 	if err != nil {
-		metrics.RecordCacheOperation("qdrant", "add_pending", "error", 0)
+		metrics.RecordCacheOperation("qdrant", "add_pending", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to store pending request: %w", err)
 	}
-	metrics.RecordCacheOperation("qdrant", "add_pending", "success", 0)
+	metrics.RecordCacheOperation("qdrant", "add_pending", "success", time.Since(start).Seconds())
 	return nil
 }
 
@@ -236,6 +237,7 @@ func (c *QdrantCache) UpdateWithResponse(requestID string, responseBody []byte, 
 	if !c.enabled {
 		return nil
 	}
+	start := time.Now()
 
 	ctx := context.Background()
 
@@ -287,10 +289,10 @@ func (c *QdrantCache) UpdateWithResponse(requestID string, responseBody []byte, 
 		}},
 	})
 	if err != nil {
-		metrics.RecordCacheOperation("qdrant", "update_response", "error", 0)
+		metrics.RecordCacheOperation("qdrant", "update_response", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to update entry with response: %w", err)
 	}
-	metrics.RecordCacheOperation("qdrant", "update_response", "success", 0)
+	metrics.RecordCacheOperation("qdrant", "update_response", "success", time.Since(start).Seconds())
 	return nil
 }
 
@@ -298,6 +300,7 @@ func (c *QdrantCache) AddEntry(ctx context.Context, requestID, model, query stri
 	if !c.enabled || ttlSeconds == 0 {
 		return nil
 	}
+	start := time.Now()
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -327,10 +330,10 @@ func (c *QdrantCache) AddEntry(ctx context.Context, requestID, model, query stri
 		}},
 	})
 	if err != nil {
-		metrics.RecordCacheOperation("qdrant", "add_entry", "error", 0)
+		metrics.RecordCacheOperation("qdrant", "add_entry", "error", time.Since(start).Seconds())
 		return fmt.Errorf("failed to store cache entry: %w", err)
 	}
-	metrics.RecordCacheOperation("qdrant", "add_entry", "success", 0)
+	metrics.RecordCacheOperation("qdrant", "add_entry", "success", time.Since(start).Seconds())
 	return nil
 }
 

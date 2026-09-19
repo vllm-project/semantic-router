@@ -19,6 +19,10 @@ func stageAgenticSessionDecision(
 	if selCtx == nil || selectedModelRef == nil || ctx == nil || selCtx.SessionID == "" {
 		return
 	}
+
+	if ctx.VSRProgressGateError != nil {
+		return
+	}
 	policy := sessionPolicyMapForTelemetry(ctx, result)
 	activeToolLoop := false
 	previousModel := ctx.PreviousModel

@@ -29,6 +29,11 @@ var ErrModelNotReady = errors.New("model not ready")
 // been prepared for evaluation yet.
 var ErrClassifierUnavailable = errors.New("signal classifier is unavailable")
 
+var (
+	ErrConfigHashMismatch    = errors.New("active runtime config does not match the evaluation manifest")
+	ErrConfigHashUnavailable = errors.New("active runtime config hash is unavailable")
+)
+
 // blankText reports whether s is empty or whitespace-only.
 func blankText(s string) bool {
 	return strings.TrimSpace(s) == ""

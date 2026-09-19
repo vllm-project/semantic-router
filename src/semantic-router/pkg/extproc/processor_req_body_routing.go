@@ -81,6 +81,8 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	ctx.SemanticRequest = request
 	// Per-model accounting keys off the validated concrete dispatch model.
 	ctx.RequestModel = dispatch.logicalModel
+
+	ctx.VSRSelectedModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -369,7 +371,6 @@ func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
 	spanContext, upstreamSpan := tracing.StartSpan(
 		ctx.TraceContext, tracing.SpanUpstreamRequest, trace.WithSpanKind(trace.SpanKindClient),
 	)
-	ctx.TraceContext = spanContext
 	ctx.UpstreamSpan = upstreamSpan
 	tracing.SetSpanAttributes(upstreamSpan,
 		attribute.String(tracing.AttrModelName, model),
