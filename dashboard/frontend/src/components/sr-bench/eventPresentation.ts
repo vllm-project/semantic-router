@@ -12,25 +12,20 @@ const lifecycle: Record<string, [string, string]> = {
   cancelled: ['Evaluation cancelled', 'Cancellation finished; saved results remain available.'],
   cancellation_requested: [
     'Cancellation requested',
-    'A stop was requested. This event alone does not confirm that in-flight requests stopped.',
+    'Cancellation is pending for active requests.',
   ],
   accounting_reconciled: [
     'Accounting reconciled',
     'Saved usage was reconciled without new model requests. Original receipts remain unchanged.',
   ],
   failure_observed: ['Failure recorded', 'The worker saved a failure for review.'],
-  call_sent: [
-    'Model request dispatched',
-    'A request was sent. This event alone does not confirm completion or known cost.',
-  ],
+  call_sent: ['Model request dispatched', 'Sent to the selected target.'],
   call_replayed: [
     'Saved answer reused',
     'A previous answer was reused for diagnostic replay; no new model generation.',
   ],
-  case_completed: [
-    'Case result saved',
-    'Processing finished. Completion does not imply a correct answer.',
-  ],
+  case_running: ['Case running', 'The worker is processing this case.'],
+  case_completed: ['Case result saved', 'The case result was saved.'],
   case_failed: ['Case failed', 'A failed case result was saved.'],
   case_cancelled: ['Case cancelled', 'A cancelled case result was saved.'],
 }

@@ -15,17 +15,22 @@ describe('saved event presentation', () => {
       },
     })
     expect(value.title).toBe('Model request dispatched')
-    expect(value.description).toContain('does not confirm completion')
+    expect(value.description).toBe('Sent to the selected target.')
     expect(value.caseID).toBe('case-1')
     expect(JSON.stringify(value)).not.toContain('private prompt')
     expect(JSON.stringify(value)).not.toContain('do not expose')
   })
   it('preserves failure context without confusing completion with correctness or cancellation request with stop', () => {
-    expect(describeRunEvent({ kind: 'case_completed' }).description).toContain(
-      'does not imply a correct answer',
+    expect(describeRunEvent({ kind: 'case_running' })).toMatchObject({
+      title: 'Case running',
+      description: 'The worker is processing this case.',
+      group: 'cases',
+    })
+    expect(describeRunEvent({ kind: 'case_completed' }).description).toBe(
+      'The case result was saved.',
     )
-    expect(describeRunEvent({ kind: 'cancellation_requested' }).description).toContain(
-      'does not confirm',
+    expect(describeRunEvent({ kind: 'cancellation_requested' }).description).toBe(
+      'Cancellation is pending for active requests.',
     )
     const failure = describeRunEvent({
       kind: 'failure_observed',
@@ -47,6 +52,9 @@ describe('saved event presentation', () => {
     ).toMatchObject({ title: 'Adapter checkpoint', caseID: 'case-2' })
     expect(describeRunEvent({ kind: 'accounting_reconciled' }).description).toContain(
       'without new model requests',
+    )
+    expect(describeRunEvent({ kind: 'call_replayed' }).description).toContain(
+      'no new model generation',
     )
   })
 })
