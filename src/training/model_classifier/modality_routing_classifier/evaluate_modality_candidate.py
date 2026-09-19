@@ -121,23 +121,51 @@ def flag_test_contamination(
     return contaminated_indices, rate_by_class
 
 
+def build_label_remap(id2label: Dict[int, str], model_path: str = "<checkpoint>") -> Dict[int, int]:
+    """Map checkpoint class ids to canonical MODALITY_LABELS ids, or raise.
+
+    A checkpoint may order its classes differently from AR=0/DIFFUSION=1/BOTH=2, so the
+    remap goes through label names. It fails closed: a missing, partial or non-canonical
+    id2label (for example the generic LABEL_0/LABEL_1/LABEL_2) is an error, because
+    falling back to the raw class id would produce valid-looking predictions that are
+    scored against the wrong classes.
+    """
+    canonical_id = {label: idx for idx, label in enumerate(MODALITY_LABELS)}
+    unknown = sorted({str(name) for name in id2label.values() if name not in canonical_id})
+    if unknown or sorted(id2label.values()) != sorted(MODALITY_LABELS):
+        raise ValueError(
+            f"{model_path}: id2label {dict(id2label)} is not a one-to-one mapping onto "
+            f"{MODALITY_LABELS}"
+            + (f" (unrecognised labels: {unknown})" if unknown else "")
+            + "; refusing to guess the class order"
+        )
+    return {ckpt_id: canonical_id[name] for ckpt_id, name in id2label.items()}
+
+
 def run_inference(model_path: str, texts: List[str], batch_size: int, max_length: int) -> np.ndarray:
     """Returns predicted label ids [N], in the order of `texts`."""
     model, tokenizer, id2label = load_sequence_classifier_for_inference(
         model_path, num_labels=len(MODALITY_LABELS)
     )
+    checkpoint_id_to_canonical_id = build_label_remap(id2label, model_path)
+    output_size = model.config.num_labels
+    if output_size != len(MODALITY_LABELS) or set(checkpoint_id_to_canonical_id) != set(range(output_size)):
+        raise ValueError(
+            f"{model_path}: classifier has {output_size} outputs but id2label covers "
+            f"ids {sorted(checkpoint_id_to_canonical_id)}; expected 0..{len(MODALITY_LABELS) - 1}"
+        )
+    logger.info(
+        "Label mapping for %s: %s",
+        model_path,
+        ", ".join(
+            f"{ckpt_id}={id2label[ckpt_id]}->{canonical_id}"
+            for ckpt_id, canonical_id in sorted(checkpoint_id_to_canonical_id.items())
+        )
+        + " (checkpoint id=name->canonical id)",
+    )
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model.to(device)
     model.eval()
-
-    # id2label from the checkpoint may not use the canonical MODALITY_LABELS order
-    # (AR=0/DIFFUSION=1/BOTH=2) -- remap defensively rather than assume it matches.
-    label_name_to_canonical_id = {label: idx for idx, label in enumerate(MODALITY_LABELS)}
-    checkpoint_id_to_canonical_id = {
-        ckpt_id: label_name_to_canonical_id[label_name]
-        for ckpt_id, label_name in id2label.items()
-        if label_name in label_name_to_canonical_id
-    }
 
     preds = []
     with torch.no_grad():
@@ -148,7 +176,7 @@ def run_inference(model_path: str, texts: List[str], batch_size: int, max_length
             ).to(device)
             logits = model(**enc).logits
             batch_preds = torch.argmax(logits, dim=-1).cpu().tolist()
-            preds.extend(checkpoint_id_to_canonical_id.get(p, p) for p in batch_preds)
+            preds.extend(checkpoint_id_to_canonical_id[p] for p in batch_preds)
 
     del model
     if torch.cuda.is_available():
