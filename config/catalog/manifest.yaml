@@ -74,6 +74,11 @@ inventory:
           - google/gemini-3.8-flash
           - google/gemini-3.7-flash
           - google/gemini-3.6-flash
+      - publisher: IBM / Granite
+        representative_models:
+          - ibm/granite-4.2-30b
+          - ibm/granite-4.2-8b
+          - ibm/granite-4.2-3b
       - publisher: Meta
         representative_models:
           - meta/muse-spark-1.3
