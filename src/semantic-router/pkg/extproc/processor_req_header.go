@@ -23,6 +23,9 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	defer span.End()
 
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
+	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
+		return rejected, nil
+	}
 
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	detectSourceFormat(path, ctx)

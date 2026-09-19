@@ -375,6 +375,11 @@ const (
 	// Used by the ext_proc when routing requests to MiniMax models.
 	UserMiniMaxKey = "x-user-minimax-key"
 
+	// UserCloudflareWorkersAIKey carries the user's Cloudflare Workors AI API token,
+	// injected by the auth backend. The endpoint is account-scoped, so the account
+	// identifier travels in the operator's base URL and only the token is per user.
+	UserCloudflareWorkersAIKey = "x-user-cloudflare-workers-ai-key"
+
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).
 	// Override via authz.identity.user_id_header for other backends:

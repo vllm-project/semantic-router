@@ -81,4 +81,4 @@ Discover the activated Recipe's published entrypoint from the running Router.
 `vllm-sr/auto` is reserved and cannot be rebound to that Recipe. Use
 `recipe validate`, `recipe plan`, and `recipe apply` only after checking their
 installed help and target contract. Verify the active binding using both
-preview and real routed requests; see [evaluation details](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md).
+preview and real routed requests; see [evaluation details](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md).

@@ -77,9 +77,28 @@ type item struct {
 }
 
 type usageRec struct {
-	PromptTokens     int64 `json:"prompt_tokens"`
-	CompletionTokens int64 `json:"completion_tokens"`
-	TotalTokens      int64 `json:"total_tokens"`
+	PromptTokens      int64 `json:"prompt_tokens"`
+	CompletionTokens  int64 `json:"completion_tokens"`
+	TotalTokens       int64 `json:"total_tokens"`
+	CachedInputTokens int64 `json:"cached_input_tokens,omitempty"`
+	CacheWriteTokens  int64 `json:"cache_write_tokens,omitempty"`
+	Unreported        bool  `json:"unreported,omitempty"`
+}
+
+func recordUsage(usage looper.TokenUsage) usageRec {
+	return usageRec{
+		PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens,
+		TotalTokens: usage.TotalTokens, CachedInputTokens: usage.CachedInputTokens,
+		CacheWriteTokens: usage.CacheWriteTokens, Unreported: usage.Unreported,
+	}
+}
+
+func (usage usageRec) tokenUsage() looper.TokenUsage {
+	return looper.TokenUsage{
+		PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens,
+		TotalTokens: usage.TotalTokens, CachedInputTokens: usage.CachedInputTokens,
+		CacheWriteTokens: usage.CacheWriteTokens, Unreported: usage.Unreported,
+	}
 }
 
 type cachedResponse struct {
@@ -292,7 +311,7 @@ func generatePanel(client *looper.Client, opt options, it item) ([]cachedRespons
 			Model:     model,
 			Content:   resp.Content,
 			Reasoning: resp.ReasoningContent,
-			Usage:     usageRec(resp.Usage),
+			Usage:     recordUsage(resp.Usage),
 		})
 	}
 	return out, nil
@@ -362,7 +381,7 @@ func produceArm(
 			return rec
 		}
 		rec.FinalAnswer = resp.Content
-		rec.Usage = usageRec(resp.Usage)
+		rec.Usage = recordUsage(resp.Usage)
 		return rec
 	}
 
@@ -392,7 +411,7 @@ func produceArm(
 		return rec
 	}
 	rec.FinalAnswer = finalAnswer(resp.Body)
-	rec.Usage = usageRec(resp.Usage)
+	rec.Usage = recordUsage(resp.Usage)
 	fillTrace(&rec, resp.IntermediateResponses)
 	return rec
 }
@@ -466,7 +485,7 @@ func toModelResponses(panel []cachedResponse) []*looper.ModelResponse {
 			Model:            p.Model,
 			Content:          p.Content,
 			ReasoningContent: p.Reasoning,
-			Usage:            looper.TokenUsage(p.Usage),
+			Usage:            p.Usage.tokenUsage(),
 		})
 	}
 	return out

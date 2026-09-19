@@ -121,6 +121,11 @@ func TestProviderVendorExtensionsAllowedOnlyForKnownVendors(t *testing.T) {
 	if !providerVendorExtensionsAllowed(policy) {
 		t.Error("providerVendorExtensionsAllowed(azure) = false, want true")
 	}
+	policy = llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = llmprotocol.ResponseVendorCloudflare
+	if !providerVendorExtensionsAllowed(policy) {
+		t.Error("providerVendorExtensionsAllowed(cloudflare) = false, want true")
+	}
 }
 
 func TestDecodeProviderWireAcceptsUnanticipatedAzureFields(t *testing.T) {

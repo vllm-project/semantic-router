@@ -61,7 +61,13 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		history,
 		ctx,
 	)
+	if decisionErr == nil {
+		decisionErr = r.benchmarkCallLimitCheck(ctx)
+	}
 	if decisionErr != nil {
+		if errors.Is(decisionErr, errBenchmarkCallLimit) {
+			return requestDecisionState{}, r.createErrorResponse(412, errBenchmarkCallLimit.Error())
+		}
 		if errors.Is(decisionErr, context.Canceled) ||
 			errors.Is(decisionErr, context.DeadlineExceeded) {
 			return requestDecisionState{}, r.createErrorResponse(499, "request canceled")
