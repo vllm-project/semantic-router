@@ -141,10 +141,15 @@ func (r *OpenAIRouter) learningExperience(ctx *RequestContext, decision string, 
 }
 
 func (r *OpenAIRouter) prepareEvalRequest(input services.EvalModelSelectionInput, decision *config.Decision) (*RequestContext, error) {
+	request, err := selection.EffectiveCandidateRequest(input.SemanticRequest, nil)
+	if err != nil {
+		return nil, err
+	}
 	ctx := &RequestContext{
 		Headers: map[string]string{}, VSRSelectedDecision: decision,
-		SemanticRequest: input.SemanticRequest, VSRConversationFacts: input.ConversationFacts,
+		SemanticRequest: request, VSRConversationFacts: input.ConversationFacts,
 		VSRContextTokenCount: input.ContextTokenCount,
+		TraceContext:         input.Context,
 	}
 	if recipe, ok := r.Config.RecipeByName(input.Recipe); ok {
 		ctx.Routing.SelectRecipe(recipe)

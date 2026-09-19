@@ -293,6 +293,15 @@ candidates. Record the intended state conditions and treat uncontrolled live
 state differences as a comparison limitation. Non-Learning selectors that depend
 on telemetry can also return state-dependent snapshots.
 
+With automatic output budgets, supported single-backend previews call the
+provider's render API to resolve each candidate's input size and available output
+capacity. Rendering does not generate an answer. Selection uses the configured
+cost forecast, not the maximum output capacity as an expected token count.
+Requests needing dynamic enrichment or overflow compression remain unresolved;
+inspect `selection_status` and `selection_reason` before relying on a model choice.
+These checks cover the supported preview envelope and configured request policy,
+not unsupported caller-specific generation fields.
+
 For a single request, `vllm-sr route preview --request-file request.json` accepts
 the Router's supported request envelope: role/content/tool-call messages, tools,
 function selection, response format, output-budget fields, string metadata and

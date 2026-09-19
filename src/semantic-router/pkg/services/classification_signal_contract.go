@@ -88,6 +88,9 @@ func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req I
 		return resp, decisionErr
 	}
 	s.populateEvalModelSelection(resp, input, decisionResult, req.PreviewContext)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	return resp, nil
 }
 
@@ -108,6 +111,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	}
 	demand, _ := modelselection.EffectiveCandidateDemand(input.semanticRequest, decisionResult.Decision)
 	selection := selector.SelectModelForEval(EvalModelSelectionInput{
+		Context:           input.requestFacts.Context,
 		PreviewContext:    previewContext,
 		ConversationFacts: input.conversationFacts,
 		SemanticRequest:   input.semanticRequest,

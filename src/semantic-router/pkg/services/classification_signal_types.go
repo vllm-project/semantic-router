@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -140,6 +141,7 @@ type EvalResponse struct {
 // facts to the live selector. Request content remains local to this call and is
 // excluded from the returned selection provenance.
 type EvalModelSelectionInput struct {
+	Context           context.Context
 	PreviewContext    *PreviewContext
 	ConversationFacts classification.ConversationFacts
 	SemanticRequest   *llmprotocol.Request
