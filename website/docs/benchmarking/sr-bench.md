@@ -298,6 +298,12 @@ calling a model. Selecting all benchmarks from one source reuses its original
 identity; a subset or multi-source composition creates a reusable frozen dataset.
 Conflicting selections are rejected rather than silently merged.
 
+Set sampling, budget and request/case limits with the form controls; no JSON
+editing is required. Registered target settings override run defaults and remain
+read-only. **Route preview** also accepts optional session and conversation
+context for inspecting session-dependent routing. Review the frozen plan before
+starting; plan review does not generate model answers.
+
 **Datasets** provides search, profile/benchmark filters and pagination. Open a
 dataset to browse its questions, benchmark coverage and subject groups. Questions
 load in pages of 25 with benchmark/category filters and text search; opening one
@@ -306,6 +312,8 @@ inputs when the pinned source is available. Reference answers, hidden tests and
 tool credentials are excluded. Source details and hashes are behind disclosure
 controls. **Evaluate dataset** reuses the chosen data. Browsing public questions
 does not establish that they are unseen; never use standard tasks for tuning.
+Each profile's total questions is the sum across its prepared sets. Sets may
+overlap, so this is not a count of unique questions or the selected run's denominator.
 
 Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
 **Recipe**. Start with the aggregate results, then inspect individual responses,

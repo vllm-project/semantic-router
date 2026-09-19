@@ -232,9 +232,10 @@ test('live comparison retains current Balance and two optimization revisions', a
       { exact: true },
     ),
   ).toBeVisible()
+  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).click()
   await page
-    .getByRole('combobox', { name: 'Baseline run', exact: true })
-    .selectOption(plan!.baseline_run_id!)
+    .locator(`[role="option"][data-value=${JSON.stringify(plan!.baseline_run_id!)}]`)
+    .click()
   const inventory = await page.request.get(`${plan!.base_url}/api/sr-bench/v1/runs`)
   expect(inventory.ok()).toBe(true)
   const savedRuns = (await inventory.json()).runs as Array<{

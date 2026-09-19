@@ -1,9 +1,8 @@
 # sr-bench 1.0
 
-Status: implementation and real-deployment acceptance recorded below. Release
-readiness additionally requires the final revision's selected checks on
+Status: design and implementation scope for sr-bench 1.0. Release readiness
+requires the final revision's selected checks on
 [PR #3913](https://github.com/vllm-project/semantic-router/pull/3913) to pass.
-The Balance quality objective remains unmet on independent validation.
 
 ## Outcome and scope
 
@@ -83,8 +82,9 @@ Benchmark names, expected answers and split labels
 are grading metadata, never routing hints in the subject request.
 
 Public evaluation splits reused as sr-bench development data are identified as
-such. Public data is not claimed to be contamination-free. Previously inspected
-GPQA labels make those results a retest, even if a local holdout split is used.
+such. Public data is not claimed to be contamination-free. If reference labels
+were previously inspected, disclose the affected evaluation as a retest, even if
+a local holdout split is used.
 Standard results must not feed configuration tuning. Training exports contain
 only explicitly eligible train/dev rows and provenance; the evaluation pipeline
 does not silently launch model training or export holdout labels.
@@ -270,7 +270,7 @@ raw reproducibility details remain collapsed. Run navigation separates Results,
 Questions, Calls, Evidence and Recipe. Comparison supports arbitrary completed
 candidate selections, chronological iteration charts and CSV/JSON export rather
 than a fixed number of optimization slots. Implementation and local regression
-coverage do not replace the live Dashboard acceptance requirement below.
+coverage do not replace the deployment validation described below.
 
 The operations skill gains a dedicated sr-bench reference covering installation,
 data preparation, preview/config/live iteration, reporting, abnormal-run handling
@@ -278,74 +278,36 @@ and train/dev/holdout boundaries. Generated public skill copies ship with it.
 
 ## Acceptance and delivery
 
-The PR includes implementation, this proposal, user documentation, updated skill
-and sanitized acceptance evidence. Private infrastructure identifiers and raw
-gated benchmark answers do not belong in the PR.
+The source change includes the implementation, this proposal, user documentation,
+operations skill and reusable automated tests. Validation covers the following
+contracts:
 
-The [September 18 development and validation study](../../../../website/docs/benchmarking/sr-bench-development-study-20260918.md)
-records the completed three-single-model baseline and three Balance revisions
-on 25 reused development cases, with 170 retained calls and qualified offline
-accounting corrections. A separate frozen validation compares the final Balance
-recipe with all three singles on 136 cases: 124 non-GPQA cases held out within
-the recorded preparation scope, plus 12 explicitly disclosed GPQA retests.
-Its 544 subject and 39 judge calls are complete and independently reconciled.
-The final recipe saved 77.16% of simulated subject cost against the strongest
-weighted single, but scored 7.89 percentage points lower. The wide paired
-interval does not establish non-inferiority. Completing the harness and two
-development loops does not mean the Balance quality objective was achieved.
+- CLI and Dashboard share catalog discovery, prepared datasets and durable run
+  identities. The retired evaluation surfaces and active documentation are removed.
+- Dataset preparation preserves source digests and whole task units, produces
+  disjoint development and holdout splits, and rejects incompatible composition.
+- Deterministic fault tests cover absolute and idle deadlines, continuous-stream
+  repetition, cancellation, unknown dispatch, budget stops and incomplete usage.
+- Single-model and MoM execution use identical frozen cases and protocol settings.
+  Saved final-channel responses, runtime identities and four-bucket accounting
+  support independent report checks.
+- Configuration iteration follows validate, plan, apply and active-revision
+  acknowledgement. Candidate comparisons retain all baselines and iterations;
+  final holdout outcomes never become tuning inputs.
+- Adapter and grader conformance are checked separately. Reference controls and
+  synthetic fixtures do not count as model capability results or a complete score.
+- Dashboard integration covers dataset navigation, question input privacy,
+  single/MoM plan review, run progress, comparison, cancellation, retained results
+  after reload, and explicit recovery lineage without duplicate dispatch.
+- CLI, backend, frontend, integration and generated-skill checks run against the
+  source revision being reviewed. Deployment validation uses explicitly bounded
+  tasks and preserves failures and unknown accounting.
 
-All nine adapters have real subject-execution evidence. MMLU-Pro, GPQA,
-SimpleQA, LiveCodeBench, Terminal-Bench and τ³ reached their grading paths in
-those model runs. Truncated ARC, SciCode and HLE responses remain incorrect;
-separate positive and negative controls exercised their actual graders. The
-ARC and SciCode controls made no model calls; the HLE controls made two judge
-calls and no subject calls. This functional coverage is not nine successful
-model-to-grader evaluations or a complete sr-bench capability score.
-
-- [x] Replace old CLI/API/UI evaluation surfaces and stale active documentation.
-- [x] Install from a built wheel and discover the same catalog from CLI and UI.
-- [x] Prepare reproducible datasets; verify disjoint splits and source digests.
-- [x] Verify deadline, continuous-stream repetition, cancellation, crash/unknown
-  dispatch, budget stop and incomplete accounting with deterministic fault tests.
-- [x] Run actual single models and MoM through the CLI using fixed task IDs;
-  verify saved responses, final-channel scoring, identities and metric arithmetic.
-- [x] Measure the current Balance recipe and every constituent single model on
-  the same frozen development cases before tuning.
-- [x] Complete optimization loop 1: inspect baseline errors and cost, formulate
-  a routing change, validate/plan/apply, confirm the active revision, then preview
-  and measure the first optimized Balance recipe.
-- [x] Complete optimization loop 2: inspect the first iteration, apply and
-  preview a second revision, then measure it on the same development cases.
-  Compare all three Balance revisions with the complete single-model baseline.
-- [x] Evaluate the frozen final recipe and all single baselines without tuning
-  against validation outcomes. Separate the 124-case non-GPQA held-out scope
-  from the 12 prior-label GPQA retests. Publish the final recipe and uncertainty;
-  report measured regressions or inconclusive improvements without hiding them.
-- [x] Exercise all nine adapter execution paths against real prerequisites;
-  qualify graders separately when truncated model responses cannot reach them.
-  Keep reference controls distinct from statistical capability claims.
-- [x] Use the real Dashboard to launch and inspect a run, compare CLI-created
-  runs, inspect failures and cancel safely; verify persistence across UI reload.
-- [x] Run relevant CLI, backend, frontend, integration and generated-skill checks.
-- [x] Publish one signed-off PR with the implementation, proposal and acceptance
-  evidence. Its final-head CI gate remains the authoritative release condition.
-
-Public browser acceptance covered dataset paging and question details, arbitrary
-iteration comparisons, exports, recipe capture, and single/MoM plan review.
-The live lifecycle created one bounded synthetic parent, cancelled it after
-dispatch, then continued one previously undispatched cell in a separate child.
-An overly strict test assertion stopped after the child completed; the failure
-was retained, the assertion corrected, and the remaining UI and accounting
-checks completed read-only against those same runs. No generation was retried.
-Cancelled-parent and completed-child reloads passed; two conditional active-run
-reload scenarios were skipped: one had no configured active run, and the other
-run was already terminal. The study records these boundaries and excludes UI expenses
-from capability comparisons.
-
-Real acceptance uses new bounded runs and a new evidence namespace. It never
-resumes an aborted or frozen historical campaign. A pre-existing model quality
-limitation remains attached to its evidence; benchmark completion does not
-retroactively qualify that model or erase prior failures.
+A complete evaluation report must disclose its dataset scope, model limitations,
+uncertainty and accounting coverage. Functional harness conformance does not
+establish a MoM quality improvement or a cost-saving result. Previously aborted
+or frozen runs remain immutable; an explicit new attempt retains its lineage
+and does not erase prior failures.
 
 ## Sources
 

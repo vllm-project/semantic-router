@@ -8,6 +8,7 @@ import {
   profileTitle,
 } from './datasetPresentation'
 import DatasetDetails from './DatasetDetails'
+import BenchSelect from './BenchSelect'
 import type { Dataset, Run } from './types'
 import shared from './SrBench.module.css'
 import styles from './DatasetInventory.module.css'
@@ -45,6 +46,10 @@ export default function DatasetInventory({
     onBackToDatasets?.()
   }
   const allBenchmarks = [...new Set(datasets.flatMap((dataset) => dataset.benchmarks ?? []))].sort()
+  const questionTotal = (items: Dataset[]) =>
+    items.reduce((total, dataset) => total + dataset.case_count, 0)
+  const preparedSetCount = (count: number) =>
+    `${number(count)} prepared ${count === 1 ? 'case set' : 'case sets'}`
   const profiles = [...new Set(datasets.map((dataset) => dataset.profile ?? 'custom'))].sort(
     (a, b) =>
       ['smoke', 'quick', 'standard', 'custom'].indexOf(a) -
@@ -83,7 +88,8 @@ export default function DatasetInventory({
           <p>Choose a case set. Explore its coverage and questions before evaluating.</p>
         </div>
         <span className={shared.badge}>
-          {number(datasets.length)} datasets · {number(allBenchmarks.length)} benchmarks
+          {number(datasets.length)} {datasets.length === 1 ? 'dataset' : 'datasets'} ·{' '}
+          {number(allBenchmarks.length)} {allBenchmarks.length === 1 ? 'benchmark' : 'benchmarks'}
         </span>
       </div>
       <div className={styles.modes} role="group" aria-label="Filter by evaluation mode">
@@ -94,7 +100,10 @@ export default function DatasetInventory({
         >
           <ProductIcon name="database" width={22} height={22} />
           <strong>All datasets</strong>
-          <span>{number(datasets.length)} prepared case sets</span>
+          <span className={styles.modeQuestions}>
+            <strong>{number(questionTotal(datasets))}</strong> total questions
+          </span>
+          <span>{preparedSetCount(datasets.length)}</span>
         </button>
         {profiles.map((item) => (
           <button
@@ -108,16 +117,28 @@ export default function DatasetInventory({
               width={22}
               height={22}
             />
-            <strong>
-              {profileTitle(item)}{' '}
-              <small>
-                {datasets.filter((dataset) => (dataset.profile ?? 'custom') === item).length}
-              </small>
-            </strong>
-            <span>{profileDescription(item)}</span>
+            <strong>{profileTitle(item)}</strong>
+            <span className={styles.modeQuestions}>
+              <strong>
+                {number(
+                  questionTotal(
+                    datasets.filter((dataset) => (dataset.profile ?? 'custom') === item),
+                  ),
+                )}
+              </strong>{' '}
+              total questions
+            </span>
+            <span title={profileDescription(item)}>
+              {preparedSetCount(
+                datasets.filter((dataset) => (dataset.profile ?? 'custom') === item).length,
+              )}
+            </span>
           </button>
         ))}
       </div>
+      <p className={styles.countNote}>
+        Question totals are across prepared sets. Sets may overlap.
+      </p>
       <div className={styles.filters}>
         <label className={styles.search}>
           Search datasets
@@ -131,17 +152,15 @@ export default function DatasetInventory({
             />
           </div>
         </label>
-        <label>
-          Benchmark
-          <select value={benchmark} onChange={(event) => filter(setBenchmark, event.target.value)}>
-            <option value="all">All benchmarks</option>
-            {allBenchmarks.map((item) => (
-              <option key={item} value={item}>
-                {benchmarkTitle(item)}
-              </option>
-            ))}
-          </select>
-        </label>
+        <BenchSelect
+          label="Benchmark"
+          value={benchmark}
+          onChange={(value) => filter(setBenchmark, value)}
+          options={[
+            { value: 'all', label: 'All benchmarks' },
+            ...allBenchmarks.map((item) => ({ value: item, label: benchmarkTitle(item) })),
+          ]}
+        />
       </div>
       {!visible.length && (
         <div className={styles.empty}>
@@ -166,7 +185,9 @@ export default function DatasetInventory({
               <h3>{profileTitle(group)}</h3>
               <span>
                 {visible.filter((dataset) => (dataset.profile ?? 'custom') === group).length}{' '}
-                datasets
+                {visible.filter((dataset) => (dataset.profile ?? 'custom') === group).length === 1
+                  ? 'dataset'
+                  : 'datasets'}
               </span>
             </div>
             <div className={styles.cards}>
@@ -203,7 +224,10 @@ export default function DatasetInventory({
                           <strong>
                             {number(dataset.case_count)} <span>questions</span>
                           </strong>
-                          <span>{number(dataset.benchmarks?.length ?? 0)} benchmarks</span>
+                          <span>
+                            {number(dataset.benchmarks?.length ?? 0)}{' '}
+                            {dataset.benchmarks?.length === 1 ? 'benchmark' : 'benchmarks'}
+                          </span>
                         </div>
                         <span className={styles.explore}>
                           Explore questions{' '}
@@ -231,7 +255,7 @@ export default function DatasetInventory({
         <nav className={styles.pagination} aria-label="Dataset pages">
           <span>
             {currentPage * PAGE_SIZE + 1}–{Math.min((currentPage + 1) * PAGE_SIZE, visible.length)}{' '}
-            of {number(visible.length)} datasets
+            of {number(visible.length)} {visible.length === 1 ? 'dataset' : 'datasets'}
           </span>
           <div>
             <button

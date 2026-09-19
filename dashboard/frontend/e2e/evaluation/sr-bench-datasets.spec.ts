@@ -103,6 +103,9 @@ test('dataset library groups by mode, pages cards and hides storage identities',
   ).toBeVisible()
   await expect(library.getByRole('article')).toHaveCount(12)
   await expect(library.getByText('1–12 of 14 datasets')).toBeVisible()
+  await expect(library.getByRole('button', { name: /^All datasets/ })).toContainText(
+    '392 total questions',
+  )
   await expect(library.getByText(dataset.name, { exact: true })).toHaveCount(0)
   await expect(library.getByText(dataset.sha256)).toHaveCount(0)
   await expect(library.getByText(dataset.path)).toHaveCount(0)
@@ -111,6 +114,43 @@ test('dataset library groups by mode, pages cards and hides storage identities',
   await expect(library.getByText('13–14 of 14 datasets')).toBeVisible()
   await library.getByLabel('Search datasets').fill('Study 2')
   await expect(library.getByRole('article')).toHaveCount(1)
+  expect(writes).toEqual([])
+})
+
+test('library mode cards summarize question counts across all prepared sets independently of filters', async ({
+  page,
+}) => {
+  const { writes } = await setup(page)
+  await page.route('**/api/sr-bench/v1/datasets', (route) =>
+    route.fulfill({
+      json: {
+        datasets: [
+          { ...dataset, id: 'smoke', profile: 'smoke', case_count: 12 },
+          { ...dataset, id: 'quick', profile: 'quick', case_count: 1000 },
+          { ...dataset, id: 'standard', profile: 'standard', case_count: 288 },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=datasets')
+  const modes = page.getByRole('group', { name: 'Filter by evaluation mode' })
+  await expect(modes.getByRole('button', { name: /^All datasets/ })).toContainText(
+    '1,300 total questions',
+  )
+  await expect(modes.getByRole('button', { name: /^Smoke/ })).toContainText('12 total questions')
+  await expect(modes.getByRole('button', { name: /^Quick/ })).toContainText('1,000 total questions')
+  await expect(modes.getByRole('button', { name: /^Standard/ })).toContainText(
+    '288 total questions',
+  )
+  await modes.getByRole('button', { name: /^Quick/ }).click()
+  await page.getByLabel('Search datasets').fill('not a dataset')
+  await expect(page.getByText('No matching datasets')).toBeVisible()
+  await expect(modes.getByRole('button', { name: /^All datasets/ })).toContainText(
+    '1,300 total questions',
+  )
+  await expect(
+    page.getByText('Question totals are across prepared sets. Sets may overlap.'),
+  ).toBeVisible()
   expect(writes).toEqual([])
 })
 
@@ -145,13 +185,17 @@ test('benchmark and subject filters request server strata; coverage shows aggreg
   const { reads } = await setup(page)
   await page.goto(`/evaluation?view=datasets&dataset=${id}`)
   const questions = page.getByRole('region', { name: 'Dataset questions' })
-  await questions.getByLabel('Benchmark', { exact: true }).selectOption('mmlu-pro')
-  await questions.getByLabel('Subject group').selectOption('Physics')
+  await questions.getByRole('combobox', { name: 'Benchmark', exact: true }).click()
+  await page.getByRole('option', { name: 'MMLU-Pro (26)', exact: true }).click()
+  await questions.getByRole('combobox', { name: 'Subject group', exact: true }).click()
+  await page.getByRole('option', { name: 'Physics', exact: true }).click()
   await expect(
     questions.getByRole('button', { name: 'Open question 1', exact: true }),
   ).toBeVisible()
   expect(reads.at(-1)?.searchParams.get('category')).toBe('Physics')
-  await questions.getByRole('searchbox', { name: 'Search questions', exact: true }).fill('conserved')
+  await questions
+    .getByRole('searchbox', { name: 'Search questions', exact: true })
+    .fill('conserved')
   await questions.getByRole('button', { name: 'Submit question search', exact: true }).click()
   await expect(questions.getByText('1 question matching “conserved”')).toBeVisible()
   expect(reads.at(-1)?.searchParams.get('q')).toBe('conserved')

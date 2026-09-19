@@ -175,11 +175,16 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
   return requests
 }
 
+async function chooseOption(page: Page, label: string, value: string) {
+  await page.getByRole('combobox', { name: label, exact: true }).click()
+  await page.getByRole('listbox').locator(`[data-value="${value}"]`).click()
+}
+
 async function chooseDataset(page: Page, id: string) {
   const selector = page.getByRole('combobox', { name: 'Prepared dataset', exact: true })
   if (!(await selector.isVisible()))
     await page.getByText('Prepared source collection', { exact: true }).click()
-  await selector.selectOption(id)
+  await chooseOption(page, 'Prepared dataset', id)
 }
 
 async function section(page: Page, name: string) {
@@ -191,7 +196,7 @@ test('plans and launches a reusable frozen dataset from the normal form', async 
   await page.goto('/evaluation?view=new')
   await expect(page.getByRole('heading', { name: 'sr-bench 1.0' })).toBeVisible()
   await chooseDataset(page, 'quick-v1')
-  await page.getByLabel('Add configured target').selectOption('single')
+  await chooseOption(page, 'Add configured target', 'single')
   await expect(page.getByRole('button', { name: 'Start evaluation' })).toBeDisabled()
   await page.getByRole('button', { name: 'Review plan' }).click()
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
@@ -214,30 +219,41 @@ test('preserves registered profiles and blocks output cap conflicts before plann
   page,
 }) => {
   const requests = await mockBench(page)
-  const requestParams = { max_tokens: 4096, temperature: 1, top_p: 0.95, seed: 42 }
+  const requestParams = {
+    max_tokens: 4096,
+    temperature: 1,
+    top_p: 0.95,
+    seed: 42,
+    top_k: 20,
+    min_p: 0.1,
+    chat_template_kwargs: { enable_thinking: true },
+  }
   await page.route('**/api/sr-bench/v1/targets', (route) =>
     route.fulfill({ json: { targets: [{ ...target, request_params: requestParams }] } }),
   )
   await page.goto('/evaluation?view=new')
   await chooseDataset(page, 'quick-v1')
-  await page
-    .getByRole('combobox', { name: 'Add configured target', exact: true })
-    .selectOption('single')
+  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await page.getByLabel('Temperature', { exact: true }).fill('3')
+  await chooseOption(page, 'Add configured target', 'single')
   const profile = page.getByRole('region', { name: 'single request profile', exact: true })
-  await expect(
-    profile.getByText('Output tokens: 4,096 (registered override)', { exact: true }),
-  ).toBeVisible()
-  await profile.getByText('Registered sampling overrides', { exact: true }).click()
-  await expect(profile.locator('pre')).toContainText('4096')
-  await page.getByText('Advanced manifest', { exact: true }).click()
-  await page.getByLabel('Use edited manifest', { exact: true }).check()
-  await expect(profile.getByRole('heading', { name: 'Effective request profile' })).toHaveCount(0)
-  await expect(profile.getByText('Output tokens:', { exact: false })).toHaveCount(0)
-  await expect(
-    profile.getByText('Request parameters come from the edited manifest and reviewed plan.'),
-  ).toBeVisible()
-  await expect(profile.locator('pre')).toContainText('4096')
-  await page.getByLabel('Use edited manifest', { exact: true }).uncheck()
+  await expect(profile.locator('dl > div').filter({ hasText: 'Output tokens' })).toContainText(
+    '4,096',
+  )
+  await expect(profile.locator('dl > div').filter({ hasText: 'Temperature' })).toContainText(
+    '1Fixed',
+  )
+  await expect(page.getByLabel('Temperature', { exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Temperature', { exact: true })).toHaveValue('1')
+  await expect(page.getByLabel('Top P', { exact: true })).toHaveValue('0.95')
+  await expect(page.getByLabel('Sampling seed', { exact: true })).toHaveValue('42')
+  await profile.getByText('Other fixed settings', { exact: true }).click()
+  await expect(profile.getByText('Top K', { exact: true })).toBeVisible()
+  await expect(profile.getByText('Min P', { exact: true })).toBeVisible()
+  await expect(profile.getByText('Thinking', { exact: true })).toBeVisible()
+  await expect(profile.getByText('Enabled', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('Manifest JSON')).toHaveCount(0)
+  await expect(page.getByLabel('Use edited manifest')).toHaveCount(0)
   await page.getByLabel('Max output tokens', { exact: true }).fill('512')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText(
@@ -254,6 +270,213 @@ test('preserves registered profiles and blocks output cap conflicts before plann
   expect(requests[0]).toMatchObject({
     manifest: { targets: [{ request_params: requestParams }], limits: { max_output_tokens: 4096 } },
   })
+})
+
+test('reviews typed sampling and case limits and invalidates a plan after settings change', async ({
+  page,
+}) => {
+  const requests = await mockBench(page)
+  await page.goto('/evaluation?view=new')
+  await chooseOption(page, 'Add configured target', 'single')
+  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await expect(page.locator('textarea')).toHaveCount(0)
+  await expect(page.getByText('Advanced manifest', { exact: true })).toHaveCount(0)
+  for (const [label, value] of [
+    ['Temperature', '0.4'],
+    ['Top P', '0.85'],
+    ['Sampling seed', '73'],
+    ['Request deadline (seconds)', '240'],
+    ['Idle timeout (seconds)', '45'],
+    ['Case deadline (seconds)', '900'],
+    ['Max calls per case', '4'],
+  ])
+    await page.getByLabel(label, { exact: true }).fill(value)
+  await page.getByLabel('Budget (USD)', { exact: true }).fill('')
+  await chooseOption(page, 'Cost accounting', 'capability_only')
+  await expect(page.getByLabel('Budget (USD)', { exact: true })).toBeDisabled()
+  await expect(page.getByLabel('Budget (USD)', { exact: true })).toHaveAttribute(
+    'placeholder',
+    'Not applied',
+  )
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeEnabled()
+  expect(requests[0]).toMatchObject({
+    manifest: {
+      targets: [target],
+      cost_policy: 'capability_only',
+      sampling: { temperature: 0.4, top_p: 0.85, seed: 73, max_tokens: 4096 },
+      limits: {
+        total_timeout_s: 240,
+        idle_timeout_s: 45,
+        case_timeout_s: 900,
+        max_calls_per_case: 4,
+        max_cost_usd: 5,
+      },
+    },
+  })
+  await page.getByLabel('Temperature', { exact: true }).fill('3')
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Temperature must be between 0 and 2')
+  expect(requests).toHaveLength(1)
+  await page.getByLabel('Temperature', { exact: true }).fill('0.5')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
+  expect(requests[2]).toMatchObject({
+    manifest: { sampling: { temperature: 0.5, seed: 73 }, targets: [target] },
+  })
+})
+
+test('freezes optional learning-session context only for route preview', async ({ page }) => {
+  const requests = await mockBench(page)
+  const mom = {
+    ...target,
+    id: 'balance',
+    kind: 'mom',
+    config_hash: 'c'.repeat(64),
+    preview_url: 'http://localhost:8001/v1',
+  }
+  await page.route('**/api/sr-bench/v1/targets', (route) =>
+    route.fulfill({ json: { targets: [mom] } }),
+  )
+  await page.goto('/evaluation?view=new')
+  await chooseOption(page, 'Add configured target', 'balance')
+  await chooseOption(page, 'Mode', 'preview')
+  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await expect(page.getByLabel('Preview sampling seed', { exact: true })).toHaveValue('42')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
+  expect(requests[0]).toMatchObject({ manifest: { mode: 'preview', seed: 42 } })
+  expect((requests[0] as { manifest: object }).manifest).not.toHaveProperty('preview_context')
+  await page.getByLabel('Session ID', { exact: true }).fill('session-alpha')
+  await page.getByLabel('Conversation ID', { exact: true }).fill('conversation-beta')
+  await page.getByLabel('Preview sampling seed', { exact: true }).fill('73')
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
+  expect(requests[1]).toMatchObject({
+    manifest: {
+      mode: 'preview',
+      sampling: { seed: 42 },
+      preview_context: {
+        session_id: 'session-alpha',
+        conversation_id: 'conversation-beta',
+        sampling_seed: 73,
+      },
+    },
+  })
+  await chooseOption(page, 'Mode', 'live')
+  await expect(page.getByLabel('Session ID', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
+  expect((requests[2] as { manifest: object }).manifest).not.toHaveProperty('preview_context')
+})
+
+test('supports keyboard selection, search and escape without reopening custom controls', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.goto('/evaluation?view=new')
+  const mode = page.getByRole('combobox', { name: 'Mode', exact: true })
+  await mode.focus()
+  await mode.press('ArrowDown')
+  await expect(page.getByRole('option', { name: /^Live evaluation/ })).toBeFocused()
+  await page.getByRole('option', { name: /^Live evaluation/ }).press('End')
+  await expect(page.getByRole('option', { name: /^Route preview/ })).toBeFocused()
+  await page.getByRole('option', { name: /^Route preview/ }).press('Enter')
+  await expect(mode).toHaveText('Route preview')
+  await expect(mode).toBeFocused()
+  await mode.press('ArrowUp')
+  await page.getByRole('option', { name: /^Route preview/ }).press('Home')
+  await page.getByRole('option', { name: /^Live evaluation/ }).press('Escape')
+  await expect(mode).toBeFocused()
+  await expect(mode).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('listbox')).toHaveCount(0)
+  const targets = page.getByRole('combobox', { name: 'Add configured target', exact: true })
+  await targets.click()
+  await page.getByRole('searchbox', { name: 'Search add configured target' }).fill('no-such-target')
+  await expect(page.getByText('No matching options.', { exact: true })).toBeVisible()
+  await page.getByRole('searchbox', { name: 'Search add configured target' }).fill('model-a')
+  await page.getByRole('searchbox', { name: 'Search add configured target' }).press('ArrowDown')
+  await expect(page.getByRole('option')).toBeFocused()
+  await page.getByRole('option').press('Escape')
+  await expect(targets).toBeFocused()
+  await expect(targets).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('keeps mixed fixed and editable sampling profiles explicit', async ({ page }) => {
+  const requests = await mockBench(page)
+  const fixed = { ...target, id: 'fixed', request_params: { temperature: 1, top_p: 0.95 } }
+  await page.route('**/api/sr-bench/v1/targets', (route) =>
+    route.fulfill({ json: { targets: [target, fixed] } }),
+  )
+  await page.goto('/evaluation?view=new')
+  await chooseOption(page, 'Add configured target', 'single')
+  await chooseOption(page, 'Add configured target', 'fixed')
+  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await expect(page.getByLabel('Temperature', { exact: true })).toBeEnabled()
+  await page.getByLabel('Temperature', { exact: true }).fill('0.3')
+  await expect(
+    page.getByText('Applies to 1 of 2 targets; fixed profiles keep their own values.'),
+  ).toHaveCount(2)
+  await expect(
+    page
+      .getByRole('region', { name: 'fixed request profile', exact: true })
+      .locator('dl > div')
+      .filter({ hasText: 'Temperature' }),
+  ).toContainText('1Fixed')
+  await expect(
+    page
+      .getByRole('region', { name: 'single request profile', exact: true })
+      .locator('dl > div')
+      .filter({ hasText: 'Temperature' }),
+  ).toContainText('0.3')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
+  expect(requests[0]).toMatchObject({
+    manifest: { sampling: { temperature: 0.3 }, targets: [target, fixed] },
+  })
+})
+
+test('keeps comparison and create controls compact on desktop and within mobile width', async ({
+  page,
+}, testInfo) => {
+  await mockBench(page)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto('/evaluation?view=compare')
+  const baseline = page.getByRole('combobox', { name: 'Baseline run', exact: true })
+  await expect(baseline).toBeVisible()
+  expect((await baseline.boundingBox())!.width).toBeLessThanOrEqual(400)
+  const selectAll = page.getByRole('button', { name: 'Select all', exact: true })
+  expect((await selectAll.boundingBox())!.width).toBeLessThan(130)
+  await baseline.click()
+  await expect(page.getByRole('listbox')).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('compare-dropdown-desktop.png') })
+  await page.getByRole('searchbox', { name: 'Search baseline run' }).press('Escape')
+  await page.goto('/evaluation?view=new')
+  await chooseOption(page, 'Add configured target', 'single')
+  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  await page
+    .getByText('Sampling and advanced limits', { exact: true })
+    .evaluate((element) => element.scrollIntoView({ block: 'start' }))
+  await page.screenshot({ path: testInfo.outputPath('create-settings-desktop.png') })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.getByRole('combobox', { name: 'Mode', exact: true }).scrollIntoViewIfNeeded()
+  await page.getByRole('combobox', { name: 'Mode', exact: true }).click()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  )
+  const menuBounds = (await page.getByRole('listbox').boundingBox())!
+  expect(menuBounds.y).toBeGreaterThanOrEqual(0)
+  expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(844)
+  await page.screenshot({ path: testInfo.outputPath('create-mode-mobile.png') })
+  await page.goto('/evaluation?view=datasets')
+  await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
+  await page.screenshot({ path: testInfo.outputPath('library-mobile.png') })
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.screenshot({ path: testInfo.outputPath('library-desktop.png') })
 })
 
 test('shows truthful metrics, routing distribution and case evidence', async ({ page }) => {
@@ -306,7 +529,7 @@ test('reconciles a lost initial submission after reload with the same identity a
   })
   await page.goto('/evaluation?view=new')
   await chooseDataset(page, 'quick-v1')
-  await page.getByLabel('Add configured target').selectOption('single')
+  await chooseOption(page, 'Add configured target', 'single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect(
@@ -358,7 +581,7 @@ test('ignores an old response after remount without clearing a newer submission'
   })
   await page.goto('/evaluation?view=new')
   await chooseDataset(page, 'quick-v1')
-  await page.getByLabel('Add configured target').selectOption('single')
+  await chooseOption(page, 'Add configured target', 'single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect.poll(() => submissions.length).toBe(1)
@@ -370,7 +593,7 @@ test('ignores an old response after remount without clearing a newer submission'
   await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
   await page.getByLabel('Run name', { exact: true }).fill('Newer submission')
   await chooseDataset(page, 'quick-v1')
-  await page.getByLabel('Add configured target').selectOption('single')
+  await chooseOption(page, 'Add configured target', 'single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect.poll(() => submissions.length).toBe(3)
@@ -424,7 +647,7 @@ test('does not navigate a new account from a prior account delayed submission', 
   )
   await page.goto('/evaluation?view=new')
   await chooseDataset(page, 'quick-v1')
-  await page.getByLabel('Add configured target').selectOption('single')
+  await chooseOption(page, 'Add configured target', 'single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect.poll(() => submitted).toBe(true)
@@ -474,7 +697,7 @@ test('fails closed when an initial submission cannot be preserved in session sto
   })
   await page.goto('/evaluation?view=new')
   await chooseDataset(page, 'quick-v1')
-  await page.getByLabel('Add configured target').selectOption('single')
+  await chooseOption(page, 'Add configured target', 'single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('No request was sent')
@@ -494,7 +717,7 @@ test('clears an initial submission only after the service proves no dispatch occ
   })
   await page.goto('/evaluation?view=new')
   await chooseDataset(page, 'quick-v1')
-  await page.getByLabel('Add configured target').selectOption('single')
+  await chooseOption(page, 'Add configured target', 'single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('Frozen plan rejected before dispatch')
@@ -870,7 +1093,7 @@ test('compares complete runs using paired results', async ({ page }) => {
       { exact: true },
     ),
   ).toBeVisible()
-  await page.getByLabel('Baseline run').selectOption('run-1')
+  await chooseOption(page, 'Baseline run', 'run-1')
   await page.getByRole('checkbox', { name: /Candidate test/ }).check()
   await page.getByRole('button', { name: 'Compare runs' }).click()
   await expect(page.getByRole('heading', { name: 'Comparison evidence' })).toBeVisible()
@@ -1142,7 +1365,7 @@ test('reopens arbitrary optimization comparisons from the saved URL', async ({
     })
   })
   await page.goto('/evaluation?view=compare')
-  await page.getByLabel('Baseline run').selectOption('run-1')
+  await chooseOption(page, 'Baseline run', 'run-1')
   await page.getByRole('button', { name: 'Select all', exact: true }).click()
   await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(4)
   await page.getByRole('button', { name: 'Compare runs' }).click()
@@ -1867,7 +2090,7 @@ test('composes selected benchmarks under one size without resampling or generati
   await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(2)
   await page.getByRole('checkbox', { name: /GPQA Diamond/ }).uncheck()
   await expect(page.getByRole('checkbox', { name: /Humanity/ })).toBeDisabled()
-  await page.getByLabel('Add configured target').selectOption('single')
+  await chooseOption(page, 'Add configured target', 'single')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
   expect(compositions).toEqual([{ dataset_ids: ['quick-suite'], benchmarks: ['mmlu-pro'] }])

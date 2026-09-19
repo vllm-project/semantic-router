@@ -62,9 +62,15 @@ only uses existing sources with matching profile, seed and split. It keeps whole
 benchmark groups, makes zero model calls, and does not download or resample data.
 Using one complete source preserves its identity. Conflicting source selections
 must be resolved explicitly; never mix dev and holdout to make a checkbox work.
+Use the typed sampling, budget and request/case-limit controls without editing
+JSON. Fixed registered target parameters override run defaults and remain
+read-only. Route Preview accepts optional session and conversation context for
+session-dependent routing; plan review does not generate model answers.
 The dataset library supports pagination, question search, coverage and subject
 groups. Its input-only question view excludes reference answers, hidden tests and
-tool credentials; reproducibility hashes are behind disclosure controls. Treat
+tool credentials; reproducibility hashes are behind disclosure controls. Each
+profile's total questions sums prepared sets that may overlap; it is not a
+deduplicated count or a run denominator. Treat
 inspected holdout tasks as unsuitable tuning evidence even when labels are hidden.
 Do not route on benchmark names, expected answers or split labels. Previously
 seen GPQA labels require a retest disclosure; public tasks are not guaranteed

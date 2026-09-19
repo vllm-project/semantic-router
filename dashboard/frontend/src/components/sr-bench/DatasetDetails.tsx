@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import ProductIcon from '../ProductIcon'
 import ProductLoadingState from '../ProductLoadingState'
+import BenchSelect from './BenchSelect'
 import { benchApi } from './api'
 import { benchmarkTitle, friendlyDatasetName, profileTitle } from './datasetPresentation'
 import { number } from './model'
@@ -349,43 +350,35 @@ function DatasetQuestions({ id, detail }: { id: string; detail: DatasetDetail })
             </button>
           </div>
         </div>
-        <label>
-          Benchmark
-          <select
-            aria-label="Benchmark"
-            value={benchmark}
-            onChange={(event) => {
-              setBenchmark(event.target.value)
-              setCategory('')
-              reset()
-            }}
-          >
-            <option value="">All benchmarks</option>
-            {detail.benchmarks.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title || benchmarkTitle(item.id)} ({item.count})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Subject group
-          <select
-            aria-label="Subject group"
-            value={category}
-            onChange={(event) => {
-              setCategory(event.target.value)
-              reset()
-            }}
-          >
-            <option value="">All subjects</option>
-            {categories.map((item) => (
-              <option key={item} value={item}>
-                {item || 'General'}
-              </option>
-            ))}
-          </select>
-        </label>
+        <BenchSelect
+          label="Benchmark"
+          value={benchmark}
+          onChange={(value) => {
+            setBenchmark(value)
+            setCategory('')
+            reset()
+          }}
+          options={[
+            { value: '', label: 'All benchmarks' },
+            ...detail.benchmarks.map((item) => ({
+              value: item.id,
+              label: `${item.title || benchmarkTitle(item.id)} (${item.count})`,
+            })),
+          ]}
+        />
+        <BenchSelect
+          label="Subject group"
+          value={category}
+          onChange={(value) => {
+            setCategory(value)
+            reset()
+          }}
+          searchable
+          options={[
+            { value: '', label: 'All subjects' },
+            ...categories.map((item) => ({ value: item, label: item || 'General' })),
+          ]}
+        />
       </form>
       {loading ? (
         <ProductLoadingState label="Loading questions" compact />

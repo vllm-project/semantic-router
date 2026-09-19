@@ -108,8 +108,10 @@ export interface Manifest {
     max_cost_usd: number
     max_run_seconds: number
     max_calls_per_case: number
+    case_timeout_s?: number
   }
   sampling: { temperature: number; top_p: number; max_tokens: number; seed?: number }
+  preview_context?: { session_id?: string; conversation_id?: string; sampling_seed?: number }
 }
 
 export interface Catalog {

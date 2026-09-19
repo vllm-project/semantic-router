@@ -237,12 +237,11 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
     await page.getByLabel('Run name', { exact: true }).fill(approved.run_name)
     await page.getByRole('radio', { name: new RegExp(`^${approved.profile}`, 'i') }).check()
     await page.getByText('Prepared source collection', { exact: true }).click()
-    await page
-      .getByRole('combobox', { name: 'Prepared dataset', exact: true })
-      .selectOption(approved.dataset_id)
-    await page
-      .getByRole('combobox', { name: 'Add configured target', exact: true })
-      .selectOption(approved.target_id)
+    await page.getByRole('combobox', { name: 'Prepared dataset', exact: true }).click()
+    await page.locator(`[role="option"][data-value=${JSON.stringify(approved.dataset_id)}]`).click()
+    await page.getByRole('combobox', { name: 'Add configured target', exact: true }).click()
+    await page.locator(`[role="option"][data-value=${JSON.stringify(approved.target_id)}]`).click()
+    await page.getByText('Sampling and advanced limits', { exact: true }).click()
     for (const [label, value] of [
       ['Budget (USD)', approved.limits.max_cost_usd],
       ['Run deadline (seconds)', approved.limits.max_run_seconds],
@@ -250,13 +249,9 @@ test('authorized synthetic UI launch, cancellation and undispatched recovery rem
       ['Idle timeout (seconds)', approved.limits.idle_timeout_s],
       ['Max output tokens', approved.limits.max_output_tokens],
       ['Concurrency', 1],
+      ['Max calls per case', 1],
     ] as const)
       await page.getByLabel(label, { exact: true }).fill(String(value))
-    await page.getByText('Advanced manifest', { exact: true }).click()
-    await page.getByLabel('Use edited manifest', { exact: true }).check()
-    const manifest = JSON.parse(await page.getByLabel('Manifest JSON').inputValue()) as Manifest
-    manifest.limits.max_calls_per_case = 1
-    await page.getByLabel('Manifest JSON').fill(JSON.stringify(manifest, null, 2))
     const plannedResponse = page.waitForResponse(responseFor('/plans'))
     await page.getByRole('button', { name: 'Review plan', exact: true }).click()
     const plannedHTTP = await plannedResponse

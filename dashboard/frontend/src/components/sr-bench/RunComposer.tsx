@@ -1,15 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { benchApi, SrBenchRequestError } from './api'
-import {
-  DEFAULT_LIMITS,
-  effectiveRequestProfile,
-  makeManifest,
-  number,
-  validateManifest,
-} from './model'
+import { DEFAULT_LIMITS, makeManifest, number, validateManifest } from './model'
 import type { Catalog, Dataset, Manifest, Plan, Run, Target } from './types'
 import styles from './SrBench.module.css'
 import ProductIcon from '../ProductIcon'
+import BenchSelect from './BenchSelect'
+import RunSettings, { type SamplingSettings } from './RunSettings'
+import TargetRequestProfile from './TargetRequestProfile'
+import controls from './BenchControls.module.css'
 import {
   benchmarkTitle,
   friendlyDatasetName,
@@ -63,8 +61,8 @@ export default function RunComposer({
     registeredTargets.filter((target) => target.model === initialModel),
   )
   const [limits, setLimits] = useState({ ...DEFAULT_LIMITS })
-  const [advanced, setAdvanced] = useState(false)
-  const [json, setJson] = useState('')
+  const [sampling, setSampling] = useState<SamplingSettings>({ temperature: 0, top_p: 1 })
+  const [previewContext, setPreviewContext] = useState<NonNullable<Manifest['preview_context']>>({})
   const [plan, setPlan] = useState<{
     manifest: Manifest
     evidence: Plan
@@ -86,14 +84,38 @@ export default function RunComposer({
     catalog.profiles.some((item) => item.id === value),
   )
   const dataset = datasets.find((item) => item.id === datasetID)
-  const formManifest = useMemo(
-    () => ({
-      ...makeManifest(name, mode, profile, dataset, targets, limits),
+  const formManifest = useMemo(() => {
+    const manifest = makeManifest(name, mode, profile, dataset, targets, limits)
+    const defaults = { ...manifest.sampling, ...sampling }
+    for (const key of ['temperature', 'top_p', 'seed'] as const) {
+      // An operator-fixed field has no editable default; discard stale form input
+      // so a disabled field cannot leave the reviewed manifest invalid.
+      if (
+        targets.length &&
+        targets.every((target) => typeof target.request_params?.[key] === 'number')
+      ) {
+        Object.assign(defaults, { [key]: manifest.sampling[key] })
+      }
+    }
+    const context = {
+      ...(previewContext.session_id?.trim()
+        ? { session_id: previewContext.session_id.trim() }
+        : {}),
+      ...(previewContext.conversation_id?.trim()
+        ? { conversation_id: previewContext.conversation_id.trim() }
+        : {}),
+      ...(previewContext.sampling_seed !== undefined
+        ? { sampling_seed: previewContext.sampling_seed }
+        : {}),
+    }
+    return {
+      ...manifest,
       cost_policy: costPolicy,
-    }),
-    [name, mode, profile, dataset, targets, limits, costPolicy],
-  )
-  const fingerprint = advanced ? json : JSON.stringify({ manifest: formManifest, benchmarks })
+      sampling: defaults,
+      ...(mode === 'preview' && Object.keys(context).length ? { preview_context: context } : {}),
+    }
+  }, [name, mode, profile, dataset, targets, limits, costPolicy, sampling, previewContext])
+  const fingerprint = JSON.stringify({ manifest: formManifest, benchmarks })
   const sources = datasets.filter((item) => !item.profile || item.profile === profile)
   const compatibleSources = dataset
     ? sources.filter((item) => item.seed === dataset.seed && item.split === dataset.split)
@@ -145,17 +167,15 @@ export default function RunComposer({
     setPending(true)
     setPlan(null)
     try {
-      let manifest = advanced ? (JSON.parse(json) as Manifest) : formManifest
+      let manifest = formManifest
       const issue = validateManifest(manifest)
       if (issue) throw new Error(issue)
-      if (!advanced) {
-        if (!benchmarks.length) throw new Error('Select at least one prepared benchmark.')
-        const composed = await benchApi.composeDatasets(selectedSourceIDs(), benchmarks)
-        if (!current()) return
-        manifest = {
-          ...manifest,
-          dataset: { path: composed.dataset.path, sha256: composed.dataset.sha256 },
-        }
+      if (!benchmarks.length) throw new Error('Select at least one prepared benchmark.')
+      const composed = await benchApi.composeDatasets(selectedSourceIDs(), benchmarks)
+      if (!current()) return
+      manifest = {
+        ...manifest,
+        dataset: { path: composed.dataset.path, sha256: composed.dataset.sha256 },
       }
       const evidence = await benchApi.plan(manifest)
       if (!current()) return
@@ -292,9 +312,10 @@ export default function RunComposer({
           dataset with the CLI to use this size.
         </p>
       )}
-      <div className={styles.sectionHeading}>
+      <div className={controls.selectionHeading}>
         <h4>Benchmarks</h4>
         <button
+          className={controls.compactButton}
           onClick={() =>
             setBenchmarks(
               benchmarks.length === availableBenchmarks.size ? [] : [...availableBenchmarks],
@@ -335,26 +356,22 @@ export default function RunComposer({
       </div>
       <details className={styles.details}>
         <summary>Prepared source collection</summary>
-        <label>
-          Prepared dataset
-          <select
-            value={datasetID}
-            onChange={(event) => {
-              setDatasetID(event.target.value)
-              setBenchmarks(
-                datasets.find((item) => item.id === event.target.value)?.benchmarks ?? [],
-              )
-            }}
-          >
-            <option value="">Select a prepared source</option>
-            {sources.map((item) => (
-              <option key={item.id} value={item.id}>
-                {friendlyDatasetName(item)} · {number(item.case_count)} cases ·{' '}
-                {item.split ?? 'split unspecified'}
-              </option>
-            ))}
-          </select>
-        </label>
+        <BenchSelect
+          label="Prepared dataset"
+          className={controls.sourcePicker}
+          value={datasetID}
+          searchable
+          placeholder="Select a prepared source"
+          options={sources.map((item) => ({
+            value: item.id,
+            label: friendlyDatasetName(item),
+            description: `${number(item.case_count)} cases · ${item.split ?? 'split unspecified'}`,
+          }))}
+          onChange={(value) => {
+            setDatasetID(value)
+            setBenchmarks(datasets.find((item) => item.id === value)?.benchmarks ?? [])
+          }}
+        />
         <p className={styles.muted}>
           Selected benchmarks are composed without resampling. Sources must share the same size,
           seed and split.
@@ -365,16 +382,23 @@ export default function RunComposer({
           Run name
           <input value={name} onChange={(event) => setName(event.target.value)} />
         </label>
-        <label>
-          Mode
-          <select
-            value={mode}
-            onChange={(event) => setMode(event.target.value as Manifest['mode'])}
-          >
-            <option value="live">Live evaluation</option>
-            <option value="preview">Route preview</option>
-          </select>
-        </label>
+        <BenchSelect
+          label="Mode"
+          value={mode}
+          options={[
+            {
+              value: 'live',
+              label: 'Live evaluation',
+              description: 'Generate answers and measure quality, cost and latency.',
+            },
+            {
+              value: 'preview',
+              label: 'Route preview',
+              description: 'Inspect routing decisions without generating answers.',
+            },
+          ]}
+          onChange={(value) => setMode(value as Manifest['mode'])}
+        />
       </div>
       {mode === 'preview' && (
         <p className={styles.notice}>
@@ -396,29 +420,26 @@ export default function RunComposer({
       )}
       <div className={styles.sectionHeading}>
         <h3>2. Choose targets</h3>
-        <div className={styles.actions}>
-          {registeredTargets.length > 0 && (
-            <label className={styles.inlineLabel}>
-              Add configured target
-              <select
-                value=""
-                onChange={(event) => {
-                  const target = registeredTargets.find((item) => item.id === event.target.value)
-                  if (target) setTargets((previous) => [...previous, { ...target }])
-                }}
-              >
-                <option value="">Choose target</option>
-                {registeredTargets
-                  .filter((item) => !targets.some((target) => target.id === item.id))
-                  .map((target) => (
-                    <option key={target.id} value={target.id}>
-                      {target.id} · {target.kind === 'mom' ? 'MoM' : 'Single model'}
-                    </option>
-                  ))}
-              </select>
-            </label>
-          )}
-        </div>
+        {registeredTargets.length > 0 && (
+          <BenchSelect
+            label="Add configured target"
+            className={controls.targetPicker}
+            value=""
+            searchable
+            placeholder="Choose target"
+            options={registeredTargets
+              .filter((item) => !targets.some((target) => target.id === item.id))
+              .map((target) => ({
+                value: target.id,
+                label: target.id,
+                description: `${target.kind === 'mom' ? 'Mixture of models' : 'Single model'} · ${target.model}`,
+              }))}
+            onChange={(value) => {
+              const target = registeredTargets.find((item) => item.id === value)
+              if (target) setTargets((previous) => [...previous, { ...target }])
+            }}
+          />
+        )}
       </div>
       {!registeredTargets.length && (
         <p className={styles.notice}>
@@ -452,37 +473,7 @@ export default function RunComposer({
                 )}
               </dl>
             </details>
-            <section aria-label={`${target.id} request profile`}>
-              {!advanced && (
-                <>
-                  <h4>Effective request profile</h4>
-                  <p>
-                    Output tokens:{' '}
-                    {number(effectiveRequestProfile(target, formManifest.sampling).max_tokens)}
-                    {target.request_params?.max_tokens === undefined
-                      ? ' (run default)'
-                      : ' (registered override)'}
-                  </p>
-                </>
-              )}
-              {advanced && (
-                <p className={styles.muted}>
-                  Request parameters come from the edited manifest and reviewed plan.
-                </p>
-              )}
-              {target.request_params && Object.keys(target.request_params).length > 0 && (
-                <details>
-                  <summary>Registered sampling overrides</summary>
-                  <pre>{JSON.stringify(target.request_params, null, 2)}</pre>
-                </details>
-              )}
-              <p className={styles.muted}>
-                Fixed server-registered values override run sampling defaults. Select another
-                registered target to use a different fixed profile. The run output cap still
-                applies; this form does not change the registered profile or raise the cap
-                automatically.
-              </p>
-            </section>
+            <TargetRequestProfile target={target} sampling={formManifest.sampling} />
             <div className={styles.targetFooter}>
               <span>
                 Credentials stay on the server.
@@ -496,26 +487,42 @@ export default function RunComposer({
               </span>
               <button
                 type="button"
+                className={controls.compactButton}
                 onClick={() => setTargets((previous) => previous.filter((_, i) => i !== index))}
               >
+                <ProductIcon name="close" />
                 Remove target {index + 1}
               </button>
             </div>
           </fieldset>
         ))}
       </div>
-      <label>
-        Cost accounting
-        <select
-          value={costPolicy}
-          onChange={(event) =>
-            setCostPolicy(event.target.value as 'require_priced' | 'capability_only')
-          }
-        >
-          <option value="require_priced">Require complete prices and cost bounds</option>
-          <option value="capability_only">Capability only — no cost-saving claim</option>
-        </select>
-      </label>
+      <BenchSelect
+        label="Cost accounting"
+        className={controls.costControl}
+        value={costPolicy}
+        options={[
+          {
+            value: 'require_priced',
+            label: 'Quality and cost',
+            description: 'Require complete prices and a model-cost budget.',
+          },
+          {
+            value: 'capability_only',
+            label: 'Quality only',
+            description: 'Run without cost-saving claims when prices are unavailable.',
+          },
+        ]}
+        onChange={(value) => {
+          setCostPolicy(value as 'require_priced' | 'capability_only')
+          if (value === 'capability_only')
+            setLimits((previous) =>
+              !Number.isFinite(previous.max_cost_usd) || previous.max_cost_usd <= 0
+                ? { ...previous, max_cost_usd: DEFAULT_LIMITS.max_cost_usd }
+                : previous,
+            )
+        }}
+      />
       {costPolicy === 'capability_only' && (
         <p className={styles.notice}>
           Unknown or unpriced usage cannot be bounded by a USD budget. Time, output and call limits
@@ -523,97 +530,18 @@ export default function RunComposer({
         </p>
       )}
       <h3>3. Set budget and limits</h3>
-      <div className={styles.formGrid}>
-        <label>
-          Budget (USD)
-          <input
-            type="number"
-            min="0.01"
-            step="0.01"
-            value={limits.max_cost_usd}
-            onChange={(event) => setLimits({ ...limits, max_cost_usd: Number(event.target.value) })}
-          />
-        </label>
-        <label>
-          Run deadline (seconds)
-          <input
-            type="number"
-            min="1"
-            value={limits.max_run_seconds}
-            onChange={(event) =>
-              setLimits({ ...limits, max_run_seconds: Number(event.target.value) })
-            }
-          />
-        </label>
-        <label>
-          Request deadline (seconds)
-          <input
-            type="number"
-            min="1"
-            value={limits.total_timeout_s}
-            onChange={(event) =>
-              setLimits({ ...limits, total_timeout_s: Number(event.target.value) })
-            }
-          />
-        </label>
-        <label>
-          Idle timeout (seconds)
-          <input
-            type="number"
-            min="1"
-            value={limits.idle_timeout_s}
-            onChange={(event) =>
-              setLimits({ ...limits, idle_timeout_s: Number(event.target.value) })
-            }
-          />
-        </label>
-        <label>
-          Max output tokens
-          <input
-            type="number"
-            min="1"
-            value={limits.max_output_tokens}
-            onChange={(event) =>
-              setLimits({ ...limits, max_output_tokens: Number(event.target.value) })
-            }
-          />
-        </label>
-        <label>
-          Concurrency
-          <input
-            type="number"
-            min="1"
-            max="32"
-            value={limits.concurrency}
-            onChange={(event) => setLimits({ ...limits, concurrency: Number(event.target.value) })}
-          />
-        </label>
-      </div>
-      <details className={styles.details}>
-        <summary>Advanced manifest</summary>
-        <p>
-          Set sampling and run limits. Target endpoints, prices, credentials and harness settings
-          are managed by the server; target edits are rejected.
-        </p>
-        <label className={styles.checkbox}>
-          <input
-            type="checkbox"
-            checked={advanced}
-            onChange={(event) => {
-              setAdvanced(event.target.checked)
-              if (event.target.checked) setJson(JSON.stringify(formManifest, null, 2))
-            }}
-          />
-          Use edited manifest
-        </label>
-        <textarea
-          aria-label="Manifest JSON"
-          rows={14}
-          value={advanced ? json : JSON.stringify(formManifest, null, 2)}
-          readOnly={!advanced}
-          onChange={(event) => setJson(event.target.value)}
-        />
-      </details>
+      <RunSettings
+        limits={limits}
+        onLimitsChange={setLimits}
+        sampling={sampling}
+        onSamplingChange={setSampling}
+        seed={formManifest.seed}
+        targets={targets}
+        costPolicy={costPolicy}
+        mode={mode}
+        previewContext={previewContext}
+        onPreviewContextChange={setPreviewContext}
+      />
       {error && (
         <p className={styles.error} role="alert">
           {error}

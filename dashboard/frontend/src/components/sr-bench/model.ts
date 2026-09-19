@@ -60,12 +60,41 @@ export function validateManifest(manifest: Manifest): string | null {
   if (manifest.mode === 'preview' && manifest.targets.some((target) => target.kind !== 'mom'))
     return 'Route preview requires MoM targets.'
   if (
+    manifest.mode === 'preview' &&
+    manifest.preview_context?.sampling_seed !== undefined &&
+    !Number.isSafeInteger(manifest.preview_context.sampling_seed)
+  )
+    return 'Preview sampling seed must be a whole number.'
+  if (
     !manifest.limits ||
     Object.values(manifest.limits).some((value) => !Number.isFinite(value) || value <= 0)
   )
     return 'Every run limit must be a positive number.'
   if (manifest.limits.idle_timeout_s > manifest.limits.total_timeout_s)
     return 'Idle timeout must not exceed the total request deadline.'
+  if (manifest.limits.total_timeout_s > manifest.limits.max_run_seconds)
+    return 'Request deadline must not exceed the run deadline.'
+  if (!Number.isInteger(manifest.limits.concurrency) || manifest.limits.concurrency > 32)
+    return 'Concurrency must be a whole number from 1 to 32.'
+  if (
+    !Number.isInteger(manifest.limits.max_output_tokens) ||
+    !Number.isInteger(manifest.limits.max_calls_per_case)
+  )
+    return 'Output tokens and calls per case must be whole numbers.'
+  if (
+    !Number.isFinite(manifest.sampling.temperature) ||
+    manifest.sampling.temperature < 0 ||
+    manifest.sampling.temperature > 2
+  )
+    return 'Temperature must be between 0 and 2.'
+  if (
+    !Number.isFinite(manifest.sampling.top_p) ||
+    manifest.sampling.top_p < 0 ||
+    manifest.sampling.top_p > 1
+  )
+    return 'Top P must be between 0 and 1.'
+  if (manifest.sampling.seed !== undefined && !Number.isSafeInteger(manifest.sampling.seed))
+    return 'Sampling seed must be a whole number.'
   for (const target of manifest.targets) {
     const fixed = target.request_params?.max_tokens
     if (typeof fixed === 'number' && fixed > manifest.limits.max_output_tokens)
@@ -74,7 +103,10 @@ export function validateManifest(manifest: Manifest): string | null {
   return null
 }
 
-export function effectiveRequestProfile(target: Target, defaults: Manifest['sampling']) {
+export function effectiveRequestProfile(
+  target: Target,
+  defaults: Manifest['sampling'],
+): Manifest['sampling'] & Record<string, unknown> {
   return { ...defaults, ...target.request_params }
 }
 

@@ -7,6 +7,8 @@ import type { Comparison, Report, Run } from './types'
 import styles from './SrBench.module.css'
 import ProductLoadingState from '../ProductLoadingState'
 import ProductIcon from '../ProductIcon'
+import BenchSelect from './BenchSelect'
+import controls from './BenchControls.module.css'
 import { IterationChart, QualityCostChart, type QualityCostPoint } from './EvaluationCharts'
 
 interface IterationEvidence {
@@ -248,29 +250,39 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         measurements.
       </p>
       <div className={styles.comparisonSetup}>
-        <label>
-          Baseline run
-          <select
+        <div className={controls.comparisonToolbar}>
+          <BenchSelect
+            label="Baseline run"
             value={baseline}
             disabled={pending}
-            onChange={(event) => {
-              setBaseline(event.target.value)
-              setCandidates((previous) => previous.filter((id) => id !== event.target.value))
-            }}
-          >
-            <option value="">Select single-model baseline</option>
-            {complete
+            searchable
+            placeholder="Select single-model baseline"
+            options={complete
               .filter((run) => run.manifest.targets.some((target) => target.kind === 'single'))
-              .map((run) => (
-                <option key={run.id} value={run.id}>
-                  {run.manifest.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <div className={styles.sectionHeading}>
+              .map((run) => ({
+                value: run.id,
+                label: run.manifest.name,
+                description: `${run.manifest.targets.map((target) => target.id).join(', ')} · ${number(run.progress.total)} cases`,
+              }))}
+            onChange={(value) => {
+              setBaseline(value)
+              setCandidates((previous) => previous.filter((id) => id !== value))
+            }}
+          />
+          <label>
+            Find comparison runs
+            <input
+              type="search"
+              placeholder="Run or model name"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+            />
+          </label>
+        </div>
+        <div className={controls.selectionHeading}>
           <h3>Runs to compare</h3>
           <button
+            className={controls.compactButton}
             disabled={pending || !candidateOptions.length}
             onClick={() =>
               setCandidates(
@@ -280,21 +292,17 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
               )
             }
           >
+            <ProductIcon
+              name={
+                candidateOptions.every((run) => candidates.includes(run.id)) ? 'close' : 'check'
+              }
+            />
             {candidateOptions.length > 0 &&
             candidateOptions.every((run) => candidates.includes(run.id))
               ? 'Clear selection'
               : 'Select all'}
           </button>
         </div>
-        <label>
-          Find comparison runs
-          <input
-            type="search"
-            placeholder="Run or model name"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-          />
-        </label>
         <div className={styles.runChoices} role="group" aria-label="Comparison runs">
           {candidateOptions.map((run) => (
             <label key={run.id} className={styles.runChoice}>

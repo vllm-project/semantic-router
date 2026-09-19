@@ -35,6 +35,25 @@
 .mode small {
   margin-left: 0.4rem;
 }
+.modeQuestions {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+.modeQuestions strong {
+  color: var(--text-primary);
+  font-size: clamp(1.35rem, 2vw, 1.7rem);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.035em;
+}
+.countNote {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-top: -0.7rem !important;
+}
 .filters,
 .questionFilters {
   display: grid;
@@ -70,14 +89,6 @@
 }
 .searchInput input {
   padding-right: 2.2rem;
-}
-.filters select,
-.questionFilters select {
-  appearance: none;
-  padding-right: 2.2rem;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23888892' stroke-width='1.5'%3E%3Cpath d='m4 6 4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 0.7rem center;
 }
 .group {
   margin-top: 1.8rem;

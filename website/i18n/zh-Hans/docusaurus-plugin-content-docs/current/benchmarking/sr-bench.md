@@ -127,7 +127,11 @@ Dashboard 默认进入 **Runs**，按名称、模型、状态和模式筛选任�
 
 在 **Create evaluation** 中，先选择 **smoke**、**quick** 或 **standard**，再勾选一个或多个已准备 benchmark，或使用 **Select all benchmarks**。它们对应真实运行 profile，standard 使用 holdout split。来源必须具有相同的 profile、seed 和 split。**Review plan** 只从这些冻结来源组合完整 benchmark 题组，不下载数据、不重新抽样，也不调用模型。完整使用一个来源时保留原数据集身份；选择子集或组合多个来源时生成可复用的冻结数据集。存在冲突时明确拒绝，不静默合并。
 
+采样、预算以及请求和任务限制通过表单控件设置，无需编辑 JSON。已注册目标的固定参数覆盖运行默认值，并保持只读。**Route preview** 还可填写可选的会话和对话上下文，以检查依赖会话状态的路由。启动前先审阅冻结计划；审阅计划不生成模型答案。
+
 **Datasets** 支持搜索、按 profile/benchmark 筛选和分页。点击数据集可查看题目、benchmark 覆盖和学科分组。题目每页 25 条，可按 benchmark、学科和文本搜索；打开题目可阅读任务说明与选项，固定来源可用时也能展示代码和 agent 任务的完整输入。参考答案、隐藏测试和工具凭据不会返回。来源信息和哈希默认折叠，点击 **Evaluate dataset** 可复用所选数据。能浏览公开题目不代表题目从未被见过；不要用 standard 题目调优。
+
+各 profile 的总题量是其已准备题集的题数之和。题集可能重叠，因此该数值不是去重题数，也不是所选运行的实际分母。
 
 运行详情分为 **Results**、**Questions**、**Calls**、**Evidence** 和 **Recipe**，先看汇总结果，再按需查看逐题响应、计量和冻结配置。
 

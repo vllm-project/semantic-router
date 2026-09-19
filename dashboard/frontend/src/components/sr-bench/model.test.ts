@@ -114,4 +114,42 @@ describe('sr-bench run contract', () => {
       ['balance: model-b', 50],
     ])
   })
+  it('validates typed sampling and limit fields before preparing a plan', () => {
+    const manifest = makeManifest(
+      'Typed settings',
+      'live',
+      'quick',
+      dataset,
+      [single],
+      DEFAULT_LIMITS,
+    )
+    for (const [sampling, message] of [
+      [{ temperature: -0.1 }, 'Temperature'],
+      [{ temperature: 2.1 }, 'Temperature'],
+      [{ temperature: Number.NaN }, 'Temperature'],
+      [{ top_p: 1.1 }, 'Top P'],
+      [{ seed: 1.5 }, 'Sampling seed'],
+    ] as const)
+      expect(
+        validateManifest({ ...manifest, sampling: { ...manifest.sampling, ...sampling } }),
+      ).toContain(message)
+    for (const [limits, message] of [
+      [{ concurrency: 33 }, 'Concurrency'],
+      [{ concurrency: 1.5 }, 'Concurrency'],
+      [{ max_calls_per_case: 1.5 }, 'whole numbers'],
+      [{ max_output_tokens: 512.5 }, 'whole numbers'],
+      [{ total_timeout_s: 1801 }, 'Request deadline'],
+      [{ case_timeout_s: 0 }, 'positive'],
+    ] as const)
+      expect(
+        validateManifest({ ...manifest, limits: { ...manifest.limits, ...limits } }),
+      ).toContain(message)
+    expect(
+      validateManifest({
+        ...manifest,
+        sampling: { ...manifest.sampling, temperature: 2, top_p: 0, seed: -1 },
+      }),
+    ).toBeNull()
+    expect(manifest.limits).not.toHaveProperty('case_timeout_s')
+  })
 })
