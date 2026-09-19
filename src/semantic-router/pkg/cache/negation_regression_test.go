@@ -6,10 +6,11 @@ import (
 	"context"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // Model-backed regression for #2691 through the production in-memory cache
@@ -38,24 +39,32 @@ var paraphraseControlPairs = [][2]string{
 	{"How do I update my email address?", "How can I update my email address?"},
 }
 
-var mmbertInitOnce sync.Once
-var mmbertInitErr error
-
-func ensureMmbert(t *testing.T) {
+func prepareMmbert(t *testing.T) embedding.Provider {
 	t.Helper()
 	modelPath := os.Getenv("VLLM_SR_MMBERT_TEST_MODEL")
 	if modelPath == "" {
 		t.Skip("set VLLM_SR_MMBERT_TEST_MODEL to run the model-backed polarity regression")
 	}
-	mmbertInitOnce.Do(func() {
-		mmbertInitErr = candle_binding.InitMmBertEmbeddingModel(modelPath, true)
-	})
-	if mmbertInitErr != nil {
-		t.Fatalf("mmbert initialization failed for explicit model %s: %v", modelPath, mmbertInitErr)
+	provider, err := native.New(nil).Embedding(context.Background(), config.ResolvedModelBinding{
+		Recipe: "cache-regression", Name: "embedding",
+		Binding: config.ModelBinding{Deployment: "mmbert-test", Contract: "embedding.v1", Adapter: "mmbert"},
+		Deployment: config.ModelDeployment{
+			Artifact: modelPath, Provider: "candle", Device: "cpu", Precision: "float32",
+			Input: config.ModelInputBudget{MaxTokens: 512, Overflow: "reject"},
+		},
+	}, mmbertMemoryCacheDimension, mmbertMemoryCacheLayer)
+	if err != nil {
+		t.Fatalf("mmbert provider preparation failed for explicit model %s: %v", modelPath, err)
 	}
+	t.Cleanup(func() {
+		if err := provider.Close(); err != nil {
+			t.Errorf("close mmbert provider: %v", err)
+		}
+	})
+	return provider
 }
 
-func newMmbertCache(t *testing.T) *InMemoryCache {
+func newMmbertCache(t *testing.T, provider embedding.Provider) *InMemoryCache {
 	t.Helper()
 	return NewInMemoryCache(InMemoryCacheOptions{
 		SimilarityThreshold: negationRegressionThreshold,
@@ -64,20 +73,21 @@ func newMmbertCache(t *testing.T) *InMemoryCache {
 		Enabled:             true,
 		EvictionPolicy:      FIFOEvictionPolicyType,
 		EmbeddingModel:      "mmbert",
+		EmbeddingProvider:   provider,
 	})
 }
 
 func TestNegationFalseHitRegressionInMemory(t *testing.T) {
-	ensureMmbert(t)
+	provider := prepareMmbert(t)
 
-	guardExercised := runNegationRegressionPairs(t)
+	guardExercised := runNegationRegressionPairs(t, provider)
 	if guardExercised == 0 {
 		t.Fatalf("no negation pair cleared threshold %.2f, so the guard was never exercised — embedder/threshold mismatch, the regression is not actually testing anything",
 			negationRegressionThreshold)
 	}
 	t.Logf("polarity guard exercised on %d/%d above-threshold negation pairs", guardExercised, len(negationRegressionPairs))
 
-	paraphraseExercised := runParaphraseControlPairs(t)
+	paraphraseExercised := runParaphraseControlPairs(t, provider)
 	if paraphraseExercised == 0 {
 		t.Fatalf("no paraphrase control pair cleared threshold %.2f, so the guard-does-not-eat-legit-hits property was never verified",
 			negationRegressionThreshold)
@@ -85,12 +95,12 @@ func TestNegationFalseHitRegressionInMemory(t *testing.T) {
 	t.Logf("paraphrase control exercised on %d/%d above-threshold pairs", paraphraseExercised, len(paraphraseControlPairs))
 }
 
-func runNegationRegressionPairs(t *testing.T) int {
+func runNegationRegressionPairs(t *testing.T, provider embedding.Provider) int {
 	t.Helper()
 	guardExercised := 0
 	for _, pair := range negationRegressionPairs {
 		cached, incoming := pair[0], pair[1]
-		c := newMmbertCache(t)
+		c := newMmbertCache(t, provider)
 		cachedAnswer := []byte("CACHED-ANSWER-FOR::" + cached)
 		if err := c.AddEntry(context.Background(), "neg", "model-x", cached, []byte("req"), cachedAnswer, 3600); err != nil {
 			t.Fatalf("AddEntry(%q): %v", cached, err)
@@ -118,12 +128,12 @@ func runNegationRegressionPairs(t *testing.T) int {
 	return guardExercised
 }
 
-func runParaphraseControlPairs(t *testing.T) int {
+func runParaphraseControlPairs(t *testing.T, provider embedding.Provider) int {
 	t.Helper()
 	paraphraseExercised := 0
 	for _, pair := range paraphraseControlPairs {
 		cached, incoming := pair[0], pair[1]
-		c := newMmbertCache(t)
+		c := newMmbertCache(t, provider)
 		if err := c.AddEntry(context.Background(), "para", "model-x", cached, []byte("req"), []byte("PARAPHRASE-ANSWER"), 3600); err != nil {
 			t.Fatalf("AddEntry(%q): %v", cached, err)
 		}
