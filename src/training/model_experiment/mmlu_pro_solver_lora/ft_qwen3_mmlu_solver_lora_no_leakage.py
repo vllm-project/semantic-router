@@ -89,6 +89,7 @@ from peft import (
     get_peft_model,
 )
 from sklearn.model_selection import train_test_split
+from training_args_compat import create_training_arguments  # noqa: E402 - standalone entrypoint path
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -1553,7 +1554,8 @@ def main(
     # Note: SFTTrainer automatically uses DistributedDataParallel (DDP) for multi-GPU training
     # DDP is much more memory-efficient than DataParallel - no manual wrapping needed!
     # BF16 mixed precision saves ~30-40% memory, enabling larger batches on multi-GPU
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=actual_batch_size,

@@ -89,6 +89,7 @@ from peft import (
 )
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
+from training_args_compat import create_training_arguments  # noqa: E402 - standalone entrypoint path
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -884,7 +885,8 @@ def main(
     )
 
     # Training arguments
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,

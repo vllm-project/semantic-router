@@ -77,6 +77,7 @@ from common_lora_utils import (
     set_gpu_device,
     setup_logging,
 )
+from training_args_compat import create_training_arguments  # noqa: E402 - standalone entrypoint path
 
 # Setup logging
 logger = setup_logging()
@@ -514,7 +515,8 @@ def main(
 
     # Training arguments (optimized for memory and stability)
     # Note: batch_size is configurable via function parameter
-    training_args = TrainingArguments(
+    training_args = create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=num_epochs,
         per_device_train_batch_size=batch_size,  # Configurable via parameter
