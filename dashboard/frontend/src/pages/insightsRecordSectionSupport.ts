@@ -2,7 +2,13 @@ export type RecordSectionSize = 'compact' | 'feature' | 'wide'
 
 const SECTION_PRESENTATION: Record<
   string,
-  { size: RecordSectionSize; collapsible?: boolean; defaultExpanded?: boolean }
+  {
+    size: RecordSectionSize
+    collapsible?: boolean
+    defaultExpanded?: boolean
+    structured?: boolean
+    description?: string
+  }
 > = {
   Lifecycle: { size: 'compact' },
   'Decision Information': { size: 'compact' },
@@ -15,8 +21,20 @@ const SECTION_PRESENTATION: Record<
   'Usage & Cost': { size: 'compact' },
   Signals: { size: 'compact' },
   'Plugin Status': { size: 'compact' },
-  'Routing Metadata': { size: 'wide', collapsible: true, defaultExpanded: false },
-  'Projection Trace': { size: 'wide', collapsible: true, defaultExpanded: true },
+  'Routing Metadata': {
+    size: 'wide',
+    collapsible: true,
+    defaultExpanded: false,
+    structured: true,
+    description: 'Captured projection outputs and signal measurements',
+  },
+  'Projection Trace': {
+    size: 'wide',
+    collapsible: true,
+    defaultExpanded: true,
+    structured: true,
+    description: 'Signal groups → weighted scores → routing outputs',
+  },
   'Request / Response': { size: 'wide', collapsible: true, defaultExpanded: false },
 }
 

@@ -1,0 +1,325 @@
+.evidence,
+.metadata {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+.intro,
+.muted {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  line-height: 1.6;
+}
+.stages {
+  display: grid;
+  gap: 1.15rem;
+}
+.stage {
+  min-width: 0;
+}
+.stageHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.7rem;
+}
+.stageHeader h3,
+.metadataGroup h3 {
+  margin: 0;
+  color: var(--color-text);
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.stageHeader p {
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  color: var(--color-text-secondary);
+}
+.stageNumber {
+  display: grid;
+  place-items: center;
+  flex: 0 0 27px;
+  height: 27px;
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  color: var(--color-text-secondary);
+  font-size: 0.73rem;
+  font-variant-numeric: tabular-nums;
+}
+.count {
+  margin-left: auto;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  font-weight: 400;
+}
+.results {
+  display: grid;
+  gap: 0.5rem;
+  margin-left: 0.8rem;
+  padding-left: 1.35rem;
+  border-left: 1px solid var(--color-border);
+}
+.result {
+  min-width: 0;
+  padding: 0.8rem 0.9rem 0;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+  scroll-margin-top: 6rem;
+}
+.resultHeading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+.resultHeading > div,
+.resultHeading h4 {
+  min-width: 0;
+}
+.resultHeading h4 {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 550;
+  overflow-wrap: anywhere;
+}
+.outcome {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  color: var(--color-text);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.resultMeta,
+.relationship {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.3rem;
+  margin: 0.5rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: 0.73rem;
+  overflow-wrap: anywhere;
+}
+.resultMeta strong,
+.relationship strong {
+  margin-left: 0.3rem;
+  color: var(--color-text);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.relationship {
+  gap: 0.5rem;
+}
+.relationship svg {
+  flex-shrink: 0;
+}
+.badge {
+  display: inline-flex;
+  padding: 0.12rem 0.4rem;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  color: var(--color-text-secondary);
+  font-size: 0.65rem;
+  font-weight: 450;
+}
+.detail {
+  min-width: 0;
+}
+.detail > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 38px;
+  padding: 0.5rem 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.72rem;
+}
+.detail > summary::-webkit-details-marker {
+  display: none;
+}
+.detail > summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.detail > summary:hover {
+  color: var(--color-text);
+}
+.detail > summary > svg {
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+.detail[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.detailBody {
+  min-width: 0;
+  display: grid;
+  gap: 0.8rem;
+  padding: 0.4rem 0 0.9rem;
+}
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin: 0;
+}
+.metrics dt {
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+}
+.metrics dd {
+  margin: 0.2rem 0 0;
+  overflow-wrap: anywhere;
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+.tableScroll {
+  max-width: 100%;
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+}
+.tableScroll table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.73rem;
+}
+.tableScroll th,
+.tableScroll td {
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.tableScroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--color-bg-elevated, #171719);
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+.tableScroll th:first-child {
+  text-align: left;
+  overflow-wrap: anywhere;
+  min-width: 120px;
+}
+.tableScroll th[scope='row'] {
+  color: var(--color-text);
+  font-weight: 450;
+}
+.tableScroll th small {
+  display: block;
+  margin-top: 0.15rem;
+  color: var(--color-text-secondary);
+  font-size: 0.67rem;
+}
+.tableScroll th .badge {
+  margin-left: 0.4rem;
+}
+.tableScroll tbody tr:last-child > * {
+  border-bottom: 0;
+}
+.raw {
+  max-height: 320px;
+  overflow: auto;
+  margin: 0;
+  padding: 0.8rem;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.metadata {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem 1.5rem;
+}
+.metadata > .intro,
+.metadataGroup:last-child {
+  grid-column: 1 / -1;
+}
+.metadataGroup {
+  min-width: 0;
+}
+.metadataGroup h3 {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.65rem;
+}
+.metadataGroup > .muted {
+  margin-bottom: 0.55rem;
+}
+.outputs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.outputs li {
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+.valueList {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+.valueList > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.76rem;
+}
+.valueList dt {
+  overflow-wrap: anywhere;
+}
+.valueList dd {
+  margin: 0;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 600px) {
+  .results {
+    margin-left: 0;
+    padding-left: 0;
+    border: 0;
+  }
+  .result {
+    padding: 0.7rem 0.7rem 0;
+  }
+  .resultHeading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .outcome {
+    justify-content: flex-start;
+  }
+  .metrics,
+  .metadata {
+    grid-template-columns: 1fr;
+  }
+  .metadataGroup {
+    grid-column: 1 / -1;
+  }
+}

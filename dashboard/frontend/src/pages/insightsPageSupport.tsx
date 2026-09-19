@@ -14,6 +14,7 @@ import type {
   Signal,
 } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
+import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
 import styles from './InsightsPage.module.css'
@@ -360,6 +361,22 @@ export function buildInsightsRecordSections(
     ],
   })
 
+  const projectionTraceFields = buildProjectionTraceFields(record)
+  if (projectionTraceFields.length > 0) {
+    sections.push({
+      title: 'Projection Trace',
+      fields: projectionTraceFields,
+    })
+  }
+
+  const routingMetadataFields = buildRoutingMetadataFields(record)
+  if (routingMetadataFields.length > 0) {
+    sections.push({
+      title: 'Routing Metadata',
+      fields: routingMetadataFields,
+    })
+  }
+
   sections.push(...buildRoutingExplanationSections(record))
 
   sections.push({
@@ -426,22 +443,6 @@ export function buildInsightsRecordSections(
       { label: 'Hallucination Detection', value: buildHallucinationValue(record) },
     ],
   })
-
-  const routingMetadataFields = buildRoutingMetadataFields(record)
-  if (routingMetadataFields.length > 0) {
-    sections.push({
-      title: 'Routing Metadata',
-      fields: routingMetadataFields,
-    })
-  }
-
-  const projectionTraceFields = buildProjectionTraceFields(record)
-  if (projectionTraceFields.length > 0) {
-    sections.push({
-      title: 'Projection Trace',
-      fields: projectionTraceFields,
-    })
-  }
 
   const requestResponseFields = buildRequestResponseFields(record, options.isReadonly)
   if (requestResponseFields.length > 0) {
@@ -533,15 +534,6 @@ function buildSignalFields(signals: Signal): ViewField[] {
       },
     ]
   })
-}
-
-function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] {
-  return [
-    buildTagField('Projection outputs', record.projections),
-    buildNumericMapField('Projection scores', record.projection_scores),
-    buildNumericMapField('Signal confidences', record.signal_confidences),
-    buildNumericMapField('Signal values', record.signal_values),
-  ].filter((field): field is ViewField => field !== null)
 }
 
 function buildGuardrailsValue(record: InsightsRecord) {
@@ -692,56 +684,8 @@ function renderReadonlyLock() {
   )
 }
 
-function buildTagField(label: string, values: string[] | undefined): ViewField | null {
-  if (!values?.length) {
-    return null
-  }
-
-  return {
-    label,
-    value: (
-      <div className={styles.modalSignalList}>
-        {values.map((value) => (
-          <span key={`${label}-${value}`} className={styles.modalSignalPill}>
-            {value}
-          </span>
-        ))}
-      </div>
-    ),
-    fullWidth: true,
-  }
-}
-
-function buildNumericMapField(
-  label: string,
-  values: Record<string, number> | undefined,
-): ViewField | null {
-  if (!values || Object.keys(values).length === 0) {
-    return null
-  }
-
-  const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right))
-  return {
-    label,
-    value: (
-      <div className={styles.pluginStack}>
-        {entries.map(([key, value]) => (
-          <span key={`${label}-${key}`} className={styles.costSubtle}>
-            {key}: {formatNumericMetric(value)}
-          </span>
-        ))}
-      </div>
-    ),
-    fullWidth: true,
-  }
-}
-
 function formatDecisionNumber(value: number | undefined) {
   return typeof value === 'number' ? String(value) : '-'
-}
-
-function formatNumericMetric(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3)
 }
 
 function getZeroSavingsReason(record: InsightsRecord): string | null {

@@ -649,9 +649,19 @@ def test_gpu_onnx_builders_validate_the_preinstalled_native_toolchain() -> None:
 def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "COPY src/vllm-sr/pyproject.toml /app/pyproject.toml" in content
-    assert content.index("COPY src/vllm-sr/pyproject.toml /app/pyproject.toml") < (
+    # Build contexts may have a restrictive umask and mode-0600 source files.
+    # Explicit COPY permissions make version imports readable after gosu.
+    version_copy = "COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml"
+    assert version_copy in content
+    assert content.index(version_copy) < (
         content.index("COPY src/vllm-sr/cli/ /app/cli/")
+    )
+    nonroot_catalog_check = (
+        "RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null"
+    )
+    assert nonroot_catalog_check in content
+    assert content.index(nonroot_catalog_check) > content.index(
+        "find /app/cli -type f -exec chmod 0444 {} +"
     )
 
 

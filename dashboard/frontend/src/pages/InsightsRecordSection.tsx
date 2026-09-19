@@ -30,7 +30,8 @@ export default function InsightsRecordSection({
           <h2 id={`${sectionId}-title`}>{sectionTitle}</h2>
           {presentation.size === 'wide' ? (
             <span className={styles.recordSectionCount}>
-              {section.fields.length} {section.fields.length === 1 ? 'group' : 'groups'}
+              {presentation.description ??
+                `${section.fields.length} ${section.fields.length === 1 ? 'group' : 'groups'}`}
             </span>
           ) : null}
         </div>
@@ -57,14 +58,22 @@ export default function InsightsRecordSection({
       {expanded ? (
         <div
           id={`${sectionId}-content`}
-          className={`${styles.recordFields} ${presentation.size === 'wide' ? styles.recordFieldsWide : ''}`}
+          className={
+            presentation.structured
+              ? styles.recordStructured
+              : `${styles.recordFields} ${presentation.size === 'wide' ? styles.recordFieldsWide : ''}`
+          }
         >
           {section.fields.map((field, fieldIndex) => (
             <div
               key={`${field.label}-${fieldIndex}`}
-              className={`${styles.recordField} ${field.fullWidth ? styles.recordFieldWide : ''}`}
+              className={
+                presentation.structured
+                  ? undefined
+                  : `${styles.recordField} ${field.fullWidth ? styles.recordFieldWide : ''}`
+              }
             >
-              <span>{field.label}</span>
+              {!presentation.structured ? <span>{field.label}</span> : null}
               <div>{field.value}</div>
             </div>
           ))}
