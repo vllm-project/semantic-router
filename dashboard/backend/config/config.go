@@ -58,21 +58,12 @@ type Config struct {
 	// Platform branding (e.g., "amd" for AMD GPU deployments)
 	Platform string
 
-	// Evaluation configuration
-	EvaluationEnabled                    bool
-	EvaluationDataDir                    string
-	EvaluationDeploymentsDir             string
-	PythonPath                           string
-	EvaluationRouterAPIKeyEnv            string
-	EvaluationEnvoyAPIKeyEnv             string
-	EvaluationAgentTaskLedger            EvaluationServiceEndpointConfig
-	EvaluationFaultRecoveryLedger        EvaluationServiceEndpointConfig
-	EvaluationHardPolicyLedger           EvaluationServiceEndpointConfig
-	EvaluationProductionExperimentLedger EvaluationServiceEndpointConfig
-	// EvaluationAvailable is frozen by router.Setup after the Evaluation Plane
-	// has initialized successfully. It is runtime state, not a user flag.
-	EvaluationAvailable         bool
-	EvaluationUnavailableReason string
+	// sr-bench is a separate durable service shared by CLI and Dashboard.
+	SRBenchURL               string
+	SRBenchTokenEnv          string
+	SRBenchAvailable         bool
+	SRBenchUnavailableReason string
+	PythonPath               string
 
 	// MCP configuration
 	MCPEnabled bool
@@ -150,42 +141,35 @@ func defaultPythonBinary() string {
 }
 
 type parsedFlags struct {
-	port                                 *string
-	staticDir                            *string
-	configFile                           *string
-	grafanaURL                           *string
-	promURL                              *string
-	routerAPI                            *string
-	routerMetrics                        *string
-	jaegerURL                            *string
-	envoyURL                             *string
-	readonlyMode                         *bool
-	runtimeConfigWritable                *bool
-	recipeStoreWritable                  *bool
-	setupMode                            *bool
-	allowOpenBootstrap                   *bool
-	allowedOrigins                       *string
-	platform                             *string
-	evaluationEnabled                    *bool
-	evaluationDataDir                    *string
-	evaluationDeploymentsDir             *string
-	pythonPath                           *string
-	evaluationRouterAPIKeyEnv            *string
-	evaluationEnvoyAPIKeyEnv             *string
-	evaluationAgentTaskLedger            evaluationEndpointFlags
-	evaluationFaultRecoveryLedger        evaluationEndpointFlags
-	evaluationHardPolicyLedger           evaluationEndpointFlags
-	evaluationProductionExperimentLedger evaluationEndpointFlags
-	mcpEnabled                           *bool
-	mlPipelineEnabled                    *bool
-	mlPipelineDataDir                    *string
-	mlTrainingDir                        *string
-	mlServiceURL                         *string
-	workflowDBPath                       *string
-	statusDBPath                         *string
-	configProjectionDBPath               *string
-	auth                                 authFlags
-	openClaw                             openClawFlags
+	port                   *string
+	staticDir              *string
+	configFile             *string
+	grafanaURL             *string
+	promURL                *string
+	routerAPI              *string
+	routerMetrics          *string
+	jaegerURL              *string
+	envoyURL               *string
+	readonlyMode           *bool
+	runtimeConfigWritable  *bool
+	recipeStoreWritable    *bool
+	setupMode              *bool
+	allowOpenBootstrap     *bool
+	allowedOrigins         *string
+	platform               *string
+	srBenchURL             *string
+	srBenchTokenEnv        *string
+	pythonPath             *string
+	mcpEnabled             *bool
+	mlPipelineEnabled      *bool
+	mlPipelineDataDir      *string
+	mlTrainingDir          *string
+	mlServiceURL           *string
+	workflowDBPath         *string
+	statusDBPath           *string
+	configProjectionDBPath *string
+	auth                   authFlags
+	openClaw               openClawFlags
 }
 
 func applyCoreConfig(cfg *Config, flags parsedFlags) {
@@ -221,32 +205,11 @@ func parseAllowedOrigins(raw string) []string {
 }
 
 func applyFeatureConfig(cfg *Config, flags parsedFlags) error {
-	cfg.EvaluationEnabled = *flags.evaluationEnabled
-	cfg.EvaluationDataDir = *flags.evaluationDataDir
+	cfg.SRBenchURL = *flags.srBenchURL
+	cfg.SRBenchTokenEnv = *flags.srBenchTokenEnv
 	cfg.PythonPath = *flags.pythonPath
-	if cfg.EvaluationEnabled {
-		cfg.EvaluationDeploymentsDir = *flags.evaluationDeploymentsDir
-		cfg.EvaluationRouterAPIKeyEnv = *flags.evaluationRouterAPIKeyEnv
-		cfg.EvaluationEnvoyAPIKeyEnv = *flags.evaluationEnvoyAPIKeyEnv
-		endpoints := []struct {
-			name   string
-			flags  evaluationEndpointFlags
-			target *EvaluationServiceEndpointConfig
-		}{
-			{"agent task ledger", flags.evaluationAgentTaskLedger, &cfg.EvaluationAgentTaskLedger},
-			{"fault recovery ledger", flags.evaluationFaultRecoveryLedger, &cfg.EvaluationFaultRecoveryLedger},
-			{"hard policy ledger", flags.evaluationHardPolicyLedger, &cfg.EvaluationHardPolicyLedger},
-			{"production experiment ledger", flags.evaluationProductionExperimentLedger, &cfg.EvaluationProductionExperimentLedger},
-		}
-		for _, endpoint := range endpoints {
-			resolved, err := resolveEvaluationEndpoint(
-				endpoint.name, *endpoint.flags.url, *endpoint.flags.apiKeyEnv, *endpoint.flags.timeoutRaw,
-			)
-			if err != nil {
-				return err
-			}
-			*endpoint.target = resolved
-		}
+	if err := ValidateSRBenchConfig(cfg.SRBenchURL, cfg.SRBenchTokenEnv); err != nil {
+		return err
 	}
 	cfg.MCPEnabled = *flags.mcpEnabled
 	cfg.MLPipelineEnabled = *flags.mlPipelineEnabled
@@ -343,33 +306,9 @@ func bindCoreFlags() parsedFlags {
 }
 
 func bindFeatureFlags(flags parsedFlags) parsedFlags {
-	flags.evaluationEnabled = flag.Bool("evaluation", env("EVALUATION_ENABLED", "true") == "true", "enable evaluation feature")
-	flags.evaluationDataDir = flag.String("evaluation-data", env("EVALUATION_DATA_DIR", "./data/evaluation"), "evaluation artifact store directory")
-	flags.evaluationDeploymentsDir = flag.String(
-		"evaluation-deployments", env("EVALUATION_DEPLOYMENTS_DIR", ""),
-		"read-only directory containing evaluation-deployments.v1 registry.json and deployment configs",
-	)
+	flags.srBenchURL = flag.String("sr-bench-url", env("SR_BENCH_URL", "http://127.0.0.1:8090"), "sr-bench service origin")
+	flags.srBenchTokenEnv = flag.String("sr-bench-token-env", env("SR_BENCH_TOKEN_ENV", "SR_BENCH_TOKEN"), "environment variable holding the sr-bench service token")
 	flags.pythonPath = flag.String("python", env("PYTHON_PATH", defaultPythonBinary()), "path to Python interpreter")
-	flags.evaluationRouterAPIKeyEnv = flag.String(
-		"evaluation-router-api-key-env", env("EVALUATION_ROUTER_API_KEY_ENV", ""),
-		"dedicated Router evaluation API key environment variable name (never the Dashboard management credential)",
-	)
-	flags.evaluationEnvoyAPIKeyEnv = flag.String(
-		"evaluation-envoy-api-key-env", env("EVALUATION_ENVOY_API_KEY_ENV", ""),
-		"server-owned Envoy API key environment variable name exposed to the fixed evaluation worker",
-	)
-	flags.evaluationAgentTaskLedger = bindEvaluationEndpointFlags(
-		"agent-task-ledger", "EVALUATION_AGENT_TASK_LEDGER", "agent-task ledger",
-	)
-	flags.evaluationFaultRecoveryLedger = bindEvaluationEndpointFlags(
-		"fault-recovery-ledger", "EVALUATION_FAULT_RECOVERY_LEDGER", "fault-recovery ledger",
-	)
-	flags.evaluationHardPolicyLedger = bindEvaluationEndpointFlags(
-		"hard-policy-ledger", "EVALUATION_HARD_POLICY_LEDGER", "hard-policy ledger",
-	)
-	flags.evaluationProductionExperimentLedger = bindEvaluationEndpointFlags(
-		"production-experiment-ledger", "EVALUATION_PRODUCTION_EXPERIMENT_LEDGER", "production experiment ledger",
-	)
 	flags.mcpEnabled = flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
 	flags.mlPipelineEnabled = flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "true") == "true", "enable ML pipeline (benchmark, train, config)")
 	flags.mlPipelineDataDir = flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
@@ -394,11 +333,6 @@ func LoadConfig() (*Config, error) {
 	if err := applyFeatureConfig(cfg, flags); err != nil {
 		return nil, err
 	}
-	if cfg.EvaluationEnabled {
-		if err := validateEvaluationRuntimeConfig(cfg); err != nil {
-			return nil, err
-		}
-	}
 	if err := applyAuthConfig(cfg, flags.auth); err != nil {
 		return nil, err
 	}
@@ -411,21 +345,4 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return cfg, nil
-}
-
-func bindEvaluationEndpointFlags(flagPrefix, envPrefix, label string) evaluationEndpointFlags {
-	return evaluationEndpointFlags{
-		url: flag.String(
-			"evaluation-"+flagPrefix+"-url", env(envPrefix+"_URL", ""),
-			"server-owned "+label+" canonical origin",
-		),
-		apiKeyEnv: flag.String(
-			"evaluation-"+flagPrefix+"-api-key-env", env(envPrefix+"_API_KEY_ENV", ""),
-			"independent "+label+" API key environment variable name",
-		),
-		timeoutRaw: flag.String(
-			"evaluation-"+flagPrefix+"-timeout", env(envPrefix+"_TIMEOUT", ""),
-			"bounded "+label+" request timeout (default 30s when configured, maximum 10m)",
-		),
-	}
 }

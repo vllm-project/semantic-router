@@ -1,6 +1,9 @@
 package services
 
 import (
+	"encoding/json"
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -45,6 +48,7 @@ func TestPopulateEvalModelSelectionReturnsConcreteRuntimeChoice(t *testing.T) {
 			Decision:     matchedDecision,
 			MatchedRules: []string{"domain:engineering"},
 		},
+		nil,
 	)
 
 	if response.SelectedModel != "model-b" || response.SelectionStatus != EvalSelectionSelected {
@@ -71,9 +75,33 @@ func TestPopulateEvalModelSelectionDoesNotInventFirstRecommendedModel(t *testing
 			Name:      "fusion-route",
 			ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
 		}},
+		nil,
 	)
 
 	if response.SelectedModel != "" || response.SelectionStatus != EvalSelectionUnavailable {
 		t.Fatalf("unwired Eval invented a final model: %+v", response)
+	}
+}
+
+func TestPreviewContextValidatesAndPassesProtectionFacts(t *testing.T) {
+	for _, identity := range []string{strings.Repeat("a", 1025), "invalid\nidentity"} {
+		_, err := (IntentRequest{Text: "test", PreviewContext: &PreviewContext{SessionID: identity}}).resolveSignalInput()
+		if !errors.Is(err, ErrInvalidRequestFacts) {
+			t.Fatalf("invalid preview identity error=%v", err)
+		}
+	}
+	seed := int64(17)
+	context := &PreviewContext{SessionID: "session", ConversationID: "conversation", SamplingSeed: &seed}
+	request := IntentRequest{Messages: []IntentMessage{{Role: "assistant", Content: json.RawMessage(`""`), ToolCalls: []json.RawMessage{json.RawMessage(`{"id":"call_1","type":"function","function":{"name":"lookup","arguments":"{}"}}`)}}, {Role: "tool", Content: json.RawMessage(`"result"`), ToolCallID: "call_1"}}, PreviewContext: context}
+	input, err := request.resolveSignalInput()
+	if err != nil {
+		t.Fatal(err)
+	}
+	selector := &evalModelSelectorStub{}
+	service := &ClassificationService{}
+	service.SetEvalModelSelector(selector)
+	service.populateEvalModelSelection(&EvalResponse{}, input, &decision.DecisionResult{Decision: &config.Decision{Name: "tool-route"}}, context)
+	if selector.input.PreviewContext != context || !selector.input.ConversationFacts.LastMessageToolResult || selector.input.SemanticRequest == nil {
+		t.Fatalf("protection context lost: %+v", selector.input)
 	}
 }

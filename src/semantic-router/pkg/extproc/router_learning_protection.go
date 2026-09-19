@@ -297,8 +297,8 @@ func (r *OpenAIRouter) protectionRescueEvidence(
 ) bool {
 	tier := decisionTier(ctx)
 	decision := selectionDecisionStateKey(learningCtx)
-	currentExp := r.routerLearningRuntimeState().experienceSnapshot(decision, tier, current)
-	proposalExp := r.routerLearningRuntimeState().experienceSnapshot(decision, tier, proposal)
+	currentExp := r.learningExperience(ctx, decision, tier, current)
+	proposalExp := r.learningExperience(ctx, decision, tier, proposal)
 	currentWeak := currentExp.UnderpoweredCount >= 2 && currentExp.UnderpoweredCount > currentExp.GoodFitCount
 	currentUnreliable := currentExp.FailedCount >= 2
 	if !currentWeak && !currentUnreliable {
@@ -419,7 +419,9 @@ func (r *OpenAIRouter) selectProtectionResultForContext(
 	if r.Config.ModelConfig != nil {
 		selector.InitializeFromConfig(r.Config.ModelConfig)
 	}
-	if r.LookupTable != nil {
+	if requestCtx != nil && requestCtx.learningPreview != nil {
+		selector.SetLookupTable(requestCtx.learningPreview.lookup)
+	} else if r.LookupTable != nil {
 		selector.SetLookupTable(r.LookupTable)
 	}
 

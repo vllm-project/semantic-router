@@ -188,7 +188,7 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 	}
 	if wire.PromptTokensDetails != nil {
 		details := wire.PromptTokensDetails
-		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens); err != nil {
+		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
 			return llmprotocol.Usage{}, err
 		}
 	}
