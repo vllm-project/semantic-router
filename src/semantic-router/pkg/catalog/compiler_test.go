@@ -798,3 +798,41 @@ func TestEffectiveModelLookupIsDefensive(t *testing.T) {
 		t.Fatalf("effective registry was mutated through lookup: %+v", second)
 	}
 }
+
+func TestBuiltInRegistryOwnsDatabricksProviderContract(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := registry.Provider("databricks")
+	if !ok {
+		t.Fatal("databricks provider is missing")
+	}
+	if provider.Category != "model_api" || provider.SupportTier != "compatible" {
+		t.Fatalf("unexpected classification: category = %q, support tier = %q", provider.Category, provider.SupportTier)
+	}
+	if provider.DefaultBaseURL != "" {
+		t.Fatalf("workspace-scoped provider declared a default base URL: %q", provider.DefaultBaseURL)
+	}
+	if len(provider.Protocols) != 1 || provider.Protocols[0] != "openai/chat-completions@1" {
+		t.Fatalf("unexpected protocols: %+v", provider.Protocols)
+	}
+	if provider.DefaultProtocol != "openai/chat-completions@1" {
+		t.Fatalf("default protocol = %q", provider.DefaultProtocol)
+	}
+	if len(provider.SupportedOperations) != 1 || provider.SupportedOperations[0] != "openai/chat-completions@1#create" {
+		t.Fatalf("unexpected operations: %+v", provider.SupportedOperations)
+	}
+	if len(provider.PathOverrides) != 0 {
+		t.Fatalf("path overrides are no-ops for a configured base path: %+v", provider.PathOverrides)
+	}
+	if provider.APIVersionQuery {
+		t.Fatal("databricks serving endpoints take no api-version query parameter")
+	}
+	if provider.Auth.Strategy != "bearer" || provider.Auth.Header != "Authorization" || provider.Auth.Prefix != "Bearer" {
+		t.Fatalf("unexpected auth contract: %+v", provider.Auth)
+	}
+	if provider.Presentation.Logo != "monogram" || provider.Presentation.Monogram != "DB" {
+		t.Fatalf("unexpected presentation: %+v", provider.Presentation)
+	}
+}
