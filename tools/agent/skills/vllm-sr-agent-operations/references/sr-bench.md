@@ -72,7 +72,7 @@ removes its grouping, not run evidence; active runs must be resolved first.
   count as incorrect and remain visible. Missing or ungraded results are not zero.
 - Route only on user-request evidence, never answers, benchmark names or split
   labels. Keep tuning and holdout separate. Disclose previously inspected tasks
-  or labels, including a GPQA retest after earlier labels were seen.
+  or labels.
 
 ## Run reliability
 
