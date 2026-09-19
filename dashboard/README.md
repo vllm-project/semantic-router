@@ -138,6 +138,15 @@ Other platforms reject a configured registry. Leaving `EVALUATION_DEPLOYMENTS_DI
 unset retains the single-runtime target. Evaluation workers require Linux for
 their sandbox.
 
+OpenClaw provisioning accepts optional `skills` entries as exact IDs from the
+server's skills catalog (`GET /api/openclaw/skills`). IDs use lowercase ASCII
+letters or digits, with single hyphens or underscores separating groups. Paths,
+case or whitespace aliases, and unknown IDs return HTTP 400 before provisioning
+starts, including for asynchronous requests. Malformed catalog JSON returns
+HTTP 500 when skills are selected. Omitting skills or selecting an empty list
+still provisions without skills. Administrators can supply a catalog with
+`OPENCLAW_SKILLS_PATH`.
+
 Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
 `DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
 Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as

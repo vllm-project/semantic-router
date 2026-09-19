@@ -19,6 +19,7 @@ var (
 		validateRoutingPreviewConfig,
 		validateModelPricingContracts,
 		validateReasoningFamilyContracts,
+		validateExternalModelReasoningContracts,
 		validateGlobalSemanticCacheContracts,
 		validateGlobalMemoryContracts,
 		validateEmbeddingModelContracts,
