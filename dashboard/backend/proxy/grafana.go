@@ -44,7 +44,17 @@ func NewGrafanaProxy(targetBase string) (*httputil.ReverseProxy, error) {
 	}
 	director := proxy.Director
 	proxy.Director = func(r *http.Request) {
+		publicHost := r.Host
+		origins := append([]string(nil), r.Header.Values("Origin")...)
 		director(r)
+		// Grafana Live validates the browser Origin against the public Host.
+		// Keep both intact, including an absent Origin; the configured URL still
+		// selects the upstream. The generic Origin override does not apply here.
+		r.Host = publicHost
+		r.Header.Del("Origin")
+		if origins != nil {
+			r.Header["Origin"] = origins
+		}
 		if strings.Contains(r.Header.Get("Accept"), "text/html") {
 			// Only HTML is rewritten; preserve compression for large static assets.
 			r.Header.Set("Accept-Encoding", "identity")

@@ -5,9 +5,42 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"reflect"
 	"strings"
 	"testing"
 )
+
+func TestGrafanaProxyPreservesPublicOriginAndFixedTarget(t *testing.T) {
+	for _, override := range []string{"false", "true"} {
+		t.Run("override="+override, func(t *testing.T) {
+			t.Setenv("PROXY_OVERRIDE_ORIGIN", override)
+			for _, origin := range []string{"", "https://dashboard.example", "https://other.example"} {
+				for _, method := range []string{http.MethodGet, http.MethodPost} {
+					t.Run(method+"/"+origin, func(t *testing.T) {
+						proxy, err := NewGrafanaProxy("http://grafana.internal:3000")
+						if err != nil {
+							t.Fatal(err)
+						}
+						request := httptest.NewRequest(method, "https://dashboard.example/embedded/grafana/api/live/ws?format=json", nil)
+						if origin != "" {
+							request.Header.Set("Origin", origin)
+						}
+						origins := append([]string(nil), request.Header.Values("Origin")...)
+						proxy.Director(request)
+						if request.Host != "dashboard.example" || !reflect.DeepEqual(request.Header.Values("Origin"), origins) {
+							t.Fatalf("public authority changed: Host=%q Origin=%q", request.Host, request.Header.Values("Origin"))
+						}
+						want := &url.URL{Scheme: "http", Host: "grafana.internal:3000", Path: "/api/live/ws", RawQuery: "format=json"}
+						if request.URL.String() != want.String() {
+							t.Fatalf("upstream URL=%s, want %s", request.URL, want)
+						}
+					})
+				}
+			}
+		})
+	}
+}
 
 func TestGrafanaProxyInstallsAdapterBeforeApplication(t *testing.T) {
 	for _, compressed := range []bool{false, true} {
@@ -64,9 +97,14 @@ func TestGrafanaProxyInstallsAdapterBeforeApplication(t *testing.T) {
 }
 
 func TestGrafanaProxyPreservesAPIAndStaticResponses(t *testing.T) {
+	t.Setenv("PROXY_OVERRIDE_ORIGIN", "true")
 	for _, contentType := range []string{"application/json", "application/javascript"} {
 		t.Run(contentType, func(t *testing.T) {
 			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Host != "dashboard.example" || r.Header.Get("Origin") != "https://dashboard.example" {
+					http.Error(w, "public authority changed", http.StatusForbidden)
+					return
+				}
 				if r.Header.Get("Accept-Encoding") != "gzip" || r.Header.Get("X-CSRF-Token") != "fixture-csrf" {
 					t.Error("non-HTML request headers changed")
 				}
@@ -78,7 +116,8 @@ func TestGrafanaProxyPreservesAPIAndStaticResponses(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			request := httptest.NewRequest(http.MethodPost, "/embedded/grafana/api/ds/query", strings.NewReader(`{"queries":[]}`))
+			request := httptest.NewRequest(http.MethodPost, "https://dashboard.example/embedded/grafana/api/ds/query", strings.NewReader(`{"queries":[]}`))
+			request.Header.Set("Origin", "https://dashboard.example")
 			request.Header.Set("Accept-Encoding", "gzip")
 			request.Header.Set("X-CSRF-Token", "fixture-csrf")
 			response := httptest.NewRecorder()
