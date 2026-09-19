@@ -114,6 +114,36 @@ func TestProviderDispatchEncodesEveryClientBackendProtocolPair(t *testing.T) {
 	}
 }
 
+func TestAzureProviderDispatchAcceptsDecoratedResponse(t *testing.T) {
+	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	profile := router.Config.ProviderProfiles["provider"]
+	profile.Type = "azure-openai"
+	router.Config.ProviderProfiles["provider"] = profile
+
+	request := testNeutralRequest(logicalModel, "hello")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	if _, err := router.prepareProviderDispatch(request, logicalModel, "", false, ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ctx.ResponseVendor != llmprotocol.ResponseVendorAzure {
+		t.Fatalf("response vendor = %q, want Azure", ctx.ResponseVendor)
+	}
+
+	body := []byte(`{"id":"response_1","model":"provider-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop","content_filter_results":{}}]}`)
+	response, err := router.decodeClientResponse(body, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.Output) != 1 || len(response.Output[0].Content) != 1 || response.Output[0].Content[0].Text != "hello" {
+		t.Fatalf("response = %+v, want decoded assistant output", response)
+	}
+	if len(ctx.ProtocolDiagnostics) != 1 ||
+		ctx.ProtocolDiagnostics[0].Field != "choices[].content_filter_results" ||
+		ctx.ProtocolDiagnostics[0].Action != llmprotocol.DiagnosticDropped {
+		t.Fatalf("diagnostics = %+v, want the dropped Azure field", ctx.ProtocolDiagnostics)
+	}
+}
+
 func TestProviderDispatchAppliesReasoningBeforeExternalModelIDRewrite(t *testing.T) {
 	router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
 	params := router.Config.ModelConfig[logicalModel]
@@ -538,6 +568,23 @@ func TestHandleAutoModelRoutingSameModelEncodesCurrentSemanticRequest(t *testing
 	}
 }
 
+func TestHandleAutoModelRoutingSameModelReevaluatesOntoSelectedRoute(t *testing.T) {
+	router := routingTestRouter("auto")
+	router.Config.ClearRouteCache = true
+	request := testNeutralRequest("auto", "route this request")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+
+	response, err := router.handleEntrypointModelRouting(
+		request, "auto", "", entropy.ReasoningDecision{}, "auto", ctx,
+	)
+	if err != nil {
+		t.Fatalf("handleEntrypointModelRouting returned error: %v", err)
+	}
+	if !response.GetRequestBody().GetResponse().GetClearRouteCache() {
+		t.Fatal("same-name entrypoint dispatch did not clear the fallback route cache")
+	}
+}
+
 func TestSpecifiedModelPreservesAnthropicWireAtExtProcBoundary(t *testing.T) {
 	router := routingTestRouter("test-model")
 	request := testNeutralRequest("test-model", "Explain the incident.")
@@ -610,4 +657,41 @@ func routingTestContext(format llmprotocol.WireFormat, request *llmprotocol.Requ
 		snapshotClientMaxOutputTokens(*request, ctx)
 	}
 	return ctx
+}
+
+func TestProviderDispatchHonorsRouteCachePolicyAcrossRequestPaths(t *testing.T) {
+	for _, flow := range []string{"looper", "same_model", "specified_model"} {
+		for _, clear := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/clear=%t", flow, clear), func(t *testing.T) {
+				router := routingTestRouter("worker")
+				router.Config.ClearRouteCache = clear
+				request := testNeutralRequest("worker", "Summarize this note.")
+				ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+				var response *ext_proc.ProcessingResponse
+				var err error
+				switch flow {
+				case "looper":
+					response, err = router.handleLooperInternalRequest("worker", ctx)
+				case "same_model":
+					response, err = router.handleEntrypointModelRouting(request, "worker", "", entropy.ReasoningDecision{}, "worker", ctx)
+				default:
+					response, err = router.handleSpecifiedModelRouting(request, "worker", "", ctx)
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				common := response.GetRequestBody().GetResponse()
+				if common == nil {
+					t.Fatalf("expected provider dispatch, got %v", response)
+				}
+				values := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+				if values[headers.SelectedModel] != "worker" || values[":path"] != "/v1/chat/completions" {
+					t.Fatalf("provider routing headers = %v", values)
+				}
+				if common.GetClearRouteCache() != clear {
+					t.Fatalf("provider headers changed but clear_route_cache = %t, want %t", common.GetClearRouteCache(), clear)
+				}
+			})
+		}
+	}
 }

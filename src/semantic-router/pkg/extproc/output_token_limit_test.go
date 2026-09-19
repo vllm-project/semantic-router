@@ -184,15 +184,15 @@ func TestPrepareProviderDispatchRerouteUsesNewModelRefBound(t *testing.T) {
 	ctx.ClientMaxOutputTokens = llmprotocol.Int64(8000)
 	ctx.VSRSelectedDecision = decision
 
-	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 	if err != nil {
-		t.Fatalf("prepareProviderDispatch: %v", err)
+		t.Fatalf("selectCapabilityTestDispatch: %v", err)
 	}
 	if dispatch.logicalModel != fallback {
 		t.Fatalf("logical model = %s, want %s", dispatch.logicalModel, fallback)
 	}
 	if request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens != 1024 {
-		t.Fatalf("MaxOutputTokens = %v, want rerouted model_ref 1024", request.Sampling.MaxOutputTokens)
+		t.Fatalf("MaxOutputTokens = %v, want selected model_ref 1024", request.Sampling.MaxOutputTokens)
 	}
 	if ctx.EffectiveMaxOutputTokensSource != outputtokens.SourceModelRef {
 		t.Fatalf("source = %q, want %s", ctx.EffectiveMaxOutputTokensSource, outputtokens.SourceModelRef)
@@ -219,9 +219,9 @@ func TestPrepareProviderDispatchRerouteOmitsPriorDispatchAsClient(t *testing.T) 
 	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
 	ctx.VSRSelectedDecision = decision
 
-	dispatch, err := router.prepareProviderDispatch(request, primary, decision.Name, false, ctx)
+	dispatch, err := selectCapabilityTestDispatch(router, request, decision, ctx)
 	if err != nil {
-		t.Fatalf("prepareProviderDispatch: %v", err)
+		t.Fatalf("selectCapabilityTestDispatch: %v", err)
 	}
 	if dispatch.logicalModel != fallback {
 		t.Fatalf("logical model = %s, want %s", dispatch.logicalModel, fallback)
@@ -230,7 +230,7 @@ func TestPrepareProviderDispatchRerouteOmitsPriorDispatchAsClient(t *testing.T) 
 		t.Fatalf("omitted client snapshot = %v, want nil", ctx.ClientMaxOutputTokens)
 	}
 	if request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens != 1024 {
-		t.Fatalf("MaxOutputTokens = %v, want rerouted model_ref 1024", request.Sampling.MaxOutputTokens)
+		t.Fatalf("MaxOutputTokens = %v, want selected model_ref 1024", request.Sampling.MaxOutputTokens)
 	}
 	if ctx.EffectiveMaxOutputTokensSource != outputtokens.SourceModelRef {
 		t.Fatalf("source = %q, want %s", ctx.EffectiveMaxOutputTokensSource, outputtokens.SourceModelRef)

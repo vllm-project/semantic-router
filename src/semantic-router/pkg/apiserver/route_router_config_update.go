@@ -175,8 +175,17 @@ func validateParsedHotReloadCompatibility(
 	currentCfg *config.RouterConfig,
 	nextCfg *config.RouterConfig,
 ) error {
+	if err := config.ValidateRoutingPreviewReload(currentCfg, nextCfg); err != nil {
+		return err
+	}
 	if err := config.ValidateLocalClassifierReload(currentCfg, nextCfg); err != nil {
 		return err
+	}
+	if currentCfg != nil && nextCfg != nil &&
+		currentCfg.Observability.Tracing != nextCfg.Observability.Tracing {
+		return fmt.Errorf(
+			"tracing configuration changed; the tracer provider is initialized at startup and cannot be activated by the Router hot-reload API; activate the candidate through the deployment workflow",
+		)
 	}
 	if !reflect.DeepEqual(
 		envoyDeploymentProjectionFromConfig(currentCfg),
@@ -369,6 +378,8 @@ func (s *ClassificationAPIServer) writeRouterConfigFiles(
 	previousData []byte,
 	yamlBytes []byte,
 ) bool {
+	release := s.runtimeRegistry.LockConfigPublication()
+	defer release()
 	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "WRITE_ERROR", fmt.Sprintf("Failed to write source config: %v", err))
 		return false
@@ -395,15 +406,20 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	message string,
 ) bool {
 	version, backupDir := s.recordRouterConfigArtifacts(paths.sourcePath, previousData)
+	afterAttempt := s.configActivationAttempt()
 	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes) {
 		return false
 	}
 
 	etag := configDocumentETag(yamlBytes)
-	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath)
+	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath, afterAttempt)
 	responseStatus := "success"
 	responseCode := statusCode
 	switch runtimeStatus {
+	case "failed":
+		responseStatus = "activation_failed"
+		responseCode = http.StatusServiceUnavailable
+		message += " The config is persisted, but runtime activation failed. Inspect activation and correct or roll back the persisted configuration."
 	case "pending":
 		responseStatus = "accepted"
 		responseCode = http.StatusAccepted
@@ -430,6 +446,7 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		ActivationStatus:     runtimeStatus,
 		GeneratedRuntimeHash: runtimeHash,
 		Message:              message,
+		Activation:           s.configActivationAfter(runtimeHash, afterAttempt),
 	})
 	return true
 }
@@ -462,7 +479,7 @@ func (s *ClassificationAPIServer) activeConfigDocumentHash() string {
 // hash only after the new router and classification service are atomically
 // available. Legacy/test servers without a runtime registry keep their
 // asynchronous behavior.
-func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath string) (string, string) {
+func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath string, afterAttempt uint64) (string, string) {
 	runtimeHash, err := configFileHash(runtimePath)
 	if err != nil {
 		return "", "unknown"
@@ -476,6 +493,9 @@ func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath str
 	for {
 		if s.activeConfigDocumentHash() == runtimeHash {
 			return runtimeHash, "active"
+		}
+		if activation := s.configActivationAfter(runtimeHash, afterAttempt); activation != nil && activation.Status == "failed" {
+			return runtimeHash, "failed"
 		}
 		if time.Now().After(deadline) {
 			return runtimeHash, "pending"

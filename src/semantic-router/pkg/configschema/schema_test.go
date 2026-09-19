@@ -3,6 +3,7 @@ package configschema
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -194,5 +195,40 @@ func TestSchemaMapsCustomScalarTypesToTheirPublicYAMLShape(t *testing.T) {
 	}
 	if limit.OneOf[1].Type != "string" || limit.OneOf[1].Const != "auto" {
 		t.Fatalf("auto CompressionTokenLimit branch = %#v", limit.OneOf[1])
+	}
+}
+
+func TestSchemaPublishesMemoryPersistenceBounds(t *testing.T) {
+	type bound struct {
+		Minimum json.Number `json:"minimum"`
+		Maximum json.Number `json:"maximum"`
+	}
+	var document struct {
+		Definitions map[string]struct {
+			Properties map[string]bound `json:"properties"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(Document(), &document); err != nil {
+		t.Fatal(err)
+	}
+	persistence, ok := document.Definitions["MemoryPersistenceConfig"]
+	if !ok {
+		t.Fatal("MemoryPersistenceConfig schema is missing")
+	}
+	wantMaximum := map[string]string{
+		"timeout_seconds":        fmt.Sprint(routerconfig.MaxMemoryPersistenceDurationSeconds),
+		"concurrency":            fmt.Sprint(routerconfig.MaxMemoryPersistenceConcurrency),
+		"queue":                  fmt.Sprint(routerconfig.MaxMemoryPersistenceQueue),
+		"shutdown_grace_seconds": fmt.Sprint(routerconfig.MaxMemoryPersistenceDurationSeconds),
+	}
+	for field, maximum := range wantMaximum {
+		got, ok := persistence.Properties[field]
+		if !ok {
+			t.Errorf("MemoryPersistenceConfig schema is missing %q", field)
+			continue
+		}
+		if got.Minimum.String() != "0" || got.Maximum.String() != maximum {
+			t.Errorf("MemoryPersistenceConfig.%s bounds = [%s, %s], want [0, %s]", field, got.Minimum, got.Maximum, maximum)
+		}
 	}
 }

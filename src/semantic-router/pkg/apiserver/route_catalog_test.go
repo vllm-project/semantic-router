@@ -4,6 +4,8 @@ package apiserver
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -38,6 +40,8 @@ func TestAPIRouteCatalogHasUniqueDocumentedPatterns(t *testing.T) {
 			t.Fatalf("route %s is outside the canonical API namespace", route.pattern())
 		}
 		for _, retired := range []string{
+			"/api/v1/response-cache",
+			"/api/v1/context-compression",
 			"/api/v1/classify",
 			"/api/v1/eval",
 			"/api/v1/nli",
@@ -62,5 +66,28 @@ func TestAPIRouteCatalogHasUniqueDocumentedPatterns(t *testing.T) {
 			t.Fatalf("duplicate route pattern %q", key)
 		}
 		seen[key] = struct{}{}
+	}
+}
+
+// Retired paths must not redirect a mutation or reach a compatibility handler.
+func TestManagementResourceBoundariesRejectRetiredOperations(t *testing.T) {
+	mux := (&ClassificationAPIServer{}).setupRoutes()
+	for _, path := range []string{
+		"/config/router", "/api/v1/response-cache/stats", "/api/v1/response-cache/flush",
+		"/api/v1/response-cache/audit", "/api/v1/context-compression/preview",
+		"/api/v1/context-compression/stats", "/api/v1/context-compression/recovery/invalidate",
+	} {
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, httptest.NewRequest(method, path, nil))
+			if response.Code != http.StatusNotFound {
+				t.Fatalf("retired %s %s = %d, want 404", method, path, response.Code)
+			}
+		}
+	}
+	for _, capability := range capabilityRegistry {
+		if capability.Name == "response-cache" || capability.Name == "context-compression" {
+			t.Fatalf("implementation feature leaked into top-level resource taxonomy: %s", capability.Name)
+		}
 	}
 }

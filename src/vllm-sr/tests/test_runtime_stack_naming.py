@@ -8,10 +8,12 @@ services address each other.
 """
 
 import subprocess
+from dataclasses import replace
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
-from cli import container_cli, container_start, core, runtime_lifecycle
+from cli import container_cli, container_start, core, runtime_lifecycle, runtime_stack
 from cli.consts import (
     DEFAULT_API_PORT,
     DEFAULT_DASHBOARD_PORT,
@@ -108,6 +110,118 @@ def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
     )
 
 
+@pytest.mark.parametrize("offset", [15_450, 65_535 - DEFAULT_ROUTER_PORT])
+def test_resolve_runtime_stack_accepts_valid_high_host_ports(offset):
+    layout = resolve_runtime_stack(port_offset=offset)
+
+    assert layout.router_port == DEFAULT_ROUTER_PORT + offset
+    assert layout.api_port == DEFAULT_API_PORT + offset
+
+
+@pytest.mark.parametrize(
+    "port_name",
+    [
+        "router_port",
+        "metrics_port",
+        "dashboard_port",
+        "api_port",
+        "jaeger_otlp_port",
+        "jaeger_ui_port",
+        "prometheus_port",
+        "grafana_port",
+        "redis_port",
+        "postgres_port",
+        "milvus_port",
+    ],
+)
+@pytest.mark.parametrize("port", [0, 65_536])
+def test_runtime_stack_rejects_each_out_of_range_host_port(port_name, port):
+    layout = resolve_runtime_stack(port_offset=0)
+
+    with pytest.raises(ValueError, match=rf"{port_name} {port}; host ports"):
+        replace(layout, **{port_name: port})
+
+
+def test_runtime_stack_validates_derived_ports_without_fixed_offset_cap(monkeypatch):
+    monkeypatch.setattr(runtime_stack, "DEFAULT_GRAFANA_PORT", 65_535)
+
+    assert resolve_runtime_stack(port_offset=0).grafana_port == 65_535
+    with pytest.raises(ValueError, match=r"grafana_port 65536"):
+        resolve_runtime_stack(port_offset=1)
+
+
+def test_start_rejects_overflowing_offset_before_runtime_mutations(monkeypatch):
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "15500")
+    mutations = []
+    for owner, name in [
+        (subprocess, "run"),
+        (core, "ensure_clean_runtime_container"),
+        (core, "_prepare_runtime_network"),
+        (core, "provision_storage_backends"),
+        (core, "container_start_vllm_sr"),
+    ]:
+        mutation = Mock(name=name)
+        monkeypatch.setattr(owner, name, mutation)
+        mutations.append(mutation)
+
+    with pytest.raises(
+        ValueError,
+        match=r"VLLM_SR_PORT_OFFSET=15500 produces invalid router_port 65551",
+    ):
+        core.start_vllm_sr("/tmp/config.yaml", env_vars={})
+
+    for mutation in mutations:
+        mutation.assert_not_called()
+
+
+@pytest.mark.parametrize("service", ["listener", "management API"])
+def test_start_rejects_configured_host_port_overflow_before_runtime_mutations(
+    monkeypatch, tmp_path, service
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        "listeners:\n  - name: custom\n    address: 0.0.0.0\n"
+        f"    port: {65000 if service == 'listener' else 8899}\n"
+        "global:\n  services:\n    management_api:\n"
+        f"      port: {65000 if service == 'management API' else 8080}\n"
+    )
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "1000")
+    mutations = []
+    for owner, name in [
+        (subprocess, "run"),
+        (core, "ensure_clean_runtime_container"),
+        (core, "_prepare_runtime_network"),
+        (core, "provision_storage_backends"),
+        (core, "container_start_vllm_sr"),
+    ]:
+        mutation = Mock(name=name)
+        monkeypatch.setattr(owner, name, mutation)
+        mutations.append(mutation)
+
+    with pytest.raises(ValueError, match=rf"{service}.*host port 66000"):
+        core.start_vllm_sr(str(config_path), env_vars={})
+
+    for mutation in mutations:
+        mutation.assert_not_called()
+
+
+def test_container_start_rejects_listener_overflow_before_preparing_paths(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "1000")
+    prepare_paths = Mock()
+    monkeypatch.setattr(container_start, "_prepare_runtime_paths", prepare_paths)
+
+    with pytest.raises(ValueError, match=r"listener custom host port 66000"):
+        container_start.container_start_vllm_sr(
+            str(tmp_path / "config.yaml"),
+            {},
+            [{"name": "custom", "address": "0.0.0.0", "port": 65000}],
+        )
+
+    prepare_paths.assert_not_called()
+
+
 def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
     calls = []
     state_root = tmp_path / "workspace-root"
@@ -122,6 +236,7 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
 
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(state_root))
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "container_status_strict", lambda _name: "not found")
     monkeypatch.setattr(
         core,
         "load_config",
@@ -132,10 +247,11 @@ def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):
     monkeypatch.setattr(
         core, "provision_storage_backends", lambda *args, **kwargs: set()
     )
+    monkeypatch.setattr(runtime_lifecycle, "container_status", lambda _name: "running")
     monkeypatch.setattr(
         runtime_lifecycle,
-        "container_status",
-        lambda _name: "running",
+        "container_status_strict",
+        lambda _name, **_kwargs: "running",
     )
     monkeypatch.setattr(
         runtime_lifecycle,
@@ -201,7 +317,7 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -254,7 +370,7 @@ def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(
     """
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -305,7 +421,7 @@ def test_container_start_vllm_sr_omits_stack_name_env_for_default_stack(
     """
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")

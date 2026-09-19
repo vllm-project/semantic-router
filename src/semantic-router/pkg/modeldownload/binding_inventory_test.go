@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protowire"
@@ -89,6 +90,9 @@ func TestSharedCandleORTArtifactKeepsBothFormats(t *testing.T) {
 	for _, provider := range []string{"candle", "ort"} {
 		if err := inventory.addDeployment(&config.RouterConfig{}, config.ResolvedModelBinding{Deployment: config.ModelDeployment{Provider: provider, Artifact: "models/shared"}, Binding: config.ModelBinding{Contract: "label_distribution.v1"}}); err != nil {
 			t.Fatal(err)
+		}
+		if provider == "candle" && !slices.Contains(inventory.specs["models/shared"].ExcludePatterns, "onnx/weights.data") {
+			t.Fatal("Candle-only snapshot downloads unused ONNX external weights")
 		}
 	}
 	spec := inventory.specs["models/shared"]
@@ -218,17 +222,9 @@ func TestExplicitDeploymentDownloadFailsClosed(t *testing.T) {
 
 func writeHFSnapshot(t *testing.T, dir, revision string, extraFiles ...string) {
 	t.Helper()
+	spec := ModelSpec{LocalPath: dir, Revision: revision}
 	for _, name := range append([]string{"config.json", "tokenizer.json", "model.safetensors"}, extraFiles...) {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("fixture"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		metadata := filepath.Join(dir, ".cache", "huggingface", "download", name+".metadata")
-		if err := os.MkdirAll(filepath.Dir(metadata), 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(metadata, []byte(revision+"\nfixture-etag\n4102444800.0\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
+		writeHFRevisionArtifact(t, spec, name, "fixture", true)
 	}
 }
 
@@ -292,9 +288,7 @@ func TestReloadReusesUnversionedCompanionFromLiveSnapshot(t *testing.T) {
 	dir := t.TempDir()
 	writeHFSnapshot(t, dir, revision, "labels.json")
 	mapping := filepath.Join(dir, "labels.json")
-	if err := os.WriteFile(mapping, []byte(`{"0":"billing"}`), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeHFRevisionArtifact(t, ModelSpec{LocalPath: dir, Revision: revision}, "labels.json", `{"0":"billing"}`, false)
 	current := deploymentConfig("candle", dir)
 	current.ModelDeployments["new"] = config.ModelDeployment{Provider: "candle", Artifact: dir, Revision: revision}
 	binding := current.ModelBindings["domain_classifier"]
@@ -341,9 +335,7 @@ func TestReloadCompanionGraphRequiresExternalTensorFiles(t *testing.T) {
 	writeHFSnapshot(t, dir, revision, "model.onnx", "actual-weights.bin")
 	entry := append(protoBytes(1, []byte("location")), protoBytes(2, []byte("actual-weights.bin"))...)
 	graph := protoBytes(7, protoBytes(5, protoBytes(13, entry)))
-	if err := os.WriteFile(filepath.Join(dir, "model.onnx"), graph, 0o600); err != nil {
-		t.Fatal(err)
-	}
+	writeHFRevisionArtifact(t, ModelSpec{LocalPath: dir, Revision: revision}, "model.onnx", string(graph), true)
 	current := deploymentConfig("ort", dir)
 	current.ModelDeployments["new"] = config.ModelDeployment{Provider: "ort", Artifact: dir, Revision: revision}
 	binding := current.ModelBindings["domain_classifier"]
@@ -516,5 +508,119 @@ func TestPinnedSnapshotRejectsStaleExtraProviderFiles(t *testing.T) {
 	}
 	if matched {
 		t.Fatal("untracked old graph incorrectly matched pinned snapshot")
+	}
+}
+
+func TestExplicitOperatingPointIsDownloadedWithBoundSnapshot(t *testing.T) {
+	cfg := deploymentConfig("candle", "models/independent")
+	cfg.ModelDeployments["new"] = config.ModelDeployment{Provider: "candle", Artifact: "models/independent", Revision: "exact-revision", Input: config.ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}}
+	cfg.ClassifierRules = []config.ClassifierSignalRule{{Name: "risk", Type: "local", Labels: []string{"one", "two"}}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"classifier.risk": {Deployment: "new", Adapter: "modernbert", Contract: config.RemoteClassifierContractLabelScores, OperatingPoint: &config.OperatingPointReference{Path: "policies/point.json", SHA256: strings.Repeat("a", 64)}}}
+	cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: "classifier", Name: "risk", Label: "one"}}}
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, ok := findSpecByPath(specs, "models/independent")
+	if !ok || spec.Revision != "exact-revision" || !slices.Contains(spec.RequiredFiles, "policies/point.json") {
+		t.Fatalf("explicit runtime policy omitted or unpinned: %+v", specs)
+	}
+	cfg.ModelBindings["classifier.risk"] = config.ModelBinding{Deployment: "new", Adapter: "modernbert", Contract: config.RemoteClassifierContractLabelDistribution}
+	cfg.Decisions = nil
+	specs, err = BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec, ok := findSpecByPath(specs, "models/independent"); ok && slices.Contains(spec.RequiredFiles, "policies/point.json") {
+		t.Fatal("policy discovered without reference")
+	}
+}
+
+func TestORTOperatingPointRequiresNativeSourceInCachedSnapshot(t *testing.T) {
+	dir := t.TempDir()
+	cfg := deploymentConfig("ort", dir)
+	deployment := cfg.ModelDeployments["new"]
+	deployment.Input = config.ModelInputBudget{MaxTokens: 32768, Overflow: "reject"}
+	cfg.ModelDeployments["new"] = deployment
+	cfg.ClassifierRules = []config.ClassifierSignalRule{{Name: "risk", Type: "local", Labels: []string{"one", "two"}}}
+	cfg.ModelBindings = map[string]config.ModelBinding{"classifier.risk": {Deployment: "new", Adapter: "modernbert", Contract: config.RemoteClassifierContractLabelScores, OperatingPoint: &config.OperatingPointReference{Path: "point.json", SHA256: strings.Repeat("a", 64)}}}
+	cfg.Decisions = []config.Decision{{Name: "route", Rules: config.RuleNode{Type: "classifier", Name: "risk", Label: "one"}}}
+	specs, err := BuildModelSpecs(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, ok := findSpecByPath(specs, dir)
+	if !ok {
+		t.Fatal("missing bound snapshot")
+	}
+	for name, data := range map[string][]byte{"config.json": []byte("{}"), "tokenizer.json": []byte("{}"), "point.json": []byte("{}"), "model.onnx": protoBytes(7, nil)} {
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if complete, err := isSpecComplete(spec); err != nil || complete {
+		t.Fatalf("graph-only cache accepted: complete=%v err=%v", complete, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "model.safetensors"), []byte("source checkpoint"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if complete, err := isSpecComplete(spec); err != nil || !complete {
+		t.Fatalf("source checkpoint omitted: complete=%v err=%v", complete, err)
+	}
+}
+
+func TestGlobalServiceDownloadsIgnoreRecipeOverrides(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		t.Run(map[bool]string{false: "module_defaults", true: "global_bindings"}[explicit], func(t *testing.T) {
+			cfg := &config.RouterConfig{MoMRegistry: map[string]string{
+				"models/global-embedding": "test/global-embedding", "models/global-nli": "test/global-nli",
+				"models/recipe-embedding": "test/recipe-embedding", "models/recipe-nli": "test/recipe-nli",
+			}}
+			cfg.BertModelPath = "models/global-embedding"
+			cfg.EmbeddingConfig.ModelType = "bert"
+			cfg.EmbeddingModels.UseCPU = true
+			cfg.Tools.Enabled = true
+			cfg.SemanticCache.Enabled = true
+			cfg.SemanticCache.EmbeddingModel = "bert"
+			cfg.SemanticCache.PolarityGuard = &config.PolarityGuardConfig{Mode: "nli"}
+			cfg.HallucinationMitigation.NLIModel.ModelID = "models/global-nli"
+			cfg.HallucinationMitigation.NLIModel.UseCPU = true
+			cfg.ModelDeployments = map[string]config.ModelDeployment{
+				"global-embedding": {Provider: "candle", Device: "cpu", Artifact: "models/global-embedding"},
+				"global-nli":       {Provider: "candle", Device: "cpu", Artifact: "models/global-nli"},
+				"recipe-embedding": {Provider: "ort", Device: "rocm:7", Artifact: "models/recipe-embedding"},
+				"recipe-nli":       {Provider: "candle", Device: "cuda:7", Artifact: "models/recipe-nli"},
+			}
+			cfg.ModelBindings = map[string]config.ModelBinding{
+				"embedding":               {Deployment: "recipe-embedding", Adapter: "mmbert", Contract: "embedding.v1"},
+				"hallucination_explainer": {Deployment: "recipe-nli", Adapter: "modernbert", Contract: "text_pair_distribution.v1"},
+			}
+			if explicit {
+				cfg.GlobalModelBindings = map[string]config.ModelBinding{
+					"embedding":               {Deployment: "global-embedding", Adapter: "bert", Contract: "embedding.v1"},
+					"hallucination_explainer": {Deployment: "global-nli", Adapter: "modernbert", Contract: "text_pair_distribution.v1"},
+				}
+			}
+			specs, err := BuildModelSpecs(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := map[string]bool{}
+			for _, spec := range specs {
+				got[spec.LocalPath] = true
+			}
+			if len(got) != 2 || !got["models/global-embedding"] || !got["models/global-nli"] {
+				t.Fatalf("service download used recipe source: %+v", specs)
+			}
+			cfg.Tools.Enabled = false
+			cfg.Decisions = []config.Decision{{Name: "no-cache-consumer"}}
+			specs, err = BuildModelSpecs(cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(specs) != 0 {
+				t.Fatalf("idle global models provisioned: %+v", specs)
+			}
+		})
 	}
 }

@@ -14,8 +14,12 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 	}
 	scoped := *cfg
 	scoped.ClassifierRules = slices.Clone(cfg.ClassifierRules)
+	scoped.ModelBindings = cfg.EffectiveModelBindings(cfg.Signals, cfg.ModelBindings)
 	for name := range scoped.ModelBindings {
 		spec, ok := plan.Lookup(recipe, name)
+		if recipe == GlobalModelScope {
+			spec, ok = plan.LookupGlobal(name)
+		}
 		if !ok {
 			return nil, fmt.Errorf("model binding %q is absent from recipe %q", name, recipe)
 		}
@@ -34,6 +38,7 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 		switch name {
 		case "domain_classifier":
 			scoped.CategoryModel.ModelID = artifact
+			scoped.CategoryModel.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.CategoryModel.Backend = remote
 			// The provider adapter is already validated/resolved separately. These
 			// legacy family flags must not override an explicit recipe binding.
@@ -45,12 +50,14 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 			}
 		case "pii_classifier":
 			scoped.PIIModel.ModelID = artifact
+			scoped.PIIModel.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.PIIModel.Backend = remote
 			if mapping != "" {
 				scoped.PIIMappingPath = mapping
 			}
 		case "prompt_guard":
 			scoped.PromptGuard.ModelID = artifact
+			scoped.PromptGuard.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			scoped.PromptGuard.Backend = remote
 			scoped.PromptGuard.Protocol = ""
 			scoped.PromptGuard.Variant = ""
@@ -64,8 +71,10 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 			scoped.ComplexityModel.Backend = remote
 		case "fact_check_classifier":
 			scoped.HallucinationMitigation.FactCheckModel.ModelID = artifact
+			scoped.HallucinationMitigation.FactCheckModel.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 		case "feedback_detector":
 			scoped.FeedbackDetector.ModelID = artifact
+			scoped.FeedbackDetector.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 			if mapping != "" {
 				scoped.FeedbackDetector.FeedbackMappingPath = mapping
 			}
@@ -86,6 +95,7 @@ func ProjectRecipeModelBindings(cfg *RouterConfig, plan *ModelBindingPlan, recip
 			if scoped.ModalityDetector.Classifier != nil {
 				classifier := *scoped.ModalityDetector.Classifier
 				classifier.ModelPath = artifact
+				classifier.MaxSequenceLength = spec.Deployment.Input.MaxTokens
 				scoped.ModalityDetector.Classifier = &classifier
 			}
 		case "hallucination_explainer":

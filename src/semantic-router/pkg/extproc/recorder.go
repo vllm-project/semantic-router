@@ -5,12 +5,13 @@ import (
 	"strconv"
 	"time"
 
-	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
@@ -40,8 +41,6 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 
 // recordRoutingDecision records routing decision with tracing
 func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
-	// Start decision evaluation span
-	routingCtx, routingSpan := tracing.StartDecisionSpan(ctx.TraceContext, decisionName)
 
 	useReasoning := reasoningDecision.UseReasoning
 	logging.ComponentDebugEvent("extproc", "reasoning_decision_applied", map[string]interface{}{
@@ -57,19 +56,15 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 	effortForMetrics := r.getReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
 	metrics.RecordReasoningDecision(requestDecisionStateKey(ctx), matchedModel, useReasoning, effortForMetrics)
 
-	// Keep legacy attributes for backward compatibility
-	tracing.SetSpanAttributes(routingSpan,
-		attribute.String(tracing.AttrRoutingStrategy, "auto"),
+	// Resolution is a point-in-time event; it does not pretend to measure backend execution.
+	trace.SpanFromContext(ctx.TraceContext).AddEvent("routing.backend.resolved", trace.WithAttributes(
+		attribute.String(tracing.AttrDecisionName, decisionName),
+		attribute.String(tracing.AttrAlgorithm, ctx.VSRSelectionMethod),
 		attribute.String(tracing.AttrRoutingReason, reasoningDecision.DecisionReason),
 		attribute.String(tracing.AttrOriginalModel, originalModel),
 		attribute.String(tracing.AttrSelectedModel, matchedModel),
 		attribute.Bool(tracing.AttrReasoningEnabled, useReasoning),
-		attribute.String(tracing.AttrReasoningEffort, effortForMetrics))
-
-	// End decision span with evaluation results
-	// matchedRules would come from signal evaluation, using empty slice for now
-	tracing.EndDecisionSpan(routingSpan, float64(reasoningDecision.Confidence), []string{}, "auto")
-	ctx.TraceContext = routingCtx
+		attribute.String(tracing.AttrReasoningEffort, effortForMetrics)))
 }
 
 // trackVSRDecision tracks VSR decision information in context
@@ -83,16 +78,6 @@ func (r *OpenAIRouter) trackVSRDecision(ctx *RequestContext, categoryName string
 		ctx.VSRReasoningMode = "on"
 	} else {
 		ctx.VSRReasoningMode = "off"
-	}
-}
-
-// setClearRouteCache sets the ClearRouteCache flag on the response
-func (r *OpenAIRouter) setClearRouteCache(response *ext_proc.ProcessingResponse) {
-	if response.GetRequestBody() != nil && response.GetRequestBody().GetResponse() != nil {
-		response.GetRequestBody().GetResponse().ClearRouteCache = true
-		logging.ComponentDebugEvent("extproc", "route_cache_clear_enabled", map[string]interface{}{
-			"feature": "clear_route_cache",
-		})
 	}
 }
 
@@ -111,7 +96,7 @@ func (r *OpenAIRouter) startRouterReplay(
 	selectedModel string,
 	decisionName string,
 ) {
-	if !shouldStartRouterReplay(ctx) {
+	if !shouldStartRouterReplay(ctx) || !r.replayAllowedForRequest(ctx) {
 		return
 	}
 
@@ -124,8 +109,35 @@ func (r *OpenAIRouter) startRouterReplay(
 
 	configureReplayRecorder(recorder, ctx.RouterReplayPluginConfig)
 	record := buildReplayRoutingRecord(ctx, originalModel, selectedModel, decisionName)
+	r.populateReplayIdentity(&record, ctx)
 	if !persistReplayRecord(ctx, recorder, record) {
 		return
+	}
+}
+
+// populateReplayIdentity records the same explicit identity used by protection,
+// including custom header names, without enabling protection or changing request
+// state. Optional Responses lineage remains the fallback for older clients.
+func (r *OpenAIRouter) populateReplayIdentity(record *routerreplay.RoutingRecord, ctx *RequestContext) {
+	if r == nil || ctx == nil || record == nil {
+		return
+	}
+	cfg := config.RouterLearningProtectionConfig{}
+	if r.Config != nil {
+		cfg = r.Config.RouterLearning.Protection
+	}
+	identity, ok := r.protectionIdentity(ctx, cfg)
+	if !ok {
+		return
+	}
+	record.SessionID = identity.sessionID
+	if identity.conversationID != "" {
+		record.ConversationID = identity.conversationID
+	}
+	// Persist the key the gate resolved, so outcome ingest can land feedback
+	// in the same window even when the session id alone keys it wider.
+	if record.Learning != nil {
+		record.Learning.ProtectionStateKey = routingLearningStateKey(ctx)
 	}
 }
 
@@ -170,6 +182,31 @@ func configureReplayRecorder(
 	recorder.SetMaxToolTraceSteps(cfg.MaxToolTraceSteps)
 }
 
+// replayUserTurnIndex groups tool continuations with the user message that
+// started them. Protocol normalization represents tool results as RoleTool,
+// including Anthropic tool_result blocks and retained Responses history.
+// Prefer the original snapshot so context trimming or Memory cannot renumber
+// turns. This history contains only messages actually available to the router.
+// Keep the invocation index as a fallback when no user history is visible.
+func replayUserTurnIndex(ctx *RequestContext) int {
+	var messages []llmprotocol.Message
+	if ctx.OriginalContextHistory != nil {
+		messages = ctx.OriginalContextHistory.Conversation().Messages
+	} else if ctx.SemanticRequest != nil {
+		messages = ctx.SemanticRequest.Messages
+	}
+	userMessages := 0
+	for _, message := range messages {
+		if message.Role == llmprotocol.RoleUser {
+			userMessages++
+		}
+	}
+	if userMessages > 0 {
+		return userMessages - 1
+	}
+	return ctx.TurnIndex
+}
+
 func buildReplayRoutingRecord(
 	ctx *RequestContext,
 	originalModel string,
@@ -181,7 +218,7 @@ func buildReplayRoutingRecord(
 	record := routerreplay.RoutingRecord{
 		RequestID:                ctx.RequestID,
 		SessionID:                ctx.SessionID,
-		TurnIndex:                ctx.TurnIndex,
+		TurnIndex:                replayUserTurnIndex(ctx),
 		Decision:                 decisionName,
 		Recipe:                   string(ctx.Routing.RecipeName()),
 		DecisionTier:             decisionTier,
@@ -289,6 +326,7 @@ func replaySignalState(ctx *RequestContext) routerreplay.Signal {
 		Modality:      ctx.VSRMatchedModality,
 		Authz:         ctx.VSRMatchedAuthz,
 		Jailbreak:     ctx.VSRMatchedJailbreak,
+		Safety:        ctx.VSRMatchedSafety,
 		PII:           ctx.VSRMatchedPII,
 		KB:            ctx.VSRMatchedKB,
 		Conversation:  ctx.VSRMatchedConversation,
@@ -414,7 +452,7 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 
 // attachRouterReplayResponse stores response payload (if configured) and optionally logs completion.
 func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseBody []byte, isFinal bool) {
-	if ctx == nil || ctx.RouterReplayID == "" {
+	if ctx == nil || ctx.RouterReplayID == "" || !r.replayAllowedForRequest(ctx) {
 		return
 	}
 

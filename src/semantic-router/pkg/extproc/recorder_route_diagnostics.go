@@ -3,6 +3,7 @@ package extproc
 import (
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -74,14 +75,25 @@ func buildReplayRouteDiagnostics(
 	}
 
 	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
-		diagnostics.SessionPolicyApplied = true
+		diagnostics.SessionPolicyApplied = policy.Mode == config.DecisionAdaptationModeApply &&
+			policy.Details.ProtectionTrace() != nil
 		diagnostics.SessionPhase = policy.SessionPhase()
 		diagnostics.PreviousModel = policy.CurrentModel()
 		diagnostics.ProposalModel = firstNonEmpty(policy.BaseSelectedModel(), diagnostics.ProposalModel)
-		diagnostics.SelectedModel = firstNonEmpty(policy.SelectedModel(), diagnostics.SelectedModel)
-		diagnostics.HardLockReason = policy.HardLockReason()
 		diagnostics.DecisionReason = policy.DecisionReason()
-		diagnostics.SessionAction = replaySessionAction(diagnostics, policy.HardLocked())
+		// The dispatch result is authoritative. Observe-mode traces describe a
+		// counterfactual selection and must not turn a real switch into a hold.
+		hardLocked := diagnostics.SessionPolicyApplied && policy.HardLocked() &&
+			diagnostics.SelectedModel == diagnostics.PreviousModel
+		if hardLocked {
+			diagnostics.HardLockReason = policy.HardLockReason()
+		}
+		if policy.Details.ProtectionTrace() != nil {
+			diagnostics.SessionAction = replaySessionAction(diagnostics, hardLocked)
+		}
+		if policy.Mode == config.DecisionAdaptationModeObserve {
+			diagnostics.DecisionReason = "observe_only"
+		}
 		diagnostics.SessionReason = replaySessionReason(diagnostics, policy)
 		return diagnostics
 	}

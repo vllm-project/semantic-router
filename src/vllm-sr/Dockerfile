@@ -36,8 +36,8 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # Configure cross-compilation environment for arm64
 # NOTE: Do NOT set OPENSSL_DIR globally — it breaks amd64 pkg-config discovery.
 # The pinned runtime-compatible Rust image (Debian bookworm) has libssl-dev pre-installed and
-# pkg-config finds it automatically for amd64. For arm64, we set OPENSSL_LIB_DIR
-# per-command below.
+# pkg-config finds native OpenSSL for host build dependencies. Target-specific
+# overrides below keep ARM64 libraries out of those host build scripts.
 ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
 ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
 ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
@@ -51,7 +51,7 @@ COPY candle-binding/Cargo.toml candle-binding/Cargo.loc[k] ./
 RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
     mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
       cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
     else \
       cargo build --release --no-default-features; \
@@ -60,13 +60,12 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
 
 # Copy real source and rebuild (dependencies are cached from above)
 COPY candle-binding/src/ ./src/
-COPY candle-binding/go.mod candle-binding/semantic-router.go ./
 
 # Delete stale library from dummy build so cargo relinks with real FFI symbols
 RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
     if [ "$TARGETARCH" = "arm64" ]; then \
-      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
       cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
     else \
       cargo build --release --no-default-features; \
@@ -206,7 +205,7 @@ COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
 COPY onnx-binding/src/ ./src/
 RUN mkdir -p /build/onnx-out && \
     if [ "$TARGETARCH" = "arm64" ]; then \
-      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu && \
+      AARCH64_UNKNOWN_LINUX_GNU_OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu cargo build --release --lib --locked --no-default-features --features dynamic --target aarch64-unknown-linux-gnu && \
       cp target/aarch64-unknown-linux-gnu/release/libonnx_semantic_router.so /build/onnx-out/; \
     else \
       cargo build --release --lib --locked --no-default-features --features dynamic && \

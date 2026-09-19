@@ -178,16 +178,8 @@ func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector)
 }
 
 func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
-	for i := range selCtx.CandidateModels {
-		if selCtx.CandidateModels[i].Model == result.SelectedModel {
-			return &selCtx.CandidateModels[i]
-		}
-		if result.Method != selection.MethodPrompt &&
-			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
-			return &selCtx.CandidateModels[i]
-		}
-	}
-	return nil
+	candidate, _ := selection.ResolveSelectionCandidate(selCtx, result)
+	return candidate
 }
 
 func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, learningApplied bool) {
@@ -260,6 +252,7 @@ func (r *OpenAIRouter) buildSelectionContext(
 		LatencyAwareTTFTPercentile: latencyAwareTTFTPercentile,
 		UserID:                     userID,
 		SessionID:                  sessionID,
+		SessionStateKey:            sessiontelemetry.RoutingSessionKey(recipeName, sessionID),
 		AgenticSession:             r.buildAgenticSessionContext(reqCtx, modelRefs, sessionID, userID),
 		ConversationHistory:        conversationHistory,
 		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
@@ -287,9 +280,27 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 	if reqCtx == nil {
 		return nil
 	}
+	return r.buildAgenticSessionContextForKey(reqCtx, modelRefs, sessionID, userID,
+		sessiontelemetry.RoutingSessionKey(reqCtx.Routing.RecipeName(), sessionID))
+}
+
+func (r *OpenAIRouter) buildAgenticSessionContextForKey(
+	reqCtx *RequestContext,
+	modelRefs []config.ModelRef,
+	sessionID, userID, stateKey string,
+) *selection.AgenticSessionContext {
+	if reqCtx == nil {
+		return nil
+	}
 	now := time.Now()
-	stateSessionID := config.RoutingNamespaceKey(reqCtx.Routing.RecipeName(), sessionID)
-	snapshot, hasMemory := sessiontelemetry.GetRouterSessionSnapshot(stateSessionID, now)
+	var snapshot sessiontelemetry.RouterSessionSnapshot
+	var hasMemory bool
+	if reqCtx.learningPreview != nil {
+		now = reqCtx.learningPreview.CapturedAt
+		snapshot, hasMemory = reqCtx.learningPreview.session(stateKey)
+	} else {
+		snapshot, hasMemory = sessiontelemetry.GetRouterSessionSnapshot(stateKey, now)
+	}
 	previousModel := reqCtx.PreviousModel
 	if previousModel == "" && hasMemory {
 		previousModel = snapshot.CurrentModel
@@ -316,6 +327,7 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 		UserID:                      userID,
 		TurnIndex:                   reqCtx.TurnIndex,
 		PreviousModel:               previousModel,
+		PreviousCandidate:           snapshot.CurrentCandidate,
 		PreviousResponseID:          reqCtx.PreviousResponseID,
 		MemoryPresent:               hasMemory,
 		MemoryTurnCount:             snapshot.TurnCount,
@@ -352,6 +364,13 @@ func nonPortableContextBinding(reqCtx *RequestContext) (bool, string) {
 		return false, ""
 	}
 	if strings.TrimSpace(reqCtx.PreviousResponseID) != "" {
+		// Router-owned history is fully expanded before signal extraction. Its
+		// retained public ID is lineage metadata, not opaque provider state.
+		state := reqCtx.ResponseObjectState
+		if state != nil && state.ProviderContextApplied && state.PreviousResponseID == reqCtx.PreviousResponseID &&
+			reqCtx.SemanticRequest != nil && reqCtx.SemanticRequest.PreviousResponseID == "" {
+			return false, ""
+		}
 		return true, "previous_response_id"
 	}
 	return false, ""
@@ -373,7 +392,14 @@ func (r *OpenAIRouter) agenticCacheWarmth(
 ) (float64, bool) {
 	cacheWarmth := reqCtx.CacheWarmthEstimate
 	cacheWarmthOK := cacheWarmth > 0
-	if ambient, ok := estimateGateCacheWarmth(previousModel, now); ok {
+	var ambient float64
+	var ambientOK bool
+	if reqCtx.learningPreview != nil {
+		ambient, ambientOK = reqCtx.learningPreview.warmth(previousModel)
+	} else {
+		ambient, ambientOK = estimateGateCacheWarmth(previousModel, now)
+	}
+	if ambientOK {
 		cacheWarmth = ambient
 		cacheWarmthOK = true
 	}
@@ -471,7 +497,9 @@ func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, us
 		if sessionID == "" {
 			sessionID = state.ConversationID
 		}
-		conversationHistory = appendStoredConversationHistory(conversationHistory, state)
+		if !state.ProviderContextApplied {
+			conversationHistory = appendStoredConversationHistory(conversationHistory, state)
+		}
 	}
 	if ctx.SemanticRequest == nil {
 		return sessionID, userID, conversationHistory

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from cli.consts import (
     DEFAULT_API_PORT,
@@ -25,6 +25,7 @@ DEFAULT_PROMETHEUS_PORT = 9090
 DEFAULT_GRAFANA_PORT = 3000
 DEFAULT_REDIS_PORT = 6379
 DEFAULT_POSTGRES_PORT = 5432
+_MAX_HOST_PORT = 65_535
 
 STACK_NAME_PATTERN = re.compile(r"[^A-Za-z0-9_.-]+")
 
@@ -64,6 +65,34 @@ class RuntimeStackLayout:
     redis_port: int
     postgres_port: int
     milvus_port: int
+
+    def __post_init__(self) -> None:
+        for field in fields(self):
+            if not field.name.endswith("_port"):
+                continue
+            self._validate_host_port(getattr(self, field.name), field.name)
+
+    def host_port(self, container_port: int, *, name: str) -> int:
+        """Apply the stack offset and validate a configured service's host port."""
+        return self._validate_host_port(container_port + self.port_offset, name)
+
+    def _validate_host_port(self, port: int, name: str) -> int:
+        if not 1 <= port <= _MAX_HOST_PORT:
+            raise ValueError(
+                f"{PORT_OFFSET_ENV}={self.port_offset} produces invalid "
+                f"{name} {port}; host ports must be between 1 and {_MAX_HOST_PORT}"
+            )
+        return port
+
+    @property
+    def sr_bench_container_name(self) -> str:
+        return self.dashboard_container_name.replace(
+            "dashboard-container", "sr-bench-container"
+        )
+
+    @property
+    def sr_bench_port(self) -> int:
+        return self.host_port(8090, name="sr-bench API host port")
 
     @property
     def dashboard_url(self) -> str:

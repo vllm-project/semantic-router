@@ -118,7 +118,13 @@ func decompileRuleNode(node *config.RuleCombination) string {
 		return "(" + strings.Join(parts, " OR ") + ")"
 	case "NOT":
 		if len(node.Conditions) == 1 {
-			inner := decompileRuleNode(&node.Conditions[0])
+			child := &node.Conditions[0]
+			inner := decompileRuleNode(child)
+			// AND is emitted without parentheses, but NOT must bind to the
+			// entire conjunction. OR already supplies its own parentheses.
+			if child.Type == "" && normalizedRuleOperator(child.Operator) == "AND" {
+				inner = "(" + inner + ")"
+			}
 			return "NOT " + inner
 		}
 	}

@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "bef43a20a96e7b329d314473083be6aa4bad0f03"
+  source_commit: "aa7b7e7bc1de4d193342e869a952552a4c15552c"
   source_file: "docs/tutorials/plugin/router-replay.md"
   outdated: false
 ---
@@ -10,6 +10,10 @@ translation:
 ## 概览
 
 `router_replay` 是一个路由局部插件，用于覆盖单条路由的回放/调试采集。
+
+配方的 `routing.data_policy.replay: false` 优先于全局和路由局部回放设置。该策略禁止采集，包括被拒绝的请求；`router_replay.enabled: true` 也不能覆盖它。Vault 使用此策略，因此其请求不会出现在 Dashboard Insights 中。详见[回放 API 和隐私控制](../../api/router#router-replay)。
+
+默认 `memory` 存储会在配置重载或路由器重启时丢失记录。如果需要在调整配方时保留会话历史，请在[共享回放服务](../learning/memory-and-replay#configuration)中配置 Postgres 或 Redis 等持久化存储。
 
 ## 主要优势
 
@@ -51,6 +55,9 @@ plugins:
       max_body_bytes: 4096
       max_tool_trace_steps: 100
 ```
+
+要让某条路由退出采集，使用 `configuration: {enabled: false}`。
+要更改部署级默认值，设置 `global.services.router_replay.enabled: false`；单条路由仍可选择开启。
 
 ## Looper 诊断 {#looper-diagnostics}
 

@@ -56,6 +56,10 @@ type CallOptions struct {
 	Logprobs              *LogprobsConfig
 	ClientMaxOutputTokens *int64
 	StageMaxOutputTokens  *int64
+
+	// candidateRequest retains admission policy through final wire mutations.
+	// It is request-scoped; a shared Client never stores recipe policy.
+	candidateRequest *Request
 }
 
 func (options CallOptions) validate(target ModelTarget) error {

@@ -1,136 +1,221 @@
 ---
-title: Agent Evaluation Loop
-description: Validate, route, probe, benchmark, and optimize vLLM Semantic Router without depending on Dashboard.
+title: Tune and Verify a Recipe
+description: Improve routing quality, latency, cost, and agent continuity with real requests.
 ---
 
-# Agent Evaluation Loop
+# Tune and Verify a Recipe
 
-An agent works directly with two runtime contracts: the Router management API
-for configuration and routing inspection, and the Envoy listener for real model
-requests. Dashboard is an optional viewer and is never part of the execution
-path.
+A useful recipe sends requests to the right handling path and delivers better
+results within your latency, cost, and safety requirements. This guide shows
+how to improve one using real Preview requests, routed responses, and session
+traces.
 
-```text
-canonical YAML
-    │
-    ├── validate → plan → compare-and-swap apply       Router :8080
-    │
-    ├── route preview                                  Router :8080
-    │       └── signals + decision; no backend call
-    │
-    ├── route probe                                    Envoy listener
-    │       └── real response + route receipt
-    │
-    └── benchmark
-            ├── routing workload → recipe behavior and system outcome
-            └── Intelligence 1.0 → physical or virtual model quality
-```
+Start with a running deployment and reachable model endpoints. Follow the
+[agent installation guide](../installation/agent) to set up a new deployment.
+Use the management origin for configuration and Preview, and the inference
+origin for real model requests.
 
-## 1. Discover and change configuration
+## Choose an objective and a baseline
 
-Discover only the contract needed for the current edit:
+Pick an outcome you can measure: fewer unnecessary reasoning calls, better
+answers to consequential questions, faster tool turns, or fewer model switches
+during an agent run. Set a quality floor and acceptable latency or cost before
+adjusting thresholds.
+
+Export the built-in bundle or save your current configuration. Record the active
+recipe, runtime image, model revisions, and assignments. Keep the original test
+cases so you can run the same requests before and after a change.
+
+Build a small representative dataset for every decision and fallback. Include
+normal requests, near-boundary cases, multilingual paraphrases, long inputs,
+quoted instructions, and multi-turn conversations. Add negative examples: a
+medical definition need not receive the same route as personalized treatment
+advice, and a quoted attack should not automatically be treated as an instruction.
+
+Pair some requests with identical background information but different tasks.
+Vary concise and detailed answer styles separately. This tests whether effort
+signals recognize the required work instead of the topic or response length.
+Treat related paraphrases and tool variants as one family when reporting coverage.
+
+## Give each part a clear job
+
+| Part | Use it to |
+| --- | --- |
+| Signals | Observe meaning, risk, effort, and explicit request constraints. |
+| Projections | Combine evidence into scores or categories that decisions can use. |
+| Decisions | Choose a small set of distinct handling paths. |
+| Algorithms | Select or coordinate models within each path. |
+| Plugins | Apply retrieval, tools, caching, and data-handling behavior. |
+| Models | Execute the request within declared capabilities and context limits. |
+
+Keep decision names short, such as `simple`, `medium`, and `reasoning`. Add a
+new decision when the action changes, rather than for every topic or language.
+
+Use heuristics for explicit facts such as required tools and structured output.
+Use learned signals where meaning matters: Embedding for intent, Complexity for
+effort, Domain with FactCheck for consequential questions, and Feedback with
+Reask for recovery. Combine clues through projections when one signal is too
+broad. Topic alone does not establish difficulty, and FactCheck predicts a need
+for checking rather than verifying a claim.
+
+Review how unknown signals affect every decision, especially conditions using
+`NOT`. A failed classifier should not turn into evidence for a cheaper route.
+Compare easy and hard signal scores before changing thresholds. Strong overlap
+calls for better task examples or a better model; sending every uncertain request
+to reasoning increases usage without establishing better discrimination.
+
+Adding a keyword condition also does not guarantee less inference: used signal
+families can run concurrently before decisions are evaluated. Measure the actual
+request cost.
+
+For recovery, include the earlier assistant reply: Feedback routing skips
+requests without one. Test direct repair instructions and self-contained error
+reports separately from Feedback matches, with harmless tone or formatting edits
+as controls. For collaboration, distinguish multiple-worker authorization from
+a discussion of agents or a request for one independent worker. The workflow
+handles its internal stages; users should not have to name them to request
+collaboration.
+
+Check that multilingual examples survive prototype compression. A rule-local
+`prototype_scoring` override stays with the Recipe, while an omitted override
+inherits global settings. Use `enabled: false` to retain all deduplicated
+candidates, and specify `best_weight` and `top_m` for their combined score.
+Measure the effect before replacing the baseline.
+
+## Validate and preview the candidate
+
+Discover the running contract before editing configuration:
 
 ```bash
-curl -sS 'http://localhost:8080/api/v1?audience=agent&visibility=primary'
-curl -sS 'http://localhost:8080/openapi.json?capability=config&audience=agent'
-vllm-sr config schema --endpoint http://localhost:8080 \
+vllm-sr config schema --endpoint "$ROUTER_ORIGIN" \
   --surface algorithm:multi_factor
-```
-
-YAML is the only operator-authored configuration format. The CLI and HTTP API
-are equivalent transports over the same Router validators:
-
-```bash
 vllm-sr config validate --config candidate.yaml \
-  --endpoint http://localhost:8080
-vllm-sr config plan --config candidate.yaml --mode replace \
-  --endpoint http://localhost:8080
-vllm-sr config apply --config candidate.yaml --mode replace \
-  --endpoint http://localhost:8080
+  --endpoint "$ROUTER_ORIGIN"
+vllm-sr config plan --config candidate.yaml \
+  --endpoint "$ROUTER_ORIGIN"
 ```
 
-`plan` executes the same parse, normalization, semantic validation, and
-hot-reload feasibility checks as mutation without writing. `apply` plans again
-and uses the returned ETag as its compare-and-swap precondition. A plan that
-changes listeners or provider backend topology returns `RESTART_REQUIRED`
-because those fields are rendered into Envoy; activate that candidate through
-the deployment workflow instead of the Router mutation API. For local Docker,
-ask before replacing the running stack, then use
-`vllm-sr serve --config candidate.yaml --replace-active-config`. Ordinary
-`serve` preserves Dashboard-edited active state.
+Apply a hot-reloadable change with `vllm-sr config apply`. If the plan reports
+`RESTART_REQUIRED`, use the deployment workflow. For an authorized local-stack
+replacement, run `vllm-sr serve --config candidate.yaml --replace-active-config`.
+Confirm readiness and the active revision before testing.
 
-## 2. Verify routing in two stages
-
-Preview checks routing policy without spending model tokens:
+Set `ENTRYPOINT` to the published entrypoint you are evaluating, then preview a
+case from your dataset:
 
 ```bash
 vllm-sr route preview \
-  --endpoint http://localhost:8080 \
-  --model vllm-sr/auto \
-  --prompt 'Implement a lock-free queue' \
-  --json
+  --endpoint "$ROUTER_ORIGIN" --model "$ENTRYPOINT" \
+  --prompt 'Give a brief definition of a readiness probe.' \
+  --trace --json --timeout 300
 ```
 
-Probe then sends a real request through Envoy and asserts the resulting route:
+Recombining saved signal values can help isolate a rule change, but it is not
+a new Preview result. First reproduce the baseline decisions and heuristic
+matches exactly, then test the candidate with real requests.
+
+Preview runs configured classifiers and embeddings without backend generation.
+Check the matched signals, projection results, decision, algorithm, selection
+status, and errors. Preserve the full messages and tool fields for multi-turn
+cases; use the discovered Preview HTTP schema when the CLI cannot express a
+request shape.
+
+Report policy coverage and deployment coverage separately. A correct decision
+with no eligible backend shows a capacity or assignment problem. An immediate
+response needs no selected model. A multi-model plan still needs execution.
+None of these outcomes should be presented as a successful backend call.
+
+## Verify delivery and the application result
+
+Send the same request through the inference listener:
 
 ```bash
 vllm-sr route probe \
-  --base-url http://localhost:8899/v1 \
-  --model vllm-sr/auto \
-  --prompt 'Implement a lock-free queue' \
-  --expect-recipe balanced \
-  --expect-decision coding \
-  --expect-algorithm multi_factor \
-  --expect-selected-model qwen \
-  --expect-response-model Qwen/Qwen3.8-Flash-Next
+  --config candidate.yaml \
+  --base-url "$INFERENCE_BASE_URL" --model "$ENTRYPOINT" \
+  --prompt 'Give a brief definition of a readiness probe.' \
+  --expect-recipe "$RECIPE" --expect-decision "$DECISION" \
+  --expect-selected-model "$SELECTED_MODEL" \
+  --expect-response-model "$RESPONSE_MODEL" \
+  --timeout 300
 ```
 
-The probe emits a machine-readable receipt with HTTP status, latency, routing
-headers, response, and assertions. `--expect-selected-model` checks the Router
-receipt; `--expect-response-model` checks the upstream OpenAI response body.
-Use the latter when that backend exposes a stable top-level `model` value. A
-failed assertion exits with code `2`.
-The base URL may be either the Envoy listener origin or the standard OpenAI
-root ending in `/v1`.
-Preview success proves decision behavior only. A selected-model header proves
-the Router's choice but not which backend answered; response-model evidence
-closes that gap when available. One probe still does not substitute for a
-benchmark.
+Set the expected values from your test case and the backend's verified response
+identity. The selected-model header and upstream response model are separate
+assertions. Omit the response-model assertion only when the backend does not
+expose a stable identity.
 
-## 3. Run comparable benchmarks
+Check completed output as well as routing. An HTTP 200 containing only reasoning,
+an empty answer, or a truncated response is not successful delivery. Use a
+completion budget that fits the actual input and leaves room for the final
+answer. When the request omits a limit, a configured
+`request_params.default_max_tokens` supplies the decision default; otherwise
+the backend default applies. For supported vLLM deployments,
+[`default_max_tokens: auto`](../installation/configuration#recipe-wide-candidate-and-replay-policies)
+uses each model's remaining native capacity. Keep the selector's output cost
+forecast separate from this capacity and report the effective deployment limits.
 
-Use `vllm-sr benchmark` for immutable routing workloads. Use the fixed
-Intelligence 1.0 harness for standalone or virtual model quality:
+Assign at least two eligible, reachable models when comparing selection policies.
+With one candidate, the test verifies delivery but cannot measure a choice between
+models.
 
-```bash
-vllm-sr benchmark intelligence list
-vllm-sr benchmark intelligence plan \
-  --model vllm-sr/quality \
-  --base-url http://localhost:8899 \
-  --source-root .vllm-sr/benchmark-sources \
-  --output .vllm-sr/benchmark-results/quality-1
-```
+Measure cold startup separately from warm median and p95 latency. Compare route
+quality, answer quality, classifier work, backend calls, token use, and cost.
+For multi-model algorithms, verify that the intended distinct workers and final
+stage actually ran.
 
-The six 1.0 leaves are MMLU-Pro, GPQA Diamond, HLE 1.0 text-only,
-LiveCodeBench v6, SciCode, and Terminal-Bench 2.1. HLE is always the frozen
-2,158-question text-only subset. The harness verifies clean runner revisions;
-attests the Hugging Face revisions used by AIPerf before execution; and uses
-Inspect Evals' checksum-pinned SciCode problems and numeric test asset. It
-records those identities and execution conditions in private, secret-free
-receipts. `--sample-limit` is smoke evidence and cannot enter the index.
+## Test retrieval, risk handling, and agent continuity
 
-A physical model name and a virtual model name use the same `--model` field and
-the same endpoint contract. A virtual score is measured end to end; it is never
-assembled from the scores of its member models.
+**Retrieval.** Attach [RAG and neural reranking](../tutorials/plugin/rag#neural-reranking)
+to a path with a real knowledge base. Retrieve a wider candidate set and use
+`rag.rerank` to retain the most relevant documents. Check document identities,
+retrieval coverage, ranking, grounded answers, and added latency. Preview selects
+the plugin; a routed request executes it. Start with a single-model path before
+adding retrieval to every stage of a multi-model workflow.
 
-## 4. Optimize from evidence
+**Risk handling.** [Guard](../tutorials/signal/learned/jailbreak) detects prompt
+attacks; [Safety and Hazard](../tutorials/signal/learned/safety) identify content
+risks and categories. Test harmful facilitation against help-seeking and benign
+analysis before choosing refusal rules. PII can select a restricted model pool;
+it does not redact content or establish a provider's retention policy.
 
-Join benchmark results with route receipts, replay decisions, outcome feedback,
-latency, token use, failures, and cost. Change one reviewed policy at a time,
-rerun the same frozen workload for baseline and candidate, and retain the
-candidate only when its declared quality, cost, reliability, and safety gates
-pass.
+**Agent continuity.** Use [Router Learning protection](../tutorials/learning/protection)
+with stable session and conversation identities. Test a full tool cycle,
+continuation, explicit correction, backend failure, decision change, and a new
+conversation. Compare `apply`, `observe`, and `bypass`: an observed recommendation
+to keep a model is different from an actual hold. Check the selected backend,
+route headers, Replay API, and Dashboard together. Repeat a session ID across
+recipes to verify their isolation. A hold must not retain an ineligible model.
 
-Credentials belong in environment variables named by `--token-env` or
-`--api-key-env`. Do not put credential values in YAML, URLs, command arguments,
-logs, or receipts.
+Built-in recipe initialization enables conversation protection and leaves online
+adaptation off, preserving any settings already present in the base configuration.
+Clients need stable identities for protection to retain a model. Adopt adaptation
+after evaluating your application's outcomes.
+
+Preview can report `execution_required` when protection participates in selection.
+It evaluates request signals without advancing conversation state; verify an
+actual hold or switch through a routed request and its Replay record.
+
+Inspect Replay and the Dashboard before activating the next candidate. The
+default in-memory Replay store is cleared by configuration reloads and restarts;
+save the traces needed for comparison first.
+
+## Keep changes that improve the objective
+
+Run baseline and candidate against the same dataset. Review regressions by
+language, input length, use case, and session stage. Keep the candidate when it
+improves the chosen outcome without violating the quality floor or hard
+constraints; otherwise restore the baseline and preserve the evidence.
+
+Use [sr-bench 1.0](sr-bench) for frozen development/holdout datasets and reusable
+single-model/MoM comparisons. `benchmark preview` records live routing choices;
+`benchmark replay` estimates eligible direct routing changes from saved answers.
+`benchmark run` measures actual model execution, and `benchmark compare` reports
+paired quality uncertainty and cost saving against the best observed single.
+Replay is diagnostic; a measured MoM score requires its real routed endpoint.
+Keep partial runs and unknown costs visible instead of presenting them as a
+complete score or zero-cost success.
+
+The [agent tuning reference](https://vllm-sr.ai/install/agent/vllm-sr/references/recipe-tuning.md)
+provides a reusable checklist. Keep raw evaluation outputs outside Git and
+credentials in environment variables named by `--token-env` or `--api-key-env`.

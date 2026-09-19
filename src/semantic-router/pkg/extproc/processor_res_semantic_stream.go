@@ -154,7 +154,7 @@ func recordStreamingTTFT(ctx *RequestContext) {
 		return
 	}
 
-	metrics.RecordModelTTFT(ctx.RequestModel, ttft)
+	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	latency.UpdateTTFT(ctx.RequestModel, ttft)
@@ -173,7 +173,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	if ctx.ProtocolResponseStream != nil {
 		return nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return err
 	}
@@ -376,6 +376,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"request_id": ctx.RequestID,
 			"error":      responseErr.Error(),
 		})
+		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return
 	}
 	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
@@ -386,6 +387,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"format":     ctx.SourceFormat,
 			"error":      err.Error(),
 		})
+		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_encode_failed", true)
 		return
 	}
 	r.updateResponseCache(ctx, encoded)
@@ -399,7 +401,11 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) {
-	if ctx == nil || usage.invalid {
+	if ctx == nil {
+		return
+	}
+	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
+	if usage.invalid {
 		return
 	}
 	totalTokens := responseUsageTotal(usage)
@@ -422,12 +428,10 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 		completionLatency.Seconds(),
 		int64(usage.promptTokens),
 		int64(usage.completionTokens),
-		false,
-		false,
 	)
 	if usage.completionTokens > 0 && completionLatency > 0 {
 		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
-		metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+		metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)

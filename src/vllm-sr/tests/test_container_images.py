@@ -79,6 +79,36 @@ def test_get_runtime_images_prefers_service_specific_env_overrides(monkeypatch):
     ]
 
 
+def test_minimal_runtime_keeps_candidate_router_separate_from_prepared_envoy(
+    monkeypatch,
+):
+    candidate = "semantic-router-ci/vllm-sr:" + "a" * 40
+    monkeypatch.setenv("VLLM_SR_IMAGE", candidate)
+    monkeypatch.setenv("VLLM_SR_ROUTER_IMAGE", candidate)
+    monkeypatch.setenv("VLLM_SR_ENVOY_IMAGE", VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT)
+    ensured = []
+    monkeypatch.setattr(
+        container_images,
+        "_ensure_image_available",
+        lambda image, policy: ensured.append((image, policy)),
+    )
+
+    images = container_images.get_runtime_images(
+        router_image=candidate,
+        include_dashboard=False,
+        pull_policy="ifnotpresent",
+    )
+
+    assert images == {
+        "router": candidate,
+        "envoy": VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+    }
+    assert ensured == [
+        (candidate, "ifnotpresent"),
+        (VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT, "ifnotpresent"),
+    ]
+
+
 def test_get_runtime_images_derives_official_envoy_image_from_official_base(
     monkeypatch,
 ):

@@ -571,12 +571,14 @@ func estimatedAttemptCost(spec attemptSpec) *float64 {
 }
 
 func actualAttemptCost(pricing modelpricing.Rates, usage TokenUsage) *float64 {
-	if !pricing.IsConfigured() {
+	if !pricing.IsConfigured() || !usage.Complete() {
 		return nil
 	}
 	cost := modelpricing.Cost(modelpricing.Usage{
-		PromptTokens:     saturatingInt64ToInt(usage.PromptTokens),
-		CompletionTokens: saturatingInt64ToInt(usage.CompletionTokens),
+		PromptTokens:      saturatingInt64ToInt(usage.PromptTokens),
+		CachedInputTokens: saturatingInt64ToInt(usage.CachedInputTokens),
+		CacheWriteTokens:  saturatingInt64ToInt(usage.CacheWriteTokens),
+		CompletionTokens:  saturatingInt64ToInt(usage.CompletionTokens),
 	}, pricing)
 	return &cost
 }

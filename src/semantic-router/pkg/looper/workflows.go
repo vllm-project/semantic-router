@@ -2,6 +2,7 @@ package looper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 type WorkflowsLooper struct {
 	*BaseLooper
 	toolStates workflowToolStateStore
+	ownsStore  bool
 }
 
 func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
@@ -22,12 +24,43 @@ func NewWorkflowsLooper(cfg *config.LooperConfig) *WorkflowsLooper {
 }
 
 func newWorkflowsLooper(cfg *config.LooperConfig, binding clientBinding) *WorkflowsLooper {
+	return newWorkflowsLooperWithService(cfg, binding, nil)
+}
+
+// newWorkflowsLooperWithService creates a WorkflowsLooper that shares the
+// state store owned by the given service. When service is nil it falls back
+// to creating a per-instance store (backward-compatible with tests).
+func newWorkflowsLooperWithService(cfg *config.LooperConfig, binding clientBinding, svc *WorkflowStateService) *WorkflowsLooper {
+	var store workflowToolStateStore
+	var ownsStore bool
+	if svc != nil {
+		store = svc.Store()
+	} else {
+		store = newWorkflowToolStateStoreFromConfig(workflowFlowRuntimeConfig(cfg))
+		ownsStore = true
+	}
 	return &WorkflowsLooper{
 		BaseLooper: newBaseLooper(cfg, binding),
-		toolStates: newWorkflowToolStateStoreFromConfig(
-			workflowFlowRuntimeConfig(cfg),
-		),
+		toolStates: store,
+		ownsStore:  ownsStore,
 	}
+}
+
+// Close releases an owned tool-state store and, when this looper created the
+// client, the client as well.
+func (l *WorkflowsLooper) Close() error {
+	if l == nil {
+		return nil
+	}
+	var storeErr error
+	if l.ownsStore && l.toolStates != nil {
+		storeErr = l.toolStates.Close()
+	}
+	var clientErr error
+	if l.BaseLooper != nil {
+		clientErr = l.BaseLooper.Close()
+	}
+	return errors.Join(storeErr, clientErr)
 }
 
 func workflowFlowRuntimeConfig(cfg *config.LooperConfig) config.FlowRuntimeConfig {
@@ -145,6 +178,11 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 	if stateID, ok := findWorkflowToolStateID(req.OriginalRequest); ok {
 		return l.resumeWorkflowToolCall(ctx, req, cfg, workerModels, stateID)
 	}
+	var err error
+	cfg, err = l.resolveDynamicWorkflowPlanner(req, cfg, original, workerModels)
+	if err != nil {
+		return nil, err
+	}
 	logging.ComponentEvent("looper", "workflows_execution_started", map[string]interface{}{
 		"decision":     req.DecisionName,
 		"mode":         cfg.Mode,
@@ -165,7 +203,8 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 		return nil, err
 	}
 	if interrupt != nil {
-		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		out, _, formatErr := l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg, nil)
+		return out, formatErr
 	}
 
 	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, plan, original, stepResults, plannerResp, workerModels)
@@ -183,7 +222,8 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 		logging.Warnf("[Workflows] Final synthesis failed; using worker response fallback because on_error=skip: %v", err)
 	}
 	if interrupt != nil {
-		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		out, _, formatErr := l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg, nil)
+		return out, formatErr
 	}
 	applyJSONActionOutputContract(req.OutputContractSpec, finalResp, workflowStepModelResponses(stepResults))
 	applyFinalOutputContract(req.OutputContractSpec, finalResp)
@@ -438,6 +478,7 @@ func (l *WorkflowsLooper) executeWorkflowStepSequential(
 			return nil, failed, &workflowToolCallInterrupt{
 				resp: resp,
 				state: &workflowPendingToolState{
+					RecipeName:           string(normalizeWorkflowRecipeName(req.RecipeName)),
 					DecisionName:         req.DecisionName,
 					Mode:                 cfg.Mode,
 					Template:             cfg.Template,
@@ -495,6 +536,7 @@ func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 		return nil, &workflowToolCallInterrupt{
 			resp: resp,
 			state: &workflowPendingToolState{
+				RecipeName:      string(normalizeWorkflowRecipeName(req.RecipeName)),
 				DecisionName:    req.DecisionName,
 				Mode:            cfg.Mode,
 				Template:        cfg.Template,
@@ -696,21 +738,10 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	iteration int,
 	baseReq *Request,
 ) (*ModelResponse, error) {
-	callReq := cloneRequest(req)
-	if !allowTools {
-		callReq = stripFusionToolUse(callReq)
-	}
-	if cfg.Temperature != nil {
-		callReq.Temperature = openai.Float(*cfg.Temperature)
-	}
+	callReq := workflowModelRequest(req, cfg, allowTools)
 	var authoredStage *int64
 	if cfg.MaxCompletionTokens > 0 {
-		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
 		authoredStage = authoredStageMaxOutputTokens(cfg.MaxCompletionTokens)
-	}
-	if modelName == cfg.PlannerModel && cfg.PlannerMaxCompletionTokens > 0 {
-		callReq.MaxCompletionTokens = openai.Int(int64(cfg.PlannerMaxCompletionTokens))
-		authoredStage = authoredStageMaxOutputTokens(cfg.PlannerMaxCompletionTokens)
 	}
 	return l.dispatchModel(
 		ctx,
@@ -723,4 +754,19 @@ func (l *WorkflowsLooper) callWorkflowModel(
 			StageMaxOutputTokens: authoredStage,
 		},
 	)
+}
+
+func workflowModelRequest(req *openai.ChatCompletionNewParams, cfg workflowsExecutionConfig, allowTools bool) *openai.ChatCompletionNewParams {
+	callReq := cloneRequest(req)
+	if !allowTools {
+		callReq = stripFusionToolUse(callReq)
+	}
+	if cfg.Temperature != nil {
+		callReq.Temperature = openai.Float(*cfg.Temperature)
+	}
+	if cfg.MaxCompletionTokens > 0 {
+		callReq.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
+		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
+	}
+	return callReq
 }

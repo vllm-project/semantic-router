@@ -21,6 +21,10 @@ type BertModel struct {
 }
 
 type CategoryModel struct {
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
 	// Enabled turns category classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
 	Enabled       *bool   `yaml:"enabled,omitempty"`
@@ -41,6 +45,11 @@ type CategoryModel struct {
 }
 
 type PIIModel struct {
+	Window *SequenceHeadWindowConfig `yaml:"window,omitempty"`
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
 	// Enabled turns PII classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
 	Enabled        *bool   `yaml:"enabled,omitempty"`
@@ -77,15 +86,23 @@ func (e EmbeddingModels) MinSimilarityThreshold() float32 {
 
 // HNSWConfig contains settings for optimizing embedding-backed classification.
 type HNSWConfig struct {
-	Backend            string                 `yaml:"backend,omitempty"`
-	ModelType          string                 `yaml:"model_type,omitempty"`
-	PreloadEmbeddings  bool                   `yaml:"preload_embeddings"`
-	TargetDimension    int                    `yaml:"target_dimension,omitempty"`
-	TargetLayer        int                    `yaml:"target_layer,omitempty"`
-	EnableSoftMatching *bool                  `yaml:"enable_soft_matching,omitempty"`
-	TopK               *int                   `yaml:"top_k,omitempty"`
-	MinScoreThreshold  float32                `yaml:"min_score_threshold,omitempty"`
-	PrototypeScoring   PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// FullContext sends complete routing text to mmBERT up to its model capacity.
+	// False retains bounded representative sampling for routing latency.
+	FullContext       bool   `yaml:"full_context,omitempty"`
+	Backend           string `yaml:"backend,omitempty"`
+	ModelType         string `yaml:"model_type,omitempty"`
+	PreloadEmbeddings bool   `yaml:"preload_embeddings"`
+	TargetDimension   int    `yaml:"target_dimension,omitempty"`
+	TargetLayer       int    `yaml:"target_layer,omitempty"`
+	// EnableSoftMatching allows below-threshold matches when no rule meets its
+	// threshold. This ranked fallback is opt-in; routing predicates default to
+	// the threshold declared by each rule.
+	EnableSoftMatching *bool `yaml:"enable_soft_matching,omitempty"`
+	// TopK limits emitted embedding matches only when positive. The default 0
+	// preserves all accepted predicates for projections and decision priority.
+	TopK              *int                   `yaml:"top_k,omitempty"`
+	MinScoreThreshold float32                `yaml:"min_score_threshold,omitempty"`
+	PrototypeScoring  PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
 }
 
 func (c HNSWConfig) WithDefaults() HNSWConfig {
@@ -104,14 +121,11 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 		result.TargetDimension = 768
 	}
 	if result.EnableSoftMatching == nil {
-		defaultEnabled := true
+		defaultEnabled := false
 		result.EnableSoftMatching = &defaultEnabled
 	}
-	if result.TopK == nil {
-		defaultTopK := 1
-		result.TopK = &defaultTopK
-	} else if *result.TopK < 0 {
-		defaultTopK := 1
+	if result.TopK == nil || *result.TopK < 0 {
+		defaultTopK := 0
 		result.TopK = &defaultTopK
 	}
 	if result.MinScoreThreshold <= 0 {
@@ -163,13 +177,18 @@ func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
 }
 
 type PromptGuardConfig struct {
-	Backend              *RemoteClassifierBackend `yaml:"backend,omitempty"`
-	Enabled              bool                     `yaml:"enabled"`
-	ModelID              string                   `yaml:"model_id"`
-	Threshold            float32                  `yaml:"threshold"`
-	UseCPU               bool                     `yaml:"use_cpu"`
-	JailbreakMappingPath string                   `yaml:"jailbreak_mapping_path"`
-	PositiveLabels       []string                 `yaml:"positive_labels,omitempty"`
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength    int                       `yaml:"max_sequence_length,omitempty"`
+	Backend              *RemoteClassifierBackend  `yaml:"backend,omitempty"`
+	Window               *SequenceHeadWindowConfig `yaml:"window,omitempty"`
+	Enabled              bool                      `yaml:"enabled"`
+	ModelID              string                    `yaml:"model_id"`
+	Threshold            float32                   `yaml:"threshold"`
+	UseCPU               bool                      `yaml:"use_cpu"`
+	JailbreakMappingPath string                    `yaml:"jailbreak_mapping_path"`
+	PositiveLabels       []string                  `yaml:"positive_labels,omitempty"`
 
 	// Variant selects a local Candle-backed model variant. Mutually
 	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when
@@ -187,6 +206,10 @@ type PromptGuardConfig struct {
 }
 
 type FeedbackDetectorConfig struct {
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength   int     `yaml:"max_sequence_length,omitempty"`
 	Enabled             bool    `yaml:"enabled"`
 	ModelID             string  `yaml:"model_id"`
 	Threshold           float32 `yaml:"threshold"`
@@ -233,19 +256,30 @@ func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
 }
 
 type ExternalModelConfig struct {
-	Name             string                 `yaml:"name,omitempty"`
-	Provider         string                 `yaml:"llm_provider"`
-	ModelRole        string                 `yaml:"model_role"`
-	ModelEndpoint    ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
-	ModelName        string                 `yaml:"llm_model_name,omitempty"`
-	TimeoutSeconds   int                    `yaml:"llm_timeout_seconds,omitempty"`
-	ParserType       string                 `yaml:"parser_type,omitempty"`
-	Threshold        float32                `yaml:"threshold,omitempty"`
-	AccessKey        string                 `yaml:"access_key,omitempty" json:"-"`
-	MaxTokens        int                    `yaml:"max_tokens,omitempty"`
-	Temperature      float64                `yaml:"temperature,omitempty"`
-	MaxRequestBytes  int64                  `yaml:"max_request_bytes,omitempty"`
-	MaxResponseBytes int64                  `yaml:"max_response_bytes,omitempty"`
+	Name             string                        `yaml:"name,omitempty"`
+	Provider         string                        `yaml:"llm_provider"`
+	ModelRole        string                        `yaml:"model_role"`
+	ModelEndpoint    ClassifierVLLMEndpoint        `yaml:"llm_endpoint,omitempty"`
+	ModelName        string                        `yaml:"llm_model_name,omitempty"`
+	TimeoutSeconds   int                           `yaml:"llm_timeout_seconds,omitempty"`
+	ParserType       string                        `yaml:"parser_type,omitempty"`
+	Threshold        float32                       `yaml:"threshold,omitempty"`
+	AccessKey        string                        `yaml:"access_key,omitempty" json:"-"`
+	MaxTokens        int                           `yaml:"max_tokens,omitempty"`
+	Temperature      float64                       `yaml:"temperature,omitempty"`
+	Reasoning        *ExternalModelReasoningConfig `yaml:"reasoning,omitempty"`
+	MaxRequestBytes  int64                         `yaml:"max_request_bytes,omitempty"`
+	MaxResponseBytes int64                         `yaml:"max_response_bytes,omitempty"`
+}
+
+// ExternalModelReasoningConfig controls reasoning for requests made to a
+// vLLM-backed external classifier. Family references the shared reasoning-family
+// catalog; the external model contract intentionally does not support inline
+// family definitions.
+type ExternalModelReasoningConfig struct {
+	Family          string `yaml:"family" jsonschema:"required"`
+	UseReasoning    *bool  `yaml:"use_reasoning" jsonschema:"required"`
+	ReasoningEffort string `yaml:"reasoning_effort,omitempty"`
 }
 
 // AdmissionConfig bounds concurrent inference for one Router Model
@@ -307,10 +341,14 @@ type HallucinationMitigationConfig struct {
 }
 
 type FactCheckModelConfig struct {
-	ModelID      string  `yaml:"model_id"`
-	Threshold    float32 `yaml:"threshold"`
-	UseCPU       bool    `yaml:"use_cpu"`
-	UseMmBERT32K bool    `yaml:"use_mmbert_32k"`
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength int     `yaml:"max_sequence_length,omitempty"`
+	ModelID           string  `yaml:"model_id"`
+	Threshold         float32 `yaml:"threshold"`
+	UseCPU            bool    `yaml:"use_cpu"`
+	UseMmBERT32K      bool    `yaml:"use_mmbert_32k"`
 }
 
 type HallucinationModelConfig struct {
@@ -396,6 +434,7 @@ type ModelParams struct {
 	Catalog              string                                         `yaml:"catalog,omitempty"`
 	ParamSize            string                                         `yaml:"param_size,omitempty"`
 	ContextWindowSize    int                                            `yaml:"context_window_size,omitempty"`
+	MaxOutputTokens      int                                            `yaml:"max_output_tokens,omitempty"`
 	APIFormat            string                                         `yaml:"api_format,omitempty"`
 	Description          string                                         `yaml:"description,omitempty"`
 	Capabilities         []string                                       `yaml:"capabilities,omitempty"`

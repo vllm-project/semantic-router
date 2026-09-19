@@ -6,10 +6,28 @@ repos:
     rev: v4.2.0
     hooks:
       - id: trailing-whitespace
-        files: \.(go|rs|py|js)$
+        files: \.(go|rs|js)$
       - id: end-of-file-fixer
-        files: \.(go|rs|py|js)$
+        files: \.(go|rs|js)$
         exclude: ^website/build/
+      - id: trailing-whitespace
+        name: check Python trailing whitespace
+        entry: python tools/agent/scripts/check_python_whitespace.py trailing-whitespace
+        files: \.py$
+      - id: end-of-file-fixer
+        name: check Python end of files
+        entry: python tools/agent/scripts/check_python_whitespace.py end-of-file-fixer
+        files: \.py$
+        exclude: ^website/build/
+      - id: trailing-whitespace
+        alias: python-format
+        files: \.py$
+        stages: [manual]
+      - id: end-of-file-fixer
+        alias: python-format
+        files: \.py$
+        exclude: ^website/build/
+        stages: [manual]
       - id: check-added-large-files
         args: ["--maxkb=500"]
         files: \.(go|rs|py|js)$
@@ -23,6 +41,13 @@ repos:
         language: system
         files: \.go$
 
+      - id: go-tools-lint
+        name: repository Go tools lint
+        entry: make go-tools-lint
+        language: system
+        pass_filenames: false
+        files: ^(tools/(dev/dsl|models/classifier-operating-point|calibration/image-routing)/.*\.go$|bench/grounded_fusion/fusioneval/.*\.go$|tools/make/go-tools\.mk$)
+
   - repo: local
     hooks:
       - id: model-catalog-generated
@@ -30,7 +55,21 @@ repos:
         entry: make model-catalog-check
         language: system
         pass_filenames: false
-        files: ^(config/catalog/|config/recipes/built-in/latest/catalog\.yaml$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
+        files: ^(config/catalog/|config/recipes/built-in/|src/vllm-sr/cli/model_bundle\.py$|src/semantic-router/pkg/catalog/zz_generated_catalog\.go$|src/vllm-sr/cli/model_assets/latest/catalog\.yaml$|dashboard/frontend/src/generated/modelCatalog\.json$|website/static/model-catalog/catalog\.json$|tools/catalog/|tools/make/model-catalog\.mk$)
+
+      - id: cli-reference-generated
+        name: CLI command reference
+        entry: make docs-cli-check
+        language: system
+        pass_filenames: false
+        files: ^(src/vllm-sr/cli/.*\.py$|tools/docs/|website/docs/api/cli\.md$)
+
+      - id: configuration-reference-generated
+        name: configuration reference catalog
+        entry: make docs-config-check
+        language: system
+        pass_filenames: false
+        files: ^(config/fragments/|website/docs/tutorials/|website/docs/installation/configuration\.md$|website/scripts/(generate-configuration-catalog\.mjs|lib/configuration-catalog\.mjs)$)
 
   - repo: local
     hooks:
@@ -95,6 +134,16 @@ repos:
         exclude: (^|/)node_modules/
         require_serial: true
 
+      # A pre-commit hook so the always-on quality gate runs this suite at the
+      # exact PR head.
+      - id: github-scripts-tests
+        name: github actions helper script tests
+        entry: bash -c 'cd .github/scripts && npm ci --no-audit --no-fund && npm test'
+        language: system
+        files: ^\.github/scripts/
+        exclude: ^\.github/scripts/node_modules/
+        pass_filenames: false
+
   # Rust specific hooks
   - repo: local
     hooks:
@@ -106,11 +155,17 @@ repos:
         pass_filenames: false
 
   # Python specific hooks
-  # Using only Black for Python formatting (simpler, no conflicts)
   - repo: https://github.com/psf/black
     rev: 25.1.0
     hooks:
       - id: black
+        args: [--check]
+        language_version: python3
+        files: \.py$
+        exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site-packages/)
+      - id: black
+        alias: python-format
+        stages: [manual]
         language_version: python3
         files: \.py$
         exclude: ^(\.venv/|venv/|env/|__pycache__/|\.git/|site-packages/)

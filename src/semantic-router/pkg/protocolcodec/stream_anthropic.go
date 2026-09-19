@@ -724,7 +724,9 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	encoder.terminal = true
 	stopEvent := anthropicEventWire{Type: "message_stop"}
 	second, err := encodeSSE(stopEvent.Type, stopEvent)
-	return [][]byte{first, second}, nil, err
+	var diagnostics llmprotocol.Diagnostics
+	appendAnthropicPartialCacheOmission(&diagnostics, encoder.policy, encoder.context.Source, *event.Usage)
+	return [][]byte{first, second}, diagnostics, err
 }
 
 func (encoder *anthropicStreamEncoder) encodeAnthropicFailure(event llmprotocol.Event) (anthropicEventWire, error) {

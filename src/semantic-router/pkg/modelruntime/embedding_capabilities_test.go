@@ -53,7 +53,11 @@ func TestOwnedRemoteEmbeddingRejectsLocalCapabilitiesBeforeProvisioning(t *testi
 			cfg := base()
 			test.mutate(cfg)
 			before := calls.Load()
-			_, prepareErr := PrepareOwnedEmbeddings(context.Background(), cfg, nil)
+			prepare := PrepareOwnedEmbeddings
+			if test.name == "cache windows" {
+				prepare = PrepareOwnedResponseCacheEmbeddings
+			}
+			_, prepareErr := prepare(context.Background(), cfg, nil)
 			if !errors.Is(prepareErr, binding.ErrCapability) {
 				t.Fatalf("capability error = %v", prepareErr)
 			}

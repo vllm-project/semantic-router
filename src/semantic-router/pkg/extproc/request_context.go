@@ -18,6 +18,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // EnhancedHallucinationSpan represents a hallucinated span with NLI explanation.
@@ -56,8 +58,15 @@ type EnhancedHallucinationInfo struct {
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
-	Headers   map[string]string
-	RequestID string
+	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
+	AutomaticCandidateDemands map[string]selection.CandidateDemand
+	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
+
+	RAGRerankLatency    time.Duration
+	RAGRerankScores     []float32
+	RAGRerankerIdentity string
+	Headers             map[string]string
+	RequestID           string
 	// IngressBodyBytes records only transport size. Source bytes live in the
 	// bounded, ephemeral protocol envelope and are never general-purpose state.
 	IngressBodyBytes  int
@@ -162,8 +171,11 @@ type RequestContext struct {
 	VSRLearningProtectionPreflight      *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
 	VSRLearningSessionID                string                                      // Router Learning memory key used for this request
 	VSRLearningConversationID           string                                      // Client-declared conversation identity used by Router Learning
-	VSRCacheHit                         bool                                        // Whether this request hit the cache
-	VSRCacheSimilarity                  float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRProgressGateConfig               *config.ProgressGateConfig
+	VSRProgressOutcomeRecorded          bool
+	VSRProgressGateError                error
+	VSRCacheHit                         bool    // Whether this request hit the cache
+	VSRCacheSimilarity                  float32 // Similarity score from last cache lookup (0 = no lookup performed)
 	VSRCacheHitKind                     string
 	VSRCacheSource                      string
 	VSRCacheEntryAgeSeconds             float64
@@ -177,6 +189,13 @@ type RequestContext struct {
 	// VSRPolicyEligibleModelRefs is a selector's hard eligibility envelope.
 	// Unlike context-only filtering, it also constrains tier/global learning.
 	VSRPolicyEligibleModelRefs []config.ModelRef
+
+	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
+	// Never recover its reasoning settings by searching model names again.
+	VSRSelectedCandidate *config.ModelRef
+
+	// Selection stages ownership; only a validated provider continuation commits it.
+	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -211,6 +230,7 @@ type RequestContext struct {
 	VSRMatchedModality        []string // Matched modality signals: "AR", "DIFFUSION", or "BOTH"
 	VSRMatchedAuthz           []string // Matched authz rule names for user-level routing
 	VSRMatchedJailbreak       []string // Matched jailbreak rule names (confidence >= threshold)
+	VSRMatchedSafety          []string // Matched safety rule names (confidence >= threshold)
 	VSRMatchedPII             []string // Matched PII rule names (denied PII types detected)
 	VSRMatchedKB              []string // Matched knowledge-base signal names
 	VSRMatchedConversation    []string // Matched conversation-shape signal names
@@ -280,8 +300,12 @@ type RequestContext struct {
 	PIIBlocked  bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
-	TraceContext context.Context // OpenTelemetry trace context for span propagation
-	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
+	TraceContext      context.Context // OpenTelemetry trace context for span propagation
+	RequestSpan       trace.Span      // Spans the complete ext_proc request, including streaming
+	UpstreamSpan      trace.Span      // Spans provider dispatch through final response body
+	TraceReceiveError error           // Receive cancellation may be consumed by Process
+	TraceStatusCode   int             // Final client status, including local immediate responses
+	TraceTrafficKind  string          // Bounded HTTP route family; never a caller path or query
 
 	// ResponseObjectState is present only when optional Responses object
 	// persistence participates in this request. Generation never depends on it.
@@ -325,6 +349,8 @@ type RequestContext struct {
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ResponseVendor           llmprotocol.ResponseVendor
+	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 
@@ -345,6 +371,10 @@ type RequestContext struct {
 	MemoryFailOpen       bool
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
+
+	// RequestAutoStore snapshots the client's memory persistence override before
+	// provider preparation removes router controls. Nil uses configured defaults.
+	RequestAutoStore *bool
 
 	ContextCompressionTargetTokens *int
 	ContextCompressionRecoveryKeys []string

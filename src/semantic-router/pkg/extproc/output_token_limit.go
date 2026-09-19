@@ -67,6 +67,14 @@ func (r *OpenAIRouter) applyDispatchOutputTokenLimit(
 		result.Effective = nil
 		result.Source = ""
 	}
+	if result.Effective == nil && result.Fallback == "" {
+		// No composed ceiling and no fallback that must clear one. Keep an
+		// already-encoded hop or caller bound instead of treating silence as a wipe.
+		ctx.EffectiveMaxOutputTokens = outputtokens.Clone(request.Sampling.MaxOutputTokens)
+		ctx.EffectiveMaxOutputTokensSource = ""
+		ctx.EffectiveMaxOutputTokensFallback = ""
+		return false
+	}
 	previous := outputtokens.Clone(request.Sampling.MaxOutputTokens)
 	request.Sampling.MaxOutputTokens = outputtokens.Clone(result.Effective)
 	ctx.EffectiveMaxOutputTokens = outputtokens.Clone(result.Effective)
