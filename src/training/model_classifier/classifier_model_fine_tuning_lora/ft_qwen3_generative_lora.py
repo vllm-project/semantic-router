@@ -77,7 +77,7 @@ from common_lora_utils import (
     set_gpu_device,
     setup_logging,
 )
-from training_args_compat import create_training_arguments  # noqa: E402 - standalone entrypoint path
+from training_args_compat import create_training_arguments  # noqa: E402
 
 # Setup logging
 logger = setup_logging()

@@ -89,7 +89,7 @@ from peft import (
     get_peft_model,
 )
 from sklearn.model_selection import train_test_split
-from training_args_compat import create_training_arguments  # noqa: E402 - standalone entrypoint path
+from training_args_compat import create_training_arguments  # noqa: E402
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,

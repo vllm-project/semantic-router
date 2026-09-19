@@ -85,4 +85,6 @@ def test_shipped_sidecar_probes_stay_inside_the_pod():
             probe = service[probe_name]
             assert "httpGet" not in probe
             assert probe["exec"]["command"][-1] == "http://127.0.0.1:8686/api/health"
-            assert probe["timeoutSeconds"] > 5
+            command = probe["exec"]["command"]
+            request_timeout = int(command[command.index("--max-time") + 1])
+            assert probe["timeoutSeconds"] > request_timeout
