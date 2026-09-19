@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 

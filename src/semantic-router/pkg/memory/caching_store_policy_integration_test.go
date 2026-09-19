@@ -8,11 +8,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
-type retrievalPolicyStoreDelegate interface{ Store }
-type retrievalPolicyStore struct {
-	retrievalPolicyStoreDelegate
-	calls int
-}
+type (
+	retrievalPolicyStoreDelegate interface{ Store }
+	retrievalPolicyStore         struct {
+		retrievalPolicyStoreDelegate
+		calls int
+	}
+)
 
 func (s *retrievalPolicyStore) Retrieve(_ context.Context, o RetrieveOptions) ([]*RetrieveResult, error) {
 	s.calls++

@@ -52,8 +52,8 @@ func TestKubernetesActivationWaitsForListenerAndKeepsServingOnFailure(t *testing
 	applied := make(chan error, 1)
 	go func() { applied <- server.ActivateKubernetesConfig(ctx, candidate) }()
 	select {
-	case err := <-applied:
-		t.Fatalf("activation before listener: %v", err)
+	case activationErr := <-applied:
+		t.Fatalf("activation before listener: %v", activationErr)
 	case <-time.After(20 * time.Millisecond):
 	}
 	serving := make(chan error, 1)

@@ -30,7 +30,7 @@ func TestLooperTraceExtensionsCrossResponseBoundary(t *testing.T) {
 					t.Fatal(err)
 				}
 				// A provider body still has to satisfy the strict public wire contract.
-				if _, err := protocolcodec.NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, snapshot, nil); err == nil {
+				if _, translateErr := protocolcodec.NewBuiltinEngine().TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, snapshot, nil); translateErr == nil {
 					t.Fatal("upstream extension unexpectedly accepted")
 				}
 				response := &looper.Response{Body: snapshot, Model: "judge", ContentType: "application/json"}
