@@ -82,9 +82,9 @@ func TestCatchAllOutranksRealMatchUnderPriorityStrategy(t *testing.T) {
 	}
 }
 
-// An OR keeps the winning branch's score only, so an extra keyword match can
-// demote a decision that reported a score and drop the pool to priority.
-func TestExtraKeywordMatchDropsPoolToPriority(t *testing.T) {
+// An OR prefers a branch that reported a score, so an extra keyword match adds
+// support without removing the evidence the decision already reported.
+func TestExtraKeywordMatchKeepsReportedEvidence(t *testing.T) {
 	mixed := config.Decision{Name: "mixed_or", Priority: 10, Tier: 1, Rules: config.RuleNode{
 		Operator: "OR",
 		Conditions: []config.RuleNode{
@@ -106,8 +106,11 @@ func TestExtraKeywordMatchDropsPoolToPriority(t *testing.T) {
 	withKeyword := rankedWinner(t, decisions, config.RoutingStrategyPriority, &SignalMatches{
 		EmbeddingRules: []string{"semantic"}, KeywordRules: []string{"marker"}, DomainRules: []string{"law"}, SignalConfidences: confidences,
 	})
-	if withKeyword.Decision.Name != "scored_route" {
-		t.Fatalf("winner = %s, want scored_route (the keyword branch wins the OR and unscores the pool)", withKeyword.Decision.Name)
+	if withKeyword.Decision.Name != "mixed_or" {
+		t.Fatalf("winner = %s, want mixed_or (the extra keyword match is support, not a demotion)", withKeyword.Decision.Name)
+	}
+	if !withKeyword.ConfidenceScored || withKeyword.Confidence != 0.95 {
+		t.Fatalf("confidence = %.4f scored = %v, want the reported 0.95 and scored", withKeyword.Confidence, withKeyword.ConfidenceScored)
 	}
 }
 
