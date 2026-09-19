@@ -1,5 +1,5 @@
 ---
-slug: introduce-vela
+slug: vela-models
 title: "Introducing Vela 1.0"
 description: "Meet Vela: 14 open models for smarter routing, stronger retrieval, and multimodal understanding. Built for Mixture-of-Models with vLLM Semantic Router."
 authors:
