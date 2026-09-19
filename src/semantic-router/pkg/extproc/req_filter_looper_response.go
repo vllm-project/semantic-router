@@ -65,12 +65,21 @@ func (r *OpenAIRouter) prepareLooperResponseWithEngine(resp *looper.Response, re
 		}
 		contentType = "text/event-stream"
 	} else if streaming {
-		stream, streamErr := engine.NewStream(
+		streamContext := llmprotocol.StreamContext{
+			Context: reqCtx.TraceContext, Options: clientStreamOptions(reqCtx), PublicModel: resp.Model,
+			ResponseID: responseObjectPublicID(reqCtx), PreviousResponseID: responseObjectPreviousID(reqCtx),
+		}
+		var mutation protocolcodec.StreamEventMutation
+		if streamContext.ResponseID != "" {
+			mutation = func(event *llmprotocol.Event) error {
+				event.ResponseID = streamContext.ResponseID
+				return nil
+			}
+		}
+		stream, streamErr := engine.NewStreamWithMutation(
 			llmprotocol.OpenAIChatV1,
 			target,
-			llmprotocol.StreamContext{
-				Context: reqCtx.TraceContext, Options: clientStreamOptions(reqCtx), PublicModel: resp.Model,
-			},
+			streamContext, mutation,
 		)
 		if streamErr != nil {
 			return nil, nil, nil, streamErr
@@ -107,24 +116,14 @@ func (r *OpenAIRouter) prepareLooperResponseWithEngine(resp *looper.Response, re
 		}
 		contentType = "text/event-stream"
 	} else {
-		translated, translateErr := engine.TranslateResponse(
-			llmprotocol.OpenAIChatV1,
-			target,
-			codecBody,
-			func(response *llmprotocol.Response) error {
-				if response.Model != resp.Model {
-					response.Model = resp.Model
-				}
-				return nil
-			},
-		)
-		if translateErr != nil {
-			return nil, nil, nil, translateErr
+		semantic, body, err = prepareBufferedLooperResponse(engine, resp, reqCtx, target)
+		if err != nil {
+			return nil, nil, nil, err
 		}
-		semantic = &translated.Response
-		body = translated.Body
-		reqCtx.ResponseEnvelope = translated.Envelope
-		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, translated.Diagnostics...)
+		streaming = reqCtx.ExpectStreamingResponse
+		if streaming {
+			contentType = "text/event-stream"
+		}
 	}
 	if headerValueCI(reqCtx, headers.SRBenchExpectedConfigHash) != "" {
 		reqCtx.BenchmarkModelUsage = r.benchmarkLooperUsage(resp, reqCtx)

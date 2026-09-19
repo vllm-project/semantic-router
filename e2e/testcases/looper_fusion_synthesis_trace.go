@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"k8s.io/client-go/kubernetes"
@@ -34,7 +35,27 @@ func testLooperFusionSynthesisTrace(ctx context.Context, client *kubernetes.Clie
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("traced synthesis status=%d, want200: %s", response.StatusCode, response.Body)
 	}
-	return validateLooperSynthesisTrace(response.Body)
+	if traceErr := validateLooperSynthesisTrace(response.Body); traceErr != nil {
+		return traceErr
+	}
+	stream, err := requestResponseAPIStreamingSSE(ctx, client, opts, "MoM", "looper-fusion-synthesis-trace", looperFusionSynthesisProbeKeyword, nil)
+	if err != nil {
+		return fmt.Errorf("request traced Responses synthesis stream: %w", err)
+	}
+	return validateLooperResponsesSynthesisStream(stream)
+}
+
+func validateLooperResponsesSynthesisStream(result responseAPIStreamingSSEResult) error {
+	if err := validateResponseAPIStreamingSSEResponse(result); err != nil {
+		return err
+	}
+	if !strings.Contains(string(result.body), "fusion-none-answer") || strings.Contains(string(result.body), `"fusion"`) {
+		return fmt.Errorf("responses synthesis stream lost its final answer or leaked the optional trace")
+	}
+	if !strings.Contains(result.protocolWarnings, "dropped;router_extension_unsupported_protocol;fusion") || len(result.protocolWarnings) > 4096 {
+		return fmt.Errorf("responses synthesis stream did not publish a bounded trace-omission diagnostic")
+	}
+	return nil
 }
 
 func validateLooperSynthesisTrace(body []byte) error {

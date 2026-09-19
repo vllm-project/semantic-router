@@ -52,9 +52,10 @@ func testResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clients
 }
 
 type responseAPIStreamingSSEResult struct {
-	statusCode  int
-	contentType string
-	body        []byte
+	statusCode       int
+	contentType      string
+	body             []byte
+	protocolWarnings string
 }
 
 func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, model string, testName string, input string, tools []map[string]any) (responseAPIStreamingSSEResult, error) {
@@ -107,9 +108,10 @@ func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clie
 	}
 
 	return responseAPIStreamingSSEResult{
-		statusCode:  resp.StatusCode,
-		contentType: resp.Header.Get("Content-Type"),
-		body:        responseBody,
+		statusCode:       resp.StatusCode,
+		contentType:      resp.Header.Get("Content-Type"),
+		body:             responseBody,
+		protocolWarnings: resp.Header.Get("x-vsr-protocol-warnings"),
 	}, nil
 }
 
