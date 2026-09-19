@@ -21,6 +21,6 @@
     {"name": "stop_reason", "patch": {"stop_reason": "max_tokens"}},
     {"name": "stop_sequence", "patch": {"stop_reason": "stop_sequence", "stop_sequence": "END"}},
     {"name": "type", "patch": {"type": "message"}},
-    {"name": "usage", "patch": {"usage": {"cache_creation": {"ephemeral_1h_input_tokens": 1, "ephemeral_5m_input_tokens": 2}, "cache_creation_input_tokens": 3, "cache_read_input_tokens": 4, "inference_geo": "us", "input_tokens": 8, "output_tokens": 5, "output_tokens_details": {"thinking_tokens": 3}, "server_tool_use": {"web_fetch_requests": 1, "web_search_requests": 2}, "service_tier": "standard"}}}
+    {"name": "usage", "patch": {"usage": {"cache_creation": {"ephemeral_1h_input_tokens": 1, "ephemeral_5m_input_tokens": 2}, "cache_creation_input_tokens": 3, "cache_read_input_tokens": 4, "inference_geo": "us", "input_tokens": 8, "output_tokens": 5, "output_tokens_details": {"thinking_tokens": 3}, "server_tool_use": {"web_fetch_requests": 1, "web_search_requests": 2}, "service_tier": "standard", "iterations": [{"type": "message", "input_tokens": 8, "output_tokens": 5, "cache_read_input_tokens": 4, "cache_creation_input_tokens": 3}]}}}
   ]
 }

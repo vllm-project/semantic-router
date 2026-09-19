@@ -31,6 +31,17 @@ type anthropicUsageWire struct {
 	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
 	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
 	ServiceTier              string                          `json:"service_tier"`
+	Iterations               json.RawMessage                 `json:"iterations,omitempty"`
+}
+
+type anthropicMessageDeltaUsageWire struct {
+	CacheCreationInputTokens int64                           `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64                           `json:"cache_read_input_tokens"`
+	InputTokens              int64                           `json:"input_tokens"`
+	OutputTokens             int64                           `json:"output_tokens"`
+	OutputTokensDetails      anthropicOutputUsageDetailsWire `json:"output_tokens_details"`
+	ServerToolUse            anthropicServerToolUsageWire    `json:"server_tool_use"`
+	Iterations               json.RawMessage                 `json:"iterations,omitempty"`
 }
 
 type anthropicCacheCreationUsageWire struct {
@@ -123,6 +134,8 @@ func appendAnthropicResponseUsage(
 		"usage.cache_creation": usage.CacheCreation.Ephemeral1hInputTokens != 0 ||
 			usage.CacheCreation.Ephemeral5mInputTokens != 0,
 		"usage.inference_geo": usage.InferenceGeo != "",
+		"usage.iterations": len(usage.Iterations) > 0 &&
+			!bytes.Equal(bytes.TrimSpace(usage.Iterations), []byte("null")),
 		"usage.server_tool_use": usage.ServerToolUse.WebFetchRequests != 0 ||
 			usage.ServerToolUse.WebSearchRequests != 0,
 		"usage.service_tier": usage.ServiceTier != "",
