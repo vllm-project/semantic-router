@@ -12,12 +12,14 @@ type (
 	retrievalPolicyStoreDelegate interface{ Store }
 	retrievalPolicyStore         struct {
 		retrievalPolicyStoreDelegate
-		calls int
+		calls       int
+		lastOptions RetrieveOptions
 	}
 )
 
 func (s *retrievalPolicyStore) Retrieve(_ context.Context, o RetrieveOptions) ([]*RetrieveResult, error) {
 	s.calls++
+	s.lastOptions = o
 	return []*RetrieveResult{{Memory: &Memory{ID: fmt.Sprintf("hybrid=%t,mode=%s,adaptive=%t", o.HybridSearch, o.HybridMode, o.AdaptiveThreshold), UserID: o.UserID}, Score: 1}}, nil
 }
 
