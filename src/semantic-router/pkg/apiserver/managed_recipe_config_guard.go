@@ -54,7 +54,7 @@ func (s *ClassificationAPIServer) acquireConfigMutationGuard(
 	}
 	if s.configMutationReadOnly() {
 		guard.Release()
-		s.writeErrorResponse(w, http.StatusForbidden, "CONFIG_READ_ONLY", "This deployment uses read-only configuration. Update the Kubernetes CRs or ConfigMap and roll out the deployment instead.")
+		s.writeErrorResponse(w, http.StatusForbidden, "CONFIG_READ_ONLY", "This deployment uses read-only configuration. Update the configuration source and reload or roll out the deployment as appropriate.")
 		return nil, false
 	}
 	return guard, true
