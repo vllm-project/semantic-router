@@ -75,7 +75,7 @@ from common_lora_utils import (
     resolve_model_path,
     set_gpu_device,
     setup_logging,
-    warmup_steps_from_ratio,
+    warmup_kwargs,
 )
 
 logger = setup_logging()
@@ -546,12 +546,7 @@ def main(
         greater_is_better=False,
         max_grad_norm=1.0,
         lr_scheduler_type="cosine",
-        warmup_steps=warmup_steps_from_ratio(
-            0.1,
-            len(train_dataset),
-            batch_size,
-            epochs,
-        ),
+        **warmup_kwargs(0.1),
         bf16=True,  # Use bf16 for L4 GPUs
         remove_unused_columns=False,  # CRITICAL: Keep our custom columns
     )

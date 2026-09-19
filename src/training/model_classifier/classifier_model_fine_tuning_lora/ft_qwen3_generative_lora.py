@@ -76,7 +76,7 @@ from common_lora_utils import (
     log_memory_usage,
     set_gpu_device,
     setup_logging,
-    warmup_steps_from_ratio,
+    warmup_kwargs,
 )
 
 # Setup logging
@@ -529,13 +529,7 @@ def main(
         eval_strategy="no",  # Skip eval during training (saves 10+ minutes)
         save_strategy="no",  # Don't save intermediate checkpoints (saves disk space!)
         save_total_limit=1,  # Keep only 1 checkpoint
-        warmup_steps=warmup_steps_from_ratio(
-            0.1,
-            len(train_dataset),
-            batch_size,
-            num_epochs,
-            max(1, 16 // batch_size),
-        ),
+        **warmup_kwargs(0.1),
         lr_scheduler_type="cosine",
         bf16=False,  # Use F32 for training (more stable)
         fp16=False,  # Use F32 for training (more stable)

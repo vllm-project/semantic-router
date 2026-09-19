@@ -2,12 +2,19 @@
 
 import json
 import os
+import sys
 
 import torch
-from common_lora_utils import warmup_steps_from_ratio
 from jailbreak_provenance import emit_training_manifests
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers import TrainingArguments
+
+# common_lora_utils lives one directory up. Python puts only the script's own
+# directory on sys.path for a direct `python path/to/script.py` launch, so
+# without this the import fails before argument parsing. The other LoRA
+# training scripts carry the same line.
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from common_lora_utils import warmup_kwargs
 
 
 def split_training_data(sample_data: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -54,12 +61,7 @@ def create_security_training_args(
         learning_rate=learning_rate,
         max_grad_norm=0.0,
         lr_scheduler_type="cosine",
-        warmup_steps=warmup_steps_from_ratio(
-            0.06,
-            num_train_examples,
-            batch_size,
-            num_epochs,
-        ),
+        **warmup_kwargs(0.06),
         weight_decay=0.01,
         logging_steps=10,
         eval_strategy="epoch",

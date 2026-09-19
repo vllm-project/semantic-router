@@ -8,7 +8,6 @@ This module provides common functions to avoid code duplication and ensure consi
 
 import gc
 import logging
-import math
 import os
 from typing import Dict, List, Optional, Tuple
 
@@ -17,93 +16,50 @@ import torch
 logger = logging.getLogger(__name__)
 
 
-def detect_world_size() -> int:
-    """Number of training processes, read from the launcher's environment.
-
-    `torchrun`, `accelerate launch` and DeepSpeed all export `WORLD_SIZE`, and
-    `safety_classifier/train.py` already reads it exactly this way, so this
-    follows the convention already in the tree rather than adding a second one.
-
-    Reading the environment rather than `torch.distributed.get_world_size()` is
-    deliberate: `TrainingArguments` is normally constructed before
-    `init_process_group()` has run, and at that point the torch call would raise
-    or report 1 while the launcher has already told us the real answer.
-
-    Falls back to 1 when the variable is absent or unparseable, which is the
-    single-process case and the previous default.
-    """
-    try:
-        return max(1, int(os.environ.get("WORLD_SIZE", "1")))
-    except ValueError:
-        logger.warning(
-            "WORLD_SIZE=%r is not an integer; assuming single-process training",
-            os.environ.get("WORLD_SIZE"),
-        )
-        return 1
-
-
-def warmup_steps_from_ratio(
-    warmup_ratio: float,
-    num_train_examples: int,
-    per_device_train_batch_size: int,
-    num_train_epochs: float,
-    gradient_accumulation_steps: int = 1,
-    world_size: Optional[int] = None,
-) -> int:
-    """Convert a warmup *ratio* into the warmup *steps* TrainingArguments takes.
+def warmup_kwargs(warmup_ratio: float) -> Dict[str, float]:
+    """Return the TrainingArguments kwarg that expresses a warmup *ratio*.
 
     `warmup_ratio` was removed from `transformers.TrainingArguments` in 5.15.0,
-    so every call site passing it raises `TypeError` on a fresh install. Only
-    `warmup_steps` survives, and it is an absolute count, so the ratio has to be
-    resolved against the number of optimizer steps the run will take.
+    so every call site passing it raises `TypeError` on a fresh install. The
+    replacement is not a different quantity, only a different name: `warmup_steps`
+    became a float, and `get_warmup_steps` reads a value below 1 as the ratio it
+    used to read from `warmup_ratio`.
 
-    The arithmetic reproduces what the Trainer did internally, rather than
-    inventing a new one, so a converted script warms up over the same span it
-    used to:
+        # transformers >= 5.15
+        warmup_steps = (
+            int(self.warmup_steps) if self.warmup_steps >= 1
+            else math.ceil(num_training_steps * self.warmup_steps)
+        )
 
-        steps_per_epoch   = ceil(examples / (batch * world_size))
-        updates_per_epoch = max(steps_per_epoch // gradient_accumulation, 1)
-        total_steps       = ceil(epochs * updates_per_epoch)
-        warmup_steps      = ceil(total_steps * ratio)
+    The two spellings are not interchangeable, which is why this picks one by
+    inspecting the dataclass rather than by version string. On 4.x
+    `warmup_steps` is an `int` and the guard is `self.warmup_steps > 0`, so a
+    float ratio there is read as an absolute step *count*: 0.06 would mean 0.06
+    steps, that is no warmup at all, and nothing would say so. The repository
+    still declares `transformers>=4.36.0` in several requirements files, so that
+    path is live.
 
-    A ratio of zero means no warmup and returns 0; anything above zero returns
-    at least 1, because a positive ratio asking for zero steps is a silent
-    change of behaviour rather than a faithful conversion.
+    Resolving the ratio is left to the Trainer, which computes
+    `num_training_steps` from the prepared dataloader. That is the only place the
+    count is known correctly: it already accounts for the world size under DDP,
+    for a final partial gradient-accumulation group, and for whatever DeepSpeed
+    or the accelerator did to the effective batch. Recomputing it here would mean
+    re-deriving all of that and staying in step with it forever.
 
     Args:
         warmup_ratio: The ratio the script used to pass, e.g. 0.06.
-        num_train_examples: `len(train_dataset)`.
-        per_device_train_batch_size: As passed to TrainingArguments.
-        num_train_epochs: As passed to TrainingArguments.
-        gradient_accumulation_steps: As passed to TrainingArguments; 1 if unset.
-        world_size: Number of processes. Defaults to reading `WORLD_SIZE` from
-            the environment, so a script launched under `torchrun` warms up over
-            the same span the Trainer used to compute for it. Pass explicitly to
-            override. Under DDP the effective batch is `batch * world_size`, so
-            leaving this at 1 would overstate the step count by that factor and
-            warm up for proportionally too long.
 
     Returns:
-        A warmup step count safe to pass as `warmup_steps`.
+        `{"warmup_ratio": r}` on transformers 4.x, `{"warmup_steps": r}` on
+        5.15+, to be splatted into the `TrainingArguments(...)` call.
     """
-    if warmup_ratio <= 0:
-        return 0
-    if num_train_examples <= 0:
-        raise ValueError(
-            f"num_train_examples must be positive, got {num_train_examples}"
-        )
-    per_device_train_batch_size = max(1, int(per_device_train_batch_size))
-    gradient_accumulation_steps = max(1, int(gradient_accumulation_steps))
-    if world_size is None:
-        world_size = detect_world_size()
-    world_size = max(1, int(world_size))
+    from dataclasses import fields
 
-    steps_per_epoch = math.ceil(
-        num_train_examples / (per_device_train_batch_size * world_size)
-    )
-    updates_per_epoch = max(steps_per_epoch // gradient_accumulation_steps, 1)
-    total_steps = math.ceil(num_train_epochs * updates_per_epoch)
-    return max(1, math.ceil(total_steps * warmup_ratio))
+    from transformers import TrainingArguments
+
+    names = {f.name for f in fields(TrainingArguments)}
+    key = "warmup_ratio" if "warmup_ratio" in names else "warmup_steps"
+    return {key: warmup_ratio}
 
 
 def get_target_modules_for_model(model_name: str) -> List[str]:

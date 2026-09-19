@@ -91,7 +91,7 @@ from common_lora_utils import (
     resolve_model_path,
     set_gpu_device,
     setup_logging,
-    warmup_steps_from_ratio,
+    warmup_kwargs,
 )
 from heldout_split import (
     MANIFEST_NAME,
@@ -640,13 +640,7 @@ def main(
         # PEFT optimization: Enhanced stability measures
         max_grad_norm=1.0,  # Gradient clipping to prevent explosion
         lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
-        warmup_steps=warmup_steps_from_ratio(
-            0.06,
-            len(train_dataset),
-            batch_size,
-            num_epochs,
-            2,
-        ),  # PEFT recommended warmup ratio for sequence classification
+        **warmup_kwargs(0.06),  # PEFT recommended warmup ratio for sequence classification
         # Additional stability measures for intent classification
         dataloader_drop_last=False,
         eval_accumulation_steps=1,

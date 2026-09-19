@@ -87,7 +87,7 @@ from common_lora_utils import (
     resolve_model_path,
     set_gpu_device,
     setup_logging,
-    warmup_steps_from_ratio,
+    warmup_kwargs,
 )
 
 # Setup logging
@@ -2446,13 +2446,7 @@ def main(
         learning_rate=learning_rate,
         max_grad_norm=1.0,  # Gradient clipping
         lr_scheduler_type="cosine",  # Cosine LR schedule for stable convergence
-        warmup_steps=warmup_steps_from_ratio(
-            0.06,
-            len(train_dataset),
-            batch_size,
-            num_epochs,
-            2,
-        ),  # PEFT recommended warmup
+        **warmup_kwargs(0.06),  # PEFT recommended warmup
         weight_decay=weight_decay,  # Adaptive regularization
         logging_steps=10,
         eval_strategy="epoch",
