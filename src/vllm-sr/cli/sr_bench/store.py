@@ -11,8 +11,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .contracts import canonical, planned_cells
+from .experiments import bind_created_run, run_roles
 
 MAX_PAGE_SIZE = 500
+MAX_REPLAY_OPTIONS = 25
+MAX_REPLAY_CURSOR_DIGITS = 19
 
 TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 
@@ -42,6 +45,7 @@ def run_summary(run):
             "sampling",
             "benchmark_weights",
             "adapter_versions",
+            "experiment",
             "plan_sha256",
             "case_sha256",
         )
@@ -80,7 +84,12 @@ def run_summary(run):
         manifest["recovery"]["selected_cell_count"] = len(
             recovery.get("selected_cells", [])
         )
-    return {**run, "manifest": manifest, "manifest_summary": True}
+    return {
+        **run,
+        "manifest": manifest,
+        "manifest_summary": True,
+        "experiment_roles": run_roles(source),
+    }
 
 
 class Store:
@@ -102,6 +111,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS run_provenance(run_id TEXT PRIMARY KEY,data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS accounting_corrections(id TEXT PRIMARY KEY,run_id TEXT NOT NULL,created_at TEXT NOT NULL,evidence_sha256 TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(run_id,evidence_sha256));
         CREATE TABLE IF NOT EXISTS recovery_claims(parent_run_id TEXT,case_id TEXT,target_id TEXT,child_run_id TEXT,PRIMARY KEY(parent_run_id,case_id,target_id));
+        CREATE TABLE IF NOT EXISTS experiments(id TEXT PRIMARY KEY,owner TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,request_key TEXT,UNIQUE(owner,request_key));
+        CREATE TABLE IF NOT EXISTS experiment_runs(seq INTEGER PRIMARY KEY AUTOINCREMENT,experiment_id TEXT NOT NULL,run_id TEXT NOT NULL,role TEXT NOT NULL,hypothesis TEXT NOT NULL,linked_at TEXT NOT NULL,UNIQUE(experiment_id,run_id));
         """
         )
         self.db.commit()
@@ -113,7 +124,15 @@ class Store:
                 (run_id, now(), kind, canonical(data)),
             )
 
-    def create(self, manifest, owner="local", request_key=None, provenance=None):
+    def create(
+        self,
+        manifest,
+        owner="local",
+        request_key=None,
+        provenance=None,
+        *,
+        actor_role="local",
+    ):
         with self.lock, self.db:
             if request_key:
                 row = self.db.execute(
@@ -155,6 +174,7 @@ class Store:
                     raise RecoveryClaimError(
                         "Recovery cells were already claimed by another child"
                     ) from exc
+            bind_created_run(self, run_id, manifest, owner, actor_role)
             self.event(run_id, "created", {"plan_sha256": manifest["plan_sha256"]})
             return self.get(run_id), True
 
@@ -267,6 +287,43 @@ class Store:
                 (owner, request_key),
             ).fetchone()
             return self.get(row[0]) if row else None
+
+    def preview_candidates(self, owner=None, after=None, limit=10):
+        """Bounded, owner-filtered completed previews in stable insertion order."""
+        if (
+            isinstance(limit, bool)
+            or not isinstance(limit, int)
+            or not 1 <= limit <= MAX_REPLAY_OPTIONS
+        ):
+            raise ValueError("Replay options limit must be between 1 and 25")
+        if after is not None and (
+            not isinstance(after, str)
+            or len(after) > MAX_REPLAY_CURSOR_DIGITS
+            or not after.isascii()
+            or not after.isdecimal()
+            or not 0 < int(after) <= 2**63 - 1
+        ):
+            raise ValueError("Invalid replay options cursor")
+        conditions = ["status='completed'", "json_extract(manifest,'$.mode')='preview'"]
+        values = []
+        if owner is not None:
+            conditions.append("owner=?")
+            values.append(owner)
+        if after is not None:
+            conditions.append("rowid<?")
+            values.append(int(after))
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT rowid,id FROM runs WHERE "
+                + " AND ".join(conditions)
+                + " ORDER BY rowid DESC LIMIT ?",
+                (*values, limit + 1),
+            ).fetchall()
+            page = rows[:limit]
+            return (
+                [self.get(row[1]) for row in page],
+                str(page[-1][0]) if len(rows) > limit else None,
+            )
 
     def children(self, run_id):
         with self.lock:

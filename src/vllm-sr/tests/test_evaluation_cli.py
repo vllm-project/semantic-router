@@ -30,11 +30,14 @@ def test_catalog_and_clean_command_surface():
         "preview",
         "target",
         "replay",
+        "replay-options",
         "regrade",
         "reconcile-usage",
         "recover-plan",
         "recover",
         "export",
+        "experiment",
+        "candidate-plan",
     }
     assert runner.invoke(benchmark, ["intelligence", "--help"]).exit_code == 2
 

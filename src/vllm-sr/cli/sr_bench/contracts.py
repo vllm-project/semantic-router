@@ -11,8 +11,11 @@ from urllib.parse import urlparse
 
 import yaml
 
+from cli.routing_preview import case_request_fields
+
 from . import VERSION
 from .adapters import get_adapter, list_adapters
+from .experiments import validate_membership, validate_role
 
 MAX_PARAMETER_BYTES = 65536
 MAX_INFERENCE_CALLS = 256
@@ -252,6 +255,8 @@ def plan(manifest):
     if isinstance(m["seed"], bool) or not isinstance(m["seed"], int):
         raise ValueError("seed must be an integer")
     m.setdefault("name", "sr-bench")
+    if "experiment" in m:
+        m["experiment"] = validate_membership(m["experiment"])
     m.setdefault("cost_policy", "require_priced")
     if m["cost_policy"] not in {"require_priced", "capability_only"}:
         raise ValueError("cost_policy must be require_priced or capability_only")
@@ -316,6 +321,7 @@ def plan(manifest):
         ):
             raise ValueError("case IDs must be unique nonempty strings")
         ids.add(c["id"])
+        case_request_fields(c)
         if (
             m["profile"] == "standard"
             and c.get("metadata", {}).get("split") != "holdout"
@@ -488,6 +494,8 @@ def plan(manifest):
             if (c["id"], t["id"]) in chosen
         ]
     m["sampling"] = sampling
+    if "experiment" in m:
+        validate_role(m, m["experiment"]["role"])
     m["case_sha256"] = digest(cases)
     expected_weights = {
         **BENCHMARK_WEIGHTS,

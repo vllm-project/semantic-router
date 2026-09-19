@@ -94,6 +94,23 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
           },
         ],
       }
+    else if (path === '/datasets/selection')
+      body = {
+        profile: new URL(route.request().url()).searchParams.get('profile'),
+        seed: 42,
+        split: 'dev',
+        model_requests: 0,
+        benchmarks: [
+          {
+            id: 'mmlu-pro',
+            title: 'MMLU-Pro',
+            eligible: true,
+            case_count: 2,
+            source_ids: ['quick-v1'],
+            reason: null,
+          },
+        ],
+      }
     else if (path === '/datasets/compose')
       body = {
         dataset: {
@@ -181,10 +198,10 @@ async function chooseOption(page: Page, label: string, value: string) {
 }
 
 async function chooseDataset(page: Page, id: string) {
-  const selector = page.getByRole('combobox', { name: 'Prepared dataset', exact: true })
-  if (!(await selector.isVisible()))
-    await page.getByText('Prepared source collection', { exact: true }).click()
-  await chooseOption(page, 'Prepared dataset', id)
+  await page.getByRole('button', { name: 'Use a specific dataset', exact: true }).click()
+  await chooseOption(page, 'Specific dataset', id)
+  if (!(await page.getByRole('checkbox', { checked: true }).count()))
+    await page.getByRole('button', { name: 'Select all benchmarks' }).click()
 }
 
 async function section(page: Page, name: string) {
@@ -342,7 +359,8 @@ test('freezes optional learning-session context only for route preview', async (
   )
   await page.goto('/evaluation?view=new')
   await chooseOption(page, 'Add configured target', 'balance')
-  await chooseOption(page, 'Mode', 'preview')
+  await page.getByRole('button', { name: 'Preview routing', exact: true }).click()
+  await chooseOption(page, 'Add configured target', 'balance')
   await page.getByText('Sampling and advanced limits', { exact: true }).click()
   await expect(page.getByLabel('Preview sampling seed', { exact: true })).toHaveValue('42')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
@@ -352,7 +370,9 @@ test('freezes optional learning-session context only for route preview', async (
   await page.getByLabel('Session ID', { exact: true }).fill('session-alpha')
   await page.getByLabel('Conversation ID', { exact: true }).fill('conversation-beta')
   await page.getByLabel('Preview sampling seed', { exact: true }).fill('73')
-  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+  await expect(
+    page.getByRole('button', { name: 'Start route preview', exact: true }),
+  ).toBeDisabled()
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
   expect(requests[1]).toMatchObject({
@@ -366,7 +386,8 @@ test('freezes optional learning-session context only for route preview', async (
       },
     },
   })
-  await chooseOption(page, 'Mode', 'live')
+  await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
+  await chooseOption(page, 'Add configured target', 'balance')
   await expect(page.getByLabel('Session ID', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
@@ -379,18 +400,19 @@ test('supports keyboard selection, search and escape without reopening custom co
 }) => {
   await mockBench(page)
   await page.goto('/evaluation?view=new')
-  const mode = page.getByRole('combobox', { name: 'Mode', exact: true })
+  await page.getByText('Sampling and advanced limits', { exact: true }).click()
+  const mode = page.getByRole('combobox', { name: 'Cost accounting', exact: true })
   await mode.focus()
   await mode.press('ArrowDown')
-  await expect(page.getByRole('option', { name: /^Live evaluation/ })).toBeFocused()
-  await page.getByRole('option', { name: /^Live evaluation/ }).press('End')
-  await expect(page.getByRole('option', { name: /^Route preview/ })).toBeFocused()
-  await page.getByRole('option', { name: /^Route preview/ }).press('Enter')
-  await expect(mode).toHaveText('Route preview')
+  await expect(page.getByRole('option', { name: /^Quality and cost/ })).toBeFocused()
+  await page.getByRole('option', { name: /^Quality and cost/ }).press('End')
+  await expect(page.getByRole('option', { name: /^Quality only/ })).toBeFocused()
+  await page.getByRole('option', { name: /^Quality only/ }).press('Enter')
+  await expect(mode).toHaveText('Quality only')
   await expect(mode).toBeFocused()
   await mode.press('ArrowUp')
-  await page.getByRole('option', { name: /^Route preview/ }).press('Home')
-  await page.getByRole('option', { name: /^Live evaluation/ }).press('Escape')
+  await page.getByRole('option', { name: /^Quality only/ }).press('Home')
+  await page.getByRole('option', { name: /^Quality and cost/ }).press('Escape')
   await expect(mode).toBeFocused()
   await expect(mode).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByRole('listbox')).toHaveCount(0)
@@ -465,15 +487,17 @@ test('keeps comparison and create controls compact on desktop and within mobile 
     .evaluate((element) => element.scrollIntoView({ block: 'start' }))
   await page.screenshot({ path: testInfo.outputPath('create-settings-desktop.png') })
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole('combobox', { name: 'Mode', exact: true }).scrollIntoViewIfNeeded()
-  await page.getByRole('combobox', { name: 'Mode', exact: true }).click()
+  await page
+    .getByRole('combobox', { name: 'Cost accounting', exact: true })
+    .scrollIntoViewIfNeeded()
+  await page.getByRole('combobox', { name: 'Cost accounting', exact: true }).click()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
   const menuBounds = (await page.getByRole('listbox').boundingBox())!
   expect(menuBounds.y).toBeGreaterThanOrEqual(0)
   expect(menuBounds.y + menuBounds.height).toBeLessThanOrEqual(844)
-  await page.screenshot({ path: testInfo.outputPath('create-mode-mobile.png') })
+  await page.screenshot({ path: testInfo.outputPath('create-accounting-mobile.png') })
   await page.goto('/evaluation?view=datasets')
   await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('library-mobile.png') })
@@ -1214,6 +1238,26 @@ test('replays saved answers and labels estimated metrics separately', async ({ p
       },
     }),
   )
+  await page.route('**/api/sr-bench/v1/runs/run-1/replay-options?*', (route) =>
+    route.fulfill({
+      json: {
+        baseline: { run_id: 'run-1' },
+        options: [
+          {
+            preview_run_id: 'preview-1',
+            name: 'Route preview',
+            profile: 'quick',
+            case_count: 2,
+            eligible: true,
+            reasons: [],
+          },
+        ],
+        next_cursor: null,
+        has_more: false,
+        model_requests: 0,
+      },
+    }),
+  )
   await page.route('**/api/sr-bench/v1/replays', (route) => {
     submitted.push(route.request().postDataJSON())
     return route.fulfill({ json: replayRun })
@@ -1250,16 +1294,21 @@ test('replays saved answers and labels estimated metrics separately', async ({ p
     return route.fulfill({ json: body })
   })
   await page.goto('/evaluation?view=compare')
-  await page.getByText('Reuse saved answers for diagnostic replay', { exact: true }).click()
+  await page
+    .locator('summary')
+    .filter({ hasText: /^Estimate a routing change$/ })
+    .click()
   await chooseOption(page, 'Saved single-model baseline', 'run-1')
   await chooseOption(page, 'Routing preview', 'preview-1')
-  await page.getByRole('button', { name: 'Create diagnostic replay' }).click()
+  await page.getByRole('button', { name: 'Create offline estimate' }).click()
   await expect(page.getByRole('heading', { name: 'Diagnostic replay estimates' })).toBeVisible()
   await expect(page.getByRole('cell', { name: '75%', exact: true })).toBeVisible()
   await expect(
     page.getByText('These estimates reuse saved answers.', { exact: false }),
   ).toBeVisible()
-  expect(submitted).toEqual([{ baseline_run_id: 'run-1', preview_run_id: 'preview-1' }])
+  expect(submitted).toEqual([
+    { baseline_run_id: 'run-1', preview_run_id: 'preview-1', idempotency_key: expect.any(String) },
+  ])
 })
 
 test('regrades saved answers and exports development evidence with holdout errors visible', async ({
@@ -2111,6 +2160,25 @@ test('composes selected benchmarks under one size without resampling or generati
     sha256: 'a'.repeat(64),
   }))
   const compositions: unknown[] = []
+  await page.route('**/api/sr-bench/v1/datasets/selection?*', (route) => {
+    const profile = new URL(route.request().url()).searchParams.get('profile')!
+    return route.fulfill({
+      json: {
+        profile,
+        seed: 42,
+        split: profile === 'standard' ? 'holdout' : 'dev',
+        model_requests: 0,
+        benchmarks: ['mmlu-pro', 'gpqa-diamond'].map((id) => ({
+          id,
+          title: id,
+          eligible: true,
+          case_count: 5,
+          source_ids: [`${profile}-suite`],
+          reason: null,
+        })),
+      },
+    })
+  })
   await page.route('**/api/sr-bench/v1/datasets', (route) =>
     route.fulfill({ json: { datasets: prepared } }),
   )
@@ -2426,4 +2494,303 @@ test('guides comparable run selection, explains exclusions and paginates arbitra
     .scrollIntoViewIfNeeded()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('guided-comparison-mobile.png') })
+})
+
+test('preserves selected benchmarks across profiles and blocks conflicting server resolutions', async ({
+  page,
+}, testInfo) => {
+  const submissions = await mockBench(page)
+  const compositions: unknown[] = []
+  await page.route('**/api/sr-bench/v1/datasets/selection?*', (route) => {
+    const profile = new URL(route.request().url()).searchParams.get('profile')!
+    return route.fulfill({
+      json: {
+        profile,
+        seed: 42,
+        split: profile === 'standard' ? 'holdout' : 'dev',
+        model_requests: 0,
+        benchmarks: [
+          {
+            id: 'mmlu-pro',
+            title: 'MMLU-Pro',
+            eligible: profile !== 'standard',
+            case_count: profile === 'standard' ? 0 : 2,
+            source_ids: profile === 'standard' ? [] : ['canonical'],
+            reason:
+              profile === 'standard'
+                ? 'Conflicting frozen revisions. Choose a specific dataset.'
+                : null,
+          },
+          {
+            id: 'gpqa-diamond',
+            title: 'GPQA Diamond',
+            eligible: true,
+            case_count: 2,
+            source_ids: ['canonical-gpqa'],
+            reason: null,
+          },
+        ],
+      },
+    })
+  })
+  await page.route('**/api/sr-bench/v1/datasets/compose', (route) => {
+    compositions.push(route.request().postDataJSON())
+    return route.fulfill({
+      json: { dataset: { path: '/prepared/canonical.json', sha256: 'a'.repeat(64) } },
+    })
+  })
+  await page.goto('/evaluation?view=new')
+  await expect(page.getByRole('combobox', { name: 'Mode', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('combobox', { name: 'Prepared dataset', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('combobox', { name: 'Cost accounting', exact: true })).toBeHidden()
+  await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
+  await chooseOption(page, 'Add configured target', 'single')
+  await page.getByRole('radio', { name: /^Standard/ }).check()
+  await expect(
+    page.getByText('Conflicting frozen revisions. Choose a specific dataset.', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
+  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeDisabled()
+  await page.getByRole('checkbox', { name: /MMLU-Pro/ }).uncheck()
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
+  expect(compositions).toEqual([{ dataset_ids: ['canonical-gpqa'], benchmarks: ['gpqa-diamond'] }])
+  expect(submissions).toHaveLength(1)
+  expect(submissions[0]).toMatchObject({
+    manifest: { profile: 'standard', mode: 'live', cost_policy: 'require_priced' },
+  })
+  await page
+    .getByRole('radiogroup', { name: 'Evaluation size' })
+    .evaluate((element) => element.scrollIntoView({ block: 'start' }))
+  await page.screenshot({ path: testInfo.outputPath('canonical-scope-desktop.png') })
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('canonical-scope-mobile.png') })
+})
+
+test('does not fall back to inventory guesses when canonical dataset resolution fails', async ({
+  page,
+}) => {
+  const submissions = await mockBench(page)
+  let reads = 0
+  let recovered = false
+  await page.route('**/api/sr-bench/v1/datasets/selection?*', (route) => {
+    reads += 1
+    return !recovered
+      ? route.fulfill({ status: 503, json: { error: 'Dataset resolution unavailable' } })
+      : route.fulfill({
+          json: {
+            profile: 'quick',
+            seed: 42,
+            split: 'dev',
+            model_requests: 0,
+            benchmarks: [
+              {
+                id: 'mmlu-pro',
+                title: 'MMLU-Pro',
+                eligible: true,
+                case_count: 2,
+                source_ids: ['quick-v1'],
+                reason: null,
+              },
+            ],
+          },
+        })
+  })
+  await page.goto('/evaluation?view=new')
+  await expect(page.getByRole('alert')).toContainText('Dataset resolution unavailable')
+  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeDisabled()
+  await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeDisabled()
+  recovered = true
+  await page.getByRole('button', { name: 'Retry benchmark check' }).click()
+  await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
+  expect(reads).toBeGreaterThanOrEqual(2)
+  expect(submissions).toHaveLength(0)
+})
+
+test('persists profile, status and search filters across reload and run details', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs', (route) =>
+    route.fulfill({
+      json: {
+        runs: [
+          run,
+          {
+            ...run,
+            id: 'smoke-run',
+            manifest: { ...manifest, name: 'Smoke baseline', profile: 'smoke' },
+          },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs')
+  await chooseOption(page, 'Run profile', 'quick')
+  await chooseOption(page, 'Run status', 'completed')
+  await page.getByLabel('Search runs').fill('Baseline')
+  await expect(page.getByRole('button', { name: 'Smoke baseline', exact: true })).toHaveCount(0)
+  await expect(page).toHaveURL(/profile=quick/)
+  await page.reload()
+  await expect(page.getByRole('combobox', { name: 'Run profile', exact: true })).toHaveText('Quick')
+  await expect(page.getByLabel('Search runs')).toHaveValue('Baseline')
+  await page.getByRole('button', { name: 'Baseline test', exact: true }).click()
+  await page.getByRole('button', { name: 'Back to runs', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: 'Run profile', exact: true })).toHaveText('Quick')
+  await expect(page.getByLabel('Search runs')).toHaveValue('Baseline')
+  await expect(page.getByRole('button', { name: 'Smoke baseline', exact: true })).toHaveCount(0)
+})
+
+test('derives a MoM candidate from a frozen baseline without composing or editing its protocol', async ({
+  page,
+}) => {
+  await mockBench(page)
+  const mom = { ...target, id: 'balance', kind: 'mom', config_hash: 'c'.repeat(64) }
+  const frozen = {
+    ...manifest,
+    profile: 'standard',
+    cost_policy: 'require_priced',
+    seed: 77,
+    cases: [{ id: 'frozen-case' }],
+    sampling: { temperature: 0.2, max_tokens: 512 },
+    limits: {
+      concurrency: 1,
+      max_output_tokens: 512,
+      max_run_seconds: 120,
+      max_cost_usd: 1,
+      max_calls_per_case: 1,
+      total_timeout_s: 60,
+      idle_timeout_s: 30,
+    },
+  }
+  const candidateRequests: unknown[] = []
+  const submissions: Array<{ idempotency_key: string; manifest: Record<string, unknown> }> = []
+  const forbidden: string[] = []
+  await page.route('**/api/sr-bench/v1/targets', (route) =>
+    route.fulfill({ json: { targets: [target, mom] } }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({ json: { ...run, manifest: frozen } }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/candidate-plan', (route) => {
+    const body = route.request().postDataJSON()
+    candidateRequests.push(body)
+    return route.fulfill({
+      json: {
+        status: 'validated',
+        total: 1,
+        plan_sha256: 'd'.repeat(64),
+        manifest: {
+          ...frozen,
+          baseline_run_id: 'run-1',
+          name: body.name,
+          mode: body.mode,
+          targets: [mom],
+          experiment: body.experiment,
+        },
+      },
+    })
+  })
+  for (const path of ['/datasets/compose', '/plans'])
+    await page.route(`**/api/sr-bench/v1${path}`, async (route) => {
+      if (route.request().method() === 'POST') {
+        forbidden.push(path)
+        return route.fulfill({
+          status: 400,
+          json: { error: 'Unexpected dispatch or new protocol' },
+        })
+      }
+      return route.fallback()
+    })
+  await page.route('**/api/sr-bench/v1/runs', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback()
+    const body = route.request().postDataJSON()
+    submissions.push(body)
+    if (submissions.length === 1) return route.abort('failed')
+    return route.fulfill({ json: { ...run, id: 'run-derived', manifest: body.manifest } })
+  })
+  await page.route('**/api/sr-bench/v1/runs/run-derived', (route) =>
+    route.fulfill({ json: { ...run, id: 'run-derived', manifest: submissions[0].manifest } }),
+  )
+  await page.goto(
+    '/evaluation?view=new&baseline=run-1&experiment=exp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa&role=candidate',
+  )
+  await expect(page.getByRole('region', { name: 'Frozen baseline protocol' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'Frozen baseline protocol' })).toContainText(
+    'Temperature 0.2 · Top P Not set · seed Not set',
+  )
+  await expect(page.getByRole('region', { name: 'Frozen baseline protocol' })).not.toContainText(
+    'seed 77',
+  )
+  await expect(page.getByRole('radiogroup', { name: 'Evaluation size' })).toHaveCount(0)
+  await expect(page.getByLabel('Budget (USD)', { exact: true })).toHaveCount(0)
+  await expect(page.getByLabel('Temperature', { exact: true })).toHaveCount(0)
+  await page.getByRole('combobox', { name: 'Add configured target', exact: true }).click()
+  await expect(page.getByRole('listbox').locator('[data-value="single"]')).toHaveCount(0)
+  await page.getByRole('listbox').locator('[data-value="balance"]').click()
+  await page.getByLabel('Run name', { exact: true }).fill('Candidate with frozen protocol')
+  await page
+    .getByLabel('Hypothesis', { exact: true })
+    .fill('Reduce cost without changing the question set.')
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeEnabled()
+  expect(candidateRequests).toEqual([
+    {
+      target_ids: ['balance'],
+      mode: 'live',
+      name: 'Candidate with frozen protocol',
+      experiment: {
+        id: 'exp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        role: 'candidate',
+        hypothesis: 'Reduce cost without changing the question set.',
+      },
+    },
+  ])
+  expect(forbidden).toEqual([])
+  await page.getByRole('button', { name: 'Start evaluation', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Evaluation submission needs reconciliation' }),
+  ).toBeVisible()
+  await page.reload()
+  await expect(
+    page.getByRole('button', { name: 'Check or submit same evaluation', exact: true }),
+  ).toBeVisible()
+  expect(submissions).toHaveLength(1)
+  await page.getByRole('button', { name: 'Check or submit same evaluation', exact: true }).click()
+  await expect(page).toHaveURL(/run=run-derived/)
+  expect(submissions).toHaveLength(2)
+  expect(submissions[1]).toEqual(submissions[0])
+  expect(submissions[0].manifest.sampling).toEqual(frozen.sampling)
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('sr-bench-submission:user-admin-1')),
+  ).toBeNull()
+  expect(forbidden).toEqual([])
+})
+
+test('an explicit dataset can be selected while automatic resolution is stalled without adopting a late response', async ({
+  page,
+}) => {
+  await mockBench(page)
+  let release!: () => void
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/sr-bench/v1/datasets/selection?*', async (route) => {
+    await waiting
+    await route
+      .fulfill({
+        json: { profile: 'quick', seed: 99, split: 'dev', model_requests: 0, benchmarks: [] },
+      })
+      .catch(() => {})
+  })
+  await page.goto('/evaluation?view=new')
+  await expect(page.getByText('Checking prepared benchmarks…', { exact: true })).toBeVisible()
+  await chooseDataset(page, 'quick-v1')
+  await chooseOption(page, 'Add configured target', 'single')
+  await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeChecked()
+  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toBeEnabled()
+  release()
+  await page.getByRole('button', { name: 'Review plan', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Plan ready for review' })).toBeVisible()
 })

@@ -9,9 +9,16 @@ import RunComposer from '../components/sr-bench/RunComposer'
 import RunDetails from '../components/sr-bench/RunDetails'
 import RunComparison from '../components/sr-bench/RunComparison'
 import ReplayComposer from '../components/sr-bench/ReplayComposer'
-import RunList from '../components/sr-bench/RunList'
+import RunList, { type RunFilters } from '../components/sr-bench/RunList'
 import DatasetInventory from '../components/sr-bench/DatasetInventory'
-import type { Catalog, Dataset, Run, Target } from '../components/sr-bench/types'
+import ExperimentWorkspace from '../components/sr-bench/ExperimentWorkspace'
+import type {
+  Catalog,
+  Dataset,
+  ExperimentRunContext,
+  Run,
+  Target,
+} from '../components/sr-bench/types'
 import styles from '../components/sr-bench/SrBench.module.css'
 import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
@@ -21,11 +28,49 @@ type Inventory = 'catalog' | 'datasets' | 'targets' | 'runs'
 export default function EvaluationPage() {
   const { user } = useAuth()
   const { serverReadonly, isLoading: settingsLoading } = useReadonly()
-  const canRun =
-    !settingsLoading && !serverReadonly && canRunEvaluation(user) && canWriteEvaluation(user)
+  const canWrite = !settingsLoading && !serverReadonly && canWriteEvaluation(user)
+  const canRun = canWrite && canRunEvaluation(user)
   const [search, setSearch] = useSearchParams()
   const selectedID = search.get('run')
+  const runFilters: RunFilters = {
+    query: search.get('q') ?? '',
+    status: ['active', 'completed', 'failed', 'interrupted', 'cancelled'].includes(
+      search.get('status') ?? '',
+    )
+      ? search.get('status')!
+      : 'all',
+    mode: ['live', 'preview', 'replay'].includes(search.get('mode') ?? '')
+      ? search.get('mode')!
+      : 'all',
+    profile: ['smoke', 'quick', 'standard'].includes(search.get('profile') ?? '')
+      ? search.get('profile')!
+      : 'all',
+    page: Math.max(0, Math.floor(Number(search.get('page')) || 0)),
+  }
+  const openRun = (id?: string) => {
+    const next = new URLSearchParams(search)
+    next.set('view', 'runs')
+    next.delete('section')
+    if (id) next.set('run', id)
+    else next.delete('run')
+    setSearch(next)
+  }
+  const updateRunFilters = (filters: RunFilters) => {
+    const next = new URLSearchParams(search)
+    for (const [key, value] of Object.entries({
+      q: filters.query,
+      status: filters.status,
+      mode: filters.mode,
+      profile: filters.profile,
+      page: filters.page,
+    })) {
+      if (!value || value === 'all') next.delete(key)
+      else next.set(key, String(value))
+    }
+    setSearch(next, { replace: true })
+  }
   const view = search.get('view') ?? (search.has('model') ? 'new' : 'runs')
+  const creating = view === 'new' || view === 'preview'
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [datasets, setDatasets] = useState<Dataset[]>([])
   const [targets, setTargets] = useState<Target[]>([])
@@ -117,6 +162,12 @@ export default function EvaluationPage() {
             <ProductIcon name="refresh" />
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
+          {view !== 'preview' && (
+            <button onClick={() => setSearch({ view: 'preview' })}>
+              <ProductIcon name="decision" />
+              Preview routing
+            </button>
+          )}
           {view !== 'new' && (
             <button className={styles.primary} onClick={() => setSearch({ view: 'new' })}>
               <ProductIcon name="plus" />
@@ -129,6 +180,7 @@ export default function EvaluationPage() {
         {(
           [
             ['runs', 'Runs', 'list'],
+            ['experiments', 'Experiments', 'evaluation'],
             ['compare', 'Compare iterations', 'chart'],
             ['datasets', 'Datasets', 'database'],
             ['catalog', 'Benchmarks', 'evaluation'],
@@ -160,20 +212,31 @@ export default function EvaluationPage() {
         </div>
       )}
       {!catalog && loading && <ProductLoadingState compact label="Loading sr-bench…" />}
-      {(view === 'new' || (view === 'runs' && selectedID)) && (
-        <button className={styles.backLink} onClick={() => setSearch({ view: 'runs' })}>
+      {(creating || (view === 'runs' && selectedID)) && (
+        <button className={styles.backLink} onClick={() => openRun()}>
           <ProductIcon name="arrow-left" />
           Back to runs
         </button>
       )}
-      {view === 'new' && catalog && loaded.datasets && loaded.targets && (
+      {creating && catalog && loaded.datasets && loaded.targets && (
         <RunComposer
           catalog={catalog}
           datasets={datasets}
           targets={targets}
           canRun={canRun}
           actorID={user?.id ?? ''}
-          key={`${user?.id ?? ''}:${search.get('dataset') ?? 'new'}`}
+          key={`${user?.id ?? ''}:${view}:${search.get('dataset') ?? 'new'}:${search.get('baseline') ?? ''}:${search.get('experiment') ?? ''}:${search.get('role') ?? ''}`}
+          mode={view === 'preview' ? 'preview' : 'live'}
+          baselineID={search.get('baseline') ?? undefined}
+          experiment={
+            search.get('experiment')
+              ? {
+                  id: search.get('experiment')!,
+                  role: (search.get('role') ??
+                    (view === 'preview' ? 'preview' : 'candidate')) as ExperimentRunContext['role'],
+                }
+              : undefined
+          }
           initialModel={search.get('model') ?? undefined}
           initialDataset={search.get('dataset') ?? undefined}
           onStarted={(run) => {
@@ -183,6 +246,29 @@ export default function EvaluationPage() {
           }}
         />
       )}
+      {view === 'experiments' && (
+        <ExperimentWorkspace
+          key={`${user?.id ?? ''}:${search.get('experiment') ?? 'all'}`}
+          id={search.get('experiment') ?? undefined}
+          actorID={user?.id ?? ''}
+          runs={runs}
+          canWrite={canWrite}
+          canRun={canRun}
+          onSelect={(id) =>
+            setSearch(id ? { view: 'experiments', experiment: id } : { view: 'experiments' })
+          }
+          onOpenRun={openRun}
+          onCandidate={(baseline, experiment, mode, role) =>
+            setSearch({
+              view: mode === 'preview' ? 'preview' : 'new',
+              ...(baseline ? { baseline } : {}),
+              experiment,
+              role,
+            })
+          }
+          onCompare={(baseline) => setSearch({ view: 'compare', baseline })}
+        />
+      )}
       {view === 'runs' && (
         <>
           {!selectedID &&
@@ -190,7 +276,9 @@ export default function EvaluationPage() {
               <RunList
                 runs={runs}
                 selectedID={selectedID}
-                onSelect={(id) => setSearch({ view: 'runs', run: id })}
+                filters={runFilters}
+                onFilters={updateRunFilters}
+                onSelect={openRun}
               />
             ) : readErrors.runs ? (
               <p role="status">Run inventory is unavailable.</p>
@@ -243,7 +331,7 @@ export default function EvaluationPage() {
         ) : (
           <ProductLoadingState compact label="Loading prepared datasets…" />
         ))}
-      {view === 'new' && (!catalog || !loaded.datasets || !loaded.targets) && (
+      {creating && (!catalog || !loaded.datasets || !loaded.targets) && (
         <ProductLoadingState
           compact
           label="Waiting for the benchmark catalog, prepared datasets and configured targets."
@@ -260,8 +348,10 @@ export default function EvaluationPage() {
         <>
           <RunComparison runs={runs} />
           <details className={styles.panel}>
-            <summary>Reuse saved answers for diagnostic replay</summary>
+            <summary>Estimate a routing change</summary>
             <ReplayComposer
+              key={user?.id ?? ''}
+              actorID={user?.id ?? ''}
               runs={runs}
               canRun={canRun}
               onCreated={(run) => {

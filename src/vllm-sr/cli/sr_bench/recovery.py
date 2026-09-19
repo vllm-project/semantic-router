@@ -85,7 +85,7 @@ def recovery_plan(store, parent_id, mode="undispatched"):
     return {**proposed, "plan_sha256": digest(proposed)}
 
 
-def recover(engine, parent_id, body, owner="local"):
+def recover(engine, parent_id, body, owner="local", *, actor_role="local"):
     mode = body.get("mode", "undispatched")
     key = body.get("idempotency_key")
     if not isinstance(key, str) or not key.strip():
@@ -166,9 +166,11 @@ def recover(engine, parent_id, body, owner="local"):
         "recovery_subset": True,
         "new_attempt_acknowledged": mode == "failed",
     }
+    if "experiment" in manifest:
+        manifest["experiment"]["role"] = "recovery"
     manifest.pop("plan_sha256", None)
     try:
-        return engine.start(manifest, owner, key, recovery=True)
+        return engine.start(manifest, owner, key, recovery=True, actor_role=actor_role)
     except RecoveryClaimError as exc:
         raise RecoveryPlanError(
             "Recovery eligibility changed; inspect a fresh recovery plan"

@@ -87,7 +87,23 @@ export interface Target {
   >
 }
 
+export interface ExperimentRunContext {
+  id: string
+  role:
+    | 'baseline'
+    | 'initial'
+    | 'candidate'
+    | 'validation'
+    | 'preview'
+    | 'smoke'
+    | 'estimate'
+    | 'recovery'
+  hypothesis?: string
+}
+
 export interface Manifest {
+  experiment?: ExperimentRunContext
+  baseline_run_id?: string
   version: 'sr-bench-1.0'
   case_sha256?: string
   benchmark_weights?: Record<string, number>
@@ -114,7 +130,7 @@ export interface Manifest {
     max_calls_per_case: number
     case_timeout_s?: number
   }
-  sampling: { temperature: number; top_p: number; max_tokens: number; seed?: number }
+  sampling: { temperature: number; top_p?: number; max_tokens: number; seed?: number }
   preview_context?: { session_id?: string; conversation_id?: string; sampling_seed?: number }
 }
 
@@ -160,6 +176,7 @@ export interface PageState {
 }
 
 export interface Run {
+  experiment_roles?: ExperimentRunContext['role'][]
   id: string
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
   created_at: string
@@ -318,4 +335,49 @@ export interface RecoveryRequest {
   cells: RecoveryCell[]
   idempotency_key: string
   acknowledge_new_attempt?: boolean
+}
+
+export interface ReplayOption {
+  preview_run_id: string
+  name: string
+  profile: string
+  case_count: number
+  eligible: boolean
+  reasons: Array<{ code: string; message: string }>
+}
+
+export interface ReplayOptions {
+  baseline: {
+    run_id: string
+    name: string
+    profile: string
+    case_count: number
+    status: string
+    mode: string
+  }
+  options: ReplayOption[]
+  next_cursor: string | null
+  has_more: boolean
+  model_requests: 0
+}
+
+export interface ReplayRequest {
+  baseline_run_id: string
+  preview_run_id: string
+  idempotency_key: string
+}
+
+export interface DatasetSelection {
+  profile: string
+  seed: number | null
+  split: 'dev' | 'holdout'
+  benchmarks: Array<{
+    id: string
+    title: string
+    eligible: boolean
+    case_count: number
+    source_ids: string[]
+    reason: string | null
+  }>
+  model_requests: 0
 }

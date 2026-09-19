@@ -346,7 +346,7 @@ def test_failed_recovery_excludes_accounting_reconciliation_unknowns(tmp_path):
     assert store.call(parent, call) == original
 
 
-def test_reconcile_api_owner_and_editor_scope(tmp_path):
+def test_reconcile_api_owner_and_write_scope(tmp_path):
     store = Store(tmp_path)
     run, _, _ = _saved(store)
     service = Server(("127.0.0.1", 0), store, "test-token")
@@ -356,7 +356,7 @@ def test_reconcile_api_owner_and_editor_scope(tmp_path):
     headers = {
         "Authorization": "Bearer test-token",
         "X-SR-Bench-Actor-ID": "alice",
-        "X-SR-Bench-Actor-Role": "editor",
+        "X-SR-Bench-Actor-Role": "write",
     }
     try:
         assert (
@@ -372,7 +372,7 @@ def test_reconcile_api_owner_and_editor_scope(tmp_path):
             requests.post(
                 url,
                 json={},
-                headers={**headers, "X-SR-Bench-Actor-Role": "viewer"},
+                headers={**headers, "X-SR-Bench-Actor-Role": "read"},
                 timeout=2,
             ).status_code
             == HTTPStatus.FORBIDDEN

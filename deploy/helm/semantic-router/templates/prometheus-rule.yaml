@@ -38,6 +38,7 @@ spec:
             severity: warning
           annotations:
             summary: Semantic Router completion latency p95 is above threshold
+            description: Full observed completion duration, including streaming; finite histogram buckets extend through 1800 seconds.
             dashboard_panel: Response duration by model
 
         - alert: HighFirstResponseObservationP95

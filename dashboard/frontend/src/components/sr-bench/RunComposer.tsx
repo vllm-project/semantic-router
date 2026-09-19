@@ -3,17 +3,14 @@ import { benchApi, SrBenchRequestError } from './api'
 import { DEFAULT_LIMITS, makeManifest, number, validateManifest } from './model'
 import type { Catalog, Dataset, Manifest, Plan, Run, Target } from './types'
 import styles from './SrBench.module.css'
+import ProductLoadingState from '../ProductLoadingState'
+import FrozenBaselineProtocol from './FrozenBaselineProtocol'
 import ProductIcon from '../ProductIcon'
 import BenchSelect from './BenchSelect'
 import RunSettings, { type SamplingSettings } from './RunSettings'
 import TargetRequestProfile from './TargetRequestProfile'
 import controls from './BenchControls.module.css'
-import {
-  benchmarkTitle,
-  friendlyDatasetName,
-  profileTitle,
-  profileDescription,
-} from './datasetPresentation'
+import RunDatasetScope, { type ResolvedDatasetScope } from './RunDatasetScope'
 import {
   clearSubmission,
   readSubmission,
@@ -29,6 +26,9 @@ interface Props {
   actorID: string
   initialModel?: string
   initialDataset?: string
+  mode?: 'live' | 'preview'
+  baselineID?: string
+  experiment?: Manifest['experiment']
   onStarted: (run: Run) => void
 }
 
@@ -40,25 +40,71 @@ export default function RunComposer({
   actorID,
   initialModel,
   initialDataset,
+  mode = 'live',
+  baselineID,
+  experiment,
   onStarted,
 }: Props) {
+  const [baseline, setBaseline] = useState<Run | null>(null)
+  const [baselineError, setBaselineError] = useState('')
+  const [baselineRevision, setBaselineRevision] = useState(0)
+  useEffect(() => {
+    if (!baselineID) return
+    const controller = new AbortController()
+    setBaseline(null)
+    setBaselineError('')
+    void benchApi
+      .run(baselineID, controller.signal)
+      .then((run) => {
+        if (!controller.signal.aborted) {
+          if (run.id !== baselineID)
+            throw new Error('The baseline identity changed. Reload the selected run.')
+          setBaseline(run)
+        }
+      })
+      .catch((cause) => {
+        if (!controller.signal.aborted)
+          setBaselineError(cause instanceof Error ? cause.message : 'Could not read the baseline.')
+      })
+    return () => controller.abort()
+  }, [baselineID, baselineRevision])
   const [saved] = useState(() => readSubmission(actorID))
   const [submission, setSubmission] = useState<PendingSubmission | null>(saved.request)
   const [name, setName] = useState('Balance comparison')
-  const [mode, setMode] = useState<Manifest['mode']>('live')
+  const [hypothesis, setHypothesis] = useState(experiment?.hypothesis ?? '')
+  const experimentContext = useMemo(
+    () =>
+      experiment
+        ? {
+            id: experiment.id,
+            role: experiment.role,
+            ...(hypothesis.trim() ? { hypothesis: hypothesis.trim() } : {}),
+          }
+        : undefined,
+    [experiment, hypothesis],
+  )
   const [costPolicy, setCostPolicy] = useState<'require_priced' | 'capability_only'>(
     'require_priced',
   )
   const [profile, setProfile] = useState(
     datasets.find((item) => item.id === initialDataset)?.profile ?? 'quick',
   )
-  const initialSource =
-    datasets.find((item) => item.id === initialDataset) ??
-    datasets.find((item) => !item.profile || item.profile === 'quick')
-  const [datasetID, setDatasetID] = useState(initialSource?.id ?? '')
-  const [benchmarks, setBenchmarks] = useState<string[]>(initialSource?.benchmarks ?? [])
+  const [benchmarks, setBenchmarks] = useState<string[]>(
+    datasets.find((item) => item.id === initialDataset)?.benchmarks ?? [],
+  )
+  const [scope, setScope] = useState<ResolvedDatasetScope>({
+    profile,
+    sourceIDs: [],
+    seed: null,
+    ready: false,
+    error: 'Select prepared benchmarks.',
+  })
   const [targets, setTargets] = useState<Target[]>(() =>
-    registeredTargets.filter((target) => target.model === initialModel),
+    registeredTargets.filter(
+      (target) =>
+        target.model === initialModel &&
+        ((!baselineID && mode === 'live') || target.kind === 'mom'),
+    ),
   )
   const [limits, setLimits] = useState({ ...DEFAULT_LIMITS })
   const [sampling, setSampling] = useState<SamplingSettings>({ temperature: 0, top_p: 1 })
@@ -80,12 +126,18 @@ export default function RunComposer({
       requestSequence.current += 1
     }
   }, [])
-  const profiles = ['smoke', 'quick', 'standard'].filter((value) =>
-    catalog.profiles.some((item) => item.id === value),
-  )
-  const dataset = datasets.find((item) => item.id === datasetID)
   const formManifest = useMemo(() => {
-    const manifest = makeManifest(name, mode, profile, dataset, targets, limits)
+    if (baseline && baseline.id === baselineID)
+      return {
+        ...baseline.manifest,
+        name,
+        mode,
+        targets,
+        ...(experimentContext ? { experiment: experimentContext } : {}),
+      }
+    const manifest = makeManifest(name, mode, profile, undefined, targets, limits)
+    manifest.seed = scope.seed ?? 20260918
+    manifest.sampling.seed = manifest.seed
     const defaults = { ...manifest.sampling, ...sampling }
     for (const key of ['temperature', 'top_p', 'seed'] as const) {
       // An operator-fixed field has no editable default; discard stale form input
@@ -110,53 +162,26 @@ export default function RunComposer({
     }
     return {
       ...manifest,
+      ...(experimentContext ? { experiment: experimentContext } : {}),
       cost_policy: costPolicy,
       sampling: defaults,
       ...(mode === 'preview' && Object.keys(context).length ? { preview_context: context } : {}),
     }
-  }, [name, mode, profile, dataset, targets, limits, costPolicy, sampling, previewContext])
-  const fingerprint = JSON.stringify({ manifest: formManifest, benchmarks })
-  const sources = datasets.filter((item) => !item.profile || item.profile === profile)
-  const compatibleSources = dataset
-    ? sources.filter((item) => item.seed === dataset.seed && item.split === dataset.split)
-    : []
-  const availableBenchmarks = new Set(compatibleSources.flatMap((item) => item.benchmarks ?? []))
-  function chooseProfile(value: string) {
-    const source = datasets.find((item) => !item.profile || item.profile === value)
-    setProfile(value)
-    setDatasetID(source?.id ?? '')
-    setBenchmarks(source?.benchmarks ?? [])
-  }
-  function selectedSourceIDs(): string[] {
-    if (!dataset) return []
-    const compatible = compatibleSources
-    const selected = [dataset]
-    for (const benchmark of benchmarks) {
-      if (selected.some((item) => item.benchmarks?.includes(benchmark))) continue
-      const covered = new Set(
-        selected.flatMap((item) => item.benchmarks ?? []).filter((id) => benchmarks.includes(id)),
-      )
-      const source = compatible
-        .filter((item) => item.benchmarks?.includes(benchmark))
-        .sort((a, b) => {
-          const overlap = (item: Dataset) =>
-            item.benchmarks?.filter((id) => covered.has(id)).length ?? 0
-          return (
-            overlap(a) - overlap(b) ||
-            (a.benchmarks?.length ?? 0) - (b.benchmarks?.length ?? 0) ||
-            a.id.localeCompare(b.id)
-          )
-        })[0]
-      if (!source)
-        throw new Error(
-          `No compatible prepared source for ${benchmark}. Choose another source collection; development and holdout data cannot be mixed.`,
-        )
-      selected.push(source)
-    }
-    return selected
-      .filter((item) => item.benchmarks?.some((benchmark) => benchmarks.includes(benchmark)))
-      .map((item) => item.id)
-  }
+  }, [
+    name,
+    mode,
+    profile,
+    scope.seed,
+    targets,
+    limits,
+    costPolicy,
+    sampling,
+    previewContext,
+    baseline,
+    baselineID,
+    experimentContext,
+  ])
+  const fingerprint = JSON.stringify({ manifest: formManifest, benchmarks, scope })
   const planCurrent = plan?.fingerprint === fingerprint
 
   async function reviewPlan() {
@@ -167,17 +192,30 @@ export default function RunComposer({
     setPending(true)
     setPlan(null)
     try {
-      let manifest = formManifest
-      const issue = validateManifest(manifest)
-      if (issue) throw new Error(issue)
-      if (!benchmarks.length) throw new Error('Select at least one prepared benchmark.')
-      const composed = await benchApi.composeDatasets(selectedSourceIDs(), benchmarks)
-      if (!current()) return
-      manifest = {
-        ...manifest,
-        dataset: { path: composed.dataset.path, sha256: composed.dataset.sha256 },
+      let evidence: Plan
+      if (baselineID) {
+        if (baseline?.id !== baselineID) throw new Error('Wait for the frozen baseline protocol.')
+        if (!targets.length) throw new Error('Choose a configured MoM target.')
+        evidence = await benchApi.candidatePlan(baselineID, {
+          target_ids: targets.map((target) => target.id),
+          mode,
+          name,
+          ...(experimentContext ? { experiment: experimentContext } : {}),
+        })
+      } else {
+        let manifest = formManifest
+        if (!scope.ready || scope.profile !== profile)
+          throw new Error(scope.error || 'Check the selected benchmarks before reviewing a plan.')
+        const composed = await benchApi.composeDatasets(scope.sourceIDs, benchmarks)
+        if (!current()) return
+        manifest = {
+          ...manifest,
+          dataset: { path: composed.dataset.path, sha256: composed.dataset.sha256 },
+        }
+        const issue = validateManifest(manifest)
+        if (issue) throw new Error(issue)
+        evidence = await benchApi.plan(manifest)
       }
-      const evidence = await benchApi.plan(manifest)
       if (!current()) return
       setPlan({
         manifest: evidence.manifest,
@@ -243,7 +281,7 @@ export default function RunComposer({
   if (submission || saved.error)
     return (
       <section className={styles.panel} aria-labelledby="new-run-title">
-        <h2 id="new-run-title">Create evaluation</h2>
+        <h2 id="new-run-title">{mode === 'preview' ? 'Preview routing' : 'Create evaluation'}</h2>
         {saved.error ? (
           <p className={styles.error} role="alert">
             {saved.error}
@@ -279,143 +317,73 @@ export default function RunComposer({
       </section>
     )
 
+  if (baselineID && baseline?.id !== baselineID)
+    return (
+      <section className={styles.panel}>
+        {baselineError ? (
+          <div className={styles.error} role="alert">
+            <p>{baselineError}</p>
+            <button onClick={() => setBaselineRevision((value) => value + 1)}>
+              Retry baseline read
+            </button>
+          </div>
+        ) : (
+          <ProductLoadingState compact label="Loading the frozen baseline protocol…" />
+        )}
+      </section>
+    )
+
   return (
     <section className={styles.panel} aria-labelledby="new-run-title">
       <div className={styles.sectionHeading}>
         <div>
-          <h2 id="new-run-title">Create evaluation</h2>
+          <h2 id="new-run-title">{mode === 'preview' ? 'Preview routing' : 'Create evaluation'}</h2>
           <p>Use the same frozen questions for single models and your MoM.</p>
         </div>
         <span className={styles.badge}>sr-bench 1.0</span>
       </div>
       <h3>1. Choose scope</h3>
-      <div className={styles.profileCards} role="radiogroup" aria-label="Evaluation size">
-        {profiles.map((value) => (
-          <label
-            key={value}
-            className={`${styles.profileCard} ${profile === value ? styles.profileSelected : ''}`}
-          >
-            <input
-              type="radio"
-              name="evaluation-profile"
-              checked={profile === value}
-              onChange={() => chooseProfile(value)}
-            />
-            <strong>{profileTitle(value)}</strong>
-            <span>{profileDescription(value)}</span>
-          </label>
-        ))}
-      </div>
-      {!sources.length && (
-        <p className={styles.notice}>
-          No prepared {profileTitle(profile).toLowerCase()} datasets are registered. Prepare a
-          dataset with the CLI to use this size.
-        </p>
-      )}
-      <div className={controls.selectionHeading}>
-        <h4>Benchmarks</h4>
-        <button
-          className={controls.compactButton}
-          onClick={() =>
-            setBenchmarks(
-              benchmarks.length === availableBenchmarks.size ? [] : [...availableBenchmarks],
-            )
-          }
-          disabled={!availableBenchmarks.size}
-        >
-          {benchmarks.length === availableBenchmarks.size && benchmarks.length
-            ? 'Clear benchmarks'
-            : 'Select all benchmarks'}
-        </button>
-      </div>
-      <div className={styles.benchmarkChoices} role="group" aria-label="Included benchmarks">
-        {catalog.benchmarks.map((benchmark) => (
-          <label key={benchmark.id} className={styles.benchmarkChoice}>
-            <input
-              type="checkbox"
-              checked={benchmarks.includes(benchmark.id)}
-              disabled={!availableBenchmarks.has(benchmark.id)}
-              onChange={(event) =>
-                setBenchmarks((previous) =>
-                  event.target.checked
-                    ? [...previous, benchmark.id]
-                    : previous.filter((id) => id !== benchmark.id),
-                )
-              }
-            />
-            <span>
-              {benchmarkTitle(benchmark.id)}
-              <small>
-                {availableBenchmarks.has(benchmark.id)
-                  ? 'Prepared'
-                  : 'No compatible prepared source'}
-              </small>
-            </span>
-          </label>
-        ))}
-      </div>
-      <details className={styles.details}>
-        <summary>Prepared source collection</summary>
-        <BenchSelect
-          label="Prepared dataset"
-          className={controls.sourcePicker}
-          value={datasetID}
-          searchable
-          placeholder="Select a prepared source"
-          options={sources.map((item) => ({
-            value: item.id,
-            label: friendlyDatasetName(item),
-            description: `${number(item.case_count)} cases · ${item.split ?? 'split unspecified'}`,
-          }))}
-          onChange={(value) => {
-            setDatasetID(value)
-            setBenchmarks(datasets.find((item) => item.id === value)?.benchmarks ?? [])
-          }}
+      {baselineID && baseline ? (
+        <FrozenBaselineProtocol run={baseline} />
+      ) : (
+        <RunDatasetScope
+          catalog={catalog}
+          datasets={datasets}
+          profile={profile}
+          onProfile={setProfile}
+          benchmarks={benchmarks}
+          onBenchmarks={setBenchmarks}
+          initialDataset={initialDataset}
+          onResolved={setScope}
         />
-        <p className={styles.muted}>
-          Selected benchmarks are composed without resampling. Sources must share the same size,
-          seed and split.
-        </p>
-      </details>
+      )}
       <div className={styles.formGrid}>
         <label>
           Run name
           <input value={name} onChange={(event) => setName(event.target.value)} />
         </label>
-        <BenchSelect
-          label="Mode"
-          value={mode}
-          options={[
-            {
-              value: 'live',
-              label: 'Live evaluation',
-              description: 'Generate answers and measure quality, cost and latency.',
-            },
-            {
-              value: 'preview',
-              label: 'Route preview',
-              description: 'Inspect routing decisions without generating answers.',
-            },
-          ]}
-          onChange={(value) => setMode(value as Manifest['mode'])}
-        />
       </div>
+      {experiment && (
+        <label>
+          Hypothesis
+          <textarea
+            value={hypothesis}
+            maxLength={2000}
+            placeholder="What changed, and what do you expect?"
+            onChange={(event) => setHypothesis(event.target.value)}
+          />
+        </label>
+      )}
       {mode === 'preview' && (
         <p className={styles.notice}>
           Preview checks decisions and selected models. It does not generate answers or measure
           capability.
         </p>
       )}
-      {datasets.length === 0 && (
+      {!baselineID && datasets.length === 0 && (
         <p className={styles.notice}>
           No prepared datasets are registered. Prepare a frozen dataset with the sr-bench CLI
           connected to this service, then refresh this page.
-        </p>
-      )}
-      {dataset && (
-        <p className={styles.muted}>
-          {benchmarks.length} benchmarks selected. The reviewed plan shows the exact frozen case
-          count.
         </p>
       )}
       <div className={styles.sectionHeading}>
@@ -428,7 +396,11 @@ export default function RunComposer({
             searchable
             placeholder="Choose target"
             options={registeredTargets
-              .filter((item) => !targets.some((target) => target.id === item.id))
+              .filter(
+                (item) =>
+                  ((!baselineID && mode === 'live') || item.kind === 'mom') &&
+                  !targets.some((target) => target.id === item.id),
+              )
               .map((target) => ({
                 value: target.id,
                 label: target.id,
@@ -497,51 +469,32 @@ export default function RunComposer({
           </fieldset>
         ))}
       </div>
-      <BenchSelect
-        label="Cost accounting"
-        className={controls.costControl}
-        value={costPolicy}
-        options={[
-          {
-            value: 'require_priced',
-            label: 'Quality and cost',
-            description: 'Require complete prices and a model-cost budget.',
-          },
-          {
-            value: 'capability_only',
-            label: 'Quality only',
-            description: 'Run without cost-saving claims when prices are unavailable.',
-          },
-        ]}
-        onChange={(value) => {
-          setCostPolicy(value as 'require_priced' | 'capability_only')
-          if (value === 'capability_only')
-            setLimits((previous) =>
-              !Number.isFinite(previous.max_cost_usd) || previous.max_cost_usd <= 0
-                ? { ...previous, max_cost_usd: DEFAULT_LIMITS.max_cost_usd }
-                : previous,
-            )
-        }}
-      />
-      {costPolicy === 'capability_only' && (
-        <p className={styles.notice}>
-          Unknown or unpriced usage cannot be bounded by a USD budget. Time, output and call limits
-          still apply; this run cannot prove cost savings.
-        </p>
+      {!baselineID && (
+        <>
+          <h3>3. Set budget and limits</h3>
+          <RunSettings
+            limits={limits}
+            onLimitsChange={setLimits}
+            sampling={sampling}
+            onSamplingChange={setSampling}
+            seed={formManifest.seed}
+            targets={targets}
+            costPolicy={costPolicy}
+            onCostPolicyChange={(value) => {
+              setCostPolicy(value)
+              if (value === 'capability_only')
+                setLimits((previous) =>
+                  !Number.isFinite(previous.max_cost_usd) || previous.max_cost_usd <= 0
+                    ? { ...previous, max_cost_usd: DEFAULT_LIMITS.max_cost_usd }
+                    : previous,
+                )
+            }}
+            mode={mode}
+            previewContext={previewContext}
+            onPreviewContextChange={setPreviewContext}
+          />
+        </>
       )}
-      <h3>3. Set budget and limits</h3>
-      <RunSettings
-        limits={limits}
-        onLimitsChange={setLimits}
-        sampling={sampling}
-        onSamplingChange={setSampling}
-        seed={formManifest.seed}
-        targets={targets}
-        costPolicy={costPolicy}
-        mode={mode}
-        previewContext={previewContext}
-        onPreviewContextChange={setPreviewContext}
-      />
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -567,7 +520,15 @@ export default function RunComposer({
         </p>
       )}
       <div className={styles.actions}>
-        <button type="button" disabled={pending || !canRun} onClick={() => void reviewPlan()}>
+        <button
+          type="button"
+          disabled={
+            pending ||
+            !canRun ||
+            (baselineID ? baseline?.id !== baselineID : !scope.ready || scope.profile !== profile)
+          }
+          onClick={() => void reviewPlan()}
+        >
           {pending ? 'Working…' : 'Review plan'}
         </button>
         <button
@@ -576,7 +537,7 @@ export default function RunComposer({
           disabled={pending || !canRun || !planCurrent}
           onClick={() => void startRun()}
         >
-          Start evaluation
+          {mode === 'preview' ? 'Start route preview' : 'Start evaluation'}
         </button>
       </div>
     </section>

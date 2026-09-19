@@ -66,7 +66,7 @@ func (h *SRBenchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeSRBenchError(w, http.StatusUnauthorized, "Authentication is required")
 		return
 	}
-	if h.readonly && r.Method != http.MethodGet {
+	if h.readonly && r.Method != http.MethodGet && !dashboardauth.IsSRBenchComparisonRequest(r.Method, r.URL.Path) {
 		writeSRBenchError(w, http.StatusForbidden, "Dashboard is read-only")
 		return
 	}
@@ -120,16 +120,25 @@ func srBenchRouteMethod(path string) (string, bool) {
 		return "", false
 	}
 	switch rest {
-	case "/health", "/catalog", "/datasets", "/targets":
+	case "/health", "/catalog", "/datasets", "/datasets/selection", "/targets":
 		return http.MethodGet, true
 	case "/plans", "/comparisons", "/replays", "/datasets/compose":
 		return http.MethodPost, true
-	case "/runs":
+	case "/runs", "/experiments":
 		// GET and POST are the only collection methods; the caller selects
 		// between them in ServeHTTP before forwarding.
 		return "", true
 	}
 	parts := strings.Split(strings.TrimPrefix(rest, "/"), "/")
+	if len(parts) >= 2 && parts[0] == "experiments" && validSRBenchExperimentID(parts[1]) {
+		if len(parts) == 2 {
+			return http.MethodGet, true
+		}
+		if len(parts) == 3 && parts[2] == "runs" {
+			return "", true
+		}
+		return "", false
+	}
 	if len(parts) >= 2 && parts[0] == "datasets" && validSRBenchDatasetID(parts[1]) {
 		if len(parts) == 2 || len(parts) == 3 && parts[2] == "cases" {
 			return http.MethodGet, true
@@ -144,9 +153,9 @@ func srBenchRouteMethod(path string) (string, bool) {
 	}
 	if len(parts) == 3 {
 		switch parts[2] {
-		case "results", "report", "events", "calls":
+		case "results", "report", "events", "calls", "replay-options":
 			return http.MethodGet, true
-		case "cancel", "regrade", "export", "recover-plan", "recover", "reconcile-usage":
+		case "cancel", "regrade", "export", "recover-plan", "recover", "reconcile-usage", "candidate-plan":
 			return http.MethodPost, true
 		}
 	}
@@ -157,7 +166,15 @@ func srBenchRouteMethod(path string) (string, bool) {
 }
 
 func validSRBenchDatasetID(value string) bool {
-	if len(value) != 64 {
+	return validSRBenchHexID(value, 64)
+}
+
+func validSRBenchExperimentID(value string) bool {
+	return strings.HasPrefix(value, "exp-") && validSRBenchHexID(strings.TrimPrefix(value, "exp-"), 32)
+}
+
+func validSRBenchHexID(value string, length int) bool {
+	if len(value) != length {
 		return false
 	}
 	for _, char := range value {

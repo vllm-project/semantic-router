@@ -528,7 +528,7 @@
 }
 .runFilters {
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-columns: 2fr repeat(3, minmax(0, 1fr));
   gap: 1rem;
   margin: 1rem 0;
 }
@@ -874,7 +874,7 @@
   margin: 0.8rem 0 1.3rem;
 }
 .benchmarkChoice:has(input:disabled) {
-  opacity: 0.45;
+  color: var(--text-secondary);
 }
 @media (max-width: 900px) {
   .chartGrid {
@@ -1024,4 +1024,42 @@
 
 .baselineSelect {
   max-width: 400px;
+}
+
+.replayComposer {
+  display: grid;
+  gap: 1rem;
+}
+.replayComposer > h2,
+.replayComposer > p {
+  margin: 0;
+}
+.replayComposer > button {
+  justify-self: start;
+}
+.replayUnavailable {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.replayUnavailable li {
+  display: grid;
+  gap: 0.25rem;
+}
+.replayUnavailable span {
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.customDataset {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+}
+.customDataset > button {
+  justify-self: start;
 }

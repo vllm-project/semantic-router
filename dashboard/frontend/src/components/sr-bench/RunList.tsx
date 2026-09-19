@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import BenchSelect from './BenchSelect'
 import BenchPagination from './BenchPagination'
 import { active, number, percent } from './model'
@@ -11,19 +10,29 @@ export function RunStatus({ status }: { status: string }) {
   return <span className={`${styles.status} ${styles[tone]}`}>{status}</span>
 }
 
+export interface RunFilters {
+  query: string
+  status: string
+  mode: string
+  profile: string
+  page: number
+}
+
 export default function RunList({
   runs,
   selectedID,
   onSelect,
+  filters,
+  onFilters,
 }: {
   runs: Run[]
   selectedID: string | null
   onSelect: (id: string) => void
+  filters: RunFilters
+  onFilters: (filters: RunFilters) => void
 }) {
-  const [query, setQuery] = useState('')
-  const [status, setStatus] = useState('all')
-  const [mode, setMode] = useState('all')
-  const [page, setPage] = useState(0)
+  const { query, status, mode, profile, page } = filters
+  const changeFilter = (patch: Partial<RunFilters>) => onFilters({ ...filters, ...patch, page: 0 })
   const filtered = runs.filter((run) => {
     const text = [
       run.id,
@@ -36,7 +45,8 @@ export default function RunList({
     return (
       text.includes(query.toLowerCase()) &&
       (status === 'all' || (status === 'active' ? active(run.status) : run.status === status)) &&
-      (mode === 'all' || run.manifest.mode === mode)
+      (mode === 'all' || run.manifest.mode === mode) &&
+      (profile === 'all' || run.manifest.profile === profile)
     )
   })
   const currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / 10) - 1))
@@ -59,8 +69,7 @@ export default function RunList({
             value={query}
             placeholder="Name, model or run ID"
             onChange={(event) => {
-              setQuery(event.target.value)
-              setPage(0)
+              changeFilter({ query: event.target.value })
             }}
           />
         </label>
@@ -68,8 +77,7 @@ export default function RunList({
           label="Run status"
           value={status}
           onChange={(value) => {
-            setStatus(value)
-            setPage(0)
+            changeFilter({ status: value })
           }}
           options={[
             { value: 'all', label: 'All statuses' },
@@ -84,14 +92,25 @@ export default function RunList({
           label="Run mode"
           value={mode}
           onChange={(value) => {
-            setMode(value)
-            setPage(0)
+            changeFilter({ mode: value })
           }}
           options={[
             { value: 'all', label: 'All modes' },
             { value: 'live', label: 'Live evaluation' },
             { value: 'preview', label: 'Route preview' },
             { value: 'replay', label: 'Diagnostic replay' },
+          ]}
+        />
+        <BenchSelect
+          label="Run profile"
+          value={profile}
+          onChange={(value) => changeFilter({ profile: value })}
+          options={[
+            { value: 'all', label: 'All profiles' },
+            ...['smoke', 'quick', 'standard'].map((value) => ({
+              value,
+              label: profileTitle(value),
+            })),
           ]}
         />
       </div>
@@ -176,7 +195,7 @@ export default function RunList({
         total={filtered.length}
         page={currentPage}
         pageSize={10}
-        onChange={setPage}
+        onChange={(page) => onFilters({ ...filters, page })}
       />
     </section>
   )

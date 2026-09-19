@@ -333,6 +333,9 @@ func observabilityPermission(_ string, path string) (string, bool) {
 func featurePermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/sr-bench/v1" || strings.HasPrefix(path, "/api/sr-bench/v1/"):
+		if IsSRBenchComparisonRequest(method, path) {
+			return PermEvalRead, true
+		}
 		if isSRBenchRunAction(path, "cancel") {
 			return PermEvalRun, true
 		}
@@ -347,6 +350,12 @@ func featurePermission(method, path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// IsSRBenchComparisonRequest identifies the body-based read of saved results.
+// It does not exempt the request from normal POST authentication or CSRF checks.
+func IsSRBenchComparisonRequest(method, path string) bool {
+	return method == http.MethodPost && path == "/api/sr-bench/v1/comparisons"
 }
 
 func isSRBenchRunAction(path, action string) bool {

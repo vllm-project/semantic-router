@@ -88,5 +88,9 @@ def capture_runner(manifest):
         **observed,
         "fingerprint_sha256": digest(observed),
         "captured_at": datetime.now(timezone.utc).isoformat(),
-        "recipe_snapshots": capture_recipes(manifest),
+        # Replay inherits frozen source receipts; consulting today's runtime
+        # would make offline reuse depend on an unrelated live configuration.
+        "recipe_snapshots": (
+            {} if manifest["mode"] == "replay" else capture_recipes(manifest)
+        ),
     }

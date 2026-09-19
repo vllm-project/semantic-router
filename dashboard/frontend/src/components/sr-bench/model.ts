@@ -88,9 +88,10 @@ export function validateManifest(manifest: Manifest): string | null {
   )
     return 'Temperature must be between 0 and 2.'
   if (
-    !Number.isFinite(manifest.sampling.top_p) ||
-    manifest.sampling.top_p < 0 ||
-    manifest.sampling.top_p > 1
+    manifest.sampling.top_p !== undefined &&
+    (!Number.isFinite(manifest.sampling.top_p) ||
+      manifest.sampling.top_p < 0 ||
+      manifest.sampling.top_p > 1)
   )
     return 'Top P must be between 0 and 1.'
   if (manifest.sampling.seed !== undefined && !Number.isSafeInteger(manifest.sampling.seed))

@@ -83,7 +83,8 @@ must use their actual routed endpoint. Price all four exclusive token buckets
 for every billed model; unsupported compound usage cannot be priced from only
 the selected model. The direct MoM adapter requires complete single-call
 accounting. Choose `capability_only` explicitly if prices are unavailable and
-make no savings claim.
+make no savings claim. Quality-only disables USD-budget stopping even when some
+prices are known; it still records known spend and enforces time/call/output limits.
 
 Resolve the effective request as run sampling plus the target's frozen
 `request_params` overrides. Do not mistake form defaults for native settings.
@@ -130,25 +131,50 @@ silently substitute zero or continue a cost-qualified claim through it.
 
 ## Perform the optimization loop
 
-1. Save live single-model and MoM baselines on identical dev tasks. Inspect
-   routing decisions, errors, final answers, usage and time before changing config.
-2. Make one coherent policy change using the existing config schema, validate,
-   plan and apply flow. Wait for the expected active runtime hash. Restart-required
-   changes use the authorized `serve --replace-active-config` path.
-3. Bind a new manifest to that hash and run `benchmark preview`. Preview checks
-   actual Router decisions and selections but has no capability score. Keep
-   Learning enabled: its preview selects against a read-only snapshot of the
-   active learning state without updating it. Inspect `selection_provenance`
-   for the config/state hashes, capture time and sampling seed. A sampled
-   snapshot choice is not a promise of the later live choice. Preserve unresolved
-   `execution_required` selections with their reasons.
-4. For eligible direct/static routing, use `benchmark replay --baseline BASELINE_ID
-   --preview PREVIEW_ID`. It reuses saved matrix cells and makes no model calls.
-   State-dependent Learning previews, plugin, agent, changed-prompt and compound
-   paths require live evaluation.
-5. Run the candidate live on the same dev cases and use `benchmark compare
-   BASELINE_ID CANDIDATE_ID`. Expand to the untouched standard split only for
-   the prespecified acceptance decision; never tune against its failures.
+1. Start with smoke preview, then bounded live smoke. Verify final answers,
+   grader prerequisites, identity, accounting, cancellation and durable evidence.
+2. Create an experiment with `benchmark experiment create NAME`, and link the
+   completed quick/dev single-model matrix using `experiment attach EXPERIMENT_ID
+   --run BASELINE_ID --role baseline`. Save the current MoM result separately.
+   Reuse the matrix rather than regenerate identical baseline cells each iteration.
+3. Make one coherent policy change using the canonical config validate/plan/apply
+   flow. Wait for the expected active hash; restart-required changes use the
+   authorized `serve --replace-active-config` path.
+4. Use `benchmark candidate-plan BASELINE_ID --target REGISTERED_MOM --mode preview
+   --experiment EXPERIMENT_ID` to inherit the exact baseline tasks and protocol.
+   Inspect the returned frozen manifest before submission. Preview has no capability
+   score. Keep Learning enabled when that is the policy under test, and inspect
+   `selection_provenance`, unresolved selection reasons and sampled seed.
+5. Inspect `benchmark replay-options BASELINE_ID --limit 10`. Use only eligible
+   completed previews with `benchmark replay --baseline BASELINE_ID --preview
+   PREVIEW_ID`. Discovery and submission share one authoritative validator.
+   Identical full cases by stable ID can differ only in order, with an explicit
+   receipt; changed answers/metadata, effective parameters, missing or duplicate
+   generations, actual prompt differences, plugins, dynamic/state-dependent choices
+   and unsupported agent/code paths reject without new model calls. Preserve the
+   same pending source IDs/idempotency key after a lost acknowledgement.
+6. Evaluate promising candidates live on the same dev cases and compare paired
+   results. Freeze the chosen policy before the prespecified standard live
+   comparison; never tune on its failures. Experiment links preserve each original
+   run and do not themselves prove comparability or start model work.
+
+Explicit recovery children stay in their parent's experiment as recovery attempts,
+not full baselines or candidate comparisons. Administrators may continue a CLI-created
+experiment; other writers create attempts only in their own experiments. Read-only
+users can compare accessible saved runs without evaluation write/run permission.
+
+Preview observes a read-only Learning snapshot; config identity does not freeze
+session/telemetry state or a later random draw. The harness does not automatically
+isolate/reset live learning state across candidates. Declare the intended state
+conditions and qualify uncontrolled differences. Non-Learning selectors can also
+be state-dependent. Never turn off Learning merely to make Replay eligible.
+
+`route preview --request-file FILE` accepts the Router's supported request subset,
+not arbitrary Chat Completions parameters. It preserves messages/tool calls, tools,
+response format, output budgets and string request metadata; unknown fields such
+as temperature/stream reject. Optional session/conversation IDs and sampling seed
+supply preview context. Benchmark cases use explicit `request_metadata` for
+provider metadata; case `metadata` can contain labels and must not be forwarded.
 
 Offline `benchmark regrade RUN_ID --output PATH` currently regrades saved MCQ/grid
 final answers with a separate artifact and zero model calls. `benchmark export

@@ -340,7 +340,7 @@ def test_composition_preserves_exact_whole_benchmarks_and_is_idempotent(tmp_path
             reader.compose(ids, benchmarks)
 
 
-def test_dataset_http_is_authenticated_read_only_and_compose_is_editor_only(
+def test_dataset_http_is_authenticated_read_only_and_compose_requires_write(
     tmp_path, monkeypatch
 ):
     store = Store(tmp_path / "store")
@@ -357,7 +357,7 @@ def test_dataset_http_is_authenticated_read_only_and_compose_is_editor_only(
     headers = {
         "Authorization": "Bearer dataset-token",
         "X-SR-Bench-Actor-ID": "reader",
-        "X-SR-Bench-Actor-Role": "viewer",
+        "X-SR-Bench-Actor-Role": "read",
     }
     active, _ = store.create(
         plan(
@@ -406,7 +406,7 @@ def test_dataset_http_is_authenticated_read_only_and_compose_is_editor_only(
             ).status_code
             == 403
         )
-        headers["X-SR-Bench-Actor-Role"] = "editor"
+        headers["X-SR-Bench-Actor-Role"] = "write"
         response = requests.post(
             base + "/datasets/compose", headers=headers, json=body, timeout=2
         )
@@ -418,3 +418,34 @@ def test_dataset_http_is_authenticated_read_only_and_compose_is_editor_only(
     finally:
         service.shutdown()
         service.server_close()
+
+
+def test_default_selection_proves_full_content_and_excludes_custom_subsets(tmp_path):
+    first = _dataset(tmp_path, [_case("mmlu")])
+    bundle = _dataset(tmp_path, [_case("gpqa", "gpqa-diamond"), _case("mmlu")])
+    _write_dataset(tmp_path, [_case("custom")], "smoke", 7, first["sources"], True)
+    reader = DatasetReader(tmp_path)
+    result = reader.selection("smoke")
+    entries = {row["id"]: row for row in result["benchmarks"]}
+    assert result["seed"] == 7 and result["model_requests"] == 0
+    assert entries["mmlu-pro"]["source_ids"] == [first["id"]]
+    assert entries["gpqa-diamond"]["source_ids"] == [bundle["id"]]
+    assert entries["hle"]["eligible"] is False
+    assert "hidden-" not in json.dumps(result)
+    changed = _case("mmlu")
+    changed["answer"] = "different-private-answer"
+    _dataset(tmp_path, [changed])
+    blocked = {row["id"]: row for row in reader.selection("smoke")["benchmarks"]}
+    assert not blocked["mmlu-pro"]["eligible"]
+    assert blocked["mmlu-pro"]["source_ids"] == []
+    assert blocked["gpqa-diamond"]["eligible"]
+
+
+def test_default_selection_blocks_cross_benchmark_seed_conflicts(tmp_path):
+    _dataset(tmp_path, [_case("first")], seed=7)
+    _dataset(tmp_path, [_case("second", "gpqa-diamond")], seed=8)
+    result = DatasetReader(tmp_path).selection("smoke")
+    assert result["seed"] is None
+    assert not any(row["eligible"] for row in result["benchmarks"])
+    with pytest.raises(ValueError, match="profile"):
+        DatasetReader(tmp_path).selection("everything")

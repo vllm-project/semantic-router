@@ -152,4 +152,14 @@ describe('sr-bench run contract', () => {
     ).toBeNull()
     expect(manifest.limits).not.toHaveProperty('case_timeout_s')
   })
+  it('preserves omitted provider sampling defaults in a frozen manifest', () => {
+    const manifest = makeManifest('Frozen', 'live', 'quick', dataset, [single], DEFAULT_LIMITS)
+    delete manifest.sampling.top_p
+    delete manifest.sampling.seed
+    const before = JSON.stringify(manifest)
+    expect(validateManifest(manifest)).toBeNull()
+    expect(JSON.stringify(manifest)).toBe(before)
+    expect(manifest.sampling).not.toHaveProperty('top_p')
+    expect(manifest.sampling).not.toHaveProperty('seed')
+  })
 })

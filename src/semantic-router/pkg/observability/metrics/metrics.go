@@ -209,9 +209,11 @@ var (
 	// ModelCompletionLatency tracks the latency of completions by model
 	ModelCompletionLatency = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "llm_model_completion_latency_seconds",
-			Help:    "The latency of LLM model completions in seconds",
-			Buckets: prometheus.DefBuckets,
+			Name: "llm_model_completion_latency_seconds",
+			Help: "The latency of LLM model completions in seconds",
+			// Completion can include long streaming/reasoning responses. Finite
+			// bounds must extend beyond the maintained 30-second P95 alert.
+			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60, 120, 300, 600, 1800},
 		},
 		[]string{"model"},
 	)

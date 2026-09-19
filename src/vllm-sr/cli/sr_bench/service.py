@@ -18,11 +18,14 @@ from cli.runtime_env_names import runtime_env_name_is_allowed
 
 from . import VERSION
 from .accounting import reconcile_usage
+from .candidate_plans import candidate_manifest, validate_candidate_protocol
 from .contracts import catalog, plan, planned_cells
 from .datasets import DatasetReader
-from .engine import Engine
+from .engine import Engine, ReviewedPlanChangedError
+from .experiments import Experiments
 from .offline import export_training, regrade, replay
 from .recovery import RecoveryPlanError, recover, recovery_plan
+from .replay_validation import ReplayEligibilityError, replay_options
 from .report import compare, make_report
 from .store import Store
 
@@ -68,6 +71,7 @@ class Server(ThreadingHTTPServer):
     def __init__(self, address, store, token=None, store_identity=None):
         self.store = store
         self.engine = Engine(store)
+        self.experiments = Experiments(store)
         self.datasets = DatasetReader(store.root)
         self.token = token
         self.store_identity = (
@@ -91,6 +95,24 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+    def _plan(self, manifest, role, actor):
+        frozen = plan(self._manifest(manifest, role))
+        if membership := frozen.get("experiment"):
+            self.server.experiments.get(
+                membership["id"], None if role == "admin" else actor
+            )
+        return {
+            "manifest": {
+                k: v
+                for k, v in frozen.items()
+                if k != "cases" or "dataset" not in frozen
+            },
+            "plan_sha256": frozen["plan_sha256"],
+            "total": len(planned_cells(frozen)),
+            "status": "validated",
+            "model_requests": 0,
+        }
+
     def _actor(self):
         token = self.server.token
         if token and not hmac.compare_digest(
@@ -104,7 +126,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise PermissionError(
                     "Trusted actor forwarding requires service authentication"
                 )
-            if not actor or role not in {"admin", "editor", "viewer"}:
+            if not actor or role not in {"admin", "write", "read"}:
                 raise PermissionError("Invalid actor identity")
             if len(actor) > MAX_ACTOR_ID_CHARS:
                 raise PermissionError("Invalid actor identity")
@@ -215,12 +237,64 @@ class Handler(BaseHTTPRequestHandler):
             if not path.startswith(PREFIX + "/"):
                 return self._send(404, {"error": "not found"})
             route = path[len(PREFIX) :].strip("/").split("/")
-            if method == "POST" and role == "viewer":
-                raise PermissionError("Editor access is required")
+            if method == "POST" and role == "read" and route != ["comparisons"]:
+                raise PermissionError("Write access is required")
+            if route[0] == "experiments":
+                if method == "GET":
+                    query = parse_qs(
+                        parsed.query, keep_blank_values=True, max_num_fields=2
+                    )
+                    if set(query) - {"after", "limit"} or any(
+                        len(v) != 1 for v in query.values()
+                    ):
+                        raise ValueError("Invalid experiment page filters")
+                    page = {
+                        "after": int(query.get("after", ["0"])[0]),
+                        "limit": int(query.get("limit", ["20"])[0]),
+                    }
+                    if len(route) == 1:
+                        return self._send(
+                            200, self.server.experiments.list(owner, **page)
+                        )
+                    if len(route) == RUN_ROUTE_PARTS:
+                        return self._send(
+                            200, self.server.experiments.get(route[1], owner)
+                        )
+                    if len(route) == RUN_ACTION_ROUTE_PARTS and route[2] == "runs":
+                        return self._send(
+                            200, self.server.experiments.runs(route[1], owner, **page)
+                        )
+                if method == "POST":
+                    body = self._body()
+                    if len(route) == 1:
+                        return self._send(
+                            201,
+                            self.server.experiments.create(
+                                body.get("name"), actor, body.get("idempotency_key")
+                            ),
+                        )
+                    if len(route) == RUN_ACTION_ROUTE_PARTS and route[2] == "runs":
+                        return self._send(
+                            200,
+                            self.server.experiments.attach(
+                                route[1],
+                                body.get("run_id"),
+                                body.get("role"),
+                                body.get("hypothesis", ""),
+                                owner=owner,
+                            ),
+                        )
             if route == ["catalog"] and method == "GET":
                 return self._send(200, catalog())
             if route == ["datasets"] and method == "GET":
                 return self._send(200, {"datasets": datasets(self.server.store)})
+            if route == ["datasets", "selection"] and method == "GET":
+                query = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=1)
+                if set(query) != {"profile"} or len(query["profile"]) != 1:
+                    raise ValueError("Dataset selection requires one profile")
+                return self._send(
+                    200, self.server.datasets.selection(query["profile"][0])
+                )
             if route == ["datasets", "compose"] and method == "POST":
                 body = self._body()
                 return self._send(
@@ -255,15 +329,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"targets": self._registry_targets()})
             if route == ["plans"] and method == "POST":
                 body = self._body()
-                frozen = plan(self._manifest(body.get("manifest", body), role))
                 return self._send(
-                    200,
-                    {
-                        "manifest": frozen,
-                        "plan_sha256": frozen["plan_sha256"],
-                        "total": len(planned_cells(frozen)),
-                        "status": "validated",
-                    },
+                    200, self._plan(body.get("manifest", body), role, actor)
                 )
             if route == ["runs"]:
                 if method == "GET":
@@ -280,6 +347,7 @@ class Handler(BaseHTTPRequestHandler):
                         self._manifest(manifest, role),
                         actor,
                         body.get("idempotency_key"),
+                        actor_role=role,
                     ),
                 )
             if route == ["replays"] and method == "POST":
@@ -294,6 +362,7 @@ class Handler(BaseHTTPRequestHandler):
                         body["preview_run_id"],
                         actor,
                         body.get("idempotency_key"),
+                        actor_role=role,
                     ),
                 )
             if route == ["comparisons"] and method == "POST":
@@ -321,6 +390,49 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, self.server.store.call(run_id, route[3]))
                 if len(route) == RUN_ACTION_ROUTE_PARTS:
                     action = route[2]
+                    if action == "candidate-plan" and method == "POST":
+                        body = self._body()
+                        if set(body) - {"target_ids", "mode", "name", "experiment"}:
+                            raise ValueError("Unsupported candidate plan fields")
+                        ids = body.get("target_ids")
+                        if (
+                            not isinstance(ids, list)
+                            or not ids
+                            or not all(isinstance(i, str) for i in ids)
+                            or len(set(ids)) != len(ids)
+                        ):
+                            raise ValueError("Select distinct configured MoM targets")
+                        registry = {t["id"]: t for t in self._registry_targets()}
+                        if any(i not in registry for i in ids):
+                            raise ValueError("Candidate target is not registered")
+                        manifest = candidate_manifest(
+                            run,
+                            [registry[i] for i in ids],
+                            body.get("mode", "live"),
+                            body.get("name"),
+                            body.get("experiment"),
+                        )
+                        result = self._plan(manifest, role, actor)
+                        validate_candidate_protocol(run, result["manifest"])
+                        return self._send(200, result)
+                    if action == "replay-options" and method == "GET":
+                        query = parse_qs(
+                            parsed.query, keep_blank_values=True, max_num_fields=2
+                        )
+                        if set(query) - {"after", "limit"} or any(
+                            len(v) != 1 for v in query.values()
+                        ):
+                            raise ValueError("Invalid replay options filters")
+                        return self._send(
+                            200,
+                            replay_options(
+                                self.server.store,
+                                run_id,
+                                owner,
+                                query.get("after", [None])[0],
+                                int(query.get("limit", ["10"])[0]),
+                            ),
+                        )
                     if action == "reconcile-usage" and method == "POST":
                         return self._send(
                             200, reconcile_usage(self.server.store, run_id)
@@ -334,7 +446,9 @@ class Handler(BaseHTTPRequestHandler):
                                 body.get("mode", "undispatched"),
                             )
                             if action == "recover-plan"
-                            else recover(self.server.engine, run_id, body, actor)
+                            else recover(
+                                self.server.engine, run_id, body, actor, actor_role=role
+                            )
                         )
                         return self._send(
                             200 if action == "recover-plan" else 201, result
@@ -363,6 +477,27 @@ class Handler(BaseHTTPRequestHandler):
                     if action == "cancel" and method == "POST":
                         return self._send(200, self.server.engine.cancel(run_id))
             self._send(404, {"error": "not found"})
+        except ReviewedPlanChangedError as exc:
+            self._send(
+                400,
+                {
+                    "error": str(exc),
+                    "code": "reviewed_plan_changed",
+                    "dispatch_started": False,
+                    "model_requests": 0,
+                },
+            )
+        except ReplayEligibilityError as exc:
+            self._send(
+                400,
+                {
+                    "error": str(exc),
+                    "code": "replay_ineligible",
+                    "reasons": exc.reasons,
+                    "model_requests": 0,
+                    "dispatch_started": False,
+                },
+            )
         except RecoveryPlanError as exc:
             self._send(
                 400,

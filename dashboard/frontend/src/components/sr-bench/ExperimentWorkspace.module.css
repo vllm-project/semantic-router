@@ -1,0 +1,100 @@
+.workflow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0 2rem;
+}
+.workflow li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-left: 2px solid var(--border-color);
+}
+.workflow span,
+.experimentCard span {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.timeline {
+  display: grid;
+  gap: 1.5rem;
+}
+.entry {
+  display: flex;
+  gap: 1rem;
+  min-width: 0;
+}
+.marker {
+  padding: 0.7rem;
+  align-self: flex-start;
+  border: 1px solid var(--border-color);
+  border-radius: 50%;
+}
+.marker svg,
+.runLink svg,
+.experimentCard svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+.entryBody {
+  min-width: 0;
+  flex: 1;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.entryBody p {
+  overflow-wrap: anywhere;
+}
+.runLink {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  text-align: left;
+  font-weight: 600;
+}
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
+  gap: 1rem;
+}
+.experimentCard {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 1.25rem;
+  text-align: left;
+}
+.experimentCard strong {
+  overflow-wrap: anywhere;
+}
+.experimentCard span {
+  grid-column: 2;
+}
+.experimentCard > svg:last-child {
+  grid-column: 3;
+  grid-row: 1 / 3;
+}
+.editor {
+  display: grid;
+  gap: 1rem;
+  max-width: 700px;
+  border-top: 1px solid var(--border-color);
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+}
+.editor > button {
+  justify-self: start;
+}
+@media (max-width: 760px) {
+  .workflow {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}
