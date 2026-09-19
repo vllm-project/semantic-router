@@ -16,6 +16,7 @@ Usage:
     python server.py --port 8686 --data-dir /app/data
 
 Environment variables:
+    ML_SERVICE_HOST      - Bind address (default: 127.0.0.1)
     ML_SERVICE_PORT      - Port to listen on (default: 8686)
     ML_SERVICE_DATA_DIR  - Data directory for job outputs (default: ./data)
 """
@@ -349,8 +350,8 @@ def main():
     parser.add_argument(
         "--host",
         type=str,
-        default=os.environ.get("ML_SERVICE_HOST", "0.0.0.0"),
-        help="Host to bind to (default: 0.0.0.0)",
+        default=os.environ.get("ML_SERVICE_HOST", "127.0.0.1"),
+        help="Host to bind to (default: 127.0.0.1; remote use requires protected transport)",
     )
     args = parser.parse_args()
 
