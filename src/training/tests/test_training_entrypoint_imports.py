@@ -55,7 +55,9 @@ class StandaloneExperimentImportsTest(unittest.TestCase):
             "ft_qwen3_mmlu_solver_lora.py",
             "ft_qwen3_mmlu_solver_lora_no_leakage.py",
         ):
-            with self.subTest(entrypoint=filename), tempfile.TemporaryDirectory() as cwd:
+            with self.subTest(
+                entrypoint=filename
+            ), tempfile.TemporaryDirectory() as cwd:
                 environment = dict(os.environ)
                 environment.pop("PYTHONPATH", None)
                 completed = subprocess.run(
