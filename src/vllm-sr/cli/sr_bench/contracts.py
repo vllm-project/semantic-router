@@ -237,6 +237,39 @@ def validate_request_params(params, limits, label="request_params"):
             raise ValueError(f"{label}.{name} must be boolean")
 
 
+def resolve_dataset(manifest):
+    """Resolve the hash-bound case source before applying benchmark policy."""
+    m = dict(manifest)
+    if "dataset" in m:
+        ds = m["dataset"]
+        if not isinstance(ds, dict) or not ds.get("path") or not ds.get("sha256"):
+            raise ValueError("dataset requires path and sha256")
+        path = Path(ds["path"]).expanduser().resolve()
+        actual = hashlib.sha256(path.read_bytes()).hexdigest()
+        if actual != ds["sha256"]:
+            raise ValueError("dataset SHA256 mismatch")
+        document = load_document(path)
+        loaded = document if isinstance(document, list) else document.get("cases")
+        if "cases" in m and m["cases"] != loaded:
+            raise ValueError("inline cases do not match dataset")
+        m["cases"] = loaded
+        metadata_path = path.parent / "manifest.json"
+        if metadata_path.is_file() and metadata_path != path:
+            metadata = load_document(metadata_path)
+            if metadata.get("sha256") == actual:
+                if metadata.get("profile") != m.get("profile", "quick"):
+                    raise ValueError(
+                        "Prepared dataset profile differs from requested run profile"
+                    )
+                if metadata.get("seed") != m.get("seed", 20260918):
+                    raise ValueError(
+                        "Prepared dataset seed differs from requested run seed"
+                    )
+                m["dataset"] = {**metadata, **ds}
+
+    return m
+
+
 def plan(manifest):
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be an object")
@@ -280,32 +313,7 @@ def plan(manifest):
         ):
             raise ValueError("preview sampling_seed must be a signed 64-bit integer")
         m["preview_context"] = context
-    if "dataset" in m:
-        ds = m["dataset"]
-        if not isinstance(ds, dict) or not ds.get("path") or not ds.get("sha256"):
-            raise ValueError("dataset requires path and sha256")
-        path = Path(ds["path"]).expanduser().resolve()
-        actual = hashlib.sha256(path.read_bytes()).hexdigest()
-        if actual != ds["sha256"]:
-            raise ValueError("dataset SHA256 mismatch")
-        document = load_document(path)
-        loaded = document if isinstance(document, list) else document.get("cases")
-        if "cases" in m and m["cases"] != loaded:
-            raise ValueError("inline cases do not match dataset")
-        m["cases"] = loaded
-        metadata_path = path.parent / "manifest.json"
-        if metadata_path.is_file() and metadata_path != path:
-            metadata = load_document(metadata_path)
-            if metadata.get("sha256") == actual:
-                if metadata.get("profile") != m["profile"]:
-                    raise ValueError(
-                        "Prepared dataset profile differs from requested run profile"
-                    )
-                if metadata.get("seed") != m["seed"]:
-                    raise ValueError(
-                        "Prepared dataset seed differs from requested run seed"
-                    )
-                m["dataset"] = {**metadata, **ds}
+    m = resolve_dataset(m)
 
     cases = m.get("cases")
     if not isinstance(cases, list) or not cases:

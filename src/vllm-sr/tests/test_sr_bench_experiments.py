@@ -1,6 +1,7 @@
 """Durable experiment links never rewrite or dispatch saved evidence."""
 
 import copy
+import hashlib
 import json
 import threading
 
@@ -540,3 +541,209 @@ def test_prepared_plan_roundtrip_uses_verified_dataset_reference(tmp_path, monke
     finally:
         service.shutdown()
         service.server_close()
+
+
+@pytest.mark.parametrize("dataset_reference", [False, True])
+def test_selected_benchmark_policy_matches_cli_candidate_review_and_submit(
+    tmp_path, monkeypatch, dataset_reference
+):
+    """Other benchmarks' judges cannot change an MMLU-only frozen protocol."""
+    document = manifest()
+    if dataset_reference:
+        case_file = tmp_path / "cases.json"
+        case_file.write_text(json.dumps(document.pop("cases")))
+        document["dataset"] = {
+            "path": str(case_file),
+            "sha256": hashlib.sha256(case_file.read_bytes()).hexdigest(),
+        }
+    store = Store(tmp_path)
+    baseline = record(store, document)
+    store.status(baseline["id"], "failed")
+    before = copy.deepcopy(store.get(baseline["id"]))
+    target = {
+        **manifest(True)["targets"][0],
+        "config_hash": "a" * 64,
+        "max_inference_calls": 1,
+    }
+    judge = {**document["targets"][0], "id": "judge"}
+    (tmp_path / "targets.json").write_text(
+        json.dumps([*document["targets"], target, judge])
+    )
+    (tmp_path / "benchmark-options.json").write_text(
+        json.dumps(
+            {
+                "simpleqa-verified": {
+                    "judge": "judge",
+                    "grader_version": "sr-bench-reference-judge-v1",
+                },
+                "tau3": {"judge": "judge", "simulator": "judge"},
+            }
+        )
+    )
+    service = Server(("127.0.0.1", 0), store, "fixture-token")
+    # Exercise actual HTTP/Engine review and durable submission; this regression
+    # never needs a model call or a live recipe snapshot.
+    monkeypatch.setattr("cli.sr_bench.engine.capture_runner", lambda *_: {})
+    monkeypatch.setattr(
+        service.engine,
+        "_run",
+        lambda run_id, *_: store.status(run_id, "completed"),
+    )
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{service.server_port}{PREFIX}"
+    local = {"Authorization": "Bearer fixture-token"}
+    admin = {
+        **local,
+        "X-SR-Bench-Actor-ID": "admin",
+        "X-SR-Bench-Actor-Role": "admin",
+    }
+    try:
+        reviewed = []
+        candidates = []
+        for headers in (local, admin):
+            response = requests.post(
+                url + "/plans", headers=headers, json={"manifest": document}, timeout=2
+            )
+            assert response.status_code == 200, response.text
+            reviewed.append(response.json())
+            response = requests.post(
+                url + f'/runs/{baseline["id"]}/candidate-plan',
+                headers=headers,
+                json={"target_ids": [target["id"]]},
+                timeout=2,
+            )
+            assert response.status_code == 200, response.text
+            candidates.append(response.json())
+        assert reviewed[0] == reviewed[1]
+        assert candidates[0] == candidates[1]
+        candidate = candidates[1]["manifest"]
+        assert "benchmark_options" not in candidate
+        assert "auxiliary_targets" not in candidate
+        assert candidate["case_sha256"] == before["manifest"]["case_sha256"]
+        if dataset_reference:
+            assert "cases" not in candidate
+        review = requests.post(
+            url + "/plans", headers=admin, json={"manifest": candidate}, timeout=2
+        )
+        assert review.status_code == 200, review.text
+        assert review.json() == candidates[1]
+        response = requests.post(
+            url + "/runs",
+            headers=admin,
+            json={"manifest": candidate, "idempotency_key": "reviewed-candidate"},
+            timeout=2,
+        )
+        assert response.status_code == 201, response.text
+        started = response.json()
+        service.engine.threads[started["id"]].join(timeout=1)
+        assert started["manifest"]["plan_sha256"] == candidate["plan_sha256"]
+        assert store.calls(started["id"]) == []
+        assert store.get(baseline["id"]) == before
+        selected = manifest()
+        for case in selected["cases"]:
+            case["benchmark"] = "simpleqa-verified"
+        response = requests.post(
+            url + "/plans", headers=admin, json={"manifest": selected}, timeout=2
+        )
+        assert response.status_code == 200, response.text
+        resolved = response.json()["manifest"]
+        assert set(resolved["benchmark_options"]) == {"simpleqa-verified"}
+        assert resolved["auxiliary_targets"] == {"judge": judge}
+    finally:
+        service.shutdown()
+        service.server_close()
+        thread.join(timeout=1)
+
+
+@pytest.mark.parametrize("change", ["new-selected-options", "changed-selected-options"])
+def test_candidate_http_rejects_selected_operator_protocol_changes(
+    tmp_path, monkeypatch, change
+):
+    document = manifest()
+    if change == "changed-selected-options":
+        document["benchmark_options"] = {"mmlu-pro": {"protocol_note": "frozen"}}
+    store = Store(tmp_path)
+    baseline = record(store, document)
+    before = copy.deepcopy(store.get(baseline["id"]))
+    target = {
+        **manifest(True)["targets"][0],
+        "config_hash": "a" * 64,
+        "max_inference_calls": 1,
+    }
+    (tmp_path / "targets.json").write_text(json.dumps([target]))
+    (tmp_path / "benchmark-options.json").write_text(
+        json.dumps({"mmlu-pro": {"protocol_note": "changed"}})
+    )
+    service = Server(("127.0.0.1", 0), store, "fixture-token")
+    monkeypatch.setattr(
+        service.engine, "start", lambda *_args, **_kwargs: pytest.fail("No dispatch")
+    )
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    headers = {
+        "Authorization": "Bearer fixture-token",
+        "X-SR-Bench-Actor-ID": "admin",
+        "X-SR-Bench-Actor-Role": "admin",
+    }
+    try:
+        response = requests.post(
+            f"http://127.0.0.1:{service.server_port}{PREFIX}/runs/{baseline['id']}/candidate-plan",
+            headers=headers,
+            json={"target_ids": [target["id"]]},
+            timeout=2,
+        )
+        assert response.status_code == (
+            400 if change == "new-selected-options" else 403
+        )
+        assert store.get(baseline["id"]) == before and len(store.list()) == 1
+    finally:
+        service.shutdown()
+        service.server_close()
+        thread.join(timeout=1)
+
+
+@pytest.mark.parametrize("route", ["plans", "runs"])
+@pytest.mark.parametrize(
+    "override", ["target", "selected-option", "other-option", "auxiliary"]
+)
+def test_benchmark_projection_does_not_authorize_client_overrides(
+    tmp_path, route, override
+):
+    document = manifest()
+    target = document["targets"][0]
+    judge = {**target, "id": "judge"}
+    options = {
+        "mmlu-pro": {"protocol_note": "fixed"},
+        "simpleqa-verified": {"judge": "judge"},
+    }
+    (tmp_path / "targets.json").write_text(json.dumps([target, judge]))
+    (tmp_path / "benchmark-options.json").write_text(json.dumps(options))
+    if override == "target":
+        document["targets"][0] = {**target, "base_url": "http://127.0.0.1:2/v1"}
+    elif override == "auxiliary":
+        document["auxiliary_targets"] = {"judge": {**judge, "model": "unregistered"}}
+    else:
+        key = "mmlu-pro" if override == "selected-option" else "simpleqa-verified"
+        document["benchmark_options"] = {key: {"client_override": True}}
+    service = Server(("127.0.0.1", 0), Store(tmp_path), "fixture-token")
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    headers = {
+        "Authorization": "Bearer fixture-token",
+        "X-SR-Bench-Actor-ID": "alice",
+        "X-SR-Bench-Actor-Role": "write",
+    }
+    try:
+        response = requests.post(
+            f"http://127.0.0.1:{service.server_port}{PREFIX}/{route}",
+            headers=headers,
+            json={"manifest": document},
+            timeout=2,
+        )
+        assert response.status_code == 403, response.text
+        assert service.store.list() == []
+    finally:
+        service.shutdown()
+        service.server_close()
+        thread.join(timeout=1)

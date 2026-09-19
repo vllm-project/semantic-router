@@ -19,7 +19,7 @@ from cli.runtime_env_names import runtime_env_name_is_allowed
 from . import VERSION
 from .accounting import reconcile_usage
 from .candidate_plans import candidate_manifest, validate_candidate_protocol
-from .contracts import catalog, plan, planned_cells
+from .contracts import catalog, plan, planned_cells, resolve_dataset
 from .datasets import DatasetReader
 from .engine import Engine, ReviewedPlanChangedError
 from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
@@ -175,6 +175,18 @@ class Handler(BaseHTTPRequestHandler):
             return manifest
         if not isinstance(manifest, dict):
             raise ValueError("manifest must be an object")
+        manifest = resolve_dataset(manifest)
+        cases = manifest.get("cases")
+        if (
+            not isinstance(cases, list)
+            or not cases
+            or any(
+                not isinstance(case, dict) or not isinstance(case.get("benchmark"), str)
+                for case in cases
+            )
+        ):
+            raise ValueError("at least one valid case is required")
+        selected = {case.get("benchmark") for case in cases}
         registry = {t["id"]: t for t in self._registry_targets()}
         resolved = []
         for target in manifest.get("targets", []):
@@ -201,18 +213,27 @@ class Handler(BaseHTTPRequestHandler):
             ):
                 raise PermissionError("Auxiliary target must match the server registry")
             auxiliary[key] = registered
-        # Resolve judge/simulator references declared by the operator without exposing credentials.
-        for config in options.values():
+        # Only selected benchmarks contribute operator defaults. Explicit frozen
+        # options remain verified above, including any intentionally retained scope.
+        selected_options = {
+            key: value for key, value in options.items() if key in selected
+        }
+        # Resolve only the auxiliary roles required by these selected benchmarks.
+        for config in selected_options.values():
             for role_name in ("judge", "simulator"):
                 ref = config.get(role_name)
                 if ref and ref not in {t["id"] for t in resolved} and ref in registry:
                     auxiliary[ref] = registry[ref]
-        return {
-            **manifest,
-            "targets": resolved,
-            "auxiliary_targets": auxiliary,
-            "benchmark_options": options,
+        result = {**manifest, "targets": resolved}
+        if auxiliary or "auxiliary_targets" in manifest:
+            result["auxiliary_targets"] = auxiliary
+        effective_options = {
+            **selected_options,
+            **manifest.get("benchmark_options", {}),
         }
+        if effective_options or "benchmark_options" in manifest:
+            result["benchmark_options"] = effective_options
+        return result
 
     def do_GET(self):
         self._handle("GET")
