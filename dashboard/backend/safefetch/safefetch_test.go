@@ -287,7 +287,9 @@ func TestClientDoesNotAutoDecompress(t *testing.T) {
 // holding a dashboard goroutine open.
 func TestClientTimesOutOnASlowPeer(t *testing.T) {
 	release := make(chan struct{})
+	var reached atomic.Bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		reached.Store(true)
 		<-release
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -298,8 +300,9 @@ func TestClientTimesOutOnASlowPeer(t *testing.T) {
 
 	host, port := splitHostPort(t, server.Listener.Addr().String())
 	policy := DefaultPolicy().
-		WithTimeout(300 * time.Millisecond).
-		WithResolver(staticResolver{addresses: []netip.Addr{netip.MustParseAddr(host)}})
+		WithTimeout(300*time.Millisecond).
+		WithResolver(staticResolver{addresses: []netip.Addr{netip.MustParseAddr(host)}}).
+		AllowingPrivate(netip.MustParsePrefix("127.0.0.0/8"), netip.MustParsePrefix("::1/128"))
 	policy.ResponseHeaderTimeout = 200 * time.Millisecond
 
 	started := time.Now()
@@ -307,6 +310,13 @@ func TestClientTimesOutOnASlowPeer(t *testing.T) {
 	closeResponse(resp)
 	if err == nil {
 		t.Fatal("a stalled peer was not cut off")
+	}
+	if !reached.Load() {
+		t.Fatal("request was refused before reaching the server, want the header timeout to be what cuts it off")
+	}
+	var netErr net.Error
+	if !errors.As(err, &netErr) || !netErr.Timeout() {
+		t.Errorf("err = %v, want a timeout error", err)
 	}
 	if elapsed := time.Since(started); elapsed > 3*time.Second {
 		t.Errorf("took %v to give up, want the configured deadline", elapsed)
