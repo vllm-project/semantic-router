@@ -147,6 +147,11 @@ runtime dependency; they do not define routing behavior by themselves.
   bodies. Review its access controls and retention settings before enabling it.
 - `global.router.skip_processing.enabled` should be enabled only when an
   authenticated upstream component owns the bypass header.
+- `global.router.agentic_facts` declares the bounded selection-facts contract for
+  external agent runtimes. It is disabled by default. Enable it only when an
+  authenticated gateway owns both the carrier header and the trust marker, and
+  strips any client-supplied copy of either; the router treats the marker as an
+  operator-declared assertion and cannot verify who set it.
 - Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
   signals bind to those shared assets by name.
 - Built-in category/domain classification uses the local `variant` selector by

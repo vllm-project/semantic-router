@@ -44,7 +44,7 @@ Global configuration has five groups:
 
 | Group | Owns | Guide |
 |---|---|---|
-| `global.router` | Router engine controls, selection defaults, streamed-body policy, learning | [Algorithms](../algorithm/overview), [Router Learning](../learning/overview) |
+| `global.router` | Router engine controls, selection defaults, streamed-body policy, learning, agentic facts | [Algorithms](../algorithm/overview), [Router Learning](../learning/overview) |
 | `global.services` | API, Response API, observability, authz, rate limits, management API, startup status, replay | [API and Observability](./api-and-observability) |
 | `global.stores` | response cache, memory, vector store | [Stores and Tools](./stores-and-tools) |
 | `global.integrations` | tool catalog and Looper runtime/state | [Stores and Tools](./stores-and-tools) |
@@ -60,6 +60,10 @@ Remote text embeddings are covered in
 - Keep overrides sparse; omitted fields inherit Router defaults.
 - Put credentials in environment variables or Kubernetes Secrets, not literal
   YAML values.
+- `global.router.agentic_facts` accepts routing facts supplied by the caller.
+  Facts can only narrow the models a decision already allows, never widen them,
+  and they must never be the sole enforcement point for a policy. Anything that
+  must hold regardless of caller input belongs in configuration.
 - Persistent stores may contain prompts, responses, embeddings, memories, or
   replay records. Set backend authentication, transport security, retention,
   and tenant/user scope deliberately.
