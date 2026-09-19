@@ -55,19 +55,20 @@ export default function EvaluationPage() {
     else next.delete('run')
     setSearch(next)
   }
-  const updateRunFilters = (filters: RunFilters) => {
-    const next = new URLSearchParams(search)
-    for (const [key, value] of Object.entries({
-      q: filters.query,
-      status: filters.status,
-      mode: filters.mode,
-      profile: filters.profile,
-      page: filters.page,
-    })) {
-      if (!value || value === 'all') next.delete(key)
-      else next.set(key, String(value))
-    }
-    setSearch(next, { replace: true })
+  const updateRunFilters = (patch: Partial<RunFilters>) => {
+    setSearch(
+      (current) => {
+        // Patch router-owned params in place so consecutive input events cannot
+        // restore a stale sibling filter before navigation has rendered.
+        for (const [field, value] of Object.entries(patch)) {
+          const key = field === 'query' ? 'q' : field
+          if (!value || value === 'all') current.delete(key)
+          else current.set(key, String(value))
+        }
+        return current
+      },
+      { replace: true },
+    )
   }
   const view = search.get('view') ?? (search.has('model') ? 'new' : 'runs')
   const creating = view === 'new' || view === 'preview'
@@ -352,7 +353,6 @@ export default function EvaluationPage() {
             <ReplayComposer
               key={user?.id ?? ''}
               actorID={user?.id ?? ''}
-              runs={runs}
               canRun={canRun}
               onCreated={(run) => {
                 setSearch({ view: 'runs', run: run.id })

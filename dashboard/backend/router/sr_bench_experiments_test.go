@@ -96,7 +96,7 @@ func TestSRBenchExperimentsUseAuthenticatedActorAndCSRF(t *testing.T) {
 		t.Fatal(err)
 	}
 	role = auth.RoleRead
-	for _, path := range []string{"/experiments", experiment, experiment + "/runs", "/datasets/selection", "/runs/run-1/replay-options"} {
+	for _, path := range []string{"/experiments", experiment, experiment + "/runs", "/datasets/selection", "/replay-options", "/comparison-options"} {
 		response := request(http.MethodGet, path, "", "", true)
 		if response.Code != http.StatusOK {
 			t.Fatalf("viewer could not read %s: %d", path, response.Code)

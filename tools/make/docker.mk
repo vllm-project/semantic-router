@@ -545,6 +545,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_sr_bench_recovery.py \
 		src/vllm-sr/tests/test_sr_bench_replay.py \
 		src/vllm-sr/tests/test_sr_bench_reporting.py \
+		src/vllm-sr/tests/test_sr_bench_run_options.py \
 		src/vllm-sr/tests/test_sr_bench_setup.py \
 		src/vllm-sr/tests/test_sr_bench_snapshots.py \
 		src/vllm-sr/tests/test_sr_bench_sources.py \

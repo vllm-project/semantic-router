@@ -13,6 +13,7 @@ from . import VERSION
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
 from .contracts import BENCHMARK_WEIGHTS, planned_cells
 from .failures import first_saved_failure
+from .target_contracts import effective_auxiliary_targets, target_inventory
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
 
@@ -394,34 +395,12 @@ def _comparison_protocol(baseline, candidate):
         if baseline.get(key) != candidate.get(key):
             raise ValueError(f"Cannot compare different {key}")
 
-    def targets(manifest):
-        return {
-            **manifest.get("auxiliary_targets", {}),
-            **{target["id"]: target for target in manifest["targets"]},
-        }
-
-    def auxiliary(manifest):
-        inventory = targets(manifest)
-        resolved = {}
-        for benchmark, options in manifest.get("benchmark_options", {}).items():
-            for role in ("judge", "simulator"):
-                if ref := options.get(role):
-                    target = inventory[ref]
-                    resolved[benchmark, role] = {
-                        **{k: v for k, v in target.items() if k != "id"},
-                        "request_params": {
-                            **manifest["sampling"],
-                            **target.get("request_params", {}),
-                        },
-                    }
-        return resolved
-
-    if auxiliary(baseline) != auxiliary(candidate):
+    if effective_auxiliary_targets(baseline) != effective_auxiliary_targets(candidate):
         raise ValueError("Cannot compare changed effective judge/simulator targets")
 
     prices, profiles = {}, {}
     for manifest in (baseline, candidate):
-        for target in targets(manifest).values():
+        for target in target_inventory(manifest).values():
             for model, price in target.get("prices", {}).items():
                 if model in prices and prices[model] != price:
                     raise ValueError("Cannot compare changed frozen model prices")
@@ -473,40 +452,68 @@ def _strongest_single(singles, report, weights):
     return best, tied, all(priced(target) for target in tied)
 
 
+class ComparisonValidator:
+    """The same frozen protocol and complete quality matrix for discovery and submit."""
+
+    def __init__(self, store, baseline):
+        self.store = store
+        self.baseline = baseline
+        bm = baseline["manifest"]
+        if baseline["status"] != "completed" or bm["mode"] != "live":
+            raise ValueError("Baseline must be a completed live run")
+        self.singles = [t for t in bm["targets"] if t["kind"] == "single"]
+        if not self.singles:
+            raise ValueError("Baseline must contain a single-model target")
+        planned = planned_cells(bm)
+        selected = {
+            target["id"]: {
+                c["case_id"] for c in planned if c["target_id"] == target["id"]
+            }
+            for target in self.singles
+        }
+        self.expected = selected[self.singles[0]["id"]]
+        if not self.expected or any(ids != self.expected for ids in selected.values()):
+            raise ValueError(
+                "Baseline targets must cover identical nonempty selected cases"
+            )
+        self.case_ids = [c["id"] for c in bm["cases"] if c["id"] in self.expected]
+        results = store.results(baseline["id"])
+        self.by_target = self._quality_rows(results, self.singles, "Baseline")
+
+    def _quality_rows(self, results, targets, label):
+        by_target = {
+            t["id"]: {r["case_id"]: r for r in results if r["target_id"] == t["id"]}
+            for t in targets
+        }
+        if any(
+            set(rows) != self.expected
+            or any(not isinstance(r.get("correct"), bool) for r in rows.values())
+            for rows in by_target.values()
+        ):
+            raise ValueError(f"{label} quality results are incomplete")
+        return by_target
+
+    def validate(self, candidate):
+        if self.baseline["id"] == candidate["id"]:
+            raise ValueError("Choose two distinct runs for comparison")
+        _comparison_protocol(self.baseline["manifest"], candidate["manifest"])
+        if candidate["status"] != "completed":
+            raise ValueError("Both runs must complete before a paired comparison")
+        return self._quality_rows(
+            self.store.results(candidate["id"]),
+            candidate["manifest"]["targets"],
+            "Candidate",
+        )
+
+
 def compare(store, baseline_id, candidate_id):
     baseline = store.get(baseline_id)
     candidate = store.get(candidate_id)
-    bm = baseline["manifest"]
-    cm = candidate["manifest"]
-    _comparison_protocol(bm, cm)
-    if bm["mode"] != "live":
-        raise ValueError("Preview cannot support quality or cost-saving comparisons")
-    if baseline["status"] != "completed" or candidate["status"] != "completed":
-        raise ValueError("Both runs must complete before a paired comparison")
-    br = store.results(baseline_id)
-    cr = store.results(candidate_id)
-    singles = [t for t in bm["targets"] if t["kind"] == "single"]
-    if not singles:
-        raise ValueError("Baseline must contain a single-model target")
-    planned = planned_cells(bm)
-    selected = {
-        target["id"]: {c["case_id"] for c in planned if c["target_id"] == target["id"]}
-        for target in singles
-    }
-    expected = selected[singles[0]["id"]]
-    if any(ids != expected for ids in selected.values()):
-        raise ValueError("Baseline targets must cover identical selected cases")
-    case_ids = [c["id"] for c in bm["cases"] if c["id"] in expected]
-    by_target = {
-        t["id"]: {r["case_id"]: r for r in br if r["target_id"] == t["id"]}
-        for t in singles
-    }
-    if any(
-        len(rows) != len(case_ids)
-        or any(not isinstance(r.get("correct"), bool) for r in rows.values())
-        for rows in by_target.values()
-    ):
-        raise ValueError("Baseline quality results are incomplete")
+    validator = ComparisonValidator(store, baseline)
+    candidate_rows = validator.validate(candidate)
+    bm, cm = baseline["manifest"], candidate["manifest"]
+    singles, expected = validator.singles, validator.expected
+    case_ids, by_target = validator.case_ids, validator.by_target
     report_b = make_report(store, baseline_id)
     report_c = make_report(store, candidate_id)
     metric_by_id = {t["id"]: t for t in report_b["summary"]["targets"]}
@@ -517,11 +524,7 @@ def compare(store, baseline_id, candidate_id):
     base_metric = metric_by_id[best]
     comparisons = []
     for target in cm["targets"]:
-        rows = {r["case_id"]: r for r in cr if r["target_id"] == target["id"]}
-        if set(rows) != set(case_ids) or any(
-            not isinstance(r.get("correct"), bool) for r in rows.values()
-        ):
-            raise ValueError("Candidate quality results are incomplete")
+        rows = candidate_rows[target["id"]]
         diffs = [int(rows[i]["correct"]) - int(base[i]["correct"]) for i in case_ids]
         groups = {
             b: [

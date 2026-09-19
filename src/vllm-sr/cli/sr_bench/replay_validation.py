@@ -237,28 +237,3 @@ class ReplayValidator:
             "receipt": receipt,
             "materialized": materialized if not reasons else [],
         }
-
-
-def replay_options(store, baseline_id, owner=None, after=None, limit=10):
-    baseline = store.get(baseline_id, owner)
-    previews, next_cursor = store.preview_candidates(owner, after, limit)
-    validator = ReplayValidator(store, baseline)
-    options = []
-    for preview in previews:
-        validation = validator.validate(preview)
-        summary = replay_summary(preview)
-        options.append(
-            {
-                "preview_run_id": summary["run_id"],
-                **{key: summary[key] for key in ("name", "profile", "case_count")},
-                "eligible": validation["eligible"],
-                "reasons": validation["reasons"],
-            }
-        )
-    return {
-        "baseline": replay_summary(baseline),
-        "options": options,
-        "next_cursor": next_cursor,
-        "has_more": next_cursor is not None,
-        "model_requests": 0,
-    }

@@ -145,16 +145,24 @@ silently substitute zero or continue a cost-qualified claim through it.
    Inspect the returned frozen manifest before submission. Preview has no capability
    score. Keep Learning enabled when that is the policy under test, and inspect
    `selection_provenance`, unresolved selection reasons and sampled seed.
-5. Inspect `benchmark replay-options BASELINE_ID --limit 10`. Use only eligible
-   completed previews with `benchmark replay --baseline BASELINE_ID --preview
+5. Use `benchmark replay-options --limit 10` to discover usable baselines, then
+   `benchmark replay-options BASELINE_ID --limit 10`. It returns only
+   compatible saved previews. Follow its opaque `next_cursor` with `--after`; an
+   empty page with `has_more: true` is incomplete discovery. `scan_limited: true`
+   leaves some large evidence unverified, not incompatible. Refresh from the first
+   page if completed evidence changes. Dashboard Replay and Compare likewise show
+   only baselines with an eligible child, using canonical read-only
+   `/replay-options` and `/comparison-options` queries. Submit a selected preview with `benchmark replay --baseline BASELINE_ID --preview
    PREVIEW_ID`. Discovery and submission share one authoritative validator.
    Identical full cases by stable ID can differ only in order, with an explicit
    receipt; changed answers/metadata, effective parameters, missing or duplicate
    generations, actual prompt differences, plugins, dynamic/state-dependent choices
    and unsupported agent/code paths reject without new model calls. Preserve the
    same pending source IDs/idempotency key after a lost acknowledgement.
-6. Evaluate promising candidates live on the same dev cases and compare paired
-   results. Freeze the chosen policy before the prespecified standard live
+6. Evaluate promising candidates live on the same dev cases. Discover usable
+   baselines with `benchmark comparison-options --limit 10`, then compatible live
+   candidates with `benchmark comparison-options BASELINE_ID --limit 10`, and
+   compare paired results. Freeze the chosen policy before the prespecified standard live
    comparison; never tune on its failures. Experiment links preserve each original
    run and do not themselves prove comparability or start model work.
 

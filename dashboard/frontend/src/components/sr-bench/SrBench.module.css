@@ -793,7 +793,7 @@
   display: flex;
   flex-direction: column;
 }
-.iterationNumbers span {
+.iterationNumbers > div > span {
   color: var(--text-secondary);
   font-size: 11px;
 }
@@ -946,38 +946,6 @@
 .eventAttention {
   color: var(--color-danger, #f69494);
 }
-.comparisonStep {
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 1.1rem;
-  margin-bottom: 0.8rem;
-  min-width: 0;
-}
-.stepHeading {
-  display: flex;
-  gap: 0.7rem;
-  align-items: flex-start;
-  margin-bottom: 1rem;
-}
-.stepHeading > span {
-  display: grid;
-  place-items: center;
-  width: 25px;
-  height: 25px;
-  flex-shrink: 0;
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.stepHeading h3 {
-  margin: 0;
-}
-.stepHeading p {
-  margin: 0.3rem 0 0;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
 .comparisonChoices {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -989,13 +957,6 @@
 }
 .comparisonChoices .runChoice input {
   margin-top: 0.25rem;
-}
-.unavailableChoice {
-  background: var(--bg-primary);
-  border-style: dashed !important;
-}
-.unavailableChoice strong {
-  color: var(--text-secondary);
 }
 .page .toggleLabel {
   display: flex;
@@ -1012,9 +973,6 @@
 @media (max-width: 640px) {
   .comparisonChoices {
     grid-template-columns: 1fr;
-  }
-  .comparisonStep {
-    padding: 0.85rem;
   }
   .pagination > .actions {
     width: 100%;
@@ -1062,4 +1020,47 @@
 }
 .customDataset > button {
   justify-self: start;
+}
+
+.optionSelectRow,
+.optionToolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: end;
+  margin: 0.75rem 0;
+}
+.optionToolbar {
+  grid-template-columns: minmax(12rem, 1fr) auto;
+}
+.optionEmpty {
+  color: var(--text-secondary);
+  padding: 0.75rem 0;
+  max-width: 65ch;
+  line-height: 1.6;
+}
+.changePositive {
+  color: var(--color-success, #60c98c);
+}
+.changeNegative {
+  color: var(--color-danger, #ff7b7b);
+}
+.changeNeutral {
+  color: var(--text-primary);
+}
+.changeUnknown {
+  color: var(--text-secondary);
+}
+.changeCaption {
+  font-weight: 400;
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: inherit;
+}
+@media (max-width: 640px) {
+  .optionSelectRow,
+  .optionToolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

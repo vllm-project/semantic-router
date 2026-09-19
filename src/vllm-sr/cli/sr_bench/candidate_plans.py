@@ -2,6 +2,8 @@
 
 import copy
 
+from .target_contracts import auxiliary_bindings, effective_auxiliary_targets
+
 
 def candidate_manifest(baseline, targets, mode="live", name=None, experiment=None):
     source = baseline["manifest"]
@@ -44,6 +46,16 @@ def candidate_manifest(baseline, targets, mode="live", name=None, experiment=Non
             "baseline_run_id": baseline["id"],
         }
     )
+    auxiliary = {
+        **source.get("auxiliary_targets", {}),
+        **{target["id"]: target for target in auxiliary_bindings(source).values()},
+    }
+    if auxiliary:
+        if set(auxiliary) & {target["id"] for target in targets}:
+            raise ValueError(
+                "Candidate subjects cannot replace fixed auxiliary targets"
+            )
+        manifest["auxiliary_targets"] = copy.deepcopy(auxiliary)
     if experiment is not None:
         manifest["experiment"] = experiment
     return manifest
@@ -60,12 +72,16 @@ def validate_candidate_protocol(baseline, candidate):
         "seed",
         "cost_policy",
         "benchmark_options",
-        "auxiliary_targets",
         "adapter_versions",
         "benchmark_weights",
     ):
-        default = {} if key in {"benchmark_options", "auxiliary_targets"} else None
+        default = {} if key == "benchmark_options" else None
         if candidate.get(key, default) != source.get(key, default):
             raise ValueError(
                 f"Baseline protocol changed ({key}); prepare a new baseline before comparing this configuration"
             )
+    if effective_auxiliary_targets(source) != effective_auxiliary_targets(candidate):
+        raise ValueError(
+            "Baseline protocol changed (effective auxiliary targets); "
+            "prepare a new baseline before comparing this configuration"
+        )

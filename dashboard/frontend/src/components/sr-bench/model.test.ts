@@ -88,7 +88,7 @@ describe('sr-bench run contract', () => {
       seed: 42,
     })
     expect(validateManifest(manifest)).toContain(
-      'Target baseline has a registered output limit of 4096 tokens, above the run cap of 512',
+      'Target model-a has a registered output limit of 4096 tokens, above the run cap of 512',
     )
     expect(JSON.stringify(manifest)).toBe(before)
     expect(
@@ -107,11 +107,17 @@ describe('sr-bench run contract', () => {
           { id: 'unknown' },
         ],
         'selected_models',
+        {
+          targets: [
+            { ...single, id: 'single' },
+            { ...single, id: 'balance', model: 'connected-balance', kind: 'mom' },
+          ],
+        },
       ),
     ).toEqual([
-      ['single: model-a', 250],
-      ['balance: model-a', 200],
-      ['balance: model-b', 50],
+      ['model-a: model-a', 250],
+      ['connected-balance: model-a', 200],
+      ['connected-balance: model-b', 50],
     ])
   })
   it('validates typed sampling and limit fields before preparing a plan', () => {

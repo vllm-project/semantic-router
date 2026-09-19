@@ -13,7 +13,6 @@ from cli.sr_bench.offline import replay
 from cli.sr_bench.replay_validation import (
     ReplayEligibilityError,
     ReplayValidator,
-    replay_options,
 )
 from cli.sr_bench.service import PREFIX, Server
 from cli.sr_bench.store import Store
@@ -137,8 +136,8 @@ def test_order_only_replay_preserves_sources_and_idempotency(tmp_path, monkeypat
         "cli.sr_bench.provenance.capture_recipes",
         lambda *_: pytest.fail("offline replay contacted live configuration"),
     )
-    options = replay_options(store, baseline["id"])
-    assert options["options"][0]["eligible"] is True
+    options = ReplayValidator(store, baseline).validate(preview)
+    assert options["eligible"] is True
     assert store.db.total_changes == changes
     created = replay(store, baseline["id"], preview["id"], request_key="once")
     receipt = created["manifest"]["replay_compatibility"]
@@ -186,7 +185,7 @@ def test_content_and_protocol_mismatches_reject_without_writes(tmp_path, change,
     baseline = record(store)
     preview = record(store, preview=True, edit=change)
     changes = store.db.total_changes
-    option = replay_options(store, baseline["id"])["options"][0]
+    option = ReplayValidator(store, baseline).validate(preview)
     assert not option["eligible"]
     assert code in {reason["code"] for reason in option["reasons"]}
     with pytest.raises(ReplayEligibilityError) as caught:
@@ -198,7 +197,7 @@ def test_content_and_protocol_mismatches_reject_without_writes(tmp_path, change,
 def test_all_route_failures_are_reported_together(tmp_path):
     store = Store(tmp_path)
     baseline = record(store)
-    record(
+    preview = record(
         store,
         preview=True,
         routing={
@@ -213,8 +212,7 @@ def test_all_route_failures_are_reported_together(tmp_path):
         },
     )
     codes = {
-        r["code"]
-        for r in replay_options(store, baseline["id"])["options"][0]["reasons"]
+        r["code"] for r in ReplayValidator(store, baseline).validate(preview)["reasons"]
     }
     assert codes == {
         "state_dependent_preview",
@@ -262,8 +260,8 @@ def test_effective_sampling_not_redundant_override_placement(tmp_path):
     document["targets"][0]["request_params"] = {
         "temperature": baseline["manifest"]["sampling"]["temperature"]
     }
-    record(store, document, preview=True)
-    assert replay_options(store, baseline["id"])["options"][0]["eligible"] is True
+    preview = record(store, document, preview=True)
+    assert ReplayValidator(store, baseline).validate(preview)["eligible"] is True
 
 
 @pytest.mark.parametrize(
@@ -284,7 +282,7 @@ def test_wire_body_must_match_frozen_protocol(tmp_path, field, value, code):
     request["effective_body"][field] = value
     store.finish_call(call["id"], "completed", {"request": request})
     changes = store.db.total_changes
-    option = replay_options(store, baseline["id"])["options"][0]
+    option = ReplayValidator(store, baseline).validate(preview)
     assert code in {reason["code"] for reason in option["reasons"]}
     with pytest.raises(ReplayEligibilityError):
         replay(store, baseline["id"], preview["id"])
@@ -304,7 +302,7 @@ def test_http_options_owner_pagination_errors_and_cli(tmp_path, monkeypatch):
         "X-SR-Bench-Actor-ID": "alice",
         "X-SR-Bench-Actor-Role": "read",
     }
-    url = origin + PREFIX + "/runs/" + baseline["id"] + "/replay-options"
+    url = origin + PREFIX + "/replay-options?baseline_run_id=" + baseline["id"]
     changes = store.db.total_changes
     try:
         first = requests.get(url, headers=headers, params={"limit": 2}, timeout=2)
@@ -321,7 +319,7 @@ def test_http_options_owner_pagination_errors_and_cli(tmp_path, monkeypatch):
             timeout=2,
         ).json()
         assert second["next_cursor"] is None and not second["has_more"]
-        assert {o["preview_run_id"] for p in (page, second) for o in p["options"]} == {
+        assert {o["run_id"] for p in (page, second) for o in p["options"]} == {
             p["id"] for p in previews
         }
         for query in ({"limit": 26}, {"after": "bad"}, {"limit": 0}, {"extra": "x"}):
@@ -330,7 +328,7 @@ def test_http_options_owner_pagination_errors_and_cli(tmp_path, monkeypatch):
                 == 400
             )
         assert requests.get(url, timeout=2).status_code == 403
-        denied = origin + PREFIX + "/runs/" + foreign["id"] + "/replay-options"
+        denied = origin + PREFIX + "/replay-options?baseline_run_id=" + foreign["id"]
         assert requests.get(denied, headers=headers, timeout=2).status_code == 404
         body = {"baseline_run_id": baseline["id"], "preview_run_id": previews[0]["id"]}
         assert (

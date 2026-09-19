@@ -3,6 +3,7 @@ import BenchPagination from './BenchPagination'
 import { active, number, percent } from './model'
 import type { Run } from './types'
 import { profileTitle } from './datasetPresentation'
+import { targetLabel } from './targetPresentation'
 import styles from './SrBench.module.css'
 
 export function RunStatus({ status }: { status: string }) {
@@ -29,10 +30,10 @@ export default function RunList({
   selectedID: string | null
   onSelect: (id: string) => void
   filters: RunFilters
-  onFilters: (filters: RunFilters) => void
+  onFilters: (filters: Partial<RunFilters>) => void
 }) {
   const { query, status, mode, profile, page } = filters
-  const changeFilter = (patch: Partial<RunFilters>) => onFilters({ ...filters, ...patch, page: 0 })
+  const changeFilter = (patch: Partial<RunFilters>) => onFilters({ ...patch, page: 0 })
   const filtered = runs.filter((run) => {
     const text = [
       run.id,
@@ -139,7 +140,7 @@ export default function RunList({
                       <div className={styles.targetChips}>
                         {run.manifest.targets.map((target) => (
                           <span className={styles.badge} key={target.id}>
-                            {target.id} · {target.kind === 'mom' ? 'MoM' : 'Single'}
+                            {targetLabel(target)} · {target.kind === 'mom' ? 'MoM' : 'Single'}
                           </span>
                         ))}
                       </div>
@@ -195,7 +196,7 @@ export default function RunList({
         total={filtered.length}
         page={currentPage}
         pageSize={10}
-        onChange={(page) => onFilters({ ...filters, page })}
+        onChange={(page) => onFilters({ page })}
       />
     </section>
   )

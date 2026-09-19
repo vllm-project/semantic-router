@@ -22,6 +22,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark candidate-plan`](#vllm-sr-benchmark-candidate-plan) | Freeze a MoM candidate on the exact questions and protocol of a saved baseline. |
 | [`vllm-sr benchmark catalog`](#vllm-sr-benchmark-catalog) | Show the nine benchmark adapters and evaluation profiles. |
 | [`vllm-sr benchmark compare`](#vllm-sr-benchmark-compare) | Compare matched cases against the best observed single model. |
+| [`vllm-sr benchmark comparison-options`](#vllm-sr-benchmark-comparison-options) | List eligible baselines, or comparable live runs for BASELINE; no model calls. |
 | [`vllm-sr benchmark dataset`](#vllm-sr-benchmark-dataset) | Prepare reproducible fixed benchmark case sets. |
 | [`vllm-sr benchmark dataset combine`](#vllm-sr-benchmark-dataset-combine) | Create a reusable multi-benchmark dataset from prepared manifests. |
 | [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download or read a pinned source and freeze a reusable dataset. |
@@ -39,7 +40,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark recover-plan`](#vllm-sr-benchmark-recover-plan) | Inspect eligible continuation cells without making model requests. |
 | [`vllm-sr benchmark regrade`](#vllm-sr-benchmark-regrade) | Regrade saved MCQ/grid final outputs without mutating original evidence. |
 | [`vllm-sr benchmark replay`](#vllm-sr-benchmark-replay) | Estimate eligible static routes from saved answers without inference. |
-| [`vllm-sr benchmark replay-options`](#vllm-sr-benchmark-replay-options) | Check saved previews against a live baseline without creating a run. |
+| [`vllm-sr benchmark replay-options`](#vllm-sr-benchmark-replay-options) | List eligible baselines, or compatible previews for BASELINE; no model calls. |
 | [`vllm-sr benchmark report`](#vllm-sr-benchmark-report) | Show quality, four-bucket usage, cost, latency, time, and limitations. |
 | [`vllm-sr benchmark run`](#vllm-sr-benchmark-run) | Execute one frozen live evaluation through the shared service. |
 | [`vllm-sr benchmark runs`](#vllm-sr-benchmark-runs) |  |
@@ -176,6 +177,21 @@ Compare matched cases against the best observed single model.
 | --- | --- |
 | `BASELINE_RUN_ID` | Required argument. Type: text. |
 | `CANDIDATE_RUN_ID` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark comparison-options` {#vllm-sr-benchmark-comparison-options}
+
+```text
+Usage: vllm-sr benchmark comparison-options [OPTIONS] [BASELINE]
+```
+
+List eligible baselines, or comparable live runs for BASELINE; no model calls.
+
+| Parameter | Description |
+| --- | --- |
+| `[BASELINE]` | Optional argument. Type: text. |
+| `--after TEXT` | Opaque cursor from the previous eligible options page. |
+| `--limit INTEGER RANGE` | [default: 10; 1&lt;=x&lt;=25] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark dataset` {#vllm-sr-benchmark-dataset}
@@ -424,15 +440,15 @@ Estimate eligible static routes from saved answers without inference.
 ### `vllm-sr benchmark replay-options` {#vllm-sr-benchmark-replay-options}
 
 ```text
-Usage: vllm-sr benchmark replay-options [OPTIONS] BASELINE
+Usage: vllm-sr benchmark replay-options [OPTIONS] [BASELINE]
 ```
 
-Check saved previews against a live baseline without creating a run.
+List eligible baselines, or compatible previews for BASELINE; no model calls.
 
 | Parameter | Description |
 | --- | --- |
-| `BASELINE` | Required argument. Type: text. |
-| `--after TEXT` | Cursor from the previous options page. |
+| `[BASELINE]` | Optional argument. Type: text. |
+| `--after TEXT` | Opaque cursor from the previous eligible options page. |
 | `--limit INTEGER RANGE` | [default: 10; 1&lt;=x&lt;=25] |
 | `--help` | Show this message and exit. Default: false. |
 

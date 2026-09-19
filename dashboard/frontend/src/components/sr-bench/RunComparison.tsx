@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { benchApi } from './api'
+import { targetLabel, targetName } from './targetPresentation'
+import { changeDirection, changeSummary, formatSignedChange } from './comparisonMetrics'
 import AccountingCorrection from './AccountingCorrection'
 import { money, number, percent, seconds, tokenTotal } from './model'
 import type { Comparison, Report, Run } from './types'
@@ -9,8 +11,48 @@ import ProductLoadingState from '../ProductLoadingState'
 import ProductIcon from '../ProductIcon'
 import ComparisonSetup from './ComparisonSetup'
 import BenchPagination from './BenchPagination'
-import { comparisonEligibility } from './comparisonEligibility'
 import { IterationChart, QualityCostChart, type QualityCostPoint } from './EvaluationCharts'
+
+const changeClass = (value: number | null | undefined) =>
+  ({
+    positive: styles.changePositive,
+    negative: styles.changeNegative,
+    neutral: styles.changeNeutral,
+    unknown: styles.changeUnknown,
+  })[changeDirection(value)]
+function ChangeValue({
+  value,
+  unit,
+  metric,
+}: {
+  value: number | null | undefined
+  unit: string
+  metric?: 'quality' | 'cost'
+}) {
+  return (
+    <span className={changeClass(value)} data-direction={changeDirection(value)}>
+      {formatSignedChange(value)}
+      {changeDirection(value) !== 'unknown' ? unit : ''}
+      {metric && (
+        <small className={styles.changeCaption}>
+          {value === 0 ? 'No change' : changeSummary(value, metric)}
+        </small>
+      )}
+    </span>
+  )
+}
+function ChangeInterval({ values }: { values: [number, number] }) {
+  return (
+    <>
+      {values.map((value, index) => (
+        <span key={index}>
+          {index ? ' to ' : ''}
+          <ChangeValue value={value * 100} unit=" pp" />
+        </span>
+      ))}
+    </>
+  )
+}
 
 interface IterationEvidence {
   id: string
@@ -117,7 +159,6 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     if (next.toString() === search.toString()) setRevision((value) => value + 1)
     else setSearch(next)
   }
-  const selectedIDs = candidates.filter(Boolean)
   function download(format: 'json' | 'csv') {
     const payload = {
       baseline_run_id: savedBaseline,
@@ -167,17 +208,6 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     link.click()
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
-  const duplicate = new Set(selectedIDs).size !== selectedIDs.length
-  const invalidSelection = candidates.some((id) => {
-    const candidate = runs.find((run) => run.id === id)
-    return (
-      !candidate ||
-      !comparisonEligibility(
-        runs.find((run) => run.id === baseline),
-        candidate,
-      ).eligible
-    )
-  })
   const reviewedBaseline = runs.find((run) => run.id === savedBaseline)
 
   const qualified =
@@ -201,7 +231,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
             typeof target.macro_accuracy === 'number' && typeof target.cost_usd === 'number'
               ? [
                   {
-                    name: target.id,
+                    name: targetName(reviewedBaseline?.manifest, target.id),
                     quality: target.macro_accuracy * 100,
                     cost: target.cost_usd,
                     kind: 'single' as const,
@@ -219,7 +249,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                 typeof row.candidate_cost_usd === 'number'
                 ? [
                     {
-                      name: `${item.stage} · ${row.candidate_target_id}`,
+                      name: `${item.stage} · ${targetName(runs.find((run) => run.id === item.id)?.manifest, row.candidate_target_id)}`,
                       quality: metric.macro_accuracy * 100,
                       cost: row.candidate_cost_usd,
                       kind:
@@ -256,36 +286,21 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
   return (
     <section className={styles.panel}>
       <h2>Compare iterations</h2>
-      <p>
-        Compare any completed runs against a single-model baseline. Only compatible frozen cases,
-        sampling, prices and limits support a paired comparison.
-      </p>
-      <p className={styles.muted}>
-        Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost
-        measurements.
-      </p>
+      <p>Choose a single-model baseline and compare compatible saved results.</p>
+      {!!results.length && (
+        <p className={styles.muted}>
+          Costs apply frozen per-token prices to recorded usage; they are not invoice or
+          hardware-cost measurements.
+        </p>
+      )}
       <ComparisonSetup
-        runs={runs}
         baseline={baseline}
         candidates={candidates}
         pending={pending}
         onBaseline={setBaseline}
         onCandidates={setCandidates}
+        onCompare={compare}
       />
-      {duplicate && <p className={styles.error}>Choose a different run for each iteration.</p>}
-      <div className={styles.actions}>
-        <button
-          className={styles.primary}
-          disabled={pending || !baseline || !selectedIDs.length || duplicate || invalidSelection}
-          onClick={compare}
-        >
-          <ProductIcon name="chart" />
-          {pending ? 'Comparing…' : 'Compare runs'}
-        </button>
-        <span className={styles.muted}>
-          Selections are saved in this page URL. Bookmark it to reopen the same evidence.
-        </span>
-      </div>
       {draftChanged && savedResults.length > 0 && (
         <p className={styles.notice}>
           Selection changed. Choose Compare runs to update the displayed evidence.
@@ -332,23 +347,24 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                     <div className={styles.iterationNumbers}>
                       <div>
                         <span>Quality Δ</span>
-                        <strong>{number(row.quality_delta * 100, 2)} pp</strong>
+                        <strong>
+                          <ChangeValue
+                            value={row.quality_delta * 100}
+                            unit=" pp"
+                            metric="quality"
+                          />
+                        </strong>
                       </div>
                       <div>
                         <span>Cost saving</span>
                         <strong>
-                          {row.cost_saving_percent === null
-                            ? 'Unknown'
-                            : `${number(row.cost_saving_percent, 2)}%`}
+                          <ChangeValue value={row.cost_saving_percent} unit="%" metric="cost" />
                         </strong>
                       </div>
                     </div>
                     <p className={styles.muted}>
-                      95% paired interval{' '}
-                      {row.quality_delta_ci95
-                        .map((value) => `${number(value * 100, 2)} pp`)
-                        .join(' to ')}{' '}
-                      · {number(row.paired_cases)} cases
+                      95% paired interval <ChangeInterval values={row.quality_delta_ci95} /> ·{' '}
+                      {number(row.paired_cases)} cases
                     </p>
                     <p className={styles.muted}>
                       {row.quality_delta_ci95[0] <= 0 && row.quality_delta_ci95[1] >= 0
@@ -409,7 +425,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                     )
                     .map((target) => (
                       <tr key={target.id}>
-                        <th scope="row">{target.id}</th>
+                        <th scope="row">{targetName(reviewedBaseline?.manifest, target.id)}</th>
                         <td>{percent(target.macro_accuracy)}</td>
                         <td>
                           {number(target.correct)} / {number(target.total)}
@@ -498,7 +514,11 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                                 <a href={`?view=runs&run=${encodeURIComponent(item.id)}`}>
                                   {candidateRun?.manifest.name ?? item.id}
                                 </a>{' '}
-                                · {row.candidate_target_id}
+                                ·{' '}
+                                {targetName(
+                                  runs.find((run) => run.id === item.id)?.manifest,
+                                  row.candidate_target_id,
+                                )}
                               </small>
                             </th>
                             <td>{percent(metrics?.macro_accuracy)}</td>
@@ -506,13 +526,17 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                               {number(metrics?.correct)} / {number(metrics?.total)}
                             </td>
                             <td>
-                              {number(row.quality_delta * 100, 2)} pp
-                              <small>vs {row.baseline_target_id}</small>
+                              <ChangeValue
+                                value={row.quality_delta * 100}
+                                unit=" pp"
+                                metric="quality"
+                              />
+                              <small>
+                                vs {targetName(reviewedBaseline?.manifest, row.baseline_target_id)}
+                              </small>
                             </td>
                             <td>
-                              {row.quality_delta_ci95
-                                .map((value) => `${number(value * 100, 2)} pp`)
-                                .join(' to ')}
+                              <ChangeInterval values={row.quality_delta_ci95} />
                               {row.quality_delta_ci95_method && (
                                 <small>
                                   {row.quality_delta_ci95_method === 'weighted-paired-hoeffding'
@@ -531,10 +555,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                                   {row.quality_delta_bootstrap_ci95 && (
                                     <p>
                                       Bootstrap diagnostic (95%):{' '}
-                                      {row.quality_delta_bootstrap_ci95
-                                        .map((value) => `${number(value * 100, 2)} pp`)
-                                        .join(' to ')}
-                                      . Use the conservative interval above for quality claims;
+                                      <ChangeInterval values={row.quality_delta_bootstrap_ci95} />.
+                                      Use the conservative interval above for quality claims;
                                       resampling identical paired outcomes can produce a zero-width
                                       diagnostic interval.
                                     </p>
@@ -545,17 +567,21 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                             <td>
                               {money(row.candidate_cost_usd)}
                               <small>
-                                {row.cost_saving_percent === null
-                                  ? 'Saving unknown'
-                                  : `${number(row.cost_saving_percent, 2)}% saving`}
+                                <ChangeValue
+                                  value={row.cost_saving_percent}
+                                  unit="% saving"
+                                  metric="cost"
+                                />
                               </small>
                             </td>
                             <td title={row.cache_neutral_cost_basis}>
                               {money(row.cache_neutral_candidate_cost_usd)}
                               <small>
-                                {row.cache_neutral_cost_saving_percent == null
-                                  ? 'Saving unknown'
-                                  : `${number(row.cache_neutral_cost_saving_percent, 2)}% estimated saving`}
+                                <ChangeValue
+                                  value={row.cache_neutral_cost_saving_percent}
+                                  unit="% estimated saving"
+                                  metric="cost"
+                                />
                               </small>
                               <small>Baseline {money(row.cache_neutral_baseline_cost_usd)}</small>
                             </td>
@@ -592,8 +618,10 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                       {(item.comparison?.baseline_tied_best_target_ids?.length ?? 0) > 1 && (
                         <p className={styles.notice}>
                           Tied best single models:{' '}
-                          {item.comparison?.baseline_tied_best_target_ids?.join(', ')}.{' '}
-                          {item.comparison?.baseline_tie_policy}
+                          {item.comparison?.baseline_tied_best_target_ids
+                            ?.map((id) => targetName(reviewedBaseline?.manifest, id))
+                            .join(', ')}
+                          . {item.comparison?.baseline_tie_policy}
                         </p>
                       )}
                     </details>
@@ -612,7 +640,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                           ?.manifest.targets.filter((target) => target.kind === 'mom')
                           .map((target) => (
                             <div key={target.id}>
-                              <dt>{target.id} frozen configuration</dt>
+                              <dt>{targetLabel(target)} frozen configuration</dt>
                               <dd>
                                 <code>
                                   {target.config_hash ?? 'Configuration identity unavailable'}

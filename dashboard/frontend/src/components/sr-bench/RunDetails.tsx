@@ -4,7 +4,8 @@ import ProductLoadingState from '../ProductLoadingState'
 import { QualityCostChart, RoutingBars } from './EvaluationCharts'
 import { benchApi, SR_BENCH_API } from './api'
 import { active, reportDistribution, money, number, percent, seconds, tokenTotal } from './model'
-import type { CaseResult, Run, TargetMetrics } from './types'
+import type { CaseResult, Manifest, Run, TargetMetrics } from './types'
+import { targetName } from './targetPresentation'
 import { useRunEvidence } from './useRunEvidence'
 import RunArtifacts from './RunArtifacts'
 import CallEvidence from './CallEvidence'
@@ -20,10 +21,12 @@ import styles from './SrBench.module.css'
 
 function MetricsTable({
   targets,
+  manifest,
   preview,
   summary = false,
 }: {
   targets: TargetMetrics[]
+  manifest: Manifest
   preview: boolean
   summary?: boolean
 }) {
@@ -44,7 +47,7 @@ function MetricsTable({
         <tbody>
           {targets.map((target) => (
             <tr key={target.id}>
-              <th scope="row">{target.id}</th>
+              <th scope="row">{targetName(manifest, target.id)}</th>
               <td>
                 {preview
                   ? 'Preview only'
@@ -150,7 +153,7 @@ export default function RunDetails({
   }
 
   const visible = results.filter((result) =>
-    `${result.case_id} ${result.target_id} ${result.benchmark} ${result.status}`
+    `${result.case_id} ${result.target_id} ${targetName(run?.manifest, result.target_id)} ${result.benchmark} ${result.status}`
       .toLowerCase()
       .includes(filter.toLowerCase()),
   )
@@ -170,7 +173,7 @@ export default function RunDetails({
           typeof target.macro_accuracy === 'number' && typeof target.cost_usd === 'number'
             ? [
                 {
-                  name: target.id,
+                  name: targetName(run.manifest, target.id),
                   quality: target.macro_accuracy * 100,
                   cost: target.cost_usd,
                   kind:
@@ -315,7 +318,8 @@ export default function RunDetails({
               <p>{run.error || report?.failure?.reason}</p>
               {!run.error && report?.failure && (
                 <p>
-                  Target {report.failure.target_id} · case {report.failure.case_id}
+                  Model {targetName(run.manifest, report.failure.target_id)} · case{' '}
+                  {report.failure.case_id}
                   {report.failure.inferred_from_saved_results ? ' · from saved case evidence' : ''}
                 </p>
               )}
@@ -352,7 +356,7 @@ export default function RunDetails({
                     <tbody>
                       {metrics.map((target) => (
                         <tr key={target.id}>
-                          <th>{target.id}</th>
+                          <th>{targetName(run.manifest, target.id)}</th>
                           <td>{percent(target.estimated_macro_accuracy)}</td>
                           <td>{money(target.estimated_cost_usd)}</td>
                           <td>{seconds(target.estimated_latency_p50_s)}</td>
@@ -374,7 +378,12 @@ export default function RunDetails({
               hardware-cost measurements.
             </p>
             {metrics.length ? (
-              <MetricsTable targets={metrics} preview={run.manifest.mode === 'preview'} summary />
+              <MetricsTable
+                manifest={run.manifest}
+                targets={metrics}
+                preview={run.manifest.mode === 'preview'}
+                summary
+              />
             ) : reportRead.loading ? (
               <ProductLoadingState compact label="Loading report metrics…" />
             ) : reportRead.error ? (
@@ -408,6 +417,7 @@ export default function RunDetails({
                     <div key={benchmark}>
                       <h4>{benchmark}</h4>
                       <MetricsTable
+                        manifest={run.manifest}
                         targets={
                           report.benchmarks.filter(
                             (row) => row.benchmark === benchmark,
@@ -424,11 +434,11 @@ export default function RunDetails({
               <div className={styles.twoColumns}>
                 <RoutingBars
                   title="Selected models"
-                  entries={reportDistribution(metrics, 'selected_models')}
+                  entries={reportDistribution(metrics, 'selected_models', run.manifest)}
                 />
                 <RoutingBars
                   title="Matched decisions"
-                  entries={reportDistribution(metrics, 'decisions')}
+                  entries={reportDistribution(metrics, 'decisions', run.manifest)}
                 />
               </div>
             )}
@@ -445,11 +455,11 @@ export default function RunDetails({
                 <div className={styles.twoColumns}>
                   <RoutingBars
                     title="Selection status"
-                    entries={reportDistribution(metrics, 'selection_statuses')}
+                    entries={reportDistribution(metrics, 'selection_statuses', run.manifest)}
                   />
                   <RoutingBars
                     title="Selection explanation"
-                    entries={reportDistribution(metrics, 'selection_reasons')}
+                    entries={reportDistribution(metrics, 'selection_reasons', run.manifest)}
                   />
                 </div>
               </>
@@ -523,7 +533,7 @@ export default function RunDetails({
                           </button>
                         </td>
                         <td>{result.benchmark}</td>
-                        <td>{result.target_id}</td>
+                        <td>{targetName(run.manifest, result.target_id)}</td>
                         <td>{result.status}</td>
                         <td>{number(result.score, 3)}</td>
                         <td>{money(result.cost_usd)}</td>
@@ -567,7 +577,7 @@ export default function RunDetails({
               <div className={styles.recordDetail}>
                 <div className={styles.sectionHeading}>
                   <h3>
-                    {selected.case_id} · {selected.target_id}
+                    {selected.case_id} · {targetName(run.manifest, selected.target_id)}
                   </h3>
                   <button onClick={() => setSelected(null)}>
                     <ProductIcon name="arrow-left" />
@@ -601,6 +611,7 @@ export default function RunDetails({
             <CallEvidence
               id={id}
               calls={calls}
+              manifest={run.manifest}
               page={callsPage}
               loadMore={loadMoreCalls}
               accountingReconciled={!!report?.provenance.accounting_correction}
@@ -642,7 +653,7 @@ export default function RunDetails({
                       const usage = typeof target.tokens === 'object' ? target.tokens : null
                       return (
                         <tr key={target.id}>
-                          <th>{target.id}</th>
+                          <th>{targetName(run.manifest, target.id)}</th>
                           {[
                             'input_tokens',
                             'cached_input_tokens',
@@ -664,7 +675,12 @@ export default function RunDetails({
                 </table>
               </div>
             </details>
-            <RunEvents events={events} page={eventsPage} loadMore={loadMoreEvents} />
+            <RunEvents
+              manifest={run.manifest}
+              events={events}
+              page={eventsPage}
+              loadMore={loadMoreEvents}
+            />
             <details className={styles.details}>
               <summary id="run-provenance">Frozen manifest and provenance</summary>
               <pre>{JSON.stringify(run.manifest, null, 2)}</pre>

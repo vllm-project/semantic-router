@@ -104,8 +104,11 @@ vllm-sr benchmark candidate-plan BASELINE_ID --target balance --mode preview \
   --experiment EXPERIMENT_ID > candidate-review.json
 # 审阅返回的冻结 manifest，再将其保存为 preview.json 提交。
 vllm-sr benchmark preview --manifest preview.json --detach
+vllm-sr benchmark replay-options --limit 10
 vllm-sr benchmark replay-options BASELINE_ID --limit 10
 vllm-sr benchmark replay --baseline BASELINE_ID --preview PREVIEW_ID
+vllm-sr benchmark comparison-options --limit 10
+vllm-sr benchmark comparison-options BASELINE_ID --limit 10
 vllm-sr benchmark compare BASELINE_ID CANDIDATE_ID
 vllm-sr benchmark regrade RUN_ID --output regrade.json
 vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
@@ -117,7 +120,9 @@ vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
 
 单请求可使用 `vllm-sr route preview --request-file request.json`。它支持 Router 的请求子集：role/content/tool-call 消息、tools、函数选择、response format、输出预算、字符串 metadata 和 preview options/context；不接受任意 Chat Completions 参数，`temperature`、`stream` 等不支持字段会被拒绝。可用 `--session-id`、`--conversation-id`、`--sampling-seed` 指定只读预览上下文；seed 不固定后续 live 随机选择。Benchmark 题目用显式 `request_metadata` 传递请求 metadata，包含来源或参考答案的题目 `metadata` 不会被转发。
 
-**Replay** 分页列出已完成预览的服务端资格和不可用原因，只能提交可用项，提交时再次执行同一校验。两边必须按稳定 ID 对应完全相同的题目，包括答案和 metadata；仅顺序不同可以复用，并保存明确回执。服务还会核验实际有效采样、保存的请求输入、确定性选模、评分协议，以及每个所选 cell 恰好一次完整生成。不会忽略内容哈希或偷偷调用模型。响应丢失后保留原 baseline、preview 和幂等键，按同一意图核对。
+**Replay** 和 **Compare** 的第一级只展示至少有一个可用下级的基线，第二级只展示兼容预览或实测候选。查询与提交复用同一权威校验，提交时再次校验。两边必须按稳定 ID 对应完全相同的题目，包括答案和 metadata；仅顺序不同可以复用，并保存明确回执。服务还会核验实际有效采样、保存的请求输入、确定性选模、评分协议，以及每个所选 cell 恰好一次完整生成。不会忽略内容哈希或偷偷调用模型。响应丢失后保留原 baseline、preview 和幂等键，按同一意图核对。
+
+只读 API 为 `GET /api/sr-bench/v1/replay-options` 和 `GET /api/sr-bench/v1/comparison-options`；不传 `baseline_run_id` 查询基线，传入后查询兼容下级。`limit` 为 1–25，`after` 必须使用上一页返回的不透明游标，CLI `benchmark replay-options` 使用相同游标。空页若仍有 `has_more: true`，表示搜索尚未完成，需点击 **Load more** 或传入下一页游标。`scan_limited: true` 表示部分证据超过单页验证限额，不能据此认定不存在其他兼容组合。可见已完成证据变化时，游标失效并要求从第一页刷新。以上查询不调用模型。
 
 Experiment 持久关联 baseline、initial、preview、estimate、candidate、validation 和 recovery 运行，不改写原始回执。创建或关联实验、查询 Replay 资格和生成候选计划均不产生模型答案；属于同一 experiment 也不代表两次运行一定可比。恢复子任务始终标为 recovery，不替代完整基线。管理员可以继续 CLI 创建的实验；其他可写用户只能在自己的实验中创建新任务。只读用户可以比较有权访问的已有结果。
 

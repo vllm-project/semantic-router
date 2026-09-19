@@ -115,6 +115,7 @@ export interface Manifest {
   profile: string
   seed: number
   targets: Target[]
+  auxiliary_targets?: Record<string, Target>
   dataset?: { path: string; sha256: string }
   cases?: unknown[]
   limits: {
@@ -337,28 +338,25 @@ export interface RecoveryRequest {
   acknowledge_new_attempt?: boolean
 }
 
-export interface ReplayOption {
-  preview_run_id: string
+export interface RunChoice {
+  run_id: string
   name: string
   profile: string
   case_count: number
-  eligible: boolean
-  reasons: Array<{ code: string; message: string }>
 }
 
-export interface ReplayOptions {
-  baseline: {
-    run_id: string
-    name: string
-    profile: string
-    case_count: number
-    status: string
-    mode: string
-  }
-  options: ReplayOption[]
+export interface RunOptions {
+  baseline: RunChoice | null
+  baselines: RunChoice[]
+  options: RunChoice[]
   next_cursor: string | null
   has_more: boolean
+  scanned_pairs: number
+  scan_limited: boolean
+  unverified_pairs: number
+  unverified_baselines: number
   model_requests: 0
+  empty_reason?: string
 }
 
 export interface ReplayRequest {

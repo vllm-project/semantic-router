@@ -25,8 +25,9 @@ from .engine import Engine, ReviewedPlanChangedError
 from .experiments import Experiments
 from .offline import export_training, regrade, replay
 from .recovery import RecoveryPlanError, recover, recovery_plan
-from .replay_validation import ReplayEligibilityError, replay_options
+from .replay_validation import ReplayEligibilityError
 from .report import compare, make_report
+from .run_options import run_options
 from .store import Store
 
 PREFIX = "/api/sr-bench/v1"
@@ -239,6 +240,26 @@ class Handler(BaseHTTPRequestHandler):
             route = path[len(PREFIX) :].strip("/").split("/")
             if method == "POST" and role == "read" and route != ["comparisons"]:
                 raise PermissionError("Write access is required")
+            if (
+                route in (["replay-options"], ["comparison-options"])
+                and method == "GET"
+            ):
+                query = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=3)
+                if set(query) - {"baseline_run_id", "after", "limit"} or any(
+                    len(value) != 1 or not value[0] for value in query.values()
+                ):
+                    raise ValueError("Invalid run options filters")
+                return self._send(
+                    200,
+                    run_options(
+                        self.server.store,
+                        "replay" if route[0] == "replay-options" else "comparison",
+                        query.get("baseline_run_id", [None])[0],
+                        owner,
+                        query.get("after", [None])[0],
+                        int(query.get("limit", ["10"])[0]),
+                    ),
+                )
             if route[0] == "experiments":
                 if method == "GET":
                     query = parse_qs(
@@ -415,24 +436,6 @@ class Handler(BaseHTTPRequestHandler):
                         result = self._plan(manifest, role, actor)
                         validate_candidate_protocol(run, result["manifest"])
                         return self._send(200, result)
-                    if action == "replay-options" and method == "GET":
-                        query = parse_qs(
-                            parsed.query, keep_blank_values=True, max_num_fields=2
-                        )
-                        if set(query) - {"after", "limit"} or any(
-                            len(v) != 1 for v in query.values()
-                        ):
-                            raise ValueError("Invalid replay options filters")
-                        return self._send(
-                            200,
-                            replay_options(
-                                self.server.store,
-                                run_id,
-                                owner,
-                                query.get("after", [None])[0],
-                                int(query.get("limit", ["10"])[0]),
-                            ),
-                        )
                     if action == "reconcile-usage" and method == "POST":
                         return self._send(
                             200, reconcile_usage(self.server.store, run_id)

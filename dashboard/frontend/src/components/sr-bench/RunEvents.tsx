@@ -1,16 +1,19 @@
 import { useState } from 'react'
 import ProductLoadingState from '../ProductLoadingState'
-import type { PageState, RunEvent } from './types'
+import type { Manifest, PageState, RunEvent } from './types'
 import BenchSelect from './BenchSelect'
 import BenchPagination from './BenchPagination'
 import { describeRunEvent } from './eventPresentation'
+import { targetName } from './targetPresentation'
 import styles from './SrBench.module.css'
 
 export default function RunEvents({
+  manifest,
   events,
   page: evidencePage,
   loadMore,
 }: {
+  manifest: Manifest
   events: RunEvent[]
   page: PageState
   loadMore: () => Promise<void>
@@ -78,7 +81,7 @@ export default function RunEvents({
               <p className={styles.muted}>
                 {[
                   row.caseID && `Case: ${row.caseID}`,
-                  row.targetID && `Target: ${row.targetID}`,
+                  row.targetID && `Model: ${targetName(manifest, row.targetID)}`,
                   row.role && `Role: ${row.role}`,
                 ]
                   .filter(Boolean)

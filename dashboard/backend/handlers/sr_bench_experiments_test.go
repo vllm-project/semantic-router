@@ -24,7 +24,8 @@ func TestSRBenchExperimentRoutesPreserveRequests(t *testing.T) {
 	}
 	for _, request := range []forwardedRequest{
 		{http.MethodGet, "/datasets/selection?profile=quick", ""},
-		{http.MethodGet, "/runs/run-1/replay-options?after=preview%3A123&limit=25", ""},
+		{http.MethodGet, "/comparison-options?baseline_run_id=run-1&after=opaque%3D&limit=25", ""},
+		{http.MethodGet, "/replay-options?baseline_run_id=run-1&after=opaque%3D&limit=25", ""},
 		{http.MethodPost, "/runs/run-1/candidate-plan", `{"target_ids":["balance"],"mode":"preview"}`},
 		{http.MethodGet, "/experiments", ""},
 		{http.MethodPost, "/experiments", `{"name":"Routing comparison"}`},
@@ -57,7 +58,9 @@ func TestSRBenchExperimentRoutesRejectInvalidPathsAndMethods(t *testing.T) {
 		status              int
 	}{
 		{http.MethodPost, "/datasets/selection", "GET", http.StatusMethodNotAllowed},
-		{http.MethodPost, "/runs/run-1/replay-options", "GET", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/replay-options", "GET", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/comparison-options", "GET", http.StatusMethodNotAllowed},
+		{http.MethodGet, "/runs/run-1/replay-options", "", http.StatusNotFound},
 		{http.MethodGet, "/runs/run-1/candidate-plan", "POST", http.StatusMethodNotAllowed},
 		{http.MethodDelete, "/experiments", "GET, POST", http.StatusMethodNotAllowed},
 		{http.MethodPost, "/experiments/" + experiment, "GET", http.StatusMethodNotAllowed},

@@ -14,7 +14,7 @@ import type {
   Report,
   RecoveryPlan,
   RecoveryRequest,
-  ReplayOptions,
+  RunOptions,
   ReplayRequest,
   Run,
   RunEvent,
@@ -171,10 +171,16 @@ export const benchApi = {
     request<Report>(`${runPath(id)}/report`, { signal }),
   events: (id: string, after = 0, signal?: AbortSignal) =>
     request<{ events: RunEvent[] }>(`${runPath(id)}/events?after=${after}`, { signal }),
-  replayOptions: (baseline: string, after?: string, signal?: AbortSignal) => {
+  runOptions: (
+    kind: 'comparison' | 'replay',
+    baseline?: string,
+    after?: string,
+    signal?: AbortSignal,
+  ) => {
     const query = new URLSearchParams({ limit: '10' })
+    if (baseline) query.set('baseline_run_id', baseline)
     if (after) query.set('after', after)
-    return request<ReplayOptions>(`${runPath(baseline)}/replay-options?${query}`, { signal })
+    return request<RunOptions>(`/${kind}-options?${query}`, { signal })
   },
   replay: (body: ReplayRequest) => post<Run>('/replays', body),
   regrade: (id: string) => post<Record<string, unknown>>(`${runPath(id)}/regrade`, {}),

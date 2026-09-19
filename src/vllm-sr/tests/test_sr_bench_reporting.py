@@ -186,6 +186,38 @@ def test_best_single_quality_tie_uses_cheapest_independent_of_manifest_order(
 
 
 @pytest.mark.parametrize(
+    "baseline_correct,candidate_correct,candidate_cost,quality_delta,saving",
+    [
+        ({"0", "1", "2", "3", "4"}, set(), 3, -1, -50),
+        (set(), {"0", "1", "2", "3", "4"}, 1, 1, 50),
+        ({"0"}, {"0"}, 2, 0, 0),
+    ],
+)
+def test_comparison_retains_negative_positive_and_zero_changes(
+    tmp_path,
+    baseline_correct,
+    candidate_correct,
+    candidate_cost,
+    quality_delta,
+    saving,
+):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(
+        store, ["flash"], {"flash": 2}, {"flash": baseline_correct}
+    )
+    candidate = _weighted_matrix(
+        store,
+        ["balance"],
+        {"balance": candidate_cost},
+        {"balance": candidate_correct},
+        candidate=True,
+    )
+    row = compare(store, baseline, candidate)["comparisons"][0]
+    assert row["quality_delta"] == pytest.approx(quality_delta)
+    assert row["cost_saving_percent"] == pytest.approx(saving)
+
+
+@pytest.mark.parametrize(
     "costs,selected,eligible",
     [
         ({"a": 2, "z": 2}, "a", True),

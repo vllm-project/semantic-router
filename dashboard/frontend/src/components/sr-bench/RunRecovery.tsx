@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { benchApi, SrBenchRequestError } from './api'
 import { money, number } from './model'
+import { targetName } from './targetPresentation'
 import type { RecoveryCell, RecoveryPlan, RecoveryRequest, Run } from './types'
 import styles from './SrBench.module.css'
 import BenchSelect from './BenchSelect'
@@ -218,7 +219,7 @@ export default function RunRecovery({
                             <td>
                               <input
                                 type="checkbox"
-                                aria-label={`Recover ${cell.target_id} ${cell.case_id}`}
+                                aria-label={`Recover ${targetName(run.manifest, cell.target_id)} ${cell.case_id}`}
                                 checked={selected.has(cellKey(cell))}
                                 onChange={(event) =>
                                   setSelected((previous) => {
@@ -230,7 +231,7 @@ export default function RunRecovery({
                                 }
                               />
                             </td>
-                            <td>{cell.target_id}</td>
+                            <td>{targetName(run.manifest, cell.target_id)}</td>
                             <td>{cell.case_id}</td>
                           </tr>
                         ))}
@@ -283,7 +284,7 @@ export default function RunRecovery({
                           .slice(excludedPage * 25, excludedPage * 25 + 25)
                           .map((cell) => (
                             <tr key={cellKey(cell)}>
-                              <td>{cell.target_id}</td>
+                              <td>{targetName(run.manifest, cell.target_id)}</td>
                               <td>{cell.case_id}</td>
                               <td>{cell.reason}</td>
                             </tr>

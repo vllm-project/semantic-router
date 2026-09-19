@@ -9,6 +9,7 @@ import ProductIcon from '../ProductIcon'
 import BenchSelect from './BenchSelect'
 import RunSettings, { type SamplingSettings } from './RunSettings'
 import TargetRequestProfile from './TargetRequestProfile'
+import { targetLabel } from './targetPresentation'
 import controls from './BenchControls.module.css'
 import RunDatasetScope, { type ResolvedDatasetScope } from './RunDatasetScope'
 import {
@@ -297,7 +298,7 @@ export default function RunComposer({
               </p>
               <p>
                 {submission.manifest.name} ·{' '}
-                {submission.manifest.targets.map((target) => target.id).join(', ')}
+                {submission.manifest.targets.map(targetLabel).join(', ')}
               </p>
               <button disabled={!canRun || pending} onClick={() => void startRun()}>
                 {pending ? 'Reconciling…' : 'Check or submit same evaluation'}
@@ -403,8 +404,8 @@ export default function RunComposer({
               )
               .map((target) => ({
                 value: target.id,
-                label: target.id,
-                description: `${target.kind === 'mom' ? 'Mixture of models' : 'Single model'} · ${target.model}`,
+                label: targetLabel(target),
+                description: target.kind === 'mom' ? 'Mixture of models' : 'Single model',
               }))}
             onChange={(value) => {
               const target = registeredTargets.find((item) => item.id === value)
@@ -424,11 +425,10 @@ export default function RunComposer({
           <fieldset key={index} className={styles.target}>
             <legend>
               <ProductIcon name={target.kind === 'mom' ? 'mixture' : 'model'} />
-              {target.id}
+              {targetLabel(target)}
             </legend>
             <p>
-              <strong>{target.kind === 'mom' ? 'Mixture of models' : 'Single model'}</strong> ·{' '}
-              {target.model}
+              <strong>{target.kind === 'mom' ? 'Mixture of models' : 'Single model'}</strong>
             </p>
             <details className={styles.details}>
               <summary>Connection and configuration</summary>

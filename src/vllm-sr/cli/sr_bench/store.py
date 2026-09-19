@@ -14,8 +14,6 @@ from .contracts import canonical, planned_cells
 from .experiments import bind_created_run, run_roles
 
 MAX_PAGE_SIZE = 500
-MAX_REPLAY_OPTIONS = 25
-MAX_REPLAY_CURSOR_DIGITS = 19
 
 TERMINAL = {"completed", "failed", "cancelled", "interrupted"}
 
@@ -287,43 +285,6 @@ class Store:
                 (owner, request_key),
             ).fetchone()
             return self.get(row[0]) if row else None
-
-    def preview_candidates(self, owner=None, after=None, limit=10):
-        """Bounded, owner-filtered completed previews in stable insertion order."""
-        if (
-            isinstance(limit, bool)
-            or not isinstance(limit, int)
-            or not 1 <= limit <= MAX_REPLAY_OPTIONS
-        ):
-            raise ValueError("Replay options limit must be between 1 and 25")
-        if after is not None and (
-            not isinstance(after, str)
-            or len(after) > MAX_REPLAY_CURSOR_DIGITS
-            or not after.isascii()
-            or not after.isdecimal()
-            or not 0 < int(after) <= 2**63 - 1
-        ):
-            raise ValueError("Invalid replay options cursor")
-        conditions = ["status='completed'", "json_extract(manifest,'$.mode')='preview'"]
-        values = []
-        if owner is not None:
-            conditions.append("owner=?")
-            values.append(owner)
-        if after is not None:
-            conditions.append("rowid<?")
-            values.append(int(after))
-        with self.lock:
-            rows = self.db.execute(
-                "SELECT rowid,id FROM runs WHERE "
-                + " AND ".join(conditions)
-                + " ORDER BY rowid DESC LIMIT ?",
-                (*values, limit + 1),
-            ).fetchall()
-            page = rows[:limit]
-            return (
-                [self.get(row[1]) for row in page],
-                str(page[-1][0]) if len(rows) > limit else None,
-            )
 
     def children(self, run_id):
         with self.lock:

@@ -1,4 +1,5 @@
 import { effectiveRequestProfile, number } from './model'
+import { targetLabel } from './targetPresentation'
 import type { Manifest, Target } from './types'
 import styles from './SrBench.module.css'
 import controls from './BenchControls.module.css'
@@ -13,9 +14,7 @@ function settingLabel(key: string) {
     ignore_eos: 'Ignore end-of-sequence',
     stop: 'Stop sequences',
   }
-  return (
-    labels[key] ?? key.replace(/_/g, ' ').replace(/^./, (character) => character.toUpperCase())
-  )
+  return labels[key] ?? key.replace(/_/g, ' ').replace(/^./, (character) => character.toUpperCase())
 }
 
 function FixedValue({ value }: { value: unknown }) {
@@ -73,7 +72,7 @@ export default function TargetRequestProfile({
   const shown = new Set<string>(fields.map(([key]) => key))
   const other = Object.entries(target.request_params ?? {}).filter(([key]) => !shown.has(key))
   return (
-    <section aria-label={`${target.id} request profile`}>
+    <section aria-label={`${targetLabel(target)} request profile`}>
       <h4>Effective request profile</h4>
       <dl className={controls.profileGrid}>
         {fields.map(([key, label]) => {

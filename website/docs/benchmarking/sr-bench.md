@@ -225,8 +225,11 @@ vllm-sr benchmark candidate-plan BASELINE_ID --target balance --mode preview \
   --experiment EXPERIMENT_ID > candidate-review.json
 # Inspect the returned frozen manifest before submitting it as preview.json.
 vllm-sr benchmark preview --manifest preview.json --detach
+vllm-sr benchmark replay-options --limit 10
 vllm-sr benchmark replay-options BASELINE_ID --limit 10
 vllm-sr benchmark replay --baseline BASELINE_ID --preview PREVIEW_ID
+vllm-sr benchmark comparison-options --limit 10
+vllm-sr benchmark comparison-options BASELINE_ID --limit 10
 vllm-sr benchmark compare BASELINE_ID CANDIDATE_ID
 vllm-sr benchmark regrade RUN_ID --output regrade.json
 vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
@@ -258,15 +261,25 @@ may contain reference labels, is never forwarded as request metadata.
 
 Replay rejects state-dependent Learning snapshots, unsupported plugin, agent
 or compound execution and missing matrix cells instead of calling a model.
-**Replay** lists completed previews with authoritative eligibility and reasons;
-only eligible choices can be submitted. The same validator checks submission
-again. Both runs must contain identical complete cases by stable ID, including
+**Replay** and **Compare** list only baselines with at least one compatible
+saved run, then offer only compatible choices. Discovery and submission use the
+same authoritative validator; submission checks again. Both runs must contain identical complete cases by stable ID, including
 answers and metadata; order alone may differ and receives an explicit receipt.
 The validator also checks effective generation parameters, actual saved request
 inputs, deterministic selection, grader identity and exactly one complete saved
 subject generation per selected cell. It never weakens frozen content hashes or
 silently calls a model. Keep the same pending baseline/preview/idempotency key
 after a lost response; do not create a new intent to reconcile it.
+
+The read-only APIs are `GET /api/sr-bench/v1/replay-options` and
+`GET /api/sr-bench/v1/comparison-options`. Omit `baseline_run_id` for baselines;
+provide it for compatible previews or live candidates. Pages use `limit` (1–25)
+and an opaque `after` cursor. CLI `benchmark replay-options` accepts that same
+cursor. An empty page with `has_more: true` is an unfinished search: use **Load
+more** or the next cursor. `scan_limited: true` means some evidence exceeded the
+per-page validation limit; it does not prove that no other compatible runs exist.
+A cursor becomes invalid when visible completed evidence changes; refresh from
+the first page. These queries make no model requests.
 
 Experiments link baseline, initial, preview, estimate, candidate, validation and recovery
 runs without changing their original receipts. Creating or attaching an experiment,

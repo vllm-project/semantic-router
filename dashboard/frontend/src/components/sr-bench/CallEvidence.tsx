@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { benchApi } from './api'
 import BenchPagination from './BenchPagination'
 import { money, number, seconds } from './model'
-import type { CallRecord, PageState } from './types'
+import type { CallRecord, Manifest, PageState } from './types'
+import { targetName } from './targetPresentation'
 import styles from './SrBench.module.css'
 import ProductIcon from '../ProductIcon'
 import ProductLoadingState from '../ProductLoadingState'
@@ -10,12 +11,14 @@ import ProductLoadingState from '../ProductLoadingState'
 export default function CallEvidence({
   id,
   calls,
+  manifest,
   page,
   loadMore,
   accountingReconciled = false,
 }: {
   id: string
   calls: CallRecord[]
+  manifest: Manifest
   page: PageState
   loadMore: () => Promise<void>
   accountingReconciled?: boolean
@@ -23,7 +26,7 @@ export default function CallEvidence({
   const [listPage, setListPage] = useState(0)
   const [filter, setFilter] = useState('')
   const visible = calls.filter((call) =>
-    `${call.id} ${call.case_id} ${call.target_id} ${call.role} ${call.status} ${call.selected_model ?? call.model ?? ''}`
+    `${call.id} ${call.case_id} ${call.target_id} ${targetName(manifest, call.target_id)} ${call.role} ${call.status} ${call.selected_model ?? call.model ?? ''}`
       .toLowerCase()
       .includes(filter.toLowerCase()),
   )
@@ -111,7 +114,7 @@ export default function CallEvidence({
                     </button>
                   </td>
                   <td>
-                    {call.case_id} / {call.target_id}
+                    {call.case_id} / {targetName(manifest, call.target_id)}
                   </td>
                   <td>{call.role}</td>
                   <td>{call.status}</td>

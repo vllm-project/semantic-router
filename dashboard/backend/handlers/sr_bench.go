@@ -120,7 +120,7 @@ func srBenchRouteMethod(path string) (string, bool) {
 		return "", false
 	}
 	switch rest {
-	case "/health", "/catalog", "/datasets", "/datasets/selection", "/targets":
+	case "/health", "/catalog", "/datasets", "/datasets/selection", "/targets", "/replay-options", "/comparison-options":
 		return http.MethodGet, true
 	case "/plans", "/comparisons", "/replays", "/datasets/compose":
 		return http.MethodPost, true
@@ -153,7 +153,7 @@ func srBenchRouteMethod(path string) (string, bool) {
 	}
 	if len(parts) == 3 {
 		switch parts[2] {
-		case "results", "report", "events", "calls", "replay-options":
+		case "results", "report", "events", "calls":
 			return http.MethodGet, true
 		case "cancel", "regrade", "export", "recover-plan", "recover", "reconcile-usage", "candidate-plan":
 			return http.MethodPost, true
