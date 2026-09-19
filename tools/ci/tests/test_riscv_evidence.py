@@ -107,6 +107,29 @@ class RISCVTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 riscv.go_cases(path, {"TestOwnedA"}, "target")
 
+    def test_capability_results_must_run_and_pass(self):
+        names = {
+            "TestEmbeddingCapabilitiesConformance",
+            "TestEmbeddingDimensionStateValidation",
+        }
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "go.jsonl"
+            for name in names:
+                for action in ("missing", "skip", "fail"):
+                    rows = go_events(sorted(names))
+                    if action == "missing":
+                        rows = [row for row in rows if row.get("Test") != name]
+                    else:
+                        for row in rows:
+                            if row.get("Test") == name and row["Action"] == "pass":
+                                row["Action"] = action
+                    write_events(path, rows)
+                    with (
+                        self.subTest(name=name, action=action),
+                        self.assertRaises(ValueError),
+                    ):
+                        riscv.go_cases(path, names, "qemu-binding")
+
     def test_rust_requires_both_real_cases_and_no_ignored_tests(self):
         with tempfile.TemporaryDirectory() as folder:
             directory = Path(folder)
@@ -205,9 +228,18 @@ class RISCVTests(unittest.TestCase):
             (directory / "models.json").write_text(
                 json.dumps({"provider": "candle", "models": [model]})
             )
-            minimal = {"TestOwnedA", "TestNewRegexProvider", "TestUtilityFunctions"}
+            capabilities = {
+                "TestEmbeddingCapabilitiesConformance",
+                "TestEmbeddingDimensionStateValidation",
+            }
+            minimal = {
+                "TestOwnedA",
+                "TestNewRegexProvider",
+                "TestUtilityFunctions",
+            } | capabilities
             (directory / "minimal-pattern.txt").write_text(
-                "^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions)$"
+                "^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions|"
+                "EmbeddingCapabilitiesConformance|EmbeddingDimensionStateValidation)$"
             )
             excluded = "TestOwnedNativeMaintainedHallucinationWithoutLabelMetadata"
             (directory / "minimal-skip.txt").write_text("^" + excluded + "$")
@@ -230,6 +262,20 @@ class RISCVTests(unittest.TestCase):
                     f"running 1 test\ntest {name} ... ok\ntest result: ok. 1 passed; 0 failed; 0 ignored;\n"
                 )
             (directory / "router.json").write_text(json.dumps(router_report()))
+            for missing in capabilities:
+                (directory / "binding-list.txt").write_text(
+                    "\n".join(sorted((minimal | {excluded}) - {missing}))
+                )
+                with (
+                    self.subTest(missing=missing),
+                    self.assertRaisesRegex(
+                        ValueError, "binding discovery is incomplete"
+                    ),
+                ):
+                    riscv.evidence(directory)
+            (directory / "binding-list.txt").write_text(
+                "\n".join(sorted(minimal | {excluded}))
+            )
             with (
                 patch.object(
                     riscv.subprocess,
@@ -247,8 +293,12 @@ class RISCVTests(unittest.TestCase):
                 ) as binary,
             ):
                 result = riscv.evidence(directory)
-            self.assertEqual(len(result["cases"]), 12)
-            self.assertEqual(len(result["expected_cases"]), 12)
+            self.assertEqual(len(result["cases"]), 14)
+            self.assertEqual(len(result["expected_cases"]), 14)
+            self.assertTrue(
+                {"qemu-binding:" + name for name in capabilities}
+                <= set(result["expected_cases"])
+            )
             self.assertEqual(binary.call_count, 3)
             self.assertEqual(result["models"], [model])
             self.assertEqual(

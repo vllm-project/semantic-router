@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Qualify Candle's emulated RISC-V execution without claiming physical hardware."""
+
 from __future__ import annotations
 
 import hashlib
@@ -164,7 +165,10 @@ def evidence(directory: Path) -> dict:
     ):
         raise ValueError("RISC-V checkpoint has no immutable identity")
     pattern = (directory / "minimal-pattern.txt").read_text().strip()
-    if pattern != "^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions)$":
+    if pattern != (
+        "^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions|"
+        "EmbeddingCapabilitiesConformance|EmbeddingDimensionStateValidation)$"
+    ):
         raise ValueError(
             "RISC-V minimal bindings must use the maintained owned fixture selection"
         )
@@ -184,9 +188,12 @@ def evidence(directory: Path) -> dict:
     required = {
         name for name in listed if re.fullmatch(pattern, name) and name != excluded
     }
-    if not {"TestUtilityFunctions", "TestNewRegexProvider"} <= required or not any(
-        name.startswith("TestOwned") for name in required
-    ):
+    if not {
+        "TestUtilityFunctions",
+        "TestNewRegexProvider",
+        "TestEmbeddingCapabilitiesConformance",
+        "TestEmbeddingDimensionStateValidation",
+    } <= required or not any(name.startswith("TestOwned") for name in required):
         raise ValueError("RISC-V owned binding discovery is incomplete")
     cases, expected = [], []
     for filename, names, prefix in (
