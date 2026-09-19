@@ -581,9 +581,8 @@ Exact McNemar test on paired correctness, candidate against clean baseline:
 ## 12. Exploratory: LFM2.5-Encoder and SCX Router
 
 - **Status:** not part of the planned experiment. §3 deferred both.
-- **What was done:** tried afterwards, out of curiosity, on branch
-  `modality-routing-lfm25-scx-exploration` (`exploration_lfm25_scx/`), using
-  the same fixed split.
+- **What was done:** tried afterwards, out of curiosity, using the same fixed
+  split. The scripts are not part of this PR yet and will be added later.
 - **How to read the table:** it is not a leaderboard.
   - Each model used a different recipe and budget.
   - One seed, no tuning.
