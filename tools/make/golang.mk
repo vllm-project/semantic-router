@@ -21,7 +21,7 @@ go-lint: ## Run golangci-lint for src/semantic-router
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
 		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
 		export PATH="$$GOPATH/bin:$$PATH" && \
-		golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
+		golangci-lint run ./... --config $(GOLANGCI_LINT_CONFIG)
 	@echo "src/semantic-router go module lint passed"
 
 go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix)
@@ -31,7 +31,7 @@ go-lint-fix: ## Auto-fix lint issues in src/semantic-router (may need manual fix
 		export GOROOT=$$(dirname $$(dirname $$(readlink -f $$(which go)))) && \
 		export GOPATH=$$(go env GOPATH 2>/dev/null || echo "$$HOME/go") && \
 		export PATH="$$GOPATH/bin:$$PATH" && \
-		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
+		golangci-lint run ./... --fix --config $(GOLANGCI_LINT_CONFIG)
 	@echo "src/semantic-router go module lint fix applied"
 
 vet: $(if $(CI),rust-ci,rust) ## Run go vet for all Go modules (build Rust library first)

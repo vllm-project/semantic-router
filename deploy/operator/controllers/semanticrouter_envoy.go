@@ -240,7 +240,7 @@ func (r *SemanticRouterReconciler) reconcileEnvoyConfig(ctx context.Context, sr 
 		},
 	}
 
-	if err := controllerutil.SetControllerReference(sr, cm, r.Scheme); err != nil {
+	if err = controllerutil.SetControllerReference(sr, cm, r.Scheme); err != nil {
 		return err
 	}
 

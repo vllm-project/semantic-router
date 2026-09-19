@@ -13,11 +13,6 @@
 //   - Rust-allocated memory is freed via explicit free functions
 package nlp_binding
 
-import (
-	"fmt"
-	"unsafe"
-)
-
 /*
 #cgo LDFLAGS: -L${SRCDIR}/target/release -lnlp_binding -ldl -lm -lpthread
 #include <stdlib.h>
@@ -75,6 +70,11 @@ extern void free_classify_result(ClassifyResult result);
 extern void free_classify_results(ClassifyResults results);
 */
 import "C"
+
+import (
+	"fmt"
+	"unsafe"
+)
 
 // MatchResult represents the output of a BM25 or N-gram classification.
 type MatchResult struct {

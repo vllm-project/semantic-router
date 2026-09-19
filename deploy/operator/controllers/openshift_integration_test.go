@@ -20,11 +20,12 @@ import (
 	"context"
 	"testing"
 
-	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
 
 func TestReconcileRouteSkipsCleanupOnStandardKubernetes(t *testing.T) {

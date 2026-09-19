@@ -54,15 +54,6 @@ jobs:
         id: dependencies
         run: go mod download
 
-      - name: Check Go Formatting
-        if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
-        run: |
-          if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
-            echo "Code is not formatted:"
-            gofmt -s -l .
-            exit 1
-          fi
-
       - name: Vet Operator Code
         if: ${{ !cancelled() && steps.dependencies.outcome == 'success' }}
         run: go vet ./...
@@ -80,7 +71,7 @@ jobs:
           version: ${{ steps.golangci_lint.outputs.version }}
           install-mode: binary
           working-directory: deploy/operator
-          args: --timeout=5m
+          args: --timeout=5m --config=${{ github.workspace }}/tools/linter/go/.golangci.yml
 
       - name: Discover Operator Unit Tests
         id: discovery

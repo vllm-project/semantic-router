@@ -35,7 +35,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
-
 	// Import testcases package to register all test cases via their init() functions
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -363,7 +362,9 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 
 		// Download pretrained models from HuggingFace
 		p.log("Downloading pretrained ML models from HuggingFace...")
-		os.MkdirAll(sourceDir, 0755)
+		if err = os.MkdirAll(sourceDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create %s: %w", sourceDir, err)
+		}
 
 		downloadCmd := exec.CommandContext(ctx, "python3", "download_model.py",
 			"--output-dir", "../../../../.cache/ml-models",
@@ -395,7 +396,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 	// This is the standard approach that works on native Linux
 	hostDir := "/tmp/kind-ml-models"
 	p.log("Copying models to host directory %s...", hostDir)
-	if err := os.MkdirAll(hostDir, 0755); err != nil {
+	if err = os.MkdirAll(hostDir, 0o755); err != nil {
 		p.log("  Warning: could not create host directory: %v (may need sudo on some systems)", err)
 	} else {
 		for _, f := range modelFiles {
@@ -405,7 +406,7 @@ func (p *Profile) prepareMLModels(ctx context.Context) error {
 			if err != nil {
 				return fmt.Errorf("failed to read %s: %w", src, err)
 			}
-			if err := os.WriteFile(dst, data, 0644); err != nil {
+			if err := os.WriteFile(dst, data, 0o644); err != nil {
 				p.log("  Warning: could not write %s: %v", dst, err)
 			} else {
 				p.log("  ✓ Copied %s to host", f)
