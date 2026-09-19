@@ -77,8 +77,12 @@ removes its grouping, not run evidence; active runs must be resolved first.
 ## Run reliability
 
 Inspect the plan before dispatch; use bounded deadlines, call/output limits and
-cost policy. Submit with a stable idempotency key. After a lost acknowledgement,
-look up that run before acting; do not substitute a new key or repeat generations.
+cost policy. Before scaling, inspect effective native reasoning effort,
+final-answer presence, finish reasons, and truncation/timeout rates. Changes to
+budgets or request profiles require new compatible baselines; never grade hidden
+reasoning as a final answer. Submit with a stable idempotency key. After a lost
+acknowledgement, look up that run before acting; do not substitute a new key or
+repeat generations.
 `cancel` stops actual work; Ctrl-C only stops the CLI wait.
 
 Inspect failures and saved receipts before recovery. `recover-plan`/`recover`
