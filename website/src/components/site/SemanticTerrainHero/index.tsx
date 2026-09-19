@@ -2,6 +2,7 @@ import React from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import useBaseUrl from '@docusaurus/useBaseUrl'
 import IconExternalLink from '@theme/Icon/ExternalLink'
+import ThemedImage from '@theme/ThemedImage'
 import Claude from '@lobehub/icons/es/Claude/components/Mono'
 import DeepSeek from '@lobehub/icons/es/DeepSeek/components/Mono'
 import Gemini from '@lobehub/icons/es/Gemini/components/Mono'
@@ -32,7 +33,8 @@ const heroModelLogos = [
 ]
 
 export default function SemanticTerrainHero(): JSX.Element {
-  const logoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
+  const lightLogoSrc = useBaseUrl('/img/vllm-sr-logo.light.png')
+  const darkLogoSrc = useBaseUrl('/img/vllm-sr-logo.white.png')
   const modelCopies = [0, 1]
   const modelRepeats = [0, 1, 2]
 
@@ -45,7 +47,10 @@ export default function SemanticTerrainHero(): JSX.Element {
         <div className="site-shell-container">
           <div className={styles.copy}>
             <div className={styles.brand}>
-              <img src={logoSrc} alt="vLLM Semantic Router" />
+              <ThemedImage
+                sources={{ light: lightLogoSrc, dark: darkLogoSrc }}
+                alt="vLLM Semantic Router"
+              />
             </div>
 
             <h1>

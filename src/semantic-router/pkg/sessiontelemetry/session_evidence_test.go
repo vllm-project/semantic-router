@@ -603,3 +603,41 @@ func TestRecentTurnOutcomesReturnClones(t *testing.T) {
 		t.Fatalf("mutation leaked into store: %+v", again[0])
 	}
 }
+
+func TestPeekRecentTurnOutcomesDoesNotHydrateSharedState(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	now := time.Now()
+	store := &fakeRouterSessionStateStore{found: true, snapshot: RouterSessionSnapshot{SessionID: "peek-outcomes", LastSeen: now, RecentOutcomes: []TurnOutcome{
+		{TurnIndex: 1, Timestamp: now.Add(-2 * time.Minute).UnixMilli(), Category: TurnProgress},
+		{TurnIndex: 2, Timestamp: now.Add(-time.Second).UnixMilli(), Category: TurnRegression},
+	}}}
+	SetRouterSessionStateStore(store)
+	t.Cleanup(func() { SetRouterSessionStateStore(nil); ResetRouterSessionMemoryForTesting() })
+	got := PeekRecentTurnOutcomesWithPolicy("peek-outcomes", now, 1, time.Minute)
+	if len(got) != 1 || got[0].TurnIndex != 2 {
+		t.Fatalf("peek window=%+v", got)
+	}
+	if store.saved != 0 {
+		t.Fatal("peek persisted state")
+	}
+	globalRouterSessionMemory.mu.Lock()
+	hydrated := len(globalRouterSessionMemory.sessions)
+	globalRouterSessionMemory.mu.Unlock()
+	if hydrated != 0 {
+		t.Fatal("peek hydrated shared state into live cache")
+	}
+	got[0].Category = TurnMissing
+	if store.snapshot.RecentOutcomes[1].Category != TurnRegression {
+		t.Fatal("peek returned an alias of shared state")
+	}
+	live := RecentTurnOutcomesWithPolicy("peek-outcomes", now, 1, time.Minute)
+	if len(live) != 1 || live[0].Category != TurnRegression {
+		t.Fatalf("live evidence=%+v", live)
+	}
+	globalRouterSessionMemory.mu.Lock()
+	hydrated = len(globalRouterSessionMemory.sessions)
+	globalRouterSessionMemory.mu.Unlock()
+	if hydrated != 1 {
+		t.Fatal("live read lost main's hydration behavior")
+	}
+}

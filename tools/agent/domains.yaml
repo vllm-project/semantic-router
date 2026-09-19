@@ -18,6 +18,7 @@ domains:
       - .pre-commit-config.yaml
       - .prowlabels.yaml
       - Makefile
+      - netlify.toml
       - tools/agent/**
       - tools/ci/**
       - tools/docker/Dockerfile.precommit
@@ -384,9 +385,7 @@ domains:
       - src/semantic-router/pkg/modelinventory/**
       - src/semantic-router/pkg/nlgen/**
       - src/semantic-router/pkg/startupstatus/**
-      - src/vllm-sr/cli/evaluation/golden/metric_analysis_catalog.v1.json
-      - src/vllm-sr/cli/evaluation/golden/research_benchmark_inventory.v1.json
-      - tools/ci/sync_evaluation_catalogs.py
+      - src/vllm-sr/cli/sr_bench/**
       - tools/make/dashboard.mk
     checks: [make dashboard-check]
     verify: [make dashboard-test-e2e-evaluation]

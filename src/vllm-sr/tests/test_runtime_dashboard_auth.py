@@ -21,7 +21,6 @@ def test_local_stack_scopes_jwt_secret_and_hides_its_value(
     else:
         monkeypatch.setenv("DASHBOARD_JWT_SECRET", secret)
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "split")
-    monkeypatch.setenv("EVALUATION_ENABLED", "false")
     monkeypatch.setattr(runtime_paths, "_current_posix_user_id", lambda: None)
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -60,7 +59,7 @@ def test_local_stack_scopes_jwt_secret_and_hides_its_value(
         )
         assert rc == 0
     creation_commands = [cmd for cmd in commands if "--name" in cmd]
-    assert len(creation_commands) == 6
+    assert len(creation_commands) == 8
     for cmd in creation_commands:
         name = cmd[cmd.index("--name") + 1]
         values = [cmd[index + 1] for index, item in enumerate(cmd[:-1]) if item == "-e"]

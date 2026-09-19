@@ -1,0 +1,335 @@
+import { readFileSync } from 'node:fs'
+import { expect, test, type Page, type TestInfo } from '@playwright/test'
+import {
+  acceptanceOrigin,
+  authenticateAcceptance,
+  type AcceptanceConnection,
+} from '../support/liveAcceptance'
+
+interface LiveAcceptancePlan extends AcceptanceConnection {
+  active_run_id?: string
+  active_expected_total?: number
+  active_dataset_sha256?: string
+  baseline_run_id?: string
+  balance_run_ids?: string[]
+  final_target_id?: string
+  final_config_hash?: string
+  dataset_id?: string
+  failed_run_id?: string
+}
+
+const planPath = process.env.SR_BENCH_LIVE_PLAN
+const plan: LiveAcceptancePlan | null = planPath
+  ? (JSON.parse(readFileSync(planPath, 'utf8')) as LiveAcceptancePlan)
+  : null
+if (plan) plan.base_url = acceptanceOrigin(plan)
+test.use({ storageState: plan?.auth_state_path })
+
+test.skip(!plan, 'Opt in with SR_BENCH_LIVE_PLAN; never run against a real deployment implicitly.')
+
+async function openAcceptance(page: Page) {
+  const blocked: string[] = []
+  await page.route('**/api/sr-bench/v1/**', async (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    // A comparison reads saved evidence. All generation, recovery, cancellation,
+    // replay, regrade and export mutations remain blocked in this acceptance pass.
+    if (
+      !['GET', 'HEAD'].includes(request.method()) &&
+      !(request.method() === 'POST' && path === '/api/sr-bench/v1/comparisons')
+    ) {
+      blocked.push(`${request.method()} ${path}`)
+      await route.abort('blockedbyclient')
+      return
+    }
+    await route.continue()
+  })
+  await authenticateAcceptance(page, plan!)
+  await page.goto(`${plan!.base_url}/evaluation?view=runs`)
+  await expect(page.getByRole('heading', { name: 'sr-bench 1.0' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  return blocked
+}
+
+async function screenshot(page: Page, testInfo: TestInfo, name: string) {
+  await page.screenshot({ path: testInfo.outputPath(name), fullPage: true })
+  await testInfo.attach(name, { path: testInfo.outputPath(name), contentType: 'image/png' })
+}
+
+async function openRun(page: Page, id: string) {
+  await page.goto(`${plan!.base_url}/evaluation?view=runs&run=${encodeURIComponent(id)}`)
+  await expect(page.getByRole('heading', { name: 'Target comparison', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Refresh evidence', exact: true })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+}
+
+test('live active long-running evaluation keeps identity and progress after reload', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !plan?.active_run_id,
+    'Provide an already-running evaluation ID; this test never starts one.',
+  )
+  const blocked = await openAcceptance(page)
+  const id = plan!.active_run_id!
+  const read = async () => {
+    const response = await page.request.get(
+      `${plan!.base_url}/api/sr-bench/v1/runs/${encodeURIComponent(id)}`,
+    )
+    expect(response.ok()).toBe(true)
+    const observed = (await response.json()) as {
+      id: string
+      status: string
+      updated_at: string
+      manifest: { plan_sha256: string; dataset?: { sha256?: string } }
+      progress: { total: number; completed: number; failed: number }
+    }
+    return {
+      id: observed.id,
+      status: observed.status,
+      updated_at: observed.updated_at,
+      manifest: {
+        plan_sha256: observed.manifest.plan_sha256,
+        dataset_sha256: observed.manifest.dataset?.sha256,
+      },
+      progress: observed.progress,
+    }
+  }
+  const before = await read()
+  expect(before.manifest.plan_sha256).toMatch(/^[a-f0-9]{64}$/)
+  if (plan!.active_expected_total !== undefined)
+    expect(before.progress.total).toBe(plan!.active_expected_total)
+  if (plan!.active_dataset_sha256)
+    expect(before.manifest.dataset_sha256).toBe(plan!.active_dataset_sha256)
+  expect(Date.now() - Date.parse(before.updated_at), 'Active evidence must be fresh.').toBeLessThan(
+    300000,
+  )
+  expect(
+    ['queued', 'running'],
+    'Active-refresh acceptance requires a genuinely active run.',
+  ).toContain(before.status)
+  await openRun(page, id)
+  await expect(page.getByRole('progressbar', { name: 'Evaluation progress' })).toBeVisible()
+  await screenshot(page, testInfo, 'live-active-before-reload.png')
+  await page.reload()
+  await expect(page).toHaveURL(new RegExp(`run=${encodeURIComponent(id)}`))
+  await expect(page.getByRole('progressbar', { name: 'Evaluation progress' })).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  const after = await read()
+  expect(after.id).toBe(id)
+  expect(after.manifest.plan_sha256).toBe(before.manifest.plan_sha256)
+  expect(Date.parse(after.updated_at)).toBeGreaterThanOrEqual(Date.parse(before.updated_at))
+  expect(after.progress.total).toBe(before.progress.total)
+  expect(after.progress.completed + after.progress.failed).toBeGreaterThanOrEqual(
+    before.progress.completed + before.progress.failed,
+  )
+  expect(['queued', 'running', 'completed', 'failed', 'cancelled', 'interrupted']).toContain(
+    after.status,
+  )
+  await screenshot(page, testInfo, 'live-active-after-reload.png')
+  await testInfo.attach('active-reload-evidence.json', {
+    body: JSON.stringify(
+      {
+        before,
+        after,
+        mutation_requests: blocked,
+        model_requests: 0,
+        scope: 'Existing active run; terminal transition during reload is allowed and recorded.',
+      },
+      null,
+      2,
+    ),
+    contentType: 'application/json',
+  })
+  expect(blocked).toEqual([])
+})
+
+test('live inventory, frozen dataset and persisted CLI run are visible', async ({
+  page,
+}, testInfo) => {
+  const blocked = await openAcceptance(page)
+  const progressBars = page
+    .getByRole('region', { name: 'Evaluation runs', exact: true })
+    .getByRole('progressbar')
+  expect(await progressBars.count()).toBeGreaterThan(0)
+  expect(
+    await progressBars.evaluateAll((elements) =>
+      elements.every((element) => {
+        const bar = element.getBoundingClientRect()
+        const cell = element.closest('td')!.getBoundingClientRect()
+        return (
+          bar.left >= cell.left &&
+          bar.right <= cell.right + 0.5 &&
+          bar.top >= cell.top &&
+          bar.bottom <= cell.bottom + 0.5
+        )
+      }),
+    ),
+  ).toBe(true)
+  await screenshot(page, testInfo, 'live-run-management.png')
+  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Dataset library', exact: true })).toBeVisible()
+  if (plan!.dataset_id) {
+    await page.goto(
+      `${plan!.base_url}/evaluation?view=datasets&dataset=${encodeURIComponent(plan!.dataset_id)}`,
+    )
+    await expect(page.getByRole('button', { name: 'Evaluate dataset', exact: true })).toBeVisible()
+    await screenshot(page, testInfo, 'live-frozen-dataset.png')
+    await page.getByRole('button', { name: 'Evaluate dataset', exact: true }).click()
+    await page.getByText('Prepared source collection', { exact: true }).click()
+    await expect(page.getByRole('combobox', { name: 'Prepared dataset', exact: true })).toHaveValue(
+      plan!.dataset_id,
+    )
+    await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeDisabled()
+  }
+  if (plan!.baseline_run_id) {
+    await openRun(page, plan!.baseline_run_id)
+    await expect(
+      page.getByRole('columnheader', { name: 'Macro accuracy', exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByText(
+        'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
+        { exact: true },
+      ),
+    ).toBeVisible()
+    await screenshot(page, testInfo, 'live-single-model-baseline.png')
+    await page.getByRole('tab', { name: 'Calls', exact: true }).click()
+    const calls = page.getByRole('region', { name: 'Persisted call records', exact: true })
+    expect(
+      await calls.evaluate((element) => element.clientHeight <= window.innerHeight * 0.6 + 1),
+    ).toBe(true)
+    await screenshot(page, testInfo, 'live-single-model-calls.png')
+    await page.getByRole('tab', { name: 'Results', exact: true }).click()
+    await page.reload()
+    await expect(
+      page.getByRole('heading', { name: 'Target comparison', exact: true }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('columnheader', { name: 'Macro accuracy', exact: true }),
+    ).toBeVisible()
+    await expect(page).toHaveURL(new RegExp(`run=${plan!.baseline_run_id}`))
+  }
+  expect(
+    blocked,
+    'Read-only UI acceptance must not attempt to launch or mutate evaluations',
+  ).toEqual([])
+})
+
+test('live comparison retains current Balance and two optimization revisions', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !plan?.baseline_run_id || !plan.balance_run_ids?.length,
+    'Requires one real single-model baseline and three completed Balance revisions.',
+  )
+  const blocked = await openAcceptance(page)
+  await page.getByRole('button', { name: 'Compare iterations', exact: true }).click()
+  await expect(
+    page.getByText(
+      'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
+      { exact: true },
+    ),
+  ).toBeVisible()
+  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).click()
+  await page
+    .locator(`[role="option"][data-value=${JSON.stringify(plan!.baseline_run_id!)}]`)
+    .click()
+  const inventory = await page.request.get(`${plan!.base_url}/api/sr-bench/v1/runs`)
+  expect(inventory.ok()).toBe(true)
+  const savedRuns = (await inventory.json()).runs as Array<{
+    id: string
+    manifest: { name: string }
+  }>
+  for (const id of plan!.balance_run_ids!) {
+    const selected = savedRuns.find((run) => run.id === id)
+    expect(selected).toBeTruthy()
+    await page
+      .getByRole('group', { name: 'Comparison runs', exact: true })
+      .locator('label')
+      .filter({ has: page.getByText(selected!.manifest.name, { exact: true }) })
+      .getByRole('checkbox')
+      .check()
+  }
+  await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Comparison evidence', exact: true }),
+  ).toBeVisible()
+  await expect(page.getByText('Comparison withheld:', { exact: false })).toHaveCount(0)
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(
+    page.getByRole('article').getByText(`Run ${plan!.balance_run_ids!.length}`, { exact: true }),
+  ).toBeVisible()
+  await screenshot(page, testInfo, 'live-balance-two-optimization-loops.png')
+  const comparisonURL = page.url()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Compare iterations', exact: true })).toBeVisible()
+  await expect(page.getByText('Single-model baseline metrics', { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole('article').getByText(`Run ${plan!.balance_run_ids!.length}`, { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByText('Comparison withheld:', { exact: false })).toHaveCount(0)
+  await expect(page).toHaveURL(comparisonURL)
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect
+    .poll(() =>
+      page
+        .getByRole('region', { name: 'sr-bench workspace' })
+        .evaluate((element) => element.getBoundingClientRect().right <= window.innerWidth),
+    )
+    .toBe(true)
+  await screenshot(page, testInfo, 'live-balance-comparison-mobile.png')
+  await testInfo.attach('comparison-selection.json', {
+    body: JSON.stringify(
+      {
+        baseline_run_id: plan!.baseline_run_id,
+        balance_run_ids: plan!.balance_run_ids,
+        comparison_url: comparisonURL,
+        model_jobs_started: 0,
+      },
+      null,
+      2,
+    ),
+    contentType: 'application/json',
+  })
+  expect(blocked).toEqual([])
+})
+
+test('live final recipe is verified and downloadable without launching a job', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    !plan?.balance_run_ids?.length || !plan.final_target_id || !plan.final_config_hash,
+    'Requires the completed final Balance run and its independently recorded configuration hash.',
+  )
+  const blocked = await openAcceptance(page)
+  await openRun(page, plan!.balance_run_ids!.at(-1)!)
+  await page.getByRole('tab', { name: 'Recipe', exact: true }).click()
+  const recipes = page.locator('#run-recipe')
+  await expect(
+    recipes.getByRole('heading', {
+      name: `${plan!.final_target_id} · Verified config snapshot`,
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(
+    recipes
+      .locator('dt')
+      .filter({ hasText: /^Configuration hash$/ })
+      .locator('xpath=following-sibling::dd[1]'),
+  ).toHaveText(plan!.final_config_hash!)
+  const downloading = page.waitForEvent('download')
+  await recipes
+    .getByRole('button', { name: `Download ${plan!.final_target_id} recipe`, exact: true })
+    .click()
+  const download = await downloading
+  await download.saveAs(testInfo.outputPath('final-recipe.json'))
+  const recipe = JSON.parse(readFileSync(testInfo.outputPath('final-recipe.json'), 'utf8'))
+  expect(recipe.config_hash).toBe(plan!.final_config_hash)
+  expect(recipe.generated_runtime_hash).toBe(plan!.final_config_hash)
+  expect(recipe.active_runtime_hash).toBe(plan!.final_config_hash)
+  expect(recipe.redacted).toBe(true)
+  await screenshot(page, testInfo, 'live-final-recipe-evidence.png')
+  expect(blocked).toEqual([])
+})

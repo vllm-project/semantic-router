@@ -304,11 +304,9 @@ def run_rust_clippy_for_crate(crate_root: Path, changed_paths: set[Path]) -> int
         if parse_failures and not saw_compiler_message:
             sys.stderr.write("\n".join(parse_failures) + "\n")
             return result.returncode
-        print(
-            "Ignoring crate-wide Rust clippy findings outside the changed-file set "
-            f"for {crate_root.relative_to(REPO_ROOT)}."
-        )
-        return 0
+        if result.stdout:
+            sys.stderr.write(result.stdout)
+        return result.returncode
 
     if result.stderr:
         sys.stderr.write(result.stderr)
