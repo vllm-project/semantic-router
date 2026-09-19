@@ -29,6 +29,11 @@ func init() {
 		Tags:        []string{"response-api", "functional", "image_generation"},
 		Fn:          testResponseAPIImageGeneration,
 	})
+	pkgtestcases.Register("response-api-image-generation-stream", pkgtestcases.TestCase{
+		Description: "POST /v1/responses stream:true declaring the image_generation tool returns the generation as Responses API SSE events ending in a completed image_generation_call item",
+		Tags:        []string{"response-api", "streaming", "image_generation"},
+		Fn:          testResponseAPIImageGenerationStreaming,
+	})
 }
 
 // testResponseAPIImageGeneration pins the hosted image_generation contract end
@@ -56,7 +61,10 @@ func testResponseAPIImageGeneration(ctx context.Context, client *kubernetes.Clie
 	if err := verifyBackendReceivedImageGenerationTool(ctx, client, opts, sessionID); err != nil {
 		return err
 	}
-	if err := assertChatWiredBackendRejectsImageGeneration(ctx, client, opts, session, sessionID); err != nil {
+	// The rejection request carries its own session marker, so the
+	// absent-dispatch probe on that marker is a real discriminator instead of a
+	// re-read of the positive request's record.
+	if err := assertChatWiredBackendRejectsImageGeneration(ctx, client, opts, session, sessionID+"-chat-wire"); err != nil {
 		return err
 	}
 	return nil
@@ -186,7 +194,7 @@ func assertChatWiredBackendRejectsImageGeneration(
 		"tools": []map[string]any{
 			{"type": "image_generation", "size": "1024x1024"},
 		},
-	}, nil)
+	}, map[string]string{"x-vsr-test-session-id": sessionID})
 	if err != nil {
 		return err
 	}
@@ -206,7 +214,7 @@ func assertChatWiredBackendRejectsImageGeneration(
 	}
 	if envelope.Error.Type != "invalid_request_error" ||
 		envelope.Error.Code != "unsupported_capability" ||
-		!strings.Contains(envelope.Error.Message, imageGenerationTextModel) ||
+		!strings.Contains(envelope.Error.Message, "openai.chat.v1") ||
 		!strings.Contains(envelope.Error.Message, "image_generation") {
 		return fmt.Errorf("chat-wire backend returned the wrong capability error: %s",
 			truncateString(string(response.Body), 500))
@@ -243,4 +251,113 @@ func isBase64Payload(s string) bool {
 		}
 	}
 	return len(s)%4 != 1
+}
+
+// testResponseAPIImageGenerationStreaming pins the streaming shape of the image
+// generation contract: a streaming Responses request declaring the
+// image_generation tool must carry the generation progress as Responses API SSE
+// events and end in a completed image_generation_call item holding the
+// generated image, without leaking upstream chat chunks into the stream.
+func testResponseAPIImageGenerationStreaming(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
+	if opts.Verbose {
+		fmt.Println("[Test] Testing Response API streaming: image_generation tool contract")
+	}
+
+	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, imageGenerationModel,
+		"response-api-image-generation-stream", "draw a red cat",
+		[]map[string]any{
+			{"type": "image_generation", "size": "1024x1024", "quality": "high", "output_format": "png"},
+		})
+	if err != nil {
+		return err
+	}
+	return validateResponseAPIImageGenerationStream(result)
+}
+
+func validateResponseAPIImageGenerationStream(result responseAPIStreamingSSEResult) error {
+	stream := string(result.body)
+
+	if result.statusCode != http.StatusOK {
+		return fmt.Errorf("streaming image generation returned HTTP %d, want 200: %s",
+			result.statusCode, truncateString(stream, 500))
+	}
+	if !strings.Contains(result.contentType, "text/event-stream") {
+		return fmt.Errorf("streaming image generation content-type = %q, want text/event-stream",
+			result.contentType)
+	}
+
+	requiredEvents := []string{
+		"event: response.output_item.added",
+		"event: response.image_generation_call.generating",
+		"event: response.image_generation_call.partial_image",
+		"event: response.image_generation_call.completed",
+		"event: response.output_item.done",
+		"event: response.completed",
+	}
+	for _, event := range requiredEvents {
+		if !strings.Contains(stream, event) {
+			return fmt.Errorf("streaming image generation is missing Responses API SSE event %q: %s",
+				event, truncateString(stream, 800))
+		}
+	}
+	if err := validateResponsesStreamEventShapes(stream); err != nil {
+		return err
+	}
+	for _, fragment := range []string{"chat.completion.chunk", "data: [DONE]"} {
+		if strings.Contains(stream, fragment) {
+			return fmt.Errorf("streaming image generation leaked upstream chat fragment %q: %s",
+				fragment, truncateString(stream, 800))
+		}
+	}
+
+	completed := 0
+	for _, item := range imageGenerationStreamItems(stream) {
+		if item.Type != "image_generation_call" || item.Status != "completed" {
+			continue
+		}
+		completed++
+		if item.Result == "" {
+			return fmt.Errorf("streaming image generation completed item carries no image: %s",
+				truncateString(stream, 800))
+		}
+		if _, decodeErr := base64.StdEncoding.DecodeString(item.Result); decodeErr != nil &&
+			!isBase64Payload(item.Result) {
+			return fmt.Errorf("streaming image generation result is not decodable base64: %w", decodeErr)
+		}
+	}
+	if completed == 0 {
+		return fmt.Errorf("streaming image generation never completed an image_generation_call item: %s",
+			truncateString(stream, 800))
+	}
+	return nil
+}
+
+type imageGenerationStreamItem struct {
+	Type   string `json:"type"`
+	Status string `json:"status"`
+	Result string `json:"result"`
+}
+
+// imageGenerationStreamItems collects every item the stream carries, from both
+// the item and the response frames.
+func imageGenerationStreamItems(stream string) []imageGenerationStreamItem {
+	items := []imageGenerationStreamItem{}
+	for _, data := range protocolSSEDataFrames([]byte(stream)) {
+		var frame struct {
+			Item     *imageGenerationStreamItem `json:"item"`
+			Response *struct {
+				Output []imageGenerationStreamItem `json:"output"`
+			} `json:"response"`
+		}
+		if err := json.Unmarshal([]byte(data), &frame); err != nil {
+			continue
+		}
+		if frame.Item != nil {
+			items = append(items, *frame.Item)
+		}
+		if frame.Response != nil {
+			items = append(items, frame.Response.Output...)
+		}
+	}
+	return items
 }
