@@ -140,7 +140,26 @@ type chatTopTokenLogprobWire struct {
 	Bytes   []int64 `json:"bytes,omitempty"`
 }
 
+// Mistral puts the served tier inside usage, separately from OpenAI's
+// top-level service_tier. Keep this provider extension typed and closed.
+type chatUsageServiceTierWire string
+
+func (tier *chatUsageServiceTierWire) UnmarshalJSON(raw []byte) error {
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	switch value {
+	case "standard", "priority":
+		*tier = chatUsageServiceTierWire(value)
+		return nil
+	default:
+		return fmt.Errorf("unsupported chat usage service tier")
+	}
+}
+
 type chatUsageWire struct {
+	ServiceTier             *chatUsageServiceTierWire        `json:"service_tier,omitempty"`
 	PromptTokens            int64                            `json:"prompt_tokens"`
 	CompletionTokens        int64                            `json:"completion_tokens"`
 	TotalTokens             int64                            `json:"total_tokens"`
