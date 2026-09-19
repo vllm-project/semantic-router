@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -50,13 +51,7 @@ func (h *SRBenchHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeSRBenchError(w, http.StatusNotFound, "sr-bench endpoint not found")
 		return
 	}
-	if method == "" && (r.Method == http.MethodGet || r.Method == http.MethodPost) {
-		method = r.Method
-	}
-	if r.Method != method {
-		if method == "" {
-			method = "GET, POST"
-		}
+	if !slices.Contains(strings.Split(method, ", "), r.Method) {
 		w.Header().Set("Allow", method)
 		writeSRBenchError(w, http.StatusMethodNotAllowed, "Method not allowed")
 		return
@@ -125,17 +120,15 @@ func srBenchRouteMethod(path string) (string, bool) {
 	case "/plans", "/comparisons", "/replays", "/datasets/compose":
 		return http.MethodPost, true
 	case "/runs", "/experiments":
-		// GET and POST are the only collection methods; the caller selects
-		// between them in ServeHTTP before forwarding.
-		return "", true
+		return "GET, POST", true
 	}
 	parts := strings.Split(strings.TrimPrefix(rest, "/"), "/")
 	if len(parts) >= 2 && parts[0] == "experiments" && validSRBenchExperimentID(parts[1]) {
 		if len(parts) == 2 {
-			return http.MethodGet, true
+			return "GET, DELETE", true
 		}
 		if len(parts) == 3 && parts[2] == "runs" {
-			return "", true
+			return "GET, POST", true
 		}
 		return "", false
 	}

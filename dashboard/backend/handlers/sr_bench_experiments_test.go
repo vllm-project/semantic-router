@@ -30,6 +30,7 @@ func TestSRBenchExperimentRoutesPreserveRequests(t *testing.T) {
 		{http.MethodGet, "/experiments", ""},
 		{http.MethodPost, "/experiments", `{"name":"Routing comparison"}`},
 		{http.MethodGet, "/experiments/" + experiment, ""},
+		{http.MethodDelete, "/experiments/" + experiment, ""},
 		{http.MethodGet, "/experiments/" + experiment + "/runs", ""},
 		{http.MethodPost, "/experiments/" + experiment + "/runs", `{"run_id":"run-1","role":"baseline","hypothesis":"Reference"}`},
 	} {
@@ -63,7 +64,7 @@ func TestSRBenchExperimentRoutesRejectInvalidPathsAndMethods(t *testing.T) {
 		{http.MethodGet, "/runs/run-1/replay-options", "", http.StatusNotFound},
 		{http.MethodGet, "/runs/run-1/candidate-plan", "POST", http.StatusMethodNotAllowed},
 		{http.MethodDelete, "/experiments", "GET, POST", http.StatusMethodNotAllowed},
-		{http.MethodPost, "/experiments/" + experiment, "GET", http.StatusMethodNotAllowed},
+		{http.MethodPost, "/experiments/" + experiment, "GET, DELETE", http.StatusMethodNotAllowed},
 		{http.MethodDelete, "/experiments/" + experiment + "/runs", "GET, POST", http.StatusMethodNotAllowed},
 		{http.MethodGet, "/experiments/" + strings.ToUpper(experiment), "", http.StatusNotFound},
 		{http.MethodGet, "/experiments/" + experiment[:len(experiment)-1], "", http.StatusNotFound},
@@ -88,5 +89,10 @@ func TestSRBenchExperimentRoutesRejectInvalidPathsAndMethods(t *testing.T) {
 		if response.Code != http.StatusForbidden {
 			t.Errorf("read-only dashboard permitted %s: %d", path, response.Code)
 		}
+	}
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, srBenchTestRequest(http.MethodDelete, SRBenchAPIPath+"/experiments/"+experiment, ""))
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("read-only dashboard permitted experiment deletion: %d", response.Code)
 	}
 }

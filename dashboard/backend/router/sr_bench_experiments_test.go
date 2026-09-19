@@ -45,7 +45,11 @@ func TestSRBenchExperimentsUseAuthenticatedActorAndCSRF(t *testing.T) {
 	handler := wrapWithAuth(mux, svc)
 	request := func(method, path, origin, csrf string, authenticated bool) *httptest.ResponseRecorder {
 		t.Helper()
-		r := httptest.NewRequest(method, "http://dashboard.example/api/sr-bench/v1"+path, strings.NewReader(`{}`))
+		body := "{}"
+		if method == http.MethodDelete {
+			body = ""
+		}
+		r := httptest.NewRequest(method, "http://dashboard.example/api/sr-bench/v1"+path, strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set("Origin", origin)
 		r.Header.Set("X-CSRF-Token", csrf)
@@ -69,8 +73,13 @@ func TestSRBenchExperimentsUseAuthenticatedActorAndCSRF(t *testing.T) {
 		t.Fatalf("authenticated initial read failed: %d", initial.Code)
 	}
 	const experiment = "/experiments/exp-0123456789abcdef0123456789abcdef"
-	writes := []string{"/experiments", experiment + "/runs", "/runs/run-1/candidate-plan"}
-	for _, path := range writes {
+	writes := []struct{ method, path string }{
+		{http.MethodPost, "/experiments"},
+		{http.MethodPost, experiment + "/runs"},
+		{http.MethodPost, "/runs/run-1/candidate-plan"},
+		{http.MethodDelete, experiment},
+	}
+	for _, action := range writes {
 		before := requests
 		for _, tc := range []struct {
 			origin, csrf  string
@@ -82,15 +91,23 @@ func TestSRBenchExperimentsUseAuthenticatedActorAndCSRF(t *testing.T) {
 			{"http://dashboard.example", "invalid", true, http.StatusForbidden},
 			{"https://other.example", csrf, true, http.StatusForbidden},
 		} {
-			response := request(http.MethodPost, path, tc.origin, tc.csrf, tc.authenticated)
+			response := request(action.method, action.path, tc.origin, tc.csrf, tc.authenticated)
 			if response.Code != tc.status || requests != before {
-				t.Fatalf("offline action auth/CSRF failure for %s: status=%d requests=%d", path, response.Code, requests)
+				t.Fatalf("offline action auth/CSRF failure for %s: status=%d requests=%d", action.path, response.Code, requests)
 			}
 		}
-		response := request(http.MethodPost, path, "http://dashboard.example", csrf, true)
+		response := request(action.method, action.path, "http://dashboard.example", csrf, true)
 		if response.Code != http.StatusOK || requests != before+1 {
-			t.Fatalf("authenticated offline action failed for %s: status=%d", path, response.Code)
+			t.Fatalf("authenticated offline action failed for %s: status=%d", action.path, response.Code)
 		}
+	}
+	if _, err := store.UpdateUserRoleOrStatus(context.Background(), user.ID, auth.RoleWrite, ""); err != nil {
+		t.Fatal(err)
+	}
+	role = auth.RoleWrite
+	deletion := request(http.MethodDelete, experiment, "http://dashboard.example", csrf, true)
+	if deletion.Code != http.StatusOK {
+		t.Fatalf("writer could not delete experiment: %d", deletion.Code)
 	}
 	if _, err := store.UpdateUserRoleOrStatus(context.Background(), user.ID, auth.RoleRead, ""); err != nil {
 		t.Fatal(err)
@@ -103,10 +120,10 @@ func TestSRBenchExperimentsUseAuthenticatedActorAndCSRF(t *testing.T) {
 		}
 	}
 	before := requests
-	for _, path := range writes {
-		response := request(http.MethodPost, path, "http://dashboard.example", csrf, true)
+	for _, action := range writes {
+		response := request(action.method, action.path, "http://dashboard.example", csrf, true)
 		if response.Code != http.StatusForbidden || requests != before {
-			t.Fatalf("viewer wrote %s: status=%d requests=%d", path, response.Code, requests)
+			t.Fatalf("viewer wrote %s: status=%d requests=%d", action.path, response.Code, requests)
 		}
 	}
 }

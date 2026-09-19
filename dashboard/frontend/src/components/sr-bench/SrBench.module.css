@@ -423,36 +423,12 @@
 .events time {
   color: var(--text-secondary);
 }
-.catalog {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 1.4rem;
-}
-.catalog article {
-  padding: 1.2rem;
-  border: 1px solid var(--border-color, #38383e);
-  border-radius: 8px;
-}
-.catalog h3 {
-  margin: 0.7rem 0 0.3rem;
-}
-.catalog p {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-.catalog a {
-  font-size: 12px;
-}
 .benchmarkResults > div {
   padding: 0.6rem 0;
 }
 @media (max-width: 900px) {
   .page {
     padding: 1.2rem;
-  }
-  .catalog {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .twoColumns {
     grid-template-columns: 1fr;
@@ -469,8 +445,7 @@
   .panel {
     padding: 1rem;
   }
-  .formGrid,
-  .catalog {
+  .formGrid {
     grid-template-columns: 1fr;
   }
   .hero h1 {

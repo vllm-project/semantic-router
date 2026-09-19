@@ -92,6 +92,11 @@
 .editor > button {
   justify-self: start;
 }
+.deleteNotice {
+  flex-basis: 100%;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
 @media (max-width: 760px) {
   .workflow {
     grid-template-columns: 1fr;

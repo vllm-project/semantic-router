@@ -22,7 +22,7 @@ from .candidate_plans import candidate_manifest, validate_candidate_protocol
 from .contracts import catalog, plan, planned_cells
 from .datasets import DatasetReader
 from .engine import Engine, ReviewedPlanChangedError
-from .experiments import Experiments
+from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
 from .offline import export_training, regrade, replay
 from .recovery import RecoveryPlanError, recover, recovery_plan
 from .replay_validation import ReplayEligibilityError
@@ -220,6 +220,9 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self._handle("POST")
 
+    def do_DELETE(self):
+        self._handle("DELETE")
+
     def _handle(self, method):
         try:
             actor, role = self._actor()
@@ -238,7 +241,9 @@ class Handler(BaseHTTPRequestHandler):
             if not path.startswith(PREFIX + "/"):
                 return self._send(404, {"error": "not found"})
             route = path[len(PREFIX) :].strip("/").split("/")
-            if method == "POST" and role == "read" and route != ["comparisons"]:
+            if role == "read" and (
+                method == "DELETE" or (method == "POST" and route != ["comparisons"])
+            ):
                 raise PermissionError("Write access is required")
             if (
                 route in (["replay-options"], ["comparison-options"])
@@ -261,6 +266,12 @@ class Handler(BaseHTTPRequestHandler):
                     ),
                 )
             if route[0] == "experiments":
+                if method == "DELETE" and len(route) == RUN_ROUTE_PARTS:
+                    if parsed.query or int(self.headers.get("Content-Length", "0")):
+                        raise ValueError("Experiment deletion takes no body or filters")
+                    return self._send(
+                        200, self.server.experiments.delete(route[1], owner)
+                    )
                 if method == "GET":
                     query = parse_qs(
                         parsed.query, keep_blank_values=True, max_num_fields=2
@@ -508,6 +519,24 @@ class Handler(BaseHTTPRequestHandler):
                     "error": str(exc),
                     "code": "recovery_plan_required",
                     "dispatch_started": False,
+                },
+            )
+        except ExperimentDeletedError as exc:
+            self._send(
+                409,
+                {
+                    "error": str(exc),
+                    "code": "experiment_deleted",
+                    "experiment_id": exc.identifier,
+                },
+            )
+        except ActiveExperimentError as exc:
+            self._send(
+                409,
+                {
+                    "error": str(exc),
+                    "code": "experiment_active_runs",
+                    "active_run_count": exc.active_run_count,
                 },
             )
         except PermissionError as exc:

@@ -30,6 +30,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark experiment`](#vllm-sr-benchmark-experiment) | Group durable baseline, routing checks, candidates and validation runs. |
 | [`vllm-sr benchmark experiment attach`](#vllm-sr-benchmark-experiment-attach) | Link existing evidence without changing or rerunning it. |
 | [`vllm-sr benchmark experiment create`](#vllm-sr-benchmark-experiment-create) | Create an experiment without submitting model work. |
+| [`vllm-sr benchmark experiment delete`](#vllm-sr-benchmark-experiment-delete) | Delete a finished experiment's grouping and links; keep every run and result. |
 | [`vllm-sr benchmark experiment list`](#vllm-sr-benchmark-experiment-list) | Read one page of experiments. |
 | [`vllm-sr benchmark experiment show`](#vllm-sr-benchmark-experiment-show) | Read the experiment and one page of its linked runs. |
 | [`vllm-sr benchmark export`](#vllm-sr-benchmark-export) | Export a dev response matrix for training; holdout export is rejected. |
@@ -290,6 +291,19 @@ Create an experiment without submitting model work.
 | --- | --- |
 | `NAME` | Required argument. Type: text. |
 | `--idempotency-key TEXT` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment delete` {#vllm-sr-benchmark-experiment-delete}
+
+```text
+Usage: vllm-sr benchmark experiment delete [OPTIONS] EXPERIMENT_ID
+```
+
+Delete a finished experiment's grouping and links; keep every run and result.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark experiment list` {#vllm-sr-benchmark-experiment-list}

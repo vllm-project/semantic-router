@@ -6,6 +6,7 @@ import copy
 
 from .accounting import correction_metadata, effective_calls
 from .contracts import digest, planned_cells
+from .experiments import inherit_membership
 from .store import TERMINAL, RecoveryClaimError
 
 MODES = {"undispatched", "failed"}
@@ -166,8 +167,7 @@ def recover(engine, parent_id, body, owner="local", *, actor_role="local"):
         "recovery_subset": True,
         "new_attempt_acknowledged": mode == "failed",
     }
-    if "experiment" in manifest:
-        manifest["experiment"]["role"] = "recovery"
+    inherit_membership(engine.store, manifest, owner, actor_role, "recovery")
     manifest.pop("plan_sha256", None)
     try:
         return engine.start(manifest, owner, key, recovery=True, actor_role=actor_role)

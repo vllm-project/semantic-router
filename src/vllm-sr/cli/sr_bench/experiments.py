@@ -25,6 +25,22 @@ ROLES = {
 }
 
 
+class ActiveExperimentError(ValueError):
+    def __init__(self, active_run_count):
+        self.active_run_count = active_run_count
+        super().__init__(
+            "Wait for linked runs to finish or cancel them before deleting this experiment"
+        )
+
+
+class ExperimentDeletedError(ValueError):
+    def __init__(self, identifier):
+        self.identifier = identifier
+        super().__init__(
+            "This creation key belongs to a deleted experiment; use a new key for a new experiment"
+        )
+
+
 def now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -87,6 +103,21 @@ def bind_created_run(store, run_id, manifest, owner, actor_role):
     _insert_link(store, link["id"], run_id, link["role"], link["hypothesis"])
 
 
+def inherit_membership(store, manifest, owner, actor_role, role):
+    """Historical group IDs do not recreate deleted groups for derived attempts."""
+    if "experiment" not in manifest:
+        return
+    link = validate_membership(manifest["experiment"])
+    with store.lock:
+        row = store.db.execute(
+            "SELECT owner FROM experiments WHERE id=?", (link["id"],)
+        ).fetchone()
+        if row is not None and (actor_role == "admin" or row[0] == owner):
+            manifest["experiment"] = {**link, "role": role}
+        else:
+            manifest.pop("experiment")
+
+
 def _insert_link(store, experiment_id, run_id, role, hypothesis):
     existing = store.db.execute(
         "SELECT role,hypothesis FROM experiment_runs WHERE experiment_id=? AND run_id=?",
@@ -123,7 +154,14 @@ class Experiments:
             raise ValueError("Invalid experiment idempotency key")
         name = name.strip()
         with self.store.lock, self.store.db:
+            self.store.db.execute("BEGIN IMMEDIATE")
             if request_key:
+                deleted = self.store.db.execute(
+                    "SELECT id FROM experiment_deletions WHERE owner=? AND request_key=?",
+                    (owner, request_key),
+                ).fetchone()
+                if deleted:
+                    raise ExperimentDeletedError(deleted[0])
                 row = self.store.db.execute(
                     "SELECT id,name FROM experiments WHERE owner=? AND request_key=?",
                     (owner, request_key),
@@ -174,12 +212,53 @@ class Experiments:
                 "SELECT COUNT(*) FROM experiment_runs WHERE experiment_id=?",
                 (identifier,),
             ).fetchone()[0]
+            active_count = self.store.active_experiment_runs(identifier)
         return {
             "id": identifier,
             "name": row[1],
             "created_at": row[2],
             "updated_at": row[3],
             "run_count": count,
+            "active_run_count": active_count,
+        }
+
+    def delete(self, identifier, owner=None):
+        if not isinstance(identifier, str) or not EXPERIMENT_ID.fullmatch(identifier):
+            raise ValueError("Invalid experiment identity")
+        with self.store.lock, self.store.db:
+            self.store.db.execute("BEGIN IMMEDIATE")
+            deleted = self.store.db.execute(
+                "SELECT owner,unlinked_runs,deleted_at FROM experiment_deletions WHERE id=?",
+                (identifier,),
+            ).fetchone()
+            if deleted:
+                if owner is not None and deleted[0] != owner:
+                    raise KeyError(identifier)
+                return self._deletion_receipt(identifier, deleted[1], deleted[2])
+            experiment = self.get(identifier, owner)
+            if experiment["active_run_count"]:
+                raise ActiveExperimentError(experiment["active_run_count"])
+            at = now()
+            self.store.db.execute(
+                "INSERT INTO experiment_deletions(id,owner,request_key,deleted_at,unlinked_runs) "
+                "SELECT id,owner,request_key,?,? FROM experiments WHERE id=?",
+                (at, experiment["run_count"], identifier),
+            )
+            self.store.db.execute(
+                "DELETE FROM experiment_runs WHERE experiment_id=?", (identifier,)
+            )
+            self.store.db.execute("DELETE FROM experiments WHERE id=?", (identifier,))
+        return self._deletion_receipt(identifier, experiment["run_count"], at)
+
+    @staticmethod
+    def _deletion_receipt(identifier, count, deleted_at):
+        return {
+            "id": identifier,
+            "deleted": True,
+            "unlinked_runs": count,
+            "deleted_at": deleted_at,
+            "runs_deleted": 0,
+            "model_requests": 0,
         }
 
     def runs(self, identifier, owner=None, after=0, limit=20):
@@ -213,6 +292,7 @@ class Experiments:
             {"id": identifier, "role": role, "hypothesis": hypothesis}
         )
         with self.store.lock, self.store.db:
+            self.store.db.execute("BEGIN IMMEDIATE")
             self.get(identifier, owner)
             run = self.store.get(run_id, owner)
             validate_role(run["manifest"], role)

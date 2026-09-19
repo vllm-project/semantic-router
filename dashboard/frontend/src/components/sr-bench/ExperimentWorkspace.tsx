@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import ProductIcon from '../ProductIcon'
 import ProductLoadingState from '../ProductLoadingState'
 import BenchSelect from './BenchSelect'
+import ExperimentDelete from './ExperimentDelete'
+import { SrBenchRequestError } from './api'
 import { experimentApi, type Experiment, type ExperimentPage } from './experimentApi'
 import {
   clearExperiment,
@@ -58,6 +60,7 @@ export default function ExperimentWorkspace({
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [name, setName] = useState('')
   const [runID, setRunID] = useState('')
   const [role, setRole] = useState<ExperimentRunContext['role']>('candidate')
@@ -113,6 +116,7 @@ export default function ExperimentWorkspace({
     saving.current = true
     setPending(true)
     setError('')
+    setNotice('')
     try {
       if (id) {
         if (!roles.includes(role)) throw new Error('Choose an eligible role for this saved run.')
@@ -130,7 +134,20 @@ export default function ExperimentWorkspace({
         }
         saveExperiment(body)
         setCreateRequest(body)
-        const result = await experimentApi.create(body.name, body.key)
+        let result: Experiment
+        try {
+          result = await experimentApi.create(body.name, body.key)
+        } catch (cause) {
+          if (!(cause instanceof SrBenchRequestError) || cause.code !== 'experiment_deleted')
+            throw cause
+          if (!current()) return
+          if (!clearExperiment(body))
+            throw new Error('The saved submission changed. Reload to reconcile its identity.')
+          setCreateRequest(null)
+          setName('')
+          setNotice('That experiment was deleted. Enter a name to create a new experiment.')
+          return
+        }
         if (!current()) return
         if (!clearExperiment(body))
           throw new Error(
@@ -162,13 +179,33 @@ export default function ExperimentWorkspace({
             independent.
           </p>
         </div>
-        <button onClick={() => setRevision((value) => value + 1)} disabled={loading}>
-          <ProductIcon name="refresh" /> Refresh
-        </button>
+        <div className={styles.actions}>
+          <button
+            className={controls.compactButton}
+            onClick={() => setRevision((value) => value + 1)}
+            disabled={loading || pending}
+          >
+            <ProductIcon name="refresh" /> Refresh
+          </button>
+          {id && detail && canWrite && !loading && !error && (
+            <ExperimentDelete
+              key={`${actorID}:${id}`}
+              experiment={detail.experiment}
+              disabled={pending}
+              onDeleted={() => onSelect()}
+              onRefresh={() => setRevision((value) => value + 1)}
+            />
+          )}
+        </div>
       </div>
       {error && (
         <p className={styles.error} role="alert">
           {error}
+        </p>
+      )}
+      {notice && (
+        <p className={styles.notice} role="status">
+          {notice}
         </p>
       )}
       {loading ? (

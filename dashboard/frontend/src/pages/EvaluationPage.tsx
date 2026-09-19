@@ -70,7 +70,12 @@ export default function EvaluationPage() {
       { replace: true },
     )
   }
-  const view = search.get('view') ?? (search.has('model') ? 'new' : 'runs')
+  const requestedView = search.get('view') ?? (search.has('model') ? 'new' : 'runs')
+  const view = ['runs', 'experiments', 'compare', 'datasets', 'new', 'preview'].includes(
+    requestedView,
+  )
+    ? requestedView
+    : 'runs'
   const creating = view === 'new' || view === 'preview'
   const [catalog, setCatalog] = useState<Catalog | null>(null)
   const [datasets, setDatasets] = useState<Dataset[]>([])
@@ -184,7 +189,6 @@ export default function EvaluationPage() {
             ['experiments', 'Experiments', 'evaluation'],
             ['compare', 'Compare iterations', 'chart'],
             ['datasets', 'Datasets', 'database'],
-            ['catalog', 'Benchmarks', 'evaluation'],
           ] as const
         ).map(([key, label, icon]) => (
           <button
@@ -361,29 +365,6 @@ export default function EvaluationPage() {
             />
           </details>
         </>
-      )}
-      {view === 'catalog' && catalog && (
-        <section className={styles.panel}>
-          <h2>Benchmark catalog</h2>
-          <p>
-            Adapters share the same targets, run ledger and reporting. A selected subset is reported
-            with its own scope; it is not a full sr-bench score.
-          </p>
-          <div className={styles.catalog}>
-            {catalog.benchmarks.map((benchmark) => (
-              <article key={benchmark.id}>
-                <span className={styles.badge}>{benchmark.kind}</span>
-                <h3>{benchmark.title}</h3>
-                <p>{benchmark.description ?? benchmark.id}</p>
-                {benchmark.source_url && (
-                  <a href={benchmark.source_url} target="_blank" rel="noreferrer">
-                    Benchmark source ↗
-                  </a>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
       )}
     </section>
   )

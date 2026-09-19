@@ -121,7 +121,8 @@ export default function RunList({
             <thead>
               <tr>
                 <th>Run / targets</th>
-                <th>Mode / profile</th>
+                <th>Mode</th>
+                <th>Profile</th>
                 <th>Status</th>
                 <th>Progress</th>
                 <th>Last update</th>
@@ -150,9 +151,9 @@ export default function RunList({
                         ? 'Live'
                         : run.manifest.mode === 'preview'
                           ? 'Preview'
-                          : 'Replay'}{' '}
-                      / {profileTitle(run.manifest.profile)}
+                          : 'Replay'}
                     </td>
+                    <td>{profileTitle(run.manifest.profile)}</td>
                     <td>
                       <RunStatus status={run.status} />
                     </td>

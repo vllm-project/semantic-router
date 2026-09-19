@@ -8,6 +8,7 @@ from . import VERSION
 from .accounting import BUCKETS, correction_metadata, effective_calls
 from .contracts import digest
 from .engine import basic_grade
+from .experiments import inherit_membership
 from .provenance import capture_runner
 from .replay_validation import ReplayEligibilityError, ReplayValidator
 
@@ -190,8 +191,7 @@ def _materialize_replay(store, baseline_id, preview_id, owner, request_key, acto
             "auxiliary_targets": bm.get("auxiliary_targets", {}),
         }
     )
-    if "experiment" in manifest:
-        manifest["experiment"]["role"] = "estimate"
+    inherit_membership(store, manifest, owner, actor_role, "estimate")
     singles = {t["id"]: t for t in bm["targets"] if t["kind"] == "single"}
     for target in manifest["targets"]:
         target["prices"] = {

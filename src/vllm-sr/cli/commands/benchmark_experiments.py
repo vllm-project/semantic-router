@@ -77,6 +77,15 @@ def attach(client, experiment_id, run_id, role, hypothesis):
     )
 
 
+@experiment.command("delete")
+@click.argument("experiment_id")
+@click.pass_obj
+def delete(client, experiment_id):
+    """Delete a finished experiment's grouping and links; keep every run and result."""
+    _identifier(experiment_id)
+    _request(client, "DELETE", f"/experiments/{experiment_id}")
+
+
 def _identifier(value):
     if not EXPERIMENT_ID.fullmatch(value):
         raise click.ClickException("Invalid experiment identity")

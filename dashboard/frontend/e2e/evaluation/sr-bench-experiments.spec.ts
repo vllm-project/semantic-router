@@ -7,6 +7,7 @@ const experiment = {
   created_at: '2026-09-18T00:00:00Z',
   updated_at: '2026-09-18T00:00:00Z',
   run_count: 21,
+  active_run_count: 0,
 }
 const run = (index: number, roles: string[] = ['candidate']) => ({
   id: `run-${index}`,
@@ -84,6 +85,56 @@ test('creates only metadata and reconciles a lost response using the same durabl
   expect(bodies[1]).toEqual(bodies[0])
   await page.getByRole('button', { name: 'Create baseline', exact: true }).click()
   await expect(page).toHaveURL(new RegExp(`view=new&experiment=${id}&role=baseline`))
+})
+
+test('clears only a confirmed deleted create submission and waits for an explicit new creation', async ({
+  page,
+}) => {
+  const bodies: Array<{ name: string; idempotency_key: string }> = []
+  await setup(page, async (route) => {
+    if (route.request().method() === 'POST') {
+      bodies.push(route.request().postDataJSON())
+      if (bodies.length === 1) return route.abort('failed')
+      if (bodies.length === 2)
+        return route.fulfill({
+          status: 409,
+          json: { error: 'Experiment was deleted.', code: 'experiment_deleted' },
+        })
+      return route.fulfill({ json: { ...experiment, name: bodies[2].name } })
+    }
+    return route.fulfill({
+      json: new URL(route.request().url()).pathname.endsWith('/runs')
+        ? {
+            experiment: { ...experiment, name: bodies[2]?.name ?? experiment.name },
+            members: [],
+            next_cursor: null,
+            has_more: false,
+          }
+        : { experiments: [], next_cursor: null, has_more: false },
+    })
+  })
+  await page.goto('/evaluation?view=experiments')
+  await page.getByLabel('Experiment name', { exact: true }).fill('Deleted study')
+  await page.getByRole('button', { name: 'Create experiment', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Check or create same experiment', exact: true }),
+  ).toBeEnabled()
+  await page.reload()
+  await page.getByRole('button', { name: 'Check or create same experiment', exact: true }).click()
+  await expect(
+    page.getByRole('status').filter({ hasText: 'That experiment was deleted.' }),
+  ).toBeVisible()
+  await expect(page.getByLabel('Experiment name', { exact: true })).toHaveValue('')
+  expect(bodies).toHaveLength(2)
+  expect(bodies[1]).toEqual(bodies[0])
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('sr-bench-experiment:user-admin-1')),
+  ).toBeNull()
+  await page.getByLabel('Experiment name', { exact: true }).fill('New study')
+  await page.getByRole('button', { name: 'Create experiment', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'New study', exact: true })).toBeVisible()
+  expect(bodies).toHaveLength(3)
+  expect(bodies[2].idempotency_key).not.toBe(bodies[0].idempotency_key)
 })
 test('paginates experiments and members and uses only authoritative run roles', async ({
   page,
@@ -237,6 +288,7 @@ test('permits experiment metadata writes without generation permission and hides
   ).toBeVisible()
   for (const action of ['Create baseline', 'Preview candidate', 'Evaluate candidate'])
     await expect(page.getByRole('button', { name: action, exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Delete experiment', exact: true })).toBeEnabled()
   permissions = ['evaluation.read']
   await page.goto(`/evaluation?view=experiments&experiment=${id}`)
   await expect(page.getByRole('heading', { name: experiment.name, exact: true })).toBeVisible()
@@ -246,9 +298,195 @@ test('permits experiment metadata writes without generation permission and hides
       .getByRole('button', { name: 'Compare iterations', exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Link run', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Delete experiment', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Create baseline', exact: true })).toHaveCount(0)
   await page.goto('/evaluation?view=experiments')
   await expect(page.getByRole('heading', { name: 'Experiments', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Create experiment', exact: true })).toHaveCount(0)
   expect(bodies).toHaveLength(2)
+})
+
+test('confirms group-only deletion, blocks duplicate clicks and preserves saved runs after reload', async ({
+  page,
+}, testInfo) => {
+  let deleted = false
+  let release: (() => void) | undefined
+  const mutations: string[] = []
+  await setup(page, async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() !== 'GET') {
+      mutations.push(`${route.request().method()} ${path}`)
+      expect(route.request().postData()).toBeNull()
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+      deleted = true
+      return route.fulfill({
+        json: { id, deleted: true, unlinked_runs: 1, runs_deleted: 0, model_requests: 0 },
+      })
+    }
+    return route.fulfill({
+      json: path.endsWith('/runs')
+        ? {
+            experiment,
+            members: [
+              {
+                run_id: 'run-0',
+                role: 'baseline',
+                hypothesis: '',
+                linked_at: experiment.created_at,
+              },
+            ],
+            next_cursor: null,
+            has_more: false,
+          }
+        : { experiments: deleted ? [] : [experiment], next_cursor: null, has_more: false },
+    })
+  })
+  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  const trigger = page.getByRole('button', { name: 'Delete experiment', exact: true })
+  await trigger.click()
+  const dialog = page.getByRole('alertdialog', { name: 'Delete experiment?' })
+  await expect(dialog).toContainText('Saved runs, results, costs and artifacts will be kept.')
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click()
+  expect(mutations).toEqual([])
+  await trigger.click()
+  await page.screenshot({ path: testInfo.outputPath('delete-experiment-desktop.png') })
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.screenshot({ path: testInfo.outputPath('delete-experiment-mobile.png') })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await dialog.getByRole('button', { name: 'Delete experiment', exact: true }).click()
+  await expect(dialog.getByRole('button', { name: 'Deleting…', exact: true })).toBeDisabled()
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled()
+  await expect.poll(() => mutations.length).toBe(1)
+  release!()
+  await expect(page).toHaveURL(/view=experiments$/)
+  await expect(page.getByRole('heading', { name: 'Experiments', exact: true })).toBeVisible()
+  await page.reload()
+  await expect(page.getByRole('heading', { name: 'Experiments', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: /Balance recipe study/ })).toHaveCount(0)
+  await page
+    .getByRole('navigation', { name: 'Evaluation views' })
+    .getByRole('button', { name: /^Runs/ })
+    .click()
+  await expect(page.getByRole('button', { name: 'Recipe 0', exact: true })).toBeVisible()
+  expect(mutations).toEqual([`DELETE /api/sr-bench/v1/experiments/${id}`])
+})
+
+test('retains a lost deletion response and reconciles only the same experiment after explicit retry', async ({
+  page,
+}) => {
+  const deletedIDs: string[] = []
+  await setup(page, async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() === 'DELETE') {
+      deletedIDs.push(path)
+      if (deletedIDs.length === 1) return route.abort('failed')
+      return route.fulfill({
+        json: { id, deleted: true, unlinked_runs: 1, runs_deleted: 0, model_requests: 0 },
+      })
+    }
+    return route.fulfill({
+      json: path.endsWith('/runs')
+        ? { experiment, members: [], next_cursor: null, has_more: false }
+        : { experiments: [], next_cursor: null, has_more: false },
+    })
+  })
+  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.getByRole('button', { name: 'Delete experiment', exact: true }).click()
+  const dialog = page.getByRole('alertdialog')
+  await dialog.getByRole('button', { name: 'Delete experiment', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toContainText('Retry checks the same experiment.')
+  expect(deletedIDs).toHaveLength(1)
+  await expect(page).toHaveURL(new RegExp(`experiment=${id}`))
+  await dialog.getByRole('button', { name: 'Retry deletion', exact: true }).click()
+  await expect(page).toHaveURL(/view=experiments$/)
+  expect(deletedIDs).toEqual(Array(2).fill(`/api/sr-bench/v1/experiments/${id}`))
+})
+
+test('refreshes an active-run rejection without repeating deletion and disables the action', async ({
+  page,
+}) => {
+  let active = 0
+  let deletions = 0
+  await setup(page, async (route) => {
+    if (route.request().method() === 'DELETE') {
+      deletions += 1
+      active = 1
+      return route.fulfill({
+        status: 409,
+        json: {
+          error: 'This experiment has active runs.',
+          code: 'experiment_active_runs',
+          active_run_count: 1,
+        },
+      })
+    }
+    return route.fulfill({
+      json: {
+        experiment: { ...experiment, active_run_count: active },
+        members: [],
+        next_cursor: null,
+        has_more: false,
+      },
+    })
+  })
+  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await page.getByRole('button', { name: 'Delete experiment', exact: true }).click()
+  const dialog = page.getByRole('alertdialog')
+  await dialog.getByRole('button', { name: 'Delete experiment', exact: true }).click()
+  await expect(dialog.getByRole('alert')).toHaveText('This experiment has active runs.')
+  await dialog.getByRole('button', { name: 'Refresh experiment', exact: true }).click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Delete experiment', exact: true })).toBeDisabled()
+  await expect(page.getByText('Wait for active runs to finish before deleting.')).toBeVisible()
+  expect(deletions).toBe(1)
+  await page.reload()
+  await expect(page.getByRole('button', { name: 'Delete experiment', exact: true })).toBeDisabled()
+  expect(deletions).toBe(1)
+})
+
+test('ignores a late deletion response after navigating to a different experiment', async ({
+  page,
+}) => {
+  const second = { ...experiment, id: 'exp-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', name: 'Other study' }
+  let release: (() => void) | undefined
+  let responded = false
+  await setup(page, async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (route.request().method() === 'DELETE') {
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+      await route.fulfill({
+        json: { id, deleted: true, unlinked_runs: 1, runs_deleted: 0, model_requests: 0 },
+      })
+      responded = true
+      return
+    }
+    return route.fulfill({
+      json: path.endsWith('/runs')
+        ? {
+            experiment: path.includes(second.id) ? second : experiment,
+            members: [],
+            next_cursor: null,
+            has_more: false,
+          }
+        : { experiments: [experiment, second], next_cursor: null, has_more: false },
+    })
+  })
+  await page.goto('/evaluation?view=experiments')
+  await page.getByRole('button', { name: /Balance recipe study/ }).click()
+  await page.getByRole('button', { name: 'Delete experiment', exact: true }).click()
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Delete experiment', exact: true })
+    .click()
+  await expect.poll(() => Boolean(release)).toBe(true)
+  await page.goBack()
+  await page.getByRole('button', { name: /Other study/ }).click()
+  release!()
+  await expect.poll(() => responded).toBe(true)
+  await expect(page).toHaveURL(new RegExp(`experiment=${second.id}`))
+  await expect(page.getByRole('heading', { name: second.name, exact: true })).toBeVisible()
 })

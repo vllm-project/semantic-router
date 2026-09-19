@@ -40,6 +40,13 @@ def test_catalog_and_clean_command_surface():
         "experiment",
         "candidate-plan",
     }
+    assert set(benchmark.commands["experiment"].commands) == {
+        "create",
+        "list",
+        "show",
+        "attach",
+        "delete",
+    }
     assert runner.invoke(benchmark, ["intelligence", "--help"]).exit_code == 2
 
 

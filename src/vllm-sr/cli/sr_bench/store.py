@@ -111,6 +111,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS recovery_claims(parent_run_id TEXT,case_id TEXT,target_id TEXT,child_run_id TEXT,PRIMARY KEY(parent_run_id,case_id,target_id));
         CREATE TABLE IF NOT EXISTS experiments(id TEXT PRIMARY KEY,owner TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,request_key TEXT,UNIQUE(owner,request_key));
         CREATE TABLE IF NOT EXISTS experiment_runs(seq INTEGER PRIMARY KEY AUTOINCREMENT,experiment_id TEXT NOT NULL,run_id TEXT NOT NULL,role TEXT NOT NULL,hypothesis TEXT NOT NULL,linked_at TEXT NOT NULL,UNIQUE(experiment_id,run_id));
+        CREATE TABLE IF NOT EXISTS experiment_deletions(id TEXT PRIMARY KEY,owner TEXT NOT NULL,request_key TEXT,deleted_at TEXT NOT NULL,unlinked_runs INTEGER NOT NULL,UNIQUE(owner,request_key));
         """
         )
         self.db.commit()
@@ -293,6 +294,16 @@ class Store:
                 (run_id,),
             ).fetchall()
             return [self.get(row[0]) for row in rows]
+
+    def active_experiment_runs(self, experiment_id):
+        with self.lock:
+            return self.db.execute(
+                "SELECT COUNT(*) FROM experiment_runs e JOIN runs r ON r.id=e.run_id "
+                "WHERE e.experiment_id=? AND r.status NOT IN ("
+                + ",".join("?" for _ in TERMINAL)
+                + ")",
+                (experiment_id, *sorted(TERMINAL)),
+            ).fetchone()[0]
 
     def recovery_claims(self, parent_id):
         with self.lock:

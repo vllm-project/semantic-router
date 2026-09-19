@@ -210,6 +210,8 @@ Known spend is recorded, but missing prices or usage do not support savings clai
 3. Make one coherent routing change. Use `config validate`, `config plan` and
    `config apply`; wait for the expected active revision. For restart-required
    changes, use the supported `serve --replace-active-config` flow.
+   Update the registered MoM target's `config_hash` to the verified active hash;
+   existing runs keep their frozen target definitions.
 4. Derive a candidate plan from the saved baseline. It preserves the exact tasks,
    sampling, grader options and limits while selecting registered MoM targets.
    Preview those tasks, then inspect server-qualified replay options. Eligible
@@ -223,7 +225,8 @@ vllm-sr benchmark experiment create "Routing quality and cost" --idempotency-key
 vllm-sr benchmark experiment attach EXPERIMENT_ID --run BASELINE_ID --role baseline
 vllm-sr benchmark candidate-plan BASELINE_ID --target balance --mode preview \
   --experiment EXPERIMENT_ID > candidate-review.json
-# Inspect the returned frozen manifest before submitting it as preview.json.
+# Inspect the plan, then extract its frozen manifest for submission.
+jq '.manifest' candidate-review.json > preview.json
 vllm-sr benchmark preview --manifest preview.json --detach
 vllm-sr benchmark replay-options --limit 10
 vllm-sr benchmark replay-options BASELINE_ID --limit 10
@@ -289,6 +292,12 @@ Recovery children remain labeled as recovery attempts even when only one model
 from a mixed baseline is selected. They never replace the full baseline.
 Administrators can continue CLI-created experiments; other writers can only add
 new attempts to their own experiments. Read-only users can compare accessible saved runs.
+
+Delete a finished experiment from its Dashboard detail or with
+`vllm-sr benchmark experiment delete EXPERIMENT_ID`. Deletion removes only the
+group and its links; every run, result and artifact remains available. Active
+linked runs block deletion. Retrying the same deletion returns its saved receipt;
+a deleted experiment's creation key cannot recreate it.
 
 Only live runs support measured capability and savings claims. Offline regrade
 currently supports saved multiple-choice/grid final answers, preserves the

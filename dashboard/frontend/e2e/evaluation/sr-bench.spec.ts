@@ -1273,16 +1273,23 @@ test('explains a failed run from saved case evidence when its terminal error is 
   ).toBeVisible()
 })
 
-test('catalog renders every registered adapter and fits mobile width', async ({ page }) => {
+test('removes the Benchmarks tab while keeping benchmark selection in Create', async ({ page }) => {
   await mockBench(page)
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto('/evaluation?view=catalog')
-  await expect(page.getByRole('heading', { name: 'tau3', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'hle', exact: true })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'scicode', exact: true })).toBeVisible()
+  await page.goto('/evaluation')
+  const navigation = page.getByRole('navigation', { name: 'Evaluation views' })
+  await expect(navigation.getByRole('button')).toHaveCount(4)
+  await expect(navigation.getByRole('button', { name: 'Benchmarks', exact: true })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Create evaluation', exact: true }).click()
+  await expect(
+    page.getByRole('group', { name: 'Included benchmarks' }).getByRole('checkbox'),
+  ).toHaveCount(9)
+  await expect(page.getByRole('checkbox', { name: /MMLU-Pro/ })).toBeEnabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
     true,
   )
+  await page.goto('/evaluation?view=unknown')
+  await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
 })
 
 test('replays saved answers and labels estimated metrics separately', async ({ page }) => {
@@ -1409,6 +1416,20 @@ test('manages long-lived runs and uses a dataset from its frozen inventory', asy
   await mockBench(page)
   await page.goto('/evaluation')
   await expect(page.getByRole('heading', { name: 'Evaluation runs' })).toBeVisible()
+  const table = page
+    .getByRole('region', { name: 'Evaluation runs', exact: true })
+    .getByRole('table')
+  await expect(table.getByRole('columnheader')).toHaveText([
+    'Run / targets',
+    'Mode',
+    'Profile',
+    'Status',
+    'Progress',
+    'Last update',
+  ])
+  const firstRow = table.getByRole('row').nth(1)
+  await expect(firstRow.getByRole('cell').nth(1)).toHaveText('Live')
+  await expect(firstRow.getByRole('cell').nth(2)).toHaveText('Quick')
   const bars = page
     .getByRole('region', { name: 'Evaluation runs', exact: true })
     .getByRole('progressbar')

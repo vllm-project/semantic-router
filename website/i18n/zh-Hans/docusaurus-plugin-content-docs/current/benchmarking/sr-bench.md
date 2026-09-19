@@ -93,7 +93,7 @@ vllm-sr benchmark cancel RUN_ID
 
 1. 从 smoke preview 开始，再做有界 live smoke，验证最终答案、评分器、身份、计量、取消和持久化证据。
 2. 创建 experiment，在 quick/dev 上保存一次单模型矩阵和当前 MoM 结果，后续兼容迭代复用这份基线。
-3. 用 `config validate`、`config plan`、`config apply` 做一次明确的配置调整，确认预期哈希已激活；需重启时使用 `serve --replace-active-config`。
+3. 用 `config validate`、`config plan`、`config apply` 做一次明确的配置调整，确认预期哈希已激活；需重启时使用 `serve --replace-active-config`。将注册 MoM 目标的 `config_hash` 更新为已验证的实际哈希，已有运行保留其冻结定义。
 4. 从保存的基线生成候选计划，保留相同题目、采样、评分选项和限制，仅选择已注册的 MoM 目标。先 preview，再检查服务端给出的 Replay 可用组合；不符合条件的路径需要 live 评测。
 5. 在同一 dev 集上实测有希望的候选并成对比较。冻结最终策略后，再执行预先约定的 standard/holdout live 验收，不根据验收失败调参。
 
@@ -102,7 +102,8 @@ vllm-sr benchmark experiment create "Routing quality and cost" --idempotency-key
 vllm-sr benchmark experiment attach EXPERIMENT_ID --run BASELINE_ID --role baseline
 vllm-sr benchmark candidate-plan BASELINE_ID --target balance --mode preview \
   --experiment EXPERIMENT_ID > candidate-review.json
-# 审阅返回的冻结 manifest，再将其保存为 preview.json 提交。
+# 审阅计划后，提取冻结 manifest 再提交。
+jq '.manifest' candidate-review.json > preview.json
 vllm-sr benchmark preview --manifest preview.json --detach
 vllm-sr benchmark replay-options --limit 10
 vllm-sr benchmark replay-options BASELINE_ID --limit 10
@@ -125,6 +126,8 @@ vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
 只读 API 为 `GET /api/sr-bench/v1/replay-options` 和 `GET /api/sr-bench/v1/comparison-options`；不传 `baseline_run_id` 查询基线，传入后查询兼容下级。`limit` 为 1–25，`after` 必须使用上一页返回的不透明游标，CLI `benchmark replay-options` 使用相同游标。空页若仍有 `has_more: true`，表示搜索尚未完成，需点击 **Load more** 或传入下一页游标。`scan_limited: true` 表示部分证据超过单页验证限额，不能据此认定不存在其他兼容组合。可见已完成证据变化时，游标失效并要求从第一页刷新。以上查询不调用模型。
 
 Experiment 持久关联 baseline、initial、preview、estimate、candidate、validation 和 recovery 运行，不改写原始回执。创建或关联实验、查询 Replay 资格和生成候选计划均不产生模型答案；属于同一 experiment 也不代表两次运行一定可比。恢复子任务始终标为 recovery，不替代完整基线。管理员可以继续 CLI 创建的实验；其他可写用户只能在自己的实验中创建新任务。只读用户可以比较有权访问的已有结果。
+
+可在 Dashboard 实验详情或通过 `vllm-sr benchmark experiment delete EXPERIMENT_ID` 删除已结束的实验。删除仅移除分组和关联，保留全部运行、结果和产物；关联任务仍在运行时会阻止删除。重试同一删除会返回已保存的回执，已删除实验的创建键不能再次创建该实验。
 
 Replay 是答案复用产生的诊断估计，不是实测能力、延迟或节省结果；依赖学习状态的快照不允许 replay。离线 regrade 目前只支持选择题/网格最终答案，零模型调用且不改写原始结果。Export 仅允许明确标记的 dev 数据，拒绝 holdout 和未知 split；它不会启动训练。
 

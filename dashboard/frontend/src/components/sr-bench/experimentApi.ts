@@ -7,6 +7,7 @@ export interface Experiment {
   created_at: string
   updated_at: string
   run_count?: number
+  active_run_count?: number
 }
 export interface ExperimentMember {
   run_id: string
@@ -34,6 +35,14 @@ export const experimentApi = {
     }),
   runs: (id: string, after = 0, signal?: AbortSignal) =>
     request<ExperimentPage>(`${path(id)}/runs?after=${after}&limit=20`, { signal }),
+  delete: (id: string) =>
+    request<{
+      id: string
+      deleted: true
+      unlinked_runs: number
+      runs_deleted: 0
+      model_requests: 0
+    }>(path(id), { method: 'DELETE' }),
   attach: (id: string, run: string, role: ExperimentRunContext['role'], hypothesis: string) =>
     request<Experiment>(`${path(id)}/runs`, {
       method: 'POST',
