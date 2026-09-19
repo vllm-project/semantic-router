@@ -36,6 +36,8 @@ def invoke_runner(
                 runner.CLASSIFIER_TESTS,
             )
         )
+        if suite == "runtime" and provider == "candle":
+            expected += (runner.CANDLE_CACHE_TESTS,)
         if suite == "runtime" and provider == "ort":
             expected += (("TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride",),)
         events = [
@@ -170,11 +172,15 @@ class ModelResultTests(unittest.TestCase):
                 self.assertEqual(
                     set(logs),
                     {"native.jsonl", "classification.jsonl"}
-                    | ({"default-execution.jsonl"} if provider == "ort" else set()),
+                    | (
+                        {"default-execution.jsonl"}
+                        if provider == "ort"
+                        else {"cache.jsonl"}
+                    ),
                 )
                 self.assertEqual(
                     [len(result["passed"]) for result in receipt["suites"]],
-                    [10, 9] + ([1] if provider == "ort" else []),
+                    [10, 9, 1],
                 )
                 for call in calls:
                     self.assertEqual(
@@ -184,6 +190,50 @@ class ModelResultTests(unittest.TestCase):
                         call.kwargs["env"]["VLLM_SR_MODEL_TEST_PROVIDER"], provider
                     )
                     self.assertIn("CANDLE_GENERIC_CLASSIFIER_MODEL", call.kwargs["env"])
+
+    def test_cache_checkpoint_has_a_required_candle_owner(self):
+        code, receipt, calls, _ = invoke_runner("runtime", "candle")
+        self.assertEqual(code, 0)
+        cache = calls[-1]
+        self.assertEqual(cache.args[0][-1], "./pkg/cache")
+        self.assertEqual(
+            cache.kwargs["env"]["VLLM_SR_MMBERT_TEST_MODEL"], "/explicit/Embedding"
+        )
+        self.assertEqual(
+            receipt["suites"][-1]["expected"], list(runner.CANDLE_CACHE_TESTS)
+        )
+        profiles = json.loads(
+            (runner.ROOT / "tools/ci/core_test_profiles.json").read_text()
+        )
+        owners = [
+            row
+            for row in profiles["excluded"]
+            if row["package"] == "./pkg/cache"
+            and row["test"] in runner.CANDLE_CACHE_TESTS
+        ]
+        self.assertEqual(len(owners), len(runner.CANDLE_CACHE_TESTS))
+        self.assertTrue(all(row["profile"] == "native" for row in owners))
+
+    def test_candle_cache_checkpoint_cannot_be_missing_skipped_or_failed(self):
+        native = [
+            {"Action": "pass", "Test": "TestPublishedVelaModels/" + name}
+            for name in runner.FAMILIES
+        ]
+        classifiers = [
+            {"Action": "pass", "Test": name} for name in runner.CLASSIFIER_TESTS
+        ]
+        for action in (None, "skip", "fail"):
+            with self.subTest(action=action):
+                cache = (
+                    [{"Action": action, "Test": runner.CANDLE_CACHE_TESTS[0]}]
+                    if action is not None
+                    else []
+                )
+                code, receipt, _, _ = invoke_runner(
+                    "runtime", "candle", events=[native, classifiers, cache]
+                )
+                self.assertEqual(code, 1)
+                self.assertFalse(receipt["success"])
 
     def test_published_batch_must_execute_for_both_providers(self):
         expected = set(runner.CLASSIFIER_TESTS)
