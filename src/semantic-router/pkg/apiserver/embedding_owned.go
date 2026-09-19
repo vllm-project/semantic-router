@@ -26,8 +26,8 @@ func preparedEmbeddings(service classificationService) (*embedding.Set, error) {
 }
 
 func classifierEmbeddings(classifier *classification.Classifier) (*embedding.Set, error) {
-	if classifier == nil || classifier.PreparedEmbeddings() == nil {
-		return nil, fmt.Errorf("embedding runtime is unavailable")
+	if classifier == nil {
+		return nil, nil
 	}
 	return classifier.PreparedEmbeddings(), nil
 }

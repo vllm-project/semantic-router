@@ -832,6 +832,13 @@ profiles:
       - deploy/kubernetes/observability/dashboard/**
       - dashboard/backend/handlers/deploy.go
       - dashboard/backend/handlers/canonical_transport.go
+  no-model:
+    display_name: No Model Readiness
+    owner: e2e
+    coverage_role: classifier-free-startup-and-readiness
+    selection: pr
+    full_ci: true
+    paths: [e2e/profiles/no-model/**, e2e/testcases/service_readiness_503.go]
   dynamic-config:
     display_name: Dynamic Configuration
     owner: e2e

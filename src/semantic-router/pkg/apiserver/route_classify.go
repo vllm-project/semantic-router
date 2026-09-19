@@ -19,6 +19,9 @@ import (
 )
 
 // writeClassificationError maps a classification service error to an HTTP
+// status code: invalid input or a bad routing model is a client error (400);
+// an unresolved decision or unavailable model is a service-unavailable error
+// (503); anything else is an internal error (500 CLASSIFICATION_ERROR).
 // status code: empty/whitespace input or a model input limit is a client error
 // (400 INVALID_INPUT);
 // an unavailable classifier or unresolved decision under fail_request is a
@@ -53,6 +56,10 @@ func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter
 	}
 	if errors.Is(err, decision.ErrDecisionUnresolved) {
 		s.writeErrorResponse(w, http.StatusServiceUnavailable, "DECISION_UNRESOLVED", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrModelNotReady) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CLASSIFIER_NOT_READY", err.Error())
 		return
 	}
 	if errors.Is(err, admission.ErrQueueFull) {

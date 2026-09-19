@@ -38,6 +38,51 @@ func (e *imageEncodeError) Error() string {
 
 func (e *imageEncodeError) Unwrap() error { return e.err }
 
+func isEmbeddingModelNotReady(err error) bool {
+	return errors.Is(err, services.ErrModelNotReady) ||
+		errors.Is(err, candle_binding.ErrEmbeddingModelNotReady)
+}
+
+// checkEmbeddingReadiness validates that the models required for the request
+// are prepared in the acquired embedding generation. Text inputs require a
+// prepared text-model family; image inputs require the multimodal provider.
+// Readiness derives from the private set of providers this generation actually
+// prepared, never from process-global flags, so a request is judged against the
+// models its own runtime owns. This prevents a text-ready-only deployment from
+// attempting image inference (which would 500) and a multimodal-only deployment
+// from being rejected for text-only requests.
+func checkEmbeddingReadiness(set *embedding.Set, req EmbeddingRequest) error {
+	if len(req.Texts) == 0 && len(req.Images) == 0 {
+		return nil
+	}
+	if len(req.Texts) > 0 && !textEmbeddingReady(set, req.Model) {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	if len(req.Images) > 0 && !set.Has("multimodal") {
+		return candle_binding.ErrEmbeddingModelNotReady
+	}
+	return nil
+}
+
+// textEmbeddingReady reports whether the text portion's selected model family
+// is prepared for the generation. An unspecified ("") or "auto" request needs
+// any prepared text model; a multimodal-only generation must not satisfy text
+// inputs. An explicit family (qwen3, gemma, mmbert, ...) must be present, with
+// model == "multimodal" allowed to serve text through its own provider.
+func textEmbeddingReady(set *embedding.Set, model string) bool {
+	switch strings.ToLower(strings.TrimSpace(model)) {
+	case "", "auto":
+		for _, info := range set.Models() {
+			if info.Name != "multimodal" {
+				return true
+			}
+		}
+		return false
+	default:
+		return set.Has(model)
+	}
+}
+
 // classifyEmbeddingError maps a buildEmbeddingResults error to the HTTP status,
 // error code, and client message. Model input limits and input-caused image
 // failures are client errors; other inference failures remain internal errors.
@@ -50,6 +95,10 @@ func classifyEmbeddingError(err error) (int, string, string) {
 		return http.StatusBadRequest, "INVALID_IMAGE",
 			fmt.Sprintf("images[%d] could not be decoded as an image", imgErr.index)
 	}
+	if isEmbeddingModelNotReady(err) {
+		return http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err)
+	}
 	return http.StatusInternalServerError, "EMBEDDING_GENERATION_FAILED",
 		fmt.Sprintf("failed to generate embedding: %v", err)
 }
@@ -61,19 +110,6 @@ const (
 	// forward pass and the body-size cap alone admits very many minimal images.
 	maxImagesPerRequest = 8
 )
-
-// invalidDimensionMessage matches the dimensions accepted by isValidDimension,
-// including 64 (which the similarity error messages previously omitted).
-const invalidDimensionMessage = "dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)"
-
-// validatePriority rejects a priority weight outside the documented [0.0, 1.0]
-// range; out-of-range values were previously accepted and passed to the model.
-func validatePriority(name string, value float32) (string, string, bool) {
-	if value < 0 || value > 1 {
-		return "INVALID_PARAMETER", fmt.Sprintf("%s must be between 0.0 and 1.0 (got %g)", name, value), false
-	}
-	return "", "", true
-}
 
 // handleEmbeddings handles embedding generation requests
 func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +126,11 @@ func (s *ClassificationAPIServer) handleEmbeddings(w http.ResponseWriter, r *htt
 	}
 	if prepareErr != nil {
 		s.writeEmbeddingRuntimeError(w, prepareErr)
+		return
+	}
+	if err := checkEmbeddingReadiness(prepared, req); err != nil {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err))
 		return
 	}
 	results, totalProcessingTime, err := buildOwnedEmbeddingResults(r.Context(), prepared, req)
@@ -254,22 +295,58 @@ func embeddingOutput(req EmbeddingRequest, text string) (*candle_binding.Embeddi
 		return candle_binding.GetEmbeddingWithMetadata(text, req.QualityPriority, req.LatencyPriority, req.Dimension)
 	case "mmbert":
 		return candle_binding.GetEmbedding2DMatryoshka(text, req.Model, req.TargetLayer, req.Dimension)
+	case "multimodal":
+		output, err := candle_binding.MultiModalEncodeText(text, req.Dimension)
+		if err != nil {
+			return nil, err
+		}
+		return &candle_binding.EmbeddingOutput{
+			Embedding:        output.Embedding,
+			ModelType:        "multimodal",
+			ProcessingTimeMs: output.ProcessingTimeMs,
+		}, nil
 	default:
 		return candle_binding.GetEmbeddingWithModelType(text, req.Model, req.Dimension)
 	}
 }
 
-// handleSimilarity handles text similarity calculation requests
-func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
+// parseSimilarityRequest parses, validates, and defaults a SimilarityRequest.
+func (s *ClassificationAPIServer) parseSimilarityRequest(w http.ResponseWriter, r *http.Request) (SimilarityRequest, bool) {
 	var req SimilarityRequest
 	if err := s.parseJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
-		return
+		return SimilarityRequest{}, false
 	}
+	if strings.TrimSpace(req.Text1) == "" || strings.TrimSpace(req.Text2) == "" {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "both text1 and text2 must be provided")
+		return SimilarityRequest{}, false
+	}
+	if req.Model == "" {
+		req.Model = "auto"
+	}
+	if req.Dimension == 0 {
+		req.Dimension = 768
+	}
+	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
+		req.QualityPriority = 0.5
+		req.LatencyPriority = 0.5
+	}
+	if req.QualityPriority < 0 || req.QualityPriority > 1 || req.LatencyPriority < 0 || req.LatencyPriority > 1 {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_PARAMETER", "quality_priority and latency_priority must be between 0 and 1")
+		return SimilarityRequest{}, false
+	}
+	if !isValidDimension(req.Dimension) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_DIMENSION",
+			fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension))
+		return SimilarityRequest{}, false
+	}
+	return req, true
+}
 
-	applySimilarityDefaults(&req)
-	if code, message, ok := validateSimilarityRequest(req); !ok {
-		s.writeErrorResponse(w, http.StatusBadRequest, code, message)
+// handleSimilarity handles text similarity calculation requests
+func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *http.Request) {
+	req, ok := s.parseSimilarityRequest(w, r)
+	if !ok {
 		return
 	}
 
@@ -280,9 +357,24 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 		return
 	}
 	start := time.Now()
-	request := EmbeddingRequest{Model: req.Model, Dimension: req.Dimension, TargetLayer: req.TargetLayer, QualityPriority: req.QualityPriority, LatencyPriority: req.LatencyPriority}
+	request := EmbeddingRequest{
+		Model:           req.Model,
+		Dimension:       req.Dimension,
+		TargetLayer:     req.TargetLayer,
+		QualityPriority: req.QualityPriority,
+		LatencyPriority: req.LatencyPriority,
+		Texts:           []string{req.Text1, req.Text2},
+	}
+
+	if checkErr := checkEmbeddingReadiness(prepared, request); checkErr != nil {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to calculate similarity: %v", checkErr))
+		return
+	}
+
 	first, err := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text1)
 	request.Model = first.ModelUsed
+
 	var score float32
 	if err == nil {
 		second, otherErr := ownedEmbeddingOutput(r.Context(), prepared, request, req.Text2)
@@ -294,6 +386,11 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 	result := SimilarityResponse{Recipe: embeddingRecipeName(req.Recipe, cfg), Similarity: score, ModelUsed: first.ModelUsed, ProcessingTimeMs: float32(time.Since(start).Microseconds()) / 1000}
 
 	if err != nil {
+		if isEmbeddingModelNotReady(err) {
+			s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+				fmt.Sprintf("failed to calculate similarity: %v", err))
+			return
+		}
 		if errors.Is(err, binding.ErrInputLimit) {
 			s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
 			return
@@ -311,35 +408,6 @@ func (s *ClassificationAPIServer) handleSimilarity(w http.ResponseWriter, r *htt
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
 
-func applySimilarityDefaults(req *SimilarityRequest) {
-	if req.Model == "" {
-		req.Model = "auto"
-	}
-	if req.Dimension == 0 {
-		req.Dimension = defaultEmbeddingDimension
-	}
-	if req.Model == "auto" && req.QualityPriority == 0 && req.LatencyPriority == 0 {
-		req.QualityPriority = defaultEmbeddingPriority
-		req.LatencyPriority = defaultEmbeddingPriority
-	}
-}
-
-func validateSimilarityRequest(req SimilarityRequest) (string, string, bool) {
-	if strings.TrimSpace(req.Text1) == "" || strings.TrimSpace(req.Text2) == "" {
-		return "INVALID_INPUT", "both text1 and text2 must be provided", false
-	}
-	if !isValidDimension(req.Dimension) {
-		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
-	}
-	if code, message, ok := validatePriority("quality_priority", req.QualityPriority); !ok {
-		return code, message, false
-	}
-	if code, message, ok := validatePriority("latency_priority", req.LatencyPriority); !ok {
-		return code, message, false
-	}
-	return "", "", true
-}
-
 // handleBatchSimilarity handles batch similarity matching requests
 func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r *http.Request) {
 	req, ok := s.parseBatchSimilarityRequest(w, r)
@@ -351,6 +419,18 @@ func (s *ClassificationAPIServer) handleBatchSimilarity(w http.ResponseWriter, r
 	defer release()
 	if err != nil {
 		s.writeEmbeddingRuntimeError(w, err)
+		return
+	}
+	if checkErr := checkEmbeddingReadiness(prepared, EmbeddingRequest{
+		Model:           req.Model,
+		Dimension:       req.Dimension,
+		TargetLayer:     req.TargetLayer,
+		QualityPriority: req.QualityPriority,
+		LatencyPriority: req.LatencyPriority,
+		Texts:           []string{req.Query},
+	}); checkErr != nil {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to calculate batch similarity: %v", checkErr))
 		return
 	}
 	response, err := ownedBatchSimilarity(r.Context(), prepared, req)
@@ -410,22 +490,19 @@ func validateBatchSimilarityRequest(req BatchSimilarityRequest) (string, string,
 	if len(req.Candidates) == 0 {
 		return "INVALID_INPUT", "candidates array cannot be empty", false
 	}
-	for i, c := range req.Candidates {
-		if strings.TrimSpace(c) == "" {
-			return "INVALID_INPUT", fmt.Sprintf("candidates[%d] must not be empty or whitespace", i), false
+	for i, candidate := range req.Candidates {
+		if strings.TrimSpace(candidate) == "" {
+			return "INVALID_INPUT", fmt.Sprintf("candidate at index %d must be provided", i), false
 		}
 	}
 	if req.TopK < 0 {
 		return "INVALID_INPUT", "top_k cannot be negative", false
 	}
+	if req.QualityPriority < 0 || req.QualityPriority > 1 || req.LatencyPriority < 0 || req.LatencyPriority > 1 {
+		return "INVALID_PARAMETER", "quality_priority and latency_priority must be between 0 and 1", false
+	}
 	if !isValidDimension(req.Dimension) {
-		return "INVALID_DIMENSION", fmt.Sprintf(invalidDimensionMessage, req.Dimension), false
-	}
-	if code, message, ok := validatePriority("quality_priority", req.QualityPriority); !ok {
-		return code, message, false
-	}
-	if code, message, ok := validatePriority("latency_priority", req.LatencyPriority); !ok {
-		return code, message, false
+		return "INVALID_DIMENSION", fmt.Sprintf("dimension must be one of: 64, 128, 256, 512, 768, 1024 (got %d)", req.Dimension), false
 	}
 	return "", "", true
 }
@@ -474,6 +551,11 @@ func formatLayerList(layers []int) string {
 func (s *ClassificationAPIServer) writeEmbeddingRuntimeError(w http.ResponseWriter, err error) {
 	if errors.Is(err, services.ErrUnknownDiagnosticRecipe) {
 		s.writeClassificationError(w, err)
+		return
+	}
+	if errors.Is(err, binding.ErrNotPrepared) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_NOT_READY",
+			fmt.Sprintf("failed to generate embedding: %v", err))
 		return
 	}
 	s.writeErrorResponse(w, http.StatusServiceUnavailable, "EMBEDDING_UNAVAILABLE", err.Error())
