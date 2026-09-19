@@ -1,4 +1,4 @@
-"""Checkpoint label mapping for the modality-routing classifiers.
+"""Canonical labels and checkpoint label mapping for the modality-routing classifiers.
 
 A checkpoint may order its classes differently from the canonical
 AR=0 / DIFFUSION=1 / BOTH=2, so anything that reads its logits (evaluation, or
@@ -7,7 +7,13 @@ Both helpers fail closed: an incompatible mapping is an error, never a guess.
 """
 
 import numpy as np
-from modality_routing_bert_finetuning_lora import MODALITY_LABELS
+
+# The canonical class order. modality_routing_bert_finetuning_lora.MODALITY_LABELS must
+# stay equal to it (test_label_contract.py checks that), but this module does not import
+# the training script, so the label helpers stay light and testable without torch.
+MODALITY_LABELS = ["AR", "DIFFUSION", "BOTH"]
+LABEL_TO_ID = {label: idx for idx, label in enumerate(MODALITY_LABELS)}
+ID_TO_LABEL = {idx: label for label, idx in LABEL_TO_ID.items()}
 
 
 def build_label_remap(

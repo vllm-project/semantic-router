@@ -52,10 +52,10 @@ import json
 import os
 import random
 import sys
+from dataclasses import dataclass
 
 import numpy as np
 import torch
-import torch.nn.functional as F  # noqa: N812  (PyTorch convention)
 from transformers import Trainer, TrainingArguments, set_seed
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -71,13 +71,22 @@ from common_lora_utils import (  # noqa: E402
     set_gpu_device,
     setup_logging,
 )
+from modality_data import (  # noqa: E402
+    ClassStats,
+    compute_class_stats,
+    compute_warmup_steps,
+    load_jsonl,
+    oversample_minority_classes,
+)
 from modality_label_mapping import (  # noqa: E402
+    LABEL_TO_ID,
+    MODALITY_LABELS,
     build_label_remap,
     check_output_size,
     logits_to_canonical_order,
 )
+from modality_losses import DistillationSettings, distillation_loss  # noqa: E402
 from modality_routing_bert_finetuning_lora import (  # noqa: E402
-    MODALITY_LABELS,
     FocalLoss,
     compute_modality_metrics,
     create_lora_modality_routing_model,
@@ -88,222 +97,97 @@ from modality_routing_bert_finetuning_lora import (  # noqa: E402
 
 logger = setup_logging()
 
-LABEL_TO_ID = {label: idx for idx, label in enumerate(MODALITY_LABELS)}
-
-# Same thresholds as modality_routing_bert_finetuning_lora.main().
-SEVERE_IMBALANCE_RATIO = 3.0
-MILD_IMBALANCE_RATIO = 1.5
-OVERSAMPLE_IMBALANCE_RATIO = 2.0
 GRADIENT_ACCUMULATION_STEPS = 2
 WARMUP_RATIO = 0.06
+DEFAULT_FOCAL_GAMMA = 2.0
 
 
-def load_jsonl(path: str) -> list[dict]:
-    """Load rows written by export_modality_dataset.py.
+@dataclass(frozen=True)
+class TrainConfig:
+    """Everything a training run needs, so main() takes one argument.
 
-    Args:
-        path: Path to a JSONL file with one {"text", "label", "label_name"} object per line.
-
-    Returns:
-        The parsed rows, in file order.
+    Attributes:
+        model_name: Student to train, "mmbert-32k" or "distilbert-base-uncased".
+        train_file: Path to train.jsonl.
+        val_file: Path to validation.jsonl.
+        teacher_model_path: Local directory or Hub repo id of the frozen teacher, or
+            None for plain fine-tuning.
+        lora_rank: LoRA rank, or None to pick one from the training set size.
+        lora_alpha: LoRA alpha, or None for twice the rank.
+        lora_dropout: LoRA dropout.
+        num_epochs: Number of training epochs.
+        batch_size: Per-device batch size.
+        learning_rate: Peak learning rate.
+        temperature: Softmax temperature for the soft-label term (distillation only).
+        kd_alpha: Weight of the soft-label term (distillation only).
+        max_length: Token limit; longer texts are truncated.
+        output_dir: Where to save the LoRA adapter, or None for a default name.
+        merge_output_dir: If set, also write a merged, servable checkpoint here.
+        gpu_id: GPU to use, or None to pick a free one.
+        use_class_weights: Whether to weight and oversample by class frequency.
+        seed: Seed for LoRA and head initialisation, oversampling and data order.
     """
-    rows = []
-    with open(path, encoding="utf-8") as f:
-        for raw in f:
-            line = raw.strip()
-            if line:
-                rows.append(json.loads(line))
-    return rows
+
+    model_name: str
+    train_file: str
+    val_file: str
+    teacher_model_path: str | None = None
+    lora_rank: int | None = None
+    lora_alpha: int | None = None
+    lora_dropout: float = 0.1
+    num_epochs: int = 8
+    batch_size: int = 32
+    learning_rate: float = 2e-5
+    temperature: float = 3.0
+    kd_alpha: float = 0.5
+    max_length: int = 256
+    output_dir: str | None = None
+    merge_output_dir: str | None = None
+    gpu_id: int | None = None
+    use_class_weights: bool = True
+    seed: int = 42
+
+    @property
+    def distillation(self) -> DistillationSettings | None:
+        """Distillation settings, or None when there is no teacher."""
+        if not self.teacher_model_path:
+            return None
+        return DistillationSettings(self.temperature, self.kd_alpha)
 
 
-def compute_class_weights_and_focal_gamma(train_data: list[dict], num_classes: int = 3):
-    """Compute class weights and the focal-loss gamma from the training labels.
+class ModalityTrainer(Trainer):
+    """Trainer with a Focal Loss on the hard labels and optional distillation.
 
-    Mirrors modality_routing_bert_finetuning_lora.main() exactly: inverse-frequency
-    weights with sqrt dampening, clamped to [0.5, 3.0], and a gamma chosen from the
-    imbalance ratio. Duplicated here because the baseline script does not expose it
-    as a function.
-
-    Args:
-        train_data: Training rows with an integer "label".
-        num_classes: Number of classes.
-
-    Returns:
-        (class_weights, focal_gamma, label_counts).
-    """
-    train_labels = [item["label"] for item in train_data]
-    label_counts: dict[int, int] = {}
-    for label in train_labels:
-        label_counts[label] = label_counts.get(label, 0) + 1
-
-    total = len(train_labels)
-    weights = []
-    for i in range(num_classes):
-        count = label_counts.get(i, 1)
-        raw_weight = total / (num_classes * count)
-        weights.append(max(0.5, min(raw_weight**0.5, 3.0)))
-    class_weights = torch.tensor(weights, dtype=torch.float32)
-
-    max_count = max(label_counts.values())
-    min_count = min(label_counts.values())
-    imbalance_ratio = max_count / max(min_count, 1)
-
-    logger.info("Class distribution in training data:")
-    for i in range(num_classes):
-        label_name = MODALITY_LABELS[i] if i < len(MODALITY_LABELS) else f"class_{i}"
-        count = label_counts.get(i, 0)
-        logger.info(
-            f"  {label_name}: {count} ({count / total * 100:.1f}%), weight={weights[i]:.3f}"
-        )
-    logger.info(f"Imbalance ratio: {imbalance_ratio:.1f}:1")
-
-    if imbalance_ratio > SEVERE_IMBALANCE_RATIO:
-        focal_gamma = 3.0
-    elif imbalance_ratio > MILD_IMBALANCE_RATIO:
-        focal_gamma = 2.0
-    else:
-        focal_gamma = 1.5
-    logger.info(f"Focal gamma: {focal_gamma}")
-
-    return class_weights, focal_gamma, label_counts
-
-
-def oversample_minority_classes(
-    train_data: list[dict], label_counts: dict[int, int]
-) -> list[dict]:
-    """Repeat minority-class rows until every class matches the largest one.
-
-    Mirrors the oversampling in modality_routing_bert_finetuning_lora.main(). Does
-    nothing if the imbalance ratio is 2.0 or less. Uses the `random` module, so seed
-    it first (main() does) for a reproducible result.
-
-    Args:
-        train_data: Training rows with an integer "label".
-        label_counts: Number of rows per label id in train_data.
-
-    Returns:
-        The rows to train on, shuffled if any class was oversampled.
-    """
-    max_count = max(label_counts.values())
-    min_count = min(label_counts.values())
-    if max_count / max(min_count, 1) <= OVERSAMPLE_IMBALANCE_RATIO:
-        return train_data
-
-    class_buckets: dict[int, list[dict]] = {}
-    for item in train_data:
-        class_buckets.setdefault(item["label"], []).append(item)
-
-    oversampled: list[dict] = []
-    for label, items in class_buckets.items():
-        if len(items) < max_count:
-            repeats = max_count // len(items)
-            remainder = max_count % len(items)
-            oversampled.extend(items * repeats + random.sample(items, remainder))
-            logger.info(
-                f"  {MODALITY_LABELS[label]}: {len(items)} -> "
-                f"{repeats * len(items) + remainder} (oversampled)"
-            )
-        else:
-            oversampled.extend(items)
-    random.shuffle(oversampled)
-    return oversampled
-
-
-class FixedSplitFocalTrainer(Trainer):
-    """Plain fine-tune trainer: hard-label Focal Loss only, no teacher."""
-
-    def __init__(self, class_weights=None, focal_gamma: float = 2.0, *args, **kwargs):
-        """Store the loss settings and initialise the Trainer.
-
-        Args:
-            class_weights: Per-class weights for the Focal Loss, or None.
-            focal_gamma: Focusing parameter of the Focal Loss.
-            *args: Passed to transformers.Trainer.
-            **kwargs: Passed to transformers.Trainer.
-        """
-        super().__init__(*args, **kwargs)
-        self.class_weights = class_weights
-        self.focal_gamma = focal_gamma
-        self._focal_loss: FocalLoss | None = None
-
-    def _get_loss_fn(self, device: torch.device) -> FocalLoss:
-        """Build the Focal Loss on first use, with the weights on the model's device.
-
-        Args:
-            device: Device the model's logits are on.
-
-        Returns:
-            The cached FocalLoss instance.
-        """
-        if self._focal_loss is None:
-            alpha = (
-                self.class_weights.to(device)
-                if self.class_weights is not None
-                else None
-            )
-            self._focal_loss = FocalLoss(
-                alpha=alpha, gamma=self.focal_gamma, reduction="mean"
-            )
-        return self._focal_loss
-
-    def compute_loss(
-        self, model, inputs, return_outputs=False, num_items_in_batch=None
-    ):
-        """Compute the Focal Loss of the model's logits against the hard labels.
-
-        Args:
-            model: The model being trained.
-            inputs: Batch with input_ids, attention_mask and labels.
-            return_outputs: Whether to also return the model outputs.
-            num_items_in_batch: Unused; kept for the Trainer interface.
-
-        Returns:
-            The loss, or (loss, outputs) if return_outputs is set.
-        """
-        labels = inputs.get("labels")
-        outputs = model(**inputs)
-        loss_fn = self._get_loss_fn(outputs.logits.device)
-        loss = loss_fn(
-            outputs.logits.view(-1, self.model.config.num_labels), labels.view(-1)
-        )
-        return (loss, outputs) if return_outputs else loss
-
-
-class ModalityDistillationTrainer(Trainer):
-    """
-    Distillation-mode trainer: combines temperature-scaled soft-label KL loss
-    (Hinton et al., 2015, with the standard T^2 gradient-scale correction) against
-    precomputed frozen-teacher logits, with the same hard-label Focal Loss used
-    elsewhere in this pipeline, weighted by kd_alpha.
+    Batches that carry a "teacher_logits" column (the training set in distillation
+    mode) also get the soft-label term. Batches without one, which is every batch in
+    plain fine-tune mode and the validation set in both modes, use the hard-label
+    loss only.
     """
 
     def __init__(
         self,
-        class_weights=None,
-        focal_gamma: float = 2.0,
-        temperature: float = 3.0,
-        kd_alpha: float = 0.5,
         *args,
+        class_weights: list[float] | None = None,
+        focal_gamma: float = DEFAULT_FOCAL_GAMMA,
+        distillation: DistillationSettings | None = None,
         **kwargs,
     ):
         """Store the loss settings and initialise the Trainer.
 
         Args:
-            class_weights: Per-class weights for the hard-label Focal Loss, or None.
-            focal_gamma: Focusing parameter of the Focal Loss.
-            temperature: Softmax temperature for the soft-label KL term.
-            kd_alpha: Weight of the soft-label term against the hard-label term.
             *args: Passed to transformers.Trainer.
+            class_weights: Per-class weights for the Focal Loss, or None.
+            focal_gamma: Focusing parameter of the Focal Loss.
+            distillation: Distillation settings, or None for hard labels only.
             **kwargs: Passed to transformers.Trainer.
         """
         super().__init__(*args, **kwargs)
         self.class_weights = class_weights
         self.focal_gamma = focal_gamma
-        self.temperature = temperature
-        self.kd_alpha = kd_alpha
+        self.distillation = distillation
         self._focal_loss: FocalLoss | None = None
 
-    def _get_loss_fn(self, device: torch.device) -> FocalLoss:
+    def _hard_loss_fn(self, device: torch.device) -> FocalLoss:
         """Build the Focal Loss on first use, with the weights on the model's device.
 
         Args:
@@ -314,7 +198,7 @@ class ModalityDistillationTrainer(Trainer):
         """
         if self._focal_loss is None:
             alpha = (
-                self.class_weights.to(device)
+                torch.tensor(self.class_weights, dtype=torch.float32, device=device)
                 if self.class_weights is not None
                 else None
             )
@@ -326,15 +210,12 @@ class ModalityDistillationTrainer(Trainer):
     def compute_loss(
         self, model, inputs, return_outputs=False, num_items_in_batch=None
     ):
-        """Combine the soft-label KL loss with the hard-label Focal Loss.
-
-        Without teacher logits in the batch (the validation set) it returns the
-        hard-label loss only.
+        """Compute the hard-label loss, plus the soft-label term when teacher logits are present.
 
         Args:
-            model: The student model being trained.
-            inputs: Batch with input_ids, attention_mask, labels and, when training,
-                teacher_logits in canonical label order.
+            model: The model being trained.
+            inputs: Batch with input_ids, attention_mask, labels and, when training
+                in distillation mode, teacher_logits in canonical label order.
             return_outputs: Whether to also return the model outputs.
             num_items_in_batch: Unused; kept for the Trainer interface.
 
@@ -342,27 +223,131 @@ class ModalityDistillationTrainer(Trainer):
             The loss, or (loss, outputs) if return_outputs is set.
         """
         labels = inputs.pop("labels")
-        # Only train_dataset carries "teacher_logits" (precomputed once, up front);
-        # val_dataset intentionally doesn't, since eval-set KD loss isn't needed for
-        # the graduation gate -- fall back to hard-loss-only during evaluation.
         teacher_logits = inputs.pop("teacher_logits", None)
         outputs = model(**inputs)
-        student_logits = outputs.logits
+        logits = outputs.logits
 
-        loss_fn = self._get_loss_fn(student_logits.device)
-        hard_loss = loss_fn(student_logits, labels)
-
-        if teacher_logits is None:
-            loss = hard_loss
-        else:
-            temp = self.temperature
-            soft_loss = F.kl_div(
-                F.log_softmax(student_logits / temp, dim=-1),
-                F.softmax(teacher_logits / temp, dim=-1),
-                reduction="batchmean",
-            ) * (temp**2)
-            loss = self.kd_alpha * soft_loss + (1 - self.kd_alpha) * hard_loss
+        loss = self._hard_loss_fn(logits.device)(logits, labels)
+        if teacher_logits is not None and self.distillation is not None:
+            loss = distillation_loss(logits, teacher_logits, loss, self.distillation)
         return (loss, outputs) if return_outputs else loss
+
+
+def log_run_header(config: TrainConfig) -> None:
+    """Log the mode and inputs of the run.
+
+    Args:
+        config: The run configuration.
+    """
+    mode = "distillation" if config.teacher_model_path else "plain fine-tune"
+    logger.info("=" * 70)
+    logger.info(f"Fixed-Split Modality Routing Trainer ({mode} mode)")
+    logger.info(f"  Student model: {config.model_name}")
+    logger.info(f"  Teacher model: {config.teacher_model_path or 'N/A'}")
+    logger.info(f"  Train file: {config.train_file}")
+    logger.info(f"  Val file: {config.val_file}")
+    logger.info(f"  Seed: {config.seed}")
+    logger.info("=" * 70)
+
+
+def log_class_stats(stats: ClassStats) -> None:
+    """Log the class balance and the loss settings derived from it.
+
+    Args:
+        stats: Statistics of the training set.
+    """
+    total = sum(stats.label_counts.values())
+    logger.info("Class distribution in training data:")
+    for i, label in enumerate(MODALITY_LABELS):
+        count = stats.label_counts.get(i, 0)
+        logger.info(
+            f"  {label}: {count} ({count / total * 100:.1f}%), "
+            f"weight={stats.class_weights[i]:.3f}"
+        )
+    logger.info(f"Imbalance ratio: {stats.imbalance_ratio:.1f}:1")
+    logger.info(f"Focal gamma: {stats.focal_gamma}")
+
+
+def prepare_training_rows(
+    config: TrainConfig,
+) -> tuple[list[dict], list[dict], ClassStats | None]:
+    """Load the fixed train and validation splits and balance the training rows.
+
+    Args:
+        config: The run configuration.
+
+    Returns:
+        (training rows after any oversampling, validation rows, class statistics or
+        None when class weighting is off).
+    """
+    train_rows = load_jsonl(config.train_file)
+    val_rows = load_jsonl(config.val_file)
+    logger.info(f"Training samples: {len(train_rows)}")
+    logger.info(f"Validation samples: {len(val_rows)}")
+    if not config.use_class_weights:
+        return train_rows, val_rows, None
+
+    stats = compute_class_stats(
+        [row["label"] for row in train_rows], num_classes=len(MODALITY_LABELS)
+    )
+    log_class_stats(stats)
+    train_rows = oversample_minority_classes(
+        train_rows, stats.label_counts, random.Random(config.seed)
+    )
+    logger.info(f"Training set after oversampling: {len(train_rows)} samples")
+    return train_rows, val_rows, stats
+
+
+def build_training_args(
+    config: TrainConfig, output_dir: str, num_train_rows: int
+) -> TrainingArguments:
+    """Build the TrainingArguments shared by both modes.
+
+    Args:
+        config: The run configuration.
+        output_dir: Where the Trainer writes checkpoints.
+        num_train_rows: Number of rows in the (oversampled) training set.
+
+    Returns:
+        The TrainingArguments for the run.
+    """
+    warmup_steps = compute_warmup_steps(
+        num_train_rows,
+        config.batch_size,
+        GRADIENT_ACCUMULATION_STEPS,
+        config.num_epochs,
+        WARMUP_RATIO,
+    )
+    return TrainingArguments(
+        output_dir=output_dir,
+        num_train_epochs=config.num_epochs,
+        per_device_train_batch_size=config.batch_size,
+        per_device_eval_batch_size=config.batch_size,
+        learning_rate=config.learning_rate,
+        max_grad_norm=1.0,
+        lr_scheduler_type="cosine",
+        warmup_steps=warmup_steps,
+        weight_decay=0.1,
+        logging_steps=10,
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        load_best_model_at_end=True,
+        metric_for_best_model="eval_f1",
+        greater_is_better=True,
+        save_total_limit=3,
+        report_to=[],
+        fp16=torch.cuda.is_available(),
+        dataloader_drop_last=False,
+        eval_accumulation_steps=1,
+        gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
+        # Distillation mode's train_dataset carries a "teacher_logits" column that
+        # AutoModelForSequenceClassification.forward() doesn't accept -- the default
+        # remove_unused_columns=True silently drops it before compute_loss ever sees
+        # it (a well-known HF Trainer gotcha), so disable that filtering here.
+        remove_unused_columns=False,
+        seed=config.seed,
+        data_seed=config.seed,
+    )
 
 
 def compute_teacher_logits(
@@ -403,72 +388,8 @@ def compute_teacher_logits(
                 max_length=max_length,
                 return_tensors="pt",
             ).to(device)
-            logits = teacher_model(**enc).logits
-            all_logits.append(logits.detach().cpu().numpy())
+            all_logits.append(teacher_model(**enc).logits.detach().cpu().numpy())
     return np.concatenate(all_logits, axis=0).astype(np.float32)
-
-
-def build_training_args(
-    *,
-    output_dir: str,
-    num_epochs: int,
-    batch_size: int,
-    learning_rate: float,
-    num_train_rows: int,
-    seed: int,
-) -> TrainingArguments:
-    """Build the TrainingArguments shared by both modes.
-
-    transformers >=5.15 removed TrainingArguments(warmup_ratio=...) and
-    logging_dir (only warmup_steps remains; 5.14.1 still accepts both). The
-    baseline script's own `warmup_ratio=0.06` hits the same TypeError on that
-    version despite its requirements.txt allowing it (transformers>=4.40.0, no
-    upper bound). The equivalent step count is computed here so this works across
-    both old and new transformers releases.
-
-    Args:
-        output_dir: Where the Trainer writes checkpoints.
-        num_epochs: Number of training epochs.
-        batch_size: Per-device batch size.
-        learning_rate: Peak learning rate.
-        num_train_rows: Number of rows in the (oversampled) training set.
-        seed: Seed for the Trainer and the data order.
-
-    Returns:
-        The TrainingArguments for the run.
-    """
-    steps_per_epoch = -(-num_train_rows // (batch_size * GRADIENT_ACCUMULATION_STEPS))
-    warmup_steps = max(1, round(WARMUP_RATIO * steps_per_epoch * num_epochs))
-    return TrainingArguments(
-        output_dir=output_dir,
-        num_train_epochs=num_epochs,
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size,
-        learning_rate=learning_rate,
-        max_grad_norm=1.0,
-        lr_scheduler_type="cosine",
-        warmup_steps=warmup_steps,
-        weight_decay=0.1,
-        logging_steps=10,
-        eval_strategy="epoch",
-        save_strategy="epoch",
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_f1",
-        greater_is_better=True,
-        save_total_limit=3,
-        report_to=[],
-        fp16=torch.cuda.is_available(),
-        dataloader_drop_last=False,
-        eval_accumulation_steps=1,
-        gradient_accumulation_steps=GRADIENT_ACCUMULATION_STEPS,
-        # Distillation mode's train_dataset carries a "teacher_logits" column that
-        # AutoModelForSequenceClassification.forward() doesn't accept -- the default
-        # remove_unused_columns=True silently drops it before compute_loss ever sees
-        # it (a well-known HF Trainer gotcha), so disable that filtering here.
-        remove_unused_columns=False,
-        seed=seed,
-        data_seed=seed,
-    )
 
 
 def add_teacher_logits(
@@ -529,7 +450,9 @@ def add_teacher_logits(
     return train_dataset.add_column("teacher_logits", teacher_logits.tolist())
 
 
-def save_run_artifacts(model, tokenizer, trainer, output_dir: str, lora_config) -> None:
+def save_run_artifacts(
+    model, tokenizer, trainer: Trainer, output_dir: str, lora_config
+) -> None:
     """Save the adapter, tokenizer, label mappings, LoRA config and final eval.
 
     Args:
@@ -558,210 +481,106 @@ def save_run_artifacts(model, tokenizer, trainer, output_dir: str, lora_config) 
     eval_results = trainer.evaluate()
     logger.info(f"  Accuracy: {eval_results['eval_accuracy']:.4f}")
     logger.info(f"  F1 (weighted): {eval_results['eval_f1']:.4f}")
+    numeric = {
+        k: float(v) for k, v in eval_results.items() if isinstance(v, (int, float))
+    }
     with open(
         os.path.join(output_dir, "eval_results.json"), "w", encoding="utf-8"
     ) as f:
-        json.dump(
-            {
-                k: float(v)
-                for k, v in eval_results.items()
-                if isinstance(v, (int, float))
-            },
-            f,
-            indent=2,
-        )
+        json.dump(numeric, f, indent=2)
 
 
-def log_run_header(
-    model_name: str,
-    teacher_model_path: str | None,
-    train_file: str,
-    val_file: str,
-    seed: int,
-) -> None:
-    """Log the mode and inputs of the run.
-
-    Args:
-        model_name: Student model name.
-        teacher_model_path: Teacher checkpoint, or None for plain fine-tuning.
-        train_file: Path to train.jsonl.
-        val_file: Path to validation.jsonl.
-        seed: Seed for the run.
-    """
-    mode = "distillation" if teacher_model_path else "plain fine-tune"
-    logger.info("=" * 70)
-    logger.info(f"Fixed-Split Modality Routing Trainer ({mode} mode)")
-    logger.info(f"  Student model: {model_name}")
-    logger.info(f"  Teacher model: {teacher_model_path or 'N/A'}")
-    logger.info(f"  Train file: {train_file}")
-    logger.info(f"  Val file: {val_file}")
-    logger.info(f"  Seed: {seed}")
-    logger.info("=" * 70)
-
-
-def main(
-    model_name: str,
-    train_file: str,
-    val_file: str,
-    *,
-    teacher_model_path: str | None = None,
-    lora_rank: int | None = None,
-    lora_alpha: int | None = None,
-    lora_dropout: float = 0.1,
-    num_epochs: int = 8,
-    batch_size: int = 32,
-    learning_rate: float = 2e-5,
-    temperature: float = 3.0,
-    kd_alpha: float = 0.5,
-    max_length: int = 256,
-    output_dir: str | None = None,
-    merge_output_dir: str | None = None,
-    gpu_id: int | None = None,
-    use_class_weights: bool = True,
-    seed: int = 42,
-):
+def main(config: TrainConfig) -> None:
     """Train the student in plain fine-tune or distillation mode.
 
-    Distillation mode is used when teacher_model_path is set. Both modes train on
-    the exporter's fixed train/validation files and never see the test set.
+    Distillation mode is used when config.teacher_model_path is set. Both modes train
+    on the exporter's fixed train/validation files and never see the test set.
 
     Args:
-        model_name: Student to train, "mmbert-32k" or "distilbert-base-uncased".
-        train_file: Path to train.jsonl.
-        val_file: Path to validation.jsonl.
-        teacher_model_path: Local directory or Hub repo id of the frozen teacher, or
-            None for plain fine-tuning.
-        lora_rank: LoRA rank, or None to pick one from the training set size.
-        lora_alpha: LoRA alpha, or None for twice the rank.
-        lora_dropout: LoRA dropout.
-        num_epochs: Number of training epochs.
-        batch_size: Per-device batch size.
-        learning_rate: Peak learning rate.
-        temperature: Softmax temperature for the soft-label term (distillation only).
-        kd_alpha: Weight of the soft-label term (distillation only).
-        max_length: Token limit; longer texts are truncated.
-        output_dir: Where to save the LoRA adapter, or None for a default name.
-        merge_output_dir: If set, also write a merged, servable checkpoint here.
-        gpu_id: GPU to use, or None to pick a free one.
-        use_class_weights: Whether to weight and oversample by class frequency.
-        seed: Seed for LoRA and head initialisation, oversampling and data order.
+        config: The run configuration.
     """
-    log_run_header(model_name, teacher_model_path, train_file, val_file, seed)
-
+    log_run_header(config)
     # Seed before anything random happens: the LoRA adapter and the classifier head
     # are initialised when the model is created (before the Trainer exists, so before
-    # the Trainer's own seeding), and oversampling uses the `random` module.
-    set_seed(seed)
-
-    if gpu_id is not None:
-        device, _ = set_gpu_device(gpu_id=gpu_id, auto_select=False)
-    else:
-        device, _ = set_gpu_device(gpu_id=None, auto_select=True)
+    # the Trainer's own seeding).
+    set_seed(config.seed)
+    device, _ = set_gpu_device(gpu_id=config.gpu_id, auto_select=config.gpu_id is None)
     clear_gpu_memory()
     log_memory_usage("Pre-training")
 
-    train_data = load_jsonl(train_file)
-    val_data = load_jsonl(val_file)
-    logger.info(f"Training samples: {len(train_data)}")
-    logger.info(f"Validation samples: {len(val_data)}")
+    train_rows, val_rows, stats = prepare_training_rows(config)
+    model_path = resolve_model_path(config.model_name)
+    logger.info(f"Using model: {config.model_name} -> {model_path}")
 
-    model_path = resolve_model_path(model_name)
-    logger.info(f"Using model: {model_name} -> {model_path}")
-
-    effective_rank = recommend_lora_rank(
-        num_train_samples=len(train_data),
+    rank = recommend_lora_rank(
+        num_train_samples=len(train_rows),
         num_classes=len(MODALITY_LABELS),
-        user_rank=lora_rank,
+        user_rank=config.lora_rank,
     )
-    effective_alpha = lora_alpha if lora_alpha is not None else 2 * effective_rank
     lora_config = create_lora_config(
-        model_name, effective_rank, effective_alpha, lora_dropout
+        config.model_name,
+        rank,
+        config.lora_alpha if config.lora_alpha is not None else 2 * rank,
+        config.lora_dropout,
     )
-
-    class_weights = None
-    focal_gamma = 2.0
-    if use_class_weights:
-        class_weights, focal_gamma, label_counts = (
-            compute_class_weights_and_focal_gamma(
-                train_data, num_classes=len(MODALITY_LABELS)
-            )
-        )
-        train_data = oversample_minority_classes(train_data, label_counts)
-        logger.info(f"Training set after oversampling: {len(train_data)} samples")
-
     model, tokenizer = create_lora_modality_routing_model(
         model_path, len(MODALITY_LABELS), lora_config
     )
-
-    train_dataset = tokenize_modality_data(train_data, tokenizer, max_length=max_length)
-    val_dataset = tokenize_modality_data(val_data, tokenizer, max_length=max_length)
-
-    if output_dir is None:
-        output_dir = (
-            f"lora_modality_router_{model_name}_fixed_split_r{effective_rank}_model"
-        )
-    os.makedirs(output_dir, exist_ok=True)
-    logger.info(f"Model will be saved to: {output_dir}")
-
-    training_args = build_training_args(
-        output_dir=output_dir,
-        num_epochs=num_epochs,
-        batch_size=batch_size,
-        learning_rate=learning_rate,
-        num_train_rows=len(train_dataset),
-        seed=seed,
+    train_dataset = tokenize_modality_data(
+        train_rows, tokenizer, max_length=config.max_length
     )
-
-    if teacher_model_path:
+    val_dataset = tokenize_modality_data(
+        val_rows, tokenizer, max_length=config.max_length
+    )
+    if config.teacher_model_path:
         train_dataset = add_teacher_logits(
             train_dataset,
-            [item["text"] for item in train_data],
-            teacher_model_path,
-            batch_size=batch_size,
-            max_length=max_length,
+            [row["text"] for row in train_rows],
+            config.teacher_model_path,
+            batch_size=config.batch_size,
+            max_length=config.max_length,
             device=device,
         )
 
-        trainer = ModalityDistillationTrainer(
-            class_weights=class_weights,
-            focal_gamma=focal_gamma,
-            temperature=temperature,
-            kd_alpha=kd_alpha,
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=val_dataset,
-            compute_metrics=compute_modality_metrics,
-        )
-    else:
-        trainer = FixedSplitFocalTrainer(
-            class_weights=class_weights,
-            focal_gamma=focal_gamma,
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=val_dataset,
-            compute_metrics=compute_modality_metrics,
-        )
+    output_dir = config.output_dir or (
+        f"lora_modality_router_{config.model_name}_fixed_split_r{rank}_model"
+    )
+    os.makedirs(output_dir, exist_ok=True)
+    logger.info(f"Model will be saved to: {output_dir}")
 
+    trainer = ModalityTrainer(
+        class_weights=stats.class_weights if stats else None,
+        focal_gamma=stats.focal_gamma if stats else DEFAULT_FOCAL_GAMMA,
+        distillation=config.distillation,
+        model=model,
+        args=build_training_args(config, output_dir, len(train_dataset)),
+        train_dataset=train_dataset,
+        eval_dataset=val_dataset,
+        compute_metrics=compute_modality_metrics,
+    )
     logger.info("Starting training...")
     trainer.train()
 
     save_run_artifacts(model, tokenizer, trainer, output_dir, lora_config)
-
     logger.info(
         f"Model saved to: {output_dir} (LoRA adapter, base model kept separate)"
     )
-
-    if merge_output_dir:
+    if config.merge_output_dir:
         logger.info(
-            f"Merging LoRA adapter into a servable checkpoint at: {merge_output_dir}"
+            f"Merging LoRA adapter into a servable checkpoint at: {config.merge_output_dir}"
         )
-        merge_lora_adapter_to_full_model(output_dir, merge_output_dir, model_path)
-        logger.info(f"Merged, servable checkpoint ready at: {merge_output_dir}")
+        merge_lora_adapter_to_full_model(
+            output_dir, config.merge_output_dir, model_path
+        )
+        logger.info(f"Merged, servable checkpoint ready at: {config.merge_output_dir}")
 
 
-if __name__ == "__main__":
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser.
+
+    Returns:
+        The parser for the trainer's options.
+    """
     parser = argparse.ArgumentParser(
         description="Fixed-split modality routing trainer: plain fine-tune (clean "
         "baseline) or knowledge distillation (candidate), both trained on "
@@ -815,11 +634,22 @@ if __name__ == "__main__":
         "--seed",
         type=int,
         default=42,
-        help="Seed for LoRA/head init, oversampling and data order. Runs differ by seed, so compare models over several seeds before reading a small gap as real.",
+        help="Seed for LoRA/head init, oversampling and data order. Runs differ by "
+        "seed, so compare models over several seeds before reading a small gap as real.",
     )
+    return parser
 
-    args = parser.parse_args()
-    main(
+
+def config_from_args(args: argparse.Namespace) -> TrainConfig:
+    """Turn parsed command-line arguments into a TrainConfig.
+
+    Args:
+        args: Result of build_parser().parse_args().
+
+    Returns:
+        The run configuration.
+    """
+    return TrainConfig(
         model_name=args.model,
         train_file=args.train_file,
         val_file=args.val_file,
@@ -839,3 +669,7 @@ if __name__ == "__main__":
         use_class_weights=not args.no_class_weights,
         seed=args.seed,
     )
+
+
+if __name__ == "__main__":
+    main(config_from_args(build_parser().parse_args()))
