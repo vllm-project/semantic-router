@@ -159,6 +159,65 @@ config:
                   value: updated-by-router
               delete:
                 - x-vsr-e2e-deleted
+      - &tools_passthrough_decision
+        name: tools_passthrough_decision
+        description: "Deterministic route for tools passthrough provider-boundary coverage (issue #3180)."
+        priority: 540
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tools_passthrough
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+      - &tools_filtered_decision
+        name: tools_filtered_decision
+        description: "Deterministic route for tools allow-list provider-boundary coverage (issue #3180)."
+        priority: 540
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tools_filtered
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: filtered
+              semantic_selection: false
+              allow_tools:
+                - get_weather
+      - &tools_none_decision
+        name: tools_none_decision
+        description: "Deterministic route for tools removal provider-boundary coverage (issue #3180)."
+        priority: 540
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tools_none
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: none
+              semantic_selection: false
       - &tool_selection_add_weather_decision
         name: tool_selection_add_weather_decision
         description: Contract route for tool_selection add mode (weather-aligned retrieval)
@@ -234,7 +293,7 @@ config:
             configuration:
               enabled: true
               mode: filter
-              relevance_threshold: 0.22
+              relevance_threshold: 0.95
               preserve_count: 2
       - &tool_selection_filter_threshold_decision
         name: tool_selection_filter_threshold_decision
@@ -756,6 +815,24 @@ config:
           keywords:
             - __PLUGIN_REQUEST_MUTATIONS__
           case_sensitive: true
+        - &tools_passthrough
+          name: tools_passthrough
+          operator: OR
+          keywords:
+            - __TOOLS_PASSTHROUGH__
+          case_sensitive: true
+        - &tools_filtered
+          name: tools_filtered
+          operator: OR
+          keywords:
+            - __TOOLS_FILTERED__
+          case_sensitive: true
+        - &tools_none
+          name: tools_none
+          operator: OR
+          keywords:
+            - __TOOLS_NONE__
+          case_sensitive: true
         - name: retention_probe_keywords
           operator: OR
           keywords:
@@ -946,6 +1023,9 @@ config:
         signals:
           keywords:
             - *plugin_request_mutations
+            - *tools_passthrough
+            - *tools_filtered
+            - *tools_none
             - *tool_selection_add_weather
             - *tool_selection_add_calc
             - *tool_selection_filter
@@ -954,6 +1034,9 @@ config:
             - *tool_selection_with_system_prompt
         decisions:
           - *plugin_request_mutations_decision
+          - *tools_passthrough_decision
+          - *tools_filtered_decision
+          - *tools_none_decision
           - *tool_selection_add_weather_decision
           - *tool_selection_add_calc_decision
           - *tool_selection_filter_decision
@@ -1048,6 +1131,41 @@ config:
             protocol: http
           llm_timeout_seconds: 5
           access_key: e2e-classifier-key
+      # Keep the baseline acceptance datasets on the artifacts they measure.
+      # Repository defaults may advance independently to newly qualified models.
+      system:
+        prompt_guard: models/mmbert32k-jailbreak-detector-merged
+        domain_classifier: models/mmbert32k-intent-classifier-merged
+        pii_classifier: models/mmbert32k-pii-detector-merged
+      modules:
+        prompt_guard:
+          enabled: true
+          model_ref: prompt_guard
+          model_id: models/mmbert32k-jailbreak-detector-merged
+          threshold: 0.7
+          use_cpu: true
+          variant: mmbert32k
+          max_sequence_length: 0
+          jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        classifier:
+          domain:
+            enabled: true
+            model_ref: domain_classifier
+            model_id: models/mmbert32k-intent-classifier-merged
+            threshold: 0.5
+            use_cpu: true
+            variant: mmbert32k
+            max_sequence_length: 0
+            category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          pii:
+            enabled: true
+            model_ref: pii_classifier
+            model_id: models/mmbert32k-pii-detector-merged
+            use_mmbert_32k: true
+            threshold: 0.9
+            use_cpu: true
+            max_sequence_length: 0
+            pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
     services:
       response_api:
         enabled: true

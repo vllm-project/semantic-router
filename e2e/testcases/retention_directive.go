@@ -43,7 +43,7 @@ func testRetentionDirective(ctx context.Context, client *kubernetes.Clientset, o
 	}
 	defer stopPortForward()
 
-	query := "Diagnostics request " + retentionProbeKeyword + " please run."
+	query := retentionProbeKeyword + " What is the weather forecast for Boston tomorrow?"
 
 	response, err := sendLocalChatCompletion(ctx, localPort, "MoM", query, 30*time.Second)
 	if err != nil {
