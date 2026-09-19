@@ -49,7 +49,11 @@ func TestConfigHashReportsExactCandidateFailureAndRecovery(t *testing.T) {
 	if response.ActivationStatus != "failed" || response.Activation == nil || response.Activation.Error == "" || response.ActiveRuntimeHash != "old" {
 		t.Fatalf("failed candidate obscured: %+v", response)
 	}
-	if _, status := server.waitForRuntimeConfigActivation(path, 0); status != "failed" {
+	generatedDocument, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, status := server.waitForRuntimeConfigActivation(path, generatedDocument, 0); status != "failed" {
 		t.Fatalf("wait status: %s", status)
 	}
 	registry.BeginConfigActivation("another-document", "file")

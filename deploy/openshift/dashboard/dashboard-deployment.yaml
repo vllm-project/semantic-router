@@ -11,13 +11,60 @@ data:
   TARGET_ROUTER_API_URL: "http://semantic-router:8080"
   TARGET_ROUTER_METRICS_URL: "http://semantic-router:9190/metrics"
   ROUTER_CONFIG_PATH: "/app/config/config.yaml"
-  # ConfigMaps are immutable runtime inputs. The canonical Dashboard image
-  # starts under OpenShift's arbitrary UID with mutation capabilities disabled.
-  DASHBOARD_RUNTIME_CONFIG_WRITABLE: "false"
+  # Runtime config writes go through the Kubernetes API to the
+  # semantic-router-config ConfigMap now (issue #3688), not the read-only
+  # mounted file, so this can be enabled again: entrypoint.sh's arbitrary-UID
+  # fail-closed check leaves this on since the write never touches disk.
+  DASHBOARD_RUNTIME_CONFIG_WRITABLE: "true"
+  # The recipe store is still a local writable-directory requirement this
+  # fix does not address: no ConfigMap backs it, so it stays disabled here.
   DASHBOARD_RECIPE_STORE_WRITABLE: "false"
   # ML service sidecar: connect to localhost since it's in the same pod
   ML_SERVICE_URL: "http://localhost:8686"
   ML_PIPELINE_ENABLED: "true"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dashboard
+  namespace: vllm-semantic-router-system
+  labels:
+    app: dashboard
+
+---
+# Scoped to the one ConfigMap that backs the mounted config file, so the
+# config write/deploy handlers can patch it through the Kubernetes API
+# instead of the read-only mount (issue #3688).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dashboard-config-writer
+  namespace: vllm-semantic-router-system
+  labels:
+    app: dashboard
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["semantic-router-config"]
+    verbs: ["get", "update", "patch"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dashboard-config-writer
+  namespace: vllm-semantic-router-system
+  labels:
+    app: dashboard
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dashboard-config-writer
+subjects:
+  - kind: ServiceAccount
+    name: dashboard
+    namespace: vllm-semantic-router-system
 
 ---
 apiVersion: apps/v1
@@ -37,6 +84,7 @@ spec:
       labels:
         app: dashboard
     spec:
+      serviceAccountName: dashboard
       containers:
         - name: dashboard
           image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/dashboard-custom:latest
@@ -48,6 +96,16 @@ spec:
           envFrom:
             - configMapRef:
                 name: dashboard-config
+          env:
+            # Lets the config write/deploy handlers patch this ConfigMap
+            # through the Kubernetes API instead of the read-only mounted
+            # file (issue #3688).
+            - name: VLLM_SR_K8S_CONFIGMAP_NAME
+              value: "semantic-router-config"
+            - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           volumeMounts:
             - name: config
               mountPath: /app/config/config.yaml
