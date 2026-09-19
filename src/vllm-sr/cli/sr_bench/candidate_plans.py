@@ -2,6 +2,7 @@
 
 import copy
 
+from .native_output import model_limits
 from .store import TERMINAL
 from .target_contracts import auxiliary_bindings, effective_auxiliary_targets
 
@@ -35,6 +36,7 @@ def candidate_manifest(baseline, targets, mode="live", name=None, experiment=Non
             "adapter_versions",
             "benchmark_weights",
             "cost_policy",
+            "output_policy",
         )
         if key in source
     }
@@ -75,6 +77,7 @@ def validate_candidate_protocol(baseline, candidate):
         "benchmark_options",
         "adapter_versions",
         "benchmark_weights",
+        "output_policy",
     ):
         default = {} if key == "benchmark_options" else None
         if candidate.get(key, default) != source.get(key, default):
@@ -86,3 +89,7 @@ def validate_candidate_protocol(baseline, candidate):
             "Baseline protocol changed (effective auxiliary targets); "
             "prepare a new baseline before comparing this configuration"
         )
+    if source.get("output_policy", "bounded") == "native" and model_limits(
+        source
+    ) != model_limits(candidate):
+        raise ValueError("Baseline protocol changed (native model limits)")

@@ -141,6 +141,47 @@ corresponding `_ROOT` variables to override those locations. Exact source
 revisions and, for code or terminal tasks, digest-pinned sandbox images remain
 required. Preflight reports missing prerequisites before dispatch.
 
+## Native output capacity
+
+Set `output_policy: native` to explore each model's available output capacity
+without a shared generation-token cap. Register `native_limits` on every selected
+target, keyed by the physical response model, with verified `context_window` and
+`max_output_tokens` values. Keep model-specific reasoning settings in
+`request_params`. Omit `max_tokens` from both sampling and target overrides.
+
+The single-model adapter uses the vLLM Chat render API to count the actual
+prompt, then generates once with the smaller of the configured output capacity
+and remaining context. A MoM recipe must use `request_params.default_max_tokens:
+auto` on every reachable decision, without a smaller output limit. Its Router
+response records the actual selected-model input and output budget. Missing or
+inconsistent evidence stops qualification; the harness does not guess a budget
+from generated token usage. Native mode currently requires physical response
+identities to match selected model identities and one fully accounted dispatch.
+
+The plan derives its evidence token ceiling from the frozen native limits. Allow
+sufficient call/run time and output storage for that capacity; idle, cancellation
+and repetition controls remain active. Model maximum output and total context are
+different values, and normal end-of-answer stopping remains enabled. Native
+capacity does not force a model to fill its context. Compare native candidates
+against native baselines with the same model limits. Offline replay is unavailable
+when equivalent per-call native budget evidence cannot be established.
+
+## Answer grading
+
+The MMLU-Pro and GPQA adapters use `sr-bench-mcq-final-v2`. Capability scoring
+extracts an unambiguous answer from the visible final channel: a leading answer
+line, an explicit answer declaration, or a boxed choice. Markdown emphasis does
+not change the answer. Conflicting declarations and prose without an explicit
+answer remain unparsed; the grader does not guess from isolated letters or use
+hidden reasoning. This is a conservative sr-bench adaptation, not an exact
+reproduction of the upstream extraction heuristics.
+
+Strict answer-format compliance is reported separately from correctness.
+Truncated responses still count as output failures. Adapter versions are frozen
+in each plan, so different graders cannot silently share a comparison. Existing
+run scores remain unchanged. `benchmark regrade RUN_ID` returns a separate,
+versioned result from saved final answers without generating or rewriting them.
+
 ## Plan and run
 
 Create a JSON or YAML manifest with the prepared dataset's `path` and `sha256`,
@@ -392,6 +433,14 @@ overlap, so this is not a count of unique questions or the selected run's denomi
 Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
 **Recipe**. Start with the aggregate results, then inspect individual responses,
 accounting and frozen configuration as needed.
+
+While a run is active, elapsed time continues updating even when no additional
+question has finished. Active calls show their phase, elapsed time, latest
+recorded response activity and received bytes. This activity helps distinguish a
+long response from one that has stopped arriving; it does not establish answer
+quality or billable token usage. Tokens and costs require a complete usage receipt.
+Use `vllm-sr benchmark show RUN_ID --calls --active` to read the same activity
+through the CLI; `--after` and `--limit` bound each page.
 
 **Compare iterations** guides two choices: a live single-model baseline with
 compatible saved outcomes, then any number of eligible candidate runs. Baselines

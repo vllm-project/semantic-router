@@ -103,7 +103,7 @@ def _wait(store, identity):
 def _transport(monkeypatch):
     dispatched = []
 
-    def chat(target, messages, *_args):
+    def chat(target, messages, *_args, **_kwargs):
         dispatched.append((messages[0]["content"], target["id"]))
         return {
             "final": "A",

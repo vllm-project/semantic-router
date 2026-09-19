@@ -93,6 +93,14 @@ const (
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
 
+	// VSREffectiveInputTokens is the selected backend's rendered input size for
+	// the finalized automatic-output dispatch, including its chat template.
+	VSREffectiveInputTokens = "x-vsr-effective-input-tokens" // #nosec G101 -- public header name, not a credential
+
+	// VSREffectiveMaxOutputTokens is the resolved output token limit sent to the
+	// selected backend for that automatic-output dispatch, including reasoning.
+	VSREffectiveMaxOutputTokens = "x-vsr-effective-max-output-tokens" // #nosec G101 -- public header name, not a credential
+
 	// VSRSelectedAlgorithm indicates the model-selection algorithm used after
 	// the routing decision matched. Example values: "static", "elo", "knn",
 	// "router_dc", "fusion", "remom", "workflows".

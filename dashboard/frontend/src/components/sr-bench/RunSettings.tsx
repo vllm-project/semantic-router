@@ -63,6 +63,9 @@ interface Props {
   seed: number
   targets: Target[]
   costPolicy: Manifest['cost_policy']
+  outputPolicy: 'bounded' | 'native'
+  onOutputPolicyChange: (policy: 'bounded' | 'native') => void
+  nativeAvailable: boolean
   onCostPolicyChange: (policy: 'require_priced' | 'capability_only') => void
   mode: Manifest['mode']
   previewContext: NonNullable<Manifest['preview_context']>
@@ -77,6 +80,9 @@ export default function RunSettings({
   seed,
   targets,
   costPolicy,
+  outputPolicy,
+  onOutputPolicyChange,
+  nativeAvailable,
   onCostPolicyChange,
   mode,
   previewContext,
@@ -106,6 +112,34 @@ export default function RunSettings({
   }
   return (
     <>
+      <BenchSelect
+        label="Output policy"
+        value={outputPolicy}
+        onChange={(value) => onOutputPolicyChange(value as 'bounded' | 'native')}
+        options={[
+          {
+            value: 'bounded',
+            label: 'Bounded output',
+            description: 'Set a shared output-token limit.',
+          },
+          ...(nativeAvailable || outputPolicy === 'native'
+            ? [
+                {
+                  value: 'native',
+                  label: 'Native capacity',
+                  description: 'Use available model capacity without a shared token cap.',
+                },
+              ]
+            : []),
+        ]}
+      />
+      <p className={styles.muted}>
+        {outputPolicy === 'native'
+          ? 'Use each selected model’s available context for reasoning and its answer. No fixed shared token cap is sent; remaining output capacity depends on the actual input.'
+          : !nativeAvailable
+            ? 'Native capacity requires operator-registered model limits and a compatible target profile.'
+            : 'A shared cap bounds each response; registered target overrides still apply.'}
+      </p>
       <div className={styles.formGrid}>
         <NumberField
           label="Budget (USD)"
@@ -127,13 +161,15 @@ export default function RunSettings({
           onChange={changeLimit('max_run_seconds')}
           min={1}
         />
-        <NumberField
-          label="Max output tokens"
-          value={limits.max_output_tokens}
-          onChange={changeLimit('max_output_tokens')}
-          min={1}
-          help="Per response. Must accommodate any fixed target profile."
-        />
+        {outputPolicy === 'bounded' && (
+          <NumberField
+            label="Max output tokens"
+            value={limits.max_output_tokens ?? ''}
+            onChange={changeLimit('max_output_tokens')}
+            min={1}
+            help="Per response. Must accommodate any fixed target profile."
+          />
+        )}
         <NumberField
           label="Concurrency"
           value={limits.concurrency}

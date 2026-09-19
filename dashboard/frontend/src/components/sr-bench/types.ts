@@ -75,12 +75,14 @@ export interface Target {
   kind: 'single' | 'mom'
   base_url: string
   model: string
+  expected_response_model?: string
   api_key_env?: string
   config_hash?: string
   capture_recipe?: boolean
   preview_url?: string
   max_inference_calls?: number
   request_params?: Record<string, unknown>
+  native_limits?: Record<string, { context_window: number; max_output_tokens: number }>
   prices?: Record<
     string,
     { input: number; cached_input: number; cache_write: number; output: number }
@@ -114,6 +116,7 @@ export interface Manifest {
   name: string
   mode: 'live' | 'preview' | 'replay'
   cost_policy?: 'require_priced' | 'capability_only'
+  output_policy?: 'bounded' | 'native'
   profile: string
   seed: number
   targets: Target[]
@@ -124,7 +127,7 @@ export interface Manifest {
     concurrency: number
     total_timeout_s: number
     idle_timeout_s: number
-    max_output_tokens: number
+    max_output_tokens?: number
     max_output_chars: number
     repetition_window: number
     repetition_limit: number
@@ -133,7 +136,7 @@ export interface Manifest {
     max_calls_per_case: number
     case_timeout_s?: number
   }
-  sampling: { temperature: number; top_p?: number; max_tokens: number; seed?: number }
+  sampling: { temperature: number; top_p?: number; max_tokens?: number; seed?: number }
   preview_context?: { session_id?: string; conversation_id?: string; sampling_seed?: number }
 }
 
@@ -165,7 +168,24 @@ export interface TargetMetrics {
   decisions?: Record<string, number>
   selection_statuses?: Record<string, number>
   selection_reasons?: Record<string, number>
+  output_diagnostics?: OutputDiagnosticsMetrics
   [key: string]: unknown
+}
+
+export interface OutputDiagnosticsMetrics {
+  planned_cases: number
+  result_cases: number
+  output_limit_cases: number
+  strict_format: {
+    checked_cases: number
+    failed_cases: number
+    unassessed_cases: number
+  }
+  subject_calls: {
+    total: number
+    finish_reasons: Record<string, number>
+    unknown_finish_reason: number
+  }
 }
 
 export interface EvidencePage {
@@ -271,6 +291,14 @@ export interface RunEvent {
   [key: string]: unknown
 }
 
+export interface CallActivity {
+  phase: 'preparing' | 'waiting' | 'streaming'
+  phase_started_at: string
+  last_activity_at: string | null
+  received_bytes: number
+  updated_at: string
+}
+
 export interface CallRecord {
   id: string
   target_id: string
@@ -280,6 +308,8 @@ export interface CallRecord {
   model?: string
   decision?: string
   status: string
+  started_at?: string
+  activity?: CallActivity
   [key: string]: unknown
 }
 

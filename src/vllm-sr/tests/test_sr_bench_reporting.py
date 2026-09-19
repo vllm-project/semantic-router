@@ -413,12 +413,181 @@ def test_failed_run_explains_first_failure_and_legacy_report_is_read_only(
     assert store.get(old["id"])["error"] is None
 
 
+def test_output_diagnostics_keep_length_and_nonempty_format_failures_distinct(
+    tmp_path, monkeypatch
+):
+    def respond(_target, messages, *_args, **_kwargs):
+        name = messages[0]["content"]
+        return {
+            "final": "I cannot select one option." if name == "format" else "A",
+            "finish_reason": "length" if name == "length" else "stop",
+            "output_complete": name != "length",
+            "cost_usd": 0.001,
+            "latency_s": 1,
+        }
+
+    monkeypatch.setattr("cli.sr_bench.engine.chat", respond)
+    document = _manifest()
+    document["cases"] = [
+        {
+            **document["cases"][0],
+            "id": name,
+            "messages": [{"role": "user", "content": name}],
+        }
+        for name in ("length", "format", "valid")
+    ]
+    store = Store(tmp_path)
+    run = Engine(store).start(document)
+    deadline = time.monotonic() + 5
+    while store.get(run["id"])["status"] in {"queued", "running"}:
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    assert store.get(run["id"])["status"] == "completed"
+    before = store.results(run["id"])
+    report = make_report(store, run["id"])
+    target = report["summary"]["targets"][0]
+    assert (target["complete"], target["completed"], target["correct"]) == (True, 3, 1)
+    assert target["output_diagnostics"] == {
+        "planned_cases": 3,
+        "result_cases": 3,
+        "output_limit_cases": 1,
+        "strict_format": {
+            "checked_cases": 2,
+            "failed_cases": 1,
+            "unassessed_cases": 1,
+        },
+        "subject_calls": {
+            "total": 3,
+            "finish_reasons": {"length": 1, "stop": 2},
+            "unknown_finish_reason": 0,
+        },
+    }
+    assert report["benchmarks"][0]["output_diagnostics"] == target["output_diagnostics"]
+    rows = {row["case_id"]: row for row in before}
+    calls = {call["case_id"]: call for call in store.calls(run["id"])}
+    assert rows["length"]["correct"] is False
+    assert rows["length"]["answer"] is None
+    assert rows["format"]["answer"] is None
+    assert calls["length"]["final"] == "A"
+    assert calls["format"]["final"] == "I cannot select one option."
+    assert store.results(run["id"]) == before
+
+
+def test_output_diagnostics_leave_missing_checks_and_call_reasons_unassessed():
+    results = [
+        {
+            "case_id": name,
+            "status": "completed",
+            "correct": True,
+            "answer": None,
+            "details": details,
+        }
+        for name, details in (("tool", {}), ("missing", {"strict_format": 0}))
+    ]
+    calls = [
+        {"case_id": "tool", "role": "subject", "finish_reason": "tool_calls"},
+        {"case_id": "missing", "role": "subject", "finish_reason": None},
+        {"case_id": "pending", "role": "subject", "finish_reason": ""},
+        {"case_id": "judge", "role": "judge", "finish_reason": "length"},
+    ]
+    result = metric("flash", results, calls, 4)
+    assert result["cost_usd"] is None
+    assert result["complete"] is False
+    assert result["output_diagnostics"] == {
+        "planned_cases": 4,
+        "result_cases": 2,
+        "output_limit_cases": 0,
+        "strict_format": {
+            "checked_cases": 0,
+            "failed_cases": 0,
+            "unassessed_cases": 4,
+        },
+        "subject_calls": {
+            "total": 3,
+            "finish_reasons": {"tool_calls": 1},
+            "unknown_finish_reason": 2,
+        },
+    }
+
+
+def test_output_diagnostics_cover_all_pages_targets_and_benchmarks(
+    tmp_path, monkeypatch
+):
+    document = _manifest()
+    document["targets"].append({**document["targets"][0], "id": "other"})
+    document["cases"] = [
+        {
+            **document["cases"][0],
+            "id": str(index),
+            "benchmark": "gpqa-diamond" if index == 501 else "mmlu-pro",
+        }
+        for index in range(502)
+    ]
+    store = Store(tmp_path)
+    run, _ = store.create(plan(document))
+    for index, case in enumerate(document["cases"]):
+        details = (
+            {"quality_failure": "output_limit", "output_complete": False}
+            if index == 500
+            else {"strict_format": index != 501}
+        )
+        store.result(
+            run["id"],
+            case["id"],
+            "flash",
+            "completed",
+            {"correct": index < 500, "score": int(index < 500), "details": details},
+        )
+        call = store.start_call(run["id"], case["id"], "flash", "subject", {})
+        store.finish_call(
+            call,
+            "completed",
+            {"finish_reason": "length" if index == 500 else "stop"},
+        )
+    assert store.page(run["id"], "results", limit=500)["next_cursor"] is not None
+    assert store.page(run["id"], "calls", limit=500)["next_cursor"] is not None
+    original_calls = store.calls
+
+    def summary_calls(run_id, summary=False):
+        assert summary is True, "Report must not load full response bodies"
+        return original_calls(run_id, summary=summary)
+
+    monkeypatch.setattr(store, "calls", summary_calls)
+    report = make_report(store, run["id"])
+    targets = {
+        row["id"]: row["output_diagnostics"] for row in report["summary"]["targets"]
+    }
+    assert targets["flash"]["planned_cases"] == 502
+    assert targets["flash"]["output_limit_cases"] == 1
+    assert targets["flash"]["strict_format"] == {
+        "checked_cases": 501,
+        "failed_cases": 1,
+        "unassessed_cases": 1,
+    }
+    assert targets["flash"]["subject_calls"]["finish_reasons"] == {
+        "length": 1,
+        "stop": 501,
+    }
+    assert targets["other"]["result_cases"] == 0
+    assert targets["other"]["strict_format"]["unassessed_cases"] == 502
+    assert targets["other"]["subject_calls"]["total"] == 0
+    benchmarks = {
+        (row["target_id"], row["benchmark"]): row["output_diagnostics"]
+        for row in report["benchmarks"]
+    }
+    assert benchmarks["flash", "mmlu-pro"]["planned_cases"] == 501
+    assert benchmarks["flash", "mmlu-pro"]["output_limit_cases"] == 1
+    assert benchmarks["flash", "mmlu-pro"]["strict_format"]["failed_cases"] == 0
+    assert benchmarks["flash", "gpqa-diamond"]["planned_cases"] == 1
+    assert benchmarks["flash", "gpqa-diamond"]["strict_format"]["failed_cases"] == 1
+
+
 def test_full_timeout_matrix_remains_comparable_without_retry_or_evidence_edits(
     tmp_path, monkeypatch
 ):
     requested = []
 
-    def respond(target, messages, *_args):
+    def respond(target, messages, *_args, **_kwargs):
         index = int(messages[0]["content"])
         requested.append((target["id"], index))
         if target["id"] == "glm" and index == 13:
