@@ -1,8 +1,8 @@
 # Use the production foundation dependency contract for the local tiny-model
 # training, loader and export tests. No checkpoint or dataset download is needed.
 -r ../../src/training/model_embeddings/mmbert_32k/requirements.txt
-torch==2.10.0
-peft==0.17.1
+torch==2.13.0
+peft==0.19.1
 onnx==1.22.0
 onnxruntime==1.24.2
-onnxscript==0.5.7
+onnxscript==0.7.2

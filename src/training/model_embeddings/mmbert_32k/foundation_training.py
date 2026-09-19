@@ -127,7 +127,7 @@ def _configure_model(args):
     if args.rope_scaling_type == "yarn":
         if args.yarn_extrapolation_factor != 1.0:
             raise ValueError(
-                "Transformers 4.57.6 official YaRN has no extrapolation_factor; "
+                "Transformers official YaRN has no extrapolation_factor; "
                 "remove the override or set it to 1.0"
             )
         configure_modernbert_yarn(

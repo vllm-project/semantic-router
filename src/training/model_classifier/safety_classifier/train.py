@@ -377,7 +377,6 @@ def _build_training_arguments(
     learning_rate = args.learning_rate or float(training["learning_rate"])
     return runtime.stack["TrainingArguments"](
         output_dir=str(runtime.output_root / "checkpoints"),
-        overwrite_output_dir=args.overwrite_output_dir,
         num_train_epochs=epochs,
         max_steps=args.max_steps,
         per_device_train_batch_size=runtime.per_device_batch,
@@ -405,7 +404,6 @@ def _build_training_arguments(
         ddp_find_unused_parameters=False if runtime.world_size > 1 else None,
         report_to=[],
         run_name=f"{contract['workflow_name']}-{args.task}",
-        save_safetensors=True,
     )
 
 

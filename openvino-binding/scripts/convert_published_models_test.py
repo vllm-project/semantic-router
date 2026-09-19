@@ -14,9 +14,25 @@ from convert_published_models import (
 from create_owned_fixture import inspect_tokenizer, make_tokenizer
 from openvino import opset13 as ops
 from openvino_tokenizers import convert_tokenizer
+from transformers import AutoTokenizer
 
 
 class PublishedModelConversionTest(unittest.TestCase):
+    def test_saved_tokenizer_reloads_for_published_conversion(self):
+        with tempfile.TemporaryDirectory() as directory:
+            make_tokenizer(4).save_pretrained(directory)
+            tokenizer = AutoTokenizer.from_pretrained(
+                directory, local_files_only=True, trust_remote_code=False
+            )
+            self.assertEqual(
+                owned_tokenizer_contract(tokenizer),
+                {"pad_token_id": 0, "end_token_ids": [2]},
+            )
+            evidence = inspect_tokenizer(
+                convert_tokenizer(tokenizer, with_detokenizer=False), 4
+            )
+            self.assertEqual(evidence["probe_tokens"], 98)
+
     def test_owned_tokenizer_export_preserves_original_counts_and_declared_ids(self):
         tokenizer = make_tokenizer(4)
         tokenizer.model_max_length = 64

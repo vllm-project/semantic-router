@@ -23,6 +23,7 @@ from .representation_contract import (
     vela_representation_contract,
 )
 from .representation_outputs import (
+    forward_with_raw_hidden_states,
     masked_mean,
     select_hidden_state,
     truncate_and_normalize,
@@ -255,7 +256,7 @@ class NewBaseTask(nn.Module):
             "base_files": expected_files,
             "provenance": provenance or {},
             "initial_encoder_state_sha256": state_digest(encoder.state_dict()),
-            "unused_mlm_keys": info["unexpected_keys"],
+            "unused_mlm_keys": sorted(info["unexpected_keys"]),
             "initialization": "exact_encoder_fresh_task",
         }
         verify_files(directory, expected_files)
@@ -347,7 +348,8 @@ class NewBaseTask(nn.Module):
             raise ValueError(
                 "CLS reranking requires a real first token; left padding is unsupported"
             )
-        outputs = self.encoder(
+        outputs = forward_with_raw_hidden_states(
+            self.encoder,
             input_ids=input_ids,
             attention_mask=attention_mask,
             output_hidden_states=True,

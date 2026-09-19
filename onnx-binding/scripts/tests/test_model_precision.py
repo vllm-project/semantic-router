@@ -42,7 +42,6 @@ class ModelPrecisionTest(unittest.TestCase):
                         directory,
                         torch_dtype=dtype,
                         attn_implementation="sdpa",
-                        reference_compile=False,
                     ).eval()
                     candidate = cast_parameters_preserving_buffers(
                         copy.deepcopy(original), dtype

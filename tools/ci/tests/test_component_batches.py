@@ -207,7 +207,7 @@ class ComponentBatchTests(unittest.TestCase):
         if command[0] == "make":
             return command[1]
         if "pip" in command:
-            return "torch" if "torch==2.10.0" in command else "training-deps"
+            return "torch" if "torch==2.13.0" in command else "training-deps"
         return "proxy-tests"
 
     def run_contracts(self, identities, *, failure="", outcome="passed"):

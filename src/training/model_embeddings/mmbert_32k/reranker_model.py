@@ -16,7 +16,7 @@ from torch.nn import functional
 from transformers import AutoConfig, AutoModel
 
 from .representation_contract import read_representation_contract
-from .representation_outputs import select_hidden_state
+from .representation_outputs import forward_with_raw_hidden_states, select_hidden_state
 
 logger = logging.getLogger(__name__)
 
@@ -243,7 +243,8 @@ class Matryoshka2DReranker(nn.Module):
         dimensions = [dim_idx] if dim_idx is not None else self.dim_indices
         all_scores = {}
         with self._encoder_context(input_ids):
-            outputs = self.encoder(
+            outputs = forward_with_raw_hidden_states(
+                self.encoder,
                 input_ids=input_ids,
                 attention_mask=attention_mask,
                 output_hidden_states=True,

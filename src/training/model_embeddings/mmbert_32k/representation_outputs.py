@@ -9,6 +9,32 @@ from torch.nn import functional
 from .representation_contract import NORMALIZATION_FINAL, read_representation_contract
 
 
+def forward_with_raw_hidden_states(encoder, *args, **kwargs):
+    """Retain the pre-final-norm exit across Transformers output conventions.
+
+    Transformers 5 replaces the last captured layer with the normalized model
+    output. Legacy reranker heads require the original raw final exit, so capture
+    the norm input explicitly without changing model weights or normalization.
+    The hook is scoped to this call and does not retain a graph on the encoder.
+    """
+    if encoder.config.model_type != "modernbert":
+        return encoder(*args, **kwargs)
+    raw = []
+
+    def capture_input(_module, inputs):
+        raw.append(inputs[0])
+
+    handle = encoder.final_norm.register_forward_pre_hook(capture_input)
+    try:
+        outputs = encoder(*args, **kwargs)
+    finally:
+        handle.remove()
+    if outputs.hidden_states is None or len(raw) != 1:
+        raise RuntimeError("ModernBERT must expose exactly one final normalization")
+    outputs.hidden_states = (*outputs.hidden_states[:-1], raw[0])
+    return outputs
+
+
 def select_hidden_state(encoder, outputs, layer: int, contract: dict, *, task: str):
     """Select raw or once-normalized states without assuming HF tuple semantics."""
     if encoder.config.model_type != "modernbert":
@@ -26,7 +52,7 @@ def select_hidden_state(encoder, outputs, layer: int, contract: dict, *, task: s
         # Reuse the encoder's result rather than running final_norm again after
         # a caller has left its autocast context.
         return outputs.last_hidden_state
-    # HF 4.57.6 stores even hidden_states[-1] BEFORE final_norm.
+    # forward_with_raw_hidden_states preserves the pre-final-norm exit.
     raw = outputs.hidden_states[layer]
     return encoder.final_norm(raw) if mode == NORMALIZATION_FINAL else raw
 

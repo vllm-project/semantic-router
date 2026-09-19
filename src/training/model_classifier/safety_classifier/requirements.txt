@@ -1,8 +1,10 @@
 # Install a ROCm-compatible PyTorch build or use the documented container first.
+# Compatibility pin only: GHSA-4j2p-28q2-5m79 is still unpatched; see README.
 accelerate==1.10.1
 datasets==4.0.0
-huggingface-hub==0.34.4
+huggingface-hub==1.5.0
 numpy==2.2.6
-peft==0.17.1
+peft==0.19.1
 safetensors==0.6.2
-transformers==4.55.2
+transformers==5.10.1
+torch==2.13.0

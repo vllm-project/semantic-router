@@ -149,7 +149,7 @@ def run_batch(batch: dict, output: Path) -> bool:
                         "-m",
                         "pip",
                         "install",
-                        "torch==2.10.0",
+                        "torch==2.13.0",
                         "--index-url",
                         "https://download.pytorch.org/whl/cpu",
                     ],

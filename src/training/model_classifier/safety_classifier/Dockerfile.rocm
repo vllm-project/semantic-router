@@ -10,6 +10,15 @@ ENV PIP_NO_CACHE_DIR=1 \
 WORKDIR /workspace/semantic-router
 
 COPY src/training/model_classifier/safety_classifier/requirements.txt /tmp/safety-requirements.txt
-RUN python -m pip install --no-cache-dir -r /tmp/safety-requirements.txt
+# The pinned image supplies ROCm userspace, but its PyTorch 2.10 is below the
+# security floor. Install matching HIP wheels before generic Python requirements.
+# This text-classification workflow does not use the base image's torchaudio;
+# its old Torch pin is incompatible with the patched runtime.
+RUN python -m pip uninstall -y torchaudio \
+    && python -m pip install --no-cache-dir --index-url https://download.pytorch.org/whl/rocm7.2 \
+        "torch==2.13.0+rocm7.2" "torchvision==0.28.0+rocm7.2" \
+    && python -m pip install --no-cache-dir -r /tmp/safety-requirements.txt \
+    && python -m pip check \
+    && python -c "from importlib.metadata import version; assert version('torch') == '2.13.0+rocm7.2'"
 
 CMD ["python", "-m", "src.training.model_classifier.safety_classifier.train", "--help"]

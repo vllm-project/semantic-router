@@ -106,3 +106,21 @@ existing binary and `legacy-9-v1` artifacts. They retain their pinned parent,
 512-token policy and existing label IDs. They do not define the current Vela
 twelve-label Hazard recipe. Load an existing adapter with the parent declared in
 its `adapter_config.json`.
+
+### Patched dependency runtime
+
+The training environment uses Transformers 5.10.1, Hub 1.5.0, PEFT 0.19.1 and
+PyTorch 2.13. `Dockerfile.rocm` installs explicit ROCm 7.2 wheels before the
+requirements and checks the selected Torch build. Its base image still contains
+an older Torch build; do not run that base without the installation step. The
+unused base torchaudio package is removed because it pins the previous Torch
+ABI. CPU tiny-model and export tests are compatibility evidence, not GPU or
+full-training qualification.
+
+The existing Accelerate pin remains affected by
+[GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79);
+upstream 1.15 is also unpatched at the source level, so no Accelerate security
+fix is claimed. The supported
+Transformers Trainer/loading path is tested without calling Accelerate's
+checkpoint-loading APIs. See the [family runtime notes](../../model_embeddings/mmbert_32k/README.md#install)
+for the precise upstream limitation.
