@@ -76,4 +76,26 @@ versioning, and uploading to a Hugging Face dataset repository.
 - `label_mapping.json`: label to integer mapping
 - `dataset_stats.json`: row counts per split and label
 - `export_config.json`: reproducibility metadata for this export
-- `hf_dataset/`: local `DatasetDict.save_to_disk()` artifact
+
+## Provenance and licenses
+
+Every row comes from one of the public sources below, or from the router's own
+template generator, and keeps the terms of its source. The licenses are the ones
+each Hugging Face dataset card declares (checked 2026-09-19). Check them before
+redistributing or using this export commercially.
+
+| Source | Declared license | Rows in this export |
+|--------|------------------|---------------------|
+| `Gustavosta/Stable-Diffusion-Prompts` | `unknown` | DIFFUSION rows (1,864 from the SD prompt sources, which the exporter tries in order) |
+| `FredZhang7/stable-diffusion-prompts-2.47M` | CreativeML OpenRAIL-M | fallback for the SD prompt rows above |
+| `tatsu-lab/alpaca` | CC BY-NC 4.0 (non-commercial) | 500 (AR) |
+| `databricks/databricks-dolly-15k` | CC BY-SA 3.0 | 500 (AR) |
+| `OpenAssistant/oasst2` | Apache-2.0 | 500 (AR) |
+| `allenai/WildChat` | ODC-By | 654 (AR, DIFFUSION and BOTH, labelled by regex) |
+| `mqliu/InterleavedBench` | none declared | 447 (BOTH) |
+| Router template generator | this repository | 590 (BOTH) |
+
+- The Alpaca rows are non-commercial, so this export is not cleanly reusable
+  under the repository's license.
+- The sources listed under "Sources" above are everything the exporter can pull
+  from. The table lists only what contributed rows to this export.
