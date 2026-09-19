@@ -1,46 +1,49 @@
 package extproc
 
 import (
-	"encoding/json"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
-var looperResponseTraceFields = [...]string{"flow", "fusion", "reasoning_mom_responses"}
-
-func isolateLooperResponseTraces(body []byte) ([]byte, map[string]json.RawMessage) {
-	traces := make(map[string]json.RawMessage)
-	for _, field := range looperResponseTraceFields {
-		var value json.RawMessage
-		if isLooperSSEBody(body) {
-			body, value = isolateLooperFieldFromSSE(body, field)
-		} else {
-			body, value = isolateLooperFieldFromJSON(body, field)
-		}
-		if len(value) > 0 {
-			traces[field] = value
-		}
+// finalizeLooperResponseExtensions is the final gate for every Looper response,
+// including native multi-choice streams. Required answer bytes are never
+// truncated; optional evidence is omitted atomically if it cannot be represented
+// in the target protocol or would exceed the final body/frame limit.
+func finalizeLooperResponseExtensions(engine *protocolcodec.Engine, body []byte, extensions []looper.ResponseExtension, ctx *RequestContext, streaming bool) ([]byte, error) {
+	if err := engine.ValidateEncodedResponse(body, streaming); err != nil {
+		return nil, err
 	}
-	return body, traces
-}
-
-func restoreLooperResponseTraces(body []byte, traces map[string]json.RawMessage, ctx *RequestContext) []byte {
-	// Workflow traces retain their existing visibility rules. Fusion and ReMoM
-	// already apply their public trace controls when they construct the response.
-	body = restoreLooperWorkflowTrace(body, traces["flow"], ctx)
-	if ctx.SourceFormat != "" && ctx.SourceFormat != llmprotocol.OpenAIChatV1 {
-		return body
+	target := ctx.SourceFormat
+	if target == "" {
+		target = llmprotocol.OpenAIChatV1
 	}
-	for _, field := range looperResponseTraceFields[1:] {
-		value := traces[field]
-		if len(value) == 0 {
+	for _, extension := range extensions {
+		field, value := extension.Name(), extension.JSON()
+		if field == "flow" && !looperShouldRestoreWorkflowTrace(ctx, value) {
 			continue
 		}
-		if isLooperSSEBody(body) {
-			body = restoreLooperFieldSSE(body, value, field)
+		reason := ""
+		if target != llmprotocol.OpenAIChatV1 {
+			reason = "router_extension_unsupported_protocol"
 		} else {
-			body = restoreLooperFieldJSON(body, value, field)
+			candidate := restoreLooperFieldJSON(body, value, field)
+			if streaming {
+				candidate = restoreLooperFieldSSE(body, value, field)
+			}
+			if err := engine.ValidateEncodedResponse(candidate, streaming); err != nil {
+				reason = "router_extension_size_limit"
+			} else {
+				body = candidate
+			}
+		}
+		if reason != "" {
+			// Keep optional-evidence disposition visible within the header budget.
+			ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics{{
+				Source: llmprotocol.OpenAIChatV1, Target: target, Field: field,
+				Action: llmprotocol.DiagnosticDropped, Reason: reason,
+			}}, ctx.ProtocolDiagnostics...)
 		}
 	}
-	return body
+	return body, nil
 }

@@ -12,7 +12,7 @@ func prepareNativeLooperStream(
 	// Ratings synthesizes a native Chat stream with alternative choices after
 	// every provider stream has completed successfully. Its buffered snapshot
 	// retains those alternatives for validation and semantic accounting.
-	translated, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, looperClientResponseBody(response.BufferedBody), nil)
+	translated, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, response.BufferedBody, nil)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -21,9 +21,14 @@ func prepareNativeLooperStream(
 		semantic.Model = response.Model
 		semantic.Generation++
 	}
-	body := looperClientResponseBody(response.Body)
+	body := response.ProtocolBody()
+	diagnostics, err := engine.ValidateNativeChatStream(body)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 	if !streamUsageRequestedByClient(ctx) {
-		filter := protocolcodec.NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+		filter := engine.NewChatUsageStreamFilter()
 		body, err = filter.Push(body)
 		if err != nil {
 			return nil, nil, err
