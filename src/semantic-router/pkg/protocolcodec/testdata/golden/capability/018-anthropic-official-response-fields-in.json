@@ -13,6 +13,7 @@
   "cases": [
     {"name": "container", "patch": {"container": {"id": "container_1"}}},
     {"name": "content", "patch": {"content": [{"type": "text", "text": "alternate"}]}},
+    {"name": "context_management", "patch": {"context_management": {"applied_edits": [{"type": "clear_thinking_20251015", "cleared_input_tokens": 4096, "cleared_tool_uses": 0}]}}},
     {"name": "error", "patch": {"error": {"type": "api_error", "message": "provider failed"}}},
     {"name": "id", "patch": {"id": "msg_2"}},
     {"name": "model", "patch": {"model": "alternate-provider-model"}},
