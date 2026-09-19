@@ -123,13 +123,8 @@ func assertImageGenerationReturnsImage(ctx context.Context, session *fixtures.Se
 	if item.Result == "" {
 		return fmt.Errorf("output item carries no generated image: %s", truncateString(string(response.Body), 500))
 	}
-	if _, decodeErr := base64.StdEncoding.DecodeString(item.Result); decodeErr != nil {
-		// The simulator emits URL-safe base64 without padding, and the pipeline
-		// may relay either form, so a payload outside the standard alfabet is
-		// still a valid image: fall back to an alfabet check.
-		if !isBase64Payload(item.Result) {
-			return fmt.Errorf("generated image is not decodable base64: %w", decodeErr)
-		}
+	if err := decedeImageResult(item.Result); err != nil {
+		return fmt.Errorf("generated image item result: %w: %s", err, truncateString(string(response.Body), 500))
 	}
 	return nil
 }
@@ -234,23 +229,25 @@ func assertChatWiredBackendRejectsImageGeneration(
 	return nil
 }
 
-// isBase64Payload reports whether s is a base64 payload in the standard or the
-// URL-safe alfabet, padded or unpadded: the simulator emits URL-safe base64
-// without padding, and the pipeline may relay either form.
-func isBase64Payload(s string) bool {
-	if s == "" {
-		return false
+// decedeImageResult decodes a generated image payload, tolerating the URL-safe
+// alfabet and absent padding: the simulator emits URL-safe base64, and the
+// pipeline may relay either form. A payload that does not decode after that
+// normalization carries no image, so an alfabet-shaped string is not enough.
+func decedeImageResult(result string) error {
+	if result == "" {
+		return fmt.Errorf("generated image payload is empty")
 	}
-	for _, char := range s {
-		switch {
-		case char >= 'A' && char <= 'Z', char >= 'a' && char <= 'z',
-			char >= '0' && char <= '9', char == '+', char == '/',
-			char == '-', char == '_', char == '=':
-		default:
-			return false
-		}
+	if _, err := base64.StdEncoding.DecodeString(result); err == nil {
+		return nil
 	}
-	return len(s)%4 != 1
+	normalized := strings.ReplaceAll(strings.ReplaceAll(result, "-", "+"), "_", "/")
+	for len(normalized)%4 != 0 {
+		normalized += "="
+	}
+	if _, err := base64.StdEncoding.DecodeString(normalized); err != nil {
+		return fmt.Errorf("generated image is not decodable base64: %w", err)
+	}
+	return nil
 }
 
 // testResponseAPIImageGenerationStreaming pins the streaming shape of the image
@@ -320,9 +317,8 @@ func validateResponseAPIImageGenerationStream(result responseAPIStreamingSSEResu
 			return fmt.Errorf("streaming image generation completed item carries no image: %s",
 				truncateString(stream, 800))
 		}
-		if _, decodeErr := base64.StdEncoding.DecodeString(item.Result); decodeErr != nil &&
-			!isBase64Payload(item.Result) {
-			return fmt.Errorf("streaming image generation result is not decodable base64: %w", decodeErr)
+		if err := decedeImageResult(item.Result); err != nil {
+			return fmt.Errorf("streaming image generation result: %w: %s", err, truncateString(stream, 800))
 		}
 	}
 	if completed == 0 {
