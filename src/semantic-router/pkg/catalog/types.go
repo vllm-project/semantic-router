@@ -377,6 +377,9 @@ type Reliability struct {
 	HealthCheckPath     string `json:"health_check_path,omitempty" yaml:"health_check_path,omitempty"`
 	HealthCheckInterval string `json:"health_check_interval,omitempty" yaml:"health_check_interval,omitempty"`
 	HealthCheckTimeout  string `json:"health_check_timeout,omitempty" yaml:"health_check_timeout,omitempty"`
+	RequestTimeout      string `json:"request_timeout,omitempty" yaml:"request_timeout,omitempty"`
+	StreamIdleTimeout   string `json:"stream_idle_timeout,omitempty" yaml:"stream_idle_timeout,omitempty"`
+	ConnectTimeout      string `json:"connect_timeout,omitempty" yaml:"connect_timeout,omitempty"`
 }
 
 type CatalogBindingVerification struct {

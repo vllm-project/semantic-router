@@ -525,6 +525,7 @@ vllm-sr-test: vllm-sr-install-cli
 	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[bench]"
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		src/vllm-sr/tests/test_config_generator_timeouts.py \
 		src/vllm-sr/tests/test_container_images.py \
 		src/vllm-sr/tests/test_container_log_spool.py \
 		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \

@@ -12,6 +12,9 @@ import (
 
 // handleResponseBody processes the response body.
 func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_ResponseBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+	if ctx != nil && ctx.IsStreamingResponse {
+		ctx.LastStreamChunkTime = time.Now()
+	}
 	if skipResponse := r.handleSkipProcessingResponseBody(v.ResponseBody.Body, ctx); skipResponse != nil {
 		return skipResponse, nil
 	}

@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"bytes"
+
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -11,6 +13,10 @@ import (
 func isUpstreamTransportError(ctx *RequestContext) bool {
 	return ctx != nil && ctx.UpstreamStatusCode != 0 &&
 		(ctx.UpstreamStatusCode < 200 || ctx.UpstreamStatusCode >= 300)
+}
+
+func isConnectTimeoutError(body []byte) bool {
+	return bytes.Contains(bytes.ToLower(body), []byte("connection timeout"))
 }
 
 // handleUpstreamTransportError is the response-body boundary for HTTP failures.
@@ -27,17 +33,30 @@ func (r *OpenAIRouter) handleUpstreamTransportError(
 	if err != nil {
 		return r.createErrorResponse(503, "protocol runtime unavailable")
 	}
+	isConnectTimeout := isConnectTimeoutError(body)
+	if ctx != nil && !ctx.UpstreamErrorMetricRecorded {
+		if isConnectTimeout {
+			metrics.RecordRequestError(ctx.RequestModel, "timeout")
+		} else if ctx.UpstreamStatusCode >= 500 {
+			metrics.RecordRequestError(ctx.RequestModel, "upstream_5xx")
+		} else if ctx.UpstreamStatusCode >= 400 {
+			metrics.RecordRequestError(ctx.RequestModel, "upstream_4xx")
+		}
+		ctx.UpstreamErrorMetricRecorded = true
+	}
 	source, target := responseWireFormats(ctx)
 	translated, err := engine.TranslateTransportError(source, target, body, nil)
 	if err != nil {
-		metrics.RecordRequestError(ctx.RequestModel, "invalid_upstream_error")
-		logging.ComponentErrorEvent("extproc", "neutral_transport_error_decode_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"format":     source,
-			"status":     ctx.UpstreamStatusCode,
-			"error":      err.Error(),
-		})
-		protocolError := upstreamTransportFallback(ctx.UpstreamStatusCode, err)
+		if !isConnectTimeout {
+			metrics.RecordRequestError(ctx.RequestModel, "invalid_upstream_error")
+			logging.ComponentErrorEvent("extproc", "neutral_transport_error_decode_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"format":     source,
+				"status":     ctx.UpstreamStatusCode,
+				"error":      err.Error(),
+			})
+		}
+		protocolError := upstreamTransportFallback(ctx.UpstreamStatusCode, body, err)
 		encoded, encodeErr := engine.EncodeError(target, protocolError)
 		if encodeErr != nil {
 			return r.createErrorResponse(502, "The selected model returned an invalid error response")
@@ -68,13 +87,17 @@ func responseWireFormats(ctx *RequestContext) (llmprotocol.WireFormat, llmprotoc
 	return source, target
 }
 
-func upstreamTransportFallback(status int, cause error) *llmprotocol.ProtocolError {
+func upstreamTransportFallback(status int, body []byte, cause error) *llmprotocol.ProtocolError {
 	category, code := llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_error"
 	switch status {
 	case 429:
 		category, code = llmprotocol.ErrorRateLimited, "rate_limited"
 	case 408, 504:
 		category, code = llmprotocol.ErrorUpstreamTimeout, "upstream_timeout"
+	case 503:
+		if isConnectTimeoutError(body) {
+			category, code = llmprotocol.ErrorUpstreamTimeout, "upstream_timeout"
+		}
 	}
 	return llmprotocol.NewError(category, code, "model service returned an invalid error response", cause)
 }

@@ -56,24 +56,31 @@ func TestUpstreamTransportErrorMalformedBodyRetainsRateLimitSemantics(t *testing
 
 func TestUpstreamTransportFallbackPreservesOnlySafeStatusSemantics(t *testing.T) {
 	tests := []struct {
+		name     string
 		status   int
+		body     []byte
 		category llmprotocol.ErrorCategory
 		code     string
 	}{
-		{status: 400, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
-		{status: 401, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
-		{status: 408, category: llmprotocol.ErrorUpstreamTimeout, code: "upstream_timeout"},
-		{status: 429, category: llmprotocol.ErrorRateLimited, code: "rate_limited"},
-		{status: 500, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
-		{status: 504, category: llmprotocol.ErrorUpstreamTimeout, code: "upstream_timeout"},
-		{status: 599, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
+		{name: "400", status: 400, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
+		{name: "401", status: 401, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
+		{name: "408", status: 408, category: llmprotocol.ErrorUpstreamTimeout, code: "upstream_timeout"},
+		{name: "429", status: 429, category: llmprotocol.ErrorRateLimited, code: "rate_limited"},
+		{name: "500", status: 500, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
+		{name: "503 generic", status: 503, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
+		{name: "503 connect failure", status: 503, body: []byte("upstream connect error or disconnect/reset before headers. reset reason: connection failure"), category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
+		{name: "503 connect timeout", status: 503, body: []byte("upstream connect error or disconnect/reset before headers. reset reason: connection timeout"), category: llmprotocol.ErrorUpstreamTimeout, code: "upstream_timeout"},
+		{name: "504", status: 504, category: llmprotocol.ErrorUpstreamTimeout, code: "upstream_timeout"},
+		{name: "599", status: 599, category: llmprotocol.ErrorUpstreamUnavailable, code: "invalid_upstream_error"},
 	}
 	for _, test := range tests {
-		protocolError := upstreamTransportFallback(test.status, nil)
-		if protocolError.Category != test.category || protocolError.Code != test.code ||
-			protocolError.Message != "model service returned an invalid error response" {
-			t.Fatalf("status %d fallback = %+v, want category=%q code=%q", test.status, protocolError, test.category, test.code)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			protocolError := upstreamTransportFallback(test.status, test.body, nil)
+			if protocolError.Category != test.category || protocolError.Code != test.code ||
+				protocolError.Message != "model service returned an invalid error response" {
+				t.Fatalf("status %d fallback = %+v, want category=%q code=%q", test.status, protocolError, test.category, test.code)
+			}
+		})
 	}
 }
 
