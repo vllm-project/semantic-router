@@ -58,38 +58,20 @@ Dataset:
 """
 
 import json
-import logging
 import os
 import re
 import sys
-from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import torch
-
-# Shared training utilities live beside the classifier entrypoints.
-_parent_dir = str(Path(__file__).resolve().parents[2] / "model_classifier")
-if _parent_dir not in sys.path:
-    sys.path.insert(0, _parent_dir)
-
-from common_lora_utils import (
-    clear_gpu_memory,
-    log_memory_usage,
-    set_gpu_device,
-    setup_logging,
-)
 from datasets import Dataset, load_dataset
 from peft import (
     LoraConfig,
-    PeftConfig,
     PeftModel,
     TaskType,
     get_peft_model,
 )
-from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
-from training_args_compat import create_training_arguments  # noqa: E402
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -97,6 +79,28 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+# Shared training utilities live beside the classifier entrypoints.
+_parent_dir = str(Path(__file__).resolve().parents[2] / "model_classifier")
+if _parent_dir not in sys.path:
+    sys.path.insert(0, _parent_dir)
+
+from common_lora_utils import (  # noqa: E402 - standalone shared utilities need the path bootstrap
+    clear_gpu_memory,
+    log_memory_usage,
+    set_gpu_device,
+    setup_logging,
+)
+from training_args_compat import (  # noqa: E402 - uses the standalone path bootstrap
+    create_training_arguments,
+)
+
+LOGGED_EXAMPLES = 5
+LOGGED_QUESTION_CHARS = 200
+LOGGED_OPTIONS = 5
+LOGGED_REASONING_CHARS = 500
+SIGNIFICANT_IMPROVEMENT_PERCENTAGE_POINTS = 5
+FP16_MIN_COMPUTE_CAPABILITY = 7
 
 # Setup logging
 logger = setup_logging()
@@ -157,7 +161,7 @@ Options:
 Answer:"""
 
 
-def get_qwen3_target_modules() -> List[str]:
+def get_qwen3_target_modules() -> list[str]:
     """Get LoRA target modules for Qwen3 architecture."""
     return [
         "q_proj",  # Query projection
@@ -170,7 +174,7 @@ def get_qwen3_target_modules() -> List[str]:
     ]
 
 
-def convert_answer_to_text(correct_answer, options: List[str]) -> str:
+def convert_answer_to_text(correct_answer, options: list[str]) -> str:
     """
     Convert any answer format to the actual answer text.
     This ensures consistency across all answer formats.
@@ -232,7 +236,7 @@ def convert_answer_to_text(correct_answer, options: List[str]) -> str:
     return str(correct_answer)
 
 
-class MMLU_Pro_Dataset:
+class MMLUProDataset:
     """Dataset class for MMLU-Pro problem solving."""
 
     def __init__(self, dataset_name="TIGER-Lab/MMLU-Pro", model_type="math-reasoner"):
@@ -272,8 +276,15 @@ class MMLU_Pro_Dataset:
 
             # Group samples by category
             category_samples = {}
-            for i, (question, category, opts, answer, answer_idx) in enumerate(
-                zip(questions, categories, options, answers, answer_indices)
+            for _i, (question, category, opts, answer, answer_idx) in enumerate(
+                zip(
+                    questions,
+                    categories,
+                    options,
+                    answers,
+                    answer_indices,
+                    strict=False,
+                )
             ):
                 if category not in category_samples:
                     category_samples[category] = []
@@ -341,7 +352,7 @@ class MMLU_Pro_Dataset:
             temp_samples, test_size=0.5, random_state=42, stratify=temp_categories
         )
 
-        logger.info(f"Dataset sizes:")
+        logger.info("Dataset sizes:")
         logger.info(f"  Train: {len(train_samples)}")
         logger.info(f"  Validation: {len(val_samples)}")
         logger.info(f"  Test: {len(test_samples)}")
@@ -353,7 +364,7 @@ class MMLU_Pro_Dataset:
         }
 
 
-def format_options(options: List[str]) -> str:
+def format_options(options: list[str]) -> str:
     """Format options list as A) ..., B) ..., etc."""
     letters = "ABCDEFGHIJ"
     formatted = []
@@ -365,10 +376,10 @@ def format_options(options: List[str]) -> str:
 
 def format_instruction(
     question: str,
-    options: List[str],
-    answer: str = None,
+    options: list[str],
+    answer: str | None = None,
     use_cot: bool = True,
-) -> List[Dict[str, str]]:
+) -> list[dict[str, str]]:
     """
     Format a problem as chat messages for proper instruction fine-tuning.
 
@@ -387,10 +398,7 @@ def format_instruction(
     """
     options_text = format_options(options)
 
-    if use_cot:
-        template = COT_INSTRUCTION_TEMPLATE
-    else:
-        template = SIMPLE_INSTRUCTION_TEMPLATE
+    template = COT_INSTRUCTION_TEMPLATE if use_cot else SIMPLE_INSTRUCTION_TEMPLATE
 
     instruction = template.format(question=question, options=options_text)
 
@@ -422,7 +430,7 @@ def format_instruction(
 
 
 def create_solver_dataset(
-    samples: List[Dict],
+    samples: list[dict],
     tokenizer,
     max_length=1024,
     use_cot=True,
@@ -475,7 +483,7 @@ def create_solver_dataset(
 
 
 def extract_answer_text(
-    generated_text: str, options: List[str], question_text: str = ""
+    generated_text: str, options: list[str], question_text: str = ""
 ) -> str:
     """
     Extract the answer TEXT from generated text and match it to one of the options.
@@ -490,7 +498,9 @@ def extract_answer_text(
     """
     # Clean up the generated text
     if "Let's think step by step:" in generated_text:
-        generated_text = generated_text.split("Let's think step by step:")[-1]
+        generated_text = generated_text.rsplit("Let's think step by step:", maxsplit=1)[
+            -1
+        ]
     elif question_text and question_text in generated_text:
         # Remove question if it was echoed
         generated_text = generated_text.split(question_text)[-1]
@@ -544,11 +554,11 @@ def extract_answer_text(
 def evaluate_model_on_samples(
     model,
     tokenizer,
-    samples: List[Dict],
+    samples: list[dict],
     use_cot: bool = True,
-    max_samples: int = None,
+    max_samples: int | None = None,
     phase_name: str = "Evaluation",
-) -> Dict:
+) -> dict:
     """
     Evaluate model on a set of samples and return detailed results.
 
@@ -647,7 +657,7 @@ def evaluate_model_on_samples(
         )
 
         # Log first 5 examples
-        if i < 5:
+        if i < LOGGED_EXAMPLES:
             logger.info(f"\n[{i+1}/{len(samples)}] Category: {category}")
             logger.info(f"Question: {question[:100]}...")
             logger.info(f"True Answer: {true_answer_text}")
@@ -668,7 +678,7 @@ def evaluate_model_on_samples(
     logger.info(f"{phase_name} Results:")
     logger.info(f"{'=' * 80}")
     logger.info(f"Overall Accuracy: {correct}/{total} = {accuracy:.2f}%")
-    logger.info(f"\nPer-Category Accuracy:")
+    logger.info("\nPer-Category Accuracy:")
     for cat in sorted(category_stats.keys()):
         cat_acc = category_stats[cat]["correct"] / category_stats[cat]["total"] * 100
         logger.info(
@@ -696,8 +706,8 @@ def main(
     learning_rate: float = 2e-4,
     max_samples_per_category: int = 200,
     num_workers: int = 0,
-    output_dir: str = None,
-    gpu_id: Optional[int] = None,
+    output_dir: str | None = None,
+    gpu_id: int | None = None,
     use_cot: bool = True,
 ):
     """Main training function for MMLU-Pro problem solving.
@@ -721,7 +731,7 @@ def main(
     log_memory_usage("Pre-training")
 
     # Load dataset
-    dataset_loader = MMLU_Pro_Dataset(model_type=model_type)
+    dataset_loader = MMLUProDataset(model_type=model_type)
     datasets = dataset_loader.prepare_datasets(max_samples_per_category)
 
     train_samples = datasets["train"]
@@ -745,16 +755,20 @@ def main(
         logger.info(f"TRAINING EXAMPLE {idx}")
         logger.info(f"{'=' * 80}")
         logger.info(f"Category: {sample.get('category', 'unknown')}")
-        logger.info(f"\nQuestion:")
+        logger.info("\nQuestion:")
         logger.info(
-            f"  {sample['question'][:200]}{'...' if len(sample['question']) > 200 else ''}"
+            f"  {sample['question'][:LOGGED_QUESTION_CHARS]}{'...' if len(sample['question']) > LOGGED_QUESTION_CHARS else ''}"
         )
 
-        logger.info(f"\nOptions:")
-        for i, opt in enumerate(sample["options"][:5], 1):  # Show first 5 options
+        logger.info("\nOptions:")
+        for i, opt in enumerate(
+            sample["options"][:LOGGED_OPTIONS], 1
+        ):  # Show first 5 options
             logger.info(f"  {chr(64+i)}) {opt}")
-        if len(sample["options"]) > 5:
-            logger.info(f"  ... ({len(sample['options']) - 5} more options)")
+        if len(sample["options"]) > LOGGED_OPTIONS:
+            logger.info(
+                f"  ... ({len(sample['options']) - LOGGED_OPTIONS} more options)"
+            )
 
         # Find the letter for the answer
         answer_letter = None
@@ -764,7 +778,7 @@ def main(
                 answer_letter = chr(65 + i)
                 break
 
-        logger.info(f"\nCorrect Answer (LETTER + TEXT format):")
+        logger.info("\nCorrect Answer (LETTER + TEXT format):")
         if answer_letter:
             logger.info(f"  {answer_letter}) {answer_text}")
         else:
@@ -775,27 +789,27 @@ def main(
             sample["question"], sample["options"], sample["answer"], use_cot=use_cot
         )
 
-        logger.info(f"\n" + "=" * 80)
-        logger.info(f"📄 CHAT FORMAT MESSAGES (will be converted to ChatML):")
-        logger.info(f"=" * 80)
-        logger.info(f"User Message:")
+        logger.info("\n" + "=" * 80)
+        logger.info("📄 CHAT FORMAT MESSAGES (will be converted to ChatML):")
+        logger.info("=" * 80)
+        logger.info("User Message:")
         logger.info(f"  {messages[0]['content'][:300]}...")
-        logger.info(f"\nAssistant Message:")
+        logger.info("\nAssistant Message:")
         logger.info(f"  {messages[1]['content']}")
-        logger.info(f"\nNote: Tokenizer will apply ChatML template:")
-        logger.info(f"  <|im_start|>user\\n[user message]<|im_end|>")
-        logger.info(f"  <|im_start|>assistant\\n[assistant message]<|im_end|>")
+        logger.info("\nNote: Tokenizer will apply ChatML template:")
+        logger.info("  <|im_start|>user\\n[user message]<|im_end|>")
+        logger.info("  <|im_start|>assistant\\n[assistant message]<|im_end|>")
         logger.info("=" * 80)
         logger.info("")
 
     logger.info(f"{'=' * 80}")
     logger.info("Training data format verified!")
     logger.info(f"   All {len(train_samples)} training samples use ChatML format")
-    logger.info(f"   Format: <|im_start|>user...question...<|im_end|>")
-    logger.info(f"           <|im_start|>assistant...answer...<|im_end|>")
-    logger.info(f"   Assistant will generate: 'The answer is X) <text>'")
-    logger.info(f"   Example: 'The answer is A) crop farmers'")
-    logger.info(f"   Model trains ONLY on assistant response (not question)")
+    logger.info("   Format: <|im_start|>user...question...<|im_end|>")
+    logger.info("           <|im_start|>assistant...answer...<|im_end|>")
+    logger.info("   Assistant will generate: 'The answer is X) <text>'")
+    logger.info("   Example: 'The answer is A) crop farmers'")
+    logger.info("   Model trains ONLY on assistant response (not question)")
     logger.info(f"{'=' * 80}\n")
 
     # Load tokenizer and model
@@ -858,7 +872,7 @@ def main(
     logger.info(
         f"Baseline established: {baseline_results['overall_accuracy']:.2f}% accuracy"
     )
-    logger.info(f"   (Expected: ~10% for untrained model on 10-choice questions)\n")
+    logger.info("   (Expected: ~10% for untrained model on 10-choice questions)\n")
 
     # Prepare datasets in solver format
     logger.info("Formatting dataset for problem solving...")
@@ -869,7 +883,7 @@ def main(
         val_samples, tokenizer, max_length=1024, use_cot=use_cot
     )
 
-    logger.info(f"Example training input:")
+    logger.info("Example training input:")
     example_text = tokenizer.decode(train_dataset[0]["input_ids"][:200])
     logger.info(example_text)
 
@@ -973,25 +987,23 @@ def main(
     improvement_pct = (improvement / baseline_acc * 100) if baseline_acc > 0 else 0
 
     logger.info(f"\n{'=' * 80}")
-    logger.info(f"OVERALL RESULTS:")
+    logger.info("OVERALL RESULTS:")
     logger.info(f"{'=' * 80}")
     logger.info(f"  Baseline (Pre-training):  {baseline_acc:.2f}%")
     logger.info(f"  Post-training:            {post_acc:.2f}%")
     logger.info(f"  Absolute Improvement:     {improvement:+.2f}%")
     logger.info(f"  Relative Improvement:     {improvement_pct:+.1f}%")
 
-    if improvement > 5:
-        logger.info(f"\n  SIGNIFICANT IMPROVEMENT! Model learned from fine-tuning!")
+    if improvement > SIGNIFICANT_IMPROVEMENT_PERCENTAGE_POINTS:
+        logger.info("\n  SIGNIFICANT IMPROVEMENT! Model learned from fine-tuning!")
     elif improvement > 0:
-        logger.info(
-            f"\n  ⚠️  Modest improvement. Consider more training data or epochs."
-        )
+        logger.info("\n  ⚠️  Modest improvement. Consider more training data or epochs.")
     else:
-        logger.info(f"\n  ⚠️  No improvement. Model needs more training.")
+        logger.info("\n  ⚠️  No improvement. Model needs more training.")
 
     # Per-category comparison
     logger.info(f"\n{'=' * 80}")
-    logger.info(f"PER-CATEGORY IMPROVEMENTS:")
+    logger.info("PER-CATEGORY IMPROVEMENTS:")
     logger.info(f"{'=' * 80}")
     logger.info(
         f"{'Category':<20} {'Baseline':<12} {'Post-train':<12} {'Improvement':<15}"
@@ -1065,14 +1077,14 @@ def main(
 def demo_inference(
     model_path: str,
     model_name: str = "Qwen/Qwen3-0.6B",
-    questions: List[Dict] = None,
+    questions: list[dict] | None = None,
 ):
     """Demonstrate inference with trained solver model."""
     logger.info(f"Loading MMLU-Pro solver model from: {model_path}")
 
     try:
         # Load config
-        with open(os.path.join(model_path, "solver_config.json"), "r") as f:
+        with open(os.path.join(model_path, "solver_config.json")) as f:
             config = json.load(f)
 
         use_cot = config.get("use_cot", True)
@@ -1089,7 +1101,7 @@ def demo_inference(
         if torch.cuda.is_available():
             try:
                 compute_capability = torch.cuda.get_device_capability()
-                use_fp16 = compute_capability[0] >= 7
+                use_fp16 = compute_capability[0] >= FP16_MIN_COMPUTE_CAPABILITY
             except Exception:
                 use_fp16 = False
 
@@ -1189,10 +1201,13 @@ def demo_inference(
 
             print(f"\n{'=' * 80}")
             print(f"Question {i+1}: {example['question']}")
-            print(f"\nOptions:")
+            print("\nOptions:")
             print(format_options(example["options"]))
-            print(f"\nModel's reasoning:")
-            print(generated_text[:500] + ("..." if len(generated_text) > 500 else ""))
+            print("\nModel's reasoning:")
+            print(
+                generated_text[:LOGGED_REASONING_CHARS]
+                + ("..." if len(generated_text) > LOGGED_REASONING_CHARS else "")
+            )
             print(f"\nPredicted Answer: {predicted_answer_text}")
             if "answer" in example:
                 # Convert true answer to text for comparison
@@ -1207,7 +1222,7 @@ def demo_inference(
 
     except Exception as e:
         logger.error(f"Error during inference: {e}")
-        import traceback
+        import traceback  # noqa: PLC0415 - imported only for this training phase
 
         traceback.print_exc()
 
