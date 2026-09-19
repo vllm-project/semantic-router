@@ -121,11 +121,13 @@ vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
 
 单请求可使用 `vllm-sr route preview --request-file request.json`。它支持 Router 的请求子集：role/content/tool-call 消息、tools、函数选择、response format、输出预算、字符串 metadata 和 preview options/context；不接受任意 Chat Completions 参数，`temperature`、`stream` 等不支持字段会被拒绝。可用 `--session-id`、`--conversation-id`、`--sampling-seed` 指定只读预览上下文；seed 不固定后续 live 随机选择。Benchmark 题目用显式 `request_metadata` 传递请求 metadata，包含来源或参考答案的题目 `metadata` 不会被转发。
 
-**Replay** 和 **Compare** 的第一级只展示至少有一个可用下级的基线，第二级只展示兼容预览或实测候选。查询与提交复用同一权威校验，提交时再次校验。两边必须按稳定 ID 对应完全相同的题目，包括答案和 metadata；仅顺序不同可以复用，并保存明确回执。服务还会核验实际有效采样、保存的请求输入、确定性选模、评分协议，以及每个所选 cell 恰好一次完整生成。不会忽略内容哈希或偷偷调用模型。响应丢失后保留原 baseline、preview 和幂等键，按同一意图核对。
+**Replay** 和 **Compare** 的第一级只展示至少有一个可用下级的基线，第二级只展示兼容预览或实测候选。查询与提交复用同一权威校验，提交时再次校验。两边必须使用相同的冻结题目和请求协议。Replay 还会核验保存的请求输入、确定性选模、评分协议，以及每个所选 cell 恰好一次完整生成。仅题目顺序不同可以复用，并保存明确回执。不会忽略内容哈希或偷偷调用模型。响应丢失后保留原 baseline、preview 和幂等键，按同一意图核对。
 
-只读 API 为 `GET /api/sr-bench/v1/replay-options` 和 `GET /api/sr-bench/v1/comparison-options`；不传 `baseline_run_id` 查询基线，传入后查询兼容下级。`limit` 为 1–25，`after` 必须使用上一页返回的不透明游标，CLI `benchmark replay-options` 使用相同游标。空页若仍有 `has_more: true`，表示搜索尚未完成，需点击 **Load more** 或传入下一页游标。`scan_limited: true` 表示部分证据超过单页验证限额，不能据此认定不存在其他兼容组合。可见已完成证据变化时，游标失效并要求从第一页刷新。以上查询不调用模型。
+Compare 允许比较 completed 或 failed 的 live 运行，但每个计划 cell 都必须有明确终态。失败按错误计入完整计划分母；缺少结果或已完成但未评分的答案会阻止比较。失败状态和未知费用始终保留。这衡量的是冻结限制下实际交付的质量，包含执行失败。
 
-Experiment 持久关联 baseline、initial、preview、estimate、candidate、validation 和 recovery 运行，不改写原始回执。创建或关联实验、查询 Replay 资格和生成候选计划均不产生模型答案；属于同一 experiment 也不代表两次运行一定可比。恢复子任务始终标为 recovery，不替代完整基线。管理员可以继续 CLI 创建的实验；其他可写用户只能在自己的实验中创建新任务。只读用户可以比较有权访问的已有结果。
+只读 API 为 `GET /api/sr-bench/v1/replay-options` 和 `GET /api/sr-bench/v1/comparison-options`；不传 `baseline_run_id` 查询基线，传入后查询兼容下级。`limit` 为 1–25，`after` 必须使用上一页返回的不透明游标，CLI `benchmark replay-options` 使用相同游标。空页若仍有 `has_more: true`，表示搜索尚未完成，需点击 **Load more** 或传入下一页游标。`scan_limited: true` 表示部分证据超过单页验证限额，不能据此认定不存在其他兼容组合。可见的可比较证据变化时，游标失效并要求从第一页刷新。以上查询不调用模型。
+
+Experiment 持久关联 baseline、initial、preview、estimate、candidate、validation 和 recovery 运行，不改写原始回执。创建或关联实验、查询 Replay 资格和生成候选计划均不产生模型答案；属于同一 experiment 也不代表两次运行一定可比。已结束的完整 live 基线即使失败，也可提供候选计划的冻结协议；这不会重试生成或改写原证据。恢复子任务始终标为 recovery，不替代完整基线。管理员可以继续 CLI 创建的实验；其他可写用户只能在自己的实验中创建新任务。只读用户可以比较有权访问的已有结果。
 
 可在 Dashboard 实验详情或通过 `vllm-sr benchmark experiment delete EXPERIMENT_ID` 删除已结束的实验。删除仅移除分组和关联，保留全部运行、结果和产物；关联任务仍在运行时会阻止删除。重试同一删除会返回已保存的回执，已删除实验的创建键不能再次创建该实验。
 
@@ -157,7 +159,7 @@ Dashboard 默认进入 **Runs**，按名称、模型、状态和模式筛选任�
 
 运行详情分为 **Results**、**Questions**、**Calls**、**Evidence** 和 **Recipe**，先看汇总结果，再按需查看逐题响应、计量和冻结配置。
 
-**Compare iterations** 分两步：先选择已完成的 live 单模型基线，再勾选任意数量的候选运行。已知协议不同、尚未完成或仅用于诊断的运行，可在 **Show unavailable runs and reasons** 中查看原因。搜索缩小候选范围，**Select all** 会跨页选择当前搜索匹配的可用运行。更换基线会清空候选；更改选择后，旧比较结果会隐藏，直到再次点击 **Compare runs**。服务端仍会核验完整的成对证据。
+**Compare iterations** 分两步：先选择存在兼容结果的 live 单模型基线，再勾选任意数量的可比较候选。没有兼容候选的基线不会出现在选项中。搜索缩小候选范围，**Select all** 会跨页选择当前搜索匹配的可用运行。更换基线会清空候选；更改选择后，旧比较结果会隐藏，直到再次点击 **Compare runs**。服务端仍会逐一核验成对结果。
 
 候选按创建时间排序，选择保存在 URL 中，不限制为两轮优化。质量/成本图和迭代图配合成对置信区间、节省率、token、延迟和 wall time 展示。结果卡片分页，图表和 CSV、JSON 导出保留全部选中比较。点估计为正但区间跨零时，不能认定已经提升。
 

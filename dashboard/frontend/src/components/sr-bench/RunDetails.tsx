@@ -6,6 +6,7 @@ import { benchApi, SR_BENCH_API } from './api'
 import { active, reportDistribution, money, number, percent, seconds, tokenTotal } from './model'
 import type { CaseResult, Manifest, Run, TargetMetrics } from './types'
 import { targetName } from './targetPresentation'
+import { canReuseBaseline } from './baselineReuse'
 import { useRunEvidence } from './useRunEvidence'
 import RunArtifacts from './RunArtifacts'
 import CallEvidence from './CallEvidence'
@@ -18,6 +19,7 @@ import RunLineage from './RunLineage'
 import RecipeEvidence from './RecipeEvidence'
 import { RunStatus } from './RunList'
 import styles from './SrBench.module.css'
+import controls from './BenchControls.module.css'
 
 function MetricsTable({
   targets,
@@ -95,6 +97,7 @@ export default function RunDetails({
   onSectionChange,
   onChanged,
   onRecovered,
+  onCandidate,
 }: {
   id: string
   actorID: string
@@ -103,6 +106,7 @@ export default function RunDetails({
   onSectionChange: (section: string) => void
   onChanged: () => void
   onRecovered: (run: Run) => void
+  onCandidate: (id: string, mode: 'live' | 'preview') => void
 }) {
   const [pending, setPending] = useState(false)
   const [filter, setFilter] = useState('')
@@ -213,6 +217,22 @@ export default function RunDetails({
               {pending ? 'Stopping…' : 'Cancel evaluation'}
             </button>
           )}
+          {canRun && canReuseBaseline(run) && (
+            <>
+              <button
+                className={controls.compactButton}
+                onClick={() => onCandidate(run.id, 'preview')}
+              >
+                <ProductIcon name="decision" /> Preview candidate
+              </button>
+              <button
+                className={controls.compactButton}
+                onClick={() => onCandidate(run.id, 'live')}
+              >
+                <ProductIcon name="evaluation" /> Evaluate candidate
+              </button>
+            </>
+          )}
         </div>
       </div>
       {error && (
@@ -310,7 +330,9 @@ export default function RunDetails({
           </nav>
           {run.status !== 'completed' && (
             <p className={styles.notice}>
-              This run is {run.status}. Partial results are not a completed evaluation.
+              This run is {run.status}. {number(run.progress.failed)} failed results remain part of
+              the saved evidence. Comparisons require an explicit terminal outcome for every planned
+              result; missing or ungraded results are not eligible.
             </p>
           )}
           {(run.error || report?.failure) && (

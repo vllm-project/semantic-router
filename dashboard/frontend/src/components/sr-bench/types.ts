@@ -104,6 +104,8 @@ export interface ExperimentRunContext {
 export interface Manifest {
   experiment?: ExperimentRunContext
   baseline_run_id?: string
+  recovery?: Record<string, unknown>
+  execution_cells?: RecoveryCell[]
   version: 'sr-bench-1.0'
   case_sha256?: string
   benchmark_weights?: Record<string, number>
@@ -147,6 +149,9 @@ export interface TargetMetrics {
   completed?: number
   failed?: number
   scored?: number
+  pending?: number
+  complete?: boolean
+  cost_complete?: boolean
   correct?: number
   accuracy?: number | null
   cost_usd?: number | null
@@ -282,7 +287,15 @@ export interface Comparison {
   version: string
   baseline_run_id: string
   candidate_run_id: string
+  baseline_status: Run['status']
+  candidate_status: Run['status']
+  baseline_quality_complete: boolean
+  candidate_quality_complete: boolean
+  baseline_targets: TargetMetrics[]
+  candidate_targets: TargetMetrics[]
+  quality_denominator: string
   baseline_selection: string
+  baseline_selection_qualification: string
   baseline_tied_best_target_ids?: string[]
   baseline_tie_policy?: string
   baseline_cost_comparison_eligible?: boolean

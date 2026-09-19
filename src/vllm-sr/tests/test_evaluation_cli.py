@@ -1,9 +1,13 @@
 """sr-bench public CLI contract (the retired evaluation commands are absent)."""
 
 import json
+import threading
 
 from cli.commands.benchmark import benchmark
+from cli.sr_bench.service import Server
+from cli.sr_bench.store import Store
 from click.testing import CliRunner
+from test_sr_bench_replay import manifest, record
 
 
 def test_catalog_and_clean_command_surface():
@@ -88,3 +92,51 @@ def test_plan_freezes_without_service_or_inference(tmp_path):
     selected = CliRunner().invoke(benchmark, ["plan", "--manifest", str(path)])
     assert selected.exit_code == 0, selected.output
     assert json.loads(selected.output)["total"] == 1
+
+
+def test_cli_candidate_plan_reuses_failed_protocol_without_dispatch(
+    tmp_path, monkeypatch
+):
+    store = Store(tmp_path)
+    baseline = record(store)
+    store.status(baseline["id"], "failed")
+    target = {
+        **manifest(True)["targets"][0],
+        "config_hash": "a" * 64,
+        "max_inference_calls": 1,
+    }
+    (tmp_path / "targets.json").write_text(json.dumps([target]))
+    server = Server(("127.0.0.1", 0), store, "fixture-token")
+    monkeypatch.setenv("SR_BENCH_TOKEN", "fixture-token")
+
+    def no_dispatch(*_args, **_kwargs):
+        raise AssertionError("Plan cannot dispatch")
+
+    monkeypatch.setattr(server.engine, "start", no_dispatch)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    original = list(store.db.iterdump())
+    try:
+        response = CliRunner().invoke(
+            benchmark,
+            [
+                "--no-autostart",
+                "--url",
+                f"http://127.0.0.1:{server.server_port}",
+                "--store",
+                str(tmp_path),
+                "candidate-plan",
+                baseline["id"],
+                "--target",
+                target["id"],
+            ],
+        )
+        assert response.exit_code == 0, response.output
+        result = json.loads(response.output)
+        assert result["model_requests"] == 0
+        assert result["manifest"]["baseline_run_id"] == baseline["id"]
+        assert result["manifest"]["case_sha256"] == baseline["manifest"]["case_sha256"]
+        assert store.get(baseline["id"])["status"] == "failed"
+        assert list(store.db.iterdump()) == original
+    finally:
+        server.shutdown()
+        server.server_close()

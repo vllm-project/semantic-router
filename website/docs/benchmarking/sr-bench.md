@@ -266,13 +266,19 @@ Replay rejects state-dependent Learning snapshots, unsupported plugin, agent
 or compound execution and missing matrix cells instead of calling a model.
 **Replay** and **Compare** list only baselines with at least one compatible
 saved run, then offer only compatible choices. Discovery and submission use the
-same authoritative validator; submission checks again. Both runs must contain identical complete cases by stable ID, including
-answers and metadata; order alone may differ and receives an explicit receipt.
-The validator also checks effective generation parameters, actual saved request
-inputs, deterministic selection, grader identity and exactly one complete saved
-subject generation per selected cell. It never weakens frozen content hashes or
+same authoritative validator; submission checks again. Both runs must contain
+identical frozen cases and request protocols. Replay also checks actual saved
+request inputs, deterministic selection, grader identity and exactly one complete
+saved subject generation per selected cell. Case order alone may differ and
+receives an explicit receipt. It never weakens frozen content hashes or
 silently calls a model. Keep the same pending baseline/preview/idempotency key
 after a lost response; do not create a new intent to reconcile it.
+
+Compare accepts completed or failed live runs only when every planned cell has
+an explicit terminal outcome. Failed outcomes count as incorrect in the full
+planned denominator; missing outcomes and completed but ungraded answers block
+comparison. Failed statuses and unknown costs remain visible. This measures
+delivered quality under the frozen limits, including execution failures.
 
 The read-only APIs are `GET /api/sr-bench/v1/replay-options` and
 `GET /api/sr-bench/v1/comparison-options`. Omit `baseline_run_id` for baselines;
@@ -281,13 +287,15 @@ and an opaque `after` cursor. CLI `benchmark replay-options` accepts that same
 cursor. An empty page with `has_more: true` is an unfinished search: use **Load
 more** or the next cursor. `scan_limited: true` means some evidence exceeded the
 per-page validation limit; it does not prove that no other compatible runs exist.
-A cursor becomes invalid when visible completed evidence changes; refresh from
+A cursor becomes invalid when visible eligible evidence changes; refresh from
 the first page. These queries make no model requests.
 
 Experiments link baseline, initial, preview, estimate, candidate, validation and recovery
 runs without changing their original receipts. Creating or attaching an experiment,
 selecting replay options and deriving a candidate plan generate no model answers.
 Experiment membership alone does not establish paired comparability.
+A terminal full live baseline can supply a candidate plan's frozen protocol even
+if it failed; this neither retries its generations nor changes its evidence.
 Recovery children remain labeled as recovery attempts even when only one model
 from a mixed baseline is selected. They never replace the full baseline.
 Administrators can continue CLI-created experiments; other writers can only add
@@ -385,13 +393,13 @@ Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
 **Recipe**. Start with the aggregate results, then inspect individual responses,
 accounting and frozen configuration as needed.
 
-**Compare iterations** guides two choices: a completed live single-model baseline,
-then any number of candidate runs. Known protocol differences and unfinished or
-diagnostic runs appear under **Show unavailable runs and reasons**. Search narrows
-the candidate list; **Select all** selects matching available runs across pages.
+**Compare iterations** guides two choices: a live single-model baseline with
+compatible saved outcomes, then any number of eligible candidate runs. Baselines
+without a compatible candidate are excluded. Search narrows the candidate list;
+**Select all** selects matching available runs across pages.
 Changing the baseline clears the candidates, and changing any selection hides
 previous comparison results until **Compare runs** is selected. The service still
-validates complete paired evidence before showing a comparison.
+validates every paired outcome before showing a comparison.
 
 Candidates are ordered by creation time, and selections are preserved in the URL.
 Quality/cost and iteration charts accompany paired confidence intervals, savings,

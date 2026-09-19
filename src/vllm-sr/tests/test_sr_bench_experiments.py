@@ -85,9 +85,12 @@ def test_experiment_binding_is_atomic_and_roles_are_validated(tmp_path):
         plan({**document, "experiment": {"id": "exp-../../x", "role": "baseline"}})
 
 
-def test_candidate_inherits_exact_protocol_without_mutating_baseline(tmp_path):
+@pytest.mark.parametrize("status", ["completed", "failed", "cancelled", "interrupted"])
+def test_candidate_inherits_exact_protocol_without_mutating_baseline(tmp_path, status):
     store = Store(tmp_path)
     baseline = record(store)
+    store.status(baseline["id"], status)
+    baseline = store.get(baseline["id"])
     original = copy.deepcopy(baseline)
     target = {
         **manifest(True)["targets"][0],
@@ -106,13 +109,28 @@ def test_candidate_inherits_exact_protocol_without_mutating_baseline(tmp_path):
             {**baseline, "manifest": {**baseline["manifest"], "execution_cells": []}},
             [target],
         )
+    with pytest.raises(ValueError, match="terminal"):
+        candidate_manifest({**baseline, "status": "running"}, [target])
+    with pytest.raises(ValueError, match="recovery subset"):
+        candidate_manifest(
+            {
+                **baseline,
+                "manifest": {
+                    **baseline["manifest"],
+                    "recovery": {"parent_run_id": "parent"},
+                },
+            },
+            [target],
+        )
 
 
+@pytest.mark.parametrize("status", ["completed", "failed"])
 def test_experiment_and_candidate_service_authorization_and_no_dispatch(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, status
 ):
     store = Store(tmp_path)
     baseline = record(store, owner="alice")
+    store.status(baseline["id"], status)
     target = {
         **manifest(True)["targets"][0],
         "config_hash": "a" * 64,

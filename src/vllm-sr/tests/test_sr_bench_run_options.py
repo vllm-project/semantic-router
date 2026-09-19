@@ -168,6 +168,53 @@ def test_authoritative_quality_and_replay_rules_are_not_relaxed(tmp_path):
         replay(store, baseline["id"], preview["id"])
 
 
+def test_failed_outcome_comparison_discovery_and_submit_have_identical_scope(tmp_path):
+    store = Store(tmp_path)
+    baseline = record(store, owner="alice")
+    child = candidate(store, "alice")
+    for run in (baseline, child):
+        row = store.results(run["id"])[0]
+        store.result(
+            run["id"],
+            row["case_id"],
+            row["target_id"],
+            "failed",
+            {"error": "Request deadline exceeded", "benchmark": row["benchmark"]},
+        )
+        store.status(run["id"], "failed")
+    original = list(store.db.iterdump())
+    assert (
+        run_options(store, "comparison", owner="alice")["baselines"][0]["run_id"]
+        == baseline["id"]
+    )
+    assert (
+        run_options(store, "comparison", baseline["id"], "alice")["options"][0][
+            "run_id"
+        ]
+        == child["id"]
+    )
+    assert run_options(store, "comparison", owner="bob")["baselines"] == []
+    assert run_options(store, "replay", owner="alice")["baselines"] == []
+    comparison = compare(store, baseline["id"], child["id"])
+    assert comparison["comparisons"][0]["paired_cases"] == 2
+    assert comparison["comparisons"][0]["quality_delta"] == 0
+    assert list(store.db.iterdump()) == original
+
+
+@pytest.mark.parametrize("status", ["running", "queued", "cancelled", "interrupted"])
+def test_comparison_discovery_does_not_admit_noncomparable_terminal_or_active_runs(
+    tmp_path, status
+):
+    store = Store(tmp_path)
+    baseline = record(store)
+    child = candidate(store)
+    store.status(baseline["id"], status)
+    assert run_options(store, "comparison")["baselines"] == []
+    assert run_options(store, "comparison", baseline["id"])["baseline"] is None
+    with pytest.raises(ValueError, match="completed or failed"):
+        compare(store, baseline["id"], child["id"])
+
+
 def test_malformed_cursor_and_ineligible_active_baseline_reject_before_loading(
     tmp_path, monkeypatch
 ):

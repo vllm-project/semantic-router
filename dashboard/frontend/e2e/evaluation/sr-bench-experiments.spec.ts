@@ -50,6 +50,49 @@ async function choose(page: Page, label: string, value: string) {
   await page.getByRole('combobox', { name: label, exact: true }).click()
   await page.getByRole('listbox').locator(`[data-value="${value}"]`).click()
 }
+test('offers candidate protocol reuse for a failed baseline while preserving its failed status', async ({
+  page,
+}) => {
+  let active = false
+  await setup(page, async (route) =>
+    route.fulfill({
+      json: {
+        experiment: { ...experiment, run_count: 1, active_run_count: active ? 1 : 0 },
+        members: [
+          { run_id: 'run-0', role: 'baseline', hypothesis: '', linked_at: experiment.created_at },
+        ],
+        next_cursor: null,
+        has_more: false,
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs', (route) =>
+    route.fulfill({
+      json: {
+        runs: [
+          {
+            ...run(0, ['baseline']),
+            status: active ? 'running' : 'failed',
+            progress: { total: 42, completed: 41, failed: 1 },
+          },
+        ],
+      },
+    }),
+  )
+  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await expect(page.getByRole('article')).toContainText('failed · 41/42 completed · 1 failed')
+  await expect(page.getByRole('button', { name: 'Preview candidate', exact: true })).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Evaluate candidate', exact: true })).toBeEnabled()
+  await page.getByRole('button', { name: 'Evaluate candidate', exact: true }).click()
+  await expect(page).toHaveURL(
+    new RegExp(`view=new&baseline=run-0&experiment=${id}&role=candidate`),
+  )
+  active = true
+  await page.goto(`/evaluation?view=experiments&experiment=${id}`)
+  await expect(page.getByRole('article')).toContainText('running · 41/42 completed · 1 failed')
+  await expect(page.getByRole('button', { name: 'Preview candidate', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Evaluate candidate', exact: true })).toHaveCount(0)
+})
 test('creates only metadata and reconciles a lost response using the same durable identity after reload', async ({
   page,
 }) => {

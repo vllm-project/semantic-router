@@ -571,7 +571,11 @@ def recover_command(
 def candidate_plan_command(
     client, baseline_run_id, target_ids, mode, name, experiment_id, hypothesis
 ):
-    """Freeze a MoM candidate on the exact questions and protocol of a saved baseline."""
+    """Reuse a terminal baseline's frozen protocol without repeating its requests.
+
+    Failed, cancelled and interrupted full-plan baselines may supply the same
+    questions and settings. This does not qualify their measurements for Compare.
+    """
     body = {"target_ids": list(target_ids), "mode": mode}
     if name:
         body["name"] = name

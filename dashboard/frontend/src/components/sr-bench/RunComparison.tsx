@@ -82,11 +82,6 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
   const evidenceMatches = !draftChanged && evidenceKey === selectionKey
   const results = evidenceMatches ? savedResults : []
   const baselineReport = evidenceMatches ? savedBaselineReport : null
-  const complete = runs.filter((run) => run.status === 'completed' && run.manifest.mode === 'live')
-  const completeIDs = complete
-    .map((run) => run.id)
-    .sort()
-    .join('|')
 
   useEffect(() => {
     setBaseline(savedBaseline)
@@ -98,7 +93,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     const selected = savedIterations
       .split('|')
       .flatMap((id, index) => (id ? [{ id, stage: `Run ${index + 1}` }] : []))
-    if (!savedBaseline || !selected.length || !completeIDs) {
+    if (!savedBaseline || !selected.length) {
       setPending(false)
       setResults([])
       setBaselineReport(null)
@@ -144,7 +139,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     return () => {
       cancelled = true
     }
-  }, [savedBaseline, savedIterations, completeIDs, revision])
+  }, [savedBaseline, savedIterations, revision])
 
   function compare() {
     setEvidencePage(0)
@@ -209,19 +204,28 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   const reviewedBaseline = runs.find((run) => run.id === savedBaseline)
+  const baselineComparison = results[0]?.comparison
+  const baselineTargets = baselineComparison?.baseline_targets ?? []
 
   const qualified =
-    baselineReport?.status === 'completed' &&
+    !!baselineReport &&
     results.length > 0 &&
     results.every(
-      (item) =>
-        !item.error &&
-        (item.comparison?.comparisons.length ?? 0) > 0 &&
-        item.report?.status === 'completed',
+      (item) => !item.error && (item.comparison?.comparisons.length ?? 0) > 0 && !!item.report,
     )
+  const baselineFailures = baselineTargets.reduce((sum, target) => sum + (target.failed ?? 0), 0)
+  const candidateFailures = results.reduce(
+    (sum, item) =>
+      sum +
+      (item.comparison?.candidate_targets.reduce(
+        (total, target) => total + (target.failed ?? 0),
+        0,
+      ) ?? 0),
+    0,
+  )
   const points: QualityCostPoint[] = qualified
     ? [
-        ...(baselineReport?.summary.targets
+        ...baselineTargets
           .filter((target) =>
             reviewedBaseline?.manifest.targets.some(
               (item) => item.id === target.id && item.kind === 'single',
@@ -238,11 +242,11 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                   },
                 ]
               : [],
-          ) ?? []),
+          ),
         ...results.flatMap(
           (item) =>
             item.comparison?.comparisons.flatMap((row) => {
-              const metric = item.report?.summary.targets.find(
+              const metric = item.comparison?.candidate_targets.find(
                 (target) => target.id === row.candidate_target_id,
               )
               return typeof metric?.macro_accuracy === 'number' &&
@@ -268,7 +272,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     qualified && results.every((item) => item.comparison?.comparisons.length === 1)
       ? results.map((item) => {
           const row = item.comparison!.comparisons[0]
-          const metric = item.report?.summary.targets.find(
+          const metric = item.comparison?.candidate_targets.find(
             (target) => target.id === row.candidate_target_id,
           )
           return {
@@ -280,7 +284,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         })
       : []
   const currentEvidencePage = Math.min(evidencePage, Math.max(0, Math.ceil(results.length / 6) - 1))
-  const baselineMetric = baselineReport?.summary.targets.find(
+  const baselineMetric = baselineTargets.find(
     (target) => target.id === results[0]?.comparison?.comparisons[0]?.baseline_target_id,
   )
   return (
@@ -312,6 +316,13 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         </p>
       )}
       {pending && <ProductLoadingState compact label="Comparing saved evaluation evidence…" />}
+      {qualified && (baselineFailures > 0 || candidateFailures > 0) && (
+        <p className={styles.notice}>
+          {number(baselineFailures)} failed baseline results · {number(candidateFailures)} failed
+          candidate results. Scores use all planned cases; explicit failed outcomes count as
+          incorrect. Run statuses remain unchanged, and unknown costs cannot support a saving claim.
+        </p>
+      )}
       {qualified && (
         <div className={styles.chartGrid}>
           <QualityCostChart points={points} />
@@ -339,6 +350,18 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
             <article className={styles.iterationCard} key={item.id}>
               <p className={styles.eyebrow}>{item.stage}</p>
               <h3>{runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}</h3>
+              {item.comparison && !item.comparison.candidate_quality_complete && (
+                <p className={styles.muted}>
+                  {item.comparison.candidate_status} ·{' '}
+                  {number(
+                    item.comparison.candidate_targets.reduce(
+                      (sum, target) => sum + (target.failed ?? 0),
+                      0,
+                    ),
+                  )}{' '}
+                  failed results
+                </p>
+              )}
               {item.error ? (
                 <p className={styles.error}>Comparison withheld: {item.error}</p>
               ) : (
@@ -402,7 +425,10 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
           <AccountingCorrection report={baselineReport} />
           <details className={styles.details}>
             <summary>Single-model baseline metrics</summary>
-            <p>{reviewedBaseline?.manifest.name ?? savedBaseline}</p>
+            <p>
+              {reviewedBaseline?.manifest.name ?? savedBaseline} ·{' '}
+              {baselineComparison?.baseline_status}
+            </p>
             <div className={styles.tableScroll}>
               <table>
                 <thead>
@@ -410,6 +436,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                     <th>Single model</th>
                     <th>Macro accuracy</th>
                     <th>Correct / denominator</th>
+                    <th>Saved outcomes</th>
                     <th>Observed model cost</th>
                     <th>Cache-neutral estimate</th>
                     <th>Tokens</th>
@@ -417,7 +444,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {baselineReport.summary.targets
+                  {baselineTargets
                     .filter((target) =>
                       reviewedBaseline?.manifest.targets.some(
                         (item) => item.id === target.id && item.kind === 'single',
@@ -429,6 +456,9 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
                         <td>{percent(target.macro_accuracy)}</td>
                         <td>
                           {number(target.correct)} / {number(target.total)}
+                        </td>
+                        <td>
+                          {number(target.completed)} completed · {number(target.failed)} failed
                         </td>
                         <td>{money(target.cost_usd)}</td>
                         <td title={target.cache_neutral_cost_basis}>
@@ -461,6 +491,10 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
             an improvement. Unknown cost cannot support a saving claim. Development-set gains
             require a separate holdout check.
           </p>
+          {!!baselineComparison?.baseline_selection_qualification &&
+            (baselineFailures > 0 || candidateFailures > 0) && (
+              <p className={styles.muted}>{baselineComparison.baseline_selection_qualification}</p>
+            )}
           <p className={styles.muted}>
             Cache-neutral estimates use the same selected single-model baseline and reprice every
             prompt token at the frozen fresh-input rate plus output. This counterfactual excludes

@@ -12,6 +12,12 @@ export default function FrozenBaselineProtocol({ run }: { run: Run }) {
         The service preserves the exact questions, grading protocol, sampling defaults and limits
         from this baseline. Only the run name and configured MoM targets change.
       </p>
+      {run.status !== 'completed' && (
+        <p>
+          Baseline status: {run.status} · {number(run.progress.failed)} failed results. Reusing its
+          protocol does not change the saved outcomes.
+        </p>
+      )}
       <dl className={styles.identity}>
         <dt>Profile</dt>
         <dd>{profileTitle(manifest.profile)}</dd>

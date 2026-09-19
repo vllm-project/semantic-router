@@ -56,6 +56,17 @@ const report = {
   provenance: { dataset_sha256: 'a'.repeat(64) },
 }
 
+const comparisonProtocol = {
+  baseline_status: 'completed',
+  candidate_status: 'completed',
+  baseline_quality_complete: true,
+  candidate_quality_complete: true,
+  baseline_targets: report.summary.targets,
+  candidate_targets: [{ ...report.summary.targets[0], id: 'balance' }],
+  quality_denominator: 'all_planned_cases; explicit failed outcomes count as incorrect',
+  baseline_selection_qualification: 'Delivered outcomes under the frozen limits.',
+}
+
 async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
   await mockAuthenticatedAppShell(page, { settings })
   const requests: unknown[] = []
@@ -197,6 +208,7 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
         baseline_selection: 'Best observed single model on identical cases.',
         baseline_tied_best_target_ids: ['single', 'another-single'],
         baseline_tie_policy: 'Lowest complete known subject cost, then stable target ID.',
+        ...comparisonProtocol,
         comparisons: [
           {
             baseline_target_id: 'single',
@@ -2095,6 +2107,7 @@ test('uses conservative quality uncertainty and identifies a zero-width bootstra
     route.fulfill({
       json: {
         baseline_selection: 'Best observed single model on identical cases.',
+        ...comparisonProtocol,
         comparisons: [
           {
             baseline_target_id: 'single',
@@ -2155,6 +2168,7 @@ test('separates observed savings from cache-neutral estimates and preserves unkn
     route.fulfill({
       json: {
         baseline_selection: 'Best observed single model on identical cases.',
+        ...comparisonProtocol,
         comparisons: [
           {
             baseline_target_id: 'single',
@@ -2394,6 +2408,7 @@ test('withholds trend charts for incompatible comparisons and never plots unknow
         : {
             json: {
               baseline_selection: 'Identical cases only',
+              ...comparisonProtocol,
               comparisons: [
                 {
                   baseline_target_id: 'single',
@@ -2738,7 +2753,7 @@ test('persists profile, status and search filters across reload and run details'
   await expect(page.getByRole('button', { name: 'Smoke baseline', exact: true })).toHaveCount(0)
 })
 
-test('derives a MoM candidate from a frozen baseline without composing or editing its protocol', async ({
+test('derives a MoM candidate from a failed 42-result frozen baseline without changing its protocol', async ({
   page,
 }) => {
   await mockBench(page)
@@ -2748,7 +2763,8 @@ test('derives a MoM candidate from a frozen baseline without composing or editin
     profile: 'standard',
     cost_policy: 'require_priced',
     seed: 77,
-    cases: [{ id: 'frozen-case' }],
+    cases: Array.from({ length: 14 }, (_, index) => ({ id: `frozen-case-${index}` })),
+    targets: [target, { ...target, id: 'second' }, { ...target, id: 'third' }],
     sampling: { temperature: 0.2, max_tokens: 512 },
     limits: {
       concurrency: 1,
@@ -2767,7 +2783,14 @@ test('derives a MoM candidate from a frozen baseline without composing or editin
     route.fulfill({ json: { targets: [target, mom] } }),
   )
   await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
-    route.fulfill({ json: { ...run, manifest: frozen } }),
+    route.fulfill({
+      json: {
+        ...run,
+        status: 'failed',
+        progress: { total: 42, completed: 41, failed: 1 },
+        manifest: frozen,
+      },
+    }),
   )
   await page.route('**/api/sr-bench/v1/runs/run-1/candidate-plan', (route) => {
     const body = route.request().postDataJSON()
@@ -2775,7 +2798,7 @@ test('derives a MoM candidate from a frozen baseline without composing or editin
     return route.fulfill({
       json: {
         status: 'validated',
-        total: 1,
+        total: 14,
         plan_sha256: 'd'.repeat(64),
         manifest: {
           ...frozen,
@@ -2818,6 +2841,9 @@ test('derives a MoM candidate from a frozen baseline without composing or editin
   )
   await expect(page.getByRole('region', { name: 'Frozen baseline protocol' })).not.toContainText(
     'seed 77',
+  )
+  await expect(page.getByRole('region', { name: 'Frozen baseline protocol' })).toContainText(
+    'Baseline status: failed · 1 failed results',
   )
   await expect(page.getByRole('radiogroup', { name: 'Evaluation size' })).toHaveCount(0)
   await expect(page.getByLabel('Budget (USD)', { exact: true })).toHaveCount(0)
@@ -2862,6 +2888,191 @@ test('derives a MoM candidate from a frozen baseline without composing or editin
     await page.evaluate(() => sessionStorage.getItem('sr-bench-submission:user-admin-1')),
   ).toBeNull()
   expect(forbidden).toEqual([])
+})
+
+test('uses authoritative failed-baseline comparisons without masking failed results or unknown savings', async ({
+  page,
+}, testInfo) => {
+  await mockBench(page)
+  const singles = [
+    target,
+    { ...target, id: 'flash', model: 'provider/flash' },
+    { ...target, id: 'qwen', model: 'provider/qwen' },
+  ]
+  const failedBaseline = {
+    ...run,
+    status: 'failed',
+    manifest: { ...manifest, targets: singles },
+    progress: { total: 42, completed: 41, failed: 1 },
+  }
+  const candidate = {
+    ...run,
+    id: 'run-2',
+    manifest: {
+      ...manifest,
+      name: 'Balance terminal comparison',
+      targets: [{ ...target, id: 'balance', kind: 'mom' }],
+    },
+    progress: { total: 14, completed: 14, failed: 0 },
+  }
+  const baselineTargets = singles.map((item, index) => ({
+    ...report.summary.targets[0],
+    id: item.id,
+    total: 14,
+    completed: index ? 14 : 13,
+    failed: index ? 0 : 1,
+    scored: index ? 14 : 13,
+    pending: 0,
+    correct: index ? 9 : 13,
+    macro_accuracy: index ? 9 / 14 : 13 / 14,
+    complete: index > 0,
+    cost_usd: index ? 1 : null,
+    cost_complete: index > 0,
+  }))
+  const candidateTargets = [
+    { ...baselineTargets[1], id: 'balance', correct: 12, macro_accuracy: 12 / 14, cost_usd: 0.5 },
+  ]
+  await page.route('**/api/sr-bench/v1/runs', (route) =>
+    route.fulfill({ json: { runs: [failedBaseline, candidate] } }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({ json: failedBaseline }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/*/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        status: route.request().url().includes('/run-1/') ? 'failed' : 'completed',
+        summary: {
+          targets: route.request().url().includes('/run-1/') ? baselineTargets : candidateTargets,
+        },
+        failure: null,
+      },
+    }),
+  )
+  await mockComparisonOptions(page, failedBaseline, [candidate])
+  await page.route('**/api/sr-bench/v1/comparisons', (route) =>
+    route.fulfill({
+      json: {
+        ...comparisonProtocol,
+        baseline_run_id: 'run-1',
+        candidate_run_id: 'run-2',
+        baseline_status: 'failed',
+        baseline_quality_complete: false,
+        baseline_targets: baselineTargets,
+        candidate_targets: candidateTargets,
+        baseline_selection: 'Best observed single model under the frozen limits.',
+        baseline_cost_comparison_eligible: false,
+        baseline_cost_comparison_reason: 'Best single-model accounting is incomplete.',
+        comparisons: [
+          {
+            baseline_target_id: 'single',
+            candidate_target_id: 'balance',
+            paired_cases: 14,
+            quality_delta: -1 / 14,
+            quality_delta_ci95: [-0.4, 0.3],
+            wins: 0,
+            losses: 1,
+            ties: 13,
+            baseline_cost_usd: null,
+            candidate_cost_usd: 0.5,
+            cost_saving_percent: null,
+          },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(page.getByRole('button', { name: 'Evaluate candidate', exact: true })).toBeEnabled()
+  await expect(page.getByText('This run is failed.', { exact: false })).toBeVisible()
+  await page.getByRole('button', { name: 'Evaluate candidate', exact: true }).click()
+  await expect(page).toHaveURL(/view=new&baseline=run-1/)
+  await page.goto('/evaluation?view=compare')
+  await chooseOption(page, 'Baseline run', 'run-1')
+  await page.getByRole('checkbox', { name: /Balance terminal comparison/ }).check()
+  await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
+  await expect(
+    page.getByText('1 failed baseline results · 0 failed candidate results.', { exact: false }),
+  ).toBeVisible()
+  const card = page
+    .getByRole('article')
+    .filter({ has: page.getByRole('heading', { name: candidate.manifest.name, exact: true }) })
+  await expect(card).toContainText('−7.14 pp')
+  await expect(card).toContainText('Unknown')
+  await expect(card).not.toContainText('0%')
+  await expect(page.getByText('A continuous trend is withheld', { exact: false })).toHaveCount(0)
+  await page.getByText('Single-model baseline metrics', { exact: true }).click()
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ has: page.getByRole('rowheader', { name: 'model-a', exact: true }) }),
+  ).toContainText('13 completed · 1 failed')
+  await expect(
+    page
+      .getByRole('row')
+      .filter({ has: page.getByRole('rowheader', { name: 'model-a', exact: true }) }),
+  ).not.toContainText('$0.00000')
+  await page.screenshot({ path: testInfo.outputPath('failed-baseline-comparison.png') })
+})
+
+test('does not enable active baseline derivation or comparisons with missing terminal results', async ({
+  page,
+}) => {
+  await mockBench(page)
+  let candidatePlans = 0,
+    comparisons = 0
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
+    route.fulfill({
+      json: { ...run, status: 'running', progress: { total: 42, completed: 40, failed: 1 } },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/candidate-plan', (route) => {
+    candidatePlans++
+    return route.abort()
+  })
+  await page.goto('/evaluation?view=new&baseline=run-1')
+  await expect(
+    page.getByText('Choose a finished live single-model baseline with its full plan.', {
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Review plan', exact: true })).toHaveCount(0)
+  await page.route('**/api/sr-bench/v1/comparison-options?*', (route) =>
+    route.fulfill({
+      json: {
+        baseline: null,
+        baselines: [],
+        options: [],
+        next_cursor: null,
+        has_more: false,
+        scanned_pairs: 1,
+        scan_limited: false,
+        unverified_pairs: 0,
+        unverified_baselines: 0,
+        model_requests: 0,
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/comparisons', (route) => {
+    comparisons++
+    return route.fulfill({
+      status: 400,
+      json: { error: 'Baseline quality results are incomplete' },
+    })
+  })
+  await page.goto('/evaluation?view=compare')
+  await expect(page.getByText('No comparable results yet.', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
+  expect(comparisons).toBe(0)
+  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  await expect(
+    page
+      .getByRole('article')
+      .getByText('Comparison withheld: Baseline quality results are incomplete', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByText('Quality Δ', { exact: true })).toHaveCount(0)
+  expect(candidatePlans).toBe(0)
+  expect(comparisons).toBe(1)
 })
 
 test('an explicit dataset can be selected while automatic resolution is stalled without adopting a late response', async ({
@@ -2921,6 +3132,7 @@ test('renders signed quality and cost changes with truthful positive negative an
     return route.fulfill({
       json: {
         baseline_selection: 'Best saved single model.',
+        ...comparisonProtocol,
         comparisons: [
           {
             baseline_target_id: 'single',

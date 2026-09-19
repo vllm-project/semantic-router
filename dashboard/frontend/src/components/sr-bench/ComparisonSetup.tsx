@@ -60,7 +60,7 @@ export default function ComparisonSetup({
       <p className={styles.optionEmpty} role="status">
         {baselines.scanLimited
           ? 'No verified comparisons available. Some saved evidence exceeded the verification limit.'
-          : 'No comparable results yet. Complete a single-model baseline and another run on the same frozen protocol.'}
+          : 'No comparable results yet. Finish a baseline and a candidate on the same questions and settings.'}
       </p>
     )
   return (

@@ -7,7 +7,7 @@ import time
 
 from .contracts import digest
 from .replay_validation import ReplayValidator, replay_summary
-from .report import ComparisonValidator
+from .report import COMPARABLE_STATUSES, ComparisonValidator
 
 MAX_LIMIT = 25
 MAX_SCAN_STEPS = 64
@@ -27,15 +27,31 @@ def _cursor(value):
     return base64.urlsafe_b64encode(json.dumps(value, sort_keys=True).encode()).decode()
 
 
-def _revision(store, owner):
+def _statuses(kind):
+    return COMPARABLE_STATUSES if kind == "comparison" else frozenset({"completed"})
+
+
+def _status_sql(kind, column="status"):
+    return (
+        column
+        + " IN ("
+        + ",".join("'" + s + "'" for s in sorted(_statuses(kind)))
+        + ")"
+    )
+
+
+def _revision(store, owner, kind):
     with store.lock:
         row = store.db.execute(
             "SELECT COUNT(*),COALESCE(MAX(r.rowid),0),MAX(r.updated_at),"
             "COALESCE((SELECT MAX(e.seq) FROM events e JOIN runs x ON x.id=e.run_id"
-            " WHERE x.status='completed' AND json_extract(x.manifest,'$.mode') IN ('live','preview')"
+            " WHERE "
+            + _status_sql(kind, "x.status")
+            + " AND json_extract(x.manifest,'$.mode') IN ('live','preview')"
             + (" AND x.owner=?" if owner is not None else "")
-            + "),0) FROM runs r WHERE r.status='completed'"
-            " AND json_extract(r.manifest,'$.mode') IN ('live','preview')"
+            + "),0) FROM runs r WHERE "
+            + _status_sql(kind, "r.status")
+            + " AND json_extract(r.manifest,'$.mode') IN ('live','preview')"
             + (" AND r.owner=?" if owner is not None else ""),
             () if owner is None else (owner, owner),
         ).fetchone()
@@ -44,7 +60,7 @@ def _revision(store, owner):
 
 def _state(store, kind, baseline_id, owner, after):
     scope = digest([kind, baseline_id, owner])
-    revision, ceiling = _revision(store, owner)
+    revision, ceiling = _revision(store, owner, kind)
     if after is None:
         return {
             "scope": scope,
@@ -101,7 +117,7 @@ def _state(store, kind, baseline_id, owner, after):
 
 
 def _next(store, owner, state, *, baseline=False, kind=None, source=None):
-    conditions = ["status='completed'", "rowid<=?", "rowid<?"]
+    conditions = [_status_sql(kind), "rowid<=?", "rowid<?"]
     values = [state["ceiling"], state["baseline_after" if baseline else "child_after"]]
     if owner is not None:
         conditions.append("owner=?")
@@ -162,7 +178,7 @@ def _load_baseline(store, run_id, owner, kind):
         ).fetchone()
     if row is None:
         raise KeyError("run not found")
-    if row != ("completed", "live", 1):
+    if row[0] not in _statuses(kind) or row[1:] != ("live", 1):
         return None, False
     if _evidence_size(store, run_id, kind == "replay") > MAX_EVIDENCE_BYTES:
         return None, True
@@ -204,7 +220,7 @@ def run_options(store, kind, baseline_id=None, owner=None, after=None, limit=10)
             page["empty_reason"] = (
                 "evidence_size_limit"
                 if limited
-                else "baseline_not_completed_live_single"
+                else "baseline_not_eligible_live_single"
             )
             return _limits(page, state)
         page["baseline"] = _choice(source)
@@ -224,7 +240,7 @@ def run_options(store, kind, baseline_id=None, owner=None, after=None, limit=10)
                         "Cursor baseline no longer qualifies; refresh options"
                     )
             else:
-                row = _next(store, owner, state, baseline=True)
+                row = _next(store, owner, state, baseline=True, kind=kind)
                 if row is None:
                     complete = True
                     break
@@ -287,9 +303,9 @@ def run_options(store, kind, baseline_id=None, owner=None, after=None, limit=10)
             more = _next(store, owner, state, kind=kind, source=source) is not None
             if not more and not baseline_id:
                 state["active"] = None
-                more = _next(store, owner, state, baseline=True) is not None
+                more = _next(store, owner, state, baseline=True, kind=kind) is not None
         else:
-            more = _next(store, owner, state, baseline=True) is not None
+            more = _next(store, owner, state, baseline=True, kind=kind) is not None
         if more:
             page.update(next_cursor=_cursor(state), has_more=True)
     if baseline_id and after is None and not page["options"] and not page["has_more"]:

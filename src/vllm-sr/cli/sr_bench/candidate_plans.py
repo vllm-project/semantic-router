@@ -2,18 +2,19 @@
 
 import copy
 
+from .store import TERMINAL
 from .target_contracts import auxiliary_bindings, effective_auxiliary_targets
 
 
 def candidate_manifest(baseline, targets, mode="live", name=None, experiment=None):
     source = baseline["manifest"]
     if (
-        baseline["status"] != "completed"
+        baseline["status"] not in TERMINAL
         or source["mode"] != "live"
         or not any(target["kind"] == "single" for target in source["targets"])
     ):
-        raise ValueError("Choose a completed live single-model baseline")
-    if source.get("execution_cells") is not None:
+        raise ValueError("Choose a terminal live single-model baseline")
+    if source.get("execution_cells") is not None or source.get("recovery"):
         raise ValueError("A recovery subset is not a complete reusable baseline")
     if not targets or any(target.get("kind") != "mom" for target in targets):
         raise ValueError("Candidate plans require configured MoM targets")

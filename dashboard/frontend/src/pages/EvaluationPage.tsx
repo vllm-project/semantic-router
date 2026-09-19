@@ -313,6 +313,9 @@ export default function EvaluationPage() {
                 setSearch({ view: 'runs', run: run.id })
                 refresh()
               }}
+              onCandidate={(baseline, mode) =>
+                setSearch({ view: mode === 'preview' ? 'preview' : 'new', baseline })
+              }
             />
           )}
         </>

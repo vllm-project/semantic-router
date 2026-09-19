@@ -5,6 +5,7 @@ import type { Catalog, Dataset, Manifest, Plan, Run, Target } from './types'
 import styles from './SrBench.module.css'
 import ProductLoadingState from '../ProductLoadingState'
 import FrozenBaselineProtocol from './FrozenBaselineProtocol'
+import { canReuseBaseline } from './baselineReuse'
 import ProductIcon from '../ProductIcon'
 import BenchSelect from './BenchSelect'
 import RunSettings, { type SamplingSettings } from './RunSettings'
@@ -60,6 +61,8 @@ export default function RunComposer({
         if (!controller.signal.aborted) {
           if (run.id !== baselineID)
             throw new Error('The baseline identity changed. Reload the selected run.')
+          if (!canReuseBaseline(run))
+            throw new Error('Choose a finished live single-model baseline with its full plan.')
           setBaseline(run)
         }
       })

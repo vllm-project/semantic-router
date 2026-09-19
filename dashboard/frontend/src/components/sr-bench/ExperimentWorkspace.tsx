@@ -3,6 +3,7 @@ import ProductIcon from '../ProductIcon'
 import ProductLoadingState from '../ProductLoadingState'
 import BenchSelect from './BenchSelect'
 import ExperimentDelete from './ExperimentDelete'
+import { canReuseBaseline } from './baselineReuse'
 import { SrBenchRequestError } from './api'
 import { experimentApi, type Experiment, type ExperimentPage } from './experimentApi'
 import {
@@ -239,7 +240,7 @@ export default function ExperimentWorkspace({
             <div className={layout.timeline}>
               {detail?.members.map((member) => {
                 const run = runs.find((value) => value.id === member.run_id)
-                const baseline = member.role === 'baseline' && run?.status === 'completed'
+                const baseline = member.role === 'baseline' && canReuseBaseline(run)
                 return (
                   <article key={member.run_id} className={layout.entry}>
                     <div className={layout.marker}>
@@ -253,7 +254,7 @@ export default function ExperimentWorkspace({
                       </button>
                       <p className={styles.muted}>
                         {run
-                          ? `${run.manifest.profile} · ${run.status} · ${run.progress.completed}/${run.progress.total} completed`
+                          ? `${run.manifest.profile} · ${run.status} · ${run.progress.completed}/${run.progress.total} completed${run.progress.failed ? ` · ${run.progress.failed} failed` : ''}`
                           : 'Open the saved run to inspect its evidence.'}
                       </p>
                       {member.hypothesis && <p>{member.hypothesis}</p>}
@@ -293,8 +294,8 @@ export default function ExperimentWorkspace({
               })}
               {!detail?.members.length && (
                 <p className={styles.muted}>
-                  Link your starting runs below. Reuse a completed baseline to evaluate a candidate
-                  on the same questions.
+                  Link your starting runs below. Reuse a finished baseline protocol to evaluate a
+                  candidate on the same questions.
                 </p>
               )}
             </div>

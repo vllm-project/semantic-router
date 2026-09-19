@@ -16,6 +16,7 @@ from .failures import first_saved_failure
 from .target_contracts import effective_auxiliary_targets, target_inventory
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
+COMPARABLE_STATUSES = frozenset({"completed", "failed"})
 
 
 def percentile(values, q):
@@ -58,7 +59,20 @@ def metric(target_id, results, calls, total):
     correct = sum(r["correct"] for r in scored)
     subject = [c for c in calls if c["role"] == "subject"]
     overhead = [c for c in calls if c["role"] != "subject"]
-    usage_complete = bool(subject) and all(c.get("usage") is not None for c in subject)
+    receipted_cases = {c["case_id"] for c in subject if c.get("case_id")}
+    subject_coverage_complete = len(receipted_cases) == total and all(
+        r.get("case_id") in receipted_cases for r in results
+    )
+    usage_complete = (
+        bool(subject)
+        and subject_coverage_complete
+        and all(c.get("usage") is not None for c in subject)
+    )
+    cost_complete = (
+        bool(subject)
+        and subject_coverage_complete
+        and all(c.get("cost_usd") is not None for c in subject)
+    )
     tokens = (
         {k: sum((c.get("usage") or {}).get(k, 0) for c in subject) for k in BUCKETS}
         if usage_complete
@@ -82,23 +96,24 @@ def metric(target_id, results, calls, total):
         "accuracy_denominator": "all_planned_cases; failures and unanswered count as incorrect",
         "complete": len(completed) == total and len(scored) == total,
         "accuracy_ci95": wilson(correct, total),
-        "cost_usd": sum_cost(subject),
+        "cost_usd": sum_cost(subject) if cost_complete else None,
         "cache_neutral_cost_usd": (
             sum(c["cache_neutral_cost_usd"] for c in subject)
             if subject
+            and subject_coverage_complete
             and all(c.get("cache_neutral_cost_usd") is not None for c in subject)
             else None
         ),
         "cache_neutral_cost_basis": "Counterfactual token-equivalent subject cost: all prompt tokens at the frozen fresh-input rate plus output; not billed spend.",
         "known_cost_usd": known,
-        "cost_complete": bool(subject)
-        and all(c.get("cost_usd") is not None for c in subject),
+        "cost_complete": cost_complete,
         "evaluation_cost_usd": sum_cost(overhead) if overhead else 0,
-        "total_spend_usd": sum_cost(calls),
+        "total_spend_usd": sum_cost(calls) if subject_coverage_complete else None,
         "tokens": tokens,
         "call_count": (
             sum(c["inference_call_count"] for c in subject)
             if subject
+            and subject_coverage_complete
             and all(c.get("inference_call_count") is not None for c in subject)
             else None
         ),
@@ -353,7 +368,15 @@ def make_report(store, run_id):
         "summary": {
             "targets": metrics,
             "wall_time_s": wall,
-            "total_spend_usd": 0 if manifest["mode"] == "replay" else sum_cost(calls),
+            "total_spend_usd": (
+                0
+                if manifest["mode"] == "replay"
+                else (
+                    sum_cost(calls)
+                    if all(item["total_spend_usd"] is not None for item in metrics)
+                    else None
+                )
+            ),
         },
         "benchmarks": benchmarks,
         "limitations": limitations,
@@ -453,14 +476,14 @@ def _strongest_single(singles, report, weights):
 
 
 class ComparisonValidator:
-    """The same frozen protocol and complete quality matrix for discovery and submit."""
+    """Shared protocol and explicit terminal outcomes for discovery and submit."""
 
     def __init__(self, store, baseline):
         self.store = store
         self.baseline = baseline
         bm = baseline["manifest"]
-        if baseline["status"] != "completed" or bm["mode"] != "live":
-            raise ValueError("Baseline must be a completed live run")
+        if baseline["status"] not in COMPARABLE_STATUSES or bm["mode"] != "live":
+            raise ValueError("Baseline must be a completed or failed live run")
         self.singles = [t for t in bm["targets"] if t["kind"] == "single"]
         if not self.singles:
             raise ValueError("Baseline must contain a single-model target")
@@ -469,7 +492,7 @@ class ComparisonValidator:
             target["id"]: {
                 c["case_id"] for c in planned if c["target_id"] == target["id"]
             }
-            for target in self.singles
+            for target in bm["targets"]
         }
         self.expected = selected[self.singles[0]["id"]]
         if not self.expected or any(ids != self.expected for ids in selected.values()):
@@ -478,18 +501,35 @@ class ComparisonValidator:
             )
         self.case_ids = [c["id"] for c in bm["cases"] if c["id"] in self.expected]
         results = store.results(baseline["id"])
-        self.by_target = self._quality_rows(results, self.singles, "Baseline")
+        self.by_target = self._quality_rows(results, bm["targets"], "Baseline")
 
     def _quality_rows(self, results, targets, label):
-        by_target = {
-            t["id"]: {r["case_id"]: r for r in results if r["target_id"] == t["id"]}
-            for t in targets
-        }
-        if any(
-            set(rows) != self.expected
-            or any(not isinstance(r.get("correct"), bool) for r in rows.values())
-            for rows in by_target.values()
-        ):
+        by_target = {target["id"]: {} for target in targets}
+        for result in results:
+            rows = by_target.get(result["target_id"])
+            if rows is None:
+                continue
+            case_id = result["case_id"]
+            status = result["status"]
+            if (
+                case_id in rows
+                or case_id not in self.expected
+                or status not in COMPARABLE_STATUSES
+                or (
+                    status == "completed"
+                    and not isinstance(result.get("correct"), bool)
+                )
+            ):
+                raise ValueError(
+                    f"{label} quality results lack unique terminal outcomes"
+                )
+            # A failed outcome is incorrect under the existing report denominator.
+            # This derived score never changes its saved status, grade or receipt.
+            rows[case_id] = {
+                **result,
+                "correct": result["correct"] if status == "completed" else False,
+            }
+        if any(set(rows) != self.expected for rows in by_target.values()):
             raise ValueError(f"{label} quality results are incomplete")
         return by_target
 
@@ -497,8 +537,15 @@ class ComparisonValidator:
         if self.baseline["id"] == candidate["id"]:
             raise ValueError("Choose two distinct runs for comparison")
         _comparison_protocol(self.baseline["manifest"], candidate["manifest"])
-        if candidate["status"] != "completed":
-            raise ValueError("Both runs must complete before a paired comparison")
+        if candidate["status"] not in COMPARABLE_STATUSES:
+            raise ValueError("Both runs must be completed or failed before comparison")
+        planned = planned_cells(candidate["manifest"])
+        if any(
+            {cell["case_id"] for cell in planned if cell["target_id"] == target["id"]}
+            != self.expected
+            for target in candidate["manifest"]["targets"]
+        ):
+            raise ValueError("Candidate targets must cover identical planned cases")
         return self._quality_rows(
             self.store.results(candidate["id"]),
             candidate["manifest"]["targets"],
@@ -607,7 +654,19 @@ def compare(store, baseline_id, candidate_id):
         "version": VERSION,
         "baseline_run_id": baseline_id,
         "candidate_run_id": candidate_id,
-        "baseline_selection": "best observed single model on identical cases; selection uncertainty is not included",
+        "baseline_status": baseline["status"],
+        "candidate_status": candidate["status"],
+        "baseline_quality_complete": all(
+            t["complete"] for t in report_b["summary"]["targets"]
+        ),
+        "candidate_quality_complete": all(
+            t["complete"] for t in report_c["summary"]["targets"]
+        ),
+        "baseline_targets": report_b["summary"]["targets"],
+        "candidate_targets": report_c["summary"]["targets"],
+        "quality_denominator": "all_planned_cases; explicit failed outcomes count as incorrect",
+        "baseline_selection": "best observed single model on identical planned cases; explicit failures count as incorrect; selection uncertainty is not included",
+        "baseline_selection_qualification": "This ranks delivered outcomes under the frozen limits, not model capability without execution failures. All single-model targets remain in the ranking, including failed outcomes and unknown costs.",
         "baseline_selected_target_id": best,
         "baseline_tied_best_target_ids": tied,
         "baseline_tie_policy": "Exact frozen weighted quality; ties prefer the lowest complete known subject cost, then stable target ID. Unknown-cost ties rank after known costs and suppress savings claims.",

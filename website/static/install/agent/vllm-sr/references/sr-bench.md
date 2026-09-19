@@ -67,6 +67,9 @@ removes its grouping, not run evidence; active runs must be resolved first.
 - Replay/Compare discovery is authoritative. Follow bounded pages when needed;
   an unfinished or size-limited scan does not prove no compatible result exists.
   Never change cases, parameters or Learning merely to force replay eligibility.
+- A terminal full baseline can supply a candidate's frozen protocol even after
+  failure. Compare requires an explicit outcome for every planned cell; failures
+  count as incorrect and remain visible. Missing or ungraded results are not zero.
 - Route only on user-request evidence, never answers, benchmark names or split
   labels. Keep tuning and holdout separate. Disclose previously inspected tasks
   or labels, including a GPQA retest after earlier labels were seen.
