@@ -560,14 +560,11 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		},
 		"usage": usage.Map(),
 	}
-	if shouldIncludeFusionTrace(cfg, trace) {
-		completion["fusion"] = projectFusionPublicTrace(trace)
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal fusion response: %w", err)
 	}
-	return &Response{
+	return withFusionExtension(&Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -576,7 +573,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		AlgorithmType:         "fusion",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}, cfg, trace)
 }
 
 func (l *FusionLooper) formatFusionToolCallJSONResponse(
@@ -595,14 +592,11 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 	completion["model"] = finalResp.Model
 	completion["usage"] = usage.Map()
 	normalizeCompletionToolFinishReason(completion)
-	if shouldIncludeFusionTrace(cfg, trace) {
-		completion["fusion"] = projectFusionPublicTrace(trace)
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal fusion tool-call response: %w", err)
 	}
-	return &Response{
+	return withFusionExtension(&Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -611,7 +605,7 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 		AlgorithmType:         "fusion",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}, cfg, trace)
 }
 
 func (l *FusionLooper) formatFusionStreamingResponse(
@@ -629,17 +623,17 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, cfg, trace)
+		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, cfg, trace)
+		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content)
 	}
 	resp := streamingLooperResponse(body, finalResp.Model, modelsUsed, iterations, "fusion")
 	resp.IntermediateResponses = trace
 	resp.Usage = usage
-	return resp, nil
+	return withFusionExtension(resp, cfg, trace)
 }
 
 func buildFusionStreamingSSE(
@@ -647,8 +641,6 @@ func buildFusionStreamingSSE(
 	created int64,
 	model string,
 	content string,
-	cfg fusionExecutionConfig,
-	trace *FusionTrace,
 ) []byte {
 	var body []byte
 	roleChoice := map[string]interface{}{
@@ -656,11 +648,7 @@ func buildFusionStreamingSSE(
 		"delta":         map[string]interface{}{"role": "assistant"},
 		"finish_reason": nil,
 	}
-	var extra map[string]interface{}
-	if shouldIncludeFusionTrace(cfg, trace) {
-		extra = map[string]interface{}{"fusion": projectFusionPublicTrace(trace)}
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
+	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, nil))
 	for _, chunk := range splitIntoChunks(content, 50) {
 		contentChoice := map[string]interface{}{
 			"index":         0,

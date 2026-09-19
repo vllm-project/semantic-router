@@ -562,6 +562,7 @@ func TestSetupActivateHandler(t *testing.T) {
 	if info, err := os.Stat(filepath.Join(tempDir, ".vllm-sr")); err != nil || !info.IsDir() {
 		t.Fatalf(".vllm-sr output directory should exist after activation: %v", err)
 	}
+	assertSnapshotPermissions(t, tempDir)
 }
 
 func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {

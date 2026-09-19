@@ -126,6 +126,12 @@ func observeProtocolStream(
 	diagnostics []llmprotocol.Diagnostic,
 ) {
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
+	// Streaming headers have already been emitted. Keep late compatibility
+	// warnings observable through the same counter and structured diagnostics
+	// as buffered responses instead of retaining them only in request state.
+	for _, diagnostic := range diagnostics {
+		recordProtocolDiagnostic(ctx, normalizeProtocol(string(ctx.SourceFormat)), normalizeProtocol(string(ctx.TargetFormat)), diagnostic)
+	}
 	ctx.SemanticStreamState.observe(events)
 }
 

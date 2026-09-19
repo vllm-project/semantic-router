@@ -30,15 +30,19 @@ class RequestStore:
             self._store.move_to_end(session_id)
         elif len(self._store) >= _MAX_REQUEST_STORE_SESSIONS:
             self._store.popitem(last=False)
-        observed_headers = {
-            name.lower(): value
-            for name, value in (headers or {}).items()
-            if name.lower() == SESSION_HEADER
-            or name.lower().startswith(_OBSERVED_HEADER_PREFIX)
-        }
+        observed_headers: dict[str, str] = {}
+        header_values: dict[str, list[str]] = {}
+        for name, value in (headers or {}).items():
+            normalized = name.lower()
+            if normalized == SESSION_HEADER or normalized.startswith(
+                _OBSERVED_HEADER_PREFIX
+            ):
+                observed_headers[normalized] = value
+                header_values.setdefault(normalized, []).append(value)
         self._store[session_id] = {
             "body": deepcopy(body),
             "headers": observed_headers,
+            "header_values": header_values,
         }
 
     def get(self, session_id: str) -> dict[str, Any] | None:
