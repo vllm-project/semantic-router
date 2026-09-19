@@ -49,6 +49,7 @@ var (
 
 	routingProfileContractValidators = []configContractValidator{
 		validatePromptGuardBackend,
+		validatePIIContracts,
 		ValidatePIIWindow,
 		validateRuleOperatorContracts,
 		validateRoutingLocalNames,

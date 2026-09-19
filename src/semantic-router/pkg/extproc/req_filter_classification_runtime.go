@@ -44,18 +44,20 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 	}
 
 	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
-		Text:                   signalInput.compressedText,
-		ContextText:            signalInput.allMessagesText,
-		CurrentUserText:        signalInput.currentUserText,
-		PriorUserMessages:      signalInput.priorUserMessages,
-		NonUserMessages:        nonUserMessages,
-		HasPriorAssistantReply: signalInput.hasAssistantReply,
-		Headers:                ctx.Headers,
-		ImageURL:               ctx.RequestImageURL,
-		UncompressedText:       signalInput.evaluationText,
-		SkipCompressionSignals: signalInput.skipCompressionSignals,
-		ConversationFacts:      signalInput.conversationFacts,
-		RequestFacts:           signalInput.requestFacts,
+		Text:                     signalInput.compressedText,
+		ContextText:              signalInput.allMessagesText,
+		CurrentUserText:          signalInput.currentUserText,
+		PriorUserMessages:        signalInput.priorUserMessages,
+		ToolResultTexts:          signalInput.toolResultTexts,
+		ToolResultScanIncomplete: signalInput.toolResultScanIncomplete,
+		NonUserMessages:          nonUserMessages,
+		HasPriorAssistantReply:   signalInput.hasAssistantReply,
+		Headers:                  ctx.Headers,
+		ImageURL:                 ctx.RequestImageURL,
+		UncompressedText:         signalInput.evaluationText,
+		SkipCompressionSignals:   signalInput.skipCompressionSignals,
+		ConversationFacts:        signalInput.conversationFacts,
+		RequestFacts:             signalInput.requestFacts,
 	})
 	if authzErr != nil {
 		signalSpan.End()

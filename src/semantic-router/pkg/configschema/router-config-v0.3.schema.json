@@ -4517,6 +4517,9 @@
         "include_history": {
           "type": "boolean"
         },
+        "source": {
+          "type": "string"
+        },
         "description": {
           "type": "string"
         }

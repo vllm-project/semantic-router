@@ -128,6 +128,30 @@ func TestFinalizeDecisionEvaluationRouteActionOverridesPinnedModel(t *testing.T)
 	assert.Equal(t, "safe-model", selectedModel)
 }
 
+func TestFinalizeDecisionEvaluationPIIMatchSelectsDeclaredSafeModel(t *testing.T) {
+	router := routeActionRouter(map[string]int{"safe-model": 0})
+	ctx := &RequestContext{}
+	result := &decision.DecisionResult{
+		Decision: &config.Decision{
+			Name:      "tool-pii-guard",
+			Rules:     config.RuleNode{Type: config.SignalTypePII, Name: "tool_pii"},
+			ModelRefs: []config.ModelRef{{Model: "safe-model"}},
+		},
+		Confidence: 1,
+	}
+
+	decisionName, _, _, selectedModel, err := router.finalizeDecisionEvaluation(
+		result,
+		config.DefaultVSRAutoModelName,
+		"continue",
+		ctx,
+	)
+	assert.NoError(t, err)
+	assert.Equal(t, "tool-pii-guard", decisionName)
+	assert.Equal(t, "safe-model", selectedModel)
+	assert.Equal(t, "safe-model", ctx.VSRSelectedModel)
+}
+
 func TestFinalizeDecisionEvaluationRouteActionNeverFallsBackToPinnedModel(t *testing.T) {
 	router := routeActionRouter(map[string]int{"safe-model": 100})
 	ctx := &RequestContext{VSRContextTokenCount: 200}

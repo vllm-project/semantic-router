@@ -26,6 +26,7 @@ type MockPIIInferenceResponse struct {
 type MockPIIInference struct {
 	MockPIIInferenceResponse
 	responseMap map[string]MockPIIInferenceResponse
+	callCount   map[string]int
 }
 
 func (m *MockPIIInference) setMockResponse(text string, entities []tasks.TokenEntity, err error) {
@@ -36,6 +37,9 @@ func (m *MockPIIInference) setMockResponse(text string, entities []tasks.TokenEn
 }
 
 func (m *MockPIIInference) ClassifyTokens(_ context.Context, text string) (tasks.TokenClassificationResult, error) {
+	if m.callCount != nil {
+		m.callCount[text]++
+	}
 	result, err := m.classifyTokensResult, m.classifyTokensError
 	if response, exists := m.responseMap[text]; exists {
 		result, err = response.classifyTokensResult, response.classifyTokensError
@@ -51,6 +55,7 @@ func newTestPIIClassifier() (*Classifier, *MockPIIInitializer, *MockPIIInference
 	mockInitializer := &MockPIIInitializer{}
 	mockModel := &MockPIIInference{
 		responseMap: make(map[string]MockPIIInferenceResponse),
+		callCount:   make(map[string]int),
 	}
 
 	cfg := &config.RouterConfig{}

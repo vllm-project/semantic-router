@@ -1315,6 +1315,7 @@ export interface JailbreakSignal {
 export interface PIISignal {
   name: string
   threshold?: number
+  source?: 'tool_result'
   pii_types_allowed?: string[]
   include_history?: boolean
   description?: string
