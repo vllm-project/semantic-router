@@ -58,7 +58,7 @@ const config: Config = {
         hashed: true, // cache-bust the index between deploys
         indexDocs: true,
         indexBlog: true,
-        indexPages: false, // homepage/community are marketing pages, not docs
+        indexPages: true, // Include the root-level Vela article; filter other pages below.
         docsRouteBasePath: '/docs',
         blogRouteBasePath: '/blog',
         searchBarShortcut: true,
@@ -75,7 +75,10 @@ const config: Config = {
         // NOTE: ignoreFiles matches the route *without* a leading slash (the
         // plugin strips baseUrl, which is "/" here, off the front) and without
         // the base URL itself, so the pattern must not anchor on "/".
-        ignoreFiles: [/^docs\/v\d+\.\d+\//],
+        ignoreFiles: [
+          /^docs\/v\d+\.\d+\//,
+          /^(?!(?:docs|blog)(?:\/|$)|vela-models$).+/,
+        ],
         // styling is handled in a later phase
       },
     ],
@@ -130,6 +133,19 @@ const config: Config = {
             'Latest updates, insights, and technical articles about vLLM Semantic Router',
           blogSidebarTitle: 'Recent Posts',
           blogSidebarCount: 10,
+          // Keep Vela in the blog while publishing it at a locale-aware root URL.
+          processBlogPosts: async ({ blogPosts }) => blogPosts.map((post) => {
+            if (post.metadata.frontMatter.slug !== 'introduce-vela') {
+              return post
+            }
+            return {
+              ...post,
+              metadata: {
+                ...post.metadata,
+                permalink: post.metadata.permalink.replace(/\/blog\/introduce-vela\/?$/, '/vela-models'),
+              },
+            }
+          }),
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
@@ -156,6 +172,10 @@ const config: Config = {
       '@docusaurus/plugin-client-redirects',
       {
         redirects: [
+          {
+            from: '/blog/introduce-vela',
+            to: '/vela-models',
+          },
           {
             from: '/docs/installation/runtime/engines-and-hardware',
             to: '/docs/installation/runtime/in-process',

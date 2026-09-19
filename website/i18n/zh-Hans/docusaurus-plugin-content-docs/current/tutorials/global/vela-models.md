@@ -21,7 +21,7 @@
 
 完整模型名由 `Vela-1.0-Encoder-307M` 和任务后缀组成。Modality 从文本请求判断所需的输出模态。FactCheck 判断是否需要核查，并不验证回答的事实真伪。
 
-公开模型集合还包括检查回答证据支持情况的 **Halu**，以及生成文本、图像和音频嵌入的 **Omni Nano / Omni Mini**。这三个 checkpoint 可直接使用并开展集成工作，尚未成为 Router 默认的幻觉检测或多模态组件。完整模型家族见 [Vela 1.0 发布公告](/blog/introduce-vela)。
+公开模型集合还包括检查回答证据支持情况的 **Halu**，以及生成文本、图像和音频嵌入的 **Omni Nano / Omni Mini**。这三个 checkpoint 可直接使用并开展集成工作，尚未成为 Router 默认的幻觉检测或多模态组件。完整模型家族见 [Vela 1.0 发布公告](/vela-models)。
 
 ## 解决什么问题 {#what-problem-does-it-solve}
 
