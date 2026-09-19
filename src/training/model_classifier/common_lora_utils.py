@@ -10,9 +10,12 @@ import gc
 import json
 import logging
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 import torch
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 logger = logging.getLogger(__name__)
 
@@ -517,6 +520,8 @@ def load_sequence_classifier_for_inference(
     Returns:
         (model, tokenizer, id2label) with model in eval() mode.
     """
+    # Lazy on purpose: this module only hard-depends on torch, so peft and
+    # transformers stay optional for callers that never load a classifier.
     from peft import PeftConfig, PeftModel
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -532,7 +537,7 @@ def load_sequence_classifier_for_inference(
     id2label: Dict[int, str] = {}
     label_mapping_path = os.path.join(model_path, "label_mapping.json")
     if os.path.isfile(label_mapping_path):
-        with open(label_mapping_path, "r") as f:
+        with open(label_mapping_path, encoding="utf-8") as f:
             mapping_data = json.load(f)
         id2label = {int(k): v for k, v in mapping_data.get("idx_to_label", {}).items()}
         if num_labels is None and id2label:

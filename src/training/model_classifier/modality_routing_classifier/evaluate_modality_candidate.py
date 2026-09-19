@@ -44,7 +44,6 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -59,8 +58,12 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(_THIS_DIR)
 sys.path.append(os.path.dirname(_THIS_DIR))
 
-from common_lora_utils import load_sequence_classifier_for_inference, setup_logging
-from modality_routing_bert_finetuning_lora import MODALITY_LABELS
+from common_lora_utils import (  # noqa: E402
+    load_sequence_classifier_for_inference,
+    setup_logging,
+)
+from modality_label_mapping import build_label_remap, check_output_size  # noqa: E402
+from modality_routing_bert_finetuning_lora import MODALITY_LABELS  # noqa: E402
 
 logger = setup_logging()
 
@@ -72,47 +75,83 @@ AGREEMENT_PAIRS = [
 ]
 
 
-def load_jsonl(path: str) -> List[Dict]:
+def load_jsonl(path: str) -> list[dict]:
+    """Load rows written by export_modality_dataset.py.
+
+    Args:
+        path: Path to a JSONL file with one {"text", "label", "label_name"} object per line.
+
+    Returns:
+        The parsed rows, in file order.
+    """
     rows = []
-    with open(path, "r") as f:
-        for line in f:
-            line = line.strip()
+    with open(path, encoding="utf-8") as f:
+        for raw in f:
+            line = raw.strip()
             if line:
                 rows.append(json.loads(line))
     return rows
 
 
 def normalize_text(text: str) -> str:
+    """Lowercase text and collapse whitespace, for near-duplicate matching.
+
+    Args:
+        text: Raw prompt text.
+
+    Returns:
+        The normalized text.
+    """
     return re.sub(r"\s+", " ", text.strip().lower())
 
 
 def sha256_of(text: str) -> str:
+    """Hash a prompt so per-example records can be joined without shipping the text.
+
+    Args:
+        text: Raw prompt text.
+
+    Returns:
+        Hex sha256 of the UTF-8 encoded text.
+    """
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def flag_test_contamination(
-    train_texts: List[str], val_texts: List[str], test_rows: List[Dict]
-) -> Tuple[List[int], Dict[str, float]]:
-    """
-    Returns (contaminated_row_indices, contamination_rate_by_class) where a test row
-    is "contaminated" if its exact text or normalized text also appears in
-    train.jsonl/validation.jsonl.
+    train_texts: list[str], val_texts: list[str], test_rows: list[dict]
+) -> tuple[list[int], dict[str, float]]:
+    """Find test rows whose text also appears in the train or validation split.
+
+    A test row is contaminated if its exact text or its normalized text (see
+    normalize_text) also appears in train.jsonl or validation.jsonl.
+
+    Args:
+        train_texts: Prompt texts from train.jsonl.
+        val_texts: Prompt texts from validation.jsonl.
+        test_rows: Rows from test.jsonl.
+
+    Returns:
+        (contaminated_row_indices, contamination_rate_by_class).
     """
     train_val_exact = set(train_texts) | set(val_texts)
     train_val_normalized = {normalize_text(t) for t in train_texts + val_texts}
 
     contaminated_indices = []
-    counts_by_class: Dict[str, int] = {}
-    contaminated_by_class: Dict[str, int] = {}
+    counts_by_class: dict[str, int] = {}
+    contaminated_by_class: dict[str, int] = {}
 
     for idx, row in enumerate(test_rows):
         label_name = row["label_name"]
         counts_by_class[label_name] = counts_by_class.get(label_name, 0) + 1
         text = row["text"]
-        is_contaminated = text in train_val_exact or normalize_text(text) in train_val_normalized
+        is_contaminated = (
+            text in train_val_exact or normalize_text(text) in train_val_normalized
+        )
         if is_contaminated:
             contaminated_indices.append(idx)
-            contaminated_by_class[label_name] = contaminated_by_class.get(label_name, 0) + 1
+            contaminated_by_class[label_name] = (
+                contaminated_by_class.get(label_name, 0) + 1
+            )
 
     rate_by_class = {
         label_name: round(contaminated_by_class.get(label_name, 0) / count, 4)
@@ -121,39 +160,53 @@ def flag_test_contamination(
     return contaminated_indices, rate_by_class
 
 
-def build_label_remap(id2label: Dict[int, str], model_path: str = "<checkpoint>") -> Dict[int, int]:
-    """Map checkpoint class ids to canonical MODALITY_LABELS ids, or raise.
+def portable_path(path: str) -> str:
+    """Return a path as it should be recorded in a checked-in report.
 
-    A checkpoint may order its classes differently from AR=0/DIFFUSION=1/BOTH=2, so the
-    remap goes through label names. It fails closed: a missing, partial or non-canonical
-    id2label (for example the generic LABEL_0/LABEL_1/LABEL_2) is an error, because
-    falling back to the raw class id would produce valid-looking predictions that are
-    scored against the wrong classes.
+    Absolute paths would leak the machine's layout and username. Hub repo ids
+    ("org/name") are not absolute and are kept as they are.
+
+    Args:
+        path: A local path or a Hub repo id.
+
+    Returns:
+        The path relative to this directory, or just its name if it lies outside it.
     """
-    canonical_id = {label: idx for idx, label in enumerate(MODALITY_LABELS)}
-    unknown = sorted({str(name) for name in id2label.values() if name not in canonical_id})
-    if unknown or sorted(id2label.values()) != sorted(MODALITY_LABELS):
-        raise ValueError(
-            f"{model_path}: id2label {dict(id2label)} is not a one-to-one mapping onto "
-            f"{MODALITY_LABELS}"
-            + (f" (unrecognised labels: {unknown})" if unknown else "")
-            + "; refusing to guess the class order"
-        )
-    return {ckpt_id: canonical_id[name] for ckpt_id, name in id2label.items()}
+    if not os.path.isabs(path):
+        return path
+    relative = os.path.relpath(path, _THIS_DIR)
+    if not relative.startswith(".."):
+        return relative
+    return os.path.basename(path.rstrip("/"))
 
 
-def run_inference(model_path: str, texts: List[str], batch_size: int, max_length: int) -> np.ndarray:
-    """Returns predicted label ids [N], in the order of `texts`."""
+def run_inference(
+    model_path: str, texts: list[str], batch_size: int, max_length: int
+) -> np.ndarray:
+    """Predict the canonical label id for each text with one checkpoint.
+
+    Accepts a LoRA adapter directory or a merged checkpoint, and logs the label
+    mapping it resolved so the eval log shows which one was used.
+
+    Args:
+        model_path: Local directory or Hub repo id of the checkpoint.
+        texts: Prompt texts to classify.
+        batch_size: Number of texts per forward pass.
+        max_length: Token limit; longer texts are truncated.
+
+    Returns:
+        Array of shape [N] with canonical label ids, in the order of texts.
+
+    Raises:
+        ValueError: If the checkpoint's labels do not map onto AR/DIFFUSION/BOTH.
+    """
     model, tokenizer, id2label = load_sequence_classifier_for_inference(
         model_path, num_labels=len(MODALITY_LABELS)
     )
     checkpoint_id_to_canonical_id = build_label_remap(id2label, model_path)
-    output_size = model.config.num_labels
-    if output_size != len(MODALITY_LABELS) or set(checkpoint_id_to_canonical_id) != set(range(output_size)):
-        raise ValueError(
-            f"{model_path}: classifier has {output_size} outputs but id2label covers "
-            f"ids {sorted(checkpoint_id_to_canonical_id)}; expected 0..{len(MODALITY_LABELS) - 1}"
-        )
+    check_output_size(
+        checkpoint_id_to_canonical_id, model.config.num_labels, model_path
+    )
     logger.info(
         "Label mapping for %s: %s",
         model_path,
@@ -172,7 +225,11 @@ def run_inference(model_path: str, texts: List[str], batch_size: int, max_length
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
             enc = tokenizer(
-                batch, truncation=True, padding=True, max_length=max_length, return_tensors="pt"
+                batch,
+                truncation=True,
+                padding=True,
+                max_length=max_length,
+                return_tensors="pt",
             ).to(device)
             logits = model(**enc).logits
             batch_preds = torch.argmax(logits, dim=-1).cpu().tolist()
@@ -184,10 +241,21 @@ def run_inference(model_path: str, texts: List[str], batch_size: int, max_length
     return np.array(preds, dtype=np.int64)
 
 
-def compute_classification_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Dict:
+def compute_classification_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
+    """Compute accuracy, weighted F1, per-class scores and the confusion matrix.
+
+    Args:
+        y_true: Ground-truth canonical label ids.
+        y_pred: Predicted canonical label ids.
+
+    Returns:
+        Dict with accuracy, f1_weighted, per_class and confusion_matrix.
+    """
     labels = list(range(len(MODALITY_LABELS)))
     accuracy = float(accuracy_score(y_true, y_pred))
-    f1_weighted = float(f1_score(y_true, y_pred, average="weighted", labels=labels, zero_division=0))
+    f1_weighted = float(
+        f1_score(y_true, y_pred, average="weighted", labels=labels, zero_division=0)
+    )
     precision, recall, f1_per_class, support = precision_recall_fscore_support(
         y_true, y_pred, average=None, labels=labels, zero_division=0
     )
@@ -211,9 +279,21 @@ def compute_classification_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> Di
 
 def compute_routing_agreement(
     y_true: np.ndarray, preds_a: np.ndarray, preds_b: np.ndarray
-) -> Dict:
-    """Per-example agreement between two models' predictions, plus who matched ground
-    truth on disagreements. Order of a/b only affects labeling, not the counts."""
+) -> dict:
+    """Compare two models' predictions example by example.
+
+    Also records which model matched the ground truth where they disagree. The
+    order of a and b only affects the labels in the result, not the counts.
+
+    Args:
+        y_true: Ground-truth canonical label ids.
+        preds_a: Predictions of the first model.
+        preds_b: Predictions of the second model.
+
+    Returns:
+        Dict with the agreement rate, the disagreement breakdown and the agreement
+        rate per ground-truth label.
+    """
     n = len(y_true)
     agree_mask = preds_a == preds_b
     num_agree = int(agree_mask.sum())
@@ -234,7 +314,8 @@ def compute_routing_agreement(
         else:
             both_wrong_different_labels += 1
 
-    def rate_of_disagreements(count: int) -> Optional[float]:
+    def rate_of_disagreements(count: int) -> float | None:
+        """Return a count as a share of all disagreements, or None if there are none."""
         return round(count / num_disagree, 4) if num_disagree else None
 
     agreement_by_true_label = {}
@@ -260,20 +341,33 @@ def compute_routing_agreement(
             },
             "both_wrong_different_labels": {
                 "count": both_wrong_different_labels,
-                "rate_of_disagreements": rate_of_disagreements(both_wrong_different_labels),
+                "rate_of_disagreements": rate_of_disagreements(
+                    both_wrong_different_labels
+                ),
             },
         },
         "agreement_rate_by_ground_truth_label": agreement_by_true_label,
     }
 
 
-def evaluate_subset(
-    y_true: np.ndarray, preds: Dict[str, np.ndarray]
-) -> Dict:
-    metrics = {key: compute_classification_metrics(y_true, preds[key]) for key in MODEL_KEYS}
+def evaluate_subset(y_true: np.ndarray, preds: dict[str, np.ndarray]) -> dict:
+    """Score every model and every agreement pair on one subset of the test set.
+
+    Args:
+        y_true: Ground-truth canonical label ids for the subset.
+        preds: Predictions per model key, aligned with y_true.
+
+    Returns:
+        Dict with the per-model metrics and the pairwise agreement blocks.
+    """
+    metrics = {
+        key: compute_classification_metrics(y_true, preds[key]) for key in MODEL_KEYS
+    }
     agreements = {}
     for a, b in AGREEMENT_PAIRS:
-        agreements[f"{a}_vs_{b}"] = compute_routing_agreement(y_true, preds[a], preds[b])
+        agreements[f"{a}_vs_{b}"] = compute_routing_agreement(
+            y_true, preds[a], preds[b]
+        )
     return {"metrics": metrics, "routing_agreement": agreements}
 
 
@@ -281,6 +375,7 @@ def main(
     test_file: str,
     train_file: str,
     val_file: str,
+    *,
     published_baseline_model_path: str,
     clean_baseline_model_path: str,
     candidate_model_path: str,
@@ -289,10 +384,26 @@ def main(
     max_length: int = 256,
     include_full_text: bool = False,
 ):
+    """Run the three-way evaluation and write the JSON report.
+
+    Args:
+        test_file: Path to test.jsonl.
+        train_file: Path to train.jsonl, used for the contamination check.
+        val_file: Path to validation.jsonl, used for the contamination check.
+        published_baseline_model_path: Checkpoint of the published baseline.
+        clean_baseline_model_path: Checkpoint of the clean baseline.
+        candidate_model_path: Checkpoint of the candidate.
+        output_report: Where to write the JSON report.
+        batch_size: Number of texts per forward pass.
+        max_length: Token limit; longer texts are truncated.
+        include_full_text: Whether to store each prompt's text in the per-example records.
+    """
     test_rows = load_jsonl(test_file)
     train_rows = load_jsonl(train_file)
     val_rows = load_jsonl(val_file)
-    logger.info(f"Loaded {len(test_rows)} test rows, {len(train_rows)} train, {len(val_rows)} val")
+    logger.info(
+        f"Loaded {len(test_rows)} test rows, {len(train_rows)} train, {len(val_rows)} val"
+    )
 
     contaminated_indices, contamination_rate_by_class = flag_test_contamination(
         [r["text"] for r in train_rows], [r["text"] for r in val_rows], test_rows
@@ -311,7 +422,7 @@ def main(
         "clean_baseline": clean_baseline_model_path,
         "candidate": candidate_model_path,
     }
-    preds: Dict[str, np.ndarray] = {}
+    preds: dict[str, np.ndarray] = {}
     for key, path in model_paths.items():
         logger.info(f"Running inference for {key}: {path}")
         preds[key] = run_inference(path, texts, batch_size, max_length)
@@ -326,7 +437,9 @@ def main(
         filtered_report = evaluate_subset(clean_y_true, clean_preds)
     else:
         filtered_report = None
-        logger.warning("Contamination filter removed all test rows; filtered report skipped.")
+        logger.warning(
+            "Contamination filter removed all test rows; filtered report skipped."
+        )
 
     per_example_records = []
     for idx, row in enumerate(test_rows):
@@ -344,19 +457,21 @@ def main(
 
     report = {
         "metadata": {
-            "test_file": test_file,
-            "train_file": train_file,
-            "val_file": val_file,
+            "test_file": portable_path(test_file),
+            "train_file": portable_path(train_file),
+            "val_file": portable_path(val_file),
             "num_test_examples": len(test_rows),
-            "model_paths": model_paths,
+            "model_paths": {k: portable_path(v) for k, v in model_paths.items()},
             "generated_at_utc": datetime.now(timezone.utc).isoformat(),
             "label_order": MODALITY_LABELS,
         },
         "contamination_check": {
             "num_contaminated": len(contaminated_indices),
-            "contamination_rate": round(len(contaminated_indices) / len(test_rows), 4)
-            if test_rows
-            else None,
+            "contamination_rate": (
+                round(len(contaminated_indices) / len(test_rows), 4)
+                if test_rows
+                else None
+            ),
             "contamination_rate_by_ground_truth_label": contamination_rate_by_class,
             "note": "A test row is flagged if its exact or whitespace/case-normalized "
             "text also appears in train.jsonl/validation.jsonl. See DECISION_RECORD.md "
@@ -373,7 +488,7 @@ def main(
         },
     }
 
-    with open(output_report, "w") as f:
+    with open(output_report, "w", encoding="utf-8") as f:
         json.dump(report, f, indent=2)
     logger.info(f"Report written to: {output_report}")
 
@@ -388,14 +503,18 @@ def main(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Three-way modality routing candidate evaluation")
+    parser = argparse.ArgumentParser(
+        description="Three-way modality routing candidate evaluation"
+    )
     parser.add_argument("--test-file", required=True)
     parser.add_argument("--train-file", required=True)
     parser.add_argument("--val-file", required=True)
     parser.add_argument("--published-baseline-model-path", required=True)
     parser.add_argument("--clean-baseline-model-path", required=True)
     parser.add_argument("--candidate-model-path", required=True)
-    parser.add_argument("--output-report", default="modality_candidate_eval_report.json")
+    parser.add_argument(
+        "--output-report", default="modality_candidate_eval_report.json"
+    )
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--max-length", type=int, default=256)
     parser.add_argument("--include-full-text", action="store_true")
