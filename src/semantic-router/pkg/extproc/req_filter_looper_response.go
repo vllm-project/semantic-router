@@ -48,10 +48,9 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	var semantic *llmprotocol.Response
 	var body []byte
 	contentType := "application/json"
-	// Isolate looper-private "flow" so the strict Chat Completions codec can
-	// translate, then restore the public workflow trace when the decision
-	// asked for intermediate responses.
-	codecBody, flow := isolateLooperWorkflowFlow(resp.Body)
+	// Router-owned traces are isolated only at this trusted boundary; the
+	// provider codec remains strict about upstream extensions.
+	codecBody, traces := isolateLooperResponseTraces(resp.Body)
 	streaming := strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream")
 	if streaming && target == llmprotocol.OpenAIChatV1 && len(resp.BufferedBody) > 0 {
 		semantic, body, err = prepareNativeLooperStream(engine, resp, reqCtx)
@@ -124,7 +123,7 @@ func (r *OpenAIRouter) prepareLooperResponse(
 	if headerValueCI(reqCtx, headers.SRBenchExpectedConfigHash) != "" {
 		reqCtx.BenchmarkModelUsage = r.benchmarkLooperUsage(resp, reqCtx)
 	}
-	body = restoreLooperWorkflowTrace(body, flow, reqCtx)
+	body = restoreLooperResponseTraces(body, traces, reqCtx)
 	reqCtx.SemanticResponse = semantic
 	reqCtx.ImmediateResponseEncoded = true
 	return &ext_proc.ProcessingResponse{
@@ -318,17 +317,17 @@ func newHeaderValueOption(key string, value string) *core.HeaderValueOption {
 
 // looperClientResponseBody drops looper-private JSON extensions before the
 // protocol codec translates a buffered or streaming result. Callers that
-// need the public workflow trace must restore it after translation.
+// need public traces must restore them after translation.
 func looperClientResponseBody(body []byte) []byte {
-	stripped, _ := isolateLooperWorkflowFlow(body)
+	stripped, _ := isolateLooperResponseTraces(body)
 	return stripped
 }
 
 func isolateLooperWorkflowFlow(body []byte) ([]byte, json.RawMessage) {
 	if isLooperSSEBody(body) {
-		return isolateFlowFromSSE(body)
+		return isolateLooperFieldFromSSE(body, "flow")
 	}
-	return isolateFlowFromJSON(body)
+	return isolateLooperFieldFromJSON(body, "flow")
 }
 
 func restoreLooperWorkflowTrace(body []byte, flow json.RawMessage, reqCtx *RequestContext) []byte {
@@ -336,9 +335,9 @@ func restoreLooperWorkflowTrace(body []byte, flow json.RawMessage, reqCtx *Reque
 		return body
 	}
 	if isLooperSSEBody(body) {
-		return restoreFlowSSE(body, flow)
+		return restoreLooperFieldSSE(body, flow, "flow")
 	}
-	return restoreFlowJSON(body, flow)
+	return restoreLooperFieldJSON(body, flow, "flow")
 }
 
 func looperShouldRestoreWorkflowTrace(reqCtx *RequestContext, flow json.RawMessage) bool {
@@ -385,7 +384,7 @@ func isLooperSSEBody(body []byte) bool {
 	return bytes.HasPrefix(trimmed, []byte("data:")) || bytes.Contains(body, []byte("\ndata:"))
 }
 
-func isolateFlowFromSSE(body []byte) ([]byte, json.RawMessage) {
+func isolateLooperFieldFromSSE(body []byte, field string) ([]byte, json.RawMessage) {
 	lines := bytes.Split(body, []byte("\n"))
 	out := make([]byte, 0, len(body))
 	var flow json.RawMessage
@@ -394,7 +393,7 @@ func isolateFlowFromSSE(body []byte) ([]byte, json.RawMessage) {
 			payload := bytes.TrimSpace(rest)
 			if !bytes.Equal(payload, []byte("[DONE]")) {
 				var extracted json.RawMessage
-				payload, extracted = isolateFlowFromJSON(payload)
+				payload, extracted = isolateLooperFieldFromJSON(payload, field)
 				if len(flow) == 0 && len(extracted) > 0 {
 					flow = extracted
 				}
@@ -409,7 +408,7 @@ func isolateFlowFromSSE(body []byte) ([]byte, json.RawMessage) {
 	return out, flow
 }
 
-func restoreFlowSSE(body []byte, flow json.RawMessage) []byte {
+func restoreLooperFieldSSE(body []byte, flow json.RawMessage, field string) []byte {
 	if len(flow) == 0 {
 		return body
 	}
@@ -420,7 +419,7 @@ func restoreFlowSSE(body []byte, flow json.RawMessage) []byte {
 		if rest, ok := bytes.CutPrefix(line, []byte("data:")); ok && !restored {
 			payload := bytes.TrimSpace(rest)
 			if len(payload) > 0 && payload[0] == '{' && !bytes.Equal(payload, []byte("[DONE]")) {
-				payload = restoreFlowJSON(payload, flow)
+				payload = restoreLooperFieldJSON(payload, flow, field)
 				line = append([]byte("data: "), payload...)
 				restored = true
 			}
@@ -433,16 +432,16 @@ func restoreFlowSSE(body []byte, flow json.RawMessage) []byte {
 	return out
 }
 
-func isolateFlowFromJSON(body []byte) ([]byte, json.RawMessage) {
+func isolateLooperFieldFromJSON(body []byte, field string) ([]byte, json.RawMessage) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(body, &obj); err != nil {
 		return body, nil
 	}
-	flow, ok := obj["flow"]
+	flow, ok := obj[field]
 	if !ok {
 		return body, nil
 	}
-	delete(obj, "flow")
+	delete(obj, field)
 	stripped, err := json.Marshal(obj)
 	if err != nil {
 		return body, nil
@@ -450,7 +449,7 @@ func isolateFlowFromJSON(body []byte) ([]byte, json.RawMessage) {
 	return stripped, flow
 }
 
-func restoreFlowJSON(body []byte, flow json.RawMessage) []byte {
+func restoreLooperFieldJSON(body []byte, flow json.RawMessage, field string) []byte {
 	if len(flow) == 0 {
 		return body
 	}
@@ -458,7 +457,7 @@ func restoreFlowJSON(body []byte, flow json.RawMessage) []byte {
 	if err := json.Unmarshal(body, &obj); err != nil {
 		return body
 	}
-	obj["flow"] = flow
+	obj[field] = flow
 	restored, err := json.Marshal(obj)
 	if err != nil {
 		return body
