@@ -107,6 +107,7 @@ func TestLooperIngressPreservesClientResponseContract(t *testing.T) {
 						require.Equal(t, ctx.SemanticResponse.ID, stored.ID)
 						require.Equal(t, "resp_previous", stored.PreviousResponseID)
 						require.Equal(t, "A useful answer", stored.OutputText)
+						assertStoredResponseMatchesClientOutput(t, router.ResponseAPIFilter, stored.ID, []byte(body), stream)
 					}
 					if format != llmprotocol.OpenAIChatV1 {
 						require.NotContains(t, body, `"fusion"`)
