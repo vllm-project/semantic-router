@@ -33,14 +33,18 @@
 
 ## Omni checkpoints {#omni-checkpoints}
 
-9 月 18 日发布的版本通过独立的文本、图像和音频编码器生成共享空间中的嵌入。这两个 checkpoint 仍供直接使用，尚未成为 Router 默认的多模态组件。
+9 月 19 日发布的版本通过独立的文本、图像和音频编码器生成共享空间中的嵌入。这两个 checkpoint 仍供直接使用，尚未成为 Router 默认的多模态组件。
 
 | Checkpoint | 总参数量 | 输出维度 | 文本上限 | 文本基座与读出 |
 | --- | ---: | ---: | ---: | --- |
-| [Omni Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/README.md) | 135.4M（135,383,808） | 384 | 512 tokens | 冻结的 GIST-small；CLS 读出 |
-| [Omni Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/README.md) | 1.33B（1,332,891,200） | 768 | 32,768 tokens | Qwen3-Embedding-0.6B；末 token Matryoshka 读出 |
+| [Omni Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/README.md) | 163.8M（163,771,288） | 384 | 512 tokens | 冻结的 GIST-small；CLS 读出 |
+| [Omni Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/README.md) | 1.36B（1,361,475,288） | 768 | 32,768 tokens | Qwen3-Embedding-0.6B；末 token Matryoshka 读出 |
 
-参数量包含全部三个模态分支。文本上限包含特殊 token；公开的 `encode_text` 对超长输入报错，不会静默截断。Mini 去除文本首尾空白，使用原生 Qwen tokenizer，不添加提示词，并拒绝分词后为零个 token 的输入。它先对最后一个非 padding token 的完整 1024 维状态做 L2 归一化，再取前 768 维并再次归一化。Nano 在 CLS 读出后采用恒等文本投影。两者均返回 L2 归一化向量。音频输入须为单声道、16 kHz，每段不超过 30 秒。
+参数量包含全部模态分支，包括新增的 CLAP 音频分支；整数和运行统计量 buffer 不计入参数。Nano 保留 CLS 读出及恒等投影；Mini 对最后一个非 padding token 的完整 1024 维状态归一化，取前 768 维后再次归一化。
+
+Mini 默认使用适合跨模态比较的共享文本模式。纯文本任务可向 `encode_text` 传入 `task=` 或自定义 `instruction=`，二者互斥。检索预设要求指定 `role="query"` 或 `role="document"`，文档不添加前缀。32,768-token 预算包含指令前缀和特殊 token；超限默认报错，只有显式设置 `truncate=True` 才截断。Nano 保留 512-token 上限并拒绝超长输入。带指令的 English 评测使用固定的官方任务指令，不是搜索通用预设得到的结果。
+
+两者都接收不超过 30 秒、保留原始采样率的 PCM，可为单声道或 channels-first 数组。传入真实采样率后，两个分支分别从原始波形生成 Whisper 的 16 kHz 输入与 CLAP 的 48 kHz 输入。存在更高采样率 PCM 时，不应先降采样到 16 kHz。CLAP 读取按端点分布、每段最多十秒的窗口，聚合归一化向量，经冻结的 TRAIN 统计量标准化及已训练的残差映射后，加到保留的未归一化 Whisper 仿射输出上，最后做 L2 归一化。文本/图像路径保留，音频路径经过新的训练与评测。
 
 最新模型卡将路由与跨模态检索能力分别与[原始 small](https://huggingface.co/llm-semantic-router/multi-modal-embed-small/tree/fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4)和[原始 large](https://huggingface.co/llm-semantic-router/multi-modal-embed-large/tree/e21cde3ccc414c56f504b322662f42c603a939ee)模型对比。分数范围为 0–100，每格表示原始模型 → 当前模型：
 
@@ -50,21 +54,23 @@
 | MASSIVE English，accuracy | 65.95 → 81.97 | 72.31 → 80.96 |
 | COCO，图像 → 文本，R@1 | 40.83 → 60.87 | 42.53 → 67.44 |
 | COCO，文本 → 图像，R@1 | 30.18 → 55.82 | 35.04 → 61.60 |
-| LibriSpeech，音频 → 文本，R@1 | 4.21 → 17.16 | 56.99 → 86.37 |
-| LibriSpeech，文本 → 音频，R@1 | 9.58 → 25.44 | 78.58 → 95.36 |
+| LibriSpeech，音频 → 文本，R@1 | 4.21 → 16.12 | 56.99 → 86.14 |
+| LibriSpeech，文本 → 音频，R@1 | 9.58 → 20.34 | 78.58 → 94.90 |
 
 双方使用相同的留出评测集，这些已知测试集在不同版本间复用，文本上限统一为 128 tokens。分类使用有标签 TRAIN 数据构建的原型；检索使用完整候选池和全部匹配正例。该协议不同于官方 MTEB 分类探针，完整指标和不确定性见下方链接的评测文档。
 
-另列当前版本的完整评测面板，使用 MTEB 2.21.0。原始 small 和 large 尚未按该完整面板协议评测：
+完整 MTEB 2.21.0 面板以 **Mean(TaskType)** 为主要指标，Mean(Task) 为补充指标。原始 small/large 模型尚未按这些完整面板协议评测。
 
-| 评测 | Nano | Mini |
-| --- | ---: | ---: |
-| English v2，41 个任务，任务均分 | 64.88 | 63.49 |
-| MAEB audio-only，19 个任务，任务均分 | 39.77 | 42.53 |
+| 面板与模式 | Mean(TaskType) | 全局排名 | 不大于该尺寸的排名 | 距该尺寸内最佳分数 | Mean(Task) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Nano · English v2，41 个任务 · 默认文本 | 60.78 | 66/188 | 5/75 | 0.61 pp | 64.88 |
+| Mini · English v2，41 个任务 · 官方指令文本 | 64.68 | 38/188 | 10/134 | 3.78 pp | 70.38 |
+| Nano · MAEB audio-only，19 个任务 · 默认音频 | 52.34 | 19/64 | 6/27 | 3.51 pp | 43.59 |
+| Mini · MAEB audio-only，19 个任务 · 默认音频 | 54.87 | 12/64 | 5/50 | 2.85 pp | 47.77 |
 
-Nano 的分数通过已记录的[权重与计算等价性](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/inference-equivalence.json)适用于精简后的推理包。Mini 的 English 面板在等价的冻结 Qwen 文本组件上测得，详见[组件等价性报告](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/benchmarks/component-equivalence.json)。两者的 English 面板均不是对当前完整 checkpoint 的新一轮运行；Mini 的音频面板则在发布的数值模型上重新评测。
+排名汇总 9 月 17 日注册表快照与当前 Vela 模型，包括单模态专用模型，已报告的评测协议存在差异。尺寸上限按全模型总参数量计算。**两个 Vela 模型都不在这两个完整面板的观测前沿上**，两种聚合指标下均如此。单任务优势包括 Nano 的 IMDb **91.95 accuracy**、NMSQA **62.90 max AP**，以及 Mini 的 Mridingham **68.14 accuracy**、SIBFLEURS **39.07 accuracy**；这些任务级前沿不能证明整体榜单领先。
 
-这些面板不覆盖全部语言和图像任务。在更新后的[任务级尺寸与质量对比](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/pareto-methodology.md)中，Nano 以 **63.28 max AP** 位于 NMSQA 的观测前沿，Mini 以 **40.06 accuracy** 位于 SIBFLEURS 的观测前沿。Nano 在 ArXiv 上为 **64.89 V-measure**，在 VehicleSoundClustering 上为 **13.80 V-measure**；由于加入了更小模型的独立实测结果，它已不在这两个任务的前沿。横轴使用全模型总参数量，不同模型的评测协议存在差异；这些图不能证明时延或整体榜单领先。全部任务、退步项和协议见固定版本的 [Nano 评测](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/EVALUATION.md)与 [Mini 评测](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/benchmarks/EVALUATION.md)。
+Nano 的 English 分数通过未改变的冻结文本路径保留。Mini 的带指令 English 评测使用固定的官方指令，并重新运行了匹配的原始文本对照：Mean(TaskType) 从 **58.79 提升到 64.68**，38 个任务提升、3 个下降。该指令模式不能替代跨图像/音频比较中的默认共享模式。两个新音频路径均重新评测；虽然音频聚合分数提升，语音与文本检索仍有退步。实际测量身份、全部任务和退步项见固定版本的 [Nano 评测](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/EVALUATION.md)、[Mini 评测](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/EVALUATION.md)及[指令模式匹配对照](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/instruction-mode.md#matched-raw-comparison)。这些面板不代表完整多语言或图像覆盖，也不证明时延或内存表现。
 
 ## 默认值与输入预算 {#defaults-and-input-budgets}
 

@@ -81,7 +81,7 @@ ArXivHierarchicalClusteringP2P,v_measure,nomic-ai/nomic-embed-text-v1,peer,0.137
 ArXivHierarchicalClusteringP2P,v_measure,nomic-ai/nomic-embed-text-v1-ablated,peer,0.137,57.903400000000005,True,False,registry_reported,registry_reported:nomic-ai/nomic-embed-text-v1-ablated,,
 ArXivHierarchicalClusteringP2P,v_measure,nomic-ai/nomic-embed-text-v1-unsupervised,peer,0.137,56.7453,True,False,registry_reported,registry_reported:nomic-ai/nomic-embed-text-v1-unsupervised,,
 ArXivHierarchicalClusteringP2P,v_measure,nomic-ai/nomic-embed-text-v1.5,peer,0.137,60.08051520875409,True,False,registry_reported,registry_reported:nomic-ai/nomic-embed-text-v1.5,,
-ArXivHierarchicalClusteringP2P,v_measure,llm-semantic-router/Vela-1.0-Omni-Nano,nano,0.135383808,64.88847259326147,True,False,exact_public_inference_applicability,vela_release_evaluation:llm-semantic-router/Vela-1.0-Omni-Nano,50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa,50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa
+ArXivHierarchicalClusteringP2P,v_measure,llm-semantic-router/Vela-1.0-Omni-Nano,nano,0.163771288,64.88847259326147,True,False,exact_text_component_applicability,vela_release_evaluation:llm-semantic-router/Vela-1.0-Omni-Nano,,474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2
 ArXivHierarchicalClusteringP2P,v_measure,ibm-granite/granite-embedding-english-r2,peer,0.149,59.0566,True,False,registry_reported,registry_reported:ibm-granite/granite-embedding-english-r2,,
 ArXivHierarchicalClusteringP2P,v_measure,Tarka-AIR/Tarka-Embedding-150M-V1,peer,0.156,63.397099999999995,True,False,registry_reported,registry_reported:Tarka-AIR/Tarka-Embedding-150M-V1,,
 ArXivHierarchicalClusteringP2P,v_measure,codefuse-ai/F2LLM-v2-160M,peer,0.159,62.4399,True,False,registry_reported,registry_reported:codefuse-ai/F2LLM-v2-160M,,
@@ -159,7 +159,7 @@ ArXivHierarchicalClusteringP2P,v_measure,DeepPavlov/rubert-base-cased,peer,1.28,
 ArXivHierarchicalClusteringP2P,v_measure,manu/sentence_croissant_alpha_v0.2,peer,1.28,59.5187,True,False,registry_reported,registry_reported:manu/sentence_croissant_alpha_v0.2,,
 ArXivHierarchicalClusteringP2P,v_measure,manu/sentence_croissant_alpha_v0.3,peer,1.28,55.098400000000005,True,False,registry_reported,registry_reported:manu/sentence_croissant_alpha_v0.3,,
 ArXivHierarchicalClusteringP2P,v_measure,manu/sentence_croissant_alpha_v0.4,peer,1.28,58.5928,True,False,registry_reported,registry_reported:manu/sentence_croissant_alpha_v0.4,,
-ArXivHierarchicalClusteringP2P,v_measure,llm-semantic-router/Vela-1.0-Omni-Mini,mini,1.3328912,62.00989328478093,True,False,exact_text_component_applicability,vela_release_evaluation:llm-semantic-router/Vela-1.0-Omni-Mini,self,d93ebb5f2f4951d52423ae13da71b037ce44d02957671e1e71bfe25623f3cff2
+ArXivHierarchicalClusteringP2P,v_measure,llm-semantic-router/Vela-1.0-Omni-Mini,mini,1.361475288,62.00989328478093,True,False,exact_text_component_applicability,vela_release_evaluation:llm-semantic-router/Vela-1.0-Omni-Mini,,d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731
 ArXivHierarchicalClusteringP2P,v_measure,NovaSearch/stella_en_1.5B_v5,peer,1.54,64.52339106857525,True,False,registry_reported,registry_reported:NovaSearch/stella_en_1.5B_v5,,
 ArXivHierarchicalClusteringP2P,v_measure,Alibaba-NLP/gte-Qwen2-1.5B-instruct,peer,1.543,64.7434,True,False,registry_reported,registry_reported:Alibaba-NLP/gte-Qwen2-1.5B-instruct,,
 ArXivHierarchicalClusteringP2P,v_measure,NovaSearch/jasper_en_vision_language_v1,peer,1.565,68.68769999999999,True,False,registry_reported,registry_reported:NovaSearch/jasper_en_vision_language_v1,,
@@ -234,7 +234,7 @@ NMSQAPairClassification,max_ap,microsoft/wavlm-base-plus-sv,peer,0.095,48.4168,T
 NMSQAPairClassification,max_ap,microsoft/wavlm-base-sd,peer,0.095,52.9964,True,False,registry_reported,registry_reported:microsoft/wavlm-base-sd,,
 NMSQAPairClassification,max_ap,microsoft/wavlm-base-sv,peer,0.095,52.9964,True,False,registry_reported,registry_reported:microsoft/wavlm-base-sv,,
 NMSQAPairClassification,max_ap,asapp/sew-d-mid-400k-ft-ls100h,peer,0.139,48.4208,True,False,registry_reported,registry_reported:asapp/sew-d-mid-400k-ft-ls100h,,
-NMSQAPairClassification,max_ap,llm-semantic-router/Vela-1.0-Omni-Nano,nano,0.135383808,63.28340215485784,True,True,exact_public_inference_applicability,,50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa,50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa
+NMSQAPairClassification,max_ap,llm-semantic-router/Vela-1.0-Omni-Nano,nano,0.163771288,62.89933955933497,True,True,measured_release_evaluation,,,474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2
 NMSQAPairClassification,max_ap,laion/clap-htsat-unfused,peer,0.153,46.9791,True,False,registry_reported,registry_reported:laion/clap-htsat-unfused,,
 NMSQAPairClassification,max_ap,laion/clap-htsat-fused,peer,0.154,47.8507,True,False,registry_reported,registry_reported:laion/clap-htsat-fused,,
 NMSQAPairClassification,max_ap,microsoft/msclap-2023,peer,0.16,51.0934,True,False,registry_reported,registry_reported:microsoft/msclap-2023,,
@@ -262,7 +262,7 @@ NMSQAPairClassification,max_ap,facebook/mms-1b-l1107,peer,1.0,50.069399999999995
 NMSQAPairClassification,max_ap,facebook/wav2vec2-xls-r-1b,peer,1.0,49.3205,True,False,registry_reported,registry_reported:facebook/wav2vec2-xls-r-1b,,
 NMSQAPairClassification,max_ap,speechbrain/m-ctc-t-large,peer,1.059,58.9789,True,False,registry_reported,registry_reported:speechbrain/m-ctc-t-large,,
 NMSQAPairClassification,max_ap,LanguageBind/LanguageBind_Omni,peer,1.2,50.053000000000004,True,False,registry_reported,registry_reported:LanguageBind/LanguageBind_Omni,,
-NMSQAPairClassification,max_ap,llm-semantic-router/Vela-1.0-Omni-Mini,mini,1.3328912,87.77176044610992,True,False,exact_metadata_only_applicability,,self,d93ebb5f2f4951d52423ae13da71b037ce44d02957671e1e71bfe25623f3cff2
+NMSQAPairClassification,max_ap,llm-semantic-router/Vela-1.0-Omni-Mini,mini,1.361475288,88.19599834012242,True,False,measured_release_evaluation,,,d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731
 NMSQAPairClassification,max_ap,openai/whisper-large-v3,peer,1.55,48.4145,True,False,registry_reported,registry_reported:openai/whisper-large-v3,,
 NMSQAPairClassification,max_ap,jinaai/jina-embeddings-v5-omni-small,peer,1.626,93.38365214450435,True,False,registry_reported,registry_reported:jinaai/jina-embeddings-v5-omni-small,,
 NMSQAPairClassification,max_ap,encord-team/ebind-full,peer,1.79,46.0069,True,False,registry_reported,registry_reported:encord-team/ebind-full,,
@@ -302,7 +302,7 @@ SIBFLEURS,accuracy,microsoft/wavlm-base-plus-sv,peer,0.095,11.857322549019608,Tr
 SIBFLEURS,accuracy,microsoft/wavlm-base-sd,peer,0.095,13.31318431372549,True,False,registry_reported,registry_reported:microsoft/wavlm-base-sd,,
 SIBFLEURS,accuracy,microsoft/wavlm-base-sv,peer,0.095,13.31318431372549,True,False,registry_reported,registry_reported:microsoft/wavlm-base-sv,,
 SIBFLEURS,accuracy,asapp/sew-d-mid-400k-ft-ls100h,peer,0.139,12.634273529411763,True,False,registry_reported,registry_reported:asapp/sew-d-mid-400k-ft-ls100h,,
-SIBFLEURS,accuracy,llm-semantic-router/Vela-1.0-Omni-Nano,nano,0.135383808,18.304657831512046,True,False,exact_public_inference_applicability,,50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa,50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa
+SIBFLEURS,accuracy,llm-semantic-router/Vela-1.0-Omni-Nano,nano,0.163771288,18.072541269472218,True,False,measured_release_evaluation,,,474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2
 SIBFLEURS,accuracy,laion/clap-htsat-unfused,peer,0.153,8.674730392156862,True,False,registry_reported,registry_reported:laion/clap-htsat-unfused,,
 SIBFLEURS,accuracy,laion/clap-htsat-fused,peer,0.154,9.069597058823529,True,False,registry_reported,registry_reported:laion/clap-htsat-fused,,
 SIBFLEURS,accuracy,microsoft/msclap-2023,peer,0.16,14.073474509803921,True,False,registry_reported,registry_reported:microsoft/msclap-2023,,
@@ -330,7 +330,7 @@ SIBFLEURS,accuracy,facebook/mms-1b-l1107,peer,1.0,21.60156862745098,True,False,r
 SIBFLEURS,accuracy,facebook/wav2vec2-xls-r-1b,peer,1.0,12.637753921568628,True,False,registry_reported,registry_reported:facebook/wav2vec2-xls-r-1b,,
 SIBFLEURS,accuracy,speechbrain/m-ctc-t-large,peer,1.059,21.695727450980392,True,False,registry_reported,registry_reported:speechbrain/m-ctc-t-large,,
 SIBFLEURS,accuracy,LanguageBind/LanguageBind_Omni,peer,1.2,14.720610784313726,True,False,registry_reported,registry_reported:LanguageBind/LanguageBind_Omni,,
-SIBFLEURS,accuracy,llm-semantic-router/Vela-1.0-Omni-Mini,mini,1.3328912,40.06316360536309,True,True,exact_metadata_only_applicability,,self,d93ebb5f2f4951d52423ae13da71b037ce44d02957671e1e71bfe25623f3cff2
+SIBFLEURS,accuracy,llm-semantic-router/Vela-1.0-Omni-Mini,mini,1.361475288,39.06804619080834,True,True,measured_release_evaluation,,,d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731
 SIBFLEURS,accuracy,openai/whisper-large-v3,peer,1.55,22.948927450980392,True,False,registry_reported,registry_reported:openai/whisper-large-v3,,
 SIBFLEURS,accuracy,jinaai/jina-embeddings-v5-omni-small,peer,1.626,30.350692156862742,True,False,registry_reported,registry_reported:jinaai/jina-embeddings-v5-omni-small,,
 SIBFLEURS,accuracy,encord-team/ebind-full,peer,1.79,14.727586274509804,True,False,registry_reported,registry_reported:encord-team/ebind-full,,
@@ -372,7 +372,7 @@ VehicleSoundClustering,v_measure,microsoft/wavlm-base-plus-sv,peer,0.095,1.7932,
 VehicleSoundClustering,v_measure,microsoft/wavlm-base-sd,peer,0.095,0.40940000000000004,True,False,registry_reported,registry_reported:microsoft/wavlm-base-sd,,
 VehicleSoundClustering,v_measure,microsoft/wavlm-base-sv,peer,0.095,0.40940000000000004,True,False,registry_reported,registry_reported:microsoft/wavlm-base-sv,,
 VehicleSoundClustering,v_measure,asapp/sew-d-mid-400k-ft-ls100h,peer,0.139,0.6276,True,False,registry_reported,registry_reported:asapp/sew-d-mid-400k-ft-ls100h,,
-VehicleSoundClustering,v_measure,llm-semantic-router/Vela-1.0-Omni-Nano,nano,0.135383808,13.800701178563807,True,False,exact_public_inference_applicability,,50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa,50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa
+VehicleSoundClustering,v_measure,llm-semantic-router/Vela-1.0-Omni-Nano,nano,0.163771288,5.275425308186281,True,False,measured_release_evaluation,,,474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2
 VehicleSoundClustering,v_measure,laion/clap-htsat-unfused,peer,0.153,2.6642,True,False,registry_reported,registry_reported:laion/clap-htsat-unfused,,
 VehicleSoundClustering,v_measure,laion/clap-htsat-fused,peer,0.154,4.7132,True,False,registry_reported,registry_reported:laion/clap-htsat-fused,,
 VehicleSoundClustering,v_measure,microsoft/msclap-2023,peer,0.16,2.86,True,False,registry_reported,registry_reported:microsoft/msclap-2023,,
@@ -400,7 +400,7 @@ VehicleSoundClustering,v_measure,facebook/mms-1b-l1107,peer,1.0,0.4373,True,Fals
 VehicleSoundClustering,v_measure,facebook/wav2vec2-xls-r-1b,peer,1.0,0.1275,True,False,registry_reported,registry_reported:facebook/wav2vec2-xls-r-1b,,
 VehicleSoundClustering,v_measure,speechbrain/m-ctc-t-large,peer,1.059,0.967,True,False,registry_reported,registry_reported:speechbrain/m-ctc-t-large,,
 VehicleSoundClustering,v_measure,LanguageBind/LanguageBind_Omni,peer,1.2,2.5643,True,False,registry_reported,registry_reported:LanguageBind/LanguageBind_Omni,,
-VehicleSoundClustering,v_measure,llm-semantic-router/Vela-1.0-Omni-Mini,mini,1.3328912,9.001091019154014,True,False,exact_metadata_only_applicability,,self,d93ebb5f2f4951d52423ae13da71b037ce44d02957671e1e71bfe25623f3cff2
+VehicleSoundClustering,v_measure,llm-semantic-router/Vela-1.0-Omni-Mini,mini,1.361475288,1.7269120528614579,True,False,measured_release_evaluation,,,d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731
 VehicleSoundClustering,v_measure,openai/whisper-large-v3,peer,1.55,1.3834000000000002,True,False,registry_reported,registry_reported:openai/whisper-large-v3,,
 VehicleSoundClustering,v_measure,jinaai/jina-embeddings-v5-omni-small,peer,1.626,4.8423,True,False,registry_reported,registry_reported:jinaai/jina-embeddings-v5-omni-small,,
 VehicleSoundClustering,v_measure,encord-team/ebind-full,peer,1.79,6.4883,True,False,registry_reported,registry_reported:encord-team/ebind-full,,

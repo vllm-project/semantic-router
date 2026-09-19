@@ -45,23 +45,38 @@ and latency requirements.
 
 ## Omni checkpoints
 
-The September 18 releases provide separate text, image and audio encoders in a
+The September 19 releases provide separate text, image and audio encoders in a
 shared embedding space. These checkpoints remain direct-use models rather than
 the Router's default multimodal components.
 
 | Checkpoint | Total parameters | Output dimensions | Text limit | Text backbone and readout |
 | --- | ---: | ---: | ---: | --- |
-| [Omni Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/README.md) | 135.4M (135,383,808) | 384 | 512 tokens | Frozen GIST-small; CLS readout |
-| [Omni Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/README.md) | 1.33B (1,332,891,200) | 768 | 32,768 tokens | Qwen3-Embedding-0.6B; last-token Matryoshka readout |
+| [Omni Nano](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/README.md) | 163.8M (163,771,288) | 384 | 512 tokens | Frozen GIST-small; CLS readout |
+| [Omni Mini](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/README.md) | 1.36B (1,361,475,288) | 768 | 32,768 tokens | Qwen3-Embedding-0.6B; last-token Matryoshka readout |
 
-Parameter counts include all three modality branches. Text limits include
-special tokens; the public `encode_text` rejects inputs above the limit instead
-of silently truncating them. Mini strips surrounding whitespace, uses the native
-Qwen tokenizer without an added prompt, and rejects text that tokenizes to zero
-tokens. Its text readout normalizes the full 1024-dimensional last nonpadding
-token, takes the first 768 dimensions, then normalizes that prefix. Nano uses an
-identity text projection after CLS readout. Both return L2-normalized vectors.
-Audio input is mono, 16 kHz, up to 30 seconds per waveform.
+Parameter counts include every modality branch, including the CLAP audio branch;
+integer and running-statistics buffers are not parameters. Nano retains CLS
+readout with an identity projection. Mini normalizes the 1024-dimensional last
+nonpadding token, takes its first 768 dimensions, then normalizes again.
+
+Mini defaults to shared text for cross-modal comparisons. For text-only tasks,
+`encode_text` accepts either `task=` or a custom `instruction=`. The retrieval
+preset requires `role="query"` or `role="document"`; documents stay unprefixed.
+The 32,768-token budget includes any instruction prefix and special tokens.
+Inputs over the budget are rejected unless Mini's caller explicitly sets
+`truncate=True`. Nano retains its 512-token limit and rejects longer inputs.
+The instructed English benchmark uses fixed official task instructions, not a
+sweep of the generic presets.
+
+Both models accept original-rate PCM of at most 30 seconds, as mono or
+channels-first arrays. Pass its actual sampling rate; each branch independently
+resamples the original waveform to 16 kHz for Whisper and 48 kHz for CLAP.
+Preserve higher-rate PCM instead of downsampling to 16 kHz before the call.
+CLAP encodes endpoint-spaced windows of at most ten seconds, aggregates their
+normalized vectors, and applies a learned residual map after frozen TRAIN
+standardization. That residual is added to the retained, unnormalized Whisper
+affine before final L2 normalization. Text/image paths are retained; audio is
+newly trained and evaluated.
 
 The latest cards compare routing and cross-modal retrieval with the
 [original small](https://huggingface.co/llm-semantic-router/multi-modal-embed-small/tree/fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4)
@@ -74,40 +89,44 @@ models. Scores are 0–100; each cell shows original → current:
 | MASSIVE English, accuracy | 65.95 → 81.97 | 72.31 → 80.96 |
 | COCO, image → text, R@1 | 40.83 → 60.87 | 42.53 → 67.44 |
 | COCO, text → image, R@1 | 30.18 → 55.82 | 35.04 → 61.60 |
-| LibriSpeech, audio → text, R@1 | 4.21 → 17.16 | 56.99 → 86.37 |
-| LibriSpeech, text → audio, R@1 | 9.58 → 25.44 | 78.58 → 95.36 |
+| LibriSpeech, audio → text, R@1 | 4.21 → 16.12 | 56.99 → 86.14 |
+| LibriSpeech, text → audio, R@1 | 9.58 → 20.34 | 78.58 → 94.90 |
 
 Both sides use the same held-out pools, reused across releases, with a 128-token
 text cap. Classification uses labeled TRAIN prototypes; retrieval uses complete
 candidate pools and all matching positives. This differs from official MTEB
 classification probes. Full metrics and uncertainty are in the linked evaluations.
 
-Separately, current full-panel results use MTEB 2.21.0. The original small and
-large models have not been evaluated under this complete-panel protocol:
+For the complete MTEB 2.21.0 panels, **Mean(TaskType)** is the primary metric;
+Mean(Task) is supplementary. The original small/large models have not been
+measured under these complete-panel protocols.
 
-| Evaluation | Nano | Mini |
-| --- | ---: | ---: |
-| English v2, 41 tasks, mean task score | 64.88 | 63.49 |
-| MAEB audio-only, 19 tasks, mean task score | 39.77 | 42.53 |
+| Panel and mode | Mean(TaskType) | Global rank | Rank at ≤ size | Gap to best at ≤ size | Mean(Task) |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Nano · English v2, 41 tasks · default text | 60.78 | 66/188 | 5/75 | 0.61 pp | 64.88 |
+| Mini · English v2, 41 tasks · official instructed text | 64.68 | 38/188 | 10/134 | 3.78 pp | 70.38 |
+| Nano · MAEB audio-only, 19 tasks · default audio | 52.34 | 19/64 | 6/27 | 3.51 pp | 43.59 |
+| Mini · MAEB audio-only, 19 tasks · default audio | 54.87 | 12/64 | 5/50 | 2.85 pp | 47.77 |
 
-Nano's scores apply to the smaller inference package through documented
-[weight and computation equivalence](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/inference-equivalence.json).
-Mini's English panel was measured on its equivalent frozen Qwen text component,
-as recorded in the [component report](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/benchmarks/component-equivalence.json).
-Neither English panel is a new full-checkpoint run; Mini's audio panel was
-freshly evaluated on the released numerical model.
+Ranks combine the September 17 registry snapshots with the current Vela models,
+including single-modality specialists and differing reported protocols. The
+size limit counts total parameters. **Neither Vela model lies on the observed
+frontier of either complete panel**, under either aggregate. Selected task
+strengths include Nano's IMDb **91.95 accuracy** and NMSQA **62.90 max AP**,
+and Mini's Mridingham **68.14 accuracy** and SIBFLEURS **39.07 accuracy**;
+these task-level frontiers do not establish overall benchmark leadership.
 
-These panels do not cover every language or image task. In the updated
-[task-level size–quality comparisons](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/pareto-methodology.md),
-Nano is on the observed NMSQA frontier at **63.28 max AP** and Mini is on the
-SIBFLEURS frontier at **40.06 accuracy**. Nano scores **64.89 V-measure** on ArXiv
-and **13.80 V-measure** on VehicleSoundClustering, but smaller independently
-measured peers place it below those two frontiers. The horizontal axis counts
-all model parameters, and peer protocols vary. These plots establish neither
-latency nor overall benchmark leadership. See the pinned
-[Nano evaluation](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/EVALUATION.md) and
-[Mini evaluation](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/benchmarks/EVALUATION.md)
-for all tasks, regressions and protocols.
+Nano's English score is retained through its unchanged frozen text path.
+Mini's instructed English panel uses fixed official instructions and a fresh
+matched raw-text control: Mean(TaskType) rises from **58.79 to 64.68**, with
+38 tasks improving and three declining. This instruction-mode result does not
+replace the default shared mode for image/audio comparisons. Both new audio
+paths are freshly evaluated; speech–text retrieval regresses despite aggregate
+audio gains. See the pinned [Nano evaluation](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/benchmarks/EVALUATION.md),
+[Mini evaluation](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/EVALUATION.md)
+and [matched instruction comparison](https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/benchmarks/instruction-mode.md#matched-raw-comparison)
+for measurement identities, all tasks and regressions. These panels do not
+establish full multilingual or image coverage, latency, or memory performance.
 
 ## Defaults and input budgets
 

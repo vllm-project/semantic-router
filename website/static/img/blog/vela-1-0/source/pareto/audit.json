@@ -1,5 +1,222 @@
 {
-  "source_revision": "d8ac5b5ac2274a501fc61aeb5be70cec1855a806",
+  "source_revision": "0496b39a51c8199592e58cbff81c250f056bd94b",
+  "companion_mini_revision": "f7fafd36abf49adf88b1b2ec0186c68b008eeb07",
+  "complete_panels": {
+    "English41": {
+      "complete_observations": 188,
+      "plotted_known_size_observations": 175,
+      "coverage": {
+        "source_rows": 337,
+        "complete_rows": 186,
+        "distinct_complete_model_names": 186,
+        "excluded_incomplete_rows": 151,
+        "known_size_complete_rows": 173,
+        "unknown_size_complete_rows": 13,
+        "task_coverage_histogram": {
+          "1": 10,
+          "2": 15,
+          "3": 9,
+          "4": 3,
+          "6": 17,
+          "9": 1,
+          "10": 4,
+          "12": 1,
+          "16": 1,
+          "19": 2,
+          "20": 1,
+          "21": 13,
+          "22": 1,
+          "23": 3,
+          "25": 10,
+          "27": 25,
+          "28": 6,
+          "29": 2,
+          "32": 1,
+          "35": 3,
+          "36": 2,
+          "37": 1,
+          "38": 3,
+          "39": 9,
+          "40": 8,
+          "41": 186
+        },
+        "ranking_population_with_two_current_models": 188,
+        "size_plot_population_with_two_current_models": 175
+      },
+      "comparison_modes": {
+        "nano": "default shared text",
+        "mini": "fixed official MTEB task instructions",
+        "peers": "recorded registry protocols"
+      },
+      "vela": [
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.163771288,
+          "rank": {
+            "mean_task_type": {
+              "score_100": 60.78184975654924,
+              "global_rank": 66,
+              "global_population": 188,
+              "known_size_frontier": false,
+              "at_most_size": {
+                "rank": 5,
+                "population": 75,
+                "gap_to_best_pp": 0.6140745488965593,
+                "best_ids": [
+                  "scores_MTEB_eng_v2:row:61"
+                ]
+              }
+            },
+            "mean_task": {
+              "score_100": 64.88431514310018,
+              "global_rank": 66,
+              "global_population": 188,
+              "known_size_frontier": false,
+              "at_most_size": {
+                "rank": 7,
+                "population": 75,
+                "gap_to_best_pp": 1.5065385154364064,
+                "best_ids": [
+                  "scores_MTEB_eng_v2:row:68"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.361475288,
+          "rank": {
+            "mean_task_type": {
+              "score_100": 64.68004520174675,
+              "global_rank": 38,
+              "global_population": 188,
+              "known_size_frontier": false,
+              "at_most_size": {
+                "rank": 10,
+                "population": 134,
+                "gap_to_best_pp": 3.775809361745308,
+                "best_ids": [
+                  "scores_MTEB_eng_v2:row:1"
+                ]
+              }
+            },
+            "mean_task": {
+              "score_100": 70.3751501978232,
+              "global_rank": 28,
+              "global_population": 188,
+              "known_size_frontier": false,
+              "at_most_size": {
+                "rank": 8,
+                "population": 134,
+                "gap_to_best_pp": 4.373281509493876,
+                "best_ids": [
+                  "scores_MTEB_eng_v2:row:1"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "audio19": {
+      "complete_observations": 64,
+      "plotted_known_size_observations": 64,
+      "coverage": {
+        "source_rows": 69,
+        "complete_rows": 62,
+        "distinct_complete_model_names": 62,
+        "excluded_incomplete_rows": 7,
+        "known_size_complete_rows": 62,
+        "unknown_size_complete_rows": 0,
+        "task_coverage_histogram": {
+          "1": 1,
+          "3": 1,
+          "4": 1,
+          "15": 1,
+          "18": 3,
+          "19": 62
+        },
+        "ranking_population_with_two_current_models": 64,
+        "size_plot_population_with_two_current_models": 64
+      },
+      "comparison_modes": {
+        "nano": "default shared audio",
+        "mini": "default shared audio",
+        "peers": "recorded registry protocols"
+      },
+      "vela": [
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.163771288,
+          "rank": {
+            "mean_task_type": {
+              "score_100": 52.33540613685162,
+              "global_rank": 19,
+              "global_population": 64,
+              "known_size_frontier": false,
+              "at_most_size": {
+                "rank": 6,
+                "population": 27,
+                "gap_to_best_pp": 3.512754763326642,
+                "best_ids": [
+                  "scores_MAEB_beta_audio-only:row:17"
+                ]
+              }
+            },
+            "mean_task": {
+              "score_100": 43.59384306459588,
+              "global_rank": 22,
+              "global_population": 64,
+              "known_size_frontier": false,
+              "at_most_size": {
+                "rank": 5,
+                "population": 27,
+                "gap_to_best_pp": 1.2625273688406435,
+                "best_ids": [
+                  "scores_MAEB_beta_audio-only:row:9"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.361475288,
+          "rank": {
+            "mean_task_type": {
+              "score_100": 54.867892360874514,
+              "global_rank": 12,
+              "global_population": 64,
+              "known_size_frontier": false,
+              "at_most_size": {
+                "rank": 5,
+                "population": 50,
+                "gap_to_best_pp": 2.8487205268634352,
+                "best_ids": [
+                  "scores_MAEB_beta_audio-only:row:10"
+                ]
+              }
+            },
+            "mean_task": {
+              "score_100": 47.77197979756932,
+              "global_rank": 9,
+              "global_population": 64,
+              "known_size_frontier": false,
+              "at_most_size": {
+                "rank": 3,
+                "population": 50,
+                "gap_to_best_pp": 1.9681502568743237,
+                "best_ids": [
+                  "scores_MAEB_beta_audio-only:row:10"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
   "tasks": {
     "arxiv": {
       "task": "ArXivHierarchicalClusteringP2P",
@@ -9,14 +226,14 @@
       "vela": [
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
+          "parameters_billion": 0.163771288,
           "score": 64.88847259326147,
           "on_displayed_frontier": false,
-          "evidence_type": "exact_public_inference_applicability"
+          "evidence_type": "exact_text_component_applicability"
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
+          "parameters_billion": 1.361475288,
           "score": 62.00989328478093,
           "on_displayed_frontier": false,
           "evidence_type": "exact_text_component_applicability"
@@ -68,17 +285,17 @@
       "vela": [
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
-          "score": 63.28340215485784,
+          "parameters_billion": 0.163771288,
+          "score": 62.89933955933497,
           "on_displayed_frontier": true,
-          "evidence_type": "exact_public_inference_applicability"
+          "evidence_type": "measured_release_evaluation"
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
-          "score": 87.77176044610992,
+          "parameters_billion": 1.361475288,
+          "score": 88.19599834012242,
           "on_displayed_frontier": false,
-          "evidence_type": "exact_metadata_only_applicability"
+          "evidence_type": "measured_release_evaluation"
         }
       ],
       "frontier": [
@@ -89,8 +306,8 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
-          "score": 63.28340215485784
+          "parameters_billion": 0.163771288,
+          "score": 62.89933955933497
         },
         {
           "model": "microsoft/speecht5_multimodal",
@@ -127,17 +344,17 @@
       "vela": [
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
-          "score": 18.304657831512046,
+          "parameters_billion": 0.163771288,
+          "score": 18.072541269472218,
           "on_displayed_frontier": false,
-          "evidence_type": "exact_public_inference_applicability"
+          "evidence_type": "measured_release_evaluation"
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
-          "score": 40.06316360536309,
+          "parameters_billion": 1.361475288,
+          "score": 39.06804619080834,
           "on_displayed_frontier": true,
-          "evidence_type": "exact_metadata_only_applicability"
+          "evidence_type": "measured_release_evaluation"
         }
       ],
       "frontier": [
@@ -163,8 +380,8 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
-          "score": 40.06316360536309
+          "parameters_billion": 1.361475288,
+          "score": 39.06804619080834
         },
         {
           "model": "facebook/seamless-m4t-v2-large",
@@ -186,17 +403,17 @@
       "vela": [
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
-          "score": 13.800701178563807,
+          "parameters_billion": 0.163771288,
+          "score": 5.275425308186281,
           "on_displayed_frontier": false,
-          "evidence_type": "exact_public_inference_applicability"
+          "evidence_type": "measured_release_evaluation"
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
-          "score": 9.001091019154014,
+          "parameters_billion": 1.361475288,
+          "score": 1.7269120528614579,
           "on_displayed_frontier": false,
-          "evidence_type": "exact_metadata_only_applicability"
+          "evidence_type": "measured_release_evaluation"
         }
       ],
       "frontier": [
@@ -219,6 +436,154 @@
           "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
           "parameters_billion": 0.086594063,
           "score": 14.342872113086985
+        }
+      ]
+    },
+    "imdb": {
+      "task": "ImdbClassification",
+      "metric": "accuracy",
+      "observation_count": 232,
+      "frontier_count": 15,
+      "vela": [
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.163771288,
+          "score": 91.94760000000001,
+          "on_displayed_frontier": true,
+          "evidence_type": "exact_text_component_applicability"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.361475288,
+          "score": 82.522,
+          "on_displayed_frontier": false,
+          "evidence_type": "exact_text_component_applicability"
+        }
+      ],
+      "frontier": [
+        {
+          "model": "minishlab/potion-base-2M",
+          "parameters_billion": 0.002,
+          "score": 70.35639999999998
+        },
+        {
+          "model": "minishlab/potion-base-4M",
+          "parameters_billion": 0.004,
+          "score": 70.78880000000001
+        },
+        {
+          "model": "Mihaiii/Squirtle",
+          "parameters_billion": 0.016,
+          "score": 74.9528
+        },
+        {
+          "model": "MongoDB/mdbr-leaf-mt",
+          "parameters_billion": 0.023,
+          "score": 88.5508
+        },
+        {
+          "model": "BAAI/bge-small-en",
+          "parameters_billion": 0.033,
+          "score": 91.5152
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-160M",
+          "parameters_billion": 0.159,
+          "score": 91.7148
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-text-nano",
+          "parameters_billion": 0.212,
+          "score": 94.7448
+        },
+        {
+          "model": "jxm/cde-small-v2",
+          "parameters_billion": 0.306,
+          "score": 94.9352
+        },
+        {
+          "model": "Tarka-AIR/Tarka-Embedding-350M-V1",
+          "parameters_billion": 0.354,
+          "score": 95.298
+        },
+        {
+          "model": "NovaSearch/stella_en_400M_v5",
+          "parameters_billion": 0.435,
+          "score": 96.4904
+        },
+        {
+          "model": "infgrad/Jasper-Token-Compression-600M",
+          "parameters_billion": 0.607,
+          "score": 97.1104
+        },
+        {
+          "model": "Qwen/Qwen3-Embedding-4B",
+          "parameters_billion": 4.022,
+          "score": 97.16
+        },
+        {
+          "model": "voyageai/voyage-3-m-exp",
+          "parameters_billion": 6.918,
+          "score": 97.2864
+        },
+        {
+          "model": "Qwen/Qwen3-Embedding-8B",
+          "parameters_billion": 7.567,
+          "score": 97.368
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.163771288,
+          "score": 91.94760000000001
+        }
+      ]
+    },
+    "mridingham": {
+      "task": "MridinghamTonic",
+      "metric": "accuracy",
+      "observation_count": 67,
+      "frontier_count": 5,
+      "vela": [
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.163771288,
+          "score": 58.41978617863634,
+          "on_displayed_frontier": true,
+          "evidence_type": "measured_release_evaluation"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.361475288,
+          "score": 68.13725852666605,
+          "on_displayed_frontier": true,
+          "evidence_type": "measured_release_evaluation"
+        }
+      ],
+      "frontier": [
+        {
+          "model": "google/yamnet",
+          "parameters_billion": 0.004,
+          "score": 35.1585
+        },
+        {
+          "model": "matthewagi/HeAR-s1.1",
+          "parameters_billion": 0.022,
+          "score": 45.0619
+        },
+        {
+          "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+          "parameters_billion": 0.087,
+          "score": 54.1632
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.163771288,
+          "score": 58.41978617863634
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.361475288,
+          "score": 68.13725852666605
         }
       ]
     }

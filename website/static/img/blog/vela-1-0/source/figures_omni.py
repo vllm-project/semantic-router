@@ -1,10 +1,10 @@
 """Detailed public Vela Omni embedding graphs, in Transformer figure grammar.
 
-Release evidence: Nano d8ac5b5ac2274a501fc61aeb5be70cec1855a806;
-Mini 2aecd547915f5cffe68ba3c2e2c3a678de8b193e. Pinned source URLs:
-https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/omni_components/single_modality.py
-https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/omni_components/qwen_text_backbone.py
-https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/2aecd547915f5cffe68ba3c2e2c3a678de8b193e/omni_components/mini.py
+Release evidence: Nano 0496b39a51c8199592e58cbff81c250f056bd94b;
+Mini f7fafd36abf49adf88b1b2ec0186c68b008eeb07. Pinned source URLs:
+https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/blob/0496b39a51c8199592e58cbff81c250f056bd94b/omni_components/single_modality.py
+https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/omni_components/qwen_text_backbone.py
+https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/f7fafd36abf49adf88b1b2ec0186c68b008eeb07/omni_components/mini.py
 Transformer internals follow Hugging Face Transformers v4.57.6.
 The shared destination contains three independent vectors, not their sum.
 Run: python3 source/figures_omni.py [--output-dir PATH]
@@ -20,7 +20,7 @@ from paper_svg import Scene
 # RUF001 exceptions retain the multiplication glyph used in the artwork.
 W = 290
 STACK = 900
-CENTERS = (350, 900, 1450)
+CENTERS = (350, 900, 1725)
 
 
 def encoder(s, cx, *, kind, layers, width, heads, inner):
@@ -126,8 +126,8 @@ def encoder(s, cx, *, kind, layers, width, heads, inner):
 
 def common_output(s, dimension):
     # Three separate endpoints within one semantic vector space.
-    s.rect(170, 115, 1460, 130, "white", r=9)
-    s.text(900, 158, f"Shared {dimension}-dimensional embedding space", 29, serif=True)
+    s.rect(170, 115, 2010, 130, "white", r=9)
+    s.text(1175, 158, f"Shared {dimension}-dimensional embedding space", 29, serif=True)
     for cx, label in zip(CENTERS, ("text", "image", "audio"), strict=True):
         s.raw(
             f'<text x="{cx}" y="211" font-size="30" text-anchor="middle" class="math">'
@@ -266,8 +266,18 @@ def text_mini(s):
         25,
     )
     s.arrow(cx, 1679, cx, STACK + 571, arrow=False)
-    s.arrow(cx, 1945, cx, 1761)
-    s.text(cx, 1982, ["Text tokens", "n ≤ 32,768"], 27)
+    s.box(
+        cx,
+        1830,
+        ["Native Tokenizer", "default: shared text", "optional: instruction + text"],
+        W,
+        95,
+        "tensor",
+        22,
+    )
+    s.arrow(cx, 1829, cx, 1761)
+    s.arrow(cx, 1945, cx, 1926)
+    s.text(cx, 1982, ["Text + optional instruction", "n ≤ 32,768 total tokens"], 25)
     s.text(cx, 2070, "Qwen3-Embedding-0.6B", 27, serif=True)
 
 
@@ -404,27 +414,24 @@ def image_encoder(s, mini):
     image_frontend(s, mini)
 
 
-def audio_encoder(s, mini):
-    cx = CENTERS[2]
+def whisper_encoder(s, mini):
+    cx = 1450
     width, layers, heads, inner, dim = (
         (1024, 24, 16, 4096, 768) if mini else (384, 4, 6, 1536, 384)
     )
     encoder(s, cx, kind="whisper", layers=layers, width=width, heads=heads, inner=inner)
     final_norm(s, cx)
-    s.box(cx, 704, ["Mean over Frames", "1500 states"], W, 75, "tensor", 25)
+    s.box(cx, 704, ["Mean over Frames", "all 1500 states"], W, 75, "tensor", 25)
     s.arrow(cx, 811, cx, 780)
-    s.box(cx, 470, ["Linear Projection", f"{width} → {dim}"], W, 70, "linear", 25)
+    s.box(cx, 470, ["Retained Affine", f"{width} → {dim}"], W, 70, "linear", 25)
     s.arrow(cx, 703, cx, 541)
-    s.arrow(cx, 469, cx, 359)
+    s.path([(cx, 469), (cx, 408), (1705, 408)])
     s.circle(cx, 1530)
     s.arrow(cx, 1511, cx, STACK + 571, arrow=False)
     s.box(
         cx + 207,
         1484,
-        [
-            "Sinusoidal Position",
-            f"1500 × {width}",  # noqa: RUF001
-        ],
+        ["Sinusoidal Position", f"1500 × {width}"],  # noqa: RUF001
         188,
         92,
         "embedding",
@@ -454,28 +461,237 @@ def audio_encoder(s, mini):
     s.box(
         cx,
         1844,
-        ["Log-Mel Spectrogram", "80 bins × 3000 frames"],  # noqa: RUF001
+        [
+            "Log-Mel Spectrogram",
+            "80 bins × 3000 frames",  # noqa: RUF001
+        ],
         W,
         75,
         "tensor",
         23,
     )
     s.arrow(cx, 1843, cx, 1808)
-    s.arrow(cx, 1945, cx, 1920)
-    s.text(cx, 1982, ["Mono waveform", "16 kHz · ≤ 30 s"], 27)
-    s.text(cx, 2070, "Whisper encoder", 29, serif=True)
+    s.box(
+        cx, 1980, ["Independent Resampling", "PCM → 16 kHz mono"], W, 85, "tensor", 21
+    )
+    s.arrow(cx, 1979, cx, 1920)
+    s.text(
+        cx - 45,
+        2140,
+        "Whisper medium" if mini else "Whisper tiny",
+        27,
+        anchor="end",
+        serif=True,
+    )
+
+
+def clap_block(s):
+    """Expanded pre-LN Swin block; stage boxes separately show patch merging."""
+    cx, top = 2550, 1160
+    s.text(cx, 1100, "Inside each Swin block", 29, serif=True)
+    s.repeat(cx - W / 2 - 35, top, W + 105, 550, "")
+    s.circle(cx, top + 48)
+    s.box(
+        cx,
+        top + 93,
+        ["Feed Forward", "Linear · GELU · Linear", "D → 4D → D"],
+        W,
+        98,
+        "ffn",
+        21,
+    )
+    s.box(cx, top + 219, "LayerNorm", W, 48, "norm", 25)
+    s.circle(cx, top + 310)
+    s.box(
+        cx,
+        top + 344,
+        [
+            "Window Self-Attention",
+            "8 × 8; relative position bias",  # noqa: RUF001
+            "alternating cyclic shifts",
+        ],
+        W,
+        110,
+        "attention",
+        20,
+    )
+    s.box(cx, top + 482, "LayerNorm", W, 42, "norm", 25)
+    s.arrow(cx, top + 570, cx, top + 525)
+    for dx in (-65, 0, 65):
+        s.path(
+            [
+                (cx, top + 481),
+                (cx, top + 468),
+                (cx + dx, top + 468),
+                (cx + dx, top + 455),
+            ]
+        )
+    s.arrow(cx, top + 343, cx, top + 329)
+    s.arrow(cx, top + 291, cx, top + 268)
+    s.arrow(cx, top + 218, cx, top + 192)
+    s.arrow(cx, top + 92, cx, top + 67)
+    s.arrow(cx, top + 29, cx, top - 20, arrow=False)
+    side = cx + W / 2 + 45
+    s.path(
+        [(cx, top + 539), (side, top + 539), (side, top + 310), (cx + 20, top + 310)]
+    )
+    s.path([(cx, top + 280), (side, top + 280), (side, top + 48), (cx + 20, top + 48)])
+    s.dot(cx, top + 539)
+    s.dot(cx, top + 280)
+    s.text(
+        cx,
+        1790,
+        [
+            "D = 96, 192, 384, 768",
+            "24 dimensions per head",
+            "No shift when grid ≤ window",
+        ],
+        22,
+    )
+    s.text(
+        cx,
+        1900,
+        [
+            "Between stages 1–3:",  # noqa: RUF001
+            "2 × 2 patch concatenation",  # noqa: RUF001
+            "LayerNorm → Linear 4D → 2D",
+        ],
+        22,
+    )
+
+
+def clap_encoder(s, mini):
+    cx, dim = 2000, 768 if mini else 384
+    s.box(
+        cx, 470, ["Learned Residual Map", f"bias-free 512 → {dim}"], W, 70, "linear", 23
+    )
+    s.path([(cx, 469), (cx, 408), (1745, 408)])
+    s.box(
+        cx,
+        580,
+        [
+            "Frozen TRAIN Statistics",
+            "(c − mean) / scale",  # noqa: RUF001
+        ],
+        W,
+        75,
+        "norm",
+        23,
+    )
+    s.arrow(cx, 579, cx, 541)
+    s.box(
+        cx,
+        690,
+        ["Window Aggregation", "L2 each → mean → L2", "one window: its unit vector"],
+        W,
+        95,
+        "softmax",
+        21,
+    )
+    s.arrow(cx, 689, cx, 656)
+    s.box(cx, 825, ["CLAP Projection", "768 → 512 → 512; ReLU"], W, 80, "linear", 22)
+    s.arrow(cx, 824, cx, 786)
+    s.box(cx, 945, ["Global Average Pool", "768 dimensions"], W, 65, "tensor", 23)
+    s.arrow(cx, 944, cx, 906)
+    s.box(cx, 1040, "Final LayerNorm", W, 48, "norm", 24)
+    s.arrow(cx, 1039, cx, 1011)
+    stages = [(4, 2, 768, 32), (3, 6, 384, 16), (2, 2, 192, 8), (1, 2, 96, 4)]
+    for i, (stage, depth, width, heads) in enumerate(stages):
+        y = 1130 + i * 140
+        lines = [
+            f"Stage {stage}: {depth} Swin blocks",
+            f"width {width} · {heads} heads",
+        ]
+        lines += (
+            [f"patch merge: {4*width} → {2*width}"]
+            if stage < len(stages)
+            else ["final 8 × 8 grid"]  # noqa: RUF001
+        )
+        s.box(cx, y, lines, W, 100, "attention", 20)
+        s.arrow(cx, y - 1, cx, 1089 if i == 0 else y - 39)
+    s.box(
+        cx,
+        1730,
+        [
+            "Patch Embedding + LN",
+            "Conv2D 4 × 4, stride 4",  # noqa: RUF001
+            "64 × 64 grid · width 96",  # noqa: RUF001
+        ],
+        W,
+        95,
+        "embedding",
+        21,
+    )
+    s.arrow(cx, 1729, cx, 1651)
+    s.box(
+        cx,
+        1870,
+        [
+            "Log-Mel → BatchNorm",
+            "64 mel bins",
+            "resize + reshape 256 × 256",  # noqa: RUF001
+        ],
+        W,
+        95,
+        "tensor",
+        20,
+    )
+    s.arrow(cx, 1869, cx, 1826)
+    s.box(
+        cx,
+        2010,
+        [
+            "Endpoint-spaced Windows",
+            "≤ 10 s each; repeat-pad short",
+            "1–3 windows per waveform",  # noqa: RUF001
+        ],
+        W,
+        95,
+        "tensor",
+        20,
+    )
+    s.arrow(cx, 2009, cx, 1966)
+    s.box(
+        cx, 2180, ["Independent Resampling", "PCM → 48 kHz mono"], W, 85, "tensor", 21
+    )
+    s.arrow(cx, 2179, cx, 2106)
+    s.text(cx + 210, 2220, "Frozen CLAP / HTS-AT", 27, anchor="start", serif=True)
+    clap_block(s)
+
+
+def audio_encoder(s, mini):
+    whisper_encoder(s, mini)
+    clap_encoder(s, mini)
+    s.circle(1725, 408)
+    s.arrow(1725, 389, 1725, 359)
+    s.text(1725, 459, "speech affine + CLAP residual", 21)
+    s.box(
+        1725,
+        2370,
+        [
+            "Original-rate PCM · ≤ 30 s",
+            "mono or channels-first; preserve original bandwidth",
+        ],
+        880,
+        92,
+        "tensor",
+        24,
+    )
+    s.path([(1725, 2369), (1725, 2310), (1450, 2310), (1450, 2066)])
+    s.path([(1725, 2310), (2000, 2310), (2000, 2266)])
+    s.dot(1725, 2310)
 
 
 def draw(mini=False):
     variant = "Mini" if mini else "Nano"
     dimension = 768 if mini else 384
     s = Scene(
-        1800,
-        2155 if mini else 2120,
-        f"Vela Omni {variant}: three embedding encoders",
+        2850,
+        2530,
+        f"Vela Omni {variant}: three modality paths",
         "Bottom-to-top public encode_text, encode_image and encode_audio graphs. "
         "Expanded Transformer layers show real normalization order, residuals, attention and feed-forward widths. "
-        "The common vector space contains three independently computed vectors. "
+        "The common vector space contains three independently computed vectors. Audio combines the retained unnormalized Whisper affine with a learned residual of frozen CLAP features, followed by L2 normalization. Both audio branches independently resample original PCM. "
         "Dropout, inactive during inference, is omitted. "
         + (
             "Mini vision uses native learned-probe attention pooling over all 729 patch states, "
@@ -490,18 +706,20 @@ def draw(mini=False):
             "The single-modality package has no BERT pooler, multimodal fusion, or intermediate exit heads."
         ),
     )
-    s.text(900, 64, f"Vela Omni {variant}", 39, serif=True)
-    s.text(900, 96, "1.33B total parameters" if mini else "135.4M total parameters", 22)
+    s.text(1175, 64, f"Vela Omni {variant}", 39, serif=True)
+    s.text(
+        1175, 96, "1.36B total parameters" if mini else "163.8M total parameters", 22
+    )
     common_output(s, dimension)
     (text_mini if mini else text_nano)(s)
     image_encoder(s, mini)
     audio_encoder(s, mini)
     if mini:
         s.text(
-            900,
-            2130,
-            "Text: causal attention; RoPE θ = 1,000,000. Native tokenization, no added prompt; no language-model head.",
-            22,
+            625,
+            2220,
+            "Text: causal attention; RoPE θ = 1,000,000; no language-model head.",
+            21,
         )
     return s.save("08-omni-mini" if mini else "07-omni-nano")
 

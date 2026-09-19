@@ -2569,8 +2569,8 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
-          "parameters_exact": 135383808,
+          "parameters_billion": 0.163771288,
+          "parameters_exact": 163771288,
           "score": 64.88847259326147,
           "open_weights": true,
           "modalities": [
@@ -2582,18 +2582,18 @@
           "kind": "nano",
           "evaluated_task_revision": "0bbdb47bcbe3a90093699aefeed338a0f28a7ee8",
           "on_displayed_frontier": false,
-          "evidence_type": "exact_public_inference_applicability",
+          "evidence_type": "exact_text_component_applicability",
           "observation_id": "vela_release_evaluation:llm-semantic-router/Vela-1.0-Omni-Nano",
-          "native_artifact_sha256": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
-          "revision": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
+          "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "revision": null,
           "evaluated_native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
           "evaluated_revision": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
           "evaluated_model": "local/Vela-Omni-Nano-GIST-Rotation",
           "revision_semantics": "Evaluated revisions are native artifact fingerprints; applies-to identity is the current whole artifact.",
-          "report": "benchmarks/mteb-eng-v2.json",
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/mteb-eng-v2.json",
           "prior_applicable_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
-          "inference_equivalence_report": "benchmarks/inference-equivalence.json",
-          "revision_kind": "native_artifact_fingerprint"
+          "revision_kind": "native_artifact_fingerprint",
+          "identity_ref": "models.nano.task_evidence.English41"
         },
         {
           "model": "ibm-granite/granite-embedding-english-r2",
@@ -5855,8 +5855,8 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
-          "parameters_exact": 1332891200,
+          "parameters_billion": 1.361475288,
+          "parameters_exact": 1361475288,
           "score": 62.00989328478093,
           "open_weights": true,
           "modalities": [
@@ -5870,14 +5870,15 @@
           "on_displayed_frontier": false,
           "evidence_type": "exact_text_component_applicability",
           "observation_id": "vela_release_evaluation:llm-semantic-router/Vela-1.0-Omni-Mini",
-          "native_artifact_sha256": "d93ebb5f2f4951d52423ae13da71b037ce44d02957671e1e71bfe25623f3cff2",
-          "revision": "self",
+          "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "revision": null,
           "evaluated_native_artifact_sha256": null,
-          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/main/benchmarks/mteb-eng-v2.json",
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/mteb-eng-v2.json",
           "evaluated_model": {
             "repo_id": "local/Qwen3-Embedding-0.6B-MRL768-NoInstructions",
             "revision": "98e47eac3fa59b6c627e371230905400b3a405ddc69ab1ef02cb1c476db04294"
-          }
+          },
+          "identity_ref": "models.mini.task_evidence.English41"
         },
         {
           "model": "NovaSearch/stella_en_1.5B_v5",
@@ -9110,17 +9111,88 @@
         "codefuse-ai/F2LLM-v2-80M"
       ],
       "frontier_observations": [
-        "registry_reported:minishlab/potion-base-2M",
-        "registry_reported:minishlab/potion-base-4M",
-        "registry_reported:minishlab/potion-base-8M",
-        "registry_reported:Mihaiii/Wartortle",
-        "registry_reported:MongoDB/mdbr-leaf-mt",
-        "registry_reported:abhinand/MedEmbed-small-v0.1",
-        "rerun:F2LLM-v2-80M:6faa7738:ArXivHierarchicalClusteringP2P:2026-09-18"
+        {
+          "model": "minishlab/potion-base-2M",
+          "parameters_billion": 0.002,
+          "score": 51.5629,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:minishlab/potion-base-2M"
+        },
+        {
+          "model": "minishlab/potion-base-4M",
+          "parameters_billion": 0.004,
+          "score": 53.420100000000005,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:minishlab/potion-base-4M"
+        },
+        {
+          "model": "minishlab/potion-base-8M",
+          "parameters_billion": 0.008,
+          "score": 55.0836,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:minishlab/potion-base-8M"
+        },
+        {
+          "model": "Mihaiii/Wartortle",
+          "parameters_billion": 0.017,
+          "score": 55.6376,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:Mihaiii/Wartortle"
+        },
+        {
+          "model": "MongoDB/mdbr-leaf-mt",
+          "parameters_billion": 0.023,
+          "score": 60.2909,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:MongoDB/mdbr-leaf-mt"
+        },
+        {
+          "model": "abhinand/MedEmbed-small-v0.1",
+          "parameters_billion": 0.033,
+          "score": 60.553599999999996,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:abhinand/MedEmbed-small-v0.1"
+        },
+        {
+          "model": "codefuse-ai/F2LLM-v2-80M",
+          "parameters_billion": 0.080084288,
+          "score": 69.74221347455739,
+          "evidence_type": "independent_rerun",
+          "observation_id": "rerun:F2LLM-v2-80M:6faa7738:ArXivHierarchicalClusteringP2P:2026-09-18"
+        }
       ],
       "peer_observation_count": 211,
       "measured_peer_observations": 1,
-      "observation_policy": "Registry observations and independently measured observations remain separate, including for the same model. All participate in the descriptive frontier; protocol differences remain explicit."
+      "observation_policy": "Registry observations and independently measured observations remain separate, including for the same model. All participate in the descriptive frontier; protocol differences remain explicit.",
+      "highlight_variant": "nano",
+      "highlight_dominators": [
+        {
+          "model": "codefuse-ai/F2LLM-v2-80M",
+          "revision": "6faa7738f343cd4321f9b2fa92fdb7cae3c117a5",
+          "parameters_billion": 0.080084288,
+          "parameters_exact": 80084288,
+          "score": 69.74221347455739,
+          "open_weights": true,
+          "modalities": [
+            "text"
+          ],
+          "training_tasks": [
+            "ArxivClusteringP2P",
+            "ArxivClusteringS2S"
+          ],
+          "source_urls": [
+            "https://huggingface.co/codefuse-ai/F2LLM-v2-80M/tree/6faa7738f343cd4321f9b2fa92fdb7cae3c117a5"
+          ],
+          "size_basis": "independently_counted_complete_checkpoint",
+          "kind": "peer",
+          "evidence_type": "independent_rerun",
+          "observation_id": "rerun:F2LLM-v2-80M:6faa7738:ArXivHierarchicalClusteringP2P:2026-09-18",
+          "report_file": "peer-evaluations/f2llm-v2-80m-arxiv.json",
+          "protocol_note": "Official MTEB2.21 task defaults; BF16, task instruction+EOS,8192 tokens; model-specific settings differ from Vela.",
+          "on_displayed_frontier": true
+        }
+      ],
+      "highlight_gap_above_best_equal_or_smaller_peer_pp": -4.85374088129592
     },
     "nmsqa": {
       "task": "NMSQAPairClassification",
@@ -9603,9 +9675,9 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
-          "parameters_exact": 135383808,
-          "score": 63.28340215485784,
+          "parameters_billion": 0.163771288,
+          "parameters_exact": 163771288,
+          "score": 62.89933955933497,
           "open_weights": true,
           "modalities": [
             "text",
@@ -9616,17 +9688,16 @@
           "kind": "nano",
           "evaluated_task_revision": "d33eea302d8a64c0a2ee094cf39d77c0814fe87a",
           "on_displayed_frontier": true,
-          "native_artifact_sha256": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
-          "revision": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
-          "evaluated_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
-          "evaluated_revision": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
+          "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "revision": null,
+          "evaluated_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "evaluated_revision": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
           "evaluated_model": "llm-semantic-router/Vela-1.0-Omni-Nano",
           "revision_semantics": "Evaluated revisions are native artifact fingerprints; applies-to identity is the current whole artifact.",
-          "evidence_type": "exact_public_inference_applicability",
-          "report": "benchmarks/maeb-audio-only.json",
-          "prior_applicable_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
-          "inference_equivalence_report": "benchmarks/inference-equivalence.json",
-          "revision_kind": "native_artifact_fingerprint"
+          "evidence_type": "measured_release_evaluation",
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/maeb-audio-only.json",
+          "revision_kind": "native_artifact_fingerprint",
+          "identity_ref": "models.nano.task_evidence.audio19"
         },
         {
           "model": "laion/clap-htsat-unfused",
@@ -10200,9 +10271,9 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
-          "parameters_exact": 1332891200,
-          "score": 87.77176044610992,
+          "parameters_billion": 1.361475288,
+          "parameters_exact": 1361475288,
+          "score": 88.19599834012242,
           "open_weights": true,
           "modalities": [
             "text",
@@ -10213,11 +10284,12 @@
           "kind": "mini",
           "evaluated_task_revision": "d33eea302d8a64c0a2ee094cf39d77c0814fe87a",
           "on_displayed_frontier": false,
-          "native_artifact_sha256": "d93ebb5f2f4951d52423ae13da71b037ce44d02957671e1e71bfe25623f3cff2",
-          "revision": "self",
-          "evaluated_native_artifact_sha256": "cf5f45cf6e26cd225e0fc0c1ece629b13b8bd0dfe57dcedef739ca8f529f80ab",
-          "evidence_type": "exact_metadata_only_applicability",
-          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/main/benchmarks/maeb-audio-only.json"
+          "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "revision": null,
+          "evaluated_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "evidence_type": "measured_release_evaluation",
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/maeb-audio-only.json",
+          "identity_ref": "models.mini.task_evidence.audio19"
         },
         {
           "model": "openai/whisper-large-v3",
@@ -10747,16 +10819,60 @@
         "LCO-Embedding/LCO-Embedding-Omni-7B"
       ],
       "frontier_observations": [
-        "registry_reported:google/yamnet",
-        "llm-semantic-router/Vela-1.0-Omni-Nano",
-        "registry_reported:microsoft/speecht5_multimodal",
-        "registry_reported:jinaai/jina-embeddings-v5-omni-nano",
-        "registry_reported:BidirLM/BidirLM-Omni-2.5B-Embedding",
-        "registry_reported:LCO-Embedding/LCO-Embedding-Omni-3B",
-        "registry_reported:LCO-Embedding/LCO-Embedding-Omni-7B"
+        {
+          "model": "google/yamnet",
+          "parameters_billion": 0.004,
+          "score": 58.2803,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:google/yamnet"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+          "parameters_billion": 0.163771288,
+          "score": 62.89933955933497,
+          "evidence_type": "measured_release_evaluation"
+        },
+        {
+          "model": "microsoft/speecht5_multimodal",
+          "parameters_billion": 0.298,
+          "score": 66.2751,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:microsoft/speecht5_multimodal"
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-omni-nano",
+          "parameters_billion": 0.986,
+          "score": 93.92026751895308,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:jinaai/jina-embeddings-v5-omni-nano"
+        },
+        {
+          "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+          "parameters_billion": 2.445,
+          "score": 95.9874,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:BidirLM/BidirLM-Omni-2.5B-Embedding"
+        },
+        {
+          "model": "LCO-Embedding/LCO-Embedding-Omni-3B",
+          "parameters_billion": 4.703,
+          "score": 96.9203,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:LCO-Embedding/LCO-Embedding-Omni-3B"
+        },
+        {
+          "model": "LCO-Embedding/LCO-Embedding-Omni-7B",
+          "parameters_billion": 8.932,
+          "score": 97.6016,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:LCO-Embedding/LCO-Embedding-Omni-7B"
+        }
       ],
       "peer_observation_count": 66,
-      "measured_peer_observations": 0
+      "measured_peer_observations": 0,
+      "highlight_variant": "nano",
+      "highlight_dominators": [],
+      "highlight_gap_above_best_equal_or_smaller_peer_pp": 4.619039559334972
     },
     "sibfleurs": {
       "task": "SIBFLEURS",
@@ -11239,9 +11355,9 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
-          "parameters_exact": 135383808,
-          "score": 18.304657831512046,
+          "parameters_billion": 0.163771288,
+          "parameters_exact": 163771288,
+          "score": 18.072541269472218,
           "open_weights": true,
           "modalities": [
             "text",
@@ -11252,17 +11368,16 @@
           "kind": "nano",
           "evaluated_task_revision": "186b61175fbd77059f769b6bf1110d449a2ff311",
           "on_displayed_frontier": false,
-          "native_artifact_sha256": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
-          "revision": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
-          "evaluated_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
-          "evaluated_revision": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
+          "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "revision": null,
+          "evaluated_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "evaluated_revision": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
           "evaluated_model": "llm-semantic-router/Vela-1.0-Omni-Nano",
           "revision_semantics": "Evaluated revisions are native artifact fingerprints; applies-to identity is the current whole artifact.",
-          "evidence_type": "exact_public_inference_applicability",
-          "report": "benchmarks/maeb-audio-only.json",
-          "prior_applicable_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
-          "inference_equivalence_report": "benchmarks/inference-equivalence.json",
-          "revision_kind": "native_artifact_fingerprint"
+          "evidence_type": "measured_release_evaluation",
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/maeb-audio-only.json",
+          "revision_kind": "native_artifact_fingerprint",
+          "identity_ref": "models.nano.task_evidence.audio19"
         },
         {
           "model": "laion/clap-htsat-unfused",
@@ -11836,9 +11951,9 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
-          "parameters_exact": 1332891200,
-          "score": 40.06316360536309,
+          "parameters_billion": 1.361475288,
+          "parameters_exact": 1361475288,
+          "score": 39.06804619080834,
           "open_weights": true,
           "modalities": [
             "text",
@@ -11849,11 +11964,12 @@
           "kind": "mini",
           "evaluated_task_revision": "186b61175fbd77059f769b6bf1110d449a2ff311",
           "on_displayed_frontier": true,
-          "native_artifact_sha256": "d93ebb5f2f4951d52423ae13da71b037ce44d02957671e1e71bfe25623f3cff2",
-          "revision": "self",
-          "evaluated_native_artifact_sha256": "cf5f45cf6e26cd225e0fc0c1ece629b13b8bd0dfe57dcedef739ca8f529f80ab",
-          "evidence_type": "exact_metadata_only_applicability",
-          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/main/benchmarks/maeb-audio-only.json"
+          "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "revision": null,
+          "evaluated_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "evidence_type": "measured_release_evaluation",
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/maeb-audio-only.json",
+          "identity_ref": "models.mini.task_evidence.audio19"
         },
         {
           "model": "openai/whisper-large-v3",
@@ -12406,16 +12522,60 @@
         "BidirLM/BidirLM-Omni-2.5B-Embedding"
       ],
       "frontier_observations": [
-        "registry_reported:google/yamnet",
-        "registry_reported:asapp/sew-d-tiny-100k-ft-ls100h",
-        "registry_reported:matthewagi/HeAR-s1.1",
-        "registry_reported:jinaai/jina-embeddings-v5-omni-nano",
-        "llm-semantic-router/Vela-1.0-Omni-Mini",
-        "registry_reported:facebook/seamless-m4t-v2-large",
-        "registry_reported:BidirLM/BidirLM-Omni-2.5B-Embedding"
+        {
+          "model": "google/yamnet",
+          "parameters_billion": 0.004,
+          "score": 13.906064705882354,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:google/yamnet"
+        },
+        {
+          "model": "asapp/sew-d-tiny-100k-ft-ls100h",
+          "parameters_billion": 0.02,
+          "score": 14.000233333333334,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:asapp/sew-d-tiny-100k-ft-ls100h"
+        },
+        {
+          "model": "matthewagi/HeAR-s1.1",
+          "parameters_billion": 0.022,
+          "score": 27.89854901960784,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:matthewagi/HeAR-s1.1"
+        },
+        {
+          "model": "jinaai/jina-embeddings-v5-omni-nano",
+          "parameters_billion": 0.986,
+          "score": 30.306906862745098,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:jinaai/jina-embeddings-v5-omni-nano"
+        },
+        {
+          "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+          "parameters_billion": 1.361475288,
+          "score": 39.06804619080834,
+          "evidence_type": "measured_release_evaluation"
+        },
+        {
+          "model": "facebook/seamless-m4t-v2-large",
+          "parameters_billion": 2.3,
+          "score": 41.91544607843137,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:facebook/seamless-m4t-v2-large"
+        },
+        {
+          "model": "BidirLM/BidirLM-Omni-2.5B-Embedding",
+          "parameters_billion": 2.445,
+          "score": 47.532355882352945,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:BidirLM/BidirLM-Omni-2.5B-Embedding"
+        }
       ],
       "peer_observation_count": 67,
-      "measured_peer_observations": 0
+      "measured_peer_observations": 0,
+      "highlight_variant": "mini",
+      "highlight_dominators": [],
+      "highlight_gap_above_best_equal_or_smaller_peer_pp": 8.76113932806324
     },
     "vehiclesoundclustering": {
       "task": "VehicleSoundClustering",
@@ -12921,9 +13081,9 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
-          "parameters_billion": 0.135383808,
-          "parameters_exact": 135383808,
-          "score": 13.800701178563807,
+          "parameters_billion": 0.163771288,
+          "parameters_exact": 163771288,
+          "score": 5.275425308186281,
           "open_weights": true,
           "modalities": [
             "text",
@@ -12934,17 +13094,16 @@
           "kind": "nano",
           "evaluated_task_revision": "5f905f9544d0c78b607639662c88c2ddd1216384",
           "on_displayed_frontier": false,
-          "native_artifact_sha256": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
-          "revision": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
-          "evaluated_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
-          "evaluated_revision": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
+          "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "revision": null,
+          "evaluated_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+          "evaluated_revision": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
           "evaluated_model": "llm-semantic-router/Vela-1.0-Omni-Nano",
           "revision_semantics": "Evaluated revisions are native artifact fingerprints; applies-to identity is the current whole artifact.",
-          "evidence_type": "exact_public_inference_applicability",
-          "report": "benchmarks/maeb-audio-only.json",
-          "prior_applicable_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
-          "inference_equivalence_report": "benchmarks/inference-equivalence.json",
-          "revision_kind": "native_artifact_fingerprint"
+          "evidence_type": "measured_release_evaluation",
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/maeb-audio-only.json",
+          "revision_kind": "native_artifact_fingerprint",
+          "identity_ref": "models.nano.task_evidence.audio19"
         },
         {
           "model": "laion/clap-htsat-unfused",
@@ -13518,9 +13677,9 @@
         },
         {
           "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
-          "parameters_billion": 1.3328912,
-          "parameters_exact": 1332891200,
-          "score": 9.001091019154014,
+          "parameters_billion": 1.361475288,
+          "parameters_exact": 1361475288,
+          "score": 1.7269120528614579,
           "open_weights": true,
           "modalities": [
             "text",
@@ -13531,11 +13690,12 @@
           "kind": "mini",
           "evaluated_task_revision": "5f905f9544d0c78b607639662c88c2ddd1216384",
           "on_displayed_frontier": false,
-          "native_artifact_sha256": "d93ebb5f2f4951d52423ae13da71b037ce44d02957671e1e71bfe25623f3cff2",
-          "revision": "self",
-          "evaluated_native_artifact_sha256": "cf5f45cf6e26cd225e0fc0c1ece629b13b8bd0dfe57dcedef739ca8f529f80ab",
-          "evidence_type": "exact_metadata_only_applicability",
-          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/blob/main/benchmarks/maeb-audio-only.json"
+          "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "revision": null,
+          "evaluated_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+          "evidence_type": "measured_release_evaluation",
+          "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/maeb-audio-only.json",
+          "identity_ref": "models.mini.task_evidence.audio19"
         },
         {
           "model": "openai/whisper-large-v3",
@@ -14101,13 +14261,279 @@
         "MIT/ast-finetuned-audioset-10-10-0.4593"
       ],
       "frontier_observations": [
-        "registry_reported:google/yamnet",
-        "registry_reported:matthewagi/HeAR-s1.1",
-        "registry_reported:openai/whisper-tiny",
-        "independent_rerun:MIT/ast-finetuned-audioset-10-10-0.4593:f826b80d28226b62986cc218e5cec390b1096902:VehicleSoundClustering"
+        {
+          "model": "google/yamnet",
+          "parameters_billion": 0.004,
+          "score": 0.35100000000000003,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:google/yamnet"
+        },
+        {
+          "model": "matthewagi/HeAR-s1.1",
+          "parameters_billion": 0.022,
+          "score": 3.8280000000000003,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:matthewagi/HeAR-s1.1"
+        },
+        {
+          "model": "openai/whisper-tiny",
+          "parameters_billion": 0.039,
+          "score": 12.3883,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:openai/whisper-tiny"
+        },
+        {
+          "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+          "parameters_billion": 0.086594063,
+          "score": 14.342872113086985,
+          "evidence_type": "independent_rerun",
+          "observation_id": "independent_rerun:MIT/ast-finetuned-audioset-10-10-0.4593:f826b80d28226b62986cc218e5cec390b1096902:VehicleSoundClustering"
+        }
       ],
       "peer_observation_count": 68,
-      "measured_peer_observations": 1
+      "measured_peer_observations": 1,
+      "highlight_variant": "nano",
+      "highlight_dominators": [
+        {
+          "model": "openai/whisper-tiny",
+          "parameters_billion": 0.039,
+          "score": 12.3883,
+          "open_weights": true,
+          "modalities": [
+            "audio"
+          ],
+          "training_tasks": null,
+          "source_urls": [
+            "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MAEB%28beta%2C%20audio-only%29/scores",
+            "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MAEB%28beta%29/scores"
+          ],
+          "size_basis": "reported_rounded_total",
+          "kind": "peer",
+          "on_displayed_frontier": true,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:openai/whisper-tiny"
+        },
+        {
+          "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+          "parameters_billion": 0.086594063,
+          "parameters_exact": 86594063,
+          "score": 14.342872113086985,
+          "open_weights": true,
+          "modalities": [
+            "audio"
+          ],
+          "training_tasks": [],
+          "source_urls": [
+            "https://huggingface.co/MIT/ast-finetuned-audioset-10-10-0.4593/tree/f826b80d28226b62986cc218e5cec390b1096902",
+            "https://github.com/YuanGongND/ast"
+          ],
+          "size_basis": "counted_pinned_full_checkpoint",
+          "kind": "peer",
+          "evidence_type": "independent_rerun",
+          "observation_id": "independent_rerun:MIT/ast-finetuned-audioset-10-10-0.4593:f826b80d28226b62986cc218e5cec390b1096902:VehicleSoundClustering",
+          "revision": "f826b80d28226b62986cc218e5cec390b1096902",
+          "report": "benchmarks/peer-evaluations/ast-vehicle.json",
+          "license": "bsd-3-clause",
+          "on_displayed_frontier": true
+        },
+        {
+          "model": "MIT/ast-finetuned-audioset-10-10-0.4593",
+          "parameters_billion": 0.087,
+          "score": 13.366700000000002,
+          "open_weights": true,
+          "modalities": [
+            "audio"
+          ],
+          "training_tasks": [
+            "AudioSetMini"
+          ],
+          "source_urls": [
+            "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MAEB%28beta%2C%20audio-only%29/scores",
+            "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MAEB%28beta%29/scores"
+          ],
+          "size_basis": "reported_rounded_total",
+          "kind": "peer",
+          "on_displayed_frontier": false,
+          "evidence_type": "registry_reported",
+          "observation_id": "registry_reported:MIT/ast-finetuned-audioset-10-10-0.4593"
+        }
+      ],
+      "highlight_gap_above_best_equal_or_smaller_peer_pp": -9.067446804900705
+    }
+  },
+  "models": {
+    "nano": {
+      "repo_id": "llm-semantic-router/Vela-1.0-Omni-Nano",
+      "release_commit": null,
+      "parameters_exact": 163771288,
+      "current_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+      "task_evidence": {
+        "English41": {
+          "source_id": "nano_English41",
+          "identity": {
+            "model": "local/Vela-Omni-Nano-GIST-Rotation",
+            "evaluated_revision": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+            "native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+            "revision_semantics": "local native artifact fingerprint, not a Hugging Face commit",
+            "component_applicability": {
+              "component": "text",
+              "evaluated_model": "local/Vela-Omni-Nano-GIST-Rotation",
+              "evaluated_native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+              "applies_to_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+              "prior_component_applicability": {
+                "model": "local/Vela-Omni-Nano-GIST-Rotation",
+                "evaluated_revision": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+                "native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+                "component_applicability": {
+                  "component": "text",
+                  "applies_to_revision": "self",
+                  "applies_to_native_artifact_sha256": "96d76f97478e114b816df3ab1b3c6947e4c5ef0babfb40ab865d7e3c838d34c4",
+                  "evaluated_model": "local/Vela-Omni-Nano-GIST-Rotation",
+                  "evaluated_revision": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+                  "evaluated_native_artifact_sha256": "29994142677559ca657c27b657eda0dddbf583bd4cf42a3a31095ab3f99d1646",
+                  "revision_kind": "local native artifact fingerprint, not a Hugging Face commit",
+                  "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/component-equivalence.json",
+                  "new_full_panel_inference": false,
+                  "basis": "199 exact text tensors and byte-identical inference/tokenizer/configuration under the same official evaluator protocol."
+                },
+                "revision_semantics": "local native artifact fingerprint, not a Hugging Face commit",
+                "inference_profile_applicability": {
+                  "revision": "self",
+                  "native_artifact_sha256": "50ce808197fb43a1b8913a66d4a47339ec66ecd10d52cbd9f9e752d02f8c43fa",
+                  "parameters": 135383808,
+                  "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/d8ac5b5ac2274a501fc61aeb5be70cec1855a806/benchmarks/inference-equivalence.json",
+                  "new_benchmark_run": false
+                }
+              },
+              "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/component-equivalence.json",
+              "new_full_panel_inference": false,
+              "basis": "The frozen text tensors, tokenizer, configuration and encoding computation are unchanged. The original measured text identity is retained."
+            }
+          },
+          "self_reference_interpretation": "Nano native fingerprint 474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2"
+        },
+        "audio19": {
+          "source_id": "nano_audio19",
+          "identity": {
+            "model": "llm-semantic-router/Vela-1.0-Omni-Nano",
+            "evaluated_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+            "release_native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+            "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/maeb-audio-only.json",
+            "new_full_panel_inference": true
+          },
+          "self_reference_interpretation": "Nano native fingerprint 474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2"
+        }
+      },
+      "release_reference": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano",
+      "release_revision_semantics": "Exact native fingerprint below; Hub commit is not encoded in this file."
+    },
+    "mini": {
+      "repo_id": "llm-semantic-router/Vela-1.0-Omni-Mini",
+      "release_commit": null,
+      "parameters_exact": 1361475288,
+      "current_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+      "task_evidence": {
+        "English41": {
+          "source_id": "mini_English41",
+          "identity": {
+            "model": "local/Qwen3-Embedding-0.6B-MRL768-NoInstructions",
+            "evaluated_revision": "98e47eac3fa59b6c627e371230905400b3a405ddc69ab1ef02cb1c476db04294",
+            "revision_semantics": "Exact standalone evaluation identity; not a Hugging Face commit for this Omni release.",
+            "component_applicability": {
+              "component": "text",
+              "evaluated_model": {
+                "repo_id": "local/Qwen3-Embedding-0.6B-MRL768-NoInstructions",
+                "revision": "98e47eac3fa59b6c627e371230905400b3a405ddc69ab1ef02cb1c476db04294"
+              },
+              "applies_to_model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+              "applies_to_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+              "prior_component_applicability": {
+                "component": "text",
+                "evaluated_model": {
+                  "repo_id": "local/Qwen3-Embedding-0.6B-MRL768-NoInstructions",
+                  "revision": "98e47eac3fa59b6c627e371230905400b3a405ddc69ab1ef02cb1c476db04294"
+                },
+                "applies_to_model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+                "applies_to_native_artifact_sha256": "1e4eb3cc6a7ab658a4c43baa8d5244a3724125afc2b6dc007737373714ccf8f3",
+                "bridge_native_artifact_sha256": "530d9af9957e1b03560943a0e4ffc1e6745b2aebfc9d977a8e9bbff91c1b627a",
+                "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/f5ef7feb7c0a7877c27ca4fa03c2183edba66fce/benchmarks/component-equivalence.json",
+                "new_whole_Omni_panel_inference": false,
+                "basis": "Exact frozen text weights, tokenizer, active configuration and encoding computation under the same evaluator protocol.",
+                "prior_bridge_native_artifact_sha256": "cf5f45cf6e26cd225e0fc0c1ece629b13b8bd0dfe57dcedef739ca8f529f80ab"
+              },
+              "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/component-equivalence.json",
+              "new_whole_Omni_panel_inference": false,
+              "basis": "Frozen text tensors, tokenizer, configuration and encoding computation are unchanged; retain the original standalone measured identity."
+            }
+          },
+          "self_reference_interpretation": "Mini native fingerprint d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731"
+        },
+        "audio19": {
+          "source_id": "mini_audio19",
+          "identity": {
+            "model": "llm-semantic-router/Vela-1.0-Omni-Mini",
+            "evaluated_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+            "release_native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+            "report": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/maeb-audio-only.json",
+            "new_full_panel_inference": true
+          },
+          "self_reference_interpretation": "Mini native fingerprint d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731"
+        }
+      },
+      "release_reference": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini",
+      "release_revision_semantics": "Exact native fingerprint below; Hub commit is not encoded in this file."
+    }
+  },
+  "sources": {
+    "nano_English41": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/mteb-eng-v2.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+      "sha256": "f3daecad1cf431630598efb04f3667431e3420239240f28a51568a74cef0c64f"
+    },
+    "nano_audio19": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/maeb-audio-only.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+      "sha256": "4fc7f217745eb0aa998bf0f8e044bd1fa5de2f73f1a7dead7b829a62c48669ff"
+    },
+    "mini_English41": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/mteb-eng-v2.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+      "sha256": "5048644990078e6b0c9bd7aa1d52a7ed60729608ebafdb22bc49b4dad0f7cac9"
+    },
+    "mini_audio19": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/maeb-audio-only.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731",
+      "sha256": "b9adc831e1de9caed37d38292dc95d65f4f933178fa7abbf7c1211f23617efbf"
+    },
+    "scores_MTEB_eng_v2": {
+      "url": "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MTEB%28eng%2C%20v2%29/scores",
+      "sha256": "e574f14dc778d72c08255450091191b103930c487fa172a2dfabe41a0b56569d",
+      "retrieved_at_utc": "2026-09-17T20:28:47.419876+00:00",
+      "bytes": 1071836,
+      "benchmark": "MTEB(eng, v2)"
+    },
+    "scores_MAEB_beta_audio-only": {
+      "url": "https://mteb-leaderboard-backend.hf.space/v1/benchmarks/MAEB%28beta%2C%20audio-only%29/scores",
+      "sha256": "6153942c26a31577cc1e3a2fbb6eb10b09dc2f1fe08749db598d261e653f6bca",
+      "retrieved_at_utc": "2026-09-17T20:28:48.670374+00:00",
+      "bytes": 194971,
+      "benchmark": "MAEB(beta, audio-only)"
+    },
+    "mini_component_equivalence": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Mini/resolve/main/benchmarks/component-equivalence.json",
+      "sha256": "8bbbd3a362d84a6e8f030803259db69e932e5997b1c7af1a276a0d17862eb184",
+      "evidence_type": "exact_component_identity_report",
+      "native_artifact_sha256": "d3a742fbe0d833b0a72e5104e0381209b7d3da78f948d3439a5da7d986232731"
+    },
+    "nano_component_equivalence": {
+      "url": "https://huggingface.co/llm-semantic-router/Vela-1.0-Omni-Nano/resolve/main/benchmarks/component-equivalence.json",
+      "evidence_type": "Vela_release_report",
+      "native_artifact_sha256": "474ad3d52f6ee7f818a3dbb6112e3d66c2423542d08228e7996a8cd600bd99a2",
+      "sha256": "ebd40f9a887791d1736132c37f510a69e18a03e247422853f54a42b417b0db9b"
     }
   }
 }

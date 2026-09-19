@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2155" viewBox="0 0 1800 2155" role="img"><title>Vela Omni Mini: three embedding encoders</title><desc>Bottom-to-top public encode_text, encode_image and encode_audio graphs. Expanded Transformer layers show real normalization order, residuals, attention and feed-forward widths. The common vector space contains three independently computed vectors. Dropout, inactive during inference, is omitted. Mini vision uses native learned-probe attention pooling over all 729 patch states, then L2 normalization, linear projection to 768, and final L2 normalization. Mini text uses Qwen3-Embedding-0.6B, causal grouped-query attention with 16 query heads and 8 key/value heads of width 128, per-head Q/K RMSNorm, RoPE theta 1000000, pre-RMSNorm and SwiGLU. Its last nonpadding token is normalized over all 1024 dimensions, then truncated to the first 768, then normalized again. No learned text projection is used.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="2850" height="2530" viewBox="0 0 2850 2530" role="img"><title>Vela Omni Mini: three modality paths</title><desc>Bottom-to-top public encode_text, encode_image and encode_audio graphs. Expanded Transformer layers show real normalization order, residuals, attention and feed-forward widths. The common vector space contains three independently computed vectors. Audio combines the retained unnormalized Whisper affine with a learned residual of frozen CLAP features, followed by L2 normalization. Both audio branches independently resample original PCM. Dropout, inactive during inference, is omitted. Mini vision uses native learned-probe attention pooling over all 729 patch states, then L2 normalization, linear projection to 768, and final L2 normalization. Mini text uses Qwen3-Embedding-0.6B, causal grouped-query attention with 16 query heads and 8 key/value heads of width 128, per-head Q/K RMSNorm, RoPE theta 1000000, pre-RMSNorm and SwiGLU. Its last nonpadding token is normalized over all 1024 dimensions, then truncated to the first 768, then normalized again. No learned text projection is used.</desc>
 <defs><marker id="arrow" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto" markerUnits="userSpaceOnUse"><path d="M0 0 L12 5 L0 10 L3 5 Z" fill="#111"/></marker></defs>
         <style>text{font-family:Arial,Helvetica,sans-serif;fill:#111;font-weight:400}.math{font-family:Georgia,'Times New Roman',serif;font-style:italic}.serif{font-family:Georgia,'Times New Roman',serif}</style>
-<text x="900" y="64.0" font-size="39" text-anchor="middle" class="serif">Vela Omni Mini</text>
-<text x="900" y="96.0" font-size="22" text-anchor="middle" class="">1.33B total parameters</text>
-<rect x="170" y="115" width="1460" height="130" rx="9" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
-<text x="900" y="158.0" font-size="29" text-anchor="middle" class="serif">Shared 768-dimensional embedding space</text>
+<text x="1175" y="64.0" font-size="39" text-anchor="middle" class="serif">Vela Omni Mini</text>
+<text x="1175" y="96.0" font-size="22" text-anchor="middle" class="">1.36B total parameters</text>
+<rect x="170" y="115" width="2010" height="130" rx="9" fill="#FFFFFF" stroke="#111" stroke-width="2.2"/>
+<text x="1175" y="158.0" font-size="29" text-anchor="middle" class="serif">Shared 768-dimensional embedding space</text>
 <text x="350" y="211" font-size="30" text-anchor="middle" class="math">z<tspan baseline-shift="sub" font-size="20" font-style="normal">text</tspan></text>
 <g data-box="205.0 300 290 58">
 <rect x="205.0" y="300" width="290" height="58" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
@@ -17,12 +17,12 @@
 <text x="900" y="337.84" font-size="26" text-anchor="middle" class="">L2 Normalize</text>
 </g>
 <path d="M900,299 L900,246" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<text x="1450" y="211" font-size="30" text-anchor="middle" class="math">z<tspan baseline-shift="sub" font-size="20" font-style="normal">audio</tspan></text>
-<g data-box="1305.0 300 290 58">
-<rect x="1305.0" y="300" width="290" height="58" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
-<text x="1450" y="337.84" font-size="26" text-anchor="middle" class="">L2 Normalize</text>
+<text x="1725" y="211" font-size="30" text-anchor="middle" class="math">z<tspan baseline-shift="sub" font-size="20" font-style="normal">audio</tspan></text>
+<g data-box="1580.0 300 290 58">
+<rect x="1580.0" y="300" width="290" height="58" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="1725" y="337.84" font-size="26" text-anchor="middle" class="">L2 Normalize</text>
 </g>
-<path d="M1450,299 L1450,246" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1725,299 L1725,246" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <rect x="158.0" y="900" width="410" height="550" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
 <text x="134.0" y="1184.0" font-size="30" text-anchor="end" class="math">28×</text>
 <circle cx="350" cy="948" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
@@ -93,9 +93,16 @@
 <text x="350" y="1743.125" font-size="25" text-anchor="middle" class="">151,669 × 1024</text>
 </g>
 <path d="M350,1679 L350,1471" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M350,1945 L350,1761" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<text x="350" y="1982.0" font-size="27" text-anchor="middle" class="">Text tokens</text>
-<text x="350" y="2013.59" font-size="27" text-anchor="middle" class="">n ≤ 32,768</text>
+<g data-box="205.0 1830 290 95">
+<rect x="205.0" y="1830" width="290" height="95" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="350" y="1859.24" font-size="22" text-anchor="middle" class="">Native Tokenizer</text>
+<text x="350" y="1884.98" font-size="22" text-anchor="middle" class="">default: shared text</text>
+<text x="350" y="1910.72" font-size="22" text-anchor="middle" class="">optional: instruction + text</text>
+</g>
+<path d="M350,1829 L350,1761" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M350,1945 L350,1926" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="350" y="1982.0" font-size="25" text-anchor="middle" class="">Text + optional instruction</text>
+<text x="350" y="2011.25" font-size="25" text-anchor="middle" class="">n ≤ 32,768 total tokens</text>
 <text x="350" y="2070.0" font-size="27" text-anchor="middle" class="serif">Qwen3-Embedding-0.6B</text>
 <rect x="708.0" y="900" width="410" height="550" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
 <text x="684.0" y="1184.0" font-size="30" text-anchor="end" class="math">27×</text>
@@ -249,16 +256,16 @@
 <g data-box="1305.0 704 290 75">
 <rect x="1305.0" y="704" width="290" height="75" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
 <text x="1450" y="735.375" font-size="25" text-anchor="middle" class="">Mean over Frames</text>
-<text x="1450" y="764.625" font-size="25" text-anchor="middle" class="">1500 states</text>
+<text x="1450" y="764.625" font-size="25" text-anchor="middle" class="">all 1500 states</text>
 </g>
 <path d="M1450,811 L1450,780" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <g data-box="1305.0 470 290 70">
 <rect x="1305.0" y="470" width="290" height="70" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
-<text x="1450" y="498.875" font-size="25" text-anchor="middle" class="">Linear Projection</text>
+<text x="1450" y="498.875" font-size="25" text-anchor="middle" class="">Retained Affine</text>
 <text x="1450" y="528.125" font-size="25" text-anchor="middle" class="">1024 → 768</text>
 </g>
 <path d="M1450,703 L1450,541" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<path d="M1450,469 L1450,359" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1450,469 L1450,408 L1705,408" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
 <circle cx="1450" cy="1530" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
 <text x="1450" y="1538.99" font-size="29" text-anchor="middle" class="">+</text>
 <path d="M1450,1511 L1450,1471" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -286,9 +293,161 @@
 <text x="1450" y="1902.775" font-size="23" text-anchor="middle" class="">80 bins × 3000 frames</text>
 </g>
 <path d="M1450,1843 L1450,1808" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<path d="M1450,1945 L1450,1920" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
-<text x="1450" y="1982.0" font-size="27" text-anchor="middle" class="">Mono waveform</text>
-<text x="1450" y="2013.59" font-size="27" text-anchor="middle" class="">16 kHz · ≤ 30 s</text>
-<text x="1450" y="2070.0" font-size="29" text-anchor="middle" class="serif">Whisper encoder</text>
-<text x="900" y="2130.0" font-size="22" text-anchor="middle" class="">Text: causal attention; RoPE θ = 1,000,000. Native tokenization, no added prompt; no language-model head.</text>
+<g data-box="1305.0 1980 290 85">
+<rect x="1305.0" y="1980" width="290" height="85" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1450" y="2017.355" font-size="21" text-anchor="middle" class="">Independent Resampling</text>
+<text x="1450" y="2041.925" font-size="21" text-anchor="middle" class="">PCM → 16 kHz mono</text>
+</g>
+<path d="M1450,1979 L1450,1920" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1405" y="2140.0" font-size="27" text-anchor="end" class="serif">Whisper medium</text>
+<g data-box="1855.0 470 290 70">
+<rect x="1855.0" y="470" width="290" height="70" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="499.36500000000007" font-size="23" text-anchor="middle" class="">Learned Residual Map</text>
+<text x="2000" y="526.2750000000001" font-size="23" text-anchor="middle" class="">bias-free 512 → 768</text>
+</g>
+<path d="M2000,469 L2000,408 L1745,408" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 580 290 75">
+<rect x="1855.0" y="580" width="290" height="75" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="611.865" font-size="23" text-anchor="middle" class="">Frozen TRAIN Statistics</text>
+<text x="2000" y="638.775" font-size="23" text-anchor="middle" class="">(c − mean) / scale</text>
+</g>
+<path d="M2000,579 L2000,541" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 690 290 95">
+<rect x="1855.0" y="690" width="290" height="95" rx="7" fill="#D8EBD8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="720.0699999999999" font-size="21" text-anchor="middle" class="">Window Aggregation</text>
+<text x="2000" y="744.64" font-size="21" text-anchor="middle" class="">L2 each → mean → L2</text>
+<text x="2000" y="769.2099999999999" font-size="21" text-anchor="middle" class="">one window: its unit vector</text>
+</g>
+<path d="M2000,689 L2000,656" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 825 290 80">
+<rect x="1855.0" y="825" width="290" height="80" rx="7" fill="#DEDCEE" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="859.61" font-size="22" text-anchor="middle" class="">CLAP Projection</text>
+<text x="2000" y="885.35" font-size="22" text-anchor="middle" class="">768 → 512 → 512; ReLU</text>
+</g>
+<path d="M2000,824 L2000,786" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 945 290 65">
+<rect x="1855.0" y="945" width="290" height="65" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="971.865" font-size="23" text-anchor="middle" class="">Global Average Pool</text>
+<text x="2000" y="998.775" font-size="23" text-anchor="middle" class="">768 dimensions</text>
+</g>
+<path d="M2000,944 L2000,906" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 1040 290 48">
+<rect x="1855.0" y="1040" width="290" height="48" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="1072.16" font-size="24" text-anchor="middle" class="">Final LayerNorm</text>
+</g>
+<path d="M2000,1039 L2000,1011" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 1130 290 100">
+<rect x="1855.0" y="1130" width="290" height="100" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="1163.3999999999999" font-size="20" text-anchor="middle" class="">Stage 4: 2 Swin blocks</text>
+<text x="2000" y="1186.8" font-size="20" text-anchor="middle" class="">width 768 · 32 heads</text>
+<text x="2000" y="1210.1999999999998" font-size="20" text-anchor="middle" class="">final 8 × 8 grid</text>
+</g>
+<path d="M2000,1129 L2000,1089" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 1270 290 100">
+<rect x="1855.0" y="1270" width="290" height="100" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="1303.3999999999999" font-size="20" text-anchor="middle" class="">Stage 3: 6 Swin blocks</text>
+<text x="2000" y="1326.8" font-size="20" text-anchor="middle" class="">width 384 · 16 heads</text>
+<text x="2000" y="1350.1999999999998" font-size="20" text-anchor="middle" class="">patch merge: 1536 → 768</text>
+</g>
+<path d="M2000,1269 L2000,1231" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 1410 290 100">
+<rect x="1855.0" y="1410" width="290" height="100" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="1443.3999999999999" font-size="20" text-anchor="middle" class="">Stage 2: 2 Swin blocks</text>
+<text x="2000" y="1466.8" font-size="20" text-anchor="middle" class="">width 192 · 8 heads</text>
+<text x="2000" y="1490.1999999999998" font-size="20" text-anchor="middle" class="">patch merge: 768 → 384</text>
+</g>
+<path d="M2000,1409 L2000,1371" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 1550 290 100">
+<rect x="1855.0" y="1550" width="290" height="100" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="1583.3999999999999" font-size="20" text-anchor="middle" class="">Stage 1: 2 Swin blocks</text>
+<text x="2000" y="1606.8" font-size="20" text-anchor="middle" class="">width 96 · 4 heads</text>
+<text x="2000" y="1630.1999999999998" font-size="20" text-anchor="middle" class="">patch merge: 384 → 192</text>
+</g>
+<path d="M2000,1549 L2000,1511" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 1730 290 95">
+<rect x="1855.0" y="1730" width="290" height="95" rx="7" fill="#F7DCDF" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="1760.0700000000002" font-size="21" text-anchor="middle" class="">Patch Embedding + LN</text>
+<text x="2000" y="1784.64" font-size="21" text-anchor="middle" class="">Conv2D 4 × 4, stride 4</text>
+<text x="2000" y="1809.2100000000003" font-size="21" text-anchor="middle" class="">64 × 64 grid · width 96</text>
+</g>
+<path d="M2000,1729 L2000,1651" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 1870 290 95">
+<rect x="1855.0" y="1870" width="290" height="95" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="1900.8999999999999" font-size="20" text-anchor="middle" class="">Log-Mel → BatchNorm</text>
+<text x="2000" y="1924.3" font-size="20" text-anchor="middle" class="">64 mel bins</text>
+<text x="2000" y="1947.6999999999998" font-size="20" text-anchor="middle" class="">resize + reshape 256 × 256</text>
+</g>
+<path d="M2000,1869 L2000,1826" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 2010 290 95">
+<rect x="1855.0" y="2010" width="290" height="95" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="2040.9" font-size="20" text-anchor="middle" class="">Endpoint-spaced Windows</text>
+<text x="2000" y="2064.3" font-size="20" text-anchor="middle" class="">≤ 10 s each; repeat-pad short</text>
+<text x="2000" y="2087.7000000000003" font-size="20" text-anchor="middle" class="">1–3 windows per waveform</text>
+</g>
+<path d="M2000,2009 L2000,1966" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<g data-box="1855.0 2180 290 85">
+<rect x="1855.0" y="2180" width="290" height="85" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="2000" y="2217.355" font-size="21" text-anchor="middle" class="">Independent Resampling</text>
+<text x="2000" y="2241.925" font-size="21" text-anchor="middle" class="">PCM → 48 kHz mono</text>
+</g>
+<path d="M2000,2179 L2000,2106" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="2210" y="2220.0" font-size="27" text-anchor="start" class="serif">Frozen CLAP / HTS-AT</text>
+<text x="2550" y="1100.0" font-size="29" text-anchor="middle" class="serif">Inside each Swin block</text>
+<rect x="2370.0" y="1160" width="395" height="550" rx="23" fill="#F4F4F4" stroke="#111" stroke-width="2.2"/>
+<circle cx="2550" cy="1208" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="2550" y="1216.99" font-size="29" text-anchor="middle" class="">+</text>
+<g data-box="2405.0 1253 290 98">
+<rect x="2405.0" y="1253" width="290" height="98" rx="7" fill="#C7E5F0" stroke="#111" stroke-width="2.2"/>
+<text x="2550" y="1284.5700000000002" font-size="21" text-anchor="middle" class="">Feed Forward</text>
+<text x="2550" y="1309.14" font-size="21" text-anchor="middle" class="">Linear · GELU · Linear</text>
+<text x="2550" y="1333.7100000000003" font-size="21" text-anchor="middle" class="">D → 4D → D</text>
+</g>
+<g data-box="2405.0 1379 290 48">
+<rect x="2405.0" y="1379" width="290" height="48" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="2550" y="1411.5" font-size="25" text-anchor="middle" class="">LayerNorm</text>
+</g>
+<circle cx="2550" cy="1470" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="2550" y="1478.99" font-size="29" text-anchor="middle" class="">+</text>
+<g data-box="2405.0 1504 290 110">
+<rect x="2405.0" y="1504" width="290" height="110" rx="7" fill="#FCE1B8" stroke="#111" stroke-width="2.2"/>
+<text x="2550" y="1542.3999999999999" font-size="20" text-anchor="middle" class="">Window Self-Attention</text>
+<text x="2550" y="1565.8" font-size="20" text-anchor="middle" class="">8 × 8; relative position bias</text>
+<text x="2550" y="1589.1999999999998" font-size="20" text-anchor="middle" class="">alternating cyclic shifts</text>
+</g>
+<g data-box="2405.0 1642 290 42">
+<rect x="2405.0" y="1642" width="290" height="42" rx="7" fill="#FBF8CB" stroke="#111" stroke-width="2.2"/>
+<text x="2550" y="1671.5" font-size="25" text-anchor="middle" class="">LayerNorm</text>
+</g>
+<path d="M2550,1730 L2550,1685" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1641 L2550,1628 L2485,1628 L2485,1615" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1641 L2550,1628 L2550,1628 L2550,1615" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1641 L2550,1628 L2615,1628 L2615,1615" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1503 L2550,1489" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1451 L2550,1428" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1378 L2550,1352" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1252 L2550,1227" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1189 L2550,1140" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M2550,1699 L2740.0,1699 L2740.0,1470 L2570,1470" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M2550,1440 L2740.0,1440 L2740.0,1208 L2570,1208" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="2550" cy="1699" r="3.5" fill="#111"/>
+<circle cx="2550" cy="1440" r="3.5" fill="#111"/>
+<text x="2550" y="1790.0" font-size="22" text-anchor="middle" class="">D = 96, 192, 384, 768</text>
+<text x="2550" y="1815.74" font-size="22" text-anchor="middle" class="">24 dimensions per head</text>
+<text x="2550" y="1841.48" font-size="22" text-anchor="middle" class="">No shift when grid ≤ window</text>
+<text x="2550" y="1900.0" font-size="22" text-anchor="middle" class="">Between stages 1–3:</text>
+<text x="2550" y="1925.74" font-size="22" text-anchor="middle" class="">2 × 2 patch concatenation</text>
+<text x="2550" y="1951.48" font-size="22" text-anchor="middle" class="">LayerNorm → Linear 4D → 2D</text>
+<circle cx="1725" cy="408" r="18" fill="#FFFFFF" stroke="#111" stroke-width="2.1"/>
+<text x="1725" y="416.99" font-size="29" text-anchor="middle" class="">+</text>
+<path d="M1725,389 L1725,359" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<text x="1725" y="459.0" font-size="21" text-anchor="middle" class="">speech affine + CLAP residual</text>
+<g data-box="1285.0 2370 880 92">
+<rect x="1285.0" y="2370" width="880" height="92" rx="7" fill="#E6ECE8" stroke="#111" stroke-width="2.2"/>
+<text x="1725" y="2410.12" font-size="24" text-anchor="middle" class="">Original-rate PCM · ≤ 30 s</text>
+<text x="1725" y="2438.2" font-size="24" text-anchor="middle" class="">mono or channels-first; preserve original bandwidth</text>
+</g>
+<path d="M1725,2369 L1725,2310 L1450,2310 L1450,2066" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<path d="M1725,2310 L2000,2310 L2000,2266" fill="none" stroke="#111" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)"/>
+<circle cx="1725" cy="2310" r="3.5" fill="#111"/>
+<text x="625" y="2220.0" font-size="21" text-anchor="middle" class="">Text: causal attention; RoPE θ = 1,000,000; no language-model head.</text>
 </svg>
