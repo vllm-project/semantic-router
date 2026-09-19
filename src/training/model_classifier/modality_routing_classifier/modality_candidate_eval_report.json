@@ -1,13 +1,13 @@
 {
   "metadata": {
-    "test_file": "/mnt/d/projects/semantic-router/src/training/model_classifier/modality_routing_classifier/exported_modality_routing_dataset/test.jsonl",
-    "train_file": "/mnt/d/projects/semantic-router/src/training/model_classifier/modality_routing_classifier/exported_modality_routing_dataset/train.jsonl",
-    "val_file": "/mnt/d/projects/semantic-router/src/training/model_classifier/modality_routing_classifier/exported_modality_routing_dataset/validation.jsonl",
+    "test_file": "exported_modality_routing_dataset/test.jsonl",
+    "train_file": "exported_modality_routing_dataset/train.jsonl",
+    "val_file": "exported_modality_routing_dataset/validation.jsonl",
     "num_test_examples": 759,
     "model_paths": {
       "published_baseline": "llm-semantic-router/mmbert32k-modality-router-merged",
-      "clean_baseline": "/home/ram/training-runs/mmbert32k_clean_baseline_merged",
-      "candidate": "/home/ram/training-runs/distilbert_candidate_merged"
+      "clean_baseline": "mmbert32k_clean_baseline_merged",
+      "candidate": "distilbert_candidate_merged"
     },
     "generated_at_utc": "2026-09-17T05:40:26.171114+00:00",
     "label_order": [
