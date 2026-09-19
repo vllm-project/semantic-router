@@ -169,6 +169,11 @@ Two baselines are reported. The reason is in §4.
   - The clean baseline is right on 15 of them and the candidate on 9.
   - Exact McNemar test, two-sided: p = 0.31.
   - Under the stricter re-judged labels the gap becomes significant (§11.3).
+  - **Training seed noise is not measured.** Each model was trained once,
+    before the trainer had a `--seed` option. A gap of 0.79 points is about 6
+    rows, and the McNemar test only covers which test rows were sampled, not
+    how much a retrained model would move. A seed sweep (several seeds per
+    model) is still to do before reading a small gap as real.
 - **Speed and size:**
   - Trained in about 120 seconds on an RTX 3090, roughly 2.5x faster than the
     clean baseline.
@@ -221,6 +226,10 @@ catch it.
   `WildChat_BOTH=18`, `Diffusion_SD=1864`, `OASST2=500`, `Alpaca=500`,
   `Dolly=500`, `InterleavedBench=447`, `BOTH_seeds=75`, `BOTH_fallback=515`.
 - **Synthesis:** no vLLM synthesis (`synthesize_both=0`).
+- **Licenses:** every row keeps the license of its source. The Alpaca rows are
+  CC BY-NC 4.0 (non-commercial), so this export is not cleanly reusable under
+  the repository's license. The full table is in the dataset README, and how to
+  handle it is a decision for the maintainers.
 
 ### Training objective
 
@@ -351,6 +360,12 @@ python evaluate_modality_candidate.py \
 
 - **Pinned environment:** `requirements-lock.txt` in this directory records the
   exact package versions used (torch 2.14.0, transformers 5.17.0, peft 0.21.0).
+- **Seeds:** the trainer takes `--seed` (default 42) and, with the same seed,
+  gives the same result twice. The reported numbers come from runs made before
+  that option existed, so the commands above reproduce the setup and not the
+  exact numbers. See the seed note in §3.
+- **Tests:** `pytest test_modality_label_mapping.py` covers the label-mapping
+  checks that the trainer and the evaluation share.
 
 ## 7. Routing agreement
 
@@ -460,6 +475,10 @@ All in `label_audit/`:
 - `judge_labels.py` with subcommands `next`, `save`, `status`, `report`,
   `sheet`, `api`.
 - `checkpoint.jsonl`: append-only, one record per judged row.
+- `dataset_sha256.json`: pins each split by hash, so judgments cannot be
+  joined to a re-exported dataset.
+- `predictions/`: the SCX and LFM2.5 test predictions used in §11.2. The
+  baseline and candidate predictions are in `modality_candidate_eval_report.json`.
 - `audit_report_test.txt` and `audit_report_validation.txt`.
 - `human_review.tsv`: blinded sheet for a human spot-check (§11.5).
 
@@ -524,6 +543,9 @@ What stands out:
   tightly.** It does not show it is the model most often right about intent.
 - Treat the original-label numbers as "how well a model reproduces this
   dataset's rules".
+- SCX against the clean baseline shows it. On the original labels SCX is right
+  on 19 rows the baseline misses and never the other way round (p < 0.001). On
+  the strict labels it is 10 against 7 (p = 0.63), which is noise.
 
 ### 11.3 Does the candidate comparison change?
 
@@ -541,6 +563,17 @@ Exact McNemar test on paired correctness, candidate against clean baseline:
 - **The verdict depends on the `BOTH` policy**, and the data does not settle
   that. I would not claim "the student matches the teacher" or "the student is
   worse" until it is decided.
+
+To reproduce the tables in §11.2 and §11.3:
+
+```bash
+cd label_audit
+python judge_labels.py report --split test \
+  --eval-report ../modality_candidate_eval_report.json \
+  --preds scx_finetuned=predictions/scx_finetuned.json \
+  --preds lfm25_lora=predictions/lfm25_lora.json \
+  --compare clean_baseline,candidate --compare clean_baseline,scx_finetuned
+```
 
 ### 11.4 Decision needed: what should `BOTH` mean?
 
