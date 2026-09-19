@@ -46,9 +46,9 @@ func looperInternalHeadersForRemoval() []string {
 	return append([]string(nil), looperInternalContextHeaders...)
 }
 
-func buildLooperInternalHeaderRemovalMutation() *ext_proc.HeaderMutation {
+func buildLooperInternalHeaderRemovalMutation(extraRemovals ...string) *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: append(looperInternalHeadersForRemoval(), extraRemovals...),
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agenticfacts"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -147,6 +148,15 @@ type RequestContext struct {
 
 	// Request header reply held until a full-duplex body is routed.
 	fullDuplexHold *fullDuplexHeaderHold
+
+	// AgenticFacts holds the outcome of validating the caller-presented
+	// selection-facts envelope. Its zero value (no Accepted, no Rejections)
+	// means no envelope was processed — either the contract is disabled, no
+	// carrier header was sent, or the request arrived without the configured
+	// trust marker. AgenticFacts.Accepted is nil whenever AgenticFacts.Rejected()
+	// is true: a presented envelope that failed validation contributes nothing
+	// to selection, by construction.
+	AgenticFacts agenticfacts.Result
 
 	StreamingComplete      bool // True after neutral stream finalization runs once.
 	StreamingAborted       bool // True if the neutral stream ended abnormally.
