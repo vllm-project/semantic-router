@@ -364,8 +364,28 @@ python evaluate_modality_candidate.py \
   gives the same result twice. The reported numbers come from runs made before
   that option existed, so the commands above reproduce the setup and not the
   exact numbers. See the seed note in §3.
-- **Tests:** `pytest test_modality_label_mapping.py` covers the label-mapping
-  checks that the trainer and the evaluation share.
+- **Tests:** run `pip install pytest` and then `pytest` in this directory. No
+  GPU, checkpoint or network is needed. The suite covers the label mapping, the
+  data helpers, the losses, the trainer, the evaluation, and the audit tool
+  (`label_audit/`, including judging through a fake API client).
+
+### Code layout
+
+Each file has one job, and the heavy parts (torch, checkpoints) sit at the edges.
+
+- `modality_routing_fixed_split_trainer.py`: the training entry point. A
+  `TrainConfig` goes in, and one `ModalityTrainer` handles both plain
+  fine-tuning and distillation.
+- `modality_data.py`: class weights, oversampling and warmup steps. No torch.
+- `modality_losses.py`: the distillation loss.
+- `modality_label_mapping.py`: the canonical labels and the checks that a
+  checkpoint's labels map onto them. No torch.
+- `evaluate_modality_candidate.py`: loads each checkpoint and predicts.
+- `modality_eval_metrics.py`: contamination check, metrics and the report.
+  No torch, so it can be tested with plain arrays.
+- `label_audit/judge_labels.py`: the audit command line. The work is in
+  `label_audit/audit_lib/`, one module per job (dataset, judgments, checkpoint,
+  statistics, human review, API judging, report).
 
 ## 7. Routing agreement
 
