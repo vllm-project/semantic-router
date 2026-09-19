@@ -3,6 +3,7 @@ package classification
 import (
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -17,7 +18,7 @@ type preppedKeywordRule struct {
 	OriginalKeywords  []string         // For logging/returning original case
 	CompiledRegexpsCS []*regexp.Regexp // Compiled regex for case-sensitive
 	CompiledRegexpsCI []*regexp.Regexp // Compiled regex for case-insensitive
-	LiteralBoundaries []bool           // Check neighboring runes for literal non-CJK keywords
+	LiteralBoundaries []bool           // Check neighboring runes for literal non-CJK words
 
 	FuzzyMatch        bool     // Enable approximate matching with Levenshtein distance
 	FuzzyThreshold    int      // Maximum edit distance for fuzzy matching (default: 2)
@@ -53,7 +54,7 @@ func prepRegexRule(rule config.KeywordRule) (preppedKeywordRule, error) {
 
 	for j, keyword := range rule.Keywords {
 		patternCS, patternCI := regexPatterns(keyword, useExplicitRegex)
-		preppedRule.LiteralBoundaries[j] = !useExplicitRegex && keyword != "" && !containsCJK(keyword)
+		preppedRule.LiteralBoundaries[j] = !useExplicitRegex && literalKeywordNeedsBoundary(keyword)
 
 		var err error
 		preppedRule.CompiledRegexpsCS[j], err = regexp.Compile(patternCS)
@@ -79,6 +80,14 @@ func regexPatterns(keyword string, useExplicitRegex bool) (string, string) {
 
 	pattern := regexp.QuoteMeta(keyword)
 	return pattern, "(?i)" + pattern
+}
+
+// Keep the legacy substring contract for punctuation-only literals. Word-like
+// literals need neighboring-rune boundaries, except for continuous CJK text.
+func literalKeywordNeedsBoundary(keyword string) bool {
+	return !containsCJK(keyword) && strings.ContainsFunc(keyword, func(r rune) bool {
+		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+	})
 }
 
 // Literal boundaries belong to the neighboring runes, not to the keyword's

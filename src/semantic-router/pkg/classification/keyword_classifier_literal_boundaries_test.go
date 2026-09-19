@@ -72,6 +72,10 @@ func TestKeywordClassifierLiteralNeighborContract(t *testing.T) {
 		{".NET", "ASP.NET then .NET", true},
 		{"C++", "c++", true},
 		{",,", "A,,, ", true},
+		{"*", "2*3", true},
+		{"?", "what?", true},
+		{"...", "wait...now", true},
+		{"💡", "idea💡here", true},
 	} {
 		t.Run(tc.word+"/"+tc.text, func(t *testing.T) {
 			c, err := NewKeywordClassifier([]config.KeywordRule{{Name: "selected", Operator: "OR", Keywords: []string{tc.word}}})
@@ -106,6 +110,8 @@ func TestKeywordClassifierLiteralOperatorsAndRegexControl(t *testing.T) {
 		{"explicit regex remains substring", "OR", "regex", "C++Builder", []string{`C\+\+`}, false, true, 1},
 		{"case sensitive control", "OR", "", "c++", []string{"C++"}, true, false, 0},
 		{"overlapping keyword rules", "OR", "", "C++", []string{"C", "C++"}, false, true, 1},
+		{"AND punctuation remains substring", "AND", "", "2*3 what?", []string{"*", "?"}, false, true, 1},
+		{"NOR rejects punctuation substring", "NOR", "", "2*3", []string{"*", "?"}, false, false, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, err := NewKeywordClassifier([]config.KeywordRule{{Name: "selected", Operator: tc.operator, Method: tc.method, Keywords: tc.keywords, CaseSensitive: tc.caseSensitive}})
