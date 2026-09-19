@@ -26,6 +26,7 @@ def test_catalog_and_clean_command_surface():
         "cancel",
         "report",
         "compare",
+        "comparison-options",
         "serve",
         "preview",
         "target",
