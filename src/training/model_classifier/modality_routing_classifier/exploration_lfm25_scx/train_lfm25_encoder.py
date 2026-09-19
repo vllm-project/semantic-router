@@ -2,140 +2,130 @@
 Lfm2BidirectionalModel, interleaved gated-conv + grouped-query-attention blocks)
 on the modality-routing task via LoRA.
 
-Key gotcha (verified by direct reproduction, matching the trap @adaamko flagged
-in DECISION_RECORD.md): the model card's documented
-`AutoModel.from_pretrained(repo, trust_remote_code=True)` path loads a
-COMPLETELY RANDOMLY-INITIALIZED model for this checkpoint -- its real weights
-are stored under an `lfm2.` prefix that `Lfm2BidirectionalModel`'s own module
-structure doesn't expect. The fix: load via
-`AutoModelForMaskedLM.from_pretrained(...).lfm2` instead, which loads the
-pretrained weights correctly (verified: zero MISSING/UNEXPECTED keys).
+Key gotcha (verified by direct reproduction, matching the trap @adaamko flagged in
+DECISION_RECORD.md): the model card's documented
+`AutoModel.from_pretrained(repo, trust_remote_code=True)` path loads a COMPLETELY
+RANDOMLY-INITIALIZED model for this checkpoint. Its real weights are stored under an
+`lfm2.` prefix that `Lfm2BidirectionalModel`'s own module structure doesn't expect.
+The fix is to load via `AutoModelForMaskedLM.from_pretrained(...).lfm2`, which loads
+the pretrained weights correctly (verified: zero MISSING/UNEXPECTED keys). See
+lfm25_classifier.load_lfm25_body.
 
-No AutoModelForSequenceClassification variant exists for this architecture, so
-this wraps the bare encoder body with a masked-mean-pool + linear head, mirroring
-the FocalLoss/class-weight recipe used elsewhere in this pipeline for consistency.
+No AutoModelForSequenceClassification variant exists for this architecture, so this
+wraps the bare encoder body with a masked-mean-pool + linear head, mirroring the
+FocalLoss/class-weight recipe used elsewhere in this pipeline for consistency.
+
+Usage:
+    python train_lfm25_encoder.py --output-dir runs/lfm25_encoder_finetuned
 """
-import json
+
+import argparse
 import os
-import sys
+from pathlib import Path
 
 import torch
-import torch.nn as nn
 from datasets import Dataset
 from peft import LoraConfig, TaskType, get_peft_model
-from transformers import AutoModelForMaskedLM, AutoTokenizer, Trainer, TrainingArguments
-from transformers.modeling_outputs import SequenceClassifierOutput
+from transformers import Trainer, TrainingArguments, set_seed
 
-from pathlib import Path as _Path
+from exploration_common import (
+    DATA_DIR,
+    LFM25_MODEL_ID,
+    MODALITY_LABELS,
+    RUNS_DIR,
+    load_jsonl,
+)
+from lfm25_classifier import (
+    LORA_TARGET_MODULES,
+    Lfm2ForModalityClassification,
+    load_lfm25_body,
+    load_lfm25_tokenizer,
+)
+from modality_data import compute_class_stats
 
-_HERE = _Path(__file__).resolve().parent
-_CLASSIFIER_DIR = str(_HERE.parent)
-sys.path.append(_CLASSIFIER_DIR)
-from modality_routing_bert_finetuning_lora import FocalLoss, MODALITY_LABELS  # noqa: E402
-
-MODEL_ID = "LiquidAI/LFM2.5-Encoder-350M"
-DATA_DIR = f"{_CLASSIFIER_DIR}/exported_modality_routing_dataset"
-OUTPUT_DIR = os.environ.get("LFM25_OUTPUT_DIR", str(_HERE / "runs" / "lfm25_encoder_finetuned"))
-LABEL_TO_ID = {label: idx for idx, label in enumerate(MODALITY_LABELS)}
-
-# LoRA target modules, from direct introspection of named_modules() on the real
-# (correctly-loaded) body -- this architecture interleaves two block types:
-#   - conv blocks: conv.in_proj / conv.out_proj (short-conv, linear projections)
-#   - attention blocks (layers 2,5,8,10,12,14 only): self_attn.q_proj/k_proj/v_proj/out_proj
-# plus feed_forward.w1/w2/w3 (gated SwiGLU-style MLP) present on every layer.
-LORA_TARGET_MODULES = [
-    "self_attn.q_proj",
-    "self_attn.k_proj",
-    "self_attn.v_proj",
-    "self_attn.out_proj",
-    "feed_forward.w1",
-    "feed_forward.w2",
-    "feed_forward.w3",
-    "conv.in_proj",
-    "conv.out_proj",
-]
+LORA_RANK = 16
+LORA_ALPHA = 32
+LORA_DROPOUT = 0.1
 
 
-def load_jsonl(path):
-    return [json.loads(l) for l in open(path) if l.strip()]
+def add_lora(body):
+    """Put a LoRA adapter on the encoder body.
 
+    Args:
+        body: The pretrained encoder.
 
-class Lfm2ForModalityClassification(nn.Module):
-    def __init__(self, body, num_labels, class_weights=None, focal_gamma=2.0, dropout=0.1):
-        super().__init__()
-        self.body = body
-        hidden_size = body.config.hidden_size if hasattr(body, "config") else body.base_model.config.hidden_size
-        self.dropout = nn.Dropout(dropout)
-        self.classifier = nn.Linear(hidden_size, num_labels)
-        self.num_labels = num_labels
-        self.focal_loss = FocalLoss(alpha=class_weights, gamma=focal_gamma, reduction="mean")
-
-    def forward(self, input_ids=None, attention_mask=None, labels=None, **kwargs):
-        outputs = self.body(input_ids=input_ids, attention_mask=attention_mask)
-        hidden = outputs.last_hidden_state if hasattr(outputs, "last_hidden_state") else outputs[0]
-        mask = attention_mask.unsqueeze(-1).to(hidden.dtype)
-        pooled = (hidden * mask).sum(1) / mask.sum(1).clamp(min=1e-6)
-        logits = self.classifier(self.dropout(pooled))
-        loss = None
-        if labels is not None:
-            loss = self.focal_loss(logits, labels)
-        return SequenceClassifierOutput(loss=loss, logits=logits)
-
-
-def compute_class_weights(train_data, num_classes=3):
-    counts = {}
-    for item in train_data:
-        counts[item["label"]] = counts.get(item["label"], 0) + 1
-    total = len(train_data)
-    weights = [max(0.5, min((total / (num_classes * counts.get(i, 1))) ** 0.5, 3.0)) for i in range(num_classes)]
-    return torch.tensor(weights, dtype=torch.float32)
-
-
-def tokenize(rows, tokenizer, max_length=256):
-    texts = [r["text"] for r in rows]
-    labels = [r["label"] for r in rows]
-    enc = tokenizer(texts, truncation=True, padding=True, max_length=max_length, return_tensors="pt")
-    return Dataset.from_dict(
-        {"input_ids": enc["input_ids"], "attention_mask": enc["attention_mask"], "labels": labels}
-    )
-
-
-def main():
-    print("Loading tokenizer + body (via AutoModelForMaskedLM, NOT the model card's documented AutoModel path)...")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=True)
-    mlm_model = AutoModelForMaskedLM.from_pretrained(MODEL_ID, trust_remote_code=True)
-    body = mlm_model.lfm2
-
-    peft_config = LoraConfig(
+    Returns:
+        The body wrapped by PEFT, with only the adapter trainable.
+    """
+    config = LoraConfig(
         task_type=TaskType.FEATURE_EXTRACTION,
         inference_mode=False,
-        r=16,
-        lora_alpha=32,
-        lora_dropout=0.1,
+        r=LORA_RANK,
+        lora_alpha=LORA_ALPHA,
+        lora_dropout=LORA_DROPOUT,
         target_modules=LORA_TARGET_MODULES,
         bias="none",
     )
-    body = get_peft_model(body, peft_config)
-    body.print_trainable_parameters()
+    return get_peft_model(body, config)
 
-    train_rows = load_jsonl(f"{DATA_DIR}/train.jsonl")
-    val_rows = load_jsonl(f"{DATA_DIR}/validation.jsonl")
-    print(f"Train: {len(train_rows)}, Val: {len(val_rows)}")
 
-    class_weights = compute_class_weights(train_rows)
-    print(f"Class weights: {class_weights.tolist()}")
+def class_weights_tensor(rows: list[dict]) -> torch.Tensor:
+    """Compute the class weights of a training set, using the shared rule.
 
-    model = Lfm2ForModalityClassification(body, num_labels=len(MODALITY_LABELS), class_weights=class_weights)
+    Args:
+        rows: Training rows with an integer "label".
 
-    train_dataset = tokenize(train_rows, tokenizer)
-    val_dataset = tokenize(val_rows, tokenizer)
+    Returns:
+        A float32 tensor with one weight per class.
+    """
+    stats = compute_class_stats(
+        [row["label"] for row in rows], num_classes=len(MODALITY_LABELS)
+    )
+    return torch.tensor(stats.class_weights, dtype=torch.float32)
 
-    training_args = TrainingArguments(
-        output_dir=OUTPUT_DIR,
-        num_train_epochs=10,
-        per_device_train_batch_size=16,
-        per_device_eval_batch_size=16,
-        learning_rate=3e-5,
+
+def tokenize_rows(rows: list[dict], tokenizer, max_length: int = 256) -> Dataset:
+    """Tokenize rows into a padded dataset with input ids, mask and labels.
+
+    Args:
+        rows: Rows with "text" and an integer "label".
+        tokenizer: The encoder's tokenizer.
+        max_length: Token limit; longer texts are truncated.
+
+    Returns:
+        A Hugging Face Dataset.
+    """
+    enc = tokenizer(
+        [r["text"] for r in rows],
+        truncation=True,
+        padding=True,
+        max_length=max_length,
+        return_tensors="pt",
+    )
+    return Dataset.from_dict(
+        {
+            "input_ids": enc["input_ids"],
+            "attention_mask": enc["attention_mask"],
+            "labels": [r["label"] for r in rows],
+        }
+    )
+
+
+def build_training_args(args: argparse.Namespace) -> TrainingArguments:
+    """Build the TrainingArguments for the run.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        The TrainingArguments.
+    """
+    return TrainingArguments(
+        output_dir=args.output_dir,
+        num_train_epochs=args.epochs,
+        per_device_train_batch_size=args.batch_size,
+        per_device_eval_batch_size=args.batch_size,
+        learning_rate=args.learning_rate,
         weight_decay=0.1,
         logging_steps=20,
         eval_strategy="epoch",
@@ -147,21 +137,82 @@ def main():
         report_to=[],
         bf16=torch.cuda.is_available(),
         remove_unused_columns=False,
+        seed=args.seed,
+        data_seed=args.seed,
     )
 
-    trainer = Trainer(model=model, args=training_args, train_dataset=train_dataset, eval_dataset=val_dataset)
+
+def save_outputs(
+    model: Lfm2ForModalityClassification, tokenizer, output_dir: str
+) -> None:
+    """Save the classifier head, the LoRA adapter and the tokenizer.
+
+    Args:
+        model: The trained wrapper.
+        tokenizer: The encoder's tokenizer.
+        output_dir: Directory to write into.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    torch.save(model.classifier.state_dict(), Path(output_dir) / "classifier_head.pt")
+    model.body.save_pretrained(Path(output_dir) / "lora_adapter")
+    tokenizer.save_pretrained(output_dir)
+
+
+def main(args: argparse.Namespace) -> None:
+    """Fine-tune the encoder with LoRA and save the adapter and head.
+
+    Args:
+        args: Parsed command-line arguments.
+    """
+    # Seed before the LoRA adapter and the head are initialised.
+    set_seed(args.seed)
+    print(
+        f"Loading {LFM25_MODEL_ID} via AutoModelForMaskedLM (not the documented AutoModel path)..."
+    )
+    tokenizer = load_lfm25_tokenizer()
+    body = add_lora(load_lfm25_body())
+    body.print_trainable_parameters()
+
+    train_rows = load_jsonl(args.train_file)
+    val_rows = load_jsonl(args.val_file)
+    print(f"Train: {len(train_rows)}, Val: {len(val_rows)}")
+    class_weights = class_weights_tensor(train_rows)
+    print(f"Class weights: {class_weights.tolist()}")
+
+    model = Lfm2ForModalityClassification(
+        body, num_labels=len(MODALITY_LABELS), class_weights=class_weights
+    )
+    trainer = Trainer(
+        model=model,
+        args=build_training_args(args),
+        train_dataset=tokenize_rows(train_rows, tokenizer),
+        eval_dataset=tokenize_rows(val_rows, tokenizer),
+    )
     print("Starting training...")
     trainer.train()
+    save_outputs(model, tokenizer, args.output_dir)
+    print(f"Saved to: {args.output_dir}")
+    print("Final eval:", trainer.evaluate())
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    torch.save(model.classifier.state_dict(), os.path.join(OUTPUT_DIR, "classifier_head.pt"))
-    model.body.save_pretrained(os.path.join(OUTPUT_DIR, "lora_adapter"))
-    tokenizer.save_pretrained(OUTPUT_DIR)
-    print(f"Saved to: {OUTPUT_DIR}")
 
-    eval_results = trainer.evaluate()
-    print("Final eval:", eval_results)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the command-line parser.
+
+    Returns:
+        The parser.
+    """
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--train-file", default=str(DATA_DIR / "train.jsonl"))
+    parser.add_argument("--val-file", default=str(DATA_DIR / "validation.jsonl"))
+    parser.add_argument(
+        "--output-dir", default=str(RUNS_DIR / "lfm25_encoder_finetuned")
+    )
+    parser.add_argument("--epochs", type=int, default=10)
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--learning-rate", type=float, default=3e-5)
+    parser.add_argument("--seed", type=int, default=42)
+    return parser
 
 
 if __name__ == "__main__":
-    main()
+    main(build_parser().parse_args())
