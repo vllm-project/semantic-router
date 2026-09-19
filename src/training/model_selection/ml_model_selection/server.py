@@ -30,14 +30,13 @@ import sys
 import threading
 import traceback
 from pathlib import Path
-from typing import List, Optional
 
 # --- FastAPI / Uvicorn ---
 try:
+    import uvicorn
     from fastapi import FastAPI, HTTPException
     from fastapi.responses import StreamingResponse
     from pydantic import BaseModel, Field
-    import uvicorn
 except ImportError:
     print(
         "Error: FastAPI and Uvicorn required.\n"
@@ -48,8 +47,8 @@ except ImportError:
 # --- Local imports (benchmark + train modules) ---
 # These are the existing modules in src/training/model_selection/ml_model_selection/
 from benchmark import run_benchmark_pipeline
-from train import run_training_pipeline
 from models import TORCH_AVAILABLE
+from train import run_training_pipeline
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -83,7 +82,7 @@ class TrainRequest(BaseModel):
 
     data_file: str = Field(..., description="Path to benchmark JSONL output")
     output_dir: str = Field(..., description="Directory to write model files")
-    algorithms: List[str] = Field(default=["knn", "kmeans", "svm", "mlp"])
+    algorithms: list[str] = Field(default=["knn", "kmeans", "svm", "mlp"])
     device: str = Field("cpu")
     embedding_model: str = Field("qwen3")
     cache_dir: str = Field("", description="Cache dir for embeddings")
@@ -126,7 +125,7 @@ class ProgressReporter:
         self.q.put(event)
 
     def done(
-        self, success: bool, message: str = "", output_files: Optional[List[str]] = None
+        self, success: bool, message: str = "", output_files: list[str] | None = None
     ):
         event = {
             "percent": 100,
@@ -210,7 +209,7 @@ def api_benchmark(req: BenchmarkRequest):
                 concise=req.concise,
                 limit=req.limit,
                 show_progress=False,  # We use on_progress callback instead
-                on_progress=lambda pct, step, msg: progress.send(pct, step, msg),
+                on_progress=progress.send,
             )
             progress.done(
                 True,
