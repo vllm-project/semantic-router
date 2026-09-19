@@ -105,14 +105,23 @@ def routing_agreement(
     baseline: Sequence[float],
     candidate: Sequence[float],
     threshold: float = DEFAULT_THRESHOLD,
+    baseline_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Whether two guards route the same request the same way.
 
     Equal accuracy with different errors still moves traffic, so the rows the
     two disagree on are counted separately and attributed to whichever guard
     was right on them.
+
+    Each vector is judged at its own operating point. Recalibrating a guard
+    moves its threshold, and scoring both at the candidate's point would report
+    the rows that changed as agreement. ``baseline_threshold`` defaults to
+    ``threshold`` for the case where one point governs both, and the report
+    names both so a reader knows what the rate was measured at.
     """
-    blocked_baseline = [score >= threshold for score in baseline]
+    if baseline_threshold is None:
+        baseline_threshold = threshold
+    blocked_baseline = [score >= baseline_threshold for score in baseline]
     blocked_candidate = [score >= threshold for score in candidate]
     truth = [label == 1 for label in labels]
     disagreement = [
@@ -126,6 +135,8 @@ def routing_agreement(
     baseline_right = len(disagreement) - candidate_right
     return {
         "rows": len(labels),
+        "baseline_threshold": baseline_threshold,
+        "candidate_threshold": threshold,
         "agreement_rate": 1.0 - len(disagreement) / len(labels),
         "both_block": sum(
             1
@@ -146,6 +157,29 @@ def routing_agreement(
             else None
         ),
     }
+
+
+def agreement_with_baseline(
+    labels: Sequence[int],
+    scores: Sequence[float],
+    threshold: float,
+    baseline: dict[str, Any],
+) -> dict[str, Any]:
+    """Compare routing against a saved report at the point each run used.
+
+    A recalibrated candidate sits at a different threshold from the baseline it
+    replaces, so judging both at the candidate's point would report every row
+    that moved as agreement. A report that records no point cannot be compared,
+    and saying so beats borrowing the candidate's.
+    """
+    if len(baseline.get("scores", [])) != len(scores):
+        return {"skipped": "the baseline report scores a different row count"}
+    saved = baseline.get("threshold")
+    if saved is None:
+        return {"skipped": "the baseline report records no operating point"}
+    return routing_agreement(
+        labels, baseline["scores"], scores, threshold, baseline_threshold=saved
+    )
 
 
 def two_sided_sign_test(successes: int, trials: int) -> float:

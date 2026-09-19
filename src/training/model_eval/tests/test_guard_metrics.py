@@ -165,6 +165,43 @@ class RoutingAgreementTest(unittest.TestCase):
         self.assertEqual(agreement["agreement_rate"], 1.0)
         self.assertIsNone(agreement["mcnemar_exact_p"])
 
+    def test_each_guard_is_judged_at_its_own_operating_point(self):
+        """A recalibrated candidate sits at a different threshold.
+
+        Both rows route differently, and scoring both vectors at the candidate's
+        point would report that as full agreement.
+        """
+        scores = [0.6, 0.7]
+
+        moved = guard_metrics.routing_agreement(
+            [0, 1], scores, scores, 0.5, baseline_threshold=0.9
+        )
+
+        self.assertEqual(moved["agreement_rate"], 0.0)
+        self.assertEqual(moved["candidate_blocks_only"], 2)
+        self.assertEqual(moved["baseline_threshold"], 0.9)
+        self.assertEqual(moved["candidate_threshold"], 0.5)
+
+    def test_a_saved_report_is_compared_at_the_point_it_recorded(self):
+        scores = [0.6, 0.7]
+        baseline = {"scores": scores, "threshold": 0.9}
+
+        compared = guard_metrics.agreement_with_baseline([0, 1], scores, 0.5, baseline)
+
+        self.assertEqual(compared["agreement_rate"], 0.0)
+
+    def test_a_baseline_without_an_operating_point_is_not_compared(self):
+        """Borrowing the candidate's point would report a change as agreement."""
+        for baseline, reason in (
+            ({"scores": [0.6, 0.7]}, "no operating point"),
+            ({"scores": [0.6], "threshold": 0.9}, "different row count"),
+        ):
+            with self.subTest(reason=reason):
+                skipped = guard_metrics.agreement_with_baseline(
+                    [0, 1], [0.6, 0.7], 0.5, baseline
+                )
+                self.assertIn(reason, skipped["skipped"])
+
     def test_equal_accuracy_with_different_errors_still_moves_traffic(self):
         agreement = guard_metrics.routing_agreement([0, 1], [0.9, 0.9], [0.1, 0.1])
 

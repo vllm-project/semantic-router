@@ -276,7 +276,10 @@ def discrimination(
         "positive_labels": list(positive_labels),
         "roc_auc": roc_auc(scores, positives),
         "fpr_budget": fpr_budget,
-        "recall_at_fpr_budget": budget["recall"] if budget else None,
+        # Both classes are present by the check above, so an empty answer here
+        # means no threshold stays inside the budget. That is a recall of zero,
+        # not an undefined one.
+        "recall_at_fpr_budget": budget["recall"] if budget else 0.0,
     }
 
 

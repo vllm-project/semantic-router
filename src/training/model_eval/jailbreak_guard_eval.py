@@ -301,12 +301,8 @@ def main() -> None:
     if args.baseline:
         baseline = json.loads(Path(args.baseline).read_text())
         report["baseline"] = baseline.get("model")
-        report["routing_agreement"] = (
-            guard_metrics.routing_agreement(
-                labels, baseline["scores"], scores, threshold
-            )
-            if len(baseline.get("scores", [])) == len(scores)
-            else {"skipped": "the baseline report scores a different row count"}
+        report["routing_agreement"] = guard_metrics.agreement_with_baseline(
+            labels, scores, threshold, baseline
         )
 
     Path(args.output).write_text(json.dumps(report, indent=2))
