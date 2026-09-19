@@ -52,3 +52,22 @@ func TestResolveProtocolOperationPathDoesNotApplyProviderOverrides(t *testing.T)
 		t.Fatalf("protocol create path = %q, err = %v", path, err)
 	}
 }
+
+func TestSnowflakeCortexResolveOperationPath(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The operator base URL must include /api/v2/cortex/v1: the resolver strips
+	// the protocol /v1 prefix whenever a base path is configured, and Snowflake
+	// documents both endpoints under /api/v2/cortex/v1.
+	basePath := "/api/v2/cortex/v1"
+	path, err := registry.ResolveOperationPath("snowflake-cortex", "openai/chat-completions@1", "create", basePath)
+	if err != nil || path != "/api/v2/cortex/v1/chat/completions" {
+		t.Fatalf("chat create path = %q, err = %v", path, err)
+	}
+	path, err = registry.ResolveOperationPath("snowflake-cortex", "anthropic/messages@1", "create", basePath)
+	if err != nil || path != "/api/v2/cortex/v1/messages" {
+		t.Fatalf("messages create path = %q, err = %v", path, err)
+	}
+}
