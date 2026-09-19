@@ -157,6 +157,10 @@ const config: Config = {
       {
         redirects: [
           {
+            from: '/blog/introduce-vela',
+            to: '/blog/vela-models',
+          },
+          {
             from: '/docs/installation/runtime/engines-and-hardware',
             to: '/docs/installation/runtime/in-process',
           },

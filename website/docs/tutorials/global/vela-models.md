@@ -30,7 +30,7 @@ The public collection also includes **Halu** for answer evidence-support
 detection and **Omni Nano / Omni Mini** for text, image and audio embeddings.
 These three checkpoints are available for direct use and integration work;
 they are not yet the Router's default hallucination or multimodal components.
-See the [Vela 1.0 release announcement](/blog/introduce-vela) for the full family.
+See the [Vela 1.0 release announcement](/blog/vela-models) for the full family.
 
 ## What Problem Does It Solve?
 
