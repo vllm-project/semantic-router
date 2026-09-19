@@ -16,7 +16,9 @@ import (
 // Model-backed regression for #2691 through the production in-memory cache
 // path. Set VLLM_SR_MMBERT_TEST_MODEL explicitly; polarity_test.go provides
 // model-free coverage when this opt-in model test is not selected.
-// The pairs are a focused smoke set, not a PAWS/QQP calibration corpus.
+// The original pairs are a focused smoke set. The separate PAWS-derived
+// fixture has pinned provenance and explicitly labelled local negatives;
+// neither is a PAWS/QQP calibration corpus.
 
 const negationRegressionThreshold = 0.80 // config/plugin/semantic-cache/memory.yaml ships 0.80
 
@@ -93,6 +95,7 @@ func TestNegationFalseHitRegressionInMemory(t *testing.T) {
 			negationRegressionThreshold)
 	}
 	t.Logf("paraphrase control exercised on %d/%d above-threshold pairs", paraphraseExercised, len(paraphraseControlPairs))
+	runPAWSPolarityModelRegression(t, provider)
 }
 
 func runNegationRegressionPairs(t *testing.T, provider embedding.Provider) int {

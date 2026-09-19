@@ -483,7 +483,7 @@ func (c *ValkeyCache) buildKNNSearchCmd(model string, embeddingBytes []byte) []s
 
 	cmd := []string{
 		"FT.SEARCH", c.indexName, knnQuery,
-		"RETURN", "4", "vector_distance", "response_body", "timestamp", "ttl_seconds",
+		"RETURN", "5", "vector_distance", "response_body", "query", "timestamp", "ttl_seconds",
 		"DIALECT", "2",
 		"PARAMS", "2", "vec",
 	}
@@ -537,16 +537,14 @@ func (c *ValkeyCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 		return LookupResult{}, nil
 	}
 
-	match := parseBestMatch(searchResult)
-	if match == nil {
-		c.recordCacheMiss("miss", time.Since(start))
-		return LookupResult{}, nil
+	if err := ctxErr(ctx); err != nil {
+		return LookupResult{}, err
 	}
-
-	similarity := float32(valkeyutil.DistanceToSimilarity(c.config.Index.VectorField.MetricType, match.distance))
-
-	if similarity < threshold {
-		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: cache miss - similarity %.4f below threshold %.4f",
+	var queryBuffer [32]string
+	queryTokens := tokenizeForPolarity(query, queryBuffer[:0])
+	match, similarity := selectValkeyPolarityMatch(searchResult, queryTokens, threshold, c.config.Index.VectorField.MetricType)
+	if match == nil {
+		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: no eligible candidate at similarity %.4f and threshold %.4f",
 			similarity, threshold)
 		logging.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "valkey",
