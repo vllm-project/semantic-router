@@ -549,17 +549,17 @@ test('keeps comparison and create controls compact on desktop and within mobile 
   await mockBench(page)
   await page.setViewportSize({ width: 1280, height: 900 })
   await page.goto('/evaluation?view=compare')
-  const baseline = page.getByRole('combobox', { name: 'Baseline run', exact: true })
+  const baseline = page.getByRole('combobox', { name: 'Reference run', exact: true })
   await expect(baseline).toBeVisible()
   expect((await baseline.boundingBox())!.width).toBeLessThanOrEqual(400)
   await expect(page.getByRole('group', { name: 'Comparison runs', exact: true })).toHaveCount(0)
-  await chooseOption(page, 'Baseline run', 'run-1')
+  await chooseOption(page, 'Reference run', 'run-1')
   const selectAll = page.getByRole('button', { name: 'Select all', exact: true })
   expect((await selectAll.boundingBox())!.width).toBeLessThan(130)
   await baseline.click()
   await expect(page.getByRole('listbox')).toBeVisible()
   await page.screenshot({ path: testInfo.outputPath('compare-dropdown-desktop.png') })
-  await page.getByRole('searchbox', { name: 'Search baseline run' }).press('Escape')
+  await page.getByRole('searchbox', { name: 'Search reference run' }).press('Escape')
   await page.goto('/evaluation?view=new')
   await chooseOption(page, 'Add configured target', 'single')
   await page.getByText('Sampling and advanced limits', { exact: true }).click()
@@ -1216,7 +1216,7 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
 test('compares complete runs using paired results', async ({ page }) => {
   await mockBench(page)
   await page.goto('/evaluation?view=compare')
-  await chooseOption(page, 'Baseline run', 'run-1')
+  await chooseOption(page, 'Reference run', 'run-1')
   await page.getByRole('checkbox', { name: /Candidate test/ }).check()
   await page.getByRole('button', { name: 'Compare runs' }).click()
   await expect(page.getByRole('heading', { name: 'Comparison evidence' })).toBeVisible()
@@ -1556,7 +1556,7 @@ test('reopens arbitrary optimization comparisons from the saved URL', async ({
   })
   await mockComparisonOptions(page, run, iterations)
   await page.goto('/evaluation?view=compare')
-  await chooseOption(page, 'Baseline run', 'run-1')
+  await chooseOption(page, 'Reference run', 'run-1')
   await page.getByRole('button', { name: 'Select all', exact: true }).click()
   await expect(page.getByRole('checkbox', { checked: true })).toHaveCount(4)
   await page.getByRole('button', { name: 'Compare runs' }).click()
@@ -2577,7 +2577,7 @@ test('shows only server-qualified comparison baselines and paginates arbitrary i
   await page.goto('/evaluation?view=compare')
   await expect(page.getByRole('group', { name: 'Comparison runs', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
-  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Reference run', exact: true }).click()
   await expect(page.getByRole('listbox').getByRole('option')).toHaveCount(1)
   await expect(page.getByRole('listbox').locator('[data-value="other-baseline"]')).toHaveCount(0)
   await page.getByRole('listbox').locator('[data-value="run-1"]').click()
@@ -2610,7 +2610,7 @@ test('shows only server-qualified comparison baselines and paginates arbitrary i
     page.getByRole('article').getByRole('heading', { name: 'Balance iteration 7', exact: true }),
   ).toBeVisible()
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).scrollIntoViewIfNeeded()
+  await page.getByRole('combobox', { name: 'Reference run', exact: true }).scrollIntoViewIfNeeded()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
   await page.screenshot({ path: testInfo.outputPath('guided-comparison-mobile.png') })
 })
@@ -2915,7 +2915,7 @@ test('derives a MoM candidate from a failed 42-result frozen baseline without ch
   await page.getByRole('listbox').locator('[data-value="balance"]').click()
   await page.getByLabel('Run name', { exact: true }).fill('Candidate with frozen protocol')
   await page
-    .getByLabel('Hypothesis', { exact: true })
+    .getByLabel('What changed? (optional)', { exact: true })
     .fill('Reduce cost without changing the question set.')
   await page.getByRole('button', { name: 'Review plan', exact: true }).click()
   await expect(page.getByRole('button', { name: 'Start evaluation', exact: true })).toBeEnabled()
@@ -2926,7 +2926,7 @@ test('derives a MoM candidate from a failed 42-result frozen baseline without ch
       name: 'Candidate with frozen protocol',
       experiment: {
         id: 'exp-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        role: 'candidate',
+        role: 'validation',
         hypothesis: 'Reduce cost without changing the question set.',
       },
     },
@@ -3050,7 +3050,7 @@ test('uses authoritative failed-baseline comparisons without masking failed resu
   await page.getByRole('button', { name: 'Evaluate candidate', exact: true }).click()
   await expect(page).toHaveURL(/view=new&baseline=run-1/)
   await page.goto('/evaluation?view=compare')
-  await chooseOption(page, 'Baseline run', 'run-1')
+  await chooseOption(page, 'Reference run', 'run-1')
   await page.getByRole('checkbox', { name: /Balance terminal comparison/ }).check()
   await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
   await expect(
@@ -3127,14 +3127,11 @@ test('does not enable active baseline derivation or comparisons with missing ter
   await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
   expect(comparisons).toBe(0)
   await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
-  await expect(
-    page
-      .getByRole('article')
-      .getByText('Comparison withheld: Baseline quality results are incomplete', { exact: true }),
-  ).toBeVisible()
+  await expect(page.getByText('No comparable results yet.', { exact: false })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
   await expect(page.getByText('Quality Δ', { exact: true })).toHaveCount(0)
   expect(candidatePlans).toBe(0)
-  expect(comparisons).toBe(1)
+  expect(comparisons).toBe(0)
 })
 
 test('an explicit dataset can be selected while automatic resolution is stalled without adopting a late response', async ({
@@ -3304,12 +3301,12 @@ test('a deep link cannot promote a baseline until its first compatible child is 
   await expect(
     page.getByRole('button', { name: 'Load more comparison runs', exact: true }),
   ).toBeVisible()
-  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Reference run', exact: true }).click()
   await expect(page.getByRole('option')).toHaveCount(1)
   await expect(page.getByRole('option', { name: /Deep saved baseline/ })).toHaveCount(0)
-  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).press('Escape')
+  await page.getByRole('combobox', { name: 'Reference run', exact: true }).press('Escape')
   await page.getByRole('button', { name: 'Load more comparison runs', exact: true }).click()
   await expect(page.getByRole('checkbox', { name: /Compatible result/ })).toBeVisible()
-  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Reference run', exact: true }).click()
   await expect(page.getByRole('option', { name: /Deep saved baseline/ })).toBeVisible()
 })

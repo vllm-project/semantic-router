@@ -3,7 +3,10 @@ import ProductIcon from '../ProductIcon'
 import ProductLoadingState from '../ProductLoadingState'
 import BenchSelect from './BenchSelect'
 import ExperimentDelete from './ExperimentDelete'
+import ExperimentEvidence from './ExperimentEvidence'
+import { experimentRoleLabels } from './experimentEvidencePresentation'
 import { canReuseBaseline } from './baselineReuse'
+import useExperimentMembers from './useExperimentMembers'
 import { SrBenchRequestError } from './api'
 import { experimentApi, type Experiment, type ExperimentPage } from './experimentApi'
 import {
@@ -17,16 +20,6 @@ import styles from './SrBench.module.css'
 import layout from './ExperimentWorkspace.module.css'
 import controls from './BenchControls.module.css'
 
-const labels: Record<ExperimentRunContext['role'], string> = {
-  baseline: 'Single-model baseline',
-  initial: 'Starting recipe',
-  candidate: 'Candidate recipe',
-  preview: 'Routing check',
-  smoke: 'Pipeline check',
-  validation: 'Holdout validation',
-  estimate: 'Offline estimate',
-  recovery: 'Recovery attempt',
-}
 interface Props {
   actorID: string
   id?: string
@@ -61,12 +54,20 @@ export default function ExperimentWorkspace({
   const [loading, setLoading] = useState(true)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
+  const [readError, setReadError] = useState('')
   const [notice, setNotice] = useState('')
   const [name, setName] = useState('')
   const [runID, setRunID] = useState('')
   const [role, setRole] = useState<ExperimentRunContext['role']>('candidate')
   const [hypothesis, setHypothesis] = useState('')
   const [revision, setRevision] = useState(0)
+  const [showCreate, setShowCreate] = useState(false)
+  const [showSaved, setShowSaved] = useState(false)
+  const [referenceID, setReferenceID] = useState('')
+  const membership = useExperimentMembers(id, revision)
+  const knownRoles = Object.fromEntries(
+    membership.members.map((member) => [member.run_id, member.role]),
+  )
   const [saved] = useState(() => readExperiment(actorID))
   const [createRequest, setCreateRequest] = useState<PendingExperiment | null>(saved.saved)
   const mounted = useRef(false)
@@ -85,7 +86,7 @@ export default function ExperimentWorkspace({
   useEffect(() => {
     const controller = new AbortController()
     setLoading(true)
-    setError('')
+    setReadError('')
     const loadingPage = id
       ? experimentApi.runs(id, cursor, controller.signal).then((value) => {
           if (!controller.signal.aborted) {
@@ -102,7 +103,7 @@ export default function ExperimentWorkspace({
     void loadingPage
       .catch((cause) => {
         if (!controller.signal.aborted)
-          setError(cause instanceof Error ? cause.message : 'Could not read experiments.')
+          setReadError(cause instanceof Error ? cause.message : 'Could not read experiments.')
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false)
@@ -111,7 +112,7 @@ export default function ExperimentWorkspace({
   }, [id, cursor, revision])
 
   async function save() {
-    if (saving.current || !canWrite || (!id && saved.error)) return
+    if (saving.current || !canWrite || (id && !membership.complete) || (!id && saved.error)) return
     const requestSequence = ++sequence.current
     const current = () => mounted.current && sequence.current === requestSequence
     saving.current = true
@@ -123,8 +124,10 @@ export default function ExperimentWorkspace({
         if (!roles.includes(role)) throw new Error('Choose an eligible role for this saved run.')
         await experimentApi.attach(id, runID, role, hypothesis)
         if (!current()) return
+        setNotice('Saved run added to this experiment.')
         setRunID('')
         setHypothesis('')
+        setShowSaved(false)
         setRevision((value) => value + 1)
       } else {
         const body: PendingExperiment = createRequest ?? {
@@ -165,6 +168,139 @@ export default function ExperimentWorkspace({
       if (current()) setPending(false)
     }
   }
+  const references = runs.filter(
+    (run) => knownRoles[run.id] === 'baseline' && canReuseBaseline(run),
+  )
+  const reference = references.find((run) => run.id === referenceID) ?? references[0]
+  const hasStartingRecipe = Object.values(knownRoles).includes('initial')
+  const hasRecipeResults = runs.some(
+    (run) =>
+      ['initial', 'candidate', 'validation'].includes(knownRoles[run.id]) &&
+      ['completed', 'failed'].includes(run.status) &&
+      run.progress.total > 0 &&
+      run.progress.completed + run.progress.failed === run.progress.total,
+  )
+  const compareAction = reference && (
+    <button
+      className={`${hasRecipeResults ? styles.primary : ''} ${controls.compactButton}`}
+      onClick={() => onCompare(reference.id)}
+    >
+      <ProductIcon name="chart" /> Compare results
+    </button>
+  )
+  const runCount = detail?.experiment.run_count
+  const empty = runCount === 0
+  const showCreateForm =
+    !id && (showCreate || !experiments.length || !!createRequest || !!saved.error)
+  const openSaved = () => setShowSaved(true)
+
+  const editor = canWrite && (
+    <div className={layout.editor}>
+      <div>
+        <h3>{id ? 'Add saved results' : 'New experiment'}</h3>
+        <p className={styles.muted}>
+          {id
+            ? 'Reuse a run you already have. Adding it here does not rerun the evaluation.'
+            : 'Give this comparison a name. You will choose models and questions in the next step.'}
+        </p>
+      </div>
+      {id ? (
+        <>
+          <BenchSelect
+            label="Saved run"
+            value={runID}
+            disabled={pending}
+            searchable
+            options={runs
+              .filter((run) => !knownRoles[run.id] && run.experiment_roles?.length)
+              .map((run) => ({
+                value: run.id,
+                label: run.manifest.name,
+                description: `${run.manifest.profile} · ${run.status}`,
+              }))}
+            onChange={(value) => {
+              setRunID(value)
+              setRole(runs.find((run) => run.id === value)!.experiment_roles![0])
+            }}
+          />
+          {roles.length > 1 && (
+            <BenchSelect
+              label="Use this result as"
+              value={role}
+              disabled={pending}
+              options={roles.map((value) => ({ value, label: experimentRoleLabels[value] }))}
+              onChange={(value) => setRole(value as ExperimentRunContext['role'])}
+            />
+          )}
+          {roles.length === 1 && <p className={styles.muted}>{experimentRoleLabels[roles[0]]}</p>}
+          <label>
+            What changed? (optional)
+            <textarea
+              disabled={pending}
+              value={hypothesis}
+              maxLength={2000}
+              onChange={(event) => setHypothesis(event.target.value)}
+              placeholder="For example: prefer the less expensive model for simple questions."
+            />
+          </label>
+        </>
+      ) : saved.error ? (
+        <p className={styles.error} role="alert">
+          {saved.error}
+        </p>
+      ) : createRequest ? (
+        <div className={styles.notice}>
+          <strong>Check your previous creation request</strong>
+          <p>{createRequest.name}</p>
+          <p>
+            The response was not confirmed. Check the same request before creating another
+            experiment.
+          </p>
+        </div>
+      ) : (
+        <label>
+          Experiment name
+          <input
+            value={name}
+            maxLength={160}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Balance · reasoning and cost"
+          />
+        </label>
+      )}
+      <div className={styles.actions}>
+        <button
+          className={`${styles.primary} ${controls.compactButton}`}
+          disabled={
+            pending ||
+            (id
+              ? !runID || !roles.includes(role)
+              : !!saved.error || (!createRequest && !name.trim()))
+          }
+          onClick={() => void save()}
+        >
+          <ProductIcon name={id ? 'link' : 'plus'} />
+          {pending
+            ? 'Saving…'
+            : id
+              ? 'Add run'
+              : createRequest
+                ? 'Check creation request'
+                : 'Create experiment'}
+        </button>
+        {!createRequest && (id || experiments.length > 0) && (
+          <button
+            className={controls.compactButton}
+            disabled={pending}
+            onClick={() => (id ? setShowSaved(false) : setShowCreate(false))}
+          >
+            {id ? 'Close' : 'Cancel'}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+
   return (
     <section className={styles.panel} aria-label="Evaluation experiments">
       <div className={styles.sectionHeading}>
@@ -176,8 +312,9 @@ export default function ExperimentWorkspace({
           )}
           <h2>{id ? (detail?.experiment.name ?? 'Experiment') : 'Experiments'}</h2>
           <p className={styles.muted}>
-            Keep your baseline, recipe hypotheses and validation evidence together. Each run remains
-            independent.
+            {id
+              ? 'Compare your recipe versions against the same single-model reference.'
+              : 'One place to compare single models, test recipe changes and see whether they improve quality or cost.'}
           </p>
         </div>
         <div className={styles.actions}>
@@ -188,7 +325,15 @@ export default function ExperimentWorkspace({
           >
             <ProductIcon name="refresh" /> Refresh
           </button>
-          {id && detail && canWrite && !loading && !error && (
+          {!id && canWrite && !showCreateForm && (
+            <button
+              className={`${styles.primary} ${controls.compactButton}`}
+              onClick={() => setShowCreate(true)}
+            >
+              <ProductIcon name="plus" /> New experiment
+            </button>
+          )}
+          {id && detail && canWrite && !loading && !readError && (
             <ExperimentDelete
               key={`${actorID}:${id}`}
               experiment={detail.experiment}
@@ -199,6 +344,11 @@ export default function ExperimentWorkspace({
           )}
         </div>
       </div>
+      {readError && (
+        <p className={styles.error} role="alert">
+          {readError}
+        </p>
+      )}
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -210,116 +360,196 @@ export default function ExperimentWorkspace({
         </p>
       )}
       {loading ? (
-        <ProductLoadingState compact label="Loading experiment evidence…" />
+        <ProductLoadingState compact label="Loading experiment…" />
       ) : (
-        !error &&
+        !readError &&
         (id ? (
           <>
-            {canRun && (
-              <button
-                className={controls.compactButton}
-                onClick={() => onCandidate('', id, 'live', 'baseline')}
-              >
-                <ProductIcon name="plus" /> Create baseline
-              </button>
-            )}
-            <ol className={layout.workflow} aria-label="Evaluation workflow">
-              <li>
-                <strong>1. Establish a baseline</strong>
-                <span>Smoke checks, then a fixed Quick comparison.</span>
-              </li>
-              <li>
-                <strong>2. Iterate the recipe</strong>
-                <span>Preview routing, test candidates and compare saved results.</span>
-              </li>
-              <li>
-                <strong>3. Validate on holdout</strong>
-                <span>Freeze the recipe before Standard evaluation.</span>
-              </li>
-            </ol>
-            <div className={layout.timeline}>
-              {detail?.members.map((member) => {
-                const run = runs.find((value) => value.id === member.run_id)
-                const baseline = member.role === 'baseline' && canReuseBaseline(run)
-                return (
-                  <article key={member.run_id} className={layout.entry}>
-                    <div className={layout.marker}>
-                      <ProductIcon name={member.role === 'preview' ? 'decision' : 'evaluation'} />
-                    </div>
-                    <div className={layout.entryBody}>
-                      <span className={styles.eyebrow}>{labels[member.role]}</span>
-                      <button className={layout.runLink} onClick={() => onOpenRun(member.run_id)}>
-                        {run?.manifest.name ?? 'Saved evaluation'}{' '}
-                        <ProductIcon name="arrow-right" />
-                      </button>
-                      <p className={styles.muted}>
-                        {run
-                          ? `${run.manifest.profile} · ${run.status} · ${run.progress.completed}/${run.progress.total} completed${run.progress.failed ? ` · ${run.progress.failed} failed` : ''}`
-                          : 'Open the saved run to inspect its evidence.'}
+            <div className={layout.overview}>
+              <div className={layout.journey} aria-label="How an experiment works">
+                <span>
+                  <ProductIcon name="model" /> Single models
+                </span>
+                <ProductIcon name="arrow-right" />
+                <span>
+                  <ProductIcon name="mixture" /> Starting recipe
+                </span>
+                <ProductIcon name="arrow-right" />
+                <span>
+                  <ProductIcon name="chart" /> Recipe versions
+                </span>
+              </div>
+              <span className={layout.count}>
+                {runCount !== undefined && `${runCount} saved ${runCount === 1 ? 'run' : 'runs'}`}
+                {!!detail?.experiment.active_run_count &&
+                  ` · ${detail.experiment.active_run_count} active`}
+              </span>
+            </div>
+            {membership.loading ? (
+              <ProductLoadingState compact label="Finding the next step…" />
+            ) : membership.error ? (
+              <div className={styles.notice} role="alert">
+                <p>Could not load all runs in this experiment. {membership.error}</p>
+                <button className={controls.compactButton} onClick={membership.reload}>
+                  Reload experiment runs
+                </button>
+              </div>
+            ) : (
+              membership.complete && (
+                <div className={layout.nextStep}>
+                  <div className={layout.nextHeading}>
+                    <ProductIcon name={reference ? 'mixture' : 'model'} />
+                    <div>
+                      <h3>
+                        {empty
+                          ? 'Start with your single models'
+                          : reference
+                            ? hasRecipeResults
+                              ? 'Review your recipe versions'
+                              : 'Test a recipe on the same questions'
+                            : 'Choose your reference results'}
+                      </h3>
+                      <p>
+                        {empty
+                          ? 'Run the connected models on shared questions, or use results you already have.'
+                          : reference
+                            ? hasRecipeResults
+                              ? 'Compare saved results to see how quality and cost changed. Test another version when you have a change to evaluate.'
+                              : 'A reference fixes the questions and settings. Measure your starting recipe, then compare changes against your best single model.'
+                            : 'Use a finished single-model run as the reference for recipe versions. Running evaluations remain visible below.'}
                       </p>
-                      {member.hypothesis && <p>{member.hypothesis}</p>}
-                      {baseline && (
-                        <div className={styles.actions}>
-                          <button onClick={() => onCompare(member.run_id)}>
-                            <ProductIcon name="chart" /> Compare iterations
+                    </div>
+                  </div>
+                  {reference ? (
+                    <>
+                      {references.length > 1 ? (
+                        <BenchSelect
+                          label="Single-model reference"
+                          value={reference.id}
+                          options={references.map((run) => ({
+                            value: run.id,
+                            label: run.manifest.name,
+                            description: `${run.manifest.profile} · ${run.status}`,
+                          }))}
+                          onChange={setReferenceID}
+                        />
+                      ) : (
+                        <div className={layout.reference}>
+                          <span>Single-model reference</span>
+                          <button onClick={() => onOpenRun(reference.id)}>
+                            {reference.manifest.name} <ProductIcon name="arrow-right" />
                           </button>
-                          {canRun && (
-                            <>
-                              <button
-                                onClick={() => onCandidate(member.run_id, id, 'preview', 'preview')}
-                              >
-                                <ProductIcon name="decision" /> Preview candidate
-                              </button>
-                              <button
-                                onClick={() =>
-                                  onCandidate(
-                                    member.run_id,
-                                    id,
-                                    'live',
-                                    run.manifest.profile === 'standard'
-                                      ? 'validation'
-                                      : 'candidate',
-                                  )
-                                }
-                              >
-                                <ProductIcon name="play" /> Evaluate candidate
-                              </button>
-                            </>
-                          )}
                         </div>
                       )}
+                      <div className={styles.actions}>
+                        {hasRecipeResults && compareAction}
+                        {canRun && (
+                          <>
+                            <button
+                              className={`${hasRecipeResults ? '' : styles.primary} ${controls.compactButton}`}
+                              onClick={() =>
+                                onCandidate(
+                                  reference.id,
+                                  id,
+                                  'live',
+                                  reference.manifest.profile === 'standard'
+                                    ? 'validation'
+                                    : hasStartingRecipe
+                                      ? 'candidate'
+                                      : 'initial',
+                                )
+                              }
+                            >
+                              <ProductIcon name="play" />{' '}
+                              {reference.manifest.profile === 'standard'
+                                ? 'Validate final recipe'
+                                : hasStartingRecipe
+                                  ? 'Test another recipe'
+                                  : 'Evaluate starting recipe'}
+                            </button>
+                            <button
+                              className={controls.compactButton}
+                              onClick={() => onCandidate(reference.id, id, 'preview', 'preview')}
+                            >
+                              <ProductIcon name="decision" /> Check routing first
+                            </button>
+                          </>
+                        )}
+                        {!hasRecipeResults && compareAction}
+                      </div>
+                    </>
+                  ) : (
+                    <div className={styles.actions}>
+                      {canRun && (
+                        <button
+                          className={`${styles.primary} ${controls.compactButton}`}
+                          onClick={() => onCandidate('', id, 'live', 'baseline')}
+                        >
+                          <ProductIcon name="play" /> Run single models
+                        </button>
+                      )}
+                      {canWrite && (
+                        <button className={controls.compactButton} onClick={openSaved}>
+                          <ProductIcon name="link" /> Use saved results
+                        </button>
+                      )}
                     </div>
-                  </article>
-                )
-              })}
-              {!detail?.members.length && (
+                  )}
+                </div>
+              )
+            )}
+            {membership.complete && showSaved && editor}
+            <div className={layout.resultsHeading}>
+              <div>
+                <h3>Saved results</h3>
                 <p className={styles.muted}>
-                  Link your starting runs below. Reuse a finished baseline protocol to evaluate a
-                  candidate on the same questions.
+                  Open a run for its scores, costs and questions. Compare results for the difference
+                  between versions.
                 </p>
+              </div>
+              {canWrite && membership.complete && !empty && !showSaved && (
+                <button className={controls.compactButton} onClick={openSaved}>
+                  <ProductIcon name="link" /> Add saved results
+                </button>
               )}
             </div>
+            <ExperimentEvidence
+              members={detail?.members ?? []}
+              runs={runs}
+              onOpenRun={onOpenRun}
+              hasMore={next !== null}
+            />
           </>
         ) : (
-          <div className={layout.cards}>
-            {experiments.map((item) => (
-              <button
-                className={layout.experimentCard}
-                key={item.id}
-                onClick={() => onSelect(item.id)}
-              >
-                <ProductIcon name="evaluation" />
-                <strong>{item.name}</strong>
-                <span>Updated {new Date(item.updated_at).toLocaleDateString()}</span>
-                <ProductIcon name="arrow-right" />
-              </button>
-            ))}
-            {!experiments.length && (
-              <p className={styles.muted}>
-                Create an experiment to organize a recipe improvement loop.
-              </p>
+          <>
+            {showCreateForm && editor}
+            {!!experiments.length && (
+              <div className={layout.cards}>
+                {experiments.map((item) => (
+                  <button
+                    className={layout.experimentCard}
+                    key={item.id}
+                    onClick={() => onSelect(item.id)}
+                  >
+                    <ProductIcon name="evaluation" />
+                    <strong>{item.name}</strong>
+                    <span>Updated {new Date(item.updated_at).toLocaleDateString()}</span>
+                    <ProductIcon name="arrow-right" />
+                  </button>
+                ))}
+              </div>
             )}
-          </div>
+            {!experiments.length && (
+              <div className={layout.emptyGuide}>
+                <ProductIcon name="mixture" />
+                <p>
+                  An experiment groups related evaluations. Create one, add a single-model
+                  reference, then test your recipe on the same questions.
+                </p>
+                <span>Creating the experiment does not start any evaluation.</span>
+              </div>
+            )}
+          </>
         ))
       )}
       {(cursors.length > 1 || next !== null) && (
@@ -334,103 +564,12 @@ export default function ExperimentWorkspace({
           <span>Page {cursors.length}</span>
           <button
             className={controls.compactButton}
-            disabled={loading || !!error || next === null}
+            disabled={loading || !!readError || next === null}
             onClick={() => next !== null && setCursors((values) => [...values, next])}
           >
             Next <ProductIcon name="chevron-right" />
           </button>
         </nav>
-      )}
-      {canWrite && (
-        <div className={layout.editor}>
-          <h3>{id ? 'Link saved evidence' : 'New experiment'}</h3>
-          {id ? (
-            <>
-              <BenchSelect
-                label="Saved run"
-                value={runID}
-                disabled={pending}
-                searchable
-                options={runs
-                  .filter(
-                    (run) =>
-                      !detail?.members.some((member) => member.run_id === run.id) &&
-                      run.experiment_roles?.length,
-                  )
-                  .map((run) => ({
-                    value: run.id,
-                    label: run.manifest.name,
-                    description: `${run.manifest.profile} · ${run.status}`,
-                  }))}
-                onChange={(value) => {
-                  setRunID(value)
-                  setRole(runs.find((run) => run.id === value)!.experiment_roles![0])
-                }}
-              />
-              {roles.length > 0 && (
-                <BenchSelect
-                  label="Role in this experiment"
-                  value={role}
-                  disabled={pending}
-                  options={roles.map((value) => ({ value, label: labels[value] }))}
-                  onChange={(value) => setRole(value as ExperimentRunContext['role'])}
-                />
-              )}
-              <label>
-                Hypothesis or note
-                <textarea
-                  disabled={pending}
-                  value={hypothesis}
-                  maxLength={2000}
-                  onChange={(event) => setHypothesis(event.target.value)}
-                  placeholder="What changed, and what do you expect?"
-                />
-              </label>
-            </>
-          ) : saved.error ? (
-            <p className={styles.error} role="alert">
-              {saved.error}
-            </p>
-          ) : createRequest ? (
-            <div className={styles.notice}>
-              <strong>Experiment submission needs reconciliation</strong>
-              <p>{createRequest.name}</p>
-              <p>
-                Check the same saved submission to retrieve or finish this experiment. No evaluation
-                is started.
-              </p>
-            </div>
-          ) : (
-            <label>
-              Experiment name
-              <input
-                value={name}
-                maxLength={160}
-                onChange={(event) => setName(event.target.value)}
-                placeholder="Balance quality and cost"
-              />
-            </label>
-          )}
-          <button
-            className={`${styles.primary} ${controls.compactButton}`}
-            disabled={
-              pending ||
-              (id
-                ? !runID || !roles.includes(role)
-                : !!saved.error || (!createRequest && !name.trim()))
-            }
-            onClick={() => void save()}
-          >
-            <ProductIcon name={id ? 'link' : 'plus'} />
-            {pending
-              ? 'Saving…'
-              : id
-                ? 'Link run'
-                : createRequest
-                  ? 'Check or create same experiment'
-                  : 'Create experiment'}
-          </button>
-        </div>
       )}
     </section>
   )

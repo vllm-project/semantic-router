@@ -10,6 +10,8 @@ import styles from './SrBench.module.css'
 import ProductLoadingState from '../ProductLoadingState'
 import ProductIcon from '../ProductIcon'
 import ComparisonSetup from './ComparisonSetup'
+import useExperimentComparison from './useExperimentComparison'
+import { comparisonSelectionReady } from './experimentComparison'
 import BenchPagination from './BenchPagination'
 import { IterationChart, QualityCostChart, type QualityCostPoint } from './EvaluationCharts'
 
@@ -66,6 +68,8 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
   const [search, setSearch] = useSearchParams()
   const savedBaseline = search.get('baseline') ?? ''
   const savedIterations = search.getAll('candidate').join('|')
+  const experiment = search.get('experiment') ?? undefined
+  const includeOutside = search.get('comparison_scope') === 'all'
   const [baseline, setBaseline] = useState(savedBaseline)
   const [candidates, setCandidates] = useState(savedIterations.split('|').filter(Boolean))
   const [savedResults, setResults] = useState<IterationEvidence[]>([])
@@ -75,11 +79,25 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
   const [evidencePage, setEvidencePage] = useState(0)
+  const options = useExperimentComparison(baseline, includeOutside ? undefined : experiment)
+  const verifiedSelection =
+    comparisonSelectionReady(
+      baseline,
+      candidates,
+      options.baselines.items,
+      options.choices.items,
+    ) &&
+    !options.membershipLoading &&
+    !options.membershipError &&
+    !options.baselines.loading &&
+    !options.baselines.error &&
+    !options.choices.loading &&
+    !options.choices.error
   const draftChanged =
     baseline !== savedBaseline ||
     [...candidates].sort().join('|') !== savedIterations.split('|').filter(Boolean).sort().join('|')
-  const selectionKey = `${savedBaseline}|${savedIterations}`
-  const evidenceMatches = !draftChanged && evidenceKey === selectionKey
+  const selectionKey = `${experiment ?? ''}:${includeOutside}:${savedBaseline}|${savedIterations}`
+  const evidenceMatches = verifiedSelection && !draftChanged && evidenceKey === selectionKey
   const results = evidenceMatches ? savedResults : []
   const baselineReport = evidenceMatches ? savedBaselineReport : null
 
@@ -93,14 +111,15 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     const selected = savedIterations
       .split('|')
       .flatMap((id, index) => (id ? [{ id, stage: `Run ${index + 1}` }] : []))
-    if (!savedBaseline || !selected.length) {
+    if (!savedBaseline || !selected.length || draftChanged || !verifiedSelection) {
       setPending(false)
+      setError('')
       setResults([])
       setBaselineReport(null)
       return
     }
     async function load() {
-      setEvidenceKey(`${savedBaseline}|${savedIterations}`)
+      setEvidenceKey(selectionKey)
       setPending(true)
       setError('')
       setResults([])
@@ -139,11 +158,14 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     return () => {
       cancelled = true
     }
-  }, [savedBaseline, savedIterations, revision])
+  }, [savedBaseline, savedIterations, revision, draftChanged, verifiedSelection, selectionKey])
 
   function compare() {
+    if (!verifiedSelection) return
     setEvidencePage(0)
     const next = new URLSearchParams({ view: 'compare', baseline })
+    if (experiment) next.set('experiment', experiment)
+    if (experiment && includeOutside) next.set('comparison_scope', 'all')
     const ordered = [...candidates].sort((a, b) => {
       const created = (id: string) => runs.find((run) => run.id === id)?.created_at ?? ''
       return created(a).localeCompare(created(b)) || a.localeCompare(b)
@@ -297,10 +319,27 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
           hardware-cost measurements.
         </p>
       )}
+      {experiment && (
+        <label className={styles.inlineLabel}>
+          <input
+            type="checkbox"
+            checked={includeOutside}
+            onChange={(event) => {
+              const next = new URLSearchParams({ view: 'compare', experiment })
+              if (event.target.checked) next.set('comparison_scope', 'all')
+              setBaseline('')
+              setCandidates([])
+              setSearch(next)
+            }}
+          />
+          Include runs outside this experiment
+        </label>
+      )}
       <ComparisonSetup
         baseline={baseline}
         candidates={candidates}
         pending={pending}
+        options={options}
         onBaseline={setBaseline}
         onCandidates={setCandidates}
         onCompare={compare}

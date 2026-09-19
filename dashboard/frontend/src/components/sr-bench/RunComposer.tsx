@@ -11,6 +11,7 @@ import BenchSelect from './BenchSelect'
 import RunSettings, { type SamplingSettings } from './RunSettings'
 import TargetRequestProfile from './TargetRequestProfile'
 import { targetLabel } from './targetPresentation'
+import { experimentRoleLabels } from './experimentEvidencePresentation'
 import controls from './BenchControls.module.css'
 import RunDatasetScope, { type ResolvedDatasetScope } from './RunDatasetScope'
 import {
@@ -47,6 +48,19 @@ export default function RunComposer({
   experiment,
   onStarted,
 }: Props) {
+  const targetKind =
+    experiment?.role === 'baseline'
+      ? 'single'
+      : baselineID ||
+          mode === 'preview' ||
+          experiment?.role === 'initial' ||
+          experiment?.role === 'candidate' ||
+          experiment?.role === 'validation'
+        ? 'mom'
+        : undefined
+  const availableTargets = registeredTargets.filter(
+    (target) => !targetKind || target.kind === targetKind,
+  )
   const [baseline, setBaseline] = useState<Run | null>(null)
   const [baselineError, setBaselineError] = useState('')
   const [baselineRevision, setBaselineRevision] = useState(0)
@@ -74,24 +88,34 @@ export default function RunComposer({
   }, [baselineID, baselineRevision])
   const [saved] = useState(() => readSubmission(actorID))
   const [submission, setSubmission] = useState<PendingSubmission | null>(saved.request)
-  const [name, setName] = useState('Balance comparison')
-  const [hypothesis, setHypothesis] = useState(experiment?.hypothesis ?? '')
-  const experimentContext = useMemo(
-    () =>
-      experiment
-        ? {
-            id: experiment.id,
-            role: experiment.role,
-            ...(hypothesis.trim() ? { hypothesis: hypothesis.trim() } : {}),
-          }
-        : undefined,
-    [experiment, hypothesis],
+  const [name, setName] = useState(
+    mode === 'preview'
+      ? 'Routing preview'
+      : experiment
+        ? experimentRoleLabels[experiment.role]
+        : 'Model comparison',
   )
+  const [hypothesis, setHypothesis] = useState(experiment?.hypothesis ?? '')
   const [costPolicy, setCostPolicy] = useState<'require_priced' | 'capability_only'>(
     'require_priced',
   )
   const [profile, setProfile] = useState(
     datasets.find((item) => item.id === initialDataset)?.profile ?? 'quick',
+  )
+  const experimentContext = useMemo(
+    () =>
+      experiment
+        ? {
+            id: experiment.id,
+            role:
+              (baseline?.manifest.profile ?? profile) === 'standard' &&
+              (experiment.role === 'initial' || experiment.role === 'candidate')
+                ? ('validation' as const)
+                : experiment.role,
+            ...(hypothesis.trim() ? { hypothesis: hypothesis.trim() } : {}),
+          }
+        : undefined,
+    [experiment, hypothesis, baseline, profile],
   )
   const [benchmarks, setBenchmarks] = useState<string[]>(
     datasets.find((item) => item.id === initialDataset)?.benchmarks ?? [],
@@ -104,11 +128,7 @@ export default function RunComposer({
     error: 'Select prepared benchmarks.',
   })
   const [targets, setTargets] = useState<Target[]>(() =>
-    registeredTargets.filter(
-      (target) =>
-        target.model === initialModel &&
-        ((!baselineID && mode === 'live') || target.kind === 'mom'),
-    ),
+    availableTargets.filter((target) => target.model === initialModel),
   )
   const [limits, setLimits] = useState({ ...DEFAULT_LIMITS })
   const [sampling, setSampling] = useState<SamplingSettings>({ temperature: 0, top_p: 1 })
@@ -369,11 +389,11 @@ export default function RunComposer({
       </div>
       {experiment && (
         <label>
-          Hypothesis
+          What changed? (optional)
           <textarea
             value={hypothesis}
             maxLength={2000}
-            placeholder="What changed, and what do you expect?"
+            placeholder="For example: prefer the less expensive model for simple questions."
             onChange={(event) => setHypothesis(event.target.value)}
           />
         </label>
@@ -391,7 +411,14 @@ export default function RunComposer({
         </p>
       )}
       <div className={styles.sectionHeading}>
-        <h3>2. Choose targets</h3>
+        <h3>
+          2.{' '}
+          {targetKind === 'single'
+            ? 'Choose single models'
+            : targetKind === 'mom'
+              ? 'Choose a recipe'
+              : 'Choose models or recipes'}
+        </h3>
         {registeredTargets.length > 0 && (
           <BenchSelect
             label="Add configured target"
@@ -399,19 +426,15 @@ export default function RunComposer({
             value=""
             searchable
             placeholder="Choose target"
-            options={registeredTargets
-              .filter(
-                (item) =>
-                  ((!baselineID && mode === 'live') || item.kind === 'mom') &&
-                  !targets.some((target) => target.id === item.id),
-              )
+            options={availableTargets
+              .filter((item) => !targets.some((target) => target.id === item.id))
               .map((target) => ({
                 value: target.id,
                 label: targetLabel(target),
                 description: target.kind === 'mom' ? 'Mixture of models' : 'Single model',
               }))}
             onChange={(value) => {
-              const target = registeredTargets.find((item) => item.id === value)
+              const target = availableTargets.find((item) => item.id === value)
               if (target) setTargets((previous) => [...previous, { ...target }])
             }}
           />

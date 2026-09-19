@@ -36,6 +36,24 @@ export default function EvaluationPage() {
     pendingSearch.current = search
   }, [search])
   const selectedID = search.get('run')
+  const experimentID = search.get('experiment')
+  const experimentRoute: Record<string, string> = experimentID ? { experiment: experimentID } : {}
+  const openComposer = (mode: 'live' | 'preview', baseline = search.get('baseline') ?? '') => {
+    const role =
+      mode === 'preview'
+        ? 'preview'
+        : !baseline
+          ? 'baseline'
+          : runs.find((run) => run.id === baseline)?.manifest.profile === 'standard'
+            ? 'validation'
+            : 'candidate'
+    setSearch({
+      view: mode === 'preview' ? 'preview' : 'new',
+      ...experimentRoute,
+      ...(baseline ? { baseline } : {}),
+      ...(experimentID ? { role } : {}),
+    })
+  }
   const runFilters: RunFilters = {
     query: search.get('q') ?? '',
     status: ['active', 'completed', 'failed', 'interrupted', 'cancelled'].includes(
@@ -170,13 +188,13 @@ export default function EvaluationPage() {
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
           {view !== 'preview' && (
-            <button onClick={() => setSearch({ view: 'preview' })}>
+            <button onClick={() => openComposer('preview')}>
               <ProductIcon name="decision" />
               Preview routing
             </button>
           )}
           {view !== 'new' && (
-            <button className={styles.primary} onClick={() => setSearch({ view: 'new' })}>
+            <button className={styles.primary} onClick={() => openComposer('live')}>
               <ProductIcon name="plus" />
               Create evaluation
             </button>
@@ -195,7 +213,7 @@ export default function EvaluationPage() {
           <button
             key={key}
             aria-current={view === key ? 'page' : undefined}
-            onClick={() => setSearch({ view: key })}
+            onClick={() => setSearch({ view: key, ...experimentRoute })}
           >
             <ProductIcon name={icon} />
             {label}
@@ -218,7 +236,16 @@ export default function EvaluationPage() {
         </div>
       )}
       {!catalog && loading && <ProductLoadingState compact label="Loading sr-bench…" />}
-      {(creating || (view === 'runs' && selectedID)) && (
+      {experimentID && view !== 'experiments' && (
+        <button
+          className={styles.backLink}
+          onClick={() => setSearch({ view: 'experiments', experiment: experimentID })}
+        >
+          <ProductIcon name="arrow-left" />
+          Back to experiment
+        </button>
+      )}
+      {!experimentID && (creating || (view === 'runs' && selectedID)) && (
         <button className={styles.backLink} onClick={() => openRun()}>
           <ProductIcon name="arrow-left" />
           Back to runs
@@ -238,8 +265,11 @@ export default function EvaluationPage() {
             search.get('experiment')
               ? {
                   id: search.get('experiment')!,
-                  role: (search.get('role') ??
-                    (view === 'preview' ? 'preview' : 'candidate')) as ExperimentRunContext['role'],
+                  role:
+                    view === 'preview'
+                      ? 'preview'
+                      : (search.get('role') as ExperimentRunContext['role']) ||
+                        (search.has('baseline') ? 'candidate' : 'baseline'),
                 }
               : undefined
           }
@@ -247,7 +277,7 @@ export default function EvaluationPage() {
           initialDataset={search.get('dataset') ?? undefined}
           onStarted={(run) => {
             setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)])
-            setSearch({ view: 'runs', run: run.id })
+            setSearch({ view: 'runs', run: run.id, ...experimentRoute })
             refresh()
           }}
         />
@@ -272,7 +302,7 @@ export default function EvaluationPage() {
               role,
             })
           }
-          onCompare={(baseline) => setSearch({ view: 'compare', baseline })}
+          onCompare={(baseline) => setSearch({ view: 'compare', baseline, ...experimentRoute })}
         />
       )}
       {view === 'runs' && (
@@ -311,12 +341,10 @@ export default function EvaluationPage() {
               canRun={canRun}
               onChanged={refresh}
               onRecovered={(run) => {
-                setSearch({ view: 'runs', run: run.id })
+                setSearch({ view: 'runs', run: run.id, ...experimentRoute })
                 refresh()
               }}
-              onCandidate={(baseline, mode) =>
-                setSearch({ view: mode === 'preview' ? 'preview' : 'new', baseline })
-              }
+              onCandidate={(baseline, mode) => openComposer(mode, baseline)}
             />
           )}
         </>
@@ -328,9 +356,16 @@ export default function EvaluationPage() {
           runsLoaded={!!loaded.runs}
           canRun={canRun}
           selectedDatasetId={search.get('dataset') ?? ''}
-          onSelectDataset={(id) => setSearch({ view: 'datasets', dataset: id })}
-          onBackToDatasets={() => setSearch({ view: 'datasets' })}
-          onUse={(dataset) => setSearch({ view: 'new', dataset: dataset.id })}
+          onSelectDataset={(id) => setSearch({ view: 'datasets', dataset: id, ...experimentRoute })}
+          onBackToDatasets={() => setSearch({ view: 'datasets', ...experimentRoute })}
+          onUse={(dataset) =>
+            setSearch({
+              view: 'new',
+              dataset: dataset.id,
+              ...experimentRoute,
+              ...(experimentID ? { role: 'baseline' } : {}),
+            })
+          }
         />
       )}
       {view === 'datasets' &&
@@ -355,7 +390,7 @@ export default function EvaluationPage() {
         ))}
       {view === 'compare' && loaded.runs && (
         <>
-          <RunComparison runs={runs} />
+          <RunComparison key={user?.id ?? ''} runs={runs} />
           <details className={styles.panel}>
             <summary>Estimate a routing change</summary>
             <ReplayComposer
@@ -363,7 +398,7 @@ export default function EvaluationPage() {
               actorID={user?.id ?? ''}
               canRun={canRun}
               onCreated={(run) => {
-                setSearch({ view: 'runs', run: run.id })
+                setSearch({ view: 'runs', run: run.id, ...experimentRoute })
                 refresh()
               }}
             />

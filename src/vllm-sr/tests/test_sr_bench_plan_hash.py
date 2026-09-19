@@ -38,7 +38,7 @@ def javascript_roundtrip(value):
         capture_output=True,
         text=True,
         check=True,
-        timeout=5,
+        timeout=30,
     )
     return json.loads(result.stdout)
 

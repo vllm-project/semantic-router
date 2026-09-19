@@ -232,7 +232,7 @@ test('live comparison retains current Balance and two optimization revisions', a
       { exact: true },
     ),
   ).toBeVisible()
-  await page.getByRole('combobox', { name: 'Baseline run', exact: true }).click()
+  await page.getByRole('combobox', { name: 'Reference run', exact: true }).click()
   await page
     .locator(`[role="option"][data-value=${JSON.stringify(plan!.baseline_run_id!)}]`)
     .click()

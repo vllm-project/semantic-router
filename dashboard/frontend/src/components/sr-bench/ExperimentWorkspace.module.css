@@ -1,67 +1,110 @@
-.workflow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-  list-style: none;
-  padding: 0;
-  margin: 1.5rem 0 2rem;
-}
-.workflow li {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
-  border-left: 2px solid var(--border-color);
-}
-.workflow span,
-.experimentCard span {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-.timeline {
-  display: grid;
-  gap: 1.5rem;
-}
-.entry {
-  display: flex;
-  gap: 1rem;
-  min-width: 0;
-}
-.marker {
-  padding: 0.7rem;
-  align-self: flex-start;
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-}
-.marker svg,
-.runLink svg,
-.experimentCard svg {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-.entryBody {
-  min-width: 0;
-  flex: 1;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-.entryBody p {
-  overflow-wrap: anywhere;
-}
-.runLink {
+.overview,
+.journey,
+.resultsHeading,
+.nextHeading {
   display: flex;
   align-items: center;
+  gap: 1rem;
+}
+.overview,
+.resultsHeading {
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+.overview {
+  margin: 1.25rem 0;
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+.journey {
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+.journey span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.journey svg,
+.reference svg,
+.experimentCard svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.count {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.nextStep {
+  display: grid;
+  gap: 1rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-secondary);
+  margin-bottom: 1.75rem;
+}
+.nextHeading {
+  align-items: flex-start;
+}
+.nextHeading > svg {
+  width: 22px;
+  height: 22px;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+.nextHeading h3,
+.resultsHeading h3,
+.editor h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+.nextHeading p {
+  max-width: 76ch;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.reference {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.reference > span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.reference button {
+  display: inline-flex;
+  align-items: center;
   gap: 0.5rem;
-  margin-top: 0.5rem;
   text-align: left;
-  font-weight: 600;
+  border: 0;
+  background: transparent;
+  padding: 0.25rem 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.resultsHeading {
+  margin: 1.5rem 0 1rem;
+}
+.resultsHeading p {
+  margin: 0;
+  font-size: 0.8rem;
 }
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
   gap: 1rem;
+  margin-top: 1.25rem;
 }
 .experimentCard {
   display: grid;
@@ -76,6 +119,8 @@
 }
 .experimentCard span {
   grid-column: 2;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
 }
 .experimentCard > svg:last-child {
   grid-column: 3;
@@ -85,12 +130,37 @@
   display: grid;
   gap: 1rem;
   max-width: 700px;
-  border-top: 1px solid var(--border-color);
-  margin-top: 2rem;
-  padding-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  margin: 1.25rem 0;
 }
-.editor > button {
-  justify-self: start;
+.editor p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+.emptyGuide {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 0.8rem;
+  max-width: 68ch;
+  padding: 1rem 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.emptyGuide > svg {
+  width: 22px;
+  height: 22px;
+  grid-row: 1 / 3;
+}
+.emptyGuide p {
+  margin: 0;
+  color: var(--text-primary);
+}
+.emptyGuide span {
+  grid-column: 2;
 }
 .deleteNotice {
   flex-basis: 100%;
@@ -98,8 +168,12 @@
   font-size: 0.8rem;
 }
 @media (max-width: 760px) {
-  .workflow {
-    grid-template-columns: 1fr;
+  .nextStep,
+  .editor {
+    padding: 1rem;
+  }
+  .journey {
+    font-size: 0.75rem;
     gap: 0.5rem;
   }
 }

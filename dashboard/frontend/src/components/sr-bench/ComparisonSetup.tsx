@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import ProductIcon from '../ProductIcon'
+import ProductLoadingState from '../ProductLoadingState'
 import BenchSelect from './BenchSelect'
 import BenchPagination from './BenchPagination'
 import RunOptionsStatus from './RunOptionsStatus'
-import useRunOptions from './useRunOptions'
+import type useExperimentComparison from './useExperimentComparison'
+import { comparisonSelectionReady } from './experimentComparison'
 import { number } from './model'
 import { profileTitle } from './datasetPresentation'
 import styles from './SrBench.module.css'
@@ -13,6 +15,7 @@ export default function ComparisonSetup({
   baseline,
   candidates,
   pending,
+  options,
   onBaseline,
   onCandidates,
   onCompare,
@@ -20,12 +23,12 @@ export default function ComparisonSetup({
   baseline: string
   candidates: string[]
   pending: boolean
+  options: ReturnType<typeof useExperimentComparison>
   onBaseline: (id: string) => void
   onCandidates: (ids: string[]) => void
   onCompare: () => void
 }) {
-  const baselines = useRunOptions('comparison')
-  const choices = useRunOptions('comparison', baseline || undefined, !!baseline)
+  const { baselines, choices } = options
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
   const available = choices.items.filter((item) =>
@@ -36,23 +39,22 @@ export default function ComparisonSetup({
     available.length > 0 && available.every((item) => candidates.includes(item.run_id))
   const invalid = candidates.some((id) => !choices.items.some((item) => item.run_id === id))
   const ready =
-    !!choices.baseline &&
-    candidates.length > 0 &&
-    !invalid &&
-    new Set(candidates).size === candidates.length &&
+    comparisonSelectionReady(baseline, candidates, baselines.items, choices.items) &&
     !choices.loading &&
     !choices.error &&
-    !baselines.error
-  const baselineItems =
-    baselines.items.some((item) => item.run_id === baseline) ||
-    !choices.baseline ||
-    !choices.items.length
-      ? baselines.items
-      : [choices.baseline, ...baselines.items]
+    !baselines.error &&
+    !baselines.loading &&
+    !options.membershipLoading &&
+    !options.membershipError
+  const baselineItems = baselines.items
   const noCombinations =
     baselines.loaded &&
     !baselines.loading &&
     !baselines.error &&
+    !choices.error &&
+    !choices.loading &&
+    !options.membershipLoading &&
+    !options.membershipError &&
     !baselines.next &&
     !baselineItems.length
   if (noCombinations)
@@ -60,25 +62,34 @@ export default function ComparisonSetup({
       <p className={styles.optionEmpty} role="status">
         {baselines.scanLimited
           ? 'No verified comparisons available. Some saved evidence exceeded the verification limit.'
-          : 'No comparable results yet. Finish a baseline and a candidate on the same questions and settings.'}
+          : 'No comparable results yet. Finish reference and recipe runs on the same questions and settings.'}
       </p>
     )
   return (
     <div className={styles.comparisonSetup}>
+      {options.membershipLoading && (
+        <ProductLoadingState compact label="Finding comparable runs…" />
+      )}
+      {options.membershipError && (
+        <div role="alert" className={styles.error}>
+          <p>{options.membershipError}</p>
+          <button onClick={options.reloadMembership}>Reload experiment members</button>
+        </div>
+      )}
       <RunOptionsStatus
         {...baselines}
-        label="baselines"
+        label="references"
         onRetry={baselines.reload}
         onMore={baselines.loadMore}
       />
       {!!baselineItems.length && (
         <BenchSelect
           className={styles.baselineSelect}
-          label="Baseline run"
+          label="Reference run"
           value={baseline}
           disabled={pending || baselines.loading || !!baselines.error}
           searchable
-          placeholder="Choose a baseline with comparable results"
+          placeholder="Choose reference results"
           options={baselineItems.map((item) => ({
             value: item.run_id,
             label: item.name,
@@ -94,6 +105,12 @@ export default function ComparisonSetup({
       )}
       {baseline && (
         <>
+          {!options.membershipLoading && !options.membershipError && !options.baselineInScope && (
+            <p className={styles.notice}>
+              The selected reference is outside this experiment. Choose reference results in this
+              experiment, or explicitly include runs outside it.
+            </p>
+          )}
           <RunOptionsStatus
             {...choices}
             label="comparison runs"
@@ -107,8 +124,8 @@ export default function ComparisonSetup({
           !choices.next ? (
             <p className={styles.optionEmpty} role="status">
               {choices.scanLimited
-                ? 'No verified results for this baseline. Some evidence exceeded the verification limit.'
-                : 'This baseline no longer has comparable results. Choose another baseline.'}
+                ? 'No verified results for this reference. Some evidence exceeded the verification limit.'
+                : 'This reference no longer has comparable results. Choose another reference.'}
             </p>
           ) : (
             choices.loaded &&
