@@ -69,3 +69,59 @@ Report per-class precision and recall, the confusion matrix, multilingual
 coverage, and failure cases such as requests that mention an image without
 asking to create one. Validate the exported adapter through the router's actual
 modality signal path before treating it as supported.
+
+## Same-run Evaluation Harness (#3856)
+
+`same_run_harness.py` and `same_run_pair.py` run a candidate and its baseline
+on the same frozen QSL one prompt at a time, then report latency, peak RSS,
+CPU seconds, and per-row routing output. Pairs are joined on `row_id` and must
+run on the same host.
+
+**Run BERT baseline:**
+
+```bash
+python same_run_harness.py \
+  --qsl exported_modality_routing_dataset/test.jsonl \
+  --model llm-semantic-router/mmbert32k-modality-router-merged \
+  --binding hf \
+  --role baseline \
+  --warmup 20 --max-length 256 --min-duration-s 60 \
+  --output same_run_bert_singlestream.json
+```
+
+**Run candidate (e.g. DistilBERT):**
+
+```bash
+python same_run_harness.py \
+  --qsl exported_modality_routing_dataset/test.jsonl \
+  --model <your-checkpoint> \
+  --binding hf \
+  --role candidate \
+  --warmup 20 --max-length 256 --min-duration-s 60 \
+  --output same_run_distilbert_singlestream.json
+```
+
+**Pair the two runs (same host required):**
+
+```bash
+python same_run_pair.py \
+  --baseline same_run_bert_singlestream.json \
+  --candidate same_run_distilbert_singlestream.json \
+  --output same_run_paired.json
+```
+
+The pair script exits non-zero and writes no output file if the two runs came
+from different machines (`cpu_model`, `core_count`, or `ram_gb` differ).
+
+Use `--binding candle` to run through `ClassifyMmBert32KModality` (production
+path). `--binding hf` uses HuggingFace transformers.
+
+Quality metrics (per-class precision, recall, threshold selection) are defined
+by [#3194](https://github.com/vllm-project/semantic-router/issues/3194). The
+harness emits `records[].label` and `records[].output` per row.
+
+**Unit tests (no model download required):**
+
+```bash
+python test_same_run.py
+```
