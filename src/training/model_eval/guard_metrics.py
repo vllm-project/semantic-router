@@ -315,8 +315,20 @@ def _auc_or_none(labels: Sequence[int], scores: Sequence[float]) -> float | None
 def _recall_or_none(
     labels: Sequence[int], scores: Sequence[float], budget: float
 ) -> float | None:
-    reached = recall_at_fpr(scores, [label == 1 for label in labels], budget)
-    return reached["recall"] if reached else None
+    """Recall inside the budget, or ``None`` when the draw cannot answer.
+
+    ``recall_at_fpr`` reports nothing for two different reasons: the draw holds
+    one class, which no recall is defined for, and the draw holds both but no
+    threshold stays inside the budget. The second is a recall of zero, and
+    dropping it would leave the bootstrap only the draws that reached the
+    budget, which is every unfavourable outcome removed and an interval that
+    cannot fall below the favourable ones.
+    """
+    positives = [label == 1 for label in labels]
+    if not any(positives) or all(positives):
+        return None
+    reached = recall_at_fpr(scores, positives, budget)
+    return reached["recall"] if reached else 0.0
 
 
 def _quantile(ordered: list[float], fraction: float) -> float:

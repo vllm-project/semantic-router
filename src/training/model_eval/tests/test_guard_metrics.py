@@ -226,6 +226,34 @@ class IntervalTest(unittest.TestCase):
 
         self.assertEqual(first["interval"], second["interval"])
 
+    def test_a_draw_that_spends_the_budget_counts_as_zero_recall(self):
+        """A resample that cannot flag anything in budget is not a missing draw.
+
+        Two negatives outrank every positive, so one false positive already
+        exceeds a 1% budget on 100 negatives and no threshold reaches any
+        positive. Dropping those resamples would leave only the ones that got
+        past the two, and the interval could then not fall below a recall the
+        sample never achieved.
+        """
+        labels = [0] * 100 + [1] * 10
+        scores = [0.9, 0.9] + [0.1] * 98 + [0.8] * 10
+
+        def recall(drawn_labels, drawn_scores):
+            return guard_metrics._recall_or_none(drawn_labels, drawn_scores, 0.01)
+
+        self.assertEqual(recall(labels, scores), 0.0)
+
+        drawn = guard_metrics.bootstrap_interval(labels, scores, recall, resamples=2000)
+
+        self.assertEqual(drawn["point"], 0.0)
+        self.assertEqual(drawn["resamples"], 2000)
+        self.assertEqual(drawn["interval"][0], 0.0)
+
+    def test_a_single_class_draw_stays_undefined(self):
+        """One class is the case a recall genuinely has no value for."""
+        self.assertIsNone(guard_metrics._recall_or_none([0, 0], [0.1, 0.2], 0.01))
+        self.assertIsNone(guard_metrics._recall_or_none([1, 1], [0.8, 0.9], 0.01))
+
 
 if __name__ == "__main__":
     unittest.main()
