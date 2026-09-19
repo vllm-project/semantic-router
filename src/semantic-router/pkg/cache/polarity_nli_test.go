@@ -52,8 +52,12 @@ func installVerifier(t *testing.T, c *InMemoryCache, fn PolarityVerifyFunc) {
 
 func finishWithCandidate(c *InMemoryCache, ctx context.Context, query string, entry CacheEntry) (LookupResult, error) {
 	const aboveThreshold = float32(1.0) // identical unit vectors
-	return c.finishFindSimilarSearch(ctx, time.Now(), entry.Model, query, polarityTestThreshold,
-		0, entry, aboveThreshold, 1, 0)
+	return c.finishFindSimilarSearch(ctx, time.Now(), entry.Model, query, polarityTestThreshold, cacheSearchResult{
+		bestIndex:      0,
+		bestEntry:      entry,
+		bestSimilarity: aboveThreshold,
+		entriesChecked: 1,
+	})
 }
 
 func TestPolarityNLIGuardRejectsContradiction(t *testing.T) {
@@ -223,8 +227,15 @@ func TestPolarityNLIGuardBelowThresholdSkipsVerifier(t *testing.T) {
 		t.Fatal("verifier must not run for a below-threshold candidate")
 		return 0, nil
 	})
-	result, err := c.finishFindSimilarSearch(context.Background(), time.Now(), entry.Model,
-		"Something unrelated", polarityTestThreshold, 0, entry, 0.42, 1, 0)
+	result, err := c.finishFindSimilarSearch(
+		context.Background(), time.Now(), entry.Model, "Something unrelated", polarityTestThreshold,
+		cacheSearchResult{
+			bestIndex:      0,
+			bestEntry:      entry,
+			bestSimilarity: 0.42,
+			entriesChecked: 1,
+		},
+	)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
