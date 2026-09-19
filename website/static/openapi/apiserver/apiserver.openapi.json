@@ -19511,6 +19511,9 @@
                                     "type": "integer"
                                   }
                                 }
+                              },
+                              "protection_state_key": {
+                                "type": "string"
                               }
                             }
                           },
@@ -20012,8 +20015,17 @@
                                       ]
                                     }
                                   },
+                                  "disposition": {
+                                    "type": "string"
+                                  },
+                                  "fallback_target": {
+                                    "type": "string"
+                                  },
                                   "required_count": {
                                     "type": "integer"
+                                  },
+                                  "selected_policy": {
+                                    "type": "string"
                                   },
                                   "usable_count": {
                                     "type": "integer"
@@ -22892,6 +22904,9 @@
                               "type": "integer"
                             }
                           }
+                        },
+                        "protection_state_key": {
+                          "type": "string"
                         }
                       }
                     },
@@ -23393,8 +23408,17 @@
                                 ]
                               }
                             },
+                            "disposition": {
+                              "type": "string"
+                            },
+                            "fallback_target": {
+                              "type": "string"
+                            },
                             "required_count": {
                               "type": "integer"
+                            },
+                            "selected_policy": {
+                              "type": "string"
                             },
                             "usable_count": {
                               "type": "integer"
