@@ -345,7 +345,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
   }, [importUrl])
 
   // Diagnostic counts (3 severity levels per design doc)
-  const errorCount = diagnostics.filter((d) => d.level === 'error').length
+  const errorCount = diagnostics.filter((d) => d.level === 'error').length + (compileError ? 1 : 0)
   const warnCount = diagnostics.filter((d) => d.level === 'warning').length
   const constraintCount = diagnostics.filter((d) => d.level === 'constraint').length
 

@@ -345,7 +345,7 @@ const BuilderPage: React.FC = () => {
 
   // Diagnostic counts
   const validationErrorCount = diagnostics.filter((d) => d.level === 'error').length
-  const errorCount = validationErrorCount + (compileError ? 1 : 0)
+  const errorCount = validationErrorCount + (compileError ? 1 : 0) + (configLoadError ? 1 : 0)
   const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0
   const totalRoutingSummary = useMemo(
     () => summarizeBuilderRoutingScopes(ast, symbols, dslSource),

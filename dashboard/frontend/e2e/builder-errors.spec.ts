@@ -48,6 +48,8 @@ test('shows automatic load failure and preserves the detailed error during manua
   })
   await expect(page.getByRole('alert')).toContainText('unknown_field')
   await expect(page.getByRole('alert')).toContainText('Failed to load')
+  await expect(page.getByText('1 error', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('Valid', { exact: true })).toHaveCount(0)
   await page.screenshot({ path: test.info().outputPath('automatic-load-error.png') })
 
   await page.getByRole('button', { name: 'Import', exact: true }).click()
@@ -61,6 +63,7 @@ test('shows automatic load failure and preserves the detailed error during manua
   await dialog.getByRole('button', { name: 'Import', exact: true }).click()
   await expect(dialog).not.toBeVisible()
   await expect(page.getByRole('alert')).toHaveCount(0)
+  await expect(page.getByText('Valid', { exact: true })).toBeVisible()
   await expect(page.getByText('model-a', { exact: true }).first()).toBeVisible()
 })
 
@@ -99,6 +102,7 @@ test('shows Format parser errors with output closed and clears them after correc
   await page.getByRole('button', { name: 'Format', exact: true }).click()
   const error = page.getByRole('alert').filter({ hasText: 'parse errors:' })
   await expect(error).toContainText('unexpected token "hello"')
+  await expect(page.getByText('0 errors', { exact: true })).toHaveCount(0)
   await page.screenshot({ path: test.info().outputPath('format-error.png') })
 
   await editor.focus()
@@ -106,5 +110,6 @@ test('shows Format parser errors with output closed and clears them after correc
   await page.keyboard.type('MODEL "repaired" {}')
   await page.getByRole('button', { name: 'Format', exact: true }).click()
   await expect(error).toHaveCount(0)
+  await expect(page.getByText('0 errors', { exact: true })).toBeVisible()
   await expect(page.locator('.monaco-editor').first()).toContainText('repaired')
 })
