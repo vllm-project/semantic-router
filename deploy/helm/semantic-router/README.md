@@ -427,7 +427,11 @@ probes and supply TLS-aware probes. Liveness continues to check the TCP listener
 In Kubernetes config mode, the first CR configuration must finish model
 preparation, warmup and runtime activation before health becomes serving. The
 controller watches the Pod namespace by default; `--namespace` explicitly
-overrides it. `Ready=True` on an IntelligentPool/IntelligentRoute acknowledges
+overrides it. For the first Kubernetes-config install, install without Helm
+`--wait`, apply one pool and route in that namespace, then wait for the Router
+deployment. On upgrades with existing CRs outside the Pod namespace, retain
+their namespace with an explicit `--namespace` argument or move the CRs first.
+`Ready=True` on an IntelligentPool/IntelligentRoute acknowledges
 activation on the reconciling replica. A failed subsequent candidate reports
 `ActivationFailed` without taking the previous serving generation out of service.
 Status persistence failures are retried without rebuilding a successful generation.
