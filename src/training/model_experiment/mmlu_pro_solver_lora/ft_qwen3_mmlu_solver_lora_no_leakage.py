@@ -51,8 +51,8 @@ from typing import Dict, List, Optional, Tuple
 
 import torch
 
-# Import common LoRA utilities from parent directory
-_parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Shared training utilities live beside the classifier entrypoints.
+_parent_dir = str(Path(__file__).resolve().parents[2] / "model_classifier")
 if _parent_dir not in sys.path:
     sys.path.insert(0, _parent_dir)
 
