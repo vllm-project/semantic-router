@@ -205,10 +205,11 @@ func registerGrafanaRoutes(mux *http.ServeMux, cfg *config.Config) *httputil.Rev
 		return nil
 	}
 
-	grafanaProxy, err := proxy.NewReverseProxy(cfg.GrafanaURL, "/embedded/grafana", false)
+	grafanaProxy, err := proxy.NewGrafanaProxy(cfg.GrafanaURL)
 	if err != nil {
 		log.Fatalf("grafana proxy error: %v", err)
 	}
+	mux.HandleFunc(proxy.GrafanaAuthScriptPath, proxy.GrafanaAuthScriptHandler)
 	mux.HandleFunc("/embedded/grafana/", func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return

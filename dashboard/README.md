@@ -263,6 +263,10 @@ The frontend does not store, copy, or forward it.
   on its own, and the server recomputes the expected value from the session id
   inside the session token rather than reading the cookie back, so planting one
   achieves nothing without the session cookie as well.
+  The embedded Grafana document loads a same-origin request adapter before its
+  application scripts. It performs the same CSRF-cookie echo for Grafana API
+  writes (including Prometheus queries); it does not exempt those requests from
+  the Dashboard's authentication, origin, CSRF, or permission checks.
 - **`SameSite=Lax` is deliberate.** `Strict` would withhold the cookie from
   top-level navigation into the dashboard, so following a link from chat or an
   alert would land on the login page despite a valid session. `Lax` still
