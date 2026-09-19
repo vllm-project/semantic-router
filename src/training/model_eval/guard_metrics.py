@@ -24,6 +24,7 @@ saved scores, including a public guard's scores or a router response log.
 
 from __future__ import annotations
 
+import hashlib
 import math
 import random
 from collections.abc import Callable, Sequence
@@ -159,26 +160,58 @@ def routing_agreement(
     }
 
 
+def rows_fingerprint(texts: Sequence[str], labels: Sequence[int]) -> str:
+    """One digest over the evaluated rows, in order, with their labels.
+
+    A paired statistic reads position i of both vectors as the same request.
+    Row counts do not establish that, so a report carries this instead: reorder
+    a dataset, relabel a row, or swap one out, and the digest moves. It cannot
+    realign two reports, which is why a mismatch is refused rather than fixed.
+    """
+    digest = hashlib.sha256()
+    for text, label in zip(texts, labels, strict=True):
+        digest.update(f"{label}\x00{text}\x00".encode())
+    return digest.hexdigest()
+
+
+# What has to match before position i of two score vectors means one request.
+# Each is already written into a report, and each changes what a score means:
+# the rows themselves, the corpus they came from, and the windowing that decided
+# how much of each row the model actually saw.
+PAIRED_FIELDS = ("rows_digest", "dataset", "dataset_version", "window")
+
+
 def agreement_with_baseline(
     labels: Sequence[int],
-    scores: Sequence[float],
-    threshold: float,
+    report: dict[str, Any],
     baseline: dict[str, Any],
 ) -> dict[str, Any]:
-    """Compare routing against a saved report at the point each run used.
+    """Compare routing against a saved report, or refuse and say why.
 
-    A recalibrated candidate sits at a different threshold from the baseline it
-    replaces, so judging both at the candidate's point would report every row
-    that moved as agreement. A report that records no point cannot be compared,
-    and saying so beats borrowing the candidate's.
+    A paired comparison is only meaningful when both runs scored the same rows
+    in the same order at their own recorded operating points. Everything that
+    could break that is checked here, because a mismatch does not fail loudly on
+    its own: it reports a reorder or a recalibration as a routing change, with a
+    significance value attached.
     """
+    scores = report["scores"]
     if len(baseline.get("scores", [])) != len(scores):
         return {"skipped": "the baseline report scores a different row count"}
+    for field in PAIRED_FIELDS:
+        mine, theirs = report.get(field), baseline.get(field)
+        if mine is None or theirs is None:
+            return {"skipped": f"a report records no {field}"}
+        if mine != theirs:
+            return {"skipped": f"the baseline report used a different {field}"}
     saved = baseline.get("threshold")
     if saved is None:
         return {"skipped": "the baseline report records no operating point"}
     return routing_agreement(
-        labels, baseline["scores"], scores, threshold, baseline_threshold=saved
+        labels,
+        baseline["scores"],
+        scores,
+        report["threshold"],
+        baseline_threshold=saved,
     )
 
 

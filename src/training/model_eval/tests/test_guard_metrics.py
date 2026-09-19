@@ -182,25 +182,89 @@ class RoutingAgreementTest(unittest.TestCase):
         self.assertEqual(moved["baseline_threshold"], 0.9)
         self.assertEqual(moved["candidate_threshold"], 0.5)
 
+    def paired(self, **overrides):
+        """A report and a baseline that describe the same ten rows."""
+        texts = [f"row {index}" for index in range(10)]
+        labels = [index % 2 for index in range(10)]
+        common = {
+            "scores": [0.6] * 10,
+            "threshold": 0.5,
+            "rows_digest": guard_metrics.rows_fingerprint(texts, labels),
+            "dataset": "corpus:test",
+            "dataset_version": "v1",
+            "window": {"size": 512, "overlap": 0},
+        }
+        return labels, dict(common), {**common, **overrides}
+
     def test_a_saved_report_is_compared_at_the_point_it_recorded(self):
-        scores = [0.6, 0.7]
-        baseline = {"scores": scores, "threshold": 0.9}
+        labels, report, baseline = self.paired(threshold=0.9)
+        report["scores"] = [0.6, 0.7] + [0.6] * 8
+        baseline["scores"] = report["scores"]
 
-        compared = guard_metrics.agreement_with_baseline([0, 1], scores, 0.5, baseline)
+        compared = guard_metrics.agreement_with_baseline(labels, report, baseline)
 
-        self.assertEqual(compared["agreement_rate"], 0.0)
+        self.assertEqual(compared["baseline_threshold"], 0.9)
+        self.assertEqual(compared["candidate_threshold"], 0.5)
 
-    def test_a_baseline_without_an_operating_point_is_not_compared(self):
-        """Borrowing the candidate's point would report a change as agreement."""
-        for baseline, reason in (
-            ({"scores": [0.6, 0.7]}, "no operating point"),
-            ({"scores": [0.6], "threshold": 0.9}, "different row count"),
-        ):
-            with self.subTest(reason=reason):
+    def test_a_reordered_dataset_is_not_a_routing_change(self):
+        """The reviewed defect: the same scorer on reversed rows read as 0% agreement
+        with a significant McNemar value, though no request changed."""
+        texts = [f"row {index}" for index in range(10)]
+        labels = [index % 2 for index in range(10)]
+        _, report, baseline = self.paired()
+        baseline["rows_digest"] = guard_metrics.rows_fingerprint(
+            list(reversed(texts)), list(reversed(labels))
+        )
+
+        skipped = guard_metrics.agreement_with_baseline(labels, report, baseline)
+
+        self.assertIn("rows_digest", skipped["skipped"])
+        self.assertNotIn("agreement_rate", skipped)
+
+    def test_a_baseline_that_cannot_be_paired_is_refused(self):
+        """Every field that changes what position i means, and the row count."""
+        cases = {
+            "rows_digest": {"rows_digest": "0" * 64},
+            "dataset": {"dataset": "other:test"},
+            "dataset_version": {"dataset_version": "v2"},
+            "window": {"window": {"size": 256, "overlap": 0}},
+        }
+        for field, override in cases.items():
+            with self.subTest(field=field):
+                labels, report, baseline = self.paired(**override)
                 skipped = guard_metrics.agreement_with_baseline(
-                    [0, 1], [0.6, 0.7], 0.5, baseline
+                    labels, report, baseline
                 )
-                self.assertIn(reason, skipped["skipped"])
+                self.assertIn(field, skipped["skipped"])
+
+        labels, report, baseline = self.paired()
+        del baseline["rows_digest"]
+        self.assertIn(
+            "no rows_digest",
+            guard_metrics.agreement_with_baseline(labels, report, baseline)["skipped"],
+        )
+
+        labels, report, baseline = self.paired()
+        del baseline["threshold"]
+        self.assertIn(
+            "no operating point",
+            guard_metrics.agreement_with_baseline(labels, report, baseline)["skipped"],
+        )
+
+        labels, report, baseline = self.paired(scores=[0.6])
+        self.assertIn(
+            "different row count",
+            guard_metrics.agreement_with_baseline(labels, report, baseline)["skipped"],
+        )
+
+    def test_the_row_digest_moves_with_order_and_with_labels(self):
+        texts = ["a", "b"]
+
+        forward = guard_metrics.rows_fingerprint(texts, [0, 1])
+
+        self.assertNotEqual(forward, guard_metrics.rows_fingerprint(["b", "a"], [1, 0]))
+        self.assertNotEqual(forward, guard_metrics.rows_fingerprint(texts, [1, 1]))
+        self.assertEqual(forward, guard_metrics.rows_fingerprint(texts, [0, 1]))
 
     def test_equal_accuracy_with_different_errors_still_moves_traffic(self):
         agreement = guard_metrics.routing_agreement([0, 1], [0.9, 0.9], [0.1, 0.1])

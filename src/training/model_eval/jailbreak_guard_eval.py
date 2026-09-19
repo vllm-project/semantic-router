@@ -297,12 +297,16 @@ def main() -> None:
     report["threshold_source"] = source
     report["window"] = {"size": args.window_size, "overlap": args.window_overlap}
     report["scores"] = scores
+    # Binds the scores to the rows they came from, in order. A paired comparison
+    # reads position i of two reports as one request, and nothing else in the
+    # report establishes that.
+    report["rows_digest"] = guard_metrics.rows_fingerprint(texts, labels)
 
     if args.baseline:
         baseline = json.loads(Path(args.baseline).read_text())
         report["baseline"] = baseline.get("model")
         report["routing_agreement"] = guard_metrics.agreement_with_baseline(
-            labels, scores, threshold, baseline
+            labels, report, baseline
         )
 
     Path(args.output).write_text(json.dumps(report, indent=2))
