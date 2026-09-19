@@ -15,40 +15,51 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestManagementRouteReadonlyMount(t *testing.T) {
-	mountPath := os.Getenv("RELEASE_READONLY_CONFIG")
-	if mountPath == "" {
-		t.Skip("set RELEASE_READONLY_CONFIG to a read-only single-file mount")
-	}
-	before, err := os.ReadFile(mountPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	candidate := strings.Replace(string(before), "default-business", "release-management-route", 1)
-	if candidate == string(before) {
-		t.Fatal("fixture route was not changed")
-	}
-	payload, err := json.Marshal(RouterConfigUpdateRequest{YAML: candidate})
+// The mandatory contract uses a self-contained Kubernetes configuration source.
+// RELEASE_READONLY_CONFIG additionally exercises the same route with a real
+// read-only bind mount when the integration runner provides one.
+func TestManagementRouteReadonlyConfiguration(t *testing.T) {
+	original := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("before_readonly_check"))
+	candidate := mustMarshalCanonicalConfigYAML(t, minimalDeployTestConfig("after_readonly_check"))
+	payload, err := json.Marshal(RouterConfigUpdateRequest{YAML: string(candidate)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	const token = "release-audit-dummy-token"
 	t.Setenv("RELEASE_AUDIT_MGMT_TOKEN", token)
-	for _, tc := range []struct {
-		name    string
-		mounted bool
-	}{{"ordinary_file_control", false}, {"readonly_mount", true}} {
+	type readonlyConfigCase struct {
+		name     string
+		path     string
+		readonly bool
+		source   config.ConfigSource
+	}
+	cases := []readonlyConfigCase{
+		{name: "ordinary_file_control"},
+		{name: "kubernetes_source", readonly: true, source: config.ConfigSourceKubernetes},
+	}
+	if mountPath := os.Getenv("RELEASE_READONLY_CONFIG"); mountPath != "" {
+		cases = append(cases, readonlyConfigCase{name: "readonly_mount", path: mountPath, readonly: true})
+	}
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			configPath := mountPath
-			if !tc.mounted {
+			configPath := tc.path
+			before := original
+			if configPath == "" {
 				configPath = filepath.Join(t.TempDir(), "config.yaml")
-				if err := os.WriteFile(configPath, before, 0o600); err != nil {
-					t.Fatal(err)
+				if writeErr := os.WriteFile(configPath, before, 0o600); writeErr != nil {
+					t.Fatal(writeErr)
+				}
+			} else {
+				var readErr error
+				before, readErr = os.ReadFile(configPath)
+				if readErr != nil {
+					t.Fatal(readErr)
 				}
 			}
 			management := config.ManagementAPIConfig{Auth: config.ManagementAPIAuthConfig{Mode: config.ManagementAuthModeBearer, Tokens: []config.ManagementAPITokenRef{{Env: "RELEASE_AUDIT_MGMT_TOKEN", Role: "admin"}}, Roles: config.DefaultManagementAPIRoles()}}
 			server := testManagementAPIServer(t, management)
 			server.configPath = configPath
+			server.config.ConfigSource = tc.source
 			mux := server.setupRoutes()
 			anonymous := httptest.NewRecorder()
 			mux.ServeHTTP(anonymous, httptest.NewRequest(http.MethodPut, "/api/v1/config", bytes.NewReader(payload)))
@@ -66,7 +77,7 @@ func TestManagementRouteReadonlyMount(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Logf("normal management registered route anonymous=%d authorized=%d unchanged=%t response=%s", anonymous.Code, response.Code, bytes.Equal(before, after), response.Body.String())
-			if !tc.mounted {
+			if !tc.readonly {
 				if response.Code != http.StatusOK {
 					t.Fatalf("writable control failed: %d %s", response.Code, response.Body.String())
 				}
