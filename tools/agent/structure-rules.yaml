@@ -29,6 +29,7 @@ root_files:
     - README.md
     - SECURITY.md
     - install.sh
+    - netlify.toml
 
 languages:
   go:

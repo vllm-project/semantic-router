@@ -523,7 +523,7 @@ Preview routing behavior without invoking a generation backend.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/routing/preview` | Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound. |
+| `POST` | `/api/v1/routing/preview` | Preview configured signals and model selection without invoking a generation backend. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound. |
 
 ### inventory
 

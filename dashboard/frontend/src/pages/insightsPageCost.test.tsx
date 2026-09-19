@@ -10,6 +10,7 @@ import {
 } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
 import { formatInsightsCost } from '../utils/insightsCost'
+import InsightsRecordSection from './InsightsRecordSection'
 
 const complete: InsightsRecord = {
   id: 'cost-record',
@@ -28,6 +29,21 @@ const complete: InsightsRecord = {
 }
 
 describe('Insights configured-rate estimates', () => {
+  it('shows the estimate caveat with the metrics and keeps the longer explanation closed', () => {
+    const section = buildInsightsRecordSections(complete, { isReadonly: false }).find(
+      (item) => item.title === 'Usage & Cost',
+    )!
+    const html = renderToStaticMarkup(<InsightsRecordSection section={section} sectionIndex={0} />)
+    const disclosure = html.indexOf('<details')
+    expect(disclosure).toBeGreaterThan(0)
+    expect(html.indexOf('not a GPU bill or provider invoice')).toBeLessThan(disclosure)
+    expect(html.indexOf('Estimated model cost')).toBeLessThan(disclosure)
+    expect(html.indexOf('highest estimate in the recipe')).toBeGreaterThan(disclosure)
+    expect(html.indexOf('historical records are not repriced')).toBeGreaterThan(disclosure)
+    expect(html).toContain('How these estimates are calculated')
+    expect(html).not.toContain('open=""')
+  })
+
   it('distinguishes tiny amounts, exact zero and unavailable data in each currency', () => {
     expect(formatInsightsCost(0.000001, 'USD')).toBe('<$0.0001')
     expect(formatInsightsCost(0.000075, 'USD')).toBe('<$0.0001')

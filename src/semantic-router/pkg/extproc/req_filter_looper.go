@@ -23,6 +23,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -118,6 +119,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
+	ctx = looper.WithExpectedConfigHash(ctx, headerValueCI(reqCtx, headers.SRBenchExpectedConfigHash))
 	if r.WorkflowStateService != nil && decision != nil && decision.Algorithm != nil &&
 		decision.Algorithm.Type == config.DecisionAlgorithmWorkflows {
 		if !r.WorkflowStateService.Acquire() {

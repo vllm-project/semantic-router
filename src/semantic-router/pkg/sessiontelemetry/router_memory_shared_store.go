@@ -215,10 +215,7 @@ func persistRouterSessionState(sessionID string) {
 	_ = store.Save(snapshot, routerMemoryTTL)
 }
 
-func loadSharedRouterSessionSnapshot(
-	sessionID string,
-	now time.Time,
-) (RouterSessionSnapshot, bool) {
+func loadSharedRouterSessionSnapshotMode(sessionID string, now time.Time, hydrate bool) (RouterSessionSnapshot, bool) {
 	store, release, acquired := acquireCurrentRouterSessionStateStore()
 	if !acquired {
 		return RouterSessionSnapshot{}, false
@@ -242,7 +239,14 @@ func loadSharedRouterSessionSnapshot(
 		return RouterSessionSnapshot{}, false
 	}
 	snapshot.IdleFor = idleFor
-	hydrateRouterSessionSnapshot(snapshot)
+	snapshot.CurrentCandidate = cloneSessionCandidate(snapshot.CurrentCandidate)
+	snapshot.ModelTurns = cloneIntMap(snapshot.ModelTurns)
+	snapshot.LastPolicy = clonePolicyMap(snapshot.LastPolicy)
+	snapshot.RecentOutcomes = cloneTurnOutcomes(snapshot.RecentOutcomes)
+	snapshot.SwitchTimestamps = cloneInt64Slice(snapshot.SwitchTimestamps)
+	if hydrate {
+		hydrateRouterSessionSnapshot(snapshot)
+	}
 	return snapshot, true
 }
 

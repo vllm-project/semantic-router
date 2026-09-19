@@ -39,7 +39,7 @@ def _stub_valid_container_cli(monkeypatch, tmp_path):
 def _minimal_stack_config(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n"
         "    address: 0.0.0.0\n    port: 8899\n"
     )
     return config_path
@@ -122,8 +122,9 @@ def test_container_start_vllm_sr_gives_storage_credentials_to_router_alone(
 
     assert router_env[POSTGRES_PASSWORD_ENV] == secrets.postgres.password
     assert router_env[REDIS_PASSWORD_ENV] == secrets.redis.password
-    # Every other container inherits this process's environment untouched.
-    assert dashboard_env is None
+    # Dashboard gets only the independent benchmark service token.
+    assert "SR_BENCH_TOKEN" in dashboard_env
+    assert not set(STORAGE_SECRET_ENV_NAMES) & set(dashboard_env)
     assert envoy_env is None
     for cmd, _ in captured:
         assert secrets.postgres.password not in cmd
@@ -148,6 +149,7 @@ def test_container_start_vllm_sr_omits_storage_credentials_without_state(
 
     assert rc == 0
     for cmd, env in captured:
-        assert env is None
+        if env is not None:
+            assert not set(STORAGE_SECRET_ENV_NAMES) & set(env)
         for name in STORAGE_SECRET_ENV_NAMES:
             assert name not in cmd

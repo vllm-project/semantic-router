@@ -57,7 +57,9 @@ type EnhancedHallucinationInfo struct {
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
+	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
 	AutomaticCandidateDemands map[string]selection.CandidateDemand
+	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
 
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32
@@ -353,6 +355,10 @@ type RequestContext struct {
 	MemoryFailOpen       bool
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
+
+	// RequestAutoStore snapshots the client's memory persistence override before
+	// provider preparation removes router controls. Nil uses configured defaults.
+	RequestAutoStore *bool
 
 	ContextCompressionTargetTokens *int
 	ContextCompressionRecoveryKeys []string

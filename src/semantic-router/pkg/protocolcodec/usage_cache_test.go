@@ -25,6 +25,8 @@ func TestOpenAIResponseCacheUsagePresence(t *testing.T) {
 			{name: "explicit zero read", details: `{"cached_tokens":0}`, read: llmprotocol.Int64(0)},
 			{name: "write only", details: `{"created_cache_tokens":2}`, write: llmprotocol.Int64(2)},
 			{name: "vllm", details: `{"cached_tokens":3,"created_cache_tokens":2}`, read: llmprotocol.Int64(3), write: llmprotocol.Int64(2), uncached: llmprotocol.Int64(5)},
+			{name: "creation alias", details: `{"cached_tokens":3,"cache_creation_tokens":2}`, read: llmprotocol.Int64(3), write: llmprotocol.Int64(2), uncached: llmprotocol.Int64(5)},
+			{name: "all aliases agree", details: `{"cached_tokens":3,"cache_write_tokens":2,"created_cache_tokens":2,"cache_creation_tokens":2}`, read: llmprotocol.Int64(3), write: llmprotocol.Int64(2), uncached: llmprotocol.Int64(5)},
 			{name: "both aliases agree", details: `{"cached_tokens":3,"cache_write_tokens":2,"created_cache_tokens":2}`, read: llmprotocol.Int64(3), write: llmprotocol.Int64(2), uncached: llmprotocol.Int64(5)},
 			{name: "canonical null", details: `{"cached_tokens":3,"cache_write_tokens":null,"created_cache_tokens":0}`, read: llmprotocol.Int64(3), write: llmprotocol.Int64(0), uncached: llmprotocol.Int64(7)},
 			{name: "alias null", details: `{"cached_tokens":3,"cache_write_tokens":0,"created_cache_tokens":null}`, read: llmprotocol.Int64(3), write: llmprotocol.Int64(0), uncached: llmprotocol.Int64(7)},
@@ -59,13 +61,18 @@ func TestOpenAIResponseCacheUsagePresence(t *testing.T) {
 func TestOpenAIResponseCacheUsageRejectsInvalidEvidence(t *testing.T) {
 	for _, format := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
 		for name, details := range map[string]string{
-			"conflicting aliases": `{"cached_tokens":3,"cache_write_tokens":2,"created_cache_tokens":4}`,
-			"negative":            `{"created_cache_tokens":-1}`,
-			"fraction":            `{"created_cache_tokens":1.5}`,
-			"string":              `{"created_cache_tokens":"2"}`,
-			"unknown field":       `{"created_cache_tokens":2,"unknown_tokens":1}`,
-			"excessive read":      `{"cached_tokens":11}`,
-			"excessive subtotal":  `{"cached_tokens":9,"created_cache_tokens":2}`,
+			"conflicting aliases":            `{"cached_tokens":3,"cache_write_tokens":2,"created_cache_tokens":4}`,
+			"conflicting creation aliases":   `{"cached_tokens":3,"created_cache_tokens":0,"cache_creation_tokens":2}`,
+			"conflicting canonical creation": `{"cached_tokens":3,"cache_write_tokens":0,"cache_creation_tokens":2}`,
+			"negative creation":              `{"cache_creation_tokens":-1}`,
+			"fractional creation":            `{"cache_creation_tokens":1.5}`,
+			"string creation":                `{"cache_creation_tokens":"2"}`,
+			"negative":                       `{"created_cache_tokens":-1}`,
+			"fraction":                       `{"created_cache_tokens":1.5}`,
+			"string":                         `{"created_cache_tokens":"2"}`,
+			"unknown field":                  `{"created_cache_tokens":2,"unknown_tokens":1}`,
+			"excessive read":                 `{"cached_tokens":11}`,
+			"excessive subtotal":             `{"cached_tokens":9,"created_cache_tokens":2}`,
 		} {
 			for _, streaming := range []bool{false, true} {
 				t.Run(fmt.Sprintf("%s/%s/stream=%t", format, name, streaming), func(t *testing.T) {
@@ -80,7 +87,7 @@ func TestOpenAIResponseCacheUsageRejectsInvalidEvidence(t *testing.T) {
 					if err == nil {
 						t.Fatal("invalid cache accounting was accepted")
 					}
-					if name == "conflicting aliases" {
+					if strings.HasPrefix(name, "conflicting") {
 						assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "conflicting_cache_usage")
 					}
 				})
