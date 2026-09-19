@@ -378,6 +378,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		})
 		return
 	}
+	recordPrimaryOutputDigest(ctx, semanticResponse)
 	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {

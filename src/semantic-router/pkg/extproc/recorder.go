@@ -787,20 +787,33 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 // hashing a stored body on one side and a decoded answer on the other.
 const primaryResponseOutcomeSource = "primary_response"
 
-// attachPrimaryOutputDigest records the primary answer under the same contract
-// shadow arms use: the assistant text of the decoded response, not the encoded
-// protocol body. The stored body carries the JSON envelope, the response id and
-// usage, so hashing it would give two models different digests for the same
-// answer.
-func attachPrimaryOutputDigest(ctx *RequestContext, recorder *routerreplay.Recorder) {
-	if ctx.SemanticResponse == nil {
+// recordPrimaryOutputDigest hashes what the selected model answered, using the
+// same contract a shadow arm is hashed under: the assistant text of the decoded
+// response, never the encoded protocol body, which carries a JSON envelope, a
+// response id and a usage block that a shadow digest never sees.
+//
+// It runs before any response-stage plugin, because a body warning prepends
+// router text to the same response in place. Hashing after that would credit
+// the warning to the model and the two arms would stop comparing.
+func recordPrimaryOutputDigest(ctx *RequestContext, response *llmprotocol.Response) {
+	if ctx == nil || response == nil || ctx.PrimaryOutputDigest != "" {
 		return
 	}
-	text := semanticResponseText(*ctx.SemanticResponse)
+	text := semanticResponseText(*response)
 	if text == "" {
 		return
 	}
 	sum := sha256.Sum256([]byte(text))
+	ctx.PrimaryOutputDigest = hex.EncodeToString(sum[:])
+	ctx.PrimaryOutputChars = utf8.RuneCountInString(text)
+}
+
+// attachPrimaryOutputDigest persists the digest captured before the response
+// was rewritten, so an offline comparison reads both arms through one contract.
+func attachPrimaryOutputDigest(ctx *RequestContext, recorder *routerreplay.Recorder) {
+	if ctx.PrimaryOutputDigest == "" {
+		return
+	}
 	outcome := routerreplay.Outcome{
 		Timestamp: time.Now().UTC(),
 		Source:    primaryResponseOutcomeSource,
@@ -808,8 +821,8 @@ func attachPrimaryOutputDigest(ctx *RequestContext, recorder *routerreplay.Recor
 		TargetRef: ctx.VSRSelectedModel,
 		Verdict:   "completed",
 		Metadata: map[string]string{
-			"response_sha256": hex.EncodeToString(sum[:]),
-			"response_chars":  strconv.Itoa(utf8.RuneCountInString(text)),
+			"response_sha256": ctx.PrimaryOutputDigest,
+			"response_chars":  strconv.Itoa(ctx.PrimaryOutputChars),
 		},
 	}
 	if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
