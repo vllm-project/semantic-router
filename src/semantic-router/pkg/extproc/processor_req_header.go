@@ -24,6 +24,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// The skip-processing opt-out would bypass a listener's model allow-list,
 	// so a restricted listener does not honor it.
 	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled() && ctx.ListenerModels == nil)
+	r.ingestAgenticFacts(ctx)
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
 	if rejected := r.benchmarkConfigPrecondition(ctx); rejected != nil {
 		return rejected, nil
@@ -47,7 +48,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	// also short-circuit in the no-op path.
 	if ctx.SkipProcessing {
 		detectStreamingExpectation(ctx)
-		mutation := buildLooperInternalHeaderRemovalMutation()
+		mutation := buildLooperInternalHeaderRemovalMutation(r.agenticFactsHeaderNames()...)
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, headers.SelectedModel)
 		if isAzureOpenAIPath(path) {
 			mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
@@ -78,7 +79,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if requiresBody && v.RequestHeaders.GetEndOfStream() {
 		return r.rejectBodylessInferenceRequest(ctx), nil
 	}
-	mutation := buildIdentityEncodingRequestMutation()
+	mutation := buildIdentityEncodingRequestMutation(r.agenticFactsHeaderNames()...)
 	if isAzureOpenAIPath(path) {
 		// The Azure client key authenticates to the Router, never to a provider.
 		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
@@ -213,7 +214,7 @@ func extractHeaderValue(header interface {
 	return headerValue
 }
 
-func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
+func buildIdentityEncodingRequestMutation(extraRemovals ...string) *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
 		SetHeaders: []*core.HeaderValueOption{{
 			Header: &core.HeaderValue{
@@ -221,7 +222,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: append(looperInternalHeadersForRemoval(), extraRemovals...),
 	}
 }
 
