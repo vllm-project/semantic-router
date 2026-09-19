@@ -53,6 +53,10 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
+The [Vela model guide](../website/docs/tutorials/global/vela-models.md) explains
+the built-in model defaults, explicit older models, and opt-in long-context
+deployment settings. Model migration preserves the existing input budgets.
+
 `src/semantic-router/pkg/configschema/router-config-v0.3.schema.json` is the one
 checked-in schema generated from the Go configuration types and routing
 registries. Do not edit it directly. See the

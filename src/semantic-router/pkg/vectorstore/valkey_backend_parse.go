@@ -26,6 +26,21 @@ import (
 	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
+// indexName returns the FT index name for a vector store collection.
+func (v *ValkeyBackend) indexName(vectorStoreID string) string {
+	return v.collectionPrefix + vectorStoreID + "_idx"
+}
+
+// keyPrefix returns the hash key prefix for a vector store collection.
+func (v *ValkeyBackend) keyPrefix(vectorStoreID string) string {
+	return v.collectionPrefix + vectorStoreID + ":"
+}
+
+// chunkKey returns the full hash key for a chunk within a collection.
+func (v *ValkeyBackend) chunkKey(vectorStoreID string, chunkID string) string {
+	return v.keyPrefix(vectorStoreID) + chunkID
+}
+
 // float32SliceToBytes converts a float32 slice to a little-endian byte slice
 // suitable for Valkey vector storage.
 func float32SliceToBytes(floats []float32) []byte {

@@ -98,21 +98,31 @@ func (c *Classifier) evaluatePIISignalWithToolResults(ctx context.Context, resul
 	for _, key := range uniqueContents {
 		cached := cachedPIIContent{}
 		if key.source == config.PIISourceToolResult {
-			// Tool results can be much larger than the request text and can
-			// contain thousands of blocks. Stream chunks directly into the
-			// bounded inference loop so the request does not first materialize
-			// every chunk in memory.
-			fullyScanned := forEachUniquePIISignalChunk(key.content, func(chunk string) bool {
-				if !toolResultBudget.consumeInferenceCall() {
-					return false
+			// A configured native long-context/window policy owns the input
+			// geometry. Otherwise tool results can be much larger than the
+			// request text and can contain thousands of blocks, so stream the
+			// bounded chunks without materializing them all first.
+			fullyScanned := true
+			if c.Config.PIIModel.Window != nil || c.hasLongContextClassifier(config.SignalTypePII) {
+				if toolResultBudget.consumeInferenceCall() {
+					tokenResult, err := c.classifyPIITokens(ctx, key.content)
+					cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
+				} else {
+					fullyScanned = false
 				}
-				tokenResult, err := c.classifyPIITokens(ctx, chunk)
-				cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
-				return true
-			})
+			} else {
+				fullyScanned = forEachUniquePIISignalChunk(key.content, func(chunk string) bool {
+					if !toolResultBudget.consumeInferenceCall() {
+						return false
+					}
+					tokenResult, err := c.classifyPIITokens(ctx, chunk)
+					cached.results = append(cached.results, cachedPIIResult{tokenResult, err})
+					return true
+				})
+			}
 			cached.incomplete = !fullyScanned
 		} else {
-			chunks := piiSignalChunks(key.content)
+			chunks := c.piiInputs(key.content)
 			cached.results = make([]cachedPIIResult, 0, len(chunks))
 			for _, chunk := range chunks {
 				tokenResult, err := c.classifyPIITokens(ctx, chunk)
@@ -154,19 +164,19 @@ func (c *Classifier) evaluatePIIRule(rule config.PIIRule, piiText string, nonUse
 		return
 	}
 
-	entityTypes, status := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Source, rule.Threshold, piiCache)
+	entityTypes, status, errorCode := c.collectPIIEntityTypes(ruleContents, rule.Name, rule.Source, rule.Threshold, piiCache)
 	if rule.Source == config.PIISourceToolResult && toolResultScanIncomplete && status == piiScanClean {
 		status = piiScanIncomplete
 	}
 	if status != piiScanClean {
 		recordedStatus := status
-		// The remote-backend contract predates the request-budget distinction
-		// and exposes any partial legacy scan through pii_evaluation_failed.
-		// Tool-result scans retain the more precise incomplete code.
+		// Legacy scans retain the historical failed code for incomplete
+		// coverage, while tool-result scans expose the more precise incomplete
+		// code. A bounded provider error such as input_limit is always preserved.
 		if rule.Source != config.PIISourceToolResult {
 			recordedStatus = piiScanFailed
 		}
-		c.recordPIIRuleError(rule, recordedStatus, results, mu)
+		c.recordPIIRuleErrorCode(rule, recordedStatus, errorCode, results, mu)
 	}
 	deniedEntities := findDeniedEntities(entityTypes, rule.PIITypesAllowed)
 	errorDrivenMatch := false
@@ -209,9 +219,16 @@ const (
 )
 
 func (c *Classifier) recordPIIRuleError(rule config.PIIRule, status piiScanStatus, results *SignalResults, mu *sync.Mutex) {
+	c.recordPIIRuleErrorCode(rule, status, "", results, mu)
+}
+
+func (c *Classifier) recordPIIRuleErrorCode(rule config.PIIRule, status piiScanStatus, errorCode string, results *SignalResults, mu *sync.Mutex) {
 	code := piiEvaluationFailedCode
 	if status == piiScanIncomplete {
 		code = piiEvaluationIncompleteCode
+	}
+	if errorCode == signalInputLimitCode {
+		code = errorCode
 	}
 
 	mu.Lock()

@@ -9,12 +9,20 @@ weighted or lexicographic objective.
 | Factor | Source | Direction |
 | --- | --- | --- |
 | Quality | Versioned Overall, capability, or operator index | Higher is better |
-| Latency | Observed TPOT, falling back to TTFT, at the selected percentile | Lower is better |
+| Latency | Observed TTFT or TPOT at the selected percentile | Lower is better |
 | Cost | Input/output pricing applied to this request's token budget | Lower is better |
 | Load | Current in-flight requests in this Router process | Lower is better |
 
 Quality is resolved for the candidate's exact reasoning effort. A score from a
-different effort is never borrowed.
+different effort is never borrowed. Coverage is not part of the objective; when
+both the final objective value and intelligence score tie, higher coverage is
+the deterministic tie-breaker.
+
+Set `latency_metric: ttft` to favor a fast first token, or `tpot` to favor fast
+streaming after generation starts. With either setting, a missing measurement
+stays unknown; the other metric is never substituted. If no candidate has that
+measurement yet, lexicographic selection continues to the next priority.
+Omitting the setting preserves the existing TPOT-then-TTFT behavior.
 
 ## What Problem Does It Solve?
 
@@ -64,6 +72,11 @@ selector recovers to equal weights.
 `lexicographic` applies priorities in order. Each stage keeps candidates within
 the declared relative tolerance of the best observed value, then passes that
 band to the next stage.
+
+Only candidates surviving every priority remain eligible for later adaptation,
+session protection, and dispatch. These steps cannot restore a model excluded
+by an earlier quality or cost band. Recorded scores may still include excluded
+models to explain the selection.
 
 ```yaml
 algorithm:
@@ -128,6 +141,8 @@ quality:
 - `exclude` removes a candidate without qualifying exact-effort evidence.
 - `disable_quality` keeps the pool, but one missing candidate disables quality
   for the entire comparison. It never changes weights for only one model.
+- Selection diagnostics report the chosen intelligence score and coverage, or
+  mark intelligence evidence unavailable; missing evidence is not shown as zero.
 
 See [Open Intelligence Index](../../../benchmarking/open-intelligence-index) for
 the built-in hierarchy and [Custom evaluations](../../../benchmarking/custom-evaluations)
@@ -171,6 +186,7 @@ as unavailable for the same request.
 | `quality.min_score` | Off | Hard quality floor on the index scale |
 | `weights.*` | `0.25` | Balanced quality, latency, cost, and load weights |
 | `latency_percentile` | `95` | Observed latency percentile, from 1 to 100 |
+| `latency_metric` | TPOT, then TTFT | Compare `ttft` or `tpot` consistently across candidates |
 | `on_no_candidates` | `cheapest` | `cheapest`, `first`, or `fail` |
 
 Latency and load observations are local to each Router process. Replicas may

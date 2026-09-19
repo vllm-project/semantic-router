@@ -143,6 +143,7 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 		"modality":       signals.MatchedModalityRules,
 		"authz":          signals.MatchedAuthzRules,
 		"jailbreak":      signals.MatchedJailbreakRules,
+		"safety":         signals.MatchedSafetyRules,
 		"pii":            signals.MatchedPIIRules,
 		"kb":             signals.MatchedKBRules,
 		"conversation":   signals.MatchedConversationRules,
@@ -283,6 +284,9 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 ) (string, float64, entropy.ReasoningDecision, string, error) {
 	reasoningDecision := entropy.ReasoningDecision{}
 	categoryName := r.applyDecisionResultToContext(result, ctx)
+	if err := r.benchmarkCallLimitCheck(ctx); err != nil {
+		return "", 0, reasoningDecision, "", err
+	}
 	decisionName := result.Decision.Name
 	evaluationConfidence := result.Confidence
 
@@ -299,6 +303,10 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 		payload["confidence"] = evaluationConfidence
 	}
 	logging.ComponentDebugEvent("extproc", "decision_evaluated", payload)
+
+	if err := r.prepareDecisionContextOverflow(ctx, originalModel); err != nil {
+		return decisionName, evaluationConfidence, reasoningDecision, "", err
+	}
 
 	destination, terminal, actionErr := r.decisionRouteActionDestination(result.Decision, ctx)
 	if actionErr != nil {
@@ -330,7 +338,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 
 func (r *OpenAIRouter) applyDecisionResultToContext(result *decision.DecisionResult, ctx *RequestContext) string {
 	ctx.VSRSelectedDecision = result.Decision
-	if pluginCfg := r.Config.EffectiveRouterReplayConfig(result.Decision); pluginCfg != nil {
+	if pluginCfg := r.effectiveReplayConfigForRequest(ctx, result.Decision); pluginCfg != nil {
 		ctx.RouterReplayPluginConfig = pluginCfg
 	}
 	ctx.ShadowDispatchPluginConfig = result.Decision.GetShadowDispatchConfig()
@@ -364,9 +372,11 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 	ctx *RequestContext,
 ) (string, entropy.ReasoningDecision, error) {
 	if result.Decision.GetFastResponseConfig() != nil {
-		return r.selectFastResponseRuntimeModel(result.Decision, ctx), entropy.ReasoningDecision{}, nil
+		ctx.VSRSelectedModel = ""
+		ctx.VSRSelectionMethod = "fast_response"
+		return "", entropy.ReasoningDecision{}, nil
 	}
-	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, ctx.VSRContextTokenCount); ineligible > 0 {
+	if ineligible := r.contextIneligibleAlgorithmModelCount(result.Decision, ctx.VSRContextTokenCount); !decisionUsesAutomaticOutput(ctx.SemanticRequest, result.Decision) && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) && ineligible > 0 {
 		return "", entropy.ReasoningDecision{}, fmt.Errorf(
 			"%w: decision %q requires %d request tokens but %d explicitly configured algorithm model(s) have smaller context windows",
 			errNoContextEligibleDecisionModel,
@@ -375,16 +385,11 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 			ineligible,
 		)
 	}
-	if len(result.Decision.ModelRefs) == 0 {
+	if len(result.Decision.ModelRefs) == 0 && !selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
 		return r.selectDecisionDefaultRuntimeModel(result.Decision, decisionName, ctx)
 	}
 
-	eligibleModelRefs, err := r.contextEligibleDecisionModelRefs(
-		result.Decision.ModelRefs,
-		decisionName,
-		ctx.VSRContextTokenCount,
-		ctx,
-	)
+	eligibleModelRefs, err := r.decisionEligibleModelRefs(result.Decision, ctx)
 	if err != nil {
 		return "", entropy.ReasoningDecision{}, err
 	}
@@ -405,6 +410,14 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		result.Decision.CandidateIterations,
 		ctx,
 	)
+	if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
+		demand, _ := selection.EffectiveCandidateDemand(ctx.SemanticRequest, result.Decision)
+		selCtx.InputTokens = demand.InputTokens
+		if demand.MaxOutputTokens != nil {
+			selCtx.ExpectedOutputTokens = int(*demand.MaxOutputTokens)
+		}
+	}
+	selCtx.CandidateDemands = ctx.AutomaticCandidateDemands
 	selectedModelRef, usedMethod, err := r.selectModelFromCandidates(
 		selCtx,
 		result.Decision.Algorithm,
@@ -414,6 +427,9 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		return "", entropy.ReasoningDecision{}, err
 	}
 	if selectedModelRef == nil {
+		if selection.CandidateRequirementsEnabled(r.candidateRequirements(ctx)) {
+			return "", entropy.ReasoningDecision{}, selection.ErrNoEligibleCandidates
+		}
 		selectedModel := r.Config.DefaultModel
 		ctx.VSRSelectedModel = selectedModel
 		ctx.VSRSelectionMethod = "default"
@@ -442,19 +458,6 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		evaluationConfidence,
 		ctx,
 	), nil
-}
-
-func (r *OpenAIRouter) selectFastResponseRuntimeModel(
-	decisionConfig *config.Decision,
-	ctx *RequestContext,
-) string {
-	selectedModel := firstDecisionModelName(decisionConfig.ModelRefs)
-	if selectedModel == "" {
-		selectedModel = r.Config.DefaultModel
-	}
-	ctx.VSRSelectedModel = selectedModel
-	ctx.VSRSelectionMethod = "fast_response"
-	return selectedModel
 }
 
 func firstDecisionModelName(modelRefs []config.ModelRef) string {

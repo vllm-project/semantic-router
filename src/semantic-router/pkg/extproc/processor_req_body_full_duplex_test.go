@@ -95,3 +95,31 @@ func TestFullDuplex_FinalResponseFallsBackToAccumulatedBody(t *testing.T) {
 	assert.Equal(t, original, streamed.GetBody())
 	assert.True(t, streamed.GetEndOfStream())
 }
+
+func TestFullDuplex_FinalResponseOmitsHeaderMutation(t *testing.T) {
+	original := []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"hello"}]}`)
+	h := &StreamedBodyHandler{ctx: &RequestContext{FullDuplexRequestBody: true}}
+	h.buf.Write(original)
+	response := &ext_proc.ProcessingResponse{
+		Response: &ext_proc.ProcessingResponse_RequestBody{
+			RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{
+				Status: ext_proc.CommonResponse_CONTINUE,
+				HeaderMutation: &ext_proc.HeaderMutation{
+					RemoveHeaders: []string{"content-length", "x-user-openai-key"},
+				},
+				BodyMutation: &ext_proc.BodyMutation{Mutation: &ext_proc.BodyMutation_Body{
+					Body: original,
+				}},
+			}},
+		},
+	}
+
+	got := h.finalizeResponse(response)
+	common := got.GetRequestBody().GetResponse()
+	require.NotNil(t, common)
+	assert.Nil(t, common.GetHeaderMutation(), "header mutation must be nil in full-duplex streamed mode")
+	streamed := common.GetBodyMutation().GetStreamedResponse()
+	require.NotNil(t, streamed)
+	assert.Equal(t, original, streamed.GetBody())
+	assert.True(t, streamed.GetEndOfStream())
+}

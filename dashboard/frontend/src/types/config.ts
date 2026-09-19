@@ -210,6 +210,7 @@ export interface ClassifierSignal {
   model_path?: string
   labels: string[]
   instructions?: string
+  disable_rationale?: boolean
   use_cpu?: boolean
 }
 
@@ -268,6 +269,21 @@ export interface JailbreakSignal {
   description?: string
 }
 
+export interface SafetySignal {
+  name: string
+  description?: string
+  model?: string
+  labels?: string[]
+  unsafe_labels?: string[]
+  threshold: number
+  hazard?: {
+    model?: string
+    labels: string[]
+    categories: string[]
+    threshold: number
+  }
+}
+
 export interface PIISignal {
   name: string
   threshold: number
@@ -292,6 +308,7 @@ export interface Signals {
   modality?: ModalitySignal[]
   role_bindings?: RoleBindingSignal[]
   jailbreak?: JailbreakSignal[]
+  safety?: SafetySignal[]
   hallucination?: HallucinationSignal[]
   pii?: PIISignal[]
   conversation?: ConversationSignal[]
@@ -319,6 +336,7 @@ export type DecisionConditionType =
   | 'modality'
   | 'authz'
   | 'jailbreak'
+  | 'safety'
   | 'pii'
   | 'kb'
   | 'conversation'

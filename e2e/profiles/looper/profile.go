@@ -64,6 +64,14 @@ func (p *Profile) GetTestCases() []string {
 		"looper-fusion-analysis-modes",
 		"looper-fusion-usable-quorum",
 		"looper-confidence-telemetry",
+		"looper-fusion-quorum-fallback",
+		"looper-fusion-quorum-zero-usable",
+		"looper-fusion-quorum-fallback-failure",
+		"looper-fusion-quorum-budget-exhausted",
+		"looper-fusion-quorum-deadline-cancellation",
+		"looper-fusion-quorum-fallback-anthropic",
+		"looper-fusion-quorum-fallback-responses",
+		"looper-fusion-quorum-caller-cancellation",
 	}
 }
 

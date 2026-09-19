@@ -100,11 +100,11 @@ RAG 和 memory 证据默认受类型化来源保护。仅当该路由明确接�
 
 ## 管理与预览 {#management-and-preview}
 
-- `GET /api/v1/context-compression/capabilities`
-- `GET /api/v1/context-compression/health`
-- `GET /api/v1/context-compression/stats`
-- `POST /api/v1/context-compression/preview`
-- `POST /api/v1/context-compression/recovery/invalidate`
+- `GET /api/v1/plugins/context_compression/capabilities`
+- `GET /api/v1/plugins/context_compression/health`
+- `GET /api/v1/observability/plugins/context_compression/stats`
+- `POST /api/v1/plugins/context_compression/preview`
+- `POST /api/v1/storage/context-recovery/invalidate`
 
 预览只返回计划、目标索引、token 计数、分数、警告和跳过原因。它永不返回源内容或被省略内容，并需要 `compression.preview`。限定范围的恢复失效需要 `compression.manage`；它接受受信任的配方、决策、用户和请求坐标，并且永不返回派生范围或恢复键。
 

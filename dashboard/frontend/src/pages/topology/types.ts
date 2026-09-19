@@ -1,6 +1,7 @@
 // topology/types.ts - Topology Page Type Definitions
 
 import { ReactNode } from 'react'
+import type { SafetySignal } from '../../types/config'
 import type {
   AlgorithmType as CanonicalAlgorithmType,
   PluginType as CanonicalPluginType,
@@ -649,6 +650,7 @@ export interface ConfigData {
       }>
       description?: string
     }>
+    safety?: SafetySignal[]
     jailbreak?: Array<{
       name: string
       threshold?: number

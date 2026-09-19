@@ -29,6 +29,7 @@ export const assertPlaygroundRequestSize = (request: Record<string, unknown>): v
 export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
   'Content-Type': 'application/json',
   'x-session-id': conversationId,
+  'x-conversation-id': conversationId,
   'x-vsr-debug': 'true',
 })
 
@@ -64,6 +65,7 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-matched-modality',
   'x-vsr-matched-authz',
   'x-vsr-matched-jailbreak',
+  'x-vsr-matched-safety',
   'x-vsr-matched-hallucination',
   'x-vsr-matched-pii',
   'x-vsr-matched-kb',

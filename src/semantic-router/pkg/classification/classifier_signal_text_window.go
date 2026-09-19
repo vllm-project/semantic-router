@@ -357,3 +357,94 @@ func uniqueSignalChunks(chunks []string) []string {
 	}
 	return unique
 }
+
+// Explicit native budgets above 512 opt the trained task into full-context
+// inference. Other signals keep their own established input policies.
+func (c *Classifier) hasLongContextClassifier(signalType string) bool {
+	if c == nil || c.Config == nil {
+		return false
+	}
+	consumer := classifierInputConsumer(signalType)
+	if binding, exists := c.Config.ModelBindings[consumer]; exists {
+		deployment, exists := c.Config.ModelDeployments[binding.Deployment]
+		return exists && deployment.Provider != "http" && deployment.Input.MaxTokens > 512
+	}
+	switch signalType {
+	case config.SignalTypeEmbedding:
+		return c.Config.EmbeddingConfig.FullContext
+	case config.SignalTypeComplexity:
+		// Local Complexity uses the semantic embedding provider's input policy.
+		// An independent remote scorer retains its existing bounded input.
+		return c.Config.ComplexityModel.Backend == nil && c.Config.EmbeddingConfig.FullContext
+	case config.SignalTypeDomain:
+		variant, _ := c.Config.CategoryModel.EffectiveVariant()
+		return c.Config.CategoryModel.Backend == nil && variant == config.CategoryVariantMmBERT32K && c.Config.CategoryModel.MaxSequenceLength > 512
+	case config.SignalTypeFactCheck:
+		return c.Config.HallucinationMitigation.FactCheckModel.UseMmBERT32K && c.Config.HallucinationMitigation.FactCheckModel.MaxSequenceLength > 512
+	case config.SignalTypeUserFeedback:
+		return c.Config.FeedbackDetector.UseMmBERT32K && c.Config.FeedbackDetector.MaxSequenceLength > 512
+	case config.SignalTypePII:
+		return c.Config.PIIModel.Backend == nil && c.Config.PIIModel.UseMmBERT32K && c.Config.PIIModel.MaxSequenceLength > 512
+	case config.SignalTypeJailbreak:
+		return c.Config.PromptGuard.Protocol == "" && c.Config.PromptGuard.Variant == config.PromptGuardVariantMmBERT32K && c.Config.PromptGuard.MaxSequenceLength > 512
+	case config.SignalTypeModality:
+		return c.Config.ModalityDetector.Classifier != nil && c.Config.ModalityDetector.Classifier.MaxSequenceLength > 512
+	}
+	return false
+}
+
+func (c *Classifier) piiInputSpans(text string) []signalChunkSpan {
+	if ((c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII)) && text != "" {
+		return []signalChunkSpan{{Text: text}}
+	}
+	return piiSignalChunkSpans(text)
+}
+
+func (c *Classifier) piiInputs(text string) []string {
+	if (c != nil && c.Config != nil && c.Config.PIIModel.Window != nil) || c.hasLongContextClassifier(config.SignalTypePII) {
+		return []string{text}
+	}
+	return piiSignalChunks(text)
+}
+
+func (c *Classifier) jailbreakInputs(text string) []string {
+	fullContext := c.hasLongContextClassifier(config.SignalTypeJailbreak)
+	if c != nil && c.models != nil && c.models.jailbreakContrastiveFullContext != nil {
+		fullContext = *c.models.jailbreakContrastiveFullContext
+	}
+	if fullContext {
+		return []string{text}
+	}
+	return jailbreakSignalChunks(text)
+}
+
+// Native token windows own tokenization and the total input limit. Decoded
+// text chunks would change both windows and overflow checks. Contrastive rules
+// continue using their existing text-window policy.
+func (c *Classifier) jailbreakModelInputs(text string) []string {
+	if text == "" {
+		return nil
+	}
+	if c != nil && c.Config != nil && c.Config.PromptGuard.Window != nil {
+		return []string{text}
+	}
+	return c.jailbreakInputs(text)
+}
+
+func classifierInputConsumer(signalType string) string {
+	switch signalType {
+	case config.SignalTypeDomain:
+		return "domain_classifier"
+	case config.SignalTypeFactCheck:
+		return "fact_check_classifier"
+	case config.SignalTypeUserFeedback:
+		return "feedback_detector"
+	case config.SignalTypePII:
+		return "pii_classifier"
+	case config.SignalTypeJailbreak:
+		return "prompt_guard"
+	case config.SignalTypeModality:
+		return "modality_detector"
+	}
+	return ""
+}

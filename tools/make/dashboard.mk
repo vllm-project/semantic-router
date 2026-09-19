@@ -6,27 +6,30 @@ DASHBOARD_DIR := dashboard
 DASHBOARD_FRONTEND_DIR := $(DASHBOARD_DIR)/frontend
 DASHBOARD_BACKEND_DIR := $(DASHBOARD_DIR)/backend
 DASHBOARD_WIZMAP_DIR := $(DASHBOARD_DIR)/wizmap
-DASHBOARD_WASM_DIR := src/semantic-router/cmd/wasm
+DASHBOARD_WASM_DIR := $(DASHBOARD_DIR)/wasm
+DASHBOARD_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/dashboard
 
 ##@ Dashboard
 
 ## Install and Development
 
-dashboard-install: ## Install dashboard dependencies (frontend npm + backend go mod)
-	@$(LOG_TARGET)
-	@echo "Installing frontend dependencies..."
-	cd $(DASHBOARD_FRONTEND_DIR) && npm install
-	@echo "Installing Knowledge Map dependencies..."
-	cd $(DASHBOARD_WIZMAP_DIR) && npm install
-	@echo "Tidying backend dependencies..."
-	cd $(DASHBOARD_BACKEND_DIR) && go mod tidy
-	@echo "dashboard dependencies installed"
+dashboard-frontend-deps: ## Install the locked frontend dependencies once per make invocation
+	@cd $(DASHBOARD_FRONTEND_DIR) && npm ci --no-audit --no-fund
+
+dashboard-wizmap-deps: ## Install the locked Knowledge Map dependencies once per make invocation
+	@cd $(DASHBOARD_WIZMAP_DIR) && npm ci --no-audit --no-fund
+
+dashboard-install: dashboard-frontend-deps dashboard-wizmap-deps ## Install locked Dashboard dependencies
+	@cd $(DASHBOARD_BACKEND_DIR) && go mod download
 
 dashboard-build-wasm: ## Build dashboard DSL compiler WASM assets
 	@$(LOG_TARGET)
 	@echo "Building dashboard WASM assets..."
 	@$(MAKE) -C $(DASHBOARD_WASM_DIR) build
 	@echo "dashboard WASM assets completed"
+
+dashboard-test-wasm: dashboard-build-wasm ## Test the dashboard DSL compiler in the Go and Node WASM runtimes
+	@$(MAKE) -C $(DASHBOARD_WASM_DIR) test-built WASM_REPORT_DIR="$(DASHBOARD_TEST_REPORT_DIR)/wasm"
 
 dashboard-dev-frontend: dashboard-install dashboard-build-wasm ## Start dashboard frontend in dev mode
 	@$(LOG_TARGET)
@@ -39,10 +42,15 @@ dashboard-dev-backend: ## Start dashboard backend in dev mode
 
 ## Build
 
-dashboard-build-frontend: dashboard-install dashboard-build-wasm ## Build dashboard frontend for production
+dashboard-build-wizmap: dashboard-wizmap-deps ## Build the Knowledge Map once for checks and embedding
+	@$(LOG_TARGET)
+	cd $(DASHBOARD_WIZMAP_DIR) && npm run build
+
+dashboard-build-frontend: dashboard-install dashboard-build-wasm dashboard-build-wizmap ## Build dashboard frontend for production
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && npm run build
-	cd $(DASHBOARD_WIZMAP_DIR) && npm run build:embedded
+	@mkdir -p $(DASHBOARD_FRONTEND_DIR)/dist/embedded/wizmap
+	@cp -R $(DASHBOARD_WIZMAP_DIR)/dist/. $(DASHBOARD_FRONTEND_DIR)/dist/embedded/wizmap/
 	@echo "dashboard/frontend build completed"
 
 dashboard-build-backend: ## Build dashboard backend binary
@@ -65,10 +73,10 @@ dashboard-build: dashboard-build-frontend dashboard-build-backend ## Build dashb
 
 ## Lint and Type Check
 
-dashboard-lint: ## Lint dashboard frontend and backend
+dashboard-lint: dashboard-frontend-deps ## Lint dashboard frontend and backend
 	@$(LOG_TARGET)
 	@echo "Running ESLint for dashboard frontend..."
-	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run lint
+	cd $(DASHBOARD_FRONTEND_DIR) && npm run lint
 	@echo "dashboard/frontend lint passed"
 	@echo "Running golangci-lint for dashboard backend..."
 	@cd $(DASHBOARD_BACKEND_DIR) && \
@@ -78,10 +86,10 @@ dashboard-lint: ## Lint dashboard frontend and backend
 		golangci-lint run ./... --config ../../tools/linter/go/.golangci.yml
 	@echo "dashboard/backend lint passed"
 
-dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
+dashboard-lint-fix: dashboard-frontend-deps ## Auto-fix lint issues in dashboard (frontend + backend)
 	@$(LOG_TARGET)
 	@echo "Running ESLint fix for dashboard frontend..."
-	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run lint -- --fix || true
+	cd $(DASHBOARD_FRONTEND_DIR) && npm run lint -- --fix || true
 	@echo "dashboard/frontend lint fix applied"
 	@echo "Running golangci-lint fix for dashboard backend..."
 	@cd $(DASHBOARD_BACKEND_DIR) && \
@@ -91,24 +99,25 @@ dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
 		golangci-lint run ./... --fix --config ../../tools/linter/go/.golangci.yml
 	@echo "dashboard/backend lint fix applied"
 
-dashboard-type-check: ## Run TypeScript type checking for dashboard frontend
+dashboard-type-check: dashboard-frontend-deps dashboard-build-wizmap ## Type-check the frontend and compile the Knowledge Map
 	@$(LOG_TARGET)
-	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run type-check
-	cd $(DASHBOARD_WIZMAP_DIR) && npm ci && npm run build >/dev/null
+	cd $(DASHBOARD_FRONTEND_DIR) && npm run type-check
 	@echo "dashboard/frontend type-check passed"
 
-dashboard-test-frontend: ## Run dashboard frontend unit tests
+dashboard-test-frontend: dashboard-frontend-deps ## Run dashboard frontend unit tests
 	@$(LOG_TARGET)
-	cd $(DASHBOARD_FRONTEND_DIR) && npm ci && npm run test:unit
+	@mkdir -p "$(DASHBOARD_TEST_REPORT_DIR)"
+	cd $(DASHBOARD_FRONTEND_DIR) && VITEST_EVIDENCE_PATH="$(DASHBOARD_TEST_REPORT_DIR)/frontend.json" \
+		npm run test:unit -- --reporter=default --reporter=junit --reporter=../../tools/ci/vitest_evidence_reporter.mjs --outputFile.junit="$(DASHBOARD_TEST_REPORT_DIR)/frontend.xml"
 	@echo "dashboard/frontend unit tests passed"
 
-dashboard-test-e2e-evaluation: ## Run Evaluation browser acceptance in Chromium
+dashboard-test-e2e-evaluation: dashboard-frontend-deps ## Run sr-bench browser acceptance in Chromium
 	@$(LOG_TARGET)
+	@mkdir -p "$(DASHBOARD_TEST_REPORT_DIR)"
 	cd $(DASHBOARD_FRONTEND_DIR) && \
-		npm ci && \
 		npx playwright install --with-deps chromium && \
-		npm run test:e2e:evaluation
-	@echo "dashboard/frontend Evaluation browser acceptance passed"
+		PLAYWRIGHT_JUNIT_OUTPUT_FILE="$(DASHBOARD_TEST_REPORT_DIR)/browser.xml" npm run test:e2e:evaluation -- --reporter=html,junit
+	@echo "dashboard/frontend sr-bench browser acceptance passed"
 
 dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 	@$(LOG_TARGET)
@@ -123,13 +132,12 @@ dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 
 dashboard-test-backend: vllm-sr-install-cli ## Run dashboard backend Go tests (run from repo root: make dashboard-test-backend)
 	@$(LOG_TARGET)
+	@mkdir -p "$(DASHBOARD_TEST_REPORT_DIR)"
 	cd $(DASHBOARD_BACKEND_DIR) && \
-		VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-$(AGENT_PYTHON)}" go test ./...
+		go test -json -list '^(Test|Fuzz|Example)' ./... > "$(DASHBOARD_TEST_REPORT_DIR)/inventory.jsonl" && \
+		go test -json -count=1 ./... > "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl"
 
-dashboard-evaluation-catalog-check: ## Check generated Evaluation catalog mirrors
-	@python3 tools/ci/sync_evaluation_catalogs.py --check
-
-dashboard-check: dashboard-evaluation-catalog-check dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (catalogs, lint, type-check, frontend + backend tests, go mod tidy)
+dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend + backend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
 
@@ -146,9 +154,8 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 	rm -rf $(DASHBOARD_BACKEND_DIR)/bin
 	@echo "dashboard cleaned"
 
-.PHONY: dashboard-install dashboard-dev-frontend dashboard-dev-backend \
-	dashboard-build dashboard-build-wasm dashboard-build-frontend dashboard-build-backend \
+.PHONY: dashboard-frontend-deps dashboard-wizmap-deps dashboard-install dashboard-dev-frontend dashboard-dev-backend \
+	dashboard-build dashboard-build-wasm dashboard-test-wasm dashboard-build-wizmap dashboard-build-frontend dashboard-build-backend \
 	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation \
-	dashboard-evaluation-catalog-check \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
 	dashboard-check dashboard-clean

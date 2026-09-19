@@ -174,5 +174,5 @@ func TestFinalizeDecisionEvaluationWithoutActionPreservesPinnedModel(t *testing.
 
 	_, _, _, selectedModel, err := router.finalizeDecisionEvaluation(result, "pinned-model", "attack text", ctx)
 	assert.NoError(t, err)
-	assert.Equal(t, "", selectedModel)
+	assert.Empty(t, selectedModel)
 }

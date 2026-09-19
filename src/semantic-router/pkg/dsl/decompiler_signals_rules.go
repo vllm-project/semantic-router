@@ -55,6 +55,9 @@ func (d *decompiler) decompileKeywordSignals() {
 func (d *decompiler) decompileEmbeddingSignals() {
 	for _, emb := range d.cfg.EmbeddingRules {
 		d.write("SIGNAL embedding %s {\n", quoteName(emb.Name))
+		if emb.PrototypeScoring != nil {
+			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(emb.PrototypeScoring))))
+		}
 		if emb.SimilarityThreshold != 0 {
 			d.write("  threshold: %v\n", emb.SimilarityThreshold)
 		}
@@ -232,6 +235,9 @@ func (d *decompiler) decompileClassifierSignals() {
 		if rule.Instructions != "" {
 			d.write("  instructions: %q\n", rule.Instructions)
 		}
+		if rule.DisableRationale {
+			d.write("  disable_rationale: true\n")
+		}
 		if rule.UseCPU {
 			d.write("  use_cpu: true\n")
 		}
@@ -242,6 +248,9 @@ func (d *decompiler) decompileClassifierSignals() {
 func (d *decompiler) decompileComplexitySignals() {
 	for _, comp := range d.cfg.ComplexityRules {
 		d.write("SIGNAL complexity %s {\n", quoteName(comp.Name))
+		if comp.PrototypeScoring != nil {
+			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(comp.PrototypeScoring))))
+		}
 		if comp.Threshold != 0 {
 			d.write("  threshold: %v\n", comp.Threshold)
 		}

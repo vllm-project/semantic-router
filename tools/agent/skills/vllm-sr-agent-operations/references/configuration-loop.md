@@ -1,6 +1,6 @@
 # Configuration and Recipe details
 
-Use these details with the [operations skill](../SKILL.md). Start with installed
+Use these details with the [operations skill](https://vllm-sr.ai/install/agent/vllm-sr/SKILL.md). Start with installed
 help and the target Router's discovery; set `ROUTER_ORIGIN` to its actual
 management origin. An inference listener is a separate endpoint.
 
@@ -24,8 +24,21 @@ A new stack has no remote revision to plan against. Validate locally, launch
 with the chosen stack settings, then discover readiness and the live schema.
 Never accidentally plan against another stack on a default port.
 
-For a running Router, preserve unrelated fields and choose replacement of a
-complete document or merging an intentional partial patch explicitly:
+For a running Router, save its current canonical configuration and derive the
+candidate from it:
+
+```bash
+vllm-sr config get --format yaml --endpoint "$ROUTER_ORIGIN" > active.yaml
+cp active.yaml candidate.yaml
+```
+
+Edit only intended fields in `candidate.yaml`. An older launch file can omit
+defaults materialized in the live document, such as tracing settings; replacing
+from that file can introduce unrelated differences and `RESTART_REQUIRED`.
+Inspect the plan's changes and reconcile them with a fresh canonical snapshot
+before deciding a restart is needed. Do not discard an intentional change merely
+because it requires a restart. Choose replacement of a complete document or
+merging an intentional partial patch explicitly:
 
 ```bash
 vllm-sr config validate --config candidate.yaml --endpoint "$ROUTER_ORIGIN"
@@ -68,4 +81,4 @@ Discover the activated Recipe's published entrypoint from the running Router.
 `vllm-sr/auto` is reserved and cannot be rebound to that Recipe. Use
 `recipe validate`, `recipe plan`, and `recipe apply` only after checking their
 installed help and target contract. Verify the active binding using both
-preview and real routed requests; see [evaluation details](evaluation-loop.md).
+preview and real routed requests; see [evaluation details](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md).

@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -204,6 +206,8 @@ type robustnessPolicy struct {
 }
 
 type probeDecision struct {
+	ExpectedSignalValues    yaml.Node `yaml:"expected_signal_values"`
+	signalValueBounds       map[string]SignalValueBounds
 	ExpectedSelectionStatus *string             `yaml:"expected_selection_status"`
 	ID                      string              `yaml:"id"`
 	ExpectedDecision        string              `yaml:"expected_decision"`
@@ -224,6 +228,8 @@ type probeDecision struct {
 }
 
 type probeVariant struct {
+	ExpectedSignalValues    yaml.Node `yaml:"expected_signal_values"`
+	signalValueBounds       map[string]SignalValueBounds
 	ExpectedSelectionStatus *string                `yaml:"expected_selection_status"`
 	ID                      string                 `yaml:"id"`
 	DisplayPrompt           string                 `yaml:"display_prompt"`
@@ -336,6 +342,11 @@ func validateProbeDecision(
 		*issues = append(*issues, label+".expected_decision is required")
 	}
 	validateExpectedSelectionStatus(decision.ExpectedSelectionStatus, label, issues)
+	var valueErr error
+	decision.signalValueBounds, valueErr = parseSignalValueExpectations(decision.ExpectedSignalValues)
+	if valueErr != nil {
+		*issues = append(*issues, label+"."+valueErr.Error())
+	}
 	decision.PluginMatch = defaultMatchMode(decision.PluginMatch)
 	decision.SignalMatch = defaultMatchMode(decision.SignalMatch)
 	if !validMatchMode(decision.PluginMatch) {
@@ -368,6 +379,11 @@ func validateProbeVariant(
 	label := fmt.Sprintf("%s.variants[%d]", decisionLabel, variantIndex)
 	validateProbeVariantIdentity(decisionID, variant.ID, label, probeIDs, issues)
 	validateExpectedSelectionStatus(variant.ExpectedSelectionStatus, label, issues)
+	var valueErr error
+	variant.signalValueBounds, valueErr = parseSignalValueExpectations(variant.ExpectedSignalValues)
+	if valueErr != nil {
+		*issues = append(*issues, label+"."+valueErr.Error())
+	}
 	variant.Query = strings.TrimSpace(variant.Query)
 	variant.DisplayPrompt = strings.TrimSpace(variant.DisplayPrompt)
 	if utf8.RuneCountInString(variant.DisplayPrompt) > 2_000 {
@@ -383,7 +399,7 @@ func validateExpectedSelectionStatus(status *string, label string, issues *[]str
 		return
 	}
 	switch *status {
-	case "selected", "planned_final", "fallback", "execution_required", "unavailable", "failed":
+	case "selected", "planned_final", "fallback", "execution_required", "unavailable", "failed", "not_required":
 		return
 	default:
 		*issues = append(*issues, label+".expected_selection_status is invalid")
@@ -585,6 +601,7 @@ func expectedAssertionsForDecision(decision probeDecision) ExpectedAssertions {
 		ForbiddenPlugins: nonNilStrings(decision.ForbiddenPlugins),
 		PluginMatch:      decision.PluginMatch,
 		Signals:          nonNilSignalMap(decision.ExpectedSignals),
+		SignalValues:     cloneSignalValueBounds(decision.signalValueBounds),
 		ForbiddenSignals: nonNilSignalMap(decision.ForbiddenSignals),
 		SignalMatch:      decision.SignalMatch,
 	}
@@ -601,6 +618,9 @@ func flattenProbe(
 	}
 	if variant.ExpectedSignals != nil {
 		expected.Signals = nonNilSignalMap(variant.ExpectedSignals)
+	}
+	if variant.signalValueBounds != nil {
+		expected.SignalValues = cloneSignalValueBounds(variant.signalValueBounds)
 	}
 	shapes, preview := probePresentation(variant)
 	return ProbeDetail{

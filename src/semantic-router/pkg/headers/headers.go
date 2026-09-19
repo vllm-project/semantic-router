@@ -271,6 +271,9 @@ const (
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
 
+	// VSRMatchedSafety contains matched content safety rule names.
+	VSRMatchedSafety = "x-vsr-matched-safety"
+
 	// VSRMatchedHallucination contains comma-separated list of matched
 	// hallucination rule names. Written in the response body phase, once the
 	// model's answer has been checked against its grounding context.
@@ -371,6 +374,11 @@ const (
 	// UserMiniMaxKey carries the user's MiniMax API key, injected by the auth backend.
 	// Used by the ext_proc when routing requests to MiniMax models.
 	UserMiniMaxKey = "x-user-minimax-key"
+
+	// UserCloudflareWorkersAIKey carries the user's Cloudflare Workors AI API token,
+	// injected by the auth backend. The endpoint is account-scoped, so the account
+	// identifier travels in the operator's base URL and only the token is per user.
+	UserCloudflareWorkersAIKey = "x-user-cloudflare-workers-ai-key"
 
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).

@@ -63,8 +63,8 @@ global:
       milvus:
         address: host.docker.internal:19530
         collection: memory_test_ci
-        dimension: 384
-      embedding_model: bert
+        dimension: 768
+      embedding_model: mmbert
       default_retrieval_limit: 5
       default_similarity_threshold: 0.60
       redis_cache:
@@ -75,6 +75,13 @@ global:
         key_prefix: "memory_cache:"
         password: ""
   model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
+        use_cpu: true
+        embedding_config:
+          model_type: mmbert
+          target_dimension: 768
     external:
       - llm_provider: vllm
         model_role: memory_rewrite

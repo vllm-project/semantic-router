@@ -18,6 +18,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -33,6 +34,7 @@ import (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
+	rerankers            map[config.RecipeName]modelruntime.PairScorer
 	Embeddings           *embedding.Set
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
@@ -79,6 +81,8 @@ type OpenAIRouter struct {
 	ProtocolCodecs       *protocolcodec.Registry
 	looperClient         *looper.Client
 
+	memoryPersistence *memory.PersistenceRunner
+
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).
 	CredentialResolver *authz.CredentialResolver
@@ -91,13 +95,16 @@ type OpenAIRouter struct {
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
 
-	routerLearningMu      sync.Mutex
-	routerLearningRuntime *routerLearningRuntime
-	generation            *routerGeneration
-	// Process registers detached work before releasing its generation lease.
-	backgroundTasks         sync.WaitGroup
+	routerLearningMu        sync.Mutex
+	routerLearningRuntime   *routerLearningRuntime
+	generation              *routerGeneration
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
+
+	// WorkflowStateService owns the shared workflow tool-state store so that
+	// pause/resume works across independent HTTP requests without leaking
+	// backend connections. Closed with the rest of the generation resources.
+	WorkflowStateService *looper.WorkflowStateService
 
 	resources *resourceScope
 }
@@ -106,7 +113,6 @@ func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
 	}
-	r.backgroundTasks.Wait()
 	return r.resources.close()
 }
 

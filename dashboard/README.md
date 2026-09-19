@@ -56,18 +56,17 @@ make dashboard-test-e2e-evaluation
 make dashboard-test-backend
 ```
 
-The required `Dashboard` CI workflow runs `dashboard-check`, then the Evaluation
+The required `Dashboard` CI workflow runs `dashboard-check`, then the sr-bench
 browser acceptance target shown above. Both gates are available locally; run
 `dashboard-check` before every Dashboard change and the browser acceptance gate
-when changing Evaluation UI or workflows. `dashboard-check` runs, in order:
+when changing sr-bench UI or workflows. `dashboard-check` runs, in order:
 
 | Step | What it covers |
 | --- | --- |
-| `dashboard-evaluation-catalog-check` | Verifies the generated Evaluation catalog mirrors match their canonical CLI sources. |
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
 | `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
 | `dashboard-test-frontend` | Frontend unit tests |
-| `dashboard-test-backend` | `go test ./...` on `dashboard/backend`, including the real Go → sandboxed Python Evaluation worker contract |
+| `dashboard-test-backend` | Go test inventory and JSON test evidence on `dashboard/backend`, including authentication, ownership forwarding and the sr-bench service proxy |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
 
 The dashboard backend is a **separate Go module**, so `go test ./...` from the
@@ -119,49 +118,72 @@ Feature controls:
 | `DASHBOARD_RUNTIME_CONFIG_WRITABLE` | Allow mutation of the mounted runtime config surface. |
 | `DASHBOARD_RECIPE_STORE_WRITABLE` | Allow Recipe package import. |
 | `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
-| `EVALUATION_ENABLED` | Enable evaluation jobs. |
-| `EVALUATION_DATA_DIR` | Durable Evaluation Plane artifact store; default `./data/evaluation`. |
-| `EVALUATION_DEPLOYMENTS_DIR` | Optional read-only directory containing a strict `evaluation-deployments.v1` `registry.json` plus relative deployment configs. Enables deployment-scoped baseline and candidate targets; unset preserves the single-runtime target. |
-| `EVALUATION_ENVOY_API_KEY_ENV` | Optional server-owned environment variable name containing the Envoy evaluation credential; the browser never supplies or receives it. |
-| `EVALUATION_AGENT_TASK_LEDGER_URL`, `_API_KEY_ENV`, `_TIMEOUT` | Optional typed server-owned endpoint for a complete sealed provider-observed agent-task ledger. Its credential and URL remain outside public catalog responses and worker argv. |
-| `VLLM_SR_SOURCE_REVISION` | Immutable source identity required to create an evaluation run: a full 40-character Git commit or `sha256:` source-tree digest. Dashboard images set this from their build argument. |
+| `SR_BENCH_URL` | Server-owned sr-bench service origin; default `http://127.0.0.1:8090`. |
+| `SR_BENCH_TOKEN_ENV` | Environment variable containing the service token; default `SR_BENCH_TOKEN`. The browser never receives this token. |
 | `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
 | `ML_SERVICE_URL` | Use an external ML service instead of local subprocesses. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
-Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
-`DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
-Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as
-writable persistent storage so complete run bundles survive container restarts.
-The Evaluation Plane fails closed unless its store and run directories are
-private to the Dashboard process (`0700` directories and `0600` bundle files).
-The Dashboard container defaults this store to `/app/data/evaluation`; its
-entrypoint excludes that subtree from shared-data permission widening and
-reapplies the private modes before every restart.
+OpenClaw provisioning accepts optional `skills` entries as exact IDs from the
+server's skills catalog (`GET /api/openclaw/skills`). IDs use lowercase ASCII
+letters or digits, with single hyphens or underscores separating groups. Paths,
+case or whitespace aliases, and unknown IDs return HTTP 400 before provisioning
+starts, including for asynchronous requests. Malformed catalog JSON returns
+HTTP 500 when skills are selected. Omitting skills or selecting an empty list
+still provisions without skills. Administrators can supply a catalog with
+`OPENCLAW_SKILLS_PATH`.
 
-For a local multi-deployment experiment, export
-`EVALUATION_DEPLOYMENTS_DIR` before the canonical `vllm-sr serve` command. The
-CLI validates every host path component, mounts the directory read-only into
-Dashboard only, and rewrites the environment value to the container path.
-Router and Envoy do not inherit the mount or variable. The registry accepts
-only deployment ID/name/description, a confined relative config path, and exact
-Router/Envoy origins. It rejects symlinks, traversal, unknown fields,
-duplicates, and literal credential or ledger configuration. Public catalog
-responses expose the safe deployment label but never origins, paths, or secret
-references. See the [Evaluation Plane guide](../website/docs/benchmarking/evaluation-plane.md#address-baseline-and-candidate-deployments-together)
-for the versioned schema and controlled-pair contract.
+## sr-bench evaluation
 
-Dashboard image builds accept `VLLM_SR_SOURCE_REVISION` as a build argument and
-embed it in the runtime image. The Dockerfile default is `unavailable`, which
-keeps the Dashboard usable but makes Evaluation Plane run creation fail closed;
-release and CI builds must pass an immutable full commit or source-tree digest.
-Repository Make targets derive the full commit from a clean checkout and a
-deterministic `sha256:` source-tree digest from tracked or untracked local
-changes. Git-ignored caches and environments are excluded. Callers may still
-override the value with `VLLM_SR_SOURCE_REVISION` when reproducing a separately
-attested source tree.
+The Evaluation page is sr-bench 1.0. It uses the same durable Python service as
+`vllm-sr benchmark`; the Go backend authenticates each request and forwards the
+user identity. Closing the browser or restarting the Dashboard does not cancel
+a run. The benchmark service owns execution, persisted results and cancellation.
+
+`vllm-sr serve` starts an independent core benchmark worker with the Dashboard
+image. Its store is `<state-root>/.sr-bench/<stack>/store`; its private service
+token is adjacent to that store, outside the Router and Dashboard mounts. The
+worker publishes a loopback port, `8090 + port offset`, and receives neither a
+Docker socket nor GPU devices. Dashboard/config reloads reuse a matching running
+worker. A stopped or changed worker requires explicit reconciliation; `vllm-sr
+stop` stops it without deleting its evidence.
+
+The core image does not include every upstream execution environment. For code
+and interactive benchmarks, prepare a dedicated worker host with the required
+pinned harnesses and sandbox dependencies. `SR_BENCH_URL` selects that external
+worker and suppresses local worker creation. Use an origin reachable from the
+Dashboard container and the same server-side token for both clients. In local
+Dashboard development:
+
+```bash
+# Set SR_BENCH_TOKEN to the same private value in both server environments.
+vllm-sr benchmark --store ./data/sr-bench serve
+SR_BENCH_URL=http://127.0.0.1:8090 make dashboard-dev-backend
+```
+
+The standalone service binds loopback by default. Keep the token server-side and use the authenticated
+Dashboard origin for browser access. Register operator-owned targets with
+`vllm-sr benchmark --store ./data/sr-bench target register --file targets.json`.
+Targets contain endpoint and model identities, four token prices, and credential
+environment references. The Dashboard selects registered targets; it cannot
+redirect their credentials to another endpoint.
+
+Prepare versioned datasets with `vllm-sr benchmark dataset prepare` and select a
+frozen dataset, profile, targets and limits in Evaluation. Review the plan before
+starting. Live runs record capability and usage; preview runs record routing
+diagnostics only. The page shows per-target and per-benchmark results, four
+token buckets, latency, wall time, failures, routing distributions and case
+evidence. Comparisons require completed live runs on the same frozen cases.
+Unknown costs remain unknown.
+
+Mount the sr-bench store as writable persistent storage. Its SQLite ledger and
+run artifacts survive service restarts. Interrupted requests are preserved for
+reconciliation and are never resent automatically. Dashboard-owned SQLite paths
+remain `DASHBOARD_AUTH_DB_PATH`, `DASHBOARD_WORKFLOW_DB_PATH`, and
+`DASHBOARD_CONFIG_PROJECTION_DB_PATH`. Historical Evaluation Plane files are not
+imported or deleted by sr-bench.
 
 ## Authentication and write safety
 
@@ -169,6 +191,20 @@ Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
 `DASHBOARD_ADMIN_EMAIL`, `DASHBOARD_ADMIN_PASSWORD`, and optionally
 `DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
 set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
+
+To keep local Docker or Podman sessions valid when recreating the stack:
+
+1. Load the same `DASHBOARD_JWT_SECRET` into the host environment before every
+   `vllm-sr serve` invocation. Use your existing secret store; do not generate a
+   new value on each launch.
+2. Keep the Dashboard authentication database on its persistent volume.
+3. Start the stack normally. This variable configures Dashboard only; do not
+   pass it through `--recipe-env`.
+
+Without a stable key, each Dashboard restart requires users to log in again.
+Rotating the key also ends existing sessions, but does not change stored
+administrator accounts. If a temporary connection or server error interrupts
+session verification, choose **Retry** to reconnect without signing in again.
 
 Writes authenticated by the session cookie must carry an `X-CSRF-Token` header
 and a matching `Origin`. The frontend does this on its own. Set
@@ -182,7 +218,7 @@ handshakes, so the origin check is the only cross-origin control there; a
 split-origin frontend that is not listed can authenticate and write but cannot
 open the room socket.
 
-Evaluation Plane evidence APIs are intentionally stricter: they accept browser
+sr-bench APIs are intentionally stricter: they accept browser
 requests only when `Origin` exactly matches the request scheme and `Host`.
 TLS-terminating proxies must overwrite `X-Forwarded-Proto` with the external
 scheme; arbitrary sibling origins never receive credentialed CORS headers.
@@ -256,6 +292,7 @@ Browser
   -> Go API and reverse proxy (dashboard/backend)
        -> Router management API
        -> Envoy inference listener
+       -> sr-bench service (durable execution and evaluation store)
        -> optional monitoring services
        -> local SQLite and config/Recipe storage
 ```

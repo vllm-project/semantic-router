@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
 // Options controls established dimension truncation and layer early exit.
@@ -129,10 +131,13 @@ func (p *providerView) EmbedAudio(ctx context.Context, data []float32, bins, fra
 	return q.EmbedAudio(ctx, data, bins, frames, dim)
 }
 
+// Windows reports a missing tokenizer as a capability mismatch, the same way a
+// prepared provider without local token windows does, so a caller can tell an
+// absent tokenizer from a tokenizer that failed.
 func (p *providerView) Windows(ctx context.Context, text string, limit int) ([]Window, error) {
 	q, ok := p.Provider.(WindowProvider)
 	if !ok {
-		return nil, fmt.Errorf("embedding provider does not support token windows")
+		return nil, fmt.Errorf("%w: embedding provider does not support token windows", binding.ErrCapability)
 	}
 	return q.Windows(ctx, text, limit)
 }
@@ -147,4 +152,29 @@ func Identity(provider Provider) string {
 	}
 	return fmt.Sprintf("%T:%p", provider, provider)
 }
-func (p *providerView) CacheIdentity() string { return Identity(p.Provider) }
+
+// Option identities are separate from physical resource identities: two views
+// may share one model while producing incompatible vectors.
+type OptionCacheIdentifiable interface{ CacheIdentityForOptions(Options) string }
+
+func (p *providerView) CacheIdentity() string {
+	if identified, ok := p.Provider.(OptionCacheIdentifiable); ok {
+		return identified.CacheIdentityForOptions(p.options)
+	}
+	return fmt.Sprintf("%s:layer=%d:dimension=%d", Identity(p.Provider), p.options.Layer, p.options.Dimension)
+}
+
+func (p *providerView) CacheIdentityForOptions(options Options) string {
+	if identified, ok := p.Provider.(OptionCacheIdentifiable); ok {
+		return identified.CacheIdentityForOptions(options)
+	}
+	return fmt.Sprintf("%s:layer=%d:dimension=%d", Identity(p.Provider), options.Layer, options.Dimension)
+}
+
+func (p *providerView) RepresentationIdentity(options Options, inputPolicy string) (ContentIdentity, error) {
+	owned, ok := p.Provider.(RepresentationProvider)
+	if !ok {
+		return ContentIdentity{}, ErrIdentityUnsupported
+	}
+	return owned.RepresentationIdentity(options, inputPolicy)
+}

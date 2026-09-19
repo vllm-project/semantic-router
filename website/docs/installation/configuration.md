@@ -29,7 +29,7 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners and timeouts. |
+| `listeners` | Public Router listeners, timeouts, and optional bearer credentials for CLI-managed Envoy listeners. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
@@ -156,6 +156,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `pii` — learned signal | `pii` detects sensitive personal data in requests. | [`config/fragments/signal/pii/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/pii/) | [Guide](../tutorials/signal/learned/pii) |
 | `preference` — learned signal | `preference` infers response-style preferences from examples and classifier settings. | [`config/fragments/signal/preference/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/preference/) | [Guide](../tutorials/signal/learned/preference) |
 | `reask` — learned signal | `reask` detects when the current user turn semantically repeats recent user turns in the same conversation. | [`config/fragments/signal/reask/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/reask/) | [Guide](../tutorials/signal/learned/reask) |
+| `safety` — learned signal | The `safety` signal predicts content risks. | [`config/fragments/signal/safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/safety/) | [Guide](../tutorials/signal/learned/safety) |
 | `structure` — heuristic signal | `structure` detects request-shape facts such as many explicit questions, ordered workflow markers, or dense constraint phrasing. | [`config/fragments/signal/structure/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/structure/) | [Guide](../tutorials/signal/heuristic/structure) |
 | `user-feedback` — learned signal | `user-feedback` detects correction, dissatisfaction, or escalation feedback from the conversation. | [`config/fragments/signal/user-feedback/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/user-feedback/) | [Guide](../tutorials/signal/learned/user-feedback) |
 
@@ -190,7 +191,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
 | `content-safety` — plugin bundle | Content Safety combines supported route-local safety plugins into one reusable policy. | [`config/fragments/plugin/content-safety/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/content-safety/) | [Guide](../tutorials/plugin/content-safety) |
-| `context-compression` — route plugin | `context_compression` is a route-local request plugin that reduces large tool/function outputs before the selected provider receives the request. | [`config/fragments/plugin/context-compression/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context-compression/) | [Guide](../tutorials/plugin/context-compression) |
+| `context-compression` — route plugin | Use `context_compression` on a decision when old conversation text or large tool outputs cost more tokens than the answer needs. | [`config/fragments/plugin/context-compression/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/context-compression/) | [Guide](../tutorials/plugin/context-compression) |
 | `fast-response` — route plugin | `fast_response` is a route-local plugin that returns a deterministic fallback message immediately. | [`config/fragments/plugin/fast-response/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/fast-response/) | [Guide](../tutorials/plugin/fast-response) |
 | `hallucination` — route plugin | `hallucination` is a route-local plugin for fact-checking and response-quality screening after the decision already matched. | [`config/fragments/plugin/hallucination/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/hallucination/) | [Guide](../tutorials/plugin/hallucination) |
 | `header-mutation` — route plugin | `header_mutation` is a route-local plugin for adding, updating, or deleting downstream headers. | [`config/fragments/plugin/header-mutation/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/header-mutation/) | [Guide](../tutorials/plugin/header-mutation) |
@@ -199,7 +200,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `request-params` — route plugin | `request_params` is a route-local plugin that validates and trims OpenAI Chat Completions request bodies before they are forwarded to backends. | [`config/fragments/plugin/request-params/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/request-params/) | [Guide](../tutorials/plugin/request-params) |
 | `response-cache` — route plugin | `response_cache` is the route-local plugin for reusing exact or semantically compatible prior responses. | [`config/fragments/plugin/response-cache/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-cache/) | [Guide](../tutorials/plugin/response-cache) |
 | `response-jailbreak` — route plugin | `response_jailbreak` is a route-local plugin for screening the model response before it is returned. | [`config/fragments/plugin/response-jailbreak/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/response-jailbreak/) | [Guide](../tutorials/plugin/response-jailbreak) |
-| `router-replay` — route plugin | `router_replay` is a route-local plugin for overriding replay/debug capture on one route. | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [Guide](../tutorials/plugin/router-replay) |
+| `router-replay` — route plugin | Use Router Replay to inspect requests in Dashboard Insights: the selected route, model, token usage, response, and tool trajectory. | [`config/fragments/plugin/router-replay/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/router-replay/) | [Guide](../tutorials/plugin/router-replay) |
 | `shadow-dispatch` — route plugin | `shadow_dispatch` is a route-local plugin that sends a bounded, sampled copy of the approved request to a secondary model and records the outcome without changing or delaying the primary response. | [`config/fragments/plugin/shadow-dispatch/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/shadow-dispatch/) | [Guide](../tutorials/plugin/shadow-dispatch) |
 | `system-prompt` — route plugin | `system_prompt` is a route-local plugin for inserting or modifying the system prompt on matched traffic. | [`config/fragments/plugin/system-prompt/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/system-prompt/) | [Guide](../tutorials/plugin/system-prompt) |
 | `tool-selection` — route plugin | `tool_selection` is a decision plugin that controls how tools are chosen for a matched route. | [`config/fragments/plugin/tool-selection/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/plugin/tool-selection/) | [Guide](../tutorials/plugin/tool-selection) |
@@ -357,6 +358,99 @@ for built-in virtual models, CLI serving, backend binding, forking, packaging,
 and migration. See
 [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete schema.
+
+### Recipe-wide candidate and replay policies
+
+Set these independently optional policies inside the default or a named recipe's
+`routing` block:
+
+```yaml
+candidate_requirements:
+  capabilities: declared
+  context: known_limits
+data_policy:
+  replay: false
+```
+
+`capabilities: declared` requires the assigned model to declare support for the
+request's task, including tools and image input, as well as a compatible provider
+protocol. `context: known_limits` checks estimated input demand plus the effective
+output reserve against declared model limits. The request must supply an output
+bound, or its decision must configure `request_params.default_max_tokens` as a
+positive integer or `auto` (see below).
+That default applies only when the caller omits the bound; `max_tokens_limit` then
+caps it as usual. A model's maximum output capacity is not a request default.
+Missing required model facts or an effective output bound make a candidate ineligible. Input accounting remains estimated, especially for
+multimodal content; this is not an exact provider token-capacity guarantee. Omit a
+field to retain that dimension's existing compatibility behavior.
+
+For example, a decision can supply the bound through its existing plugin:
+
+```yaml
+plugins:
+  - type: request_params
+    configuration:
+      default_max_tokens: 4096
+      max_tokens_limit: 8192
+```
+
+To use each model's available output capacity when the caller omits a limit:
+
+```yaml
+algorithm:
+  type: multi_factor
+  multi_factor:
+    expected_output_tokens: 4096
+plugins:
+  - type: request_params
+    configuration:
+      default_max_tokens: auto
+```
+
+`auto` requires an explicit `vllm` provider, one backend per model, the OpenAI
+Chat format, and declared context and output limits. Enable the backend's
+`/v1/chat/completions/render` API with `vllm serve --enable-scale-out` on a vLLM
+version that supports it. The Router preprocesses each candidate's complete
+provider request without generating an answer, then repeats that check after
+final request changes. It uses the actual templated input length to allocate
+`min(max_output_tokens, context_window - input_tokens)`. A smaller backend limit
+than declared is a configuration error; align the deployment and model card.
+Explicit caller limits keep their existing behavior and need no render call.
+`max_tokens_limit` still caps the resulting output budget.
+
+`expected_output_tokens` is a positive cost forecast, **not an output limit**.
+It is required for `multi_factor` with `auto`, and is bounded by the caller's
+limit or each candidate's available capacity. Different maximum context windows
+do not by themselves make a model's forecast more expensive. Without this field,
+non-automatic requests retain their existing cost calculation.
+
+A request that fits a candidate is not truncated based on a text-length estimate.
+If every compatible candidate reports input overflow, the Router applies the
+configured context compression policy once and verifies the result with the
+backend. Compression can be conservative; final capacity checking is exact.
+Without a suitable compression policy, overflow remains an error. An unavailable
+or invalid render API fails clearly and never triggers compression. Preview
+reports `execution_required` because it does not have the complete provider
+request. Automatic budgets currently support text and tool requests, excluding
+multimodal input, provider truncation, LoRA, Looper, and shadow dispatch.
+
+A recipe's `replay: false` prevents router replay capture even if a decision tries
+to enable it, including requests rejected before a decision is available. Absent
+or true adds no restriction to the existing global and decision configuration.
+This field does not control other stores, logs, or backend retention. Operators
+must assign deployments that meet their privacy requirements.
+
+For multi-factor selection, `latency_metric: ttft` compares time to first token;
+`tpot` compares time per output token. Omission preserves the existing TPOT-then-TTFT
+fallback. Pair the metric with explicit quality evidence and a lexicographic
+objective when quality is a floor rather than a score to trade away.
+
+Discover the current contract with
+`vllm-sr config schema --section routing.candidate_requirements` and
+`vllm-sr config schema --section routing.data_policy`.
+DSL `ROUTING` blocks support the same objects. Kubernetes CRD emission preserves
+these policies for the default routing profile; named recipes and entrypoints
+require canonical YAML and are rejected by CRD emission rather than discarded.
 
 ## Configuration workflows
 

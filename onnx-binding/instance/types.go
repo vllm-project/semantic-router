@@ -4,15 +4,20 @@ package instance
 
 // Options fixes execution and input policy before a model is loaded.
 type Options struct {
-	ModelPath      string `json:"model_path"`
-	ModelFile      string `json:"model_file,omitempty"`
-	Provider       string `json:"provider,omitempty"` // cpu (default) or migraphx
-	DeviceID       int    `json:"device_id,omitempty"`
-	Precision      string `json:"precision,omitempty"` // native (default) or MIGraphX fp16 conversion
-	MaxInputTokens int    `json:"max_input_tokens,omitempty"`
-	Overflow       string `json:"overflow,omitempty"` // reject (default) or truncate_right
-	IntraThreads   int    `json:"intra_threads,omitempty"`
-	ProfilePrefix  string `json:"profile_prefix,omitempty"`
+	ModelPath               string `json:"model_path"`
+	ModelFile               string `json:"model_file,omitempty"`
+	Provider                string `json:"provider,omitempty"` // cpu (default), migraphx, or rocm
+	DeviceID                int    `json:"device_id,omitempty"`
+	Precision               string `json:"precision,omitempty"` // native (default) or MIGraphX fp16 conversion
+	MaxInputTokens          int    `json:"max_input_tokens,omitempty"`
+	DocumentMaxInputTokens  int    `json:"document_max_input_tokens,omitempty"` // typed window tasks only
+	ExecutionMaxInputTokens int    `json:"execution_max_input_tokens,omitempty"`
+	CompilationCacheDir     string `json:"compilation_cache_dir,omitempty"`
+	Overflow                string `json:"overflow,omitempty"` // reject (default) or truncate_right
+	IntraThreads            int    `json:"intra_threads,omitempty"`
+	ProfilePrefix           string `json:"profile_prefix,omitempty"`
+	CustomOpsProfile        string `json:"custom_ops_profile,omitempty"` // none (default) or ck_flash_attention
+	AllowCPUFallback        bool   `json:"allow_cpu_fallback,omitempty"` // ROCm only; requires an audited ORT profile
 }
 
 type InstanceOptions = Options
@@ -67,27 +72,63 @@ type EmbeddingResult struct {
 
 // SessionEvidence describes loaded execution policy. Successful registration is
 // not an inference claim; CompletedInferences and the ORT profile prove execution.
+// InputSchema records actual loaded session declarations for every provider;
+// dynamic dimensions are -1 and fixed dimensions remain explicit.
 type SessionEvidence struct {
-	RuntimeBuild        string `json:"runtime_build"`
-	Graph               string `json:"graph"`
-	Provider            string `json:"provider"`
-	DeviceID            int    `json:"device_id"`
-	Precision           string `json:"precision"`
-	CPUFallbackDisabled bool   `json:"cpu_fallback_disabled"`
-	ProfilePrefix       string `json:"profile_prefix"`
+	RuntimeBuild            string                    `json:"runtime_build"`
+	CompilerFlags           map[string]string         `json:"compiler_flags"`
+	Artifacts               []ArtifactDigest          `json:"artifacts"`
+	ExecutionMaxInputTokens int                       `json:"execution_max_input_tokens,omitempty"`
+	ExecutionInputs         []ExecutionInput          `json:"execution_inputs"`
+	InputSchema             []ExecutionInput          `json:"input_schema"`
+	CompilationCache        *CompilationCacheEvidence `json:"compilation_cache,omitempty"`
+	Graph                   string                    `json:"graph"`
+	Provider                string                    `json:"provider"`
+	DeviceID                int                       `json:"device_id"`
+	Precision               string                    `json:"precision"`
+	CPUFallbackDisabled     bool                      `json:"cpu_fallback_disabled"`
+	CustomOpsProfile        string                    `json:"custom_ops_profile"`
+	CustomOpsLibrary        string                    `json:"custom_ops_library,omitempty"`
+	CustomOpsSHA256         string                    `json:"custom_ops_sha256,omitempty"`
+	ProfilePrefix           string                    `json:"profile_prefix"`
+}
+
+// ArtifactDigest is captured from files actually consumed by the owned session.
+type ArtifactDigest struct {
+	Role   string `json:"role"`
+	SHA256 string `json:"sha256"`
+}
+
+// ExecutionInput describes one named tensor input. In SessionEvidence.InputSchema,
+// its shape preserves the loaded graph's declared dimensions, including -1 for
+// dynamic axes. ExecutionInputs separately records MIGraphX's fixed contract;
+// an empty ExecutionInputs slice does not imply a dynamic graph.
+type ExecutionInput struct {
+	Name  string  `json:"name"`
+	Dtype string  `json:"dtype"`
+	Shape []int64 `json:"shape"`
+}
+
+type CompilationCacheEvidence struct {
+	Key               string            `json:"key"`
+	State             string            `json:"state"`
+	Files             map[string]string `json:"files"`
+	CompiledFileReads []string          `json:"compiled_file_reads"`
 }
 
 type Info struct {
-	Task                string            `json:"task"`
-	ModelLimit          int               `json:"model_limit"`
-	TaskLimit           int               `json:"task_limit"`
-	EffectiveLimit      int               `json:"effective_limit"`
-	Overflow            string            `json:"overflow"`
-	Labels              []string          `json:"labels"`
-	Dimension           int               `json:"dimension"`
-	AvailableLayers     []int             `json:"available_layers"`
-	Sessions            []SessionEvidence `json:"sessions"`
-	CompletedInferences uint64            `json:"completed_inferences"`
+	PairScorer             *PairScorerSelection `json:"pair_scorer,omitempty"`
+	Task                   string               `json:"task"`
+	ModelLimit             int                  `json:"model_limit"`
+	TaskLimit              int                  `json:"task_limit"`
+	EffectiveLimit         int                  `json:"effective_limit"`
+	DocumentMaxInputTokens int                  `json:"document_max_input_tokens"`
+	Overflow               string               `json:"overflow"`
+	Labels                 []string             `json:"labels"`
+	Dimension              int                  `json:"dimension"`
+	AvailableLayers        []int                `json:"available_layers"`
+	Sessions               []SessionEvidence    `json:"sessions"`
+	CompletedInferences    uint64               `json:"completed_inferences"`
 }
 
 // TextWindow is a UTF-8 byte range in the original input (End exclusive).

@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"time"
@@ -19,16 +20,20 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	ctx *RequestContext,
 	completionLatency time.Duration,
 ) *ext_proc.ProcessingResponse {
-	usage := invalidResponseTerminalUsage("authoritative_usage_missing")
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", map[string]interface{}{
+		decodeEvent := map[string]interface{}{
 			"request_id":     ctx.RequestID,
 			"backend_format": ctx.TargetFormat,
 			"client_format":  ctx.SourceFormat,
 			"error":          err.Error(),
-		})
+		}
+		// Log the private cause while keeping the client-facing message generic.
+		if cause := errors.Unwrap(err); cause != nil {
+			decodeEvent["cause"] = cause.Error()
+		}
+		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
 	clientBody := responseBody
@@ -39,11 +44,11 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			return r.createErrorResponse(502, "The selected model returned an incompatible response")
 		}
 	}
-	usage = r.takeNeutralResponseUsage(ctx)
+	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
-	r.updateResponseCache(ctx, clientBody)
+	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
@@ -53,9 +58,11 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 
 	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
+		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 		return jailbreakResponse
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
+		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
 		return hallucinationResponse
 	}
 
@@ -262,4 +269,39 @@ func setResponseContentType(response *ext_proc.ProcessingResponse, contentType s
 
 func isResponseAPIRequest(ctx *RequestContext) bool {
 	return ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1
+}
+
+// cacheableClientResponse returns the bytes that may be persisted as the public
+// response. The cache is read back under the strict canonical contract by
+// decodeCachedClientResponse, deliberately without a backend vendor allowance,
+// because a cache partition is keyed on the ingress protocol and may be served
+// to a request that never touches the same backend.
+//
+// A same-format response is forwarded to the client verbatim, so on a backend
+// with a vendor allowance those bytes still carry the provider's decorations.
+// Persisting them would store an entry the strict reader rejects: the first
+// Azure response would poison its own partition and every later hit would fail.
+// Re-encoding from the neutral response yields the canonical equivalent. When
+// that encode fails, nothing is cached - a miss is recoverable, a poisoned
+// entry is not.
+func (r *OpenAIRouter) cacheableClientResponse(
+	clientBody []byte,
+	rewritten bool,
+	response llmprotocol.Response,
+	ctx *RequestContext,
+) []byte {
+	if rewritten || ctx == nil || !ctx.ResponseVendorExtensions {
+		return clientBody
+	}
+	canonical, err := r.encodeClientResponse(response, ctx)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "cache_write_skipped_noncanonical_response", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"format":     ctx.SourceFormat,
+			"vendor":     string(ctx.ResponseVendor),
+			"error":      err.Error(),
+		})
+		return nil
+	}
+	return canonical
 }

@@ -145,8 +145,8 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	return cfg
 }
 
-func newStartupWriter(cfg *config.RouterConfig, configPath string) startupstatus.StatusWriter {
-	writer := buildStartupWriter(cfg, configPath)
+func newStartupWriter(cfg *config.RouterConfig, configPath string, registry *routerruntime.Registry) startupstatus.StatusWriter {
+	writer := registry.StartupStatusWriter(buildStartupWriter(cfg, configPath))
 	writeStartupState(writer, startupstatus.State{
 		Phase:   "starting",
 		Ready:   false,
