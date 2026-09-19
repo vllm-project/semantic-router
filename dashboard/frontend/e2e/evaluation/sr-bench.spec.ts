@@ -1259,7 +1259,14 @@ test('explains a failed run from saved case evidence when its terminal error is 
 }) => {
   await mockBench(page)
   await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
-    route.fulfill({ json: { ...run, status: 'failed', error: null } }),
+    route.fulfill({
+      json: {
+        ...run,
+        status: 'failed',
+        error: null,
+        progress: { total: 2, completed: 1, failed: 1 },
+      },
+    }),
   )
   await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
     route.fulfill({
@@ -1281,7 +1288,15 @@ test('explains a failed run from saved case evidence when its terminal error is 
     'Model Unknown model · case case-a · from saved case evidence',
   )
   await expect(
-    page.getByText('This run is failed. Partial results are not a completed evaluation.'),
+    page.getByText('This run is failed. 1 failed results remain part of the saved evidence.', {
+      exact: false,
+    }),
+  ).toBeVisible()
+  await expect(
+    page.getByText(
+      'Comparisons require an explicit terminal outcome for every planned result; missing or ungraded results are not eligible.',
+      { exact: false },
+    ),
   ).toBeVisible()
 })
 
@@ -2751,6 +2766,53 @@ test('persists profile, status and search filters across reload and run details'
   await expect(page.getByRole('combobox', { name: 'Run profile', exact: true })).toHaveText('Quick')
   await expect(page.getByLabel('Search runs')).toHaveValue('Baseline')
   await expect(page.getByRole('button', { name: 'Smoke baseline', exact: true })).toHaveCount(0)
+})
+
+test('keeps same-event filter changes and restores the URL after history navigation', async ({
+  page,
+}) => {
+  await mockBench(page)
+  await page.goto('/evaluation?view=runs&profile=quick&status=completed&context=kept')
+  await page.getByRole('combobox', { name: 'Run mode', exact: true }).click()
+  await page
+    .getByRole('listbox')
+    .locator('[data-value="live"]')
+    .evaluate((option) => {
+      ;(option as HTMLButtonElement).click()
+      const input = document.querySelector<HTMLInputElement>('input[type="search"]')!
+      const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+      setValue.call(input, 'Baseline')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  const expected = (url: URL) =>
+    url.searchParams.get('profile') === 'quick' &&
+    url.searchParams.get('status') === 'completed' &&
+    url.searchParams.get('mode') === 'live' &&
+    url.searchParams.get('q') === 'Baseline' &&
+    url.searchParams.get('context') === 'kept'
+  await expect(page).toHaveURL(expected)
+  await page.getByRole('button', { name: 'Datasets', exact: true }).click()
+  await expect(page).toHaveURL(/view=datasets/)
+  await page.goBack()
+  await expect(page).toHaveURL(expected)
+  await expect(page.getByLabel('Search runs')).toHaveValue('Baseline')
+  await chooseOption(page, 'Run profile', 'smoke')
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get('profile') === 'smoke' && url.searchParams.get('context') === 'kept',
+  )
+  await page.goForward()
+  await expect(page).toHaveURL(/view=datasets/)
+  await page.goBack()
+  await expect(page.getByRole('combobox', { name: 'Run profile', exact: true })).toHaveText('Smoke')
+  await page.getByLabel('Search runs').fill('model-a')
+  await expect(page).toHaveURL(
+    (url) =>
+      url.searchParams.get('profile') === 'smoke' &&
+      url.searchParams.get('mode') === 'live' &&
+      url.searchParams.get('q') === 'model-a' &&
+      url.searchParams.get('context') === 'kept',
+  )
 })
 
 test('derives a MoM candidate from a failed 42-result frozen baseline without changing its protocol', async ({

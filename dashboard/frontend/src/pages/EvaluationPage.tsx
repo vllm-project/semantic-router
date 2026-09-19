@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
@@ -31,6 +31,10 @@ export default function EvaluationPage() {
   const canWrite = !settingsLoading && !serverReadonly && canWriteEvaluation(user)
   const canRun = canWrite && canRunEvaluation(user)
   const [search, setSearch] = useSearchParams()
+  const pendingSearch = useRef(search)
+  useEffect(() => {
+    pendingSearch.current = search
+  }, [search])
   const selectedID = search.get('run')
   const runFilters: RunFilters = {
     query: search.get('q') ?? '',
@@ -56,19 +60,16 @@ export default function EvaluationPage() {
     setSearch(next)
   }
   const updateRunFilters = (patch: Partial<RunFilters>) => {
-    setSearch(
-      (current) => {
-        // Patch router-owned params in place so consecutive input events cannot
-        // restore a stale sibling filter before navigation has rendered.
-        for (const [field, value] of Object.entries(patch)) {
-          const key = field === 'query' ? 'q' : field
-          if (!value || value === 'all') current.delete(key)
-          else current.set(key, String(value))
-        }
-        return current
-      },
-      { replace: true },
-    )
+    // Router setters do not queue functional updates. Keep same-event patches
+    // together until navigation renders; external navigation resyncs above.
+    const next = new URLSearchParams(pendingSearch.current)
+    for (const [field, value] of Object.entries(patch)) {
+      const key = field === 'query' ? 'q' : field
+      if (!value || value === 'all') next.delete(key)
+      else next.set(key, String(value))
+    }
+    pendingSearch.current = next
+    setSearch(next, { replace: true })
   }
   const requestedView = search.get('view') ?? (search.has('model') ? 'new' : 'runs')
   const view = ['runs', 'experiments', 'compare', 'datasets', 'new', 'preview'].includes(
