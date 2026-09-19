@@ -18,6 +18,7 @@ domains:
       - .pre-commit-config.yaml
       - .prowlabels.yaml
       - Makefile
+      - netlify.toml
       - tools/agent/**
       - tools/ci/**
       - tools/docker/Dockerfile.precommit
