@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -12,34 +15,184 @@ import (
 	"time"
 )
 
+// config.yaml can carry plaintext provider credentials, so every copy the
+// Dashboard writes is readable only by the user it runs as.
+const (
+	configSnapshotDirMode  os.FileMode = 0o700
+	configSnapshotFileMode os.FileMode = 0o600
+)
+
 func configBackupDir(configDir string) string {
 	return filepath.Join(configDir, ".vllm-sr", "config-backups")
 }
 
-func createConfigBackup(configDir string, existingData []byte) string {
-	backupDir := configBackupDir(configDir)
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		log.Printf("Warning: failed to create backup directory: %v", err)
+// MkdirAll applies its mode only when it creates the directory, so an existing
+// one left world-readable by an earlier build needs the explicit Chmod.
+func ensureConfigSnapshotDir(dir string) error {
+	if err := os.MkdirAll(dir, configSnapshotDirMode); err != nil {
+		return err
 	}
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("config snapshot directory %s is a symlink", dir)
+	}
+	if info.Mode().Perm() == configSnapshotDirMode {
+		return nil
+	}
+	return os.Chmod(dir, configSnapshotDirMode)
+}
+
+// A snapshot never overwrites in place: the old inode keeps its old mode until a
+// chmod lands, and descriptors already open on it keep reading. Write a fresh
+// 0600 file and rename it over the target instead.
+func writeConfigSnapshot(path string, data []byte) error {
+	if err := rejectUnsafeSnapshotTarget(path); err != nil {
+		return err
+	}
+	temp, err := createConfigSnapshotTemp(path)
+	if err != nil {
+		return err
+	}
+	if err := writeAndCloseSnapshotTemp(temp, data); err != nil {
+		_ = os.Remove(temp.Name())
+		return err
+	}
+	if err := os.Rename(temp.Name(), path); err != nil {
+		_ = os.Remove(temp.Name())
+		return err
+	}
+	// The rename is not durable until the directory entry is synced, so a crash
+	// here would drop the restore point the caller is about to rely on.
+	return syncSnapshotDirectory(filepath.Dir(path))
+}
+
+func syncSnapshotDirectory(dir string) error {
+	directory, err := os.Open(dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = directory.Close() }()
+	return directory.Sync()
+}
+
+// Lstat never follows the final element, so a symlink fails IsRegular here and a
+// planted path cannot redirect credentials outside the snapshot directory.
+func rejectUnsafeSnapshotTarget(path string) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("config snapshot target %s is not a regular file", path)
+	}
+	return nil
+}
+
+// O_EXCL with an unpredictable name means the descriptor is always a file this
+// process just created at 0600, never one that already existed.
+func createConfigSnapshotTemp(path string) (*os.File, error) {
+	random := make([]byte, 12)
+	if _, err := rand.Read(random); err != nil {
+		return nil, err
+	}
+	temp := filepath.Join(
+		filepath.Dir(path),
+		"."+filepath.Base(path)+"."+hex.EncodeToString(random)+".tmp",
+	)
+	return os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, configSnapshotFileMode)
+}
+
+func writeAndCloseSnapshotTemp(temp *os.File, data []byte) error {
+	_, err := temp.Write(data)
+	if err == nil {
+		err = temp.Sync()
+	}
+	if closeErr := temp.Close(); err == nil {
+		err = closeErr
+	}
+	return err
+}
+
+// Shared by listing, cleanup and permission repair so they cannot disagree.
+func isConfigBackupEntry(entry os.DirEntry) bool {
+	return !entry.IsDir() &&
+		strings.HasPrefix(entry.Name(), "config.") &&
+		strings.HasSuffix(entry.Name(), ".yaml")
+}
+
+func archivedDSLPath(configDir string) string {
+	return filepath.Join(configDir, ".vllm-sr", "config.dsl")
+}
+
+// Restricts snapshots an earlier build left world-readable, so an upgrade does
+// not keep leaking them until they rotate out. Best effort: never fails a deploy.
+//
+// config.dsl is repaired here too. It lives beside the backup directory rather
+// than in it, and a deploy that carries no DSL never rewrites it, so nothing
+// else would ever tighten an upgraded install's copy.
+func repairConfigSnapshotPermissions(configDir string) {
+	backupDir := configBackupDir(configDir)
+	entries, err := os.ReadDir(backupDir)
+	if err == nil {
+		for _, entry := range entries {
+			if !isConfigBackupEntry(entry) {
+				continue
+			}
+			repairSnapshotFilePermissions(filepath.Join(backupDir, entry.Name()))
+		}
+	}
+	repairSnapshotFilePermissions(archivedDSLPath(configDir))
+}
+
+// Lstat keeps a symlink out of the chmod: os.Chmod follows links, so a planted
+// one would let this widen or narrow a file outside the snapshot tree.
+func repairSnapshotFilePermissions(path string) {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return
+	}
+	if info.Mode().Perm() == configSnapshotFileMode {
+		return
+	}
+	if err := os.Chmod(path, configSnapshotFileMode); err != nil {
+		log.Printf("Warning: failed to restrict permissions on config snapshot %s: %v", path, err)
+		return
+	}
+	log.Printf("Restricted permissions on pre-existing config snapshot: %s", path)
+}
+
+// Fails closed: an unsafe or unfixable backup directory means the credentials in
+// config.yaml would land somewhere this process cannot keep owner-only, so
+// nothing is written and the caller aborts rather than losing the restore point.
+func createConfigBackup(configDir string, existingData []byte) (string, error) {
+	backupDir := configBackupDir(configDir)
+	if err := ensureConfigSnapshotDir(backupDir); err != nil {
+		return "", fmt.Errorf("prepare config backup directory: %w", err)
+	}
+	repairConfigSnapshotPermissions(configDir)
 
 	version := time.Now().Format("20060102-150405")
 	if len(existingData) == 0 {
-		return version
+		return version, nil
 	}
 
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := os.WriteFile(backupFile, existingData, 0o644); err != nil {
-		log.Printf("Warning: failed to create backup: %v", err)
-	} else {
-		log.Printf("[Deploy] Config backup created: %s", backupFile)
+	if err := writeConfigSnapshot(backupFile, existingData); err != nil {
+		return "", fmt.Errorf("write config backup: %w", err)
 	}
+	log.Printf("[Deploy] Config backup created: %s", backupFile)
 
-	return version
+	return version, nil
 }
 
 func readArchivedDSL(configDir string) string {
-	dslFile := filepath.Join(configDir, ".vllm-sr", "config.dsl")
-	data, err := os.ReadFile(dslFile)
+	data, err := os.ReadFile(archivedDSLPath(configDir))
 	if err != nil {
 		return ""
 	}
@@ -57,10 +210,25 @@ func archiveDeployDSL(configDir string, dsl string) {
 		return
 	}
 
-	dslFile := filepath.Join(dslDir, "config.dsl")
-	if err := os.WriteFile(dslFile, []byte(dsl), 0o644); err != nil {
+	// The DSL compiles into config.yaml and can carry the same credentials. Its
+	// directory keeps its mode: other services read siblings out of it.
+	if err := writeConfigSnapshot(archivedDSLPath(configDir), []byte(dsl)); err != nil {
 		log.Printf("Warning: failed to archive DSL source: %v", err)
 	}
+}
+
+// Only a missing file means "no existing config". Collapsing every read error
+// into empty data would let a deploy or rollback overwrite an unreadable live
+// config with no snapshot, and the nil result also disables the runtime restore.
+func readLiveConfig(configPath string) ([]byte, error) {
+	data, err := os.ReadFile(configPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read current config %s: %w", configPath, err)
+	}
+	return data, nil
 }
 
 func readConfigBackup(configDir string, version string) ([]byte, error) {
@@ -68,25 +236,29 @@ func readConfigBackup(configDir string, version string) ([]byte, error) {
 	return os.ReadFile(backupFile)
 }
 
-func snapshotCurrentConfigBeforeRollback(configPath string, configDir string) []byte {
-	existingData, err := os.ReadFile(configPath)
-	if err != nil || len(existingData) == 0 {
-		return existingData
+// Fails closed for the same reason as createConfigBackup.
+func snapshotCurrentConfigBeforeRollback(configPath string, configDir string) ([]byte, error) {
+	existingData, err := readLiveConfig(configPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(existingData) == 0 {
+		return existingData, nil
 	}
 
 	backupDir := configBackupDir(configDir)
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
-		log.Printf("Warning: failed to create backup directory: %v", err)
-		return existingData
+	if err := ensureConfigSnapshotDir(backupDir); err != nil {
+		return nil, fmt.Errorf("prepare config backup directory: %w", err)
 	}
+	repairConfigSnapshotPermissions(configDir)
 
 	currentVersion := time.Now().Format("20060102-150405")
 	preRollbackFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion))
-	if err := os.WriteFile(preRollbackFile, existingData, 0o644); err != nil {
-		log.Printf("Warning: failed to snapshot current config before rollback: %v", err)
+	if err := writeConfigSnapshot(preRollbackFile, existingData); err != nil {
+		return nil, fmt.Errorf("snapshot current config before rollback: %w", err)
 	}
 
-	return existingData
+	return existingData, nil
 }
 
 func versionsLocalList(w http.ResponseWriter, configPath string) {
@@ -108,7 +280,7 @@ func listConfigVersions(configPath string) ([]ConfigVersion, error) {
 
 	versions := []ConfigVersion{}
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasPrefix(entry.Name(), "config.") || !strings.HasSuffix(entry.Name(), ".yaml") {
+		if !isConfigBackupEntry(entry) {
 			continue
 		}
 
@@ -144,7 +316,7 @@ func cleanupBackups(backupDir string) {
 
 	var backups []os.DirEntry
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), "config.") && strings.HasSuffix(entry.Name(), ".yaml") {
+		if isConfigBackupEntry(entry) {
 			backups = append(backups, entry)
 		}
 	}
