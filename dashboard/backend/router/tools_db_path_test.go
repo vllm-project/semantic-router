@@ -78,7 +78,7 @@ func TestResolveToolsDBPathDoesNotDoubleTheConfigDirectory(t *testing.T) {
 	}
 }
 
-// An unparseable config takes the error branch. It must yield the router's own
+// An unparsable config takes the error branch. It must yield the router's own
 // default made absolute, not the doubled path — that branch is precisely what a
 // user sees when their config is broken, so it should not compound the problem.
 func TestResolveToolsDBPathFallbackIsUsedWhenTheConfigWillNotParse(t *testing.T) {
