@@ -346,17 +346,20 @@ func primarySucceeded(rec store.Record) bool {
 // primaryArm reads the digest the router recorded for the selected model. It
 // deliberately does not hash rec.ResponseBody, which holds the encoded protocol
 // response rather than the assistant text a shadow arm is hashed from.
+//
+// The model comes from the record rather than the outcome. The example id is
+// built from it, and the id decides the split, so a name that could arrive from
+// either of two fields would let the same observation land in two places.
 func primaryArm(rec store.Record) (Arm, bool) {
 	for _, outcome := range rec.Outcomes {
 		if outcome.Source != primaryResponseSource || outcome.Verdict != shadowVerdictCompleted {
 			continue
 		}
 		digest := outcome.Metadata["response_sha256"]
-		model := firstNonEmpty(outcome.TargetRef, rec.SelectedModel)
-		if digest == "" || model == "" {
+		if digest == "" {
 			continue
 		}
-		return Arm{Model: model, OutputDigest: digest}, true
+		return Arm{Model: rec.SelectedModel, OutputDigest: digest}, true
 	}
 	return Arm{}, false
 }
