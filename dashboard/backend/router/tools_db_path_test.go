@@ -27,7 +27,7 @@ func writeConfig(t *testing.T, body string) (*config.Config, string) {
 	if err := os.WriteFile(configPath, []byte(body), 0o644); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
-	return &config.Config{ConfigDir: configDir, AbsConfigPath: configPath}, root
+	return &config.Config{ConfigDir: configDir, AbsConfigPath: configPath, ConfigBaseDir: root}, root
 }
 
 const toolsConfig = `global:

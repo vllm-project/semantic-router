@@ -108,6 +108,7 @@ variables. Defaults are defined in
 | `DASHBOARD_STATIC_DIR` | Built frontend assets. |
 | `ROUTER_CONFIG_PATH` | Canonical Router YAML read or updated by config APIs. |
 | `DASHBOARD_CONFIG_DIR` | Directory for config versions and related state. |
+| `VLLM_SR_CONFIG_BASE_DIR` | Absolute shared asset root for relative tools database paths; defaults to the process working directory. The development launcher sets the repository root and the CLI sets `/app`. |
 | `TARGET_ROUTER_API_URL` | Router management API; default `http://localhost:8080`. |
 | `TARGET_ROUTER_METRICS_URL` | Router Prometheus endpoint. |
 | `TARGET_ENVOY_URL` | Inference endpoint used by Playground and route probes. |
