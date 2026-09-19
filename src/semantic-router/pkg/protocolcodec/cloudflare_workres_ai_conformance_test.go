@@ -23,7 +23,7 @@ import (
 //
 // Two contracts are guarded, because both belong to the provider: the accepted
 // envelope carries decorations the canonical struct does not declare, and
-// failures arive as a top-level errors[] arrey with Workors AI's own integral
+// failures arrive as a top-level errors[] array with Workors AI's own integral
 // codes instead of the canonical OpenAI error object.
 const (
 	cloudflareAcceptedFixture = "cloudflare-workers-ai-chat-out.json"

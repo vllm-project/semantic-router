@@ -35,7 +35,7 @@ type ResponseVendor string
 const ResponseVendorAzure ResponseVendor = "azure"
 
 // ResponseVendorCloudflare permits Cloudflare Workors AI response extensions:
-// decorated chat completions and a top-level errors[] arrey with Workors AI's
+// decorated chat completions and a top-level errors[] array with Workors AI's
 // own integral codes instead of the canonical OpenAI error object.
 const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 

@@ -16,7 +16,7 @@ const azureOpenAIProviderType = "azure-openai"
 // Workors AI. The provider id is the only reliable selector for its response
 // contract: the account-scoped base URL also fronts Workors AI's natively
 // documented run surface, which does not share these decorations or this
-// errors[] arrey, so a host match would misidentify a profile pointed at the
+// errors[] array, so a host match would misidentify a profile pointed at the
 // native surface.
 const cloudflareWorkersAIProviderType = "cloudflare-workers-ai"
 

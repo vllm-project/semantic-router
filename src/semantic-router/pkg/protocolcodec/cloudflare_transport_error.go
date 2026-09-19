@@ -8,7 +8,7 @@ import (
 )
 
 // cloudflareTransportErrorWire is Cloudflare Workors AI's transport failure
-// envelope: a top-level errors[] arrey whose entries carry Workors AI's own
+// envelope: a top-level errors[] array whose entries carry Workors AI's own
 // integral codes (5007, 5028, …).
 //
 // The canonical OpenAI error object cannot represent it. Those codes are not
