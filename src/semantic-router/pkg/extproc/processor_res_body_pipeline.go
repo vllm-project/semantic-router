@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"errors"
 	"strconv"
 	"strings"
@@ -50,6 +51,36 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
+	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
+	if blocked != nil {
+		return blocked
+	}
+
+	response := buildResponseBodyContinueResponse(nil, nil)
+	if len(headerOptions) > 0 {
+		response.GetResponseBody().GetResponse().HeaderMutation = &ext_proc.HeaderMutation{
+			SetHeaders: headerOptions,
+		}
+	}
+	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+		setResponseBodyMutation(response, finalBody)
+	}
+	return response
+}
+
+// finalizeResponsePolicy runs the shared response-stage processing across normal and fallback paths:
+// scoring response signals, evaluating guardrail plugins (jailbreak, hallucination) for blocking or warning,
+// executing memory suppression decisions, applying warnings and cost headers,
+// persisting Responses objects, and updating replay audit records.
+func (r *OpenAIRouter) finalizeResponsePolicy(
+	ctx *RequestContext,
+	semanticResponse *llmprotocol.Response,
+	clientBody []byte,
+) (*ext_proc.ProcessingResponse, []byte, []*core.HeaderValueOption) {
+	if r == nil || ctx == nil || semanticResponse == nil {
+		return nil, clientBody, nil
+	}
+
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
 	// decision carries a plugin; the plugins below then consume it. Recorded
@@ -59,11 +90,11 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
 		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
-		return jailbreakResponse
+		return jailbreakResponse, nil, nil
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
 		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
-		return hallucinationResponse
+		return hallucinationResponse, nil, nil
 	}
 
 	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
@@ -71,13 +102,18 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
 	addResponseCostHeaders(ctx, response)
-	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
-		setResponseBodyMutation(response, clientBody)
-	}
 	r.persistResponseObject(ctx)
 	r.updateRouterReplayHallucinationStatus(ctx)
 	r.attachRouterReplayResponse(ctx, finalBody, true)
-	return response
+
+	var headerOptions []*core.HeaderValueOption
+	if bodyResp := response.GetResponseBody(); bodyResp != nil && bodyResp.GetResponse() != nil {
+		if hm := bodyResp.GetResponse().GetHeaderMutation(); hm != nil {
+			headerOptions = hm.GetSetHeaders()
+		}
+	}
+
+	return nil, finalBody, headerOptions
 }
 
 // observeResponseStageSignals scores the response-stage rules against the

@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
@@ -19,16 +21,17 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
-	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
-	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
-	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
-	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
-	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
-	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
+	ConfigSource              ConfigSource             `yaml:"config_source,omitempty"`
+	Strategy                  RoutingStrategy          `yaml:"strategy,omitempty"`
+	AutoModelName             string                   `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            *[]string                `yaml:"auto_model_names,omitempty"`
+	IncludeConfigModelsInList bool                     `yaml:"include_config_models_in_list"`
+	ClearRouteCache           bool                     `yaml:"clear_route_cache"`
+	StreamedBody              CanonicalStreamedBody    `yaml:"streamed_body"`
+	SkipProcessing            SkipProcessingConfig     `yaml:"skip_processing"`
+	ModelSelection            ModelSelectionConfig     `yaml:"model_selection"`
+	Learning                  RouterLearningConfig     `yaml:"learning,omitempty"`
+	Fallback                  *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -358,6 +361,9 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.SkipProcessing = router.SkipProcessing
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
+	if router.Fallback != nil && cfg.Fallback == nil {
+		cfg.Fallback = router.Fallback.Clone()
+	}
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {

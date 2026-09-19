@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
@@ -106,14 +107,20 @@ func createTestRouterWithToolsProvider(cfg *config.RouterConfig, provider embedd
 		return nil, err
 	}
 
+	fallbackPolicy := fallback.DefaultPolicy()
+	circuitBreaker := fallback.NewBackendCircuitBreaker(fallbackPolicy.CircuitBreaker)
+	orchestrator := fallback.NewOrchestrator(fallbackPolicy, circuitBreaker)
+
 	return &OpenAIRouter{
-		Config:               cfg,
-		CategoryDescriptions: cfg.GetCategoryDescriptions(),
-		Classifier:           classifier,
-		Cache:                semanticCache,
-		ToolsDatabase:        toolsDatabase,
-		ResponseAPIFilter:    newTestResponseAPIFilter(cfg),
-		CredentialResolver:   newTestCredentialResolver(cfg),
+		Config:                 cfg,
+		CategoryDescriptions:   cfg.GetCategoryDescriptions(),
+		Classifier:             classifier,
+		Cache:                  semanticCache,
+		ToolsDatabase:          toolsDatabase,
+		ResponseAPIFilter:      newTestResponseAPIFilter(cfg),
+		CredentialResolver:     newTestCredentialResolver(cfg),
+		FallbackOrchestrator:   orchestrator,
+		FallbackCircuitBreaker: circuitBreaker,
 	}, nil
 }
 
