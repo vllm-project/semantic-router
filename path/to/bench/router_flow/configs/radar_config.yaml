@@ -1,0 +1,10 @@
+# complete code
+"""
+RADAR-inspired configuration for difficulty and model-budget ability estimates.
+"""
+model_budget:
+  type: float
+  default: 1.0
+difficulty:
+  type: float
+  default: 1.0
