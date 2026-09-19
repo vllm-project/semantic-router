@@ -735,13 +735,17 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "strategy": "bearer",
                 "header": "Authorization",
                 "prefix": "Bearer",
+                "injected_header": "x-user-cloudflare-workers-ai-key",
             },
         )
         self.assertEqual(
             provider["presentation"],
             {"logo": "monogram", "monogram": "Cf", "monochrome": False},
         )
-        self.assertEqual(provider["conformance"], {"status": "unverified"})
+        self.assertEqual(
+            provider["conformance"],
+            {"status": "live_verified", "verified_at": "2026-09-19"},
+        )
         self.assertNotIn("models", provider)
 
     def test_databricks_provider_contract_is_complete(self) -> None:

@@ -254,11 +254,7 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		Parsed:      &completion,
 		Model:       modelName, // Use the requested model name, not the backend's response
 		IsStreaming: false,
-		Usage: TokenUsage{
-			PromptTokens:     completion.Usage.PromptTokens,
-			CompletionTokens: completion.Usage.CompletionTokens,
-			TotalTokens:      completion.Usage.TotalTokens,
-		},
+		Usage:       parseResponseUsage(body),
 	}
 
 	// Extract content, tool_calls, and logprobs

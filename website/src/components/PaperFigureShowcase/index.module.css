@@ -1559,6 +1559,7 @@
 
 .paperTitle,
 [data-theme='dark'] .paperTitle {
+  color: var(--site-text-strong);
   font-size: clamp(1.85rem, 3.2vw, 2.5rem);
   line-height: 1.12;
   letter-spacing: -0.035em;
@@ -1682,8 +1683,8 @@
 .tokenTag:hover,
 [data-theme='dark'] .tokenTag:hover {
   border-color: var(--site-hover-border);
-  background: rgba(48, 162, 255, 0.14);
-  color: var(--site-brand-blue);
+  background: var(--site-accent-soft);
+  color: var(--site-hover-text);
 }
 .agentNode:hover,
 [data-theme='dark'] .agentNode:hover,
@@ -1742,7 +1743,7 @@
 .transformerExitDot,
 [data-theme='dark'] .transformerExitDot {
   border: 1px solid var(--site-border);
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--site-surface-soft);
   color: var(--site-accent-strong);
 }
 
@@ -1798,7 +1799,7 @@
 .transformerEntropyTrack,
 [data-theme='dark'] .transformerEntropyTrack {
   border-color: var(--site-border-strong);
-  background: rgba(255, 255, 255, 0.028);
+  background: var(--site-surface-soft);
 }
 
 .figureCanvas,

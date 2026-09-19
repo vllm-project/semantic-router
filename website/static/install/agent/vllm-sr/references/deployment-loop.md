@@ -57,7 +57,7 @@ acceleration, report that limitation before starting a different deployment.
 If initialization or inference fails, retain the image, model revision, error,
 and triggering input size. Qualify a proposed fix on that path; a successful
 short request does not establish long-context or concurrent behavior. Use the
-[evaluation checks](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md) required by the user's task.
+[evaluation checks](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md) required by the user's task.
 
 ## Add or replace physical models
 
@@ -95,7 +95,7 @@ prompt-plus-generation context. A learned binding's `overflow: reject` does not
 by itself make that limit an API rejection boundary: an unknown signal can cause
 `no_match` and another decision to serve the request. Candidate metadata can also
 exclude a budget that the backend accepts directly. Verify these separately with
-the [boundary checks](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md#token-boundaries-and-public-errors)
+the [boundary checks](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md#token-boundaries-and-public-errors)
 before advertising supported limits.
 
 ## Dashboard access
@@ -120,7 +120,7 @@ do not assume default credentials. Record the access URL/tunnel and hand off
 credentials privately through the user's chosen secure mechanism.
 
 Follow the main skill's UI path and the
-[repeated checks](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md#repeated-api-and-ui-checks) to verify real
+[repeated checks](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md#repeated-api-and-ui-checks) to verify real
 Playground completions. Server-backed preview and inference delivery are
 separate evidence. Keep credentials and raw private workload outputs out of
 source control and public receipts.

@@ -12,6 +12,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -24,6 +25,14 @@ import (
 // service outage (503); anything else is treated as an
 // internal error (500 CLASSIFICATION_ERROR).
 func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
+	if errors.Is(err, services.ErrConfigHashMismatch) {
+		s.writeErrorResponse(w, http.StatusPreconditionFailed, "CONFIG_HASH_MISMATCH", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrConfigHashUnavailable) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CONFIG_HASH_UNAVAILABLE", err.Error())
+		return
+	}
 	if errors.Is(err, services.ErrEmptyText) ||
 		errors.Is(err, services.ErrInvalidRequestFacts) ||
 		errors.Is(err, binding.ErrInputLimit) {
@@ -75,10 +84,16 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 // should be evaluated regardless of whether they are used in decisions
 func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.IntentRequest
+	expected := r.Header.Get(headers.SRBenchExpectedConfigHash)
+	if expected != "" && !headers.ValidConfigHash(expected) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONFIG_HASH", "expected config hash must be a lowercase SHA-256 digest")
+		return
+	}
 	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
+	req.ExpectedConfigHash = expected
 
 	if r.URL.Query().Get("trace") == "true" {
 		if req.Options == nil {

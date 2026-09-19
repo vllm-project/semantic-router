@@ -18,8 +18,8 @@ const AppRouter: React.FC = () => {
   const { user } = useAuth()
   const {
     isLoading: settingsLoading,
-    evaluationAvailable,
-    evaluationUnavailableReason,
+    srBenchAvailable,
+    srBenchUnavailableReason,
   } = useReadonly()
   const canUseMLSetup = canAccessMLSetup(user)
 
@@ -66,8 +66,8 @@ const AppRouter: React.FC = () => {
               user,
               setupMode,
               settingsLoading,
-              evaluationAvailable,
-              evaluationUnavailableReason,
+              srBenchAvailable,
+              srBenchUnavailableReason,
             })}
           </Route>
         </Route>

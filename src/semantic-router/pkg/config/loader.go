@@ -478,13 +478,35 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		}
 	}
 	if tuning, ok := raw["tuning"]; ok {
-		if err := rejectUnknownMapFields(prefix+".tuning", nestedStringMap(tuning), []string{
+		tuningMap := nestedStringMap(tuning)
+		if err := rejectUnknownMapFields(prefix+".tuning", tuningMap, []string{
 			"idle_timeout_seconds",
 			"min_turns_before_switch",
 			"switch_margin",
 			"stability_weight",
+			"progress_gate",
 		}); err != nil {
 			return err
+		}
+		if gate, ok := tuningMap["progress_gate"]; ok {
+			if err := rejectUnknownMapFields(
+				prefix+".tuning.progress_gate",
+				nestedStringMap(gate),
+				[]string{
+					"enabled",
+					"mode",
+					"calibration_id",
+					"window_size",
+					"window_ttl_seconds",
+					"min_window_outcomes",
+					"min_consecutive_regressions",
+					"min_consecutive_recoveries",
+					"cooldown_seconds",
+					"max_switches_per_window",
+				},
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

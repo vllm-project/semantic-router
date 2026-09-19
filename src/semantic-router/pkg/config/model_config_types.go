@@ -256,19 +256,30 @@ func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
 }
 
 type ExternalModelConfig struct {
-	Name             string                 `yaml:"name,omitempty"`
-	Provider         string                 `yaml:"llm_provider"`
-	ModelRole        string                 `yaml:"model_role"`
-	ModelEndpoint    ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
-	ModelName        string                 `yaml:"llm_model_name,omitempty"`
-	TimeoutSeconds   int                    `yaml:"llm_timeout_seconds,omitempty"`
-	ParserType       string                 `yaml:"parser_type,omitempty"`
-	Threshold        float32                `yaml:"threshold,omitempty"`
-	AccessKey        string                 `yaml:"access_key,omitempty" json:"-"`
-	MaxTokens        int                    `yaml:"max_tokens,omitempty"`
-	Temperature      float64                `yaml:"temperature,omitempty"`
-	MaxRequestBytes  int64                  `yaml:"max_request_bytes,omitempty"`
-	MaxResponseBytes int64                  `yaml:"max_response_bytes,omitempty"`
+	Name             string                        `yaml:"name,omitempty"`
+	Provider         string                        `yaml:"llm_provider"`
+	ModelRole        string                        `yaml:"model_role"`
+	ModelEndpoint    ClassifierVLLMEndpoint        `yaml:"llm_endpoint,omitempty"`
+	ModelName        string                        `yaml:"llm_model_name,omitempty"`
+	TimeoutSeconds   int                           `yaml:"llm_timeout_seconds,omitempty"`
+	ParserType       string                        `yaml:"parser_type,omitempty"`
+	Threshold        float32                       `yaml:"threshold,omitempty"`
+	AccessKey        string                        `yaml:"access_key,omitempty" json:"-"`
+	MaxTokens        int                           `yaml:"max_tokens,omitempty"`
+	Temperature      float64                       `yaml:"temperature,omitempty"`
+	Reasoning        *ExternalModelReasoningConfig `yaml:"reasoning,omitempty"`
+	MaxRequestBytes  int64                         `yaml:"max_request_bytes,omitempty"`
+	MaxResponseBytes int64                         `yaml:"max_response_bytes,omitempty"`
+}
+
+// ExternalModelReasoningConfig controls reasoning for requests made to a
+// vLLM-backed external classifier. Family references the shared reasoning-family
+// catalog; the external model contract intentionally does not support inline
+// family definitions.
+type ExternalModelReasoningConfig struct {
+	Family          string `yaml:"family" jsonschema:"required"`
+	UseReasoning    *bool  `yaml:"use_reasoning" jsonschema:"required"`
+	ReasoningEffort string `yaml:"reasoning_effort,omitempty"`
 }
 
 // AdmissionConfig bounds concurrent inference for one Router Model

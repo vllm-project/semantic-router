@@ -117,6 +117,6 @@ vllm-sr route probe \
 
 用同一数据集运行基线和候选版本，按语言、输入长度、用例和会话阶段检查回归。候选版本改善目标且没有违反质量底线和硬约束时保留它，否则恢复基线并保存证据。
 
-更广泛的路由工作负载可通过 `vllm-sr benchmark catalog` 发现。完整模型或虚拟模型比较，可使用 `vllm-sr benchmark intelligence list` 和 `plan --help` 了解固定测试集。虚拟模型必须通过真实端点评测，不能用成员模型分数拼出结果。部分测试有助于调优，但不能代表完整测试集得分。
+使用 [sr-bench 1.0](sr-bench) 构建冻结 dev/holdout 数据并复用单模型/MoM 对比。`benchmark preview` 记录真实路由，`benchmark replay` 从保存的单模型答案估计可支持的直接路由变更。`benchmark run` 测量真实生成；`benchmark compare` 给出最强已测单模型基线下的成对质量区间和成本节省。Replay 只是诊断估计；MoM 必须通过真实入口评测。部分结果和未知成本不能冒充完整分数或零成本成功。
 
 [Agent 调优参考](https://vllm-sr.ai/install/agent/vllm-sr/references/recipe-tuning.md) 提供可复用的检查步骤。原始评测输出保留在 Git 之外，凭据放在 `--token-env` 或 `--api-key-env` 指定名称的环境变量中。

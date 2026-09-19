@@ -201,7 +201,9 @@ func fingerprintArtifact(ctx context.Context, abs string) (string, error) {
 		return "", fmt.Errorf("stat model artifact: %w", err)
 	}
 	if info.IsDir() {
-		artifactDirectory, openErr := directory.OpenRoot(start)
+		// Open the snapshot directory by absolute path so nested symlink targets
+		// (for example HF ../../blobs/...) resolve against the cache root.
+		artifactDirectory, openErr := os.OpenRoot(filepath.Join(directory.Name(), start))
 		if openErr != nil {
 			return "", fmt.Errorf("open model artifact: %w", openErr)
 		}
