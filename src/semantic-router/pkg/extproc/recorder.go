@@ -1,9 +1,12 @@
 package extproc
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"time"
+	"unicode/utf8"
 
 	"go.opentelemetry.io/otel/attribute"
 
@@ -472,6 +475,9 @@ func (r *OpenAIRouter) attachRouterReplayResponse(ctx *RequestContext, responseB
 	if len(responseBody) > 0 {
 		_ = recorder.AttachResponse(ctx.RouterReplayID, responseBody)
 	}
+	if isFinal {
+		attachPrimaryOutputDigest(ctx, recorder)
+	}
 	if responseTrace := buildReplayResponseToolTrace(ctx, responseBody); responseTrace != nil {
 		if stored, ok := recorder.GetRecord(ctx.RouterReplayID); ok {
 			responseTrace = mergeReplayToolTraces(stored.ToolTrace, responseTrace)
@@ -773,6 +779,59 @@ func (r *OpenAIRouter) updateRouterReplayUsageCost(ctx *RequestContext, usage ro
 
 	if err := recorder.UpdateUsageCost(ctx.RouterReplayID, usage); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_usage_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"error":      err.Error(),
+		})
+	}
+}
+
+// primaryResponseOutcomeSource marks the outcome that carries the digest of
+// what the selected model answered. Shadow dispatch writes its arms the same
+// way, so an offline comparison reads both sides through one path instead of
+// hashing a stored body on one side and a decoded answer on the other.
+const primaryResponseOutcomeSource = "primary_response"
+
+// recordPrimaryOutputDigest hashes what the selected model answered, using the
+// same contract a shadow arm is hashed under: the assistant text of the decoded
+// response, never the encoded protocol body, which carries a JSON envelope, a
+// response id and a usage block that a shadow digest never sees.
+//
+// It runs before any response-stage plugin, because a body warning prepends
+// router text to the same response in place. Hashing after that would credit
+// the warning to the model and the two arms would stop comparing.
+func recordPrimaryOutputDigest(ctx *RequestContext, response *llmprotocol.Response) {
+	if ctx == nil || response == nil || ctx.PrimaryOutputDigest != "" {
+		return
+	}
+	text := semanticResponseText(*response)
+	if text == "" {
+		return
+	}
+	sum := sha256.Sum256([]byte(text))
+	ctx.PrimaryOutputDigest = hex.EncodeToString(sum[:])
+	ctx.PrimaryOutputChars = utf8.RuneCountInString(text)
+}
+
+// attachPrimaryOutputDigest persists the digest captured before the response
+// was rewritten, so an offline comparison reads both arms through one contract.
+func attachPrimaryOutputDigest(ctx *RequestContext, recorder *routerreplay.Recorder) {
+	if ctx.PrimaryOutputDigest == "" {
+		return
+	}
+	outcome := routerreplay.Outcome{
+		Timestamp: time.Now().UTC(),
+		Source:    primaryResponseOutcomeSource,
+		Target:    "model",
+		TargetRef: ctx.VSRSelectedModel,
+		Verdict:   "completed",
+		Metadata: map[string]string{
+			"response_sha256": ctx.PrimaryOutputDigest,
+			"response_chars":  strconv.Itoa(ctx.PrimaryOutputChars),
+		},
+	}
+	if err := recorder.AppendOutcome(ctx.RouterReplayID, outcome); err != nil {
+		logging.ComponentErrorEvent("extproc", "primary_output_digest_persist_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"replay_id":  ctx.RouterReplayID,
 			"error":      err.Error(),

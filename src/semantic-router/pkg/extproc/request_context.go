@@ -330,6 +330,13 @@ type RequestContext struct {
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
 	SemanticResponse         *llmprotocol.Response
+	// PrimaryOutputDigest hashes the answer the selected model produced, taken
+	// before any response-stage plugin rewrites it. A body warning prepends
+	// router text to SemanticResponse in place, so hashing that later would
+	// attribute the warning to the model and stop the digest comparing with a
+	// shadow arm's.
+	PrimaryOutputDigest      string
+	PrimaryOutputChars       int
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
