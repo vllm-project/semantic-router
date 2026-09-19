@@ -347,6 +347,18 @@ func (r *RedisStore) UpdateUsageCost(ctx context.Context, id string, usage Usage
 	})
 }
 
+// UpdateRequestDemandSnapshots replaces bounded request-demand evidence for a record.
+func (r *RedisStore) UpdateRequestDemandSnapshots(
+	ctx context.Context,
+	id string,
+	snapshots []RequestDemandSnapshot,
+) error {
+	return r.updateRecord(ctx, id, func(record *Record) bool {
+		setRequestDemandSnapshots(record, snapshots)
+		return true
+	})
+}
+
 // UpdateToolTrace updates tool-calling trace details for a record.
 func (r *RedisStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	return r.updateRecord(ctx, id, func(record *Record) bool {

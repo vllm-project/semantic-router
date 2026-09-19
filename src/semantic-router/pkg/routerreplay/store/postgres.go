@@ -650,6 +650,55 @@ func (p *PostgresStore) UpdateUsageCost(ctx context.Context, id string, usage Us
 	return fn()
 }
 
+// UpdateRequestDemandSnapshots replaces bounded request-demand evidence for a record.
+func (p *PostgresStore) UpdateRequestDemandSnapshots(
+	ctx context.Context,
+	id string,
+	snapshots []RequestDemandSnapshot,
+) error {
+	release, err := p.lifecycle.beginMutation()
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	snapshotsJSON, err := json.Marshal(cloneRequestDemandSnapshots(snapshots))
+	if err != nil {
+		return fmt.Errorf("failed to marshal request demand snapshots: %w", err)
+	}
+	//nolint:gosec // tableName is validated during store creation
+	query := fmt.Sprintf(`
+		UPDATE %s
+		SET route_diagnostics = jsonb_set(
+			COALESCE(NULLIF(route_diagnostics, 'null'::jsonb), '{}'::jsonb),
+			'{request_demand_snapshots}',
+			$2::jsonb,
+			true
+		)
+		WHERE id = $1
+	`, p.tableName)
+
+	fn := func() error {
+		result, err := p.db.ExecContext(ctx, query, id, string(snapshotsJSON))
+		if err != nil {
+			return fmt.Errorf("failed to update request demand snapshots: %w", err)
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if rows == 0 {
+			return fmt.Errorf("record with ID %s not found", id)
+		}
+		return nil
+	}
+
+	if p.asyncWrites {
+		return p.runAsyncAndWait(ctx, fn)
+	}
+	return fn()
+}
+
 // UpdateToolTrace updates tool-calling trace details for a record.
 func (p *PostgresStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	release, err := p.lifecycle.beginMutation()

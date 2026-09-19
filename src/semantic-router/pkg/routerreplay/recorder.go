@@ -366,6 +366,15 @@ func (r *Recorder) UpdateUsageCost(id string, usage UsageCost) error {
 	return r.storage.UpdateUsageCost(ctx, id, usage)
 }
 
+func (r *Recorder) UpdateRequestDemandSnapshots(
+	id string,
+	snapshots []RequestDemandSnapshot,
+) error {
+	ctx, cancel := r.replayOperationContext()
+	defer cancel()
+	return r.storage.UpdateRequestDemandSnapshots(ctx, id, snapshots)
+}
+
 func (r *Recorder) UpdateToolTrace(id string, trace ToolTrace) error {
 	policy := r.policySnapshot()
 	// Apply MaxToolTraceBytes here too: response-side traces are attached via

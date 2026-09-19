@@ -229,6 +229,23 @@ func (m *MemoryStore) UpdateUsageCost(ctx context.Context, id string, usage Usag
 	return nil
 }
 
+// UpdateRequestDemandSnapshots replaces bounded request-demand evidence for a record.
+func (m *MemoryStore) UpdateRequestDemandSnapshots(
+	ctx context.Context,
+	id string,
+	snapshots []RequestDemandSnapshot,
+) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	record, ok := m.byID[id]
+	if !ok {
+		return fmt.Errorf("record with ID %s not found", id)
+	}
+	setRequestDemandSnapshots(record, snapshots)
+	return nil
+}
+
 // UpdateToolTrace updates tool-calling trace details for a record.
 func (m *MemoryStore) UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error {
 	m.mu.Lock()
