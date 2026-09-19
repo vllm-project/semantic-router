@@ -348,6 +348,9 @@ domains:
     paths:
       - src/vllm-sr/**
       - pyproject.toml
+      # Escalation paths only add jobs for an already-selected domain, so the
+      # CLI E2E assets are listed here as well; otherwise a change confined to
+      # them can never select this domain or reach the cli job that runs them.
       - e2e/testing/vllm-sr-cli/**
       - tools/make/docker.mk
     checks: [make vllm-sr-test]
