@@ -142,10 +142,16 @@ must be confirmed with maintainers before the PR that depends on it merges.
 - [x] `TASK-02` Add the versioned envelope schema and its validator as a standalone
   package with stable rejection reason codes and no runtime wiring. Landed as
   `src/semantic-router/pkg/agenticfacts`, pending review.
-- [ ] `TASK-03` Add the disabled-by-default config contract and trust policy,
+- [x] `TASK-03` Add the disabled-by-default config contract and trust policy,
   including canonical import/export, reference config, and required public docs.
-- [ ] `TASK-04` Ingest and validate the envelope at the request boundary, enforce
+  Landed in `pkg/config` (`agentic_facts.go`, canonical schema wiring, reference
+  config, validator, docs), pending review.
+- [x] `TASK-04` Ingest and validate the envelope at the request boundary, enforce
   trust, strip the carrier, and emit diagnostics without changing selection.
+  Landed in `pkg/extproc` (`req_filter_agentic_facts.go`, wired into
+  `handleRequestHeaders`), pending review. Both the carrier and trust-marker
+  headers are stripped on every return path, including the skip-processing
+  bypass, not only the normal routing path.
 - [ ] `TASK-05` Project accepted facts into the typed signal family and wire it
   through the routing-surface catalog, validators, decision engine, and Replay
   signal state.
@@ -158,11 +164,10 @@ must be confirmed with maintainers before the PR that depends on it merges.
 
 ## Next Action
 
-Commit `TASK-02` on `feat/3379-agentic-facts-schema`, then start `TASK-03`.
-`CONFIRM-02` and `CONFIRM-03` shape the config contract and `CONFIRM-08` and
-`CONFIRM-09` become externally visible at `TASK-04`, so raise all four for
-maintainer ruling while `TASK-03` is in progress rather than after the branch is
-complete.
+Commit `TASK-04` on `feat/3379-agentic-facts-schema`, then start `TASK-05`.
+`CONFIRM-02`, `CONFIRM-03`, `CONFIRM-08`, and `CONFIRM-09` are now implemented
+and externally visible in `pkg/extproc`, not just recorded defaults, so raise
+all four for maintainer ruling before the branch is complete rather than after.
 
 ## Operating Rules
 
