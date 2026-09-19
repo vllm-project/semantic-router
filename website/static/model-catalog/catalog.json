@@ -93890,12 +93890,14 @@
     {
       "auth": {
         "header": "Authorization",
+        "injected_header": "x-user-cloudflare-workers-ai-key",
         "prefix": "Bearer",
         "strategy": "bearer"
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-19"
       },
       "default_protocol": "openai/chat-completions@1",
       "description": "Cloudflare Workers AI OpenAI-compatible inference.",
