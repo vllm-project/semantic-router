@@ -99,6 +99,33 @@ def digest(value):
     return hashlib.sha256(canonical(value).encode()).hexdigest()
 
 
+def protocol_canonical(value):
+    """Compare control values across JSON clients without rewriting evidence.
+
+    JSON has one numeric type: browsers serialize 1.0 as 1 and -0.0 as 0.
+    Preserve booleans, strings, array order and fractional values, and retain
+    canonical()'s rejection of non-finite numbers. Raw case/dataset digests
+    deliberately keep their separate, exact-content contract.
+    """
+
+    def numbers(item):
+        if isinstance(item, float) and item.is_integer():
+            return int(item)
+        if isinstance(item, dict):
+            return {key: numbers(child) for key, child in item.items()}
+        if isinstance(item, list):
+            return [numbers(child) for child in item]
+        return item
+
+    return canonical(numbers(value))
+
+
+def plan_digest(manifest):
+    """Hash a reviewed plan's numeric semantics, excluding its own receipt."""
+    content = {key: value for key, value in manifest.items() if key != "plan_sha256"}
+    return hashlib.sha256(protocol_canonical(content).encode()).hexdigest()
+
+
 def planned_cells(manifest):
     return manifest.get("execution_cells") or [
         {"case_id": case["id"], "target_id": target["id"]}
@@ -525,5 +552,5 @@ def plan(manifest):
             adapter = get_adapter(case["benchmark"])
             if adapter.preflight is not None:
                 adapter.preflight(case, m, cache)
-    m["plan_sha256"] = digest({k: v for k, v in m.items() if k != "plan_sha256"})
+    m["plan_sha256"] = plan_digest(m)
     return m

@@ -6,7 +6,7 @@ from cli.routing_preview import PROMPT_FIELDS, case_request_fields
 
 from . import VERSION
 from .accounting import effective_calls
-from .contracts import canonical, digest
+from .contracts import canonical, digest, protocol_canonical
 
 REPLAYABLE = {"mmlu-pro", "gpqa-diamond", "arc-agi-2", "hle", "simpleqa-verified"}
 
@@ -169,7 +169,9 @@ class ReplayValidator:
                     **selected.get("request_params", {}),
                 }
                 preview_params = {**pm["sampling"], **target.get("request_params", {})}
-                if canonical(baseline_params) != canonical(preview_params):
+                if protocol_canonical(baseline_params) != protocol_canonical(
+                    preview_params
+                ):
                     reject(
                         "sampling_mismatch",
                         "Replay selected model has different frozen effective request parameters.",

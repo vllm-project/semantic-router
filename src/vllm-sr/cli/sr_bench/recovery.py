@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 
 from .accounting import correction_metadata, effective_calls
-from .contracts import digest, planned_cells
+from .contracts import digest, plan_digest, planned_cells
 from .experiments import inherit_membership
 from .store import TERMINAL, RecoveryClaimError
 
@@ -83,7 +83,7 @@ def recovery_plan(store, parent_id, mode="undispatched"):
         "requires_new_attempt_acknowledgment": mode == "failed",
         "scope": "Selected cells only; parent evidence and spend remain separate.",
     }
-    return {**proposed, "plan_sha256": digest(proposed)}
+    return {**proposed, "plan_sha256": plan_digest(proposed)}
 
 
 def recover(engine, parent_id, body, owner="local", *, actor_role="local"):

@@ -6,7 +6,7 @@ import copy
 
 from . import VERSION
 from .accounting import BUCKETS, correction_metadata, effective_calls
-from .contracts import digest
+from .contracts import plan_digest
 from .engine import basic_grade
 from .experiments import inherit_membership
 from .provenance import capture_runner
@@ -200,9 +200,7 @@ def _materialize_replay(store, baseline_id, preview_id, owner, request_key, acto
             if selected_target["id"] == target["id"]
             for model, price in singles[source_target].get("prices", {}).items()
         }
-    manifest["plan_sha256"] = digest(
-        {k: v for k, v in manifest.items() if k != "plan_sha256"}
-    )
+    manifest["plan_sha256"] = plan_digest(manifest)
     run, created = store.create(
         manifest,
         owner,

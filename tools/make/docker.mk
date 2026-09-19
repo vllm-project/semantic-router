@@ -543,6 +543,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
 		src/vllm-sr/tests/test_routing_preview.py \
 		src/vllm-sr/tests/test_sr_bench_harness.py \
+		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
 		src/vllm-sr/tests/test_sr_bench_recovery.py \
 		src/vllm-sr/tests/test_sr_bench_replay.py \
 		src/vllm-sr/tests/test_sr_bench_reporting.py \
