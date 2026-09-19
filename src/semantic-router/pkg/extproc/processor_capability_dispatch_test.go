@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
@@ -364,6 +365,9 @@ func TestCapabilitySelectionChoosesImagesWireSibling(t *testing.T) {
 	if ctx.RequestModel != imageBackend {
 		t.Fatalf("ctx.RequestModel = %q, want %q (rerouted images serving model for token/ttfb/usage attribution)", ctx.RequestModel, imageBackend)
 	}
+	if ctx.VSRSelectedModel != imageBackend {
+		t.Fatalf("ctx.VSRSelectedModel = %q, want %q (selected-model header reflects the final dispatch model)", ctx.VSRSelectedModel, imageBackend)
+	}
 }
 
 // A pure image request that omits tool_choice is defaulted to auto by
@@ -461,5 +465,47 @@ func TestWireFormatForImagesAPIFormat(t *testing.T) {
 func TestRequestWirePathForImagesFormat(t *testing.T) {
 	if path := requestWirePath(llmprotocol.OpenAIImagesV1); path != "/v1/images/generations" {
 		t.Fatalf("wire path = %q, want /v1/images/generations", path)
+	}
+}
+
+// A capability reroute must move the in-flight admission entry with the
+// request: the entry opened under the decision-selected model is closed, the
+// rerouted model carries it, and the response path ends the entry it owns.
+func TestPrepareProviderDispatchHopsInflightToReroutedModel(t *testing.T) {
+	router, primary := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	imageBackend := "image-backend"
+	router.Config.ModelConfig[imageBackend] = config.ModelParams{
+		PreferredEndpoints: []string{"backend"},
+		APIFormat:          config.APIFormatImages,
+		ExternalModelIDs:   map[string]string{"vllm": "provider-image"},
+	}
+	decision := &config.Decision{
+		Name: "Omni",
+		ModelRefs: []config.ModelRef{
+			{Model: primary},
+			{Model: imageBackend},
+		},
+	}
+	request := testNeutralRequest(primary, "draw a cat")
+	request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}
+	request.ImageGeneration = &llmprotocol.ImageGenerationOptions{Size: "1024x1024"}
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	ctx.VSRSelectedDecision = decision
+	// The prepare phase opens the in-flight token under the decision-selected
+	// model, before any capability reroute is known.
+	ctx.InflightToken = inflight.Begin(imageBackend)
+
+	if _, err := selectCapabilityTestDispatch(router, request, decision, ctx); err != nil {
+		t.Fatalf("expected reroute to images sibling, got error: %v", err)
+	}
+	if got := inflight.Get(primary); got != 0 {
+		t.Fatalf("inflight(%s) = %d, want 0 after the reroute hand-over", primary, got)
+	}
+	if got := inflight.Get(imageBackend); got != 1 {
+		t.Fatalf("inflight(%s) = %d, want 1 under the dispatched model", imageBackend, got)
+	}
+	inflight.End(ctx.RequestModel, ctx.InflightToken)
+	if got := inflight.Get(imageBackend); got != 0 {
+		t.Fatalf("inflight(%s) = %d, want 0 after the response ends the token", imageBackend, got)
 	}
 }

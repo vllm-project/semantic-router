@@ -1838,6 +1838,19 @@ global:
           min_turns_before_switch: 1
           switch_margin: 0.05
           stability_weight: 1.0
+          # Gate session model switches on recent-outcome evidence. Disabled by
+          # default; thresholds stay placeholders until they are calibrated.
+          progress_gate:
+            enabled: false
+            mode: observe
+            calibration_id: "" # External profile name@version; required for enforce.
+            window_size: 8
+            window_ttl_seconds: 900
+            min_window_outcomes: 3
+            min_consecutive_regressions: 2
+            min_consecutive_recoveries: 2
+            cooldown_seconds: 120
+            max_switches_per_window: 2
       state_store:
         backend: redis
         ttl_seconds: 86400
@@ -2423,6 +2436,19 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
+      - name: external-reasoning-classifier
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: vllm-classifier
+          port: 8000
+          protocol: http
+          use_chat_template: true
+        llm_model_name: qwen/qwen3.8-27b
+        reasoning:
+          family: qwen3.8
+          use_reasoning: true
+          reasoning_effort: low
       - name: external-sequence-classifier
         llm_provider: openai
         model_role: classification

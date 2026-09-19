@@ -675,6 +675,9 @@ func (s *Server) reloadRouterFromConfigLocked(
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
 	if err := s.service.Swap(newRouter, func(acquire AcquireFunc) {
+		if newRouter != nil {
+			newRouter.WorkflowStateService.CommitStorePolicy()
+		}
 		publishRouterState(candidateCfg, newRouter, s.runtime, acquire)
 	}); err != nil {
 		return err

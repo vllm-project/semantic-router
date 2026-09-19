@@ -287,12 +287,11 @@ func testSingleCacheRequestForModel(ctx context.Context, testCase CacheTestCase,
 // The contract (#2473): the score belongs to this request, rejected candidates
 // included. A hit is only served above the configured threshold, so its score
 // lands in (0,1]; a miss may omit the header, or report its best rejected
-// candidate, which must still be a finite score in [0,1). The header rides the
+// candidate, which must still be a finite score in [0,1]. The header rides the
 // x-vsr-debug surface.
 //
-// The miss bound is [0,1) rather than "below threshold" on purpose: the profile
-// threshold is not visible here, and a miss reporting a full 1.0 match would
-// mean the hit path was bypassed.
+// A verifier outage (#3176) can reject even a full-similarity candidate; the
+// score alone does not establish that the candidate is safe to serve.
 func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 	if simHeader == "" {
 		if cacheHit {
@@ -313,8 +312,9 @@ func parseCacheSimilarity(simHeader string, cacheHit bool) (float64, string) {
 		}
 		return sim, ""
 	}
-	if sim < 0.0 || sim >= 1.0 {
-		return 0, fmt.Sprintf("cache-miss similarity %.4f out of expected [0,1) range", sim)
+	// Even a full-similarity candidate can miss when NLI verification fails.
+	if sim < 0.0 || sim > 1.0 {
+		return 0, fmt.Sprintf("cache-miss similarity %.4f out of expected [0,1] range", sim)
 	}
 	return sim, ""
 }

@@ -109,6 +109,12 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
 	if ctx != nil && ctx.IsStreamingResponse && !ctx.StreamingComplete {
 		ctx.StreamingAborted = true
+		// The evidence window is count-bounded, so a turn that never reaches EOS
+		// must still land as a fact. Without it the newest failed turns cannot
+		// displace older regressions and a later request could switch on
+		// evidence that is no longer from the latest turns. The recorder is
+		// idempotent and empty usage stays non-attributable.
+		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
 	if ctx != nil && ctx.InflightToken != 0 {
