@@ -15,6 +15,11 @@ Use it to:
 - manage security policies, ML selection workflows, MCP tools, and optional
   OpenClaw workers when those features are enabled.
 
+Playground starts with the default route advertised by the Router. Named recipe
+entrypoints and orchestration aliases remain selectable alongside it; adding a
+Fusion route does not change ordinary chat's default. If the Router advertises
+only explicit entrypoints, Playground selects the first available entrypoint.
+
 The Dashboard is a control plane, not an inference proxy. Applications should
 send inference requests to Envoy.
 
