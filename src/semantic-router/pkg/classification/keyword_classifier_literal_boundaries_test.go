@@ -51,6 +51,8 @@ func TestKeywordClassifierLiteralNeighborContract(t *testing.T) {
 		want       bool
 	}{
 		{"C++", "C++Builder", false},
+		{"python", "python_code", false},
+		{"python", "code_python", false},
 		{"C#", "C#script", false},
 		{".NET", "ASP.NET", false},
 		{".NET", ".NETCore", false},
@@ -59,7 +61,9 @@ func TestKeywordClassifierLiteralNeighborContract(t *testing.T) {
 		{"A)", "A) answer", true},
 		{"привет", "скажи привет!", true},
 		{"안녕하세요", "안녕하세요 여러분", true},
+		{"안녕하세요", "안녕하세요여러분", true},
 		{"こんにちは", "こんにちは 世界", true},
+		{"こんにちは", "こんにちは世界", true},
 		{"café", "a café nearby", true},
 		{"café", "caféteria", false},
 		{"C++", "解释C++语言", true},

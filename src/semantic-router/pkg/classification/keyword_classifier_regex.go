@@ -84,7 +84,8 @@ func regexPatterns(keyword string, useExplicitRegex bool) (string, string) {
 // Literal boundaries belong to the neighboring runes, not to the keyword's
 // first/last character. Reuse the structure keyword contract, retaining CJK
 // substring matching and the regex engine's Unicode case folding. Explicit
-// regex patterns remain untouched. Advance one rune after a rejected match so
+// regex patterns remain untouched. Unlike structure features, literal routing
+// also keeps its existing underscore word boundary. Advance one rune after a rejected match so
 // an overlapping or later valid occurrence is still considered.
 func matchesKeywordPattern(text string, rule preppedKeywordRule, index int, pattern *regexp.Regexp) bool {
 	if !rule.LiteralBoundaries[index] {
@@ -96,7 +97,8 @@ func matchesKeywordPattern(text string, rule preppedKeywordRule, index int, patt
 			return false
 		}
 		start, end := offset+match[0], offset+match[1]
-		if keywordBoundaryMatch(text, start, end) {
+		if keywordBoundaryMatch(text, start, end) &&
+			(start == 0 || text[start-1] != '_') && (end == len(text) || text[end] != '_') {
 			return true
 		}
 		_, size := utf8.DecodeRuneInString(text[start:])
