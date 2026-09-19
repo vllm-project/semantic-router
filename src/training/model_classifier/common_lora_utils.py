@@ -16,6 +16,52 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+def warmup_kwargs(warmup_ratio: float) -> Dict[str, float]:
+    """Return the TrainingArguments kwarg that expresses a warmup *ratio*.
+
+    `warmup_ratio` was removed from `transformers.TrainingArguments` in 5.15.0,
+    so every call site passing it raises `TypeError` on a fresh install. The
+    replacement is not a different quantity, only a different name: `warmup_steps`
+    became a float, and `get_warmup_steps` reads a value below 1 as the ratio it
+    used to read from `warmup_ratio`.
+
+        # transformers >= 5.15
+        warmup_steps = (
+            int(self.warmup_steps) if self.warmup_steps >= 1
+            else math.ceil(num_training_steps * self.warmup_steps)
+        )
+
+    The two spellings are not interchangeable, which is why this picks one by
+    inspecting the dataclass rather than by version string. On 4.x
+    `warmup_steps` is an `int` and the guard is `self.warmup_steps > 0`, so a
+    float ratio there is read as an absolute step *count*: 0.06 would mean 0.06
+    steps, that is no warmup at all, and nothing would say so. The repository
+    still declares `transformers>=4.36.0` in several requirements files, so that
+    path is live.
+
+    Resolving the ratio is left to the Trainer, which computes
+    `num_training_steps` from the prepared dataloader. That is the only place the
+    count is known correctly: it already accounts for the world size under DDP,
+    for a final partial gradient-accumulation group, and for whatever DeepSpeed
+    or the accelerator did to the effective batch. Recomputing it here would mean
+    re-deriving all of that and staying in step with it forever.
+
+    Args:
+        warmup_ratio: The ratio the script used to pass, e.g. 0.06.
+
+    Returns:
+        `{"warmup_ratio": r}` on transformers 4.x, `{"warmup_steps": r}` on
+        5.15+, to be splatted into the `TrainingArguments(...)` call.
+    """
+    from dataclasses import fields
+
+    from transformers import TrainingArguments
+
+    names = {f.name for f in fields(TrainingArguments)}
+    key = "warmup_ratio" if "warmup_ratio" in names else "warmup_steps"
+    return {key: warmup_ratio}
+
+
 def get_target_modules_for_model(model_name: str) -> List[str]:
     """
     Get appropriate target_modules for LoRA based on model architecture.

@@ -25,6 +25,8 @@ Optimized Hyperparameters (validated 2026-02-02):
 
 import argparse
 import json
+import os
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -40,6 +42,13 @@ from transformers import (
     TrainingArguments,
     set_seed,
 )
+
+# common_lora_utils lives one directory up. Python puts only the script's own
+# directory on sys.path for a direct `python path/to/script.py` launch, so
+# without this the import fails before argument parsing. The other LoRA
+# training scripts carry the same line.
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from common_lora_utils import warmup_kwargs
 
 if __package__:
     from .data_contract import (
@@ -361,7 +370,7 @@ def main():
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size * 2,
         learning_rate=args.lr,
-        warmup_ratio=args.warmup_ratio,
+        **warmup_kwargs(args.warmup_ratio),
         weight_decay=args.weight_decay,
         eval_strategy="epoch",
         save_strategy="epoch",

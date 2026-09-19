@@ -79,52 +79,29 @@ from common_lora_utils import (
     log_memory_usage,
     set_gpu_device,
     setup_logging,
+    warmup_kwargs,
 )
 from datasets import Dataset, load_dataset
-from peft import (
-    LoraConfig,
-    PeftConfig,
-    PeftModel,
-    TaskType,
-    get_peft_model,
-)
+from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 from sklearn.model_selection import train_test_split
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    TrainingArguments,
-)
+from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
 from trl import SFTTrainer
 
 # Import bench dataset implementations
 try:
-    from reasoning.dataset_implementations.arc_dataset import (
-        ARCDataset,
-    )
+    from reasoning.dataset_implementations.arc_dataset import ARCDataset
     from reasoning.dataset_implementations.commonsenseqa_dataset import (
         CommonsenseQADataset,
     )
-    from reasoning.dataset_implementations.gsm8k_dataset import (
-        GSM8KDataset,
-    )
-    from reasoning.dataset_implementations.math_dataset import (
-        MATHDataset,
-    )
-    from reasoning.dataset_implementations.openbookqa_dataset import (
-        OpenBookQADataset,
-    )
+    from reasoning.dataset_implementations.gsm8k_dataset import GSM8KDataset
+    from reasoning.dataset_implementations.math_dataset import MATHDataset
+    from reasoning.dataset_implementations.openbookqa_dataset import OpenBookQADataset
     from reasoning.dataset_implementations.openmathrreasoning_dataset import (
         OpenMathReasoningDataset,
     )
-    from reasoning.dataset_implementations.sciq_dataset import (
-        SciQDataset,
-    )
-    from reasoning.dataset_implementations.strategyqa_dataset import (
-        StrategyQADataset,
-    )
-    from reasoning.dataset_implementations.truthfulqa_dataset import (
-        TruthfulQADataset,
-    )
+    from reasoning.dataset_implementations.sciq_dataset import SciQDataset
+    from reasoning.dataset_implementations.strategyqa_dataset import StrategyQADataset
+    from reasoning.dataset_implementations.truthfulqa_dataset import TruthfulQADataset
 except ImportError as e:
     print(f"Warning: Could not import some dataset implementations: {e}")
     print(f"Bench parent directory: {_bench_parent_dir}")
@@ -1561,14 +1538,13 @@ def main(
         gradient_accumulation_steps=actual_grad_accum,
         learning_rate=learning_rate,
         weight_decay=0.01,
-        logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="epoch",
         save_total_limit=2,
         load_best_model_at_end=True,
         metric_for_best_model="loss",
-        warmup_ratio=0.1,
+        **warmup_kwargs(0.1),
         lr_scheduler_type="cosine",
         bf16=True,  # BF16 mixed precision for memory efficiency (L4 GPUs support BF16)
         fp16=False,

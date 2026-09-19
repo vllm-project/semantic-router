@@ -78,15 +78,10 @@ from common_lora_utils import (
     log_memory_usage,
     set_gpu_device,
     setup_logging,
+    warmup_kwargs,
 )
 from datasets import Dataset, load_dataset
-from peft import (
-    LoraConfig,
-    PeftConfig,
-    PeftModel,
-    TaskType,
-    get_peft_model,
-)
+from peft import LoraConfig, PeftConfig, PeftModel, TaskType, get_peft_model
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 from transformers import (
@@ -892,14 +887,13 @@ def main(
         gradient_accumulation_steps=max(1, 8 // batch_size),
         learning_rate=learning_rate,
         weight_decay=0.01,
-        logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="epoch",
         save_total_limit=2,
         load_best_model_at_end=True,
         metric_for_best_model="loss",
-        warmup_ratio=0.1,
+        **warmup_kwargs(0.1),
         lr_scheduler_type="cosine",
         fp16=False,
         gradient_checkpointing=False,
