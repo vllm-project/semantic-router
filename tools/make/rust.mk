@@ -26,6 +26,13 @@ RUST_CI_LIB_TESTS ?= \
 	core::tokenization_window::tests::test_window_ranges_edges \
 	core::tokenization_test::test_tokenization_config_custom \
 	ffi::embedding_test::test_truncate_embedding_renormalizes_prefix \
+	ffi::capabilities::tests::normalizes_known_model_types \
+	ffi::capabilities::tests::reports_multimodal_modalities \
+	ffi::capabilities::tests::distinguishes_unsupported_and_invalid_input \
+	ffi::capabilities::tests::observed_dimension_buffer_roundtrip \
+	ffi::capability_dimensions::tests::preserves_declared_dimensions_and_native_width \
+	ffi::capability_dimensions::tests::rejects_invalid_model_metadata \
+	model_architectures::embedding::multimodal_embedding::tests::test_loaded_dimensions_follow_model_configuration \
 	model_architectures::embedding::mmbert_embedding::tests::test_early_exit_preserves_residual_and_full_depth_applies_final_norm \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_requires_pooling_head \
@@ -136,7 +143,7 @@ test-rust-flash-attn-module: rust-flash-attn
 # Hermetic Go/C ABI contracts. Published checkpoint inference is a separate
 # required suite (make test-models), not a whitelist of optional legacy tests.
 # The same contracts run under RISC-V QEMU without the unsupported race detector.
-BINDING_MINIMAL_GO_TESTS ?= ^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions)$$
+BINDING_MINIMAL_GO_TESTS ?= ^Test(Owned.*|NewRegexProvider|RegexProvider_.*|UtilityFunctions|EmbeddingCapabilitiesConformance|EmbeddingDimensionStateValidation)$$
 # This checkpoint case belongs to legacy-hallucination-checkpoints in core_test_profiles.json.
 BINDING_MINIMAL_GO_SKIP ?= ^TestOwnedNativeMaintainedHallucinationWithoutLabelMetadata$$
 
@@ -471,6 +478,7 @@ test-riscv-qemu: download-riscv-classifier ## Cross-compile Candle CPU classifie
 		$(RISCV_QEMU) -L $(RISCV_SYSROOT) "$(RISCV_QEMU_TEST)" \
 		-test.list '$(BINDING_MINIMAL_GO_TESTS)' >"$(MODEL_TEST_REPORT_DIR)/binding-list.txt"
 	@cd candle-binding || exit; status=0; \
+		QEMU_LD_PREFIX="$(RISCV_SYSROOT)" \
 		LD_LIBRARY_PATH="$(CURDIR)/candle-binding/target/$(RISCV_GNU_TARGET)/release" \
 		$(RISCV_QEMU) -L $(RISCV_SYSROOT) "$(RISCV_QEMU_TEST)" \
 		-test.run '$(BINDING_MINIMAL_GO_TESTS)' -test.skip '$(BINDING_MINIMAL_GO_SKIP)' -test.v=test2json -test.count=1 -test.timeout 90m \
