@@ -582,7 +582,7 @@ Exact McNemar test on paired correctness, candidate against clean baseline:
 
 - **Status:** not part of the planned experiment. §3 deferred both.
 - **What was done:** tried afterwards, out of curiosity, using the same fixed
-  split. The scripts are not part of this PR yet and will be added later.
+  split. The scripts are in a separate draft PR, #3934, not in this one.
 - **How to read the table:** it is not a leaderboard.
   - Each model used a different recipe and budget.
   - One seed, no tuning.
