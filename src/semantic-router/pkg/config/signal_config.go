@@ -36,6 +36,7 @@ type Signals struct {
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
 	ActionRules        []ActionRule           `yaml:"actions,omitempty"`
 	DecisionRules      []DecisionSignalRule   `yaml:"decision,omitempty"`
+	AgenticFactsRules  []AgenticFactsRule     `yaml:"agentic_facts_rules,omitempty"`
 	// TopicContinuityRules are context-policy evidence sources; they are not
 	// decision-referenceable.
 	TopicContinuityRules []TopicContinuityRule `yaml:"topic_continuity,omitempty"`

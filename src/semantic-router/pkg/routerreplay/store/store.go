@@ -37,6 +37,7 @@ type Signal struct {
 	Classifier    []string `json:"classifier,omitempty"`
 	InputModality []string `json:"input_modality,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
+	AgenticFacts  []string `json:"agentic_facts,omitempty"`
 }
 
 // UsageCost captures token usage and pricing-derived cost details for a record.

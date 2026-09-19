@@ -93,6 +93,7 @@ type SignalMatches struct {
 	InputModalityRules []string // structural input-modality presence rule names matched
 	ActionRules        []string // the request's single action, when declared
 	DecisionRules      []string // decision-model answers matched: noul/score rule names, "rule:choice" for choices
+	AgenticFactsRules  []string // agentic facts rule names matched (delegated_role, task_phase)
 	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences  map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
@@ -646,6 +647,8 @@ func resolvePolicySignalRules(
 		return signals.MetadataRules, true
 	case config.SignalTypeInputModality:
 		return signals.InputModalityRules, true
+	case config.SignalTypeAgenticFacts:
+		return signals.AgenticFactsRules, true
 	case config.SignalTypeProjection:
 		return signals.ProjectionRules, true
 	default:
