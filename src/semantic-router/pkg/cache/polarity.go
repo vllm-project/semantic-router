@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"slices"
 	"strings"
 	"unicode"
 )
@@ -65,9 +66,10 @@ var irregularContractions = [][2]string{
 	{"ain't", "not"},
 }
 
-// tokenizeForPolarity returns normalized unique tokens; order and repetition
-// do not affect the guard.
-func tokenizeForPolarity(s string) map[string]struct{} {
+// tokenizeForPolarity returns sorted unique tokens backed by the caller's buffer
+// when it fits. Cache entries prepare this immutable summary once on insertion;
+// each lookup reuses one query summary across all candidates and fallback scans.
+func tokenizeForPolarity(s string, tokens []string) []string {
 	s = strings.ToLower(s)
 	// Normalize typographic apostrophes before expanding contractions so ASCII
 	// and curly-apostrophe contractions take the same negation path.
@@ -76,66 +78,69 @@ func tokenizeForPolarity(s string) map[string]struct{} {
 		s = strings.ReplaceAll(s, ic[0], ic[1])
 	}
 	s = strings.ReplaceAll(s, "n't", " not")
-	set := make(map[string]struct{})
-	for _, tok := range strings.FieldsFunc(s, func(r rune) bool {
+	for tok := range strings.FieldsFuncSeq(s, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	}) {
-		set[tok] = struct{}{}
+		tokens = append(tokens, tok)
 	}
-	return set
+	slices.Sort(tokens)
+	return slices.Compact(tokens)
 }
 
-func diffTokens(a, b map[string]struct{}) []string {
-	var only []string
-	for tok := range a {
-		if _, ok := b[tok]; !ok {
-			only = append(only, tok)
+// polarityMismatch reports whether near-identical token sets differ in polarity.
+func polarityMismatch(incoming, cached string) bool {
+	var incomingBuffer, cachedBuffer [32]string
+	return polarityTokensMismatch(
+		tokenizeForPolarity(incoming, incomingBuffer[:0]),
+		tokenizeForPolarity(cached, cachedBuffer[:0]),
+	)
+}
+
+// Sorted summaries let the bounded symmetric difference stay on the stack.
+// Once more than tokenDiffLimit distinct tokens differ, the original surface
+// gate cannot reject this pair, so no remaining tokens need to be visited.
+func polarityTokensMismatch(incoming, cached []string) bool {
+	var onlyIncoming, onlyCached [tokenDiffLimit]string
+	incomingCount, cachedCount := 0, 0
+	for i, j := 0, 0; i < len(incoming) || j < len(cached); {
+		switch {
+		case i < len(incoming) && j < len(cached) && incoming[i] == cached[j]:
+			i++
+			j++
+		case j == len(cached) || (i < len(incoming) && incoming[i] < cached[j]):
+			if incomingCount+cachedCount == tokenDiffLimit {
+				return false
+			}
+			onlyIncoming[incomingCount] = incoming[i]
+			incomingCount++
+			i++
+		default:
+			if incomingCount+cachedCount == tokenDiffLimit {
+				return false
+			}
+			onlyCached[cachedCount] = cached[j]
+			cachedCount++
+			j++
 		}
 	}
-	return only
-}
-
-func containsAny(tokens []string, cues map[string]struct{}) bool {
-	for _, tok := range tokens {
-		if _, ok := cues[tok]; ok {
-			return true
+	if containsNegationCue(onlyIncoming[:incomingCount]) != containsNegationCue(onlyCached[:cachedCount]) {
+		return true
+	}
+	for _, tok := range onlyIncoming[:incomingCount] {
+		for _, other := range onlyCached[:cachedCount] {
+			if _, ok := antonymFlip[tok][other]; ok {
+				return true
+			}
 		}
 	}
 	return false
 }
 
-// polarityMismatch reports whether near-identical token sets differ in polarity.
-func polarityMismatch(incoming, cached string) bool {
-	a := tokenizeForPolarity(incoming)
-	b := tokenizeForPolarity(cached)
-
-	onlyA := diffTokens(a, b)
-	onlyB := diffTokens(b, a)
-
-	// Only near-identical, non-identical token sets can be polarity variants.
-	if len(onlyA)+len(onlyB) == 0 || len(onlyA)+len(onlyB) > tokenDiffLimit {
-		return false
-	}
-
-	if containsAny(onlyA, negationCues) != containsAny(onlyB, negationCues) {
-		return true
-	}
-
-	onlyBSet := make(map[string]struct{}, len(onlyB))
-	for _, tok := range onlyB {
-		onlyBSet[tok] = struct{}{}
-	}
-	for _, tok := range onlyA {
-		opposites := antonymFlip[tok]
-		if opposites == nil {
-			continue
-		}
-		for opp := range opposites {
-			if _, ok := onlyBSet[opp]; ok {
-				return true
-			}
+func containsNegationCue(tokens []string) bool {
+	for _, tok := range tokens {
+		if _, ok := negationCues[tok]; ok {
+			return true
 		}
 	}
-
 	return false
 }

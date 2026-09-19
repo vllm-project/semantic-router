@@ -40,7 +40,7 @@ func TestFinishFindSimilarSearchPolarityWiring(t *testing.T) {
 	// Exercise the candidate-selection seam used by both search paths.
 	buildResult := func(c *InMemoryCache, query string, entry CacheEntry) cacheSearchResult {
 		result := cacheSearchResult{bestIndex: -1}
-		c.considerSearchCandidate(&result, query, threshold, 0, entry, embedding)
+		c.considerSearchCandidate(&result, tokenizeForPolarity(query, nil), threshold, 0, entry, embedding)
 		return result
 	}
 

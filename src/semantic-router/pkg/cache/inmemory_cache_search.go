@@ -79,7 +79,7 @@ type cacheSearchResult struct {
 
 func (c *InMemoryCache) considerSearchCandidate(
 	result *cacheSearchResult,
-	query string,
+	queryTokens []string,
 	threshold float32,
 	entryIndex int,
 	entry CacheEntry,
@@ -88,7 +88,14 @@ func (c *InMemoryCache) considerSearchCandidate(
 	dotProduct := embeddingDotProduct(queryEmbedding, entry.Embedding)
 	result.entriesChecked++
 
-	if dotProduct >= threshold && polarityMismatch(query, entry.Query) {
+	var cachedBuffer [32]string
+	cachedTokens := entry.polarityTokens
+	if dotProduct >= threshold && cachedTokens == nil {
+		// Directly constructed entries (including small fixtures) still obey the
+		// same guard; production insertion prepares this metadata once.
+		cachedTokens = tokenizeForPolarity(entry.Query, cachedBuffer[:0])
+	}
+	if dotProduct >= threshold && polarityTokensMismatch(queryTokens, cachedTokens) {
 		if !result.polarityRejected || dotProduct > result.polarityRejectedScore {
 			result.polarityRejected = true
 			result.polarityRejectedEntry = entry
@@ -107,7 +114,7 @@ func (c *InMemoryCache) considerSearchCandidate(
 func (c *InMemoryCache) scanHNSWCandidates(
 	queryEmbedding []float32,
 	model string,
-	query string,
+	queryTokens []string,
 	threshold float32,
 	scopeNamespace string,
 	now time.Time,
@@ -126,7 +133,7 @@ func (c *InMemoryCache) scanHNSWCandidates(
 		if !ok {
 			continue
 		}
-		c.considerSearchCandidate(&result, query, threshold, entryIndex, entry, queryEmbedding)
+		c.considerSearchCandidate(&result, queryTokens, threshold, entryIndex, entry, queryEmbedding)
 	}
 	logging.Debugf("InMemoryCache.FindSimilar: HNSW search checked %d candidates", len(candidateIndices))
 	return result
@@ -135,7 +142,7 @@ func (c *InMemoryCache) scanHNSWCandidates(
 func (c *InMemoryCache) scanLinearForSimilarity(
 	queryEmbedding []float32,
 	model string,
-	query string,
+	queryTokens []string,
 	threshold float32,
 	scopeNamespace string,
 	now time.Time,
@@ -149,7 +156,7 @@ func (c *InMemoryCache) scanLinearForSimilarity(
 		if !ok {
 			continue
 		}
-		c.considerSearchCandidate(&result, query, threshold, entryIndex, entry, queryEmbedding)
+		c.considerSearchCandidate(&result, queryTokens, threshold, entryIndex, entry, queryEmbedding)
 	}
 	if !c.useHNSW {
 		logging.Debugf("InMemoryCache.FindSimilar: Linear search used (HNSW disabled)")
@@ -205,19 +212,21 @@ func (c *InMemoryCache) runFindSimilarEmbeddingSearch(
 	threshold float32,
 	scopeNamespace string,
 ) cacheSearchResult {
+	var queryBuffer [32]string
+	queryTokens := tokenizeForPolarity(query, queryBuffer[:0])
 	c.mu.RLock()
 	now := time.Now()
 	var result cacheSearchResult
 	if c.useHNSW && c.hnswIndex != nil {
 		c.refreshHNSWIfStaleDuringSearch()
-		result = c.scanHNSWCandidates(queryEmbedding, model, query, threshold, scopeNamespace, now)
+		result = c.scanHNSWCandidates(queryEmbedding, model, queryTokens, threshold, scopeNamespace, now)
 		if result.polarityRejected && (result.bestIndex < 0 || result.bestSimilarity < threshold) {
 			// HNSW is approximate; scan all entries before a polarity rejection
 			// hides a valid lower-ranked hit.
-			result = c.scanLinearForSimilarity(queryEmbedding, model, query, threshold, scopeNamespace, now)
+			result = c.scanLinearForSimilarity(queryEmbedding, model, queryTokens, threshold, scopeNamespace, now)
 		}
 	} else {
-		result = c.scanLinearForSimilarity(queryEmbedding, model, query, threshold, scopeNamespace, now)
+		result = c.scanLinearForSimilarity(queryEmbedding, model, queryTokens, threshold, scopeNamespace, now)
 	}
 	c.mu.RUnlock()
 	return result
