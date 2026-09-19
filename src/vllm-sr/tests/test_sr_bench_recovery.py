@@ -234,11 +234,11 @@ def test_recovery_api_scopes_parent_and_reconciles_idempotent_submission(
     headers = {
         "Authorization": "Bearer service-test-token",
         "X-SR-Bench-Actor-ID": "alice",
-        "X-SR-Bench-Actor-Role": "editor",
+        "X-SR-Bench-Actor-Role": "write",
     }
     try:
         bob = {**headers, "X-SR-Bench-Actor-ID": "bob"}
-        viewer = {**headers, "X-SR-Bench-Actor-Role": "viewer"}
+        viewer = {**headers, "X-SR-Bench-Actor-Role": "read"}
         for actor, expected in [
             (bob, HTTPStatus.NOT_FOUND),
             (viewer, HTTPStatus.FORBIDDEN),
@@ -298,6 +298,6 @@ def test_existing_run_receipt_does_not_recapture_changed_environment(
 
     monkeypatch.setattr("cli.sr_bench.engine.capture_runner", changed_environment)
     assert engine.start(manifest, request_key="first")["id"] == run["id"]
-    changed = {**manifest, "name": "another frozen protocol"}
+    changed = plan({**manifest, "name": "another frozen protocol"})
     with pytest.raises(ValueError, match="different plan"):
         engine.start(changed, request_key="first")

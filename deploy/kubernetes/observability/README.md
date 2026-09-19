@@ -100,7 +100,7 @@ Prometheus is at `http://127.0.0.1:9090`, Grafana at
 1. Open Prometheus **Status > Targets** and find the `semantic-router` job.
 2. Send inference traffic through Envoy.
 3. Query a metric that the current Router emits, such as
-   `llm_model_requests_total`.
+   `llm_request_outcomes_total{traffic_kind="inference"}`.
 4. Open the provisioned Grafana Router dashboard and confirm its time range
    includes the traffic.
 
@@ -116,8 +116,8 @@ kubectl logs deployment/prometheus \
 ## Alert rules
 
 [`prometheus/rules.yaml`](prometheus/rules.yaml) defines thresholds for request
-errors, completion latency, TTFT, TPOT, routing latency, in-flight requests, and
-cache hit rate. Treat these as starting points. Tune them from an observed
+outcomes, response duration, first response observation, response duration per
+output token, routing latency, in-flight requests, and cache hit rate. Treat these as starting points. Tune them from an observed
 baseline and route them through your existing Alertmanager or incident system;
 this package does not install notification delivery.
 

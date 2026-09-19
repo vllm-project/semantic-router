@@ -536,9 +536,18 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_sr_bench_client.py \
 		src/vllm-sr/tests/test_sr_bench_collection.py \
 		src/vllm-sr/tests/test_sr_bench_datasets.py \
+		src/vllm-sr/tests/test_sr_bench_dataset_validation.py \
+		src/vllm-sr/tests/test_sr_bench_dataset_fingerprints.py \
+		src/vllm-sr/tests/test_sr_bench_experiments.py \
+		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
+		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
+		src/vllm-sr/tests/test_routing_preview.py \
 		src/vllm-sr/tests/test_sr_bench_harness.py \
+		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
 		src/vllm-sr/tests/test_sr_bench_recovery.py \
+		src/vllm-sr/tests/test_sr_bench_replay.py \
 		src/vllm-sr/tests/test_sr_bench_reporting.py \
+		src/vllm-sr/tests/test_sr_bench_run_options.py \
 		src/vllm-sr/tests/test_sr_bench_setup.py \
 		src/vllm-sr/tests/test_sr_bench_snapshots.py \
 		src/vllm-sr/tests/test_sr_bench_sources.py \

@@ -264,7 +264,7 @@ func (e *DecisionEngine) evaluateDecisions(
 	}
 	if !withTrace {
 		for i := range results {
-			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, results[i].Decision.Name), results[i].Confidence)
+			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, results[i].Decision.Name), results[i].Confidence, results[i].ConfidenceScored && !results[i].CatchAll)
 		}
 	}
 	if len(results) == 0 {

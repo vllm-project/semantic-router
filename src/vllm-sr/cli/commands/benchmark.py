@@ -7,9 +7,11 @@ import os
 import time
 from functools import wraps
 from pathlib import Path
+from urllib.parse import urlencode
 
 import click
 
+from cli.commands.benchmark_experiments import experiment
 from cli.runtime_stack import resolve_runtime_stack
 from cli.sr_bench import setup, sources
 from cli.sr_bench.client import Client
@@ -392,6 +394,37 @@ def target_register(client, source):
     output({"targets": validated["targets"], "registered": len(validated["targets"])})
 
 
+@benchmark.command("replay-options")
+@click.argument("baseline", required=False)
+@click.option("--after", help="Opaque cursor from the previous eligible options page.")
+@click.option("--limit", type=click.IntRange(1, 25), default=10, show_default=True)
+@click.pass_obj
+@guarded
+def replay_options_command(client, baseline, after, limit):
+    """List eligible baselines, or compatible previews for BASELINE; no model calls."""
+    _saved_run_options(client, "replay", baseline, after, limit)
+
+
+@benchmark.command("comparison-options")
+@click.argument("baseline", required=False)
+@click.option("--after", help="Opaque cursor from the previous eligible options page.")
+@click.option("--limit", type=click.IntRange(1, 25), default=10, show_default=True)
+@click.pass_obj
+@guarded
+def comparison_options_command(client, baseline, after, limit):
+    """List eligible baselines, or comparable live runs for BASELINE; no model calls."""
+    _saved_run_options(client, "comparison", baseline, after, limit)
+
+
+def _saved_run_options(client, kind, baseline, after, limit):
+    query = {"limit": limit}
+    if baseline is not None:
+        query["baseline_run_id"] = baseline
+    if after is not None:
+        query["after"] = after
+    output(client.request("GET", f"/{kind}-options?" + urlencode(query)))
+
+
 @benchmark.command("replay")
 @click.option(
     "--baseline", required=True, help="Completed single-model answer matrix run ID."
@@ -516,3 +549,52 @@ def recover_command(
             },
         )
     )
+
+
+@benchmark.command("candidate-plan")
+@click.argument("baseline_run_id")
+@click.option(
+    "--target",
+    "target_ids",
+    multiple=True,
+    required=True,
+    help="Registered MoM target; may be repeated.",
+)
+@click.option(
+    "--mode", type=click.Choice(["live", "preview"]), default="live", show_default=True
+)
+@click.option("--name")
+@click.option("--experiment", "experiment_id")
+@click.option("--hypothesis", default="")
+@click.pass_obj
+@guarded
+def candidate_plan_command(
+    client, baseline_run_id, target_ids, mode, name, experiment_id, hypothesis
+):
+    """Reuse a terminal baseline's frozen protocol without repeating its requests.
+
+    Failed, cancelled and interrupted full-plan baselines may supply the same
+    questions and settings. This does not qualify their measurements for Compare.
+    """
+    body = {"target_ids": list(target_ids), "mode": mode}
+    if name:
+        body["name"] = name
+    if experiment_id:
+        baseline = client.request("GET", "/runs/" + baseline_run_id)
+        body["experiment"] = {
+            "id": experiment_id,
+            "role": (
+                "preview"
+                if mode == "preview"
+                else (
+                    "validation"
+                    if baseline["manifest"]["profile"] == "standard"
+                    else "candidate"
+                )
+            ),
+            "hypothesis": hypothesis,
+        }
+    output(client.request("POST", "/runs/" + baseline_run_id + "/candidate-plan", body))
+
+
+benchmark.add_command(experiment)

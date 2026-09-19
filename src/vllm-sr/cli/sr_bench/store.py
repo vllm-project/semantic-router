@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .contracts import canonical, planned_cells
+from .experiments import bind_created_run, run_roles
 
 MAX_PAGE_SIZE = 500
 
@@ -42,6 +43,7 @@ def run_summary(run):
             "sampling",
             "benchmark_weights",
             "adapter_versions",
+            "experiment",
             "plan_sha256",
             "case_sha256",
         )
@@ -80,7 +82,12 @@ def run_summary(run):
         manifest["recovery"]["selected_cell_count"] = len(
             recovery.get("selected_cells", [])
         )
-    return {**run, "manifest": manifest, "manifest_summary": True}
+    return {
+        **run,
+        "manifest": manifest,
+        "manifest_summary": True,
+        "experiment_roles": run_roles(source),
+    }
 
 
 class Store:
@@ -102,6 +109,9 @@ class Store:
         CREATE TABLE IF NOT EXISTS run_provenance(run_id TEXT PRIMARY KEY,data TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS accounting_corrections(id TEXT PRIMARY KEY,run_id TEXT NOT NULL,created_at TEXT NOT NULL,evidence_sha256 TEXT NOT NULL,data TEXT NOT NULL,UNIQUE(run_id,evidence_sha256));
         CREATE TABLE IF NOT EXISTS recovery_claims(parent_run_id TEXT,case_id TEXT,target_id TEXT,child_run_id TEXT,PRIMARY KEY(parent_run_id,case_id,target_id));
+        CREATE TABLE IF NOT EXISTS experiments(id TEXT PRIMARY KEY,owner TEXT NOT NULL,name TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,request_key TEXT,UNIQUE(owner,request_key));
+        CREATE TABLE IF NOT EXISTS experiment_runs(seq INTEGER PRIMARY KEY AUTOINCREMENT,experiment_id TEXT NOT NULL,run_id TEXT NOT NULL,role TEXT NOT NULL,hypothesis TEXT NOT NULL,linked_at TEXT NOT NULL,UNIQUE(experiment_id,run_id));
+        CREATE TABLE IF NOT EXISTS experiment_deletions(id TEXT PRIMARY KEY,owner TEXT NOT NULL,request_key TEXT,deleted_at TEXT NOT NULL,unlinked_runs INTEGER NOT NULL,UNIQUE(owner,request_key));
         """
         )
         self.db.commit()
@@ -113,7 +123,15 @@ class Store:
                 (run_id, now(), kind, canonical(data)),
             )
 
-    def create(self, manifest, owner="local", request_key=None, provenance=None):
+    def create(
+        self,
+        manifest,
+        owner="local",
+        request_key=None,
+        provenance=None,
+        *,
+        actor_role="local",
+    ):
         with self.lock, self.db:
             if request_key:
                 row = self.db.execute(
@@ -155,6 +173,7 @@ class Store:
                     raise RecoveryClaimError(
                         "Recovery cells were already claimed by another child"
                     ) from exc
+            bind_created_run(self, run_id, manifest, owner, actor_role)
             self.event(run_id, "created", {"plan_sha256": manifest["plan_sha256"]})
             return self.get(run_id), True
 
@@ -275,6 +294,16 @@ class Store:
                 (run_id,),
             ).fetchall()
             return [self.get(row[0]) for row in rows]
+
+    def active_experiment_runs(self, experiment_id):
+        with self.lock:
+            return self.db.execute(
+                "SELECT COUNT(*) FROM experiment_runs e JOIN runs r ON r.id=e.run_id "
+                "WHERE e.experiment_id=? AND r.status NOT IN ("
+                + ",".join("?" for _ in TERMINAL)
+                + ")",
+                (experiment_id, *sorted(TERMINAL)),
+            ).fetchone()[0]
 
     def recovery_claims(self, parent_id):
         with self.lock:
