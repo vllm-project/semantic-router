@@ -36,7 +36,7 @@
         "type",
         "usage"
       ],
-      "extension_response_fields": ["error"],
+      "extension_response_fields": ["context_management", "error"],
       "official_usage_fields": [
         "cache_creation",
         "cache_creation_input_tokens",
