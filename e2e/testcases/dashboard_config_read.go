@@ -18,7 +18,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("dashboard-config-read", pkgtestcases.TestCase{
-		Description: "Verify dashboard config endpoints return the router config as JSON and YAML",
+		Description: "Verify dashboard config endpoints serve the deployed router config as JSON and YAML",
 		Tags:        []string{"dashboard", "config"},
 		Fn:          testDashboardConfigRead,
 	})
@@ -49,7 +49,7 @@ func testDashboardConfigRead(ctx context.Context, client *kubernetes.Clientset, 
 	}
 
 	if opts.Verbose {
-		fmt.Printf("[Dashboard] config-read OK: JSON keys=%d, YAML bytes=%d\n", len(configJSON), yamlSize)
+		fmt.Printf("[Dashboard] config-read OK: JSON keys=%d, YAML bytes=%d, base-model and other_decision present on both reads\n", len(configJSON), yamlSize)
 	}
 
 	if opts.SetDetails != nil {
@@ -92,6 +92,9 @@ func fetchDashboardJSONConfig(ctx context.Context, client *http.Client, baseURL,
 	}
 
 	if err := assertDashboardCanonicalConfig(result); err != nil {
+		return nil, fmt.Errorf("config/all: %w", err)
+	}
+	if err := assertCanonicalConfigIdentity(result); err != nil {
 		return nil, fmt.Errorf("config/all: %w", err)
 	}
 
@@ -138,6 +141,9 @@ func fetchDashboardYAMLConfig(ctx context.Context, client *http.Client, baseURL,
 	if err := assertDashboardCanonicalConfig(document); err != nil {
 		return 0, fmt.Errorf("config/yaml: %w", err)
 	}
+	if err := assertCanonicalConfigIdentity(document); err != nil {
+		return 0, fmt.Errorf("config/yaml: %w", err)
+	}
 	return len(body), nil
 }
 
@@ -165,4 +171,47 @@ func assertDashboardCanonicalConfig(document map[string]interface{}) error {
 		return fmt.Errorf("canonical config must declare routing decisions")
 	}
 	return nil
+}
+
+// assertCanonicalConfigIdentity checks that a served config document is the
+// deployed dashboard fixture (e2e/profiles/dashboard/values.yaml) rather than
+// chart placeholders: the provider surface must declare base-model and the
+// routing surface must declare other_decision. Canonical-shape checks alone
+// cannot tell those apart, because a placeholder document can also be a
+// canonical v0.3 config with nonempty models and decisions.
+func assertCanonicalConfigIdentity(doc map[string]interface{}) error {
+	if err := assertNamedEntry(doc, "providers", "models", "base-model"); err != nil {
+		return err
+	}
+	if err := assertNamedEntry(doc, "routing", "decisions", "other_decision"); err != nil {
+		return err
+	}
+	return nil
+}
+
+// assertNamedEntry asserts doc[section][list] contains an entry whose name
+// field equals want. Both read paths decode into JSON-shaped maps, so one
+// walker covers the JSON and YAML responses.
+func assertNamedEntry(doc map[string]interface{}, section, list, want string) error {
+	sectionMap, ok := doc[section].(map[string]interface{})
+	if !ok {
+		return fmt.Errorf("config has no %q object", section)
+	}
+	entries, ok := sectionMap[list].([]interface{})
+	if !ok {
+		return fmt.Errorf("config %s has no %q list", section, list)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		entryMap, ok := entry.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := entryMap["name"].(string)
+		if name == want {
+			return nil
+		}
+		names = append(names, name)
+	}
+	return fmt.Errorf("%s.%s does not declare %q, got %v", section, list, want, names)
 }
