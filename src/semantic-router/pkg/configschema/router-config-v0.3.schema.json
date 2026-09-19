@@ -6909,9 +6909,6 @@
         "update_interval": {
           "type": "string"
         },
-        "queue_depth_estimation": {
-          "type": "boolean"
-        },
         "max_models": {
           "type": "integer"
         }

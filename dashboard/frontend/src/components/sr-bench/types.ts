@@ -89,6 +89,10 @@ export interface Target {
 
 export interface Manifest {
   version: 'sr-bench-1.0'
+  case_sha256?: string
+  benchmark_weights?: Record<string, number>
+  adapter_versions?: Record<string, string>
+  benchmark_options?: Record<string, unknown>
   name: string
   mode: 'live' | 'preview' | 'replay'
   cost_policy?: 'require_priced' | 'capability_only'

@@ -319,13 +319,20 @@ Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
 **Recipe**. Start with the aggregate results, then inspect individual responses,
 accounting and frozen configuration as needed.
 
-**Compare iterations** selects a single-model baseline, then uses checkboxes for
-any number of completed candidate runs. Candidates are ordered by creation
-time, and selections are preserved in the URL. Quality/cost and iteration charts
-accompany paired confidence intervals, savings, tokens, latency and wall time;
-CSV and JSON export the comparison. The interface is not limited to two tuning
-iterations. Incompatible or incomplete scopes cannot become a comparison row.
-A positive estimate with an interval spanning zero is not proof of a gain.
+**Compare iterations** guides two choices: a completed live single-model baseline,
+then any number of candidate runs. Known protocol differences and unfinished or
+diagnostic runs appear under **Show unavailable runs and reasons**. Search narrows
+the candidate list; **Select all** selects matching available runs across pages.
+Changing the baseline clears the candidates, and changing any selection hides
+previous comparison results until **Compare runs** is selected. The service still
+validates complete paired evidence before showing a comparison.
+
+Candidates are ordered by creation time, and selections are preserved in the URL.
+Quality/cost and iteration charts accompany paired confidence intervals, savings,
+tokens, latency and wall time. Result cards are paginated; charts and CSV/JSON
+exports retain all selected comparisons. The interface is not limited to two
+tuning iterations. A positive estimate with an interval spanning zero is not proof
+of a gain.
 
 For a MoM target, the operator can register `capture_recipe: true` with its
 `config_hash` and canonical `preview_url`. The worker captures a redacted recipe
@@ -338,10 +345,19 @@ Deployment wiring and secrets are omitted; the download is a recipe artifact,
 not a complete deployable configuration. Existing runs without a snapshot show
 that it is unavailable rather than borrowing a later recipe.
 
-Calls and results load in pages of 100; full call bodies load on inspection.
-Metrics and routing distributions come from the complete report independently of
-loaded detail pages. Events show the latest 100 entries with access to older
-pages. Regrade and training export reuse saved evidence without new model calls.
+Calls and results fetch at most 100 rows at a time and display 25 rows per page;
+full call bodies load on inspection. Search applies to loaded rows. Metrics and
+routing distributions come from the complete report independently of loaded detail
+pages. Recovery candidates, exclusions and child attempts are also paginated.
+
+**Run events** shows human-readable saved activity, oldest first, with event-type
+filters and 25 rows per page. Opening details fetches at most 1,000 events;
+**Load more events** explicitly reads the next saved page. A full API page is
+labelled as a loaded count because the endpoint does not provide a total.
+Filtering applies only to loaded events. This is an event snapshot: **Refresh
+evidence** loads a new snapshot while run progress continues polling independently.
+A failed page read preserves its cursor and existing rows. Regrade and training
+export reuse saved evidence without new model calls.
 
 ### Recover unfinished work explicitly
 

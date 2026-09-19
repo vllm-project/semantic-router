@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import BenchSelect from './BenchSelect'
+import BenchPagination from './BenchPagination'
 import { active, number, percent } from './model'
 import type { Run } from './types'
 import { profileTitle } from './datasetPresentation'
@@ -62,38 +64,36 @@ export default function RunList({
             }}
           />
         </label>
-        <label>
-          Run status
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value)
-              setPage(0)
-            }}
-          >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="completed">Completed</option>
-            <option value="failed">Failed</option>
-            <option value="interrupted">Interrupted</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </label>
-        <label>
-          Run mode
-          <select
-            value={mode}
-            onChange={(event) => {
-              setMode(event.target.value)
-              setPage(0)
-            }}
-          >
-            <option value="all">All modes</option>
-            <option value="live">Live evaluation</option>
-            <option value="preview">Route preview</option>
-            <option value="replay">Diagnostic replay</option>
-          </select>
-        </label>
+        <BenchSelect
+          label="Run status"
+          value={status}
+          onChange={(value) => {
+            setStatus(value)
+            setPage(0)
+          }}
+          options={[
+            { value: 'all', label: 'All statuses' },
+            { value: 'active', label: 'Active' },
+            { value: 'completed', label: 'Completed' },
+            { value: 'failed', label: 'Failed' },
+            { value: 'interrupted', label: 'Interrupted' },
+            { value: 'cancelled', label: 'Cancelled' },
+          ]}
+        />
+        <BenchSelect
+          label="Run mode"
+          value={mode}
+          onChange={(value) => {
+            setMode(value)
+            setPage(0)
+          }}
+          options={[
+            { value: 'all', label: 'All modes' },
+            { value: 'live', label: 'Live evaluation' },
+            { value: 'preview', label: 'Route preview' },
+            { value: 'replay', label: 'Diagnostic replay' },
+          ]}
+        />
       </div>
       {filtered.length ? (
         <div className={styles.tableScroll}>
@@ -171,23 +171,13 @@ export default function RunList({
             : 'No runs yet. Create an evaluation using a prepared dataset.'}
         </p>
       )}
-      {filtered.length > 10 && (
-        <div className={styles.actions}>
-          <button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>
-            Previous runs
-          </button>
-          <span>
-            {number(filtered.length)} runs · page {currentPage + 1} of{' '}
-            {Math.ceil(filtered.length / 10)}
-          </span>
-          <button
-            disabled={(currentPage + 1) * 10 >= filtered.length}
-            onClick={() => setPage(currentPage + 1)}
-          >
-            Next runs
-          </button>
-        </div>
-      )}
+      <BenchPagination
+        label="Runs"
+        total={filtered.length}
+        page={currentPage}
+        pageSize={10}
+        onChange={setPage}
+      />
     </section>
   )
 }

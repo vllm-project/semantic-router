@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { benchApi } from './api'
+import BenchSelect from './BenchSelect'
 import type { Run } from './types'
 import styles from './SrBench.module.css'
 
@@ -37,44 +38,32 @@ export default function ReplayComposer({
         validate the candidate.
       </p>
       <div className={styles.formGrid}>
-        <label>
-          Saved single-model baseline
-          <select
-            value={baseline}
-            disabled={pending}
-            onChange={(event) => setBaseline(event.target.value)}
-          >
-            <option value="">Select saved answers</option>
-            {completed
-              .filter(
-                (run) =>
-                  run.manifest.mode === 'live' &&
-                  run.manifest.targets.some((target) => target.kind === 'single'),
-              )
-              .map((run) => (
-                <option key={run.id} value={run.id}>
-                  {run.manifest.name} · {run.id}
-                </option>
-              ))}
-          </select>
-        </label>
-        <label>
-          Routing preview
-          <select
-            value={preview}
-            disabled={pending}
-            onChange={(event) => setPreview(event.target.value)}
-          >
-            <option value="">Select preview</option>
-            {completed
-              .filter((run) => run.manifest.mode === 'preview')
-              .map((run) => (
-                <option key={run.id} value={run.id}>
-                  {run.manifest.name} · {run.id}
-                </option>
-              ))}
-          </select>
-        </label>
+        <BenchSelect
+          label="Saved single-model baseline"
+          value={baseline}
+          disabled={pending}
+          searchable
+          placeholder="Select saved answers"
+          onChange={setBaseline}
+          options={completed
+            .filter(
+              (run) =>
+                run.manifest.mode === 'live' &&
+                run.manifest.targets.some((target) => target.kind === 'single'),
+            )
+            .map((run) => ({ value: run.id, label: run.manifest.name, description: run.id }))}
+        />
+        <BenchSelect
+          label="Routing preview"
+          value={preview}
+          disabled={pending}
+          searchable
+          placeholder="Select preview"
+          onChange={setPreview}
+          options={completed
+            .filter((run) => run.manifest.mode === 'preview')
+            .map((run) => ({ value: run.id, label: run.manifest.name, description: run.id }))}
+        />
       </div>
       <p className={styles.muted}>
         Replay supports direct single-model routes. Plugin, agent and compound execution changes

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { benchApi } from './api'
+import BenchPagination from './BenchPagination'
 import { money, number, seconds } from './model'
 import type { CallRecord, PageState } from './types'
 import styles from './SrBench.module.css'
@@ -19,6 +20,14 @@ export default function CallEvidence({
   loadMore: () => Promise<void>
   accountingReconciled?: boolean
 }) {
+  const [listPage, setListPage] = useState(0)
+  const [filter, setFilter] = useState('')
+  const visible = calls.filter((call) =>
+    `${call.id} ${call.case_id} ${call.target_id} ${call.role} ${call.status} ${call.selected_model ?? call.model ?? ''}`
+      .toLowerCase()
+      .includes(filter.toLowerCase()),
+  )
+  const currentPage = Math.min(listPage, Math.max(0, Math.ceil(visible.length / 25) - 1))
   const [selected, setSelected] = useState<string | null>(null)
   const [detail, setDetail] = useState<CallRecord | null>(null)
   const [error, setError] = useState('')
@@ -41,13 +50,27 @@ export default function CallEvidence({
   return (
     <section>
       <div hidden={!!selected}>
-        <h3>Call records</h3>
+        <div className={styles.sectionHeading}>
+          <h3>Call records</h3>
+          <label className={styles.inlineLabel}>
+            Filter loaded calls
+            <input
+              type="search"
+              value={filter}
+              placeholder="Call, case, target or status"
+              onChange={(event) => {
+                setFilter(event.target.value)
+                setListPage(0)
+              }}
+            />
+          </label>
+        </div>
         {page.total !== null && (
           <p className={styles.muted}>
-            Showing {number(calls.length)} of {number(page.total)} persisted call summaries. Prompts
-            and responses load only when you inspect a call. These pages are snapshots; refresh
-            evidence to reload current statuses. Aggregate metrics above always come from the full
-            report.
+            Loaded {number(calls.length)} of {number(page.total)} persisted call summaries.
+            Filtering applies to loaded calls. Prompts and responses load only when you inspect a
+            call. These pages are snapshots; refresh evidence to reload current statuses. Aggregate
+            metrics above always come from the full report.
           </p>
         )}
         {page.loading && page.total === null && (
@@ -80,7 +103,7 @@ export default function CallEvidence({
               </tr>
             </thead>
             <tbody>
-              {calls.map((call) => (
+              {visible.slice(currentPage * 25, currentPage * 25 + 25).map((call) => (
                 <tr key={call.id}>
                   <td>
                     <button className={styles.linkButton} onClick={() => setSelected(call.id)}>
@@ -101,6 +124,16 @@ export default function CallEvidence({
             </tbody>
           </table>
         </div>
+        {!visible.length && calls.length > 0 && (
+          <p className={styles.muted}>No loaded calls match this filter.</p>
+        )}
+        <BenchPagination
+          label="Calls"
+          total={visible.length}
+          page={currentPage}
+          pageSize={25}
+          onChange={setListPage}
+        />
         {page.error && (
           <p role="alert" className={styles.error}>
             {page.error}

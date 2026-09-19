@@ -7,8 +7,9 @@ import type { Comparison, Report, Run } from './types'
 import styles from './SrBench.module.css'
 import ProductLoadingState from '../ProductLoadingState'
 import ProductIcon from '../ProductIcon'
-import BenchSelect from './BenchSelect'
-import controls from './BenchControls.module.css'
+import ComparisonSetup from './ComparisonSetup'
+import BenchPagination from './BenchPagination'
+import { comparisonEligibility } from './comparisonEligibility'
 import { IterationChart, QualityCostChart, type QualityCostPoint } from './EvaluationCharts'
 
 interface IterationEvidence {
@@ -25,12 +26,20 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
   const savedIterations = search.getAll('candidate').join('|')
   const [baseline, setBaseline] = useState(savedBaseline)
   const [candidates, setCandidates] = useState(savedIterations.split('|').filter(Boolean))
-  const [filter, setFilter] = useState('')
-  const [results, setResults] = useState<IterationEvidence[]>([])
-  const [baselineReport, setBaselineReport] = useState<Report | null>(null)
+  const [savedResults, setResults] = useState<IterationEvidence[]>([])
+  const [savedBaselineReport, setBaselineReport] = useState<Report | null>(null)
+  const [evidenceKey, setEvidenceKey] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
+  const [evidencePage, setEvidencePage] = useState(0)
+  const draftChanged =
+    baseline !== savedBaseline ||
+    [...candidates].sort().join('|') !== savedIterations.split('|').filter(Boolean).sort().join('|')
+  const selectionKey = `${savedBaseline}|${savedIterations}`
+  const evidenceMatches = !draftChanged && evidenceKey === selectionKey
+  const results = evidenceMatches ? savedResults : []
+  const baselineReport = evidenceMatches ? savedBaselineReport : null
   const complete = runs.filter((run) => run.status === 'completed' && run.manifest.mode === 'live')
   const completeIDs = complete
     .map((run) => run.id)
@@ -54,6 +63,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
       return
     }
     async function load() {
+      setEvidenceKey(`${savedBaseline}|${savedIterations}`)
       setPending(true)
       setError('')
       setResults([])
@@ -95,6 +105,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
   }, [savedBaseline, savedIterations, completeIDs, revision])
 
   function compare() {
+    setEvidencePage(0)
     const next = new URLSearchParams({ view: 'compare', baseline })
     const ordered = [...candidates].sort((a, b) => {
       const created = (id: string) => runs.find((run) => run.id === id)?.created_at ?? ''
@@ -107,13 +118,6 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     else setSearch(next)
   }
   const selectedIDs = candidates.filter(Boolean)
-  const candidateOptions = complete.filter(
-    (run) =>
-      run.id !== baseline &&
-      `${run.manifest.name} ${run.manifest.targets.map((target) => target.id).join(' ')}`
-        .toLowerCase()
-        .includes(filter.toLowerCase()),
-  )
   function download(format: 'json' | 'csv') {
     const payload = {
       baseline_run_id: savedBaseline,
@@ -164,6 +168,16 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
     setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
   const duplicate = new Set(selectedIDs).size !== selectedIDs.length
+  const invalidSelection = candidates.some((id) => {
+    const candidate = runs.find((run) => run.id === id)
+    return (
+      !candidate ||
+      !comparisonEligibility(
+        runs.find((run) => run.id === baseline),
+        candidate,
+      ).eligible
+    )
+  })
   const reviewedBaseline = runs.find((run) => run.id === savedBaseline)
 
   const qualified =
@@ -235,6 +249,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
           }
         })
       : []
+  const currentEvidencePage = Math.min(evidencePage, Math.max(0, Math.ceil(results.length / 6) - 1))
   const baselineMetric = baselineReport?.summary.targets.find(
     (target) => target.id === results[0]?.comparison?.comparisons[0]?.baseline_target_id,
   )
@@ -249,95 +264,19 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost
         measurements.
       </p>
-      <div className={styles.comparisonSetup}>
-        <div className={controls.comparisonToolbar}>
-          <BenchSelect
-            label="Baseline run"
-            value={baseline}
-            disabled={pending}
-            searchable
-            placeholder="Select single-model baseline"
-            options={complete
-              .filter((run) => run.manifest.targets.some((target) => target.kind === 'single'))
-              .map((run) => ({
-                value: run.id,
-                label: run.manifest.name,
-                description: `${run.manifest.targets.map((target) => target.id).join(', ')} · ${number(run.progress.total)} cases`,
-              }))}
-            onChange={(value) => {
-              setBaseline(value)
-              setCandidates((previous) => previous.filter((id) => id !== value))
-            }}
-          />
-          <label>
-            Find comparison runs
-            <input
-              type="search"
-              placeholder="Run or model name"
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-            />
-          </label>
-        </div>
-        <div className={controls.selectionHeading}>
-          <h3>Runs to compare</h3>
-          <button
-            className={controls.compactButton}
-            disabled={pending || !candidateOptions.length}
-            onClick={() =>
-              setCandidates(
-                candidateOptions.every((run) => candidates.includes(run.id))
-                  ? candidates.filter((id) => !candidateOptions.some((run) => run.id === id))
-                  : [...new Set([...candidates, ...candidateOptions.map((run) => run.id)])],
-              )
-            }
-          >
-            <ProductIcon
-              name={
-                candidateOptions.every((run) => candidates.includes(run.id)) ? 'close' : 'check'
-              }
-            />
-            {candidateOptions.length > 0 &&
-            candidateOptions.every((run) => candidates.includes(run.id))
-              ? 'Clear selection'
-              : 'Select all'}
-          </button>
-        </div>
-        <div className={styles.runChoices} role="group" aria-label="Comparison runs">
-          {candidateOptions.map((run) => (
-            <label key={run.id} className={styles.runChoice}>
-              <input
-                type="checkbox"
-                disabled={pending}
-                checked={candidates.includes(run.id)}
-                onChange={(event) =>
-                  setCandidates((previous) =>
-                    event.target.checked
-                      ? [...previous, run.id]
-                      : previous.filter((id) => id !== run.id),
-                  )
-                }
-              />
-              <span>
-                <strong>{run.manifest.name}</strong>
-                <small>
-                  {run.manifest.targets.map((target) => target.id).join(', ')} ·{' '}
-                  {run.progress.total} cells · {run.manifest.profile}
-                </small>
-              </span>
-            </label>
-          ))}
-        </div>
-        <p className={styles.muted}>
-          {selectedIDs.length} runs selected, ordered by creation time. Incompatible evidence is
-          reported and excluded from continuous trends.
-        </p>
-      </div>
+      <ComparisonSetup
+        runs={runs}
+        baseline={baseline}
+        candidates={candidates}
+        pending={pending}
+        onBaseline={setBaseline}
+        onCandidates={setCandidates}
+      />
       {duplicate && <p className={styles.error}>Choose a different run for each iteration.</p>}
       <div className={styles.actions}>
         <button
           className={styles.primary}
-          disabled={pending || !baseline || !selectedIDs.length || duplicate}
+          disabled={pending || !baseline || !selectedIDs.length || duplicate || invalidSelection}
           onClick={compare}
         >
           <ProductIcon name="chart" />
@@ -347,6 +286,11 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
           Selections are saved in this page URL. Bookmark it to reopen the same evidence.
         </span>
       </div>
+      {draftChanged && savedResults.length > 0 && (
+        <p className={styles.notice}>
+          Selection changed. Choose Compare runs to update the displayed evidence.
+        </p>
+      )}
       {error && (
         <p className={styles.error} role="alert">
           {error}
@@ -376,7 +320,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
       )}
       {results.length > 0 && (
         <div className={styles.iterationCards}>
-          {results.map((item) => (
+          {results.slice(currentEvidencePage * 6, currentEvidencePage * 6 + 6).map((item) => (
             <article className={styles.iterationCard} key={item.id}>
               <p className={styles.eyebrow}>{item.stage}</p>
               <h3>{runs.find((run) => run.id === item.id)?.manifest.name ?? item.id}</h3>
@@ -430,6 +374,13 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
           ))}
         </div>
       )}
+      <BenchPagination
+        label="Comparison results"
+        total={results.length}
+        page={currentEvidencePage}
+        pageSize={6}
+        onChange={setEvidencePage}
+      />
       {baselineReport && (
         <>
           <AccountingCorrection report={baselineReport} />

@@ -158,17 +158,16 @@ func (r *OpenAIRouter) addSemanticSystemPromptIfConfigured(
 		return false, nil
 	}
 	start := time.Now()
-	promptContext, span := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", decisionName)
+	_, span := tracing.StartPluginSpan(ctx.TraceContext, "system_prompt", decisionName)
 	mode := decision.GetSystemPromptMode()
 	injected := llmprotocol.SetSystemInstruction(request, promptConfig.SystemPrompt, mode)
 	latency := time.Since(start).Milliseconds()
 	tracing.SetSpanAttributes(span,
 		attribute.Bool("system_prompt.injected", injected),
 		attribute.String("system_prompt.mode", mode),
-		attribute.String(tracing.AttrCategoryName, decisionName),
+		attribute.String(tracing.AttrDecisionName, decisionName),
 	)
 	tracing.EndPluginSpan(span, "success", latency, "prompt_injected")
-	ctx.TraceContext = promptContext
 	ctx.VSRInjectedSystemPrompt = true
 	logging.Infof("Applied system instruction for decision %q to model %q", decisionName, model)
 	return true, nil

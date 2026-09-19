@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -40,8 +41,6 @@ func (r *OpenAIRouter) logRoutingDecision(ctx *RequestContext, reasonCode string
 
 // recordRoutingDecision records routing decision with tracing
 func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName string, originalModel string, matchedModel string, reasoningDecision entropy.ReasoningDecision) {
-	// Start decision evaluation span
-	routingCtx, routingSpan := tracing.StartDecisionSpan(ctx.TraceContext, decisionName)
 
 	useReasoning := reasoningDecision.UseReasoning
 	logging.ComponentDebugEvent("extproc", "reasoning_decision_applied", map[string]interface{}{
@@ -57,19 +56,15 @@ func (r *OpenAIRouter) recordRoutingDecision(ctx *RequestContext, decisionName s
 	effortForMetrics := r.getReasoningEffort(ctx.VSRSelectedDecision, matchedModel)
 	metrics.RecordReasoningDecision(requestDecisionStateKey(ctx), matchedModel, useReasoning, effortForMetrics)
 
-	// Keep legacy attributes for backward compatibility
-	tracing.SetSpanAttributes(routingSpan,
-		attribute.String(tracing.AttrRoutingStrategy, "auto"),
+	// Resolution is a point-in-time event; it does not pretend to measure backend execution.
+	trace.SpanFromContext(ctx.TraceContext).AddEvent("routing.backend.resolved", trace.WithAttributes(
+		attribute.String(tracing.AttrDecisionName, decisionName),
+		attribute.String(tracing.AttrAlgorithm, ctx.VSRSelectionMethod),
 		attribute.String(tracing.AttrRoutingReason, reasoningDecision.DecisionReason),
 		attribute.String(tracing.AttrOriginalModel, originalModel),
 		attribute.String(tracing.AttrSelectedModel, matchedModel),
 		attribute.Bool(tracing.AttrReasoningEnabled, useReasoning),
-		attribute.String(tracing.AttrReasoningEffort, effortForMetrics))
-
-	// End decision span with evaluation results
-	// matchedRules would come from signal evaluation, using empty slice for now
-	tracing.EndDecisionSpan(routingSpan, float64(reasoningDecision.Confidence), []string{}, "auto")
-	ctx.TraceContext = routingCtx
+		attribute.String(tracing.AttrReasoningEffort, effortForMetrics)))
 }
 
 // trackVSRDecision tracks VSR decision information in context

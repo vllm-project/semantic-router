@@ -197,9 +197,19 @@ bounded run, inspect metrics and case artifacts, compare, cancel and reload the
 page. Verify task filters, data-set identity, read reconnection, explicit recovery
 scope/lineage, and same-key reconciliation after a lost recovery response. Check
 the Results, Questions, Calls, Evidence and Recipe tabs instead of relying on one
-large raw-data view. Compare a compatible single-model baseline with any number
-of completed candidate runs using the URL-persisted checkboxes; verify creation
-order, quality/cost and iteration charts, and CSV/JSON comparison exports. For a
+large raw-data view. Events are readable snapshots: fetch at most 1,000 initially,
+then explicitly load further pages; display 25 per page and label full pages as
+loaded counts, not totals. Verify that event filters and call/result searches apply
+only to loaded rows, page-read failure preserves the cursor, and progress polling
+does not silently drain the event log. Refresh evidence to replace the snapshot.
+
+Compare a completed live single-model baseline with any number of candidates
+using the guided steps and URL-persisted checkboxes. Check unavailable reasons,
+search-scoped Select all across pages, and clearing candidates when changing the
+baseline. Changed selections must hide previous results until Compare runs is
+selected. The service remains authoritative for complete paired comparability.
+Verify creation order, paginated result cards, quality/cost and iteration charts,
+and CSV/JSON exports covering all selected comparisons. For a
 two-loop study, include current Balance and both optimization revisions, while
 keeping the interface usable for subsequent candidates. Inspect/download the captured recipe
 and verify cost/quality uncertainty and full denominators. Review narrow-screen
