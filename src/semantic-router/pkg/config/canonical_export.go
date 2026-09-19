@@ -313,6 +313,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
 			Fallback:       cfg.RoutingDefaults.Fallback.Clone(),
+			AgenticFacts:   cfg.AgenticFacts,
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
