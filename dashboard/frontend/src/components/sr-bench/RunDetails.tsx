@@ -13,6 +13,7 @@ import CallEvidence from './CallEvidence'
 import RunEvents from './RunEvents'
 import BenchPagination from './BenchPagination'
 import AccountingCorrection from './AccountingCorrection'
+import OutputDiagnostics from './OutputDiagnostics'
 import PreviewEvidence from './PreviewEvidence'
 import RunRecovery from './RunRecovery'
 import RunLineage from './RunLineage'
@@ -418,6 +419,9 @@ export default function RunDetails({
             <p className={styles.muted}>
               Unknown usage and cost remain “—”; incomplete evidence cannot establish a cost saving.
             </p>
+            {run.manifest.mode === 'live' && report && (
+              <OutputDiagnostics targets={report.summary.targets} manifest={run.manifest} />
+            )}
             <details className={styles.details}>
               <summary>Cost and timing interpretation</summary>
               <p className={styles.muted}>
@@ -613,8 +617,31 @@ export default function RunDetails({
                   <PreviewEvidence routing={selected.details?.routing} />
                 ) : (
                   <>
-                    <h4>Final answer</h4>
-                    <pre>{selected.answer || 'No final answer recorded.'}</pre>
+                    <h4>
+                      {['mmlu-pro', 'gpqa-diamond'].includes(selected.benchmark)
+                        ? 'Parsed answer'
+                        : 'Recorded answer'}
+                    </h4>
+                    <pre>
+                      {selected.answer == null || selected.answer === ''
+                        ? ['mmlu-pro', 'gpqa-diamond'].includes(selected.benchmark)
+                          ? 'No answer parsed.'
+                          : 'No answer recorded for this case.'
+                        : typeof selected.answer === 'string'
+                          ? selected.answer
+                          : JSON.stringify(selected.answer, null, 2)}
+                    </pre>
+                    {selected.details?.quality_failure === 'output_limit' ? (
+                      <p className={styles.notice}>
+                        The output limit was reached. This case counts as incorrect under the frozen
+                        protocol.
+                      </p>
+                    ) : selected.details?.strict_format === false ? (
+                      <p className={styles.notice}>
+                        The final text did not match the required answer format. Inspect the
+                        original call for the full response.
+                      </p>
+                    ) : null}
                   </>
                 )}
                 <details>

@@ -5,7 +5,6 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
-import re
 import threading
 import time
 from http import HTTPStatus
@@ -17,67 +16,16 @@ from cli.routing_preview import build_preview_request, case_request_fields
 from .adapters import get_adapter
 from .contracts import digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
+from .native_output import capacity as native_capacity
+from .native_output import validate_recipes as validate_native_recipes
 from .provenance import capture_runner
 from .report import BUCKETS, make_report
 from .store import TERMINAL, now
 from .transport import CallFailure, chat, effective_request
 
-ARC_MAX_COLOR = 9
-
 
 class ReviewedPlanChangedError(ValueError):
     """A new submission differs from its reviewed hash before any dispatch."""
-
-
-def basic_grade(case, final):
-    expected = case["answer"]
-    if case["benchmark"] in {"mmlu-pro", "gpqa-diamond"}:
-        text = final.strip()
-        match = re.fullmatch(r"(?:ANSWER\s*:\s*)?\(?([A-J])\)?[.]?", text, re.I)
-        answer = match.group(1).upper() if match else None
-        return {
-            "answer": answer,
-            "correct": answer is not None and answer == str(expected).upper(),
-            "score": float(answer is not None and answer == str(expected).upper()),
-            "details": {"strict_format": match is not None},
-        }
-    if case["benchmark"] == "arc-agi-2":
-        try:
-            answer = json.loads(final)
-
-            def valid_grid(grid):
-                return (
-                    isinstance(grid, list)
-                    and bool(grid)
-                    and bool(grid[0])
-                    and all(
-                        isinstance(row, list)
-                        and len(row) == len(grid[0])
-                        and all(type(x) is int and 0 <= x <= ARC_MAX_COLOR for x in row)
-                        for row in grid
-                    )
-                )
-
-            valid = (
-                (
-                    isinstance(answer, list)
-                    and bool(answer)
-                    and all(valid_grid(grid) for grid in answer)
-                )
-                if case.get("metadata", {}).get("output_format") == "grids"
-                else valid_grid(answer)
-            )
-        except (ValueError, TypeError):
-            answer = None
-            valid = False
-        correct = valid and answer == expected
-        return {
-            "answer": answer,
-            "correct": correct,
-            "score": float(correct),
-            "details": {"valid_grid": valid},
-        }
-    raise ValueError("No basic grader for benchmark")
 
 
 class Context:
@@ -155,7 +103,12 @@ class Context:
                         max(p["input"], p["cached_input"], p["cache_write"])
                         for p in prices
                     )
-                    + request_body["max_tokens"] * max(p["output"] for p in prices)
+                    + (
+                        native_capacity(selected)
+                        if self.manifest["output_policy"] == "native"
+                        else request_body["max_tokens"]
+                    )
+                    * max(p["output"] for p in prices)
                 )
                 / 1_000_000
             )
@@ -210,6 +163,11 @@ class Context:
                 self.cancelled,
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
+                **(
+                    {"output_policy": "native"}
+                    if self.manifest["output_policy"] == "native"
+                    else {}
+                ),
             )
             if (
                 self.manifest["cost_policy"] == "require_priced"
@@ -295,11 +253,13 @@ class Engine:
                 raise ReviewedPlanChangedError(
                     "Reviewed plan changed; review a new frozen plan before starting"
                 )
+            provenance = capture_runner(frozen)
+            validate_native_recipes(frozen, provenance)
             run, created = self.store.create(
                 frozen,
                 owner,
                 request_key,
-                provenance=capture_runner(frozen),
+                provenance=provenance,
                 actor_role=actor_role,
             )
         if created:
@@ -364,8 +324,14 @@ class Engine:
                         "messages": case["messages"],
                         **case_request_fields(case),
                         "model": target["model"],
-                        "max_tokens": target.get("request_params", {}).get(
-                            "max_tokens", manifest["sampling"]["max_tokens"]
+                        **(
+                            {
+                                "max_tokens": target.get("request_params", {}).get(
+                                    "max_tokens", manifest["sampling"]["max_tokens"]
+                                )
+                            }
+                            if manifest["output_policy"] == "bounded"
+                            else {}
                         ),
                         "options": {"trace": True},
                         "preview_context": manifest["preview_context"],
