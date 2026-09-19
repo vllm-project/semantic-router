@@ -17,13 +17,38 @@ import torch
 logger = logging.getLogger(__name__)
 
 
+def detect_world_size() -> int:
+    """Number of training processes, read from the launcher's environment.
+
+    `torchrun`, `accelerate launch` and DeepSpeed all export `WORLD_SIZE`, and
+    `safety_classifier/train.py` already reads it exactly this way, so this
+    follows the convention already in the tree rather than adding a second one.
+
+    Reading the environment rather than `torch.distributed.get_world_size()` is
+    deliberate: `TrainingArguments` is normally constructed before
+    `init_process_group()` has run, and at that point the torch call would raise
+    or report 1 while the launcher has already told us the real answer.
+
+    Falls back to 1 when the variable is absent or unparseable, which is the
+    single-process case and the previous default.
+    """
+    try:
+        return max(1, int(os.environ.get("WORLD_SIZE", "1")))
+    except ValueError:
+        logger.warning(
+            "WORLD_SIZE=%r is not an integer; assuming single-process training",
+            os.environ.get("WORLD_SIZE"),
+        )
+        return 1
+
+
 def warmup_steps_from_ratio(
     warmup_ratio: float,
     num_train_examples: int,
     per_device_train_batch_size: int,
     num_train_epochs: float,
     gradient_accumulation_steps: int = 1,
-    world_size: int = 1,
+    world_size: Optional[int] = None,
 ) -> int:
     """Convert a warmup *ratio* into the warmup *steps* TrainingArguments takes.
 
@@ -51,7 +76,12 @@ def warmup_steps_from_ratio(
         per_device_train_batch_size: As passed to TrainingArguments.
         num_train_epochs: As passed to TrainingArguments.
         gradient_accumulation_steps: As passed to TrainingArguments; 1 if unset.
-        world_size: Number of processes; 1 for single-device training.
+        world_size: Number of processes. Defaults to reading `WORLD_SIZE` from
+            the environment, so a script launched under `torchrun` warms up over
+            the same span the Trainer used to compute for it. Pass explicitly to
+            override. Under DDP the effective batch is `batch * world_size`, so
+            leaving this at 1 would overstate the step count by that factor and
+            warm up for proportionally too long.
 
     Returns:
         A warmup step count safe to pass as `warmup_steps`.
@@ -64,6 +94,8 @@ def warmup_steps_from_ratio(
         )
     per_device_train_batch_size = max(1, int(per_device_train_batch_size))
     gradient_accumulation_steps = max(1, int(gradient_accumulation_steps))
+    if world_size is None:
+        world_size = detect_world_size()
     world_size = max(1, int(world_size))
 
     steps_per_epoch = math.ceil(

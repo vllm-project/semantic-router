@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import ast
 import math
+import os
 import unittest
 from pathlib import Path
 from typing import ClassVar
+from unittest import mock
 
 TRAINING_ROOT = Path(__file__).resolve().parents[1]
 HELPER_SOURCE = TRAINING_ROOT / "model_classifier" / "common_lora_utils.py"
@@ -35,7 +37,7 @@ def _load_helper():
     )
     namespace: dict = {}
     exec(compile(prologue, str(HELPER_SOURCE), "exec"), namespace)
-    return namespace["warmup_steps_from_ratio"]
+    return namespace
 
 
 def trainer_reference(
@@ -64,7 +66,18 @@ class WarmupStepsFromRatioTest(unittest.TestCase):
     # helper does not exist yet.
     @classmethod
     def setUpClass(cls) -> None:
-        cls.warmup_steps_from_ratio = staticmethod(_load_helper())
+        namespace = _load_helper()
+        cls.warmup_steps_from_ratio = staticmethod(namespace["warmup_steps_from_ratio"])
+        cls.detect_world_size = staticmethod(namespace["detect_world_size"])
+
+    def setUp(self) -> None:
+        # The helper now reads WORLD_SIZE when the caller does not pass one, so
+        # a variable inherited from the surrounding shell would otherwise change
+        # what these assertions mean. Each test states its own world size.
+        patcher = mock.patch.dict(os.environ, {}, clear=False)
+        patcher.start()
+        os.environ.pop("WORLD_SIZE", None)
+        self.addCleanup(patcher.stop)
 
     def test_matches_the_trainer_arithmetic(self) -> None:
         """The converted scripts must warm up over the same span as before."""
@@ -111,6 +124,43 @@ class WarmupStepsFromRatioTest(unittest.TestCase):
                 self.assertLessEqual(
                     self.warmup_steps_from_ratio(ratio, 10_000, 16, 3, 2, 1), total
                 )
+
+    def test_world_size_comes_from_the_launcher_when_not_passed(self) -> None:
+        """Under torchrun the effective batch is batch * world_size.
+
+        Defaulting to 1 would divide by a batch world_size times too small, so
+        the step count — and the warmup span computed from it — would be that
+        many times too large.
+        """
+        with mock.patch.dict(os.environ, {"WORLD_SIZE": "4"}):
+            detected = self.warmup_steps_from_ratio(0.06, 10_000, 16, 3, 2)
+        self.assertEqual(
+            detected, trainer_reference(0.06, 10_000, 16, 3, 2, world_size=4)
+        )
+        self.assertNotEqual(
+            detected, trainer_reference(0.06, 10_000, 16, 3, 2, world_size=1)
+        )
+
+    def test_an_explicit_world_size_overrides_the_environment(self) -> None:
+        with mock.patch.dict(os.environ, {"WORLD_SIZE": "8"}):
+            self.assertEqual(
+                self.warmup_steps_from_ratio(0.06, 10_000, 16, 3, 2, world_size=2),
+                trainer_reference(0.06, 10_000, 16, 3, 2, world_size=2),
+            )
+
+    def test_world_size_falls_back_to_one_without_a_launcher(self) -> None:
+        self.assertEqual(self.detect_world_size(), 1)
+        self.assertEqual(
+            self.warmup_steps_from_ratio(0.06, 10_000, 16, 3, 2),
+            trainer_reference(0.06, 10_000, 16, 3, 2, world_size=1),
+        )
+
+    def test_an_unparseable_world_size_does_not_crash_the_run(self) -> None:
+        """A malformed launcher variable must not take the training run down."""
+        for bad in ("", "auto", "2.5", "-1"):
+            with self.subTest(world_size=bad):
+                with mock.patch.dict(os.environ, {"WORLD_SIZE": bad}):
+                    self.assertEqual(self.detect_world_size(), 1)
 
 
 class NoScriptStillPassesRemovedArgumentsTest(unittest.TestCase):
