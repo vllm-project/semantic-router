@@ -76,7 +76,7 @@ func NewRedisCache(ctx context.Context, cfg *RedisCacheConfig) (*RedisCache, err
 }
 
 // cacheKey builds a value key from userID and a hash of the retrieval options
-// (query, projectID, limit, threshold, types). Value keys live under the "v:"
+// (query, projectID, limit, threshold, types and retrieval policy). Value keys live under the "v:"
 // namespace so they can never collide with a per-user index key (see
 // userIndexKey), regardless of userID content.
 func cacheKey(prefix, userID string, opts RetrieveOptions) string {
@@ -88,6 +88,7 @@ func cacheKey(prefix, userID string, opts RetrieveOptions) string {
 	_, _ = fmt.Fprintf(h, "%d", opts.Limit)
 	h.Write([]byte("\x00"))
 	_, _ = fmt.Fprintf(h, "%.6f", opts.Threshold)
+	_, _ = fmt.Fprintf(h, "\x00%t\x00%s\x00%t", opts.HybridSearch, opts.HybridMode, opts.AdaptiveThreshold)
 	for _, t := range opts.Types {
 		h.Write([]byte("\x00"))
 		h.Write([]byte(t))

@@ -190,3 +190,21 @@ func TestRedisCache_SetThenGet_RoundTrip(t *testing.T) {
 	assert.Equal(t, "a", got[0].Memory.Content)
 	assert.Equal(t, float32(0.9), got[0].Score)
 }
+
+func TestCacheKeySeparatesRetrievalPolicies(t *testing.T) {
+	baseline := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
+	for _, change := range []struct {
+		name  string
+		apply func(*RetrieveOptions)
+	}{
+		{"hybrid", func(o *RetrieveOptions) { o.HybridSearch = true }},
+		{"fusion mode", func(o *RetrieveOptions) { o.HybridMode = "rrf" }},
+		{"adaptive", func(o *RetrieveOptions) { o.AdaptiveThreshold = true }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			other := baseline
+			change.apply(&other)
+			assert.NotEqual(t, cacheKey("mem:", "u1", baseline), cacheKey("mem:", "u1", other))
+		})
+	}
+}
