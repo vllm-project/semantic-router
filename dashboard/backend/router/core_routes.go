@@ -159,17 +159,55 @@ func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
 	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
 }
 
+// resolveToolsDBPath returns an absolute path to the tools database.
+//
+// Both halves of this used to produce a path that does not exist.
+//
+// A configured tools_db_path is relative to the project root, which is how
+// config/config.yaml spells it: "config/runtime/tools/tools_db.json". It was
+// returned unchanged and opened with os.ReadFile (handlers/tools.go), so it
+// resolved against the process working directory instead. That directory is
+// dashboard/backend for the documented dev launch (tools/make/dashboard.mk
+// runs "cd $(DASHBOARD_BACKEND_DIR) && go run main.go"), where no such file
+// exists — so /api/tools-db answered 404 in a default checkout even though the
+// database ships in the repository and the key names it correctly.
+//
+// The fallback, used when the config will not parse, joined "config" onto
+// cfg.ConfigDir. ConfigDir is already the directory holding the config file
+// (config.Load derives it as filepath.Dir of the absolute config path), so the
+// result carried "config" twice.
+//
+// The fallback keeps the router's own default spelling, config/tools_db.json
+// (config.defaultCanonicalIntegrationGlobal), rather than the checkout's
+// config/runtime/tools/tools_db.json. Those are both right, for different
+// deployments: every chart and manifest under deploy/ mounts a tools_db.json
+// at config/tools_db.json and names it explicitly, while the repository's own
+// config.yaml names the runtime path. Picking either one here would make the
+// dashboard disagree with the router in half of the installations, so it
+// defers to the router's default and only makes it absolute.
+//
+// An absolute configured path is returned as given: it is already unambiguous,
+// and rewriting it would break a deployment that points outside the checkout.
+// defaultToolsDBPath mirrors the router's own default
+// (config.defaultCanonicalIntegrationGlobal), relative to the project root.
+const defaultToolsDBPath = "config/tools_db.json"
+
 func resolveToolsDBPath(cfg *config.Config) string {
-	toolsDBPath := filepath.Join(cfg.ConfigDir, "config", "tools_db.json")
+	projectRoot := filepath.Dir(cfg.ConfigDir)
+	fallback := filepath.Join(projectRoot, defaultToolsDBPath)
+
 	toolSelection, err := routercontract.ReadToolSelection(cfg.AbsConfigPath)
 	if err != nil {
-		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", toolsDBPath, err)
-		return toolsDBPath
+		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", fallback, err)
+		return fallback
 	}
-	if toolSelection.ToolsDBPath != "" {
+	if toolSelection.ToolsDBPath == "" {
+		return fallback
+	}
+	if filepath.IsAbs(toolSelection.ToolsDBPath) {
 		return toolSelection.ToolsDBPath
 	}
-	return toolsDBPath
+	return filepath.Join(projectRoot, toolSelection.ToolsDBPath)
 }
 
 func registerStatusRoutes(mux *http.ServeMux, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {
