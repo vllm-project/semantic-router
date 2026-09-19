@@ -32,10 +32,14 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 	signalInput := r.prepareSignalEvaluationInput(history)
 	observePromptCompression(ctx, signalInput.compression.outcome, signalInput.compression.elapsed)
 	signalInput.requestFacts.Context = ctx.TraceContext
+	if ctx.AgenticFacts.Accepted != nil {
+		signalInput.requestFacts.AgenticFactsDelegatedRole = ctx.AgenticFacts.Accepted.DelegatedRole
+		signalInput.requestFacts.AgenticFactsTaskPhase = ctx.AgenticFacts.Accepted.TaskPhase
+	}
 	ctx.VSRConversationFacts = signalInput.conversationFacts
 	ctx.VSRContextHasNonText = ctx.VSRContextHasNonText ||
 		signalInput.requestFacts.ContextHasNonText
-	if signalInput.evaluationText == "" && !hasEnvelopeRoutingFacts(history) {
+	if signalInput.evaluationText == "" && !hasEnvelopeRoutingFacts(history, ctx) {
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
@@ -68,7 +72,7 @@ func (r *OpenAIRouter) prepareDecisionEvaluation(
 	ctx *RequestContext,
 ) (string, bool) {
 	if len(history.nonUserMessages) == 0 && history.currentUserMessage == "" &&
-		!hasEnvelopeRoutingFacts(history) {
+		!hasEnvelopeRoutingFacts(history, ctx) {
 		return "", true
 	}
 

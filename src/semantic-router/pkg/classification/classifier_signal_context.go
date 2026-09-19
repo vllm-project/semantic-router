@@ -37,6 +37,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
 		config.SignalTypeAction:        len(c.Config.ActionRules) > 0,
 		config.SignalTypeDecision:      len(c.Config.DecisionRules) > 0,
+		config.SignalTypeAgenticFacts:  len(c.Config.AgenticFactsRules) > 0,
 	}
 }
 
