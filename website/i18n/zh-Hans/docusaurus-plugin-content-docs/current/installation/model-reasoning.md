@@ -2,7 +2,7 @@
 title: 模型推理
 description: 继承、复用或定义模型推理契约，并从路由决策中选择其 mode 和 effort。
 translation:
-  source_commit: "6a4e51ad570a95c2a493ce4b1494bcedb525fa08"
+  source_commit: "bef43a20a96e7b329d314473083be6aa4bad0f03"
   source_file: "docs/installation/model-reasoning.md"
   outdated: false
 ---
@@ -101,8 +101,11 @@ routing:
           use_reasoning: true
           reasoning_mode: enabled
           reasoning_effort: high
+          max_completion_tokens: 2048
 ```
 
 effort 必须由家族列出，并且被该 Model 的每个 Provider 绑定允许。`reasoning_mode` 必须与 `use_reasoning` 一致。省略 effort 以使用家族默认值，或在需要一个有效的部署级默认值优先时设置 `providers.defaults.reasoning_effort`。
+
+`max_completion_tokens` 是可选的按模型补全上限。设置后，Provider 派发会取客户端请求、决策插件 `request_params.max_tokens_limit`、此 ModelRef 值、任何 Looper 算法/阶段上限，以及未来的请求级 ledger 中的最严格值（最小值）。省略则保持现有行为。同一上限适用于普通路由和 Looper hop（包括 Confidence 升级），因此每个被选中的模型都在派发时独立封顶。
 
 在控制面板决策编辑器中，先选择 Model。UI 从其有效家族派生 mode 和 effort 选项，并禁用 Model 或 Provider 不支持的控件。没有家族的自定义 Model 保持为透传模型，并且没有控制面板推理控件。

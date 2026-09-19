@@ -12,6 +12,8 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 )
 
 func TestFormatConfidenceStreamingResponsePublishesOnlySelectedCandidate(t *testing.T) {
@@ -691,6 +693,69 @@ func assertMissingMarginResult(t *testing.T, response *Response, err error, want
 	}
 	if response.Model != wantModel || response.Usage.TotalTokens != 6 {
 		t.Fatalf("response = model %q usage %+v, want escalated aggregate", response.Model, response.Usage)
+	}
+}
+
+func TestConfidenceHopOmitsInheritedStageBoundWhenClientIsBlocked(t *testing.T) {
+	var clientHeader, stageHeader string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		clientHeader = r.Header.Get(headers.VSRLooperClientMaxOutputTokens)
+		stageHeader = r.Header.Get(headers.VSRLooperStageMaxOutputTokens)
+		choice := map[string]interface{}{
+			"index":         0,
+			"message":       map[string]interface{}{"role": "assistant", "content": "small answer"},
+			"finish_reason": "stop",
+			"logprobs": map[string]interface{}{
+				"content": []map[string]interface{}{{
+					"token":   "answer",
+					"logprob": -0.01,
+					"bytes":   []int{97},
+				}},
+			},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"id":      "chatcmpl-confidence-token-limit",
+			"object":  "chat.completion",
+			"created": 1,
+			"model":   "small",
+			"choices": []map[string]interface{}{choice},
+			"usage": map[string]interface{}{
+				"prompt_tokens":     1,
+				"completion_tokens": 1,
+				"total_tokens":      2,
+			},
+		})
+	}))
+	defer server.Close()
+
+	modelLimit := 1024
+	request := confidenceLogprobRequest("skip")
+	request.OriginalRequest.MaxCompletionTokens = openai.Int(256)
+	request.ModelRefs = []config.ModelRef{{
+		Model:               "small",
+		MaxCompletionTokens: &modelLimit,
+	}}
+	request.ModelParams = map[string]config.ModelParams{"small": {ParamSize: "1b"}}
+
+	if _, err := NewConfidenceLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(
+		context.Background(),
+		request,
+	); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if clientHeader != "256" {
+		t.Fatalf("client hop header = %q, want 256", clientHeader)
+	}
+	if stageHeader != "" {
+		t.Fatalf("inherited client limit must not be sent as a stage bound, got %q", stageHeader)
+	}
+
+	result := outputtokens.Compose(outputtokens.Sources{
+		ModelRef: outputtokens.FromInt(&modelLimit),
+	})
+	if result.Effective == nil || *result.Effective != 1024 || result.Source != outputtokens.SourceModelRef {
+		t.Fatalf("blocked client compose = %+v, want model_ref 1024", result)
 	}
 }
 

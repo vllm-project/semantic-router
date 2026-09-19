@@ -109,6 +109,7 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 	defer func() { <-sem }()
 
 	msgCopy := toolFreeLooperRequest(messages)
+	var authoredStage *int64
 	if cfg.Temperature > 0 {
 		msgCopy.Temperature = openai.Float(cfg.Temperature)
 	}
@@ -117,6 +118,7 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 		// deprecated field so upstreams never receive conflicting limits.
 		msgCopy.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
 		msgCopy.MaxCompletionTokens = openai.Int(int64(*cfg.MaxCompletionTokens))
+		authoredStage = authoredStageMaxOutputTokens(*cfg.MaxCompletionTokens)
 	}
 
 	startTime := time.Now()
@@ -125,7 +127,11 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 		req,
 		msgCopy,
 		ModelTarget{Name: modelName, AccessKey: accessKeyForModel(req, modelName)},
-		CallOptions{DecisionName: req.DecisionName, Iteration: idx + 1},
+		CallOptions{
+			DecisionName:         req.DecisionName,
+			Iteration:            idx + 1,
+			StageMaxOutputTokens: authoredStage,
+		},
 	)
 	elapsed := time.Since(startTime)
 

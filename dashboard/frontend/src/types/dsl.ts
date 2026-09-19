@@ -117,6 +117,7 @@ export interface ASTModelRef {
   paramSize?: string
   weight?: number
   reasoningFamily?: string
+  maxCompletionTokens?: number
   pos: ASTPosition
 }
 

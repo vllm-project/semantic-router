@@ -31,6 +31,31 @@ def test_decision_without_description_parses():
     assert config.decisions[0].description is None
 
 
+def test_model_ref_max_completion_tokens_parses():
+    decision = _decision(
+        modelRefs=[{"model": "vision-model", "max_completion_tokens": 512}]
+    )
+    config = UserConfig(version="0.3", routing={"decisions": [decision]})
+
+    assert config.decisions[0].modelRefs[0].max_completion_tokens == 512
+
+
+def test_model_ref_rejects_non_positive_max_completion_tokens():
+    with pytest.raises(Exception, match="greater than or equal to 1"):
+        UserConfig(
+            version="0.3",
+            routing={
+                "decisions": [
+                    _decision(
+                        modelRefs=[
+                            {"model": "vision-model", "max_completion_tokens": 0}
+                        ]
+                    )
+                ]
+            },
+        )
+
+
 def test_decision_with_description_still_parses():
     config = UserConfig(
         version="0.3",

@@ -31,6 +31,7 @@ func automaticFixture(t *testing.T, text string, handler http.HandlerFunc) (*Ope
 	require.NoError(t, err)
 	ctx.VSRSelectedDecision.Plugins = append(ctx.VSRSelectedDecision.Plugins, config.DecisionPlugin{Type: "request_params", Configuration: payload})
 	ctx.SemanticRequest.Sampling.MaxOutputTokens = nil
+	snapshotClientMaxOutputTokens(*ctx.SemanticRequest, ctx)
 	return r, ctx
 }
 
@@ -168,6 +169,7 @@ func TestAutomaticOutputExplicitCallerHasNoRenderCalls(t *testing.T) {
 	calls := 0
 	r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 	ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
+	snapshotClientMaxOutputTokens(*ctx.SemanticRequest, ctx)
 	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
 	_, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
 	require.NoError(t, err)
@@ -187,6 +189,7 @@ func TestAutomaticOutputBlockedCallerBudgetUsesRenderer(t *testing.T) {
 			calls := 0
 			r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 			ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
+			snapshotClientMaxOutputTokens(*ctx.SemanticRequest, ctx)
 			setAutomaticBlockedParams(t, ctx, []string{field})
 			require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
 			refs, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
@@ -213,6 +216,7 @@ func TestAutomaticOutputBlockedCallerBudgetRejectsInvalidPolicyBeforeRender(t *t
 	calls := 0
 	r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
 	ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
+	snapshotClientMaxOutputTokens(*ctx.SemanticRequest, ctx)
 	setAutomaticBlockedParams(t, ctx, []string{"max_tokens", "messages"})
 	err := r.prepareDecisionContextOverflow(ctx, "auto")
 	require.ErrorContains(t, err, "required semantic field")

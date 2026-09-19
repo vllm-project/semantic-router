@@ -70,11 +70,17 @@ Open **Insights** in the Dashboard, or use the
 Costs are [estimates from recorded tokens and configured rates](../../api/router#configured-rate-cost-estimates),
 not invoices. Missing prices and usage remain unknown.
 
-Confidence Looper requests also include `route_diagnostics.looper`: bounded
-attempts, token and cost accounting, timings, disposition reasons, and the final
-attempt. This diagnostic object excludes prompts, tool arguments, credentials,
-and raw errors. Attempt details require replay-detail permission, and any
-truncation is marked.
+Confidence Looper records include a versioned `route_diagnostics.looper`
+object. It contains bounded attempt metadata, token and cost accounting,
+latencies, disposition reason codes, the OpenTelemetry trace ID when tracing is
+active, and `final_attempt_ordinal`. Ordinary records also include
+`effective_max_output_tokens`, `effective_max_output_tokens_source`, and
+`effective_max_output_tokens_fallback` on `route_diagnostics`. Looper attempts
+repeat those three fields so Confidence escalation can show each model's
+composed ceiling. Attempt details are omitted from viewer-redacted responses
+and remain available to principals with replay-detail permission. This
+diagnostic object excludes prompts, tool arguments, credentials, and raw
+errors. Any truncation is marked.
 
 For a complete decision fragment, see
 [`config/fragments/plugin/router-replay/debug.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/router-replay/debug.yaml).
