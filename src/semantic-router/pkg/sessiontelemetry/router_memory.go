@@ -244,6 +244,16 @@ func RecordSessionUsage(p SessionUsageParams) {
 
 // GetRouterSessionSnapshot returns a clone of the router-owned session memory.
 func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSnapshot, bool) {
+	return routerSessionSnapshot(sessionID, now, true)
+}
+
+// PeekRouterSessionSnapshot reads the same routing state without expiring local
+// entries or hydrating shared storage into the live session cache.
+func PeekRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSnapshot, bool) {
+	return routerSessionSnapshot(sessionID, now, false)
+}
+
+func routerSessionSnapshot(sessionID string, now time.Time, mutate bool) (RouterSessionSnapshot, bool) {
 	if sessionID == "" {
 		return RouterSessionSnapshot{}, false
 	}
@@ -252,7 +262,7 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 	st := s.sessions[sessionID]
 	if st == nil {
 		s.mu.Unlock()
-		return loadSharedRouterSessionSnapshot(sessionID, now)
+		return loadSharedRouterSessionSnapshotMode(sessionID, now, mutate)
 	}
 	if now.IsZero() {
 		now = s.nowFn()
@@ -262,7 +272,9 @@ func GetRouterSessionSnapshot(sessionID string, now time.Time) (RouterSessionSna
 		idleFor = 0
 	}
 	if idleFor > routerMemoryTTL {
-		delete(s.sessions, sessionID)
+		if mutate {
+			delete(s.sessions, sessionID)
+		}
 		s.mu.Unlock()
 		return RouterSessionSnapshot{}, false
 	}

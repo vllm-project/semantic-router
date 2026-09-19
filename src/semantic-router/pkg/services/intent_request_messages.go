@@ -84,6 +84,13 @@ type intentMessageContentPart struct {
 }
 
 func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
+	if req.PreviewContext != nil {
+		for _, identity := range []string{req.PreviewContext.SessionID, req.PreviewContext.ConversationID} {
+			if len(identity) > 1024 || strings.ContainsAny(identity, "\r\n\x00") {
+				return intentSignalInput{}, fmt.Errorf("%w: preview identity must be at most 1024 bytes without control separators", ErrInvalidRequestFacts)
+			}
+		}
+	}
 	if err := validateIntentMetadata(req.Metadata); err != nil {
 		return intentSignalInput{}, err
 	}

@@ -4,12 +4,15 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmproto
 
 // Cache detail fields are optional provider evidence. In particular, vLLM can
 // omit them when usage details are disabled; absence must not invent a zero.
-func decodeInputCacheUsage(usage *llmprotocol.Usage, cached, written, created *int64) error {
-	if written != nil && created != nil && *written != *created {
-		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "conflicting_cache_usage", "upstream cache_write_tokens and created_cache_tokens disagree", nil)
-	}
-	if written == nil {
-		written = created
+func decodeInputCacheUsage(usage *llmprotocol.Usage, cached, written *int64, aliases ...*int64) error {
+	for _, alias := range aliases {
+		if alias == nil {
+			continue
+		}
+		if written != nil && *written != *alias {
+			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "conflicting_cache_usage", "upstream cache-write token aliases disagree", nil)
+		}
+		written = alias
 	}
 	usage.InputCacheRead = optionalAuthoritative(cached)
 	usage.InputCacheWrite = optionalAuthoritative(written)

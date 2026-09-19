@@ -91,7 +91,7 @@ func ConfigureTurnOutcomeWindow(sessionID string, size int, ttl time.Duration, n
 	// Recover shared state first: creating an empty local session here would
 	// otherwise shadow a window that only exists in the shared store.
 	if !known {
-		_, _ = loadSharedRouterSessionSnapshot(sessionID, now)
+		_, _ = loadSharedRouterSessionSnapshotMode(sessionID, now, true)
 	}
 
 	s.mu.Lock()
@@ -132,7 +132,7 @@ func RecordTurnOutcome(sessionID string, outcome TurnOutcome, timestamp time.Tim
 	_, known := s.sessions[sessionID]
 	s.mu.Unlock()
 	if !known {
-		_, _ = loadSharedRouterSessionSnapshot(sessionID, now)
+		_, _ = loadSharedRouterSessionSnapshotMode(sessionID, now, true)
 	}
 	s.mu.Lock()
 	size, windowTTL := s.sessions[sessionID].windowPolicy()
@@ -161,6 +161,16 @@ func RecentTurnOutcomes(sessionID string, now time.Time) []TurnOutcome {
 // sessions return an empty window (cold start). A zero now falls back to the
 // store clock.
 func RecentTurnOutcomesWithPolicy(sessionID string, now time.Time, size int, ttl time.Duration) []TurnOutcome {
+	return recentTurnOutcomesWithPolicy(sessionID, now, size, ttl, true)
+}
+
+// PeekRecentTurnOutcomesWithPolicy reads the same local/shared outcome union
+// without hydrating shared state into the live cache. Preview callers own the copy.
+func PeekRecentTurnOutcomesWithPolicy(sessionID string, now time.Time, size int, ttl time.Duration) []TurnOutcome {
+	return recentTurnOutcomesWithPolicy(sessionID, now, size, ttl, false)
+}
+
+func recentTurnOutcomesWithPolicy(sessionID string, now time.Time, size int, ttl time.Duration, hydrate bool) []TurnOutcome {
 	if sessionID == "" {
 		return nil
 	}
@@ -173,7 +183,11 @@ func RecentTurnOutcomesWithPolicy(sessionID string, now time.Time, size int, ttl
 	st := s.sessions[sessionID]
 	if st == nil {
 		s.mu.Unlock()
-		return sharedRecentTurnOutcomes(sessionID, now, size, ttl)
+		if hydrate {
+			return sharedRecentTurnOutcomes(sessionID, now, size, ttl)
+		}
+		window, _ := sharedTurnOutcomes(sessionID, now)
+		return trimTurnOutcomes(pruneTurnOutcomes(window, ttl, now), size)
 	}
 	if now.Sub(st.lastSeen) > routerMemoryTTL {
 		s.mu.Unlock()
@@ -219,7 +233,7 @@ func sharedTurnOutcomes(sessionID string, now time.Time) ([]TurnOutcome, bool) {
 // sharedRecentTurnOutcomes recovers the window from the shared store on a
 // local miss.
 func sharedRecentTurnOutcomes(sessionID string, now time.Time, size int, ttl time.Duration) []TurnOutcome {
-	snapshot, ok := loadSharedRouterSessionSnapshot(sessionID, now)
+	snapshot, ok := loadSharedRouterSessionSnapshotMode(sessionID, now, true)
 	if !ok {
 		return nil
 	}

@@ -376,6 +376,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"request_id": ctx.RequestID,
 			"error":      responseErr.Error(),
 		})
+		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return
 	}
 	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
@@ -386,6 +387,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"format":     ctx.SourceFormat,
 			"error":      err.Error(),
 		})
+		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_encode_failed", true)
 		return
 	}
 	r.updateResponseCache(ctx, encoded)
