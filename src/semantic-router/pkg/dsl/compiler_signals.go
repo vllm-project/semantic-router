@@ -220,6 +220,22 @@ func (c *Compiler) compileMetadataSignal(s *SignalDecl) {
 	c.config.MetadataRules = append(c.config.MetadataRules, rule)
 }
 
+func (c *Compiler) compileAgenticFactsSignal(s *SignalDecl) {
+	payload := fieldsToMap(s.Fields)
+	payload["name"] = s.Name
+	raw, err := yaml.Marshal(payload)
+	if err != nil {
+		c.addError(s.Pos, "failed to encode agentic_facts signal %q: %v", s.Name, err)
+		return
+	}
+	var rule config.AgenticFactsRule
+	if err := yaml.Unmarshal(raw, &rule); err != nil {
+		c.addError(s.Pos, "failed to decode agentic_facts signal %q: %v", s.Name, err)
+		return
+	}
+	c.config.AgenticFactsRules = append(c.config.AgenticFactsRules, rule)
+}
+
 func (c *Compiler) compileInputModalitySignal(s *SignalDecl) {
 	payload := fieldsToMap(s.Fields)
 	payload["name"] = s.Name

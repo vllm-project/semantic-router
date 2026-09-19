@@ -146,6 +146,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedClassifier = signals.MatchedClassifierRules
 	ctx.VSRMatchedInputModality = signals.MatchedInputModalityRules
 	ctx.VSRMatchedDecisionModel = signals.MatchedDecisionRules
+	ctx.VSRMatchedAgenticFacts = signals.MatchedAgenticFactsRules
 	ctx.VSRMatchedProjection = signals.MatchedProjectionRules
 	ctx.VSRProjectionScores = cloneReplayFloat64Map(signals.ProjectionScores)
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)

@@ -34,6 +34,7 @@ type Signals struct {
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
 	ActionRules        []ActionRule           `yaml:"actions,omitempty"`
 	DecisionRules      []DecisionSignalRule   `yaml:"decision,omitempty"`
+	AgenticFactsRules  []AgenticFactsRule     `yaml:"agentic_facts_rules,omitempty"`
 }
 
 // HallucinationRule declares the response-stage hallucination observation:

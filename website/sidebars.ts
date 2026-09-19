@@ -93,6 +93,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/heuristic/event',
                 'tutorials/signal/heuristic/metadata',
                 'tutorials/signal/heuristic/structure',
+                'tutorials/signal/heuristic/agentic-facts',
               ],
             },
             {

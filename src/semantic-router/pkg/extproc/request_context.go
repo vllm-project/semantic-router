@@ -333,6 +333,7 @@ type RequestContext struct {
 	VSRMatchedClassifier      []string // Matched generic classifier signal names
 	VSRMatchedInputModality   []string // Matched structural input-modality signal names
 	VSRMatchedDecisionModel   []string // Matched decision-model signals (rule or rule:choice)
+	VSRMatchedAgenticFacts    []string // Matched agentic facts rule names (delegated_role, task_phase)
 	VSRConversationFacts      classification.ConversationFacts
 	VSRMatchedProjection      []string // Matched projection mapping outputs
 	VSRProjectionScores       map[string]float64

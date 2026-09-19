@@ -107,6 +107,17 @@ func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interfac
 	assertReferenceConfigConversationSignalCoverage(t, mustSliceAt(t, signals, "conversation"))
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "events"), reflect.TypeOf(EventRule{}), "routing.signals.events")
 	assertSliceUnionCoversStructFields(t, mustSliceAt(t, signals, "input_modality"), reflect.TypeOf(InputModalityRule{}), "routing.signals.input_modality")
+	assertReferenceConfigAgenticFactsSignalCoverage(t, mustSliceAt(t, signals, "agentic_facts"))
+}
+
+func assertReferenceConfigAgenticFactsSignalCoverage(t testingT, rules []interface{}) {
+	assertSliceUnionCoversStructFields(t, rules, reflect.TypeOf(AgenticFactsRule{}), "routing.signals.agentic_facts")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, rules, "predicate", "routing.signals.agentic_facts"),
+		reflect.TypeOf(AgenticFactsPredicate{}),
+		"routing.signals.agentic_facts[].predicate",
+	)
 }
 
 func assertReferenceConfigProjectionCoverage(t testingT, projections map[string]interface{}) {

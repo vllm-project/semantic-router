@@ -91,6 +91,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		InputModality: append([]InputModalityRule(nil), signals.InputModalityRules...),
 		Actions:       append([]ActionRule(nil), signals.ActionRules...),
 		Decision:      append([]DecisionSignalRule(nil), signals.DecisionRules...),
+		AgenticFacts:  append([]AgenticFactsRule(nil), signals.AgenticFactsRules...),
 	}
 }
 

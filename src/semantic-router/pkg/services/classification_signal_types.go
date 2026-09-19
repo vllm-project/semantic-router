@@ -95,6 +95,7 @@ type MatchedSignals struct {
 	InputModality []string `json:"input_modality,omitempty"`
 	Action        []string `json:"action,omitempty"`
 	Decision      []string `json:"decision,omitempty"`
+	AgenticFacts  []string `json:"agentic_facts,omitempty"`
 	Projection    []string `json:"projection,omitempty"`
 }
 

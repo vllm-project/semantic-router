@@ -794,6 +794,20 @@ routing:
         model: external-sequence-classifier
         labels: [SAFE, RISKY]
 
+    agentic_facts:
+      - name: reviewer_role
+        description: Caller declared itself as a reviewer subagent.
+        field: delegated_role
+        predicate:
+          equals: reviewer
+      - name: execution_phase
+        description: Caller is in an execution or verification task phase.
+        field: task_phase
+        predicate:
+          in:
+            - execute
+            - verify
+
   projections:
     partitions:
       - name: support_intents
