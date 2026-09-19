@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -74,26 +75,23 @@ func regexPatterns(keyword string, useExplicitRegex bool) (string, string) {
 		return keyword, "(?i)" + keyword
 	}
 
-	quotedKeyword := regexp.QuoteMeta(keyword)
-	hasWordChar := false
-	hasChinese := false
+	pattern := regexp.QuoteMeta(keyword)
+	// Han keywords retain substring matching because written Chinese does not
+	// delimit words with spaces. Other literal keywords use Unicode word
+	// boundaries only at ends that are themselves letters, digits or '_'.
 	for _, r := range keyword {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
-			hasWordChar = true
-		}
 		if unicode.Is(unicode.Han, r) {
-			hasChinese = true
-		}
-		if hasWordChar && hasChinese {
-			break
+			return pattern, "(?i)" + pattern
 		}
 	}
-
-	patternCS := quotedKeyword
-	patternCI := "(?i)" + quotedKeyword
-	if hasWordChar && !hasChinese {
-		patternCS = "\\b" + patternCS + "\\b"
-		patternCI = "(?i)\\b" + quotedKeyword + "\\b"
+	first, _ := utf8.DecodeRuneInString(keyword)
+	last, _ := utf8.DecodeLastRuneInString(keyword)
+	isWord := func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' }
+	if isWord(first) {
+		pattern = `(?:^|[^\p{L}\p{N}_])` + pattern
 	}
-	return patternCS, patternCI
+	if isWord(last) {
+		pattern += `(?:$|[^\p{L}\p{N}_])`
+	}
+	return pattern, "(?i)" + pattern
 }
