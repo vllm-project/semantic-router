@@ -59,6 +59,30 @@ routing:
 
 LLM 分类器引用命名的 `global.model_catalog.external` 条目，并添加 `instructions`。运行时固定温度、输出 schema、精确标签校验，以及默认 1 MiB 的响应上限。在外部模型条目上设置 `max_response_bytes` 可覆盖该上限。因为运行时拥有输出 schema，该条目上的 `parser_type` 必须是 `json` 或未设置；其他值会在配置加载时被拒绝。模型必须为每个已声明标签报告分数；每个分数必须在 `0` 与 `1` 之间，完整分布必须大约合计为 `1.0`。这些是模型报告的置信度分数，不是校准过的分类器概率。Classifier 叶是唯一接受 `on_error` 的决策谓词；失败会在 eval/回放诊断中暴露有界的 `classifier_evaluation_failed` 代码。
 
+LLM 分类器也可以在外部模型上声明 reasoning 请求偏好：
+
+```yaml
+global:
+  model_catalog:
+    external:
+      - name: risk-judge
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: vllm-classifier.example.com
+          port: 8000
+          protocol: http
+        llm_model_name: qwen/qwen3.8-27b
+        reasoning:
+          family: qwen3.8
+          use_reasoning: true
+          reasoning_effort: low
+```
+
+`family` 引用已有的 reasoning family；外部模型不能内联定义新 family。只要出现该配置块，`family` 与 `use_reasoning` 都是必填项。启用 reasoning 时，`reasoning_effort` 可省略；若填写，则必须属于该 family 声明的档位。配置若尝试关闭 always-on family，或在 reasoning 已关闭时仍设置 effort，会在加载阶段被拒绝。
+
+Reasoning 控制目前只支持使用 `llm_provider: vllm` 的外部分类器。mode 与普通 effort 控制会投影到 `chat_template_kwargs`；声明为 `top_level_reasoning_effort` 的 family 则使用类型化的顶层 `reasoning_effort` 字段。该控制只作用于 `type: llm` 的分类器请求，不影响 `sequence_classifier`、其他 Router 模型调用或响应解析。它只是请求偏好：上游模型仍可能忽略它，或无法生成要求的 JSON 契约；这类失败继续遵循现有分类器错误策略。如果模型仍然进行了推理，但返回了有效的分类 JSON，Router 会像以前一样使用该 JSON；解析或暴露独立 reasoning trace 不在本次改动范围内。
+
 失败时，决策树将该叶评估为 `Unknown`，直到完整 AND/OR/NOT 表达式已知。根级 `rules.on_unknown` 再选择 `no_match`、`match` 或 `fail_request`。`no_match` 与 `match` 只解析自身决策；`fail_request` 是全局失败即拒绝：即使另一条决策干净匹配，也会以 503 拒绝整个请求，与优先级无关。省略 `rules.on_unknown` 时，条件级 `on_error`（`no_match` 或 `match`）保留先前通用分类器结果。设置 `rules.on_unknown` 会禁用该树中所有条件级 `on_error`，因此 Router 会拒绝同时设置两者的配置。`prompt_guard.on_error`（`allow` 或 `block`）仍是 jailbreak 规则的兼容默认。诊断同时包含信号错误与已应用的任何终端策略。见[安全模型](../../../installation/runtime/safety)。
 
 `sequence_classifier` 分类器也引用命名外部模型，但使用共享的 `http_classify` 约定，并保留其完整标签分布。响应必须恰好包含已声明标签，分数合计大约为 `1.0`；sigmoid 多标签输出与标签子集会被拒绝。它们至少需要两个标签，并且不接受 `instructions`、`model_path` 或 `use_cpu`。

@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 const learningOutcomeIdempotencyTTL = 10 * time.Minute
@@ -86,6 +87,13 @@ func (rt *routerLearningRuntime) updateOwnedModelOutcome(
 	}
 	decisionName, decisionTier := rt.resolveOutcomeDecisionContext(outcome)
 	rt.recordModelExperience(decisionName, decisionTier, model, verdict, outcome.Score)
+	if rt.config != nil && rt.config.RouterLearning.Enabled && rt.config.RouterLearning.Protection.EffectiveEnabled() {
+		gate := rt.config.RouterLearning.Protection.Tuning.ProgressGate.EffectiveConfig()
+		if gate.Enabled {
+			sessiontelemetry.ConfigureTurnOutcomeWindow(ingestedEvidenceKey(record), gate.WindowSize, time.Duration(gate.WindowTTLSeconds)*time.Second, time.Now())
+			recordIngestedTurnOutcome(record, model, verdict, outcome.Score, outcome.ScoreProvided)
+		}
+	}
 	return routerruntime.RouterOutcomeResult{Updated: 1, Recorded: true}
 }
 

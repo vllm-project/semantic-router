@@ -36,6 +36,9 @@ func initClassifier(b *testing.B) {
 		benchClassifier, classifierErr = benchmarkRuntime.LoRABatch(context.Background(), domain, pii, guard)
 	})
 	if classifierErr != nil {
+		if missingBenchModels(classifierErr) {
+			b.Skipf("Failed to initialize classifier: %v", classifierErr)
+		}
 		b.Fatalf("prepare owned Vela classifiers: %v", classifierErr)
 	}
 	recordModelIdentity(b, "domain", "pii", "jailbreak")

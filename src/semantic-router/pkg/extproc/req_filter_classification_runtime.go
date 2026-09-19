@@ -282,6 +282,9 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 ) (string, float64, entropy.ReasoningDecision, string, error) {
 	reasoningDecision := entropy.ReasoningDecision{}
 	categoryName := r.applyDecisionResultToContext(result, ctx)
+	if err := r.benchmarkCallLimitCheck(ctx); err != nil {
+		return "", 0, reasoningDecision, "", err
+	}
 	decisionName := result.Decision.Name
 	evaluationConfidence := result.Confidence
 

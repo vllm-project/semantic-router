@@ -293,7 +293,14 @@ func (r *OpenAIRouter) buildAgenticSessionContextForKey(
 		return nil
 	}
 	now := time.Now()
-	snapshot, hasMemory := sessiontelemetry.GetRouterSessionSnapshot(stateKey, now)
+	var snapshot sessiontelemetry.RouterSessionSnapshot
+	var hasMemory bool
+	if reqCtx.learningPreview != nil {
+		now = reqCtx.learningPreview.CapturedAt
+		snapshot, hasMemory = reqCtx.learningPreview.session(stateKey)
+	} else {
+		snapshot, hasMemory = sessiontelemetry.GetRouterSessionSnapshot(stateKey, now)
+	}
 	previousModel := reqCtx.PreviousModel
 	if previousModel == "" && hasMemory {
 		previousModel = snapshot.CurrentModel
@@ -385,7 +392,14 @@ func (r *OpenAIRouter) agenticCacheWarmth(
 ) (float64, bool) {
 	cacheWarmth := reqCtx.CacheWarmthEstimate
 	cacheWarmthOK := cacheWarmth > 0
-	if ambient, ok := estimateGateCacheWarmth(previousModel, now); ok {
+	var ambient float64
+	var ambientOK bool
+	if reqCtx.learningPreview != nil {
+		ambient, ambientOK = reqCtx.learningPreview.warmth(previousModel)
+	} else {
+		ambient, ambientOK = estimateGateCacheWarmth(previousModel, now)
+	}
+	if ambientOK {
 		cacheWarmth = ambient
 		cacheWarmthOK = true
 	}
