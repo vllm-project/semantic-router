@@ -126,6 +126,15 @@ Feature controls:
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
+OpenClaw provisioning accepts optional `skills` entries as exact IDs from the
+server's skills catalog (`GET /api/openclaw/skills`). IDs use lowercase ASCII
+letters or digits, with single hyphens or underscores separating groups. Paths,
+case or whitespace aliases, and unknown IDs return HTTP 400 before provisioning
+starts, including for asynchronous requests. Malformed catalog JSON returns
+HTTP 500 when skills are selected. Omitting skills or selecting an empty list
+still provisions without skills. Administrators can supply a catalog with
+`OPENCLAW_SKILLS_PATH`.
+
 ## sr-bench evaluation
 
 The Evaluation page is sr-bench 1.0. It uses the same durable Python service as
