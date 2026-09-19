@@ -545,7 +545,7 @@ def main(
     os.makedirs(output_dir, exist_ok=True)
 
     training_args = create_security_training_args(
-        output_dir, num_epochs, batch_size, learning_rate
+        output_dir, num_epochs, batch_size, learning_rate, len(train_data)
     )
     trainer = SecurityLoRATrainer(
         model=model,

@@ -76,6 +76,7 @@ from common_lora_utils import (
     log_memory_usage,
     set_gpu_device,
     setup_logging,
+    warmup_steps_from_ratio,
 )
 
 # Setup logging
@@ -524,12 +525,17 @@ def main(
         ),  # Maintain effective batch size of 16, minimum 1
         learning_rate=learning_rate,
         weight_decay=0.01,
-        logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="no",  # Skip eval during training (saves 10+ minutes)
         save_strategy="no",  # Don't save intermediate checkpoints (saves disk space!)
         save_total_limit=1,  # Keep only 1 checkpoint
-        warmup_ratio=0.1,
+        warmup_steps=warmup_steps_from_ratio(
+            0.1,
+            len(train_dataset),
+            batch_size,
+            num_epochs,
+            max(1, 16 // batch_size),
+        ),
         lr_scheduler_type="cosine",
         bf16=False,  # Use F32 for training (more stable)
         fp16=False,  # Use F32 for training (more stable)

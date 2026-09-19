@@ -78,6 +78,7 @@ from common_lora_utils import (
     log_memory_usage,
     set_gpu_device,
     setup_logging,
+    warmup_steps_from_ratio,
 )
 from datasets import Dataset, load_dataset
 from peft import (
@@ -892,14 +893,19 @@ def main(
         gradient_accumulation_steps=max(1, 8 // batch_size),
         learning_rate=learning_rate,
         weight_decay=0.01,
-        logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="epoch",
         save_total_limit=2,
         load_best_model_at_end=True,
         metric_for_best_model="loss",
-        warmup_ratio=0.1,
+        warmup_steps=warmup_steps_from_ratio(
+            0.1,
+            len(train_dataset),
+            batch_size,
+            num_epochs,
+            max(1, 8 // batch_size),
+        ),
         lr_scheduler_type="cosine",
         fp16=False,
         gradient_checkpointing=False,

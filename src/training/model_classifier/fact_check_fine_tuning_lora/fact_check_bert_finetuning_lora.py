@@ -75,6 +75,7 @@ from common_lora_utils import (
     resolve_model_path,
     set_gpu_device,
     setup_logging,
+    warmup_steps_from_ratio,
 )
 
 # Setup logging
@@ -576,9 +577,9 @@ class FactCheckDataset:
         nisq_questions = []
 
         try:
+            import csv
             import subprocess
             import tempfile
-            import csv
 
             # Check for cached dataset first
             cached_path = None
@@ -1279,9 +1280,13 @@ def main(
         learning_rate=learning_rate,
         max_grad_norm=1.0,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.06,
+        warmup_steps=warmup_steps_from_ratio(
+            0.06,
+            len(train_dataset),
+            batch_size,
+            num_epochs,
+        ),
         weight_decay=0.01,
-        logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="epoch",

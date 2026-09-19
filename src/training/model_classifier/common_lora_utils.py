@@ -8,12 +8,70 @@ This module provides common functions to avoid code duplication and ensure consi
 
 import gc
 import logging
+import math
 import os
 from typing import Dict, List, Optional, Tuple
 
 import torch
 
 logger = logging.getLogger(__name__)
+
+
+def warmup_steps_from_ratio(
+    warmup_ratio: float,
+    num_train_examples: int,
+    per_device_train_batch_size: int,
+    num_train_epochs: float,
+    gradient_accumulation_steps: int = 1,
+    world_size: int = 1,
+) -> int:
+    """Convert a warmup *ratio* into the warmup *steps* TrainingArguments takes.
+
+    `warmup_ratio` was removed from `transformers.TrainingArguments` in 5.15.0,
+    so every call site passing it raises `TypeError` on a fresh install. Only
+    `warmup_steps` survives, and it is an absolute count, so the ratio has to be
+    resolved against the number of optimizer steps the run will take.
+
+    The arithmetic reproduces what the Trainer did internally, rather than
+    inventing a new one, so a converted script warms up over the same span it
+    used to:
+
+        steps_per_epoch   = ceil(examples / (batch * world_size))
+        updates_per_epoch = max(steps_per_epoch // gradient_accumulation, 1)
+        total_steps       = ceil(epochs * updates_per_epoch)
+        warmup_steps      = ceil(total_steps * ratio)
+
+    A ratio of zero means no warmup and returns 0; anything above zero returns
+    at least 1, because a positive ratio asking for zero steps is a silent
+    change of behaviour rather than a faithful conversion.
+
+    Args:
+        warmup_ratio: The ratio the script used to pass, e.g. 0.06.
+        num_train_examples: `len(train_dataset)`.
+        per_device_train_batch_size: As passed to TrainingArguments.
+        num_train_epochs: As passed to TrainingArguments.
+        gradient_accumulation_steps: As passed to TrainingArguments; 1 if unset.
+        world_size: Number of processes; 1 for single-device training.
+
+    Returns:
+        A warmup step count safe to pass as `warmup_steps`.
+    """
+    if warmup_ratio <= 0:
+        return 0
+    if num_train_examples <= 0:
+        raise ValueError(
+            f"num_train_examples must be positive, got {num_train_examples}"
+        )
+    per_device_train_batch_size = max(1, int(per_device_train_batch_size))
+    gradient_accumulation_steps = max(1, int(gradient_accumulation_steps))
+    world_size = max(1, int(world_size))
+
+    steps_per_epoch = math.ceil(
+        num_train_examples / (per_device_train_batch_size * world_size)
+    )
+    updates_per_epoch = max(steps_per_epoch // gradient_accumulation_steps, 1)
+    total_steps = math.ceil(num_train_epochs * updates_per_epoch)
+    return max(1, math.ceil(total_steps * warmup_ratio))
 
 
 def get_target_modules_for_model(model_name: str) -> List[str]:

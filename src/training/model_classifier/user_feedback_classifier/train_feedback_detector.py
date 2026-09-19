@@ -29,6 +29,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from common_lora_utils import warmup_steps_from_ratio
 from datasets import Dataset, load_dataset
 from sklearn.metrics import accuracy_score, classification_report, f1_score
 from transformers import (
@@ -361,7 +362,12 @@ def main():
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size * 2,
         learning_rate=args.lr,
-        warmup_ratio=args.warmup_ratio,
+        warmup_steps=warmup_steps_from_ratio(
+            args.warmup_ratio,
+            len(train_dataset),
+            args.batch_size,
+            args.epochs,
+        ),
         weight_decay=args.weight_decay,
         eval_strategy="epoch",
         save_strategy="epoch",

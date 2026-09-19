@@ -4,6 +4,7 @@ import json
 import os
 
 import torch
+from common_lora_utils import warmup_steps_from_ratio
 from jailbreak_provenance import emit_training_manifests
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
 from transformers import TrainingArguments
@@ -32,9 +33,19 @@ def compute_security_metrics(eval_pred) -> dict[str, float]:
 
 
 def create_security_training_args(
-    output_dir: str, num_epochs: int, batch_size: int, learning_rate: float
+    output_dir: str,
+    num_epochs: int,
+    batch_size: int,
+    learning_rate: float,
+    num_train_examples: int,
 ) -> TrainingArguments:
-    """Create the TrainingArguments for jailbreak LoRA fine-tuning."""
+    """Create the TrainingArguments for jailbreak LoRA fine-tuning.
+
+    `num_train_examples` is `len(train_data)`. It is a parameter rather than a
+    constant because warmup is expressed as a ratio here, and the ratio has to
+    be resolved against the number of optimizer steps the run will take —
+    `warmup_ratio` no longer exists in transformers 5.15+.
+    """
     return TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
@@ -43,9 +54,13 @@ def create_security_training_args(
         learning_rate=learning_rate,
         max_grad_norm=0.0,
         lr_scheduler_type="cosine",
-        warmup_ratio=0.06,
+        warmup_steps=warmup_steps_from_ratio(
+            0.06,
+            num_train_examples,
+            batch_size,
+            num_epochs,
+        ),
         weight_decay=0.01,
-        logging_dir=f"{output_dir}/logs",
         logging_steps=10,
         eval_strategy="epoch",
         save_strategy="epoch",
