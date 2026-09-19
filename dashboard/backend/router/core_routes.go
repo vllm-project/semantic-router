@@ -107,6 +107,9 @@ func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupR
 }
 
 func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions ...configRouteOptions) {
+	if err := handlers.RestrictExistingConfigSnapshots(cfg.ConfigDir); err != nil {
+		log.Printf("Warning: could not restrict existing config snapshots: %v", err)
+	}
 	options := configRouteOptions{}
 	if len(routeOptions) > 0 {
 		options = routeOptions[0]
