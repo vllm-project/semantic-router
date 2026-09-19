@@ -1,12 +1,12 @@
 ---
-slug: introduce-vela
+slug: vela-models
 title: "Introducing Vela 1.0"
 description: "Meet Vela: 14 open models for smarter routing, stronger retrieval, and multimodal understanding. Built for Mixture-of-Models with vLLM Semantic Router."
 authors:
   - name: "vLLM Semantic Router Team"
     url: "https://github.com/vllm-project/semantic-router"
 tags: [release, vela, mixture-of-models, semantic-router]
-image: /img/blog/vela-1-0/launch-poster.png
+image: /img/vllm-sr-logo.social.png
 ---
 
 import { ArticleChartGallery, ArticleFigure, ArticleMetrics, ArticleVideo } from '@site/src/components/ArticleMedia';
