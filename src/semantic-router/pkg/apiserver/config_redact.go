@@ -6,7 +6,8 @@ import (
 	"context"
 	"net/http"
 	"regexp"
-	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 const redactedConfigValue = "[REDACTED]"
@@ -15,10 +16,6 @@ const redactedConfigValue = "[REDACTED]"
 // sometimes appear inside parse/validation error strings.
 var sensitiveAssignmentPattern = regexp.MustCompile(
 	`(?i)((?:["']?(?:api[_-]?key|x[_-]?api[_-]?key|access[_-]?(?:key|token)|auth[_-]?(?:password|token)|refresh[_-]?token|client[_-]?secret|private[_-]?key|proxy[_-]?authorization|authorization|password|credential|secret|token)["']?)\s*[:=]\s*)(?:"[^"]*"|'[^']*'|(?:Bearer|Basic)\s+[^\s,}\]]+|[^\s,}\]]+)`,
-)
-
-var environmentReferencePattern = regexp.MustCompile(
-	`^\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)$`,
 )
 
 // scrubSecretsInErrorMessage removes plaintext credential assignments from
@@ -62,63 +59,5 @@ func (s *ClassificationAPIServer) maybeRedactConfigView(r *http.Request, value i
 }
 
 func redactSensitiveConfigValue(value interface{}) interface{} {
-	switch typed := value.(type) {
-	case map[string]interface{}:
-		out := make(map[string]interface{}, len(typed))
-		for key, nested := range typed {
-			if isSensitiveConfigKey(key) {
-				if isPureEnvironmentReference(nested) {
-					out[key] = nested
-				} else {
-					out[key] = redactedConfigValue
-				}
-				continue
-			}
-			out[key] = redactSensitiveConfigValue(nested)
-		}
-		return out
-	case []interface{}:
-		out := make([]interface{}, len(typed))
-		for i, nested := range typed {
-			out[i] = redactSensitiveConfigValue(nested)
-		}
-		return out
-	default:
-		return value
-	}
-}
-
-func isPureEnvironmentReference(value interface{}) bool {
-	text, ok := value.(string)
-	return ok && environmentReferencePattern.MatchString(strings.TrimSpace(text))
-}
-
-func isSensitiveConfigKey(key string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(key))
-	compact := strings.NewReplacer("_", "", "-", "", " ", "").Replace(normalized)
-	// Env var names (api_key_env) and presence flags stay visible.
-	if strings.HasSuffix(compact, "env") || strings.HasSuffix(compact, "envset") {
-		return false
-	}
-	switch compact {
-	case "apikey", "xapikey", "accesskey", "password", "authpassword",
-		"clientsecret", "privatekey", "authorization", "proxyauthorization",
-		"credential", "secret", "token":
-		return true
-	}
-	for _, suffix := range []string{
-		"apikey",
-		"accesskey",
-		"password",
-		"clientsecret",
-		"privatekey",
-		"authorization",
-		"credential",
-		"token",
-	} {
-		if strings.HasSuffix(compact, suffix) {
-			return true
-		}
-	}
-	return false
+	return config.RedactSensitiveConfigValue(value)
 }
