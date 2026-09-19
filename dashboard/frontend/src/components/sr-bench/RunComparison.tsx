@@ -320,7 +320,7 @@ export default function RunComparison({ runs }: { runs: Run[] }) {
         </p>
       )}
       {experiment && (
-        <label className={styles.inlineLabel}>
+        <label className={styles.checkbox}>
           <input
             type="checkbox"
             checked={includeOutside}

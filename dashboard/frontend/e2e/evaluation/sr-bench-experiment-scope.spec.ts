@@ -118,8 +118,49 @@ async function setup(page: Page, profile: 'quick' | 'standard' = 'quick') {
     } else if (path === '/replay-options')
       body = { baseline: null, baselines: [], options: [], next_cursor: null, has_more: false }
     else if (path === '/comparisons') {
-      comparisonReads.push(route.request().postDataJSON())
-      body = { comparisons: [] }
+      const request = route.request().postDataJSON()
+      comparisonReads.push(request)
+      const metrics = {
+        total: 2,
+        completed: 2,
+        failed: 0,
+        pending: 0,
+        scored: 2,
+        correct: 2,
+        accuracy: 1,
+        macro_accuracy: 1,
+        complete: true,
+        cost_complete: true,
+        cost_usd: 0.01,
+      }
+      body = {
+        version: 'sr-bench-1.0',
+        ...request,
+        baseline_status: 'completed',
+        candidate_status: 'completed',
+        baseline_quality_complete: true,
+        candidate_quality_complete: true,
+        baseline_targets: [{ id: single.id, ...metrics }],
+        candidate_targets: [{ id: mom.id, ...metrics }],
+        quality_denominator: 'all_planned_cases; explicit failed outcomes count as incorrect',
+        baseline_selection: 'Best observed single model on identical cases.',
+        baseline_selection_qualification: 'Delivered outcomes under the frozen limits.',
+        comparisons: [
+          {
+            baseline_target_id: single.id,
+            candidate_target_id: mom.id,
+            paired_cases: 2,
+            quality_delta: 0,
+            quality_delta_ci95: [-0.5, 0.5],
+            cost_saving_percent: 0,
+            baseline_cost_usd: 0.01,
+            candidate_cost_usd: 0.01,
+            wins: 0,
+            losses: 0,
+            ties: 2,
+          },
+        ],
+      }
     } else if (path === `/runs/${baseline.id}/candidate-plan`) {
       const request = route.request().postDataJSON()
       body = {
@@ -180,36 +221,79 @@ test('uses all membership pages and excludes baselines with only outside compati
   expect(state.comparisonReads).toEqual([])
 })
 
-test('blocks outside deep-linked comparison until an explicit change of scope', async ({
-  page,
-}) => {
-  const state = await setup(page)
-  await page.goto(
-    `/evaluation?view=compare&experiment=${experimentID}&baseline=${outsideBaseline.id}&candidate=${outsider.id}`,
-  )
-  const scope = page.getByRole('checkbox', {
-    name: 'Include runs outside this experiment',
-    exact: true,
+for (const viewport of [
+  { name: 'desktop', width: 1600, height: 1000 },
+  { name: 'mobile', width: 390, height: 844 },
+]) {
+  test(`blocks outside deep-linked comparison until an explicit change of scope on ${viewport.name}`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize(viewport)
+    const pageErrors: string[] = []
+    page.on('pageerror', (error) => pageErrors.push(error.name))
+    const state = await setup(page)
+    await page.goto(
+      `/evaluation?view=compare&experiment=${experimentID}&baseline=${outsideBaseline.id}&candidate=${outsider.id}`,
+    )
+    const scope = page.getByRole('checkbox', {
+      name: 'Include runs outside this experiment',
+      exact: true,
+    })
+    await expect(scope).toBeVisible()
+    const layout = await scope.evaluate((input) => {
+      const label = input.closest('label')!
+      const textNode = [...label.childNodes].find(
+        (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+      )!
+      const range = document.createRange()
+      range.selectNodeContents(textNode)
+      const text = range.getBoundingClientRect()
+      const box = input.getBoundingClientRect()
+      const container = label.getBoundingClientRect()
+      return {
+        input: {
+          left: box.left,
+          right: box.right,
+          top: box.top,
+          bottom: box.bottom,
+          width: box.width,
+        },
+        text: { left: text.left, right: text.right, top: text.top, bottom: text.bottom },
+        container: { left: container.left, right: container.right },
+      }
+    })
+    expect(layout.input.width).toBeLessThanOrEqual(24)
+    expect(layout.input.right).toBeLessThanOrEqual(layout.text.left)
+    expect(layout.text.left - layout.input.right).toBeLessThanOrEqual(16)
+    expect(Math.min(layout.input.bottom, layout.text.bottom)).toBeGreaterThan(
+      Math.max(layout.input.top, layout.text.top),
+    )
+    expect(layout.input.left).toBeGreaterThanOrEqual(layout.container.left)
+    expect(layout.text.right).toBeLessThanOrEqual(layout.container.right + 1)
+    await page.screenshot({ path: testInfo.outputPath(`comparison-scope-${viewport.name}.png`) })
+    await expect(
+      page.getByText('The selected reference is outside this experiment.', { exact: false }),
+    ).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
+    expect(state.comparisonReads).toEqual([])
+    await scope.click()
+    await expect(scope).toBeChecked()
+    await expect(page).toHaveURL(/comparison_scope=all/)
+    await expect.poll(() => new URL(page.url()).searchParams.has('candidate')).toBe(false)
+    await choose(page, 'Reference run', outsideBaseline.id)
+    await page.getByRole('checkbox', { name: /Outside candidate/ }).check()
+    await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
+    await expect.poll(() => state.comparisonReads.length).toBe(1)
+    expect(state.comparisonReads[0]).toEqual({
+      baseline_run_id: outsideBaseline.id,
+      candidate_run_id: outsider.id,
+    })
+    await expect(
+      page.getByRole('heading', { name: 'Comparison evidence', exact: true }),
+    ).toBeVisible()
+    expect(pageErrors).toEqual([])
   })
-  await expect(scope).toBeVisible()
-  await expect(
-    page.getByText('The selected reference is outside this experiment.', { exact: false }),
-  ).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toHaveCount(0)
-  expect(state.comparisonReads).toEqual([])
-  await scope.click()
-  await expect(scope).toBeChecked()
-  await expect(page).toHaveURL(/comparison_scope=all/)
-  await expect.poll(() => new URL(page.url()).searchParams.has('candidate')).toBe(false)
-  await choose(page, 'Reference run', outsideBaseline.id)
-  await page.getByRole('checkbox', { name: /Outside candidate/ }).check()
-  await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
-  await expect.poll(() => state.comparisonReads.length).toBe(1)
-  expect(state.comparisonReads[0]).toEqual({
-    baseline_run_id: outsideBaseline.id,
-    candidate_run_id: outsider.id,
-  })
-})
+}
 
 for (const { profile, inputRole, expectedRole } of [
   { profile: 'quick', inputRole: 'initial', expectedRole: 'initial' },
