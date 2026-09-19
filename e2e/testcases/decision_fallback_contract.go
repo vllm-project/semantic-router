@@ -61,7 +61,9 @@ func validateFallbackProviderRequest(tc DecisionFallbackCase, observed []byte) e
 		return fmt.Errorf("decode fallback provider request: %w", err)
 	}
 	want := buildFallbackRequest(tc)
-	if request.Body.Model != expectedFallbackModel(tc) || len(request.Body.Messages) != 1 || request.Body.Messages[0] != want.Messages[0] {
+	got := request.Body.Messages[0]
+	if request.Body.Model != expectedFallbackModel(tc) || len(request.Body.Messages) != 1 ||
+		got.Role != want.Messages[0].Role || got.Content != want.Messages[0].Content {
 		return fmt.Errorf("provider did not receive the selected model and original fallback fixture message")
 	}
 	return nil

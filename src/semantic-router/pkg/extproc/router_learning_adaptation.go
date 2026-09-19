@@ -65,7 +65,11 @@ func (r *OpenAIRouter) applyRoutingSamplingAdaptation(
 	usedSampling := adaptationSamplingAllowed(mode, preflight)
 	seed := int64(0)
 	if usedSampling {
-		seed = routerLearningSamplingSeedSource()
+		if input.ctx != nil && input.ctx.learningPreview != nil {
+			seed = input.ctx.learningPreview.Seed
+		} else {
+			seed = routerLearningSamplingSeedSource()
+		}
 	}
 	rng := rand.New(rand.NewSource(seed))
 	scores := r.scoreRoutingSamplingCandidates(learningCtx, input.ctx, input.baseResult, candidateSet, usedSampling, rng)
@@ -395,7 +399,7 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 			scores = append(scores, prior)
 			continue
 		}
-		exp := r.routerLearningRuntimeState().experienceSnapshot(selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
+		exp := r.learningExperience(ctx, selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
 		alpha := exp.SeedWeight*exp.QualitySeed + float64(exp.GoodFitCount) + 1
 		beta := exp.SeedWeight*(1-exp.QualitySeed) + float64(exp.UnderpoweredCount) + 1
 		mean := alpha / (alpha + beta)

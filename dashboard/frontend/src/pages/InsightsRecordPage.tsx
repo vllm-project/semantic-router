@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import ProductLoadingState from '../components/ProductLoadingState'
@@ -104,7 +104,6 @@ export default function InsightsRecordPage() {
     () => (record ? buildInsightsRecordSections(record, { isReadonly }) : []),
     [isReadonly, record],
   )
-  const hasProjectionTrace = sections.some((section) => section.title === 'Projection Trace')
 
   const lifecycle = record ? getInsightsLifecyclePresentation(record) : null
 
@@ -167,18 +166,15 @@ export default function InsightsRecordPage() {
           </header>
 
           <div className={styles.recordSections}>
-            <InsightsSessionRoutes trajectory={trajectory} />
             {sections.map((section, sectionIndex) => (
-              <Fragment key={`${section.title ?? 'details'}-${sectionIndex}`}>
-                <InsightsRecordSection section={section} sectionIndex={sectionIndex} />
-                {section.title === 'Projection Trace' ? (
-                  <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
-                ) : null}
-              </Fragment>
+              <InsightsRecordSection
+                key={`${record.id}-${section.title ?? 'details'}`}
+                section={section}
+                sectionIndex={sectionIndex}
+              />
             ))}
-            {!hasProjectionTrace ? (
-              <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
-            ) : null}
+            <InsightsSessionRoutes trajectory={trajectory} />
+            <InsightsRecordTrace record={record} trajectory={trajectory} error={traceError} />
           </div>
         </>
       ) : null}

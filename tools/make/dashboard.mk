@@ -111,13 +111,13 @@ dashboard-test-frontend: dashboard-frontend-deps ## Run dashboard frontend unit 
 		npm run test:unit -- --reporter=default --reporter=junit --reporter=../../tools/ci/vitest_evidence_reporter.mjs --outputFile.junit="$(DASHBOARD_TEST_REPORT_DIR)/frontend.xml"
 	@echo "dashboard/frontend unit tests passed"
 
-dashboard-test-e2e-evaluation: dashboard-frontend-deps ## Run Evaluation browser acceptance in Chromium
+dashboard-test-e2e-evaluation: dashboard-frontend-deps ## Run sr-bench browser acceptance in Chromium
 	@$(LOG_TARGET)
 	@mkdir -p "$(DASHBOARD_TEST_REPORT_DIR)"
 	cd $(DASHBOARD_FRONTEND_DIR) && \
 		npx playwright install --with-deps chromium && \
 		PLAYWRIGHT_JUNIT_OUTPUT_FILE="$(DASHBOARD_TEST_REPORT_DIR)/browser.xml" npm run test:e2e:evaluation -- --reporter=html,junit
-	@echo "dashboard/frontend Evaluation browser acceptance passed"
+	@echo "dashboard/frontend sr-bench browser acceptance passed"
 
 dashboard-go-mod-tidy: ## Check go mod tidy for dashboard backend
 	@$(LOG_TARGET)
@@ -134,14 +134,10 @@ dashboard-test-backend: vllm-sr-install-cli ## Run dashboard backend Go tests (r
 	@$(LOG_TARGET)
 	@mkdir -p "$(DASHBOARD_TEST_REPORT_DIR)"
 	cd $(DASHBOARD_BACKEND_DIR) && \
-		export VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-$(AGENT_PYTHON)}" && \
 		go test -json -list '^(Test|Fuzz|Example)' ./... > "$(DASHBOARD_TEST_REPORT_DIR)/inventory.jsonl" && \
-		go test -json -count=1 -skip '^(TestEvaluationStoreOwnershipSubprocessHelper|TestControlledPairSubprocessCrashHelper)$$' ./... > "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl"
+		go test -json -count=1 ./... > "$(DASHBOARD_TEST_REPORT_DIR)/backend.jsonl"
 
-dashboard-evaluation-catalog-check: ## Check generated Evaluation catalog mirrors
-	@python3 tools/ci/sync_evaluation_catalogs.py --check
-
-dashboard-check: dashboard-evaluation-catalog-check dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (catalogs, lint, type-check, frontend + backend tests, go mod tidy)
+dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend + backend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
 
@@ -161,6 +157,5 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 .PHONY: dashboard-frontend-deps dashboard-wizmap-deps dashboard-install dashboard-dev-frontend dashboard-dev-backend \
 	dashboard-build dashboard-build-wasm dashboard-test-wasm dashboard-build-wizmap dashboard-build-frontend dashboard-build-backend \
 	dashboard-test-backend dashboard-test-frontend dashboard-test-e2e-evaluation \
-	dashboard-evaluation-catalog-check \
 	dashboard-lint dashboard-lint-fix dashboard-type-check dashboard-go-mod-tidy \
 	dashboard-check dashboard-clean

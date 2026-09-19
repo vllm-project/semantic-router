@@ -61,7 +61,7 @@ routing:
 
 对于由内置卡片支撑的别名，将 `model` 设为规范的 `providers.models[].catalog` ID，而不是面向请求的别名。因此同一检查点的多个别名共享同一份模型证据。
 
-Evaluation Plane 会冻结每个 provider 别名背后的有效卡片，包括内置元数据和运维覆盖。因此由目录支撑的实时目标不需要重复的 `routing.modelCards` 条目。
+该配置是路由证据，与 [sr-bench 1.0](sr-bench) 的执行账本分开。sr-bench 固定自身的目标、数据和价格身份。应先审查完整 live 报告，再显式发布运维评测记录；目录值不能代替当前部署的新测量。
 
 ## 定义基准和指数 {#define-a-benchmark-and-index}
 
