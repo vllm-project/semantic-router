@@ -19,6 +19,17 @@ export default function InsightsRecordSection({
   const [expanded, setExpanded] = useState(presentation.defaultExpanded ?? true)
   const sectionTitle = section.title || 'Details'
   const sectionId = `insight-section-${sectionIndex}`
+  const noteFields = section.fields.filter((field) =>
+    presentation.noteFields?.includes(field.label),
+  )
+  const secondaryFields = section.fields.filter((field) =>
+    presentation.secondaryFields?.includes(field.label),
+  )
+  const primaryFields = section.fields.filter(
+    (field) =>
+      !presentation.noteFields?.includes(field.label) &&
+      !presentation.secondaryFields?.includes(field.label),
+  )
 
   return (
     <section
@@ -61,10 +72,10 @@ export default function InsightsRecordSection({
           className={
             presentation.structured
               ? styles.recordStructured
-              : `${styles.recordFields} ${presentation.size === 'wide' ? styles.recordFieldsWide : ''}`
+              : `${styles.recordFields} ${presentation.size === 'wide' ? styles.recordFieldsWide : ''} ${presentation.metricColumns === 4 ? styles.recordMetrics : ''} ${presentation.metricColumns === 3 ? styles.recordFieldsThree : ''}`
           }
         >
-          {section.fields.map((field, fieldIndex) => (
+          {primaryFields.map((field, fieldIndex) => (
             <div
               key={`${field.label}-${fieldIndex}`}
               className={
@@ -77,6 +88,28 @@ export default function InsightsRecordSection({
               <div>{field.value}</div>
             </div>
           ))}
+          {noteFields.map((field) => (
+            <p key={field.label} className={styles.recordSectionNote}>
+              <strong>{field.label}: </strong>
+              {field.value}
+            </p>
+          ))}
+          {secondaryFields.length > 0 ? (
+            <details className={styles.recordExplanation}>
+              <summary>
+                <span>{presentation.secondaryTitle || 'More details'}</span>
+                <ProductIcon name="chevron-down" width={15} height={15} />
+              </summary>
+              <dl>
+                {secondaryFields.map((field) => (
+                  <div key={field.label}>
+                    <dt>{field.label}</dt>
+                    <dd>{field.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          ) : null}
         </div>
       ) : null}
     </section>

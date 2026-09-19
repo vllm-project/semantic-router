@@ -1,4 +1,4 @@
-export type RecordSectionSize = 'compact' | 'feature' | 'wide'
+export type RecordSectionSize = 'compact' | 'half' | 'feature' | 'wide'
 
 const SECTION_PRESENTATION: Record<
   string,
@@ -8,6 +8,10 @@ const SECTION_PRESENTATION: Record<
     defaultExpanded?: boolean
     structured?: boolean
     description?: string
+    metricColumns?: number
+    noteFields?: string[]
+    secondaryFields?: string[]
+    secondaryTitle?: string
   }
 > = {
   Lifecycle: { size: 'compact' },
@@ -18,9 +22,16 @@ const SECTION_PRESENTATION: Record<
   'Observed Candidate Scores': { size: 'wide', collapsible: true, defaultExpanded: true },
   'Adaptation Candidate Scores': { size: 'wide', collapsible: true, defaultExpanded: true },
   'Request Capacity': { size: 'wide', collapsible: true, defaultExpanded: false },
-  'Usage & Cost': { size: 'compact' },
-  Signals: { size: 'compact' },
-  'Plugin Status': { size: 'compact' },
+  'Usage & Cost': {
+    size: 'wide',
+    description: 'Recorded token usage and configured-rate estimates',
+    metricColumns: 4,
+    noteFields: ['Cost basis'],
+    secondaryFields: ['Baseline basis', 'Current pricing'],
+    secondaryTitle: 'How these estimates are calculated',
+  },
+  Signals: { size: 'half' },
+  'Plugin Status': { size: 'half', metricColumns: 3 },
   'Routing Metadata': {
     size: 'wide',
     collapsible: true,
