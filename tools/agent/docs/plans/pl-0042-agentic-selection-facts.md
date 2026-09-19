@@ -53,6 +53,20 @@ must be confirmed with maintainers before the PR that depends on it merges.
 - [ ] `CONFIRM-04` Signal family name and rule vocabulary. Default: a dedicated
   family separate from the existing untrusted `metadata` family, so the trust
   distinction stays visible in config, decisions, and Replay.
+
+  Rule vocabulary for `TASK-05`: text-equality rules only, matching on string
+  fields such as `delegated_role` and `task_phase`, following the same rule
+  shape already used by the `metadata` family. Numeric predicate rules
+  (`gt`/`gte`/`lt`/`lte`) against the `Budget` fields (`remaining_tokens`,
+  `remaining_time_ms`, `remaining_cost`) are explicitly deferred, not
+  implemented in `TASK-05`.
+
+  Rationale: of those three numeric fields, only `remaining_tokens` is
+  evidenced by the merged proposal; `remaining_time_ms` and `remaining_cost`
+  were extrapolated when `TASK-02` built the schema and their names and units
+  are still open per `CONFIRM-09`. Building comparison-rule support against
+  fields that may still be renamed or resized risks wasted work. Revisit once
+  `CONFIRM-09` is settled with maintainers.
 - [ ] `CONFIRM-05` Failure policy defaults: invalid or untrusted input degrades to
   ordinary routing with diagnostics, while valid facts that leave no eligible
   candidate fail closed rather than silently ignoring the facts. `CONFIRM-08`
@@ -113,7 +127,10 @@ must be confirmed with maintainers before the PR that depends on it merges.
   vocabulary is invented here. Closed is the right posture for a field that gates
   mid-session model switching, because an unrecognized value cannot be acted on
   safely. These map onto the existing `HasNonPortableContext` flag consumed by
-  `pkg/selection/session_aware.go` in `TASK-05`.
+  `pkg/selection/session_aware.go`, wired in `TASK-06`, not `TASK-05`: `TASK-05`
+  only projects accepted facts into the typed signal family without changing
+  selection, per its own task description, so the hard-lock wiring belongs with
+  the rest of eligibility narrowing.
 
   A currency with no cost is `conflicting`, and a cost with no currency is
   `missing`. Neither is interpretable alone, and an uninterpretable budget must
@@ -152,9 +169,24 @@ must be confirmed with maintainers before the PR that depends on it merges.
   `handleRequestHeaders`), pending review. Both the carrier and trust-marker
   headers are stripped on every return path, including the skip-processing
   bypass, not only the normal routing path.
-- [ ] `TASK-05` Project accepted facts into the typed signal family and wire it
+- [x] `TASK-05` Project accepted facts into the typed signal family and wire it
   through the routing-surface catalog, validators, decision engine, and Replay
-  signal state.
+  signal state. Landed as the `agentic_facts` family across `pkg/config`
+  (rule schema, catalog, validators, canonical import/export), `pkg/dsl`
+  (compiler/decompiler), `pkg/classification` (evaluator, readiness, dispatch),
+  `pkg/decision` (`SignalMatches`), `pkg/extproc` (request-facts plumbing and
+  `VSRMatchedAgenticFacts`), `pkg/routerreplay` (`Signal.AgenticFacts`), and
+  `pkg/services` (API matched/unmatched signal exposure), plus reference config,
+  fragment, and tutorial docs. Pending review.
+
+  Two findings worth reviewer attention. First, `Signals.AgenticFactsRules` uses
+  the YAML key `agentic_facts_rules` internally because `Signals` inlines into
+  `RouterConfig`, where `agentic_facts` is already taken by the `TASK-03` trust
+  and bounds config; the canonical public surface keeps the clean
+  `routing.signals.agentic_facts` spelling. Second, `hasEnvelopeRoutingFacts`
+  now takes the request context and counts accepted facts, so a request with no
+  prompt text but a valid envelope still reaches decision evaluation, matching
+  the behavior request metadata already had.
 - [ ] `TASK-06` Narrow hard eligibility from accepted facts at every seam that
   produces candidates, with a subset property test and explicit empty-set behavior.
 - [ ] `TASK-07` Emit content-minimized Replay provenance for accepted and rejected
@@ -164,10 +196,17 @@ must be confirmed with maintainers before the PR that depends on it merges.
 
 ## Next Action
 
-Commit `TASK-04` on `feat/3379-agentic-facts-schema`, then start `TASK-05`.
-`CONFIRM-02`, `CONFIRM-03`, `CONFIRM-08`, and `CONFIRM-09` are now implemented
-and externally visible in `pkg/extproc`, not just recorded defaults, so raise
-all four for maintainer ruling before the branch is complete rather than after.
+Start `TASK-06` on `feat/3379-agentic-facts-schema`. `CONFIRM-02`, `CONFIRM-03`,
+`CONFIRM-08`, and `CONFIRM-09` are implemented and externally visible in
+`pkg/extproc`, and `CONFIRM-04` is now externally visible as the `agentic_facts`
+signal family and its rule vocabulary, so raise all five for maintainer ruling
+before the branch is complete rather than after.
+
+`TASK-06` carries the plan's hardest invariant: narrowing must be a pure
+intersection with the candidate set each seam already computed, never a superset
+of it, at every one of the seams that produce candidates. The `CONFIRM-05`
+fail-closed case applies only once facts are valid and the narrowed set is
+empty; it is not a validation behavior.
 
 ## Operating Rules
 
