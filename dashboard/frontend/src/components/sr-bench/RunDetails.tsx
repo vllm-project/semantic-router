@@ -17,6 +17,8 @@ import OutputDiagnostics from './OutputDiagnostics'
 import PreviewEvidence from './PreviewEvidence'
 import RunRecovery from './RunRecovery'
 import RunLineage from './RunLineage'
+import RunElapsed from './RunElapsed'
+import RunActivity from './RunActivity'
 import RecipeEvidence from './RecipeEvidence'
 import { RunStatus } from './RunList'
 import styles from './SrBench.module.css'
@@ -267,11 +269,10 @@ export default function RunDetails({
               <strong>{number(totalTokens)}</strong>
               <small>All four usage buckets</small>
             </div>
-            <div>
-              <span>Elapsed wall time</span>
-              <strong>{seconds(report?.summary.wall_time_s ?? run.summary?.wall_time_s)}</strong>
-              <small>Saved run duration</small>
-            </div>
+            <RunElapsed
+              run={run}
+              savedSeconds={report?.summary.wall_time_s ?? run.summary?.wall_time_s}
+            />
           </div>
           <progress
             className={styles.progress}
@@ -284,6 +285,7 @@ export default function RunDetails({
             <time dateTime={run.updated_at}>{new Date(run.updated_at).toLocaleString()}</time>.
             Closing this page does not stop the worker.
           </p>
+          <RunActivity run={run} revision={revision} />
           <nav className={styles.detailNav} role="tablist" aria-label="Run sections">
             {(
               [

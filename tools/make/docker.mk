@@ -533,6 +533,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_evaluation_cli.py \
 		src/vllm-sr/tests/test_sr_bench.py \
 		src/vllm-sr/tests/test_sr_bench_accounting.py \
+		src/vllm-sr/tests/test_sr_bench_activity.py \
 		src/vllm-sr/tests/test_sr_bench_client.py \
 		src/vllm-sr/tests/test_sr_bench_collection.py \
 		src/vllm-sr/tests/test_sr_bench_datasets.py \

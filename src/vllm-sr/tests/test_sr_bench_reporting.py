@@ -416,7 +416,7 @@ def test_failed_run_explains_first_failure_and_legacy_report_is_read_only(
 def test_output_diagnostics_keep_length_and_nonempty_format_failures_distinct(
     tmp_path, monkeypatch
 ):
-    def respond(_target, messages, *_args):
+    def respond(_target, messages, *_args, **_kwargs):
         name = messages[0]["content"]
         return {
             "final": "I cannot select one option." if name == "format" else "A",
@@ -587,7 +587,7 @@ def test_full_timeout_matrix_remains_comparable_without_retry_or_evidence_edits(
 ):
     requested = []
 
-    def respond(target, messages, *_args):
+    def respond(target, messages, *_args, **_kwargs):
         index = int(messages[0]["content"])
         requested.append((target["id"], index))
         if target["id"] == "glm" and index == 13:

@@ -13,6 +13,7 @@ import requests
 
 from cli.routing_preview import build_preview_request, case_request_fields
 
+from .activity import CallActivity
 from .adapters import get_adapter
 from .contracts import digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
@@ -136,6 +137,9 @@ class Context:
                 max(0.1, self.deadline - time.monotonic()),
             ),
         }
+        activity = CallActivity(
+            lambda value: self.store.update_call_activity(call_id, value)
+        )
         call_id = self.store.start_call(
             self.run_id,
             self.case["id"],
@@ -143,6 +147,7 @@ class Context:
             role,
             {
                 "model": selected["model"],
+                "activity": activity.snapshot(),
                 "request": {
                     "messages": messages,
                     "sampling": self.manifest["sampling"],
@@ -163,6 +168,7 @@ class Context:
                 self.cancelled,
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
+                activity=activity,
                 **(
                     {"output_policy": "native"}
                     if self.manifest["output_policy"] == "native"

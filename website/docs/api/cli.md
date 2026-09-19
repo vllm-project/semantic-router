@@ -551,6 +551,7 @@ Read a run, bounded evidence page, or one complete saved call.
 | `RUN_ID` | Required argument. Type: text. |
 | `--results` | Default: false. |
 | `--calls` | Default: false. |
+| `--active` | Read only in-progress calls; requires --calls. Default: false. |
 | `--events` | Default: false. |
 | `--after INTEGER RANGE` | Evidence cursor from the previous page.  [x&gt;=0] Default: 0. |
 | `--limit INTEGER RANGE` | Calls/results per page.  [1&lt;=x&lt;=500] Default: 100. |

@@ -291,6 +291,14 @@ export interface RunEvent {
   [key: string]: unknown
 }
 
+export interface CallActivity {
+  phase: 'preparing' | 'waiting' | 'streaming'
+  phase_started_at: string
+  last_activity_at: string | null
+  received_bytes: number
+  updated_at: string
+}
+
 export interface CallRecord {
   id: string
   target_id: string
@@ -300,6 +308,8 @@ export interface CallRecord {
   model?: string
   decision?: string
   status: string
+  started_at?: string
+  activity?: CallActivity
   [key: string]: unknown
 }
 

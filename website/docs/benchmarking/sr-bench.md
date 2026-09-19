@@ -434,6 +434,14 @@ Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
 **Recipe**. Start with the aggregate results, then inspect individual responses,
 accounting and frozen configuration as needed.
 
+While a run is active, elapsed time continues updating even when no additional
+question has finished. Active calls show their phase, elapsed time, latest
+recorded response activity and received bytes. This activity helps distinguish a
+long response from one that has stopped arriving; it does not establish answer
+quality or billable token usage. Tokens and costs require a complete usage receipt.
+Use `vllm-sr benchmark show RUN_ID --calls --active` to read the same activity
+through the CLI; `--after` and `--limit` bound each page.
+
 **Compare iterations** guides two choices: a live single-model baseline with
 compatible saved outcomes, then any number of eligible candidate runs. Baselines
 without a compatible candidate are excluded. Search narrows the candidate list;

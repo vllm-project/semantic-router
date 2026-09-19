@@ -14,6 +14,7 @@ from http import HTTPStatus
 import requests
 
 from . import native_output
+from .activity import CHECKPOINT_SECONDS
 
 MAX_USAGE_RECEIPT_BYTES = 12288
 MAX_RECEIPT_CALLS = 256
@@ -207,6 +208,7 @@ def chat(
     extra_body=None,
     stream_path=None,
     output_policy="bounded",
+    activity=None,
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
@@ -243,6 +245,9 @@ def chat(
     # The finalizer fsyncs partial evidence before closing on every exit path.
     stream_file = None
     native_evidence = None
+    wire_bytes = 0
+    last_received_at = None
+    next_checkpoint = 0
     if stream_path:
         stream_file = open(stream_path, "xb", buffering=8192)  # noqa: SIM115
 
@@ -281,6 +286,8 @@ def chat(
             )
         if cancelled() or time.monotonic() - started > limits["total_timeout_s"]:
             raise CallFailure("cancelled or total request deadline exceeded")
+        if activity is not None:
+            activity.waiting()
         response = requests.post(
             endpoint,
             json=body,
@@ -319,7 +326,6 @@ def chat(
         watcher.start()
         buffer = bytearray()
         event_lines = []
-        wire_bytes = 0
 
         def consume(lines):
             nonlocal content, reasoning, usage, model, finish, ttft, raw_usage, done
@@ -387,13 +393,20 @@ def chat(
                 raise CallFailure(guard_error[0])
             if cancelled():
                 raise CallFailure("cancelled")
-            if time.monotonic() - started > limits["total_timeout_s"]:
+            observed_at = time.monotonic()
+            if observed_at - started > limits["total_timeout_s"]:
                 raise CallFailure("total request deadline exceeded")
+            if not chunk:
+                continue
             wire_bytes += len(chunk)
+            last_received_at = observed_at
             if wire_bytes > max(limits["max_output_chars"] * 30, 1048576):
                 raise CallFailure("Stream byte cap exceeded")
             if stream_file is not None:
                 stream_file.write(chunk)
+            if activity is not None and observed_at >= next_checkpoint:
+                activity.received(wire_bytes, observed_at)
+                next_checkpoint = observed_at + CHECKPOINT_SECONDS
             buffer.extend(chunk)
             if len(buffer) > limits["max_output_chars"] * 2:
                 raise CallFailure("SSE line cap exceeded")
@@ -470,3 +483,5 @@ def chat(
                 os.fsync(stream_file.fileno())
             finally:
                 stream_file.close()
+        if activity is not None and last_received_at is not None:
+            activity.received(wire_bytes, last_received_at, force=True)
