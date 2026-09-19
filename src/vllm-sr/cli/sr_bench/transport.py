@@ -13,6 +13,8 @@ from http import HTTPStatus
 
 import requests
 
+from . import native_output
+
 MAX_USAGE_RECEIPT_BYTES = 12288
 MAX_RECEIPT_CALLS = 256
 
@@ -197,11 +199,22 @@ def effective_request(target, messages, sampling, extra_body=None):
 
 
 def chat(
-    target, messages, sampling, limits, cancelled, extra_body=None, stream_path=None
+    target,
+    messages,
+    sampling,
+    limits,
+    cancelled,
+    extra_body=None,
+    stream_path=None,
+    output_policy="bounded",
 ):
     started = time.monotonic()
     endpoint = target["base_url"].rstrip("/") + "/chat/completions"
     body = effective_request(target, messages, sampling, extra_body)
+    if output_policy not in {"bounded", "native"}:
+        raise CallFailure("Unknown output policy")
+    if output_policy == "native" and "max_tokens" in body:
+        raise CallFailure("Native output forbids an explicit output cap")
     if body.get("max_tokens", 0) > limits["max_output_tokens"]:
         raise CallFailure("Requested tokens exceed frozen cap")
     headers = {"Content-Type": "application/json"}
@@ -218,6 +231,7 @@ def chat(
     reasoning = ""
     usage = None
     model = target["model"]
+    provider_model_observed = False
     finish = None
     ttft = None
     tool_calls = {}
@@ -228,6 +242,7 @@ def chat(
     guard_error = []
     # The finalizer fsyncs partial evidence before closing on every exit path.
     stream_file = None
+    native_evidence = None
     if stream_path:
         stream_file = open(stream_path, "xb", buffering=8192)  # noqa: SIM115
 
@@ -247,9 +262,25 @@ def chat(
                 if target["kind"] == "single"
                 else None
             ),
+            **(
+                {
+                    "native_output": {
+                        **native_evidence,
+                        "provider_model_observed": provider_model_observed,
+                    }
+                }
+                if native_evidence is not None
+                else {}
+            ),
         }
 
     try:
+        if output_policy == "native" and target["kind"] == "single":
+            body, native_evidence = native_output.resolve_single(
+                target, body, headers, limits, cancelled, started
+            )
+        if cancelled() or time.monotonic() - started > limits["total_timeout_s"]:
+            raise CallFailure("cancelled or total request deadline exceeded")
         response = requests.post(
             endpoint,
             json=body,
@@ -264,6 +295,8 @@ def chat(
             raise CallFailure(f"Target HTTP {response.status_code}")
         if "text/event-stream" not in response.headers.get("content-type", ""):
             raise CallFailure("Target did not return a streaming response")
+        if output_policy == "native" and target["kind"] == "mom":
+            native_evidence = native_output.from_headers(target, response.headers)
 
         def watch():
             while not stop.wait(0.1):
@@ -290,6 +323,7 @@ def chat(
 
         def consume(lines):
             nonlocal content, reasoning, usage, model, finish, ttft, raw_usage, done
+            nonlocal provider_model_observed
             data = "\n".join(x[5:].lstrip() for x in lines if x.startswith("data:"))
             if not data:
                 return
@@ -299,6 +333,9 @@ def chat(
             obj = json.loads(data)
             if obj.get("error"):
                 raise CallFailure("Target returned an error event")
+            if native_evidence is not None and obj.get("model") is not None:
+                native_output.validate_response(native_evidence, obj["model"], None)
+                provider_model_observed = True
             model = obj.get("model") or model
             if obj.get("usage"):
                 raw_usage = obj["usage"]
@@ -342,6 +379,8 @@ def chat(
                 raise CallFailure("Repeated output guard triggered")
             if usage and usage["output_tokens"] > limits["max_output_tokens"]:
                 raise CallFailure("Output token cap exceeded")
+            if native_evidence is not None:
+                native_output.validate_usage(native_evidence, usage)
 
         for chunk in response.iter_content(chunk_size=1):
             if guard_error:
@@ -377,6 +416,12 @@ def chat(
         if not done or finish not in {"stop", "tool_calls", "function_call", "length"}:
             raise CallFailure(f"Incomplete final response (finish_reason={finish})")
         result = partial()
+        if output_policy == "native":
+            if not provider_model_observed:
+                raise CallFailure(
+                    "Native response model acknowledgement missing", result
+                )
+            native_output.validate_response(native_evidence, model, usage)
         result["output_complete"] = finish != "length"
         if (
             target.get("expected_response_model")
@@ -407,6 +452,8 @@ def chat(
                 result,
             )
         return result
+    except native_output.NativeOutputError as exc:
+        raise CallFailure(str(exc), partial()) from exc
     except CallFailure as exc:
         exc.partial = {**partial(), **exc.partial}
         raise

@@ -27,8 +27,8 @@ targets and datasets before preparing duplicates; credentials stay server-side.
 ## Run one improvement cycle
 
 1. Create an experiment to group the work. Define the capability objective, allowed
-   quality loss, cost basis and time/call/output budgets. Use Smoke preview and
-   bounded live Smoke to verify routing, final-answer grading and accounting.
+   quality loss, cost basis and execution policy. Use Smoke preview and live
+   Smoke to verify routing, final-answer grading and accounting.
 2. Freeze a Quick/dev dataset and run the relevant single-model baselines plus
    the current MoM. Link those runs to the experiment. Reuse compatible saved
    baselines in later iterations rather than regenerate them.
@@ -41,7 +41,7 @@ targets and datasets before preparing duplicates; credentials stay server-side.
    the exact baseline cases and request protocol; select Preview or Live and
    attach the experiment. Its output wraps the manifest; extract `.manifest`
    before passing it to `run` or `preview`. Preview the candidate first. If useful, discover replay
-   combinations with `replay-options`; otherwise proceed to bounded live work.
+   combinations with `replay-options`; otherwise proceed to live evaluation.
 5. Compare the live candidate with the strongest observed single on the same
    cases using `comparison-options` and `compare`. Keep or revert according to the
    stated objective. Repeat on dev when warranted; freeze the chosen recipe
@@ -76,9 +76,12 @@ removes its grouping, not run evidence; active runs must be resolved first.
 
 ## Run reliability
 
-Inspect the plan before dispatch; use bounded deadlines, call/output limits and
-cost policy. Before scaling, inspect effective native reasoning effort,
-final-answer presence, finish reasons, and truncation/timeout rates. Changes to
+Inspect the plan before dispatch. Choose output capacity for the objective: use
+verified native capacity and highest reasoning for capability exploration, or an
+explicit fixed budget for constrained comparisons. Align single-model and MoM
+profiles and allow time and evidence storage for that capacity. Before scaling,
+inspect effective reasoning effort, final-answer presence, finish reasons, and
+truncation/timeout rates. Changes to
 budgets or request profiles require new compatible baselines; never grade hidden
 reasoning as a final answer. Submit with a stable idempotency key. After a lost
 acknowledgement, look up that run before acting; do not substitute a new key or

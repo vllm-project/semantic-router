@@ -165,6 +165,7 @@ class Handler(BaseHTTPRequestHandler):
             "preview_api_key_env",
             "request_params",
             "capture_recipe",
+            "native_limits",
         }
         if any(set(t) - safe for t in data):
             raise ValueError("Server target registry contains unsupported fields")
