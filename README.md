@@ -44,6 +44,93 @@ Use it to improve quality, cost, latency, privacy, and safety without hard-codin
 
 [Explore how it works →](https://vllm-sr.ai/docs/intro/)
 
+## Supported Providers
+
+The built-in catalog covers hosted APIs, gateways, and self-hosted runtimes. See the live list on the [Models page](https://vllm-sr.ai/models).
+
+<table>
+  <tr>
+    <td align="center" width="12%"><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=128" height="40" alt="OpenAI"/><br/><sub>OpenAI</sub></td>
+    <td align="center" width="12%"><img src="https://www.google.com/s2/favicons?domain=azure.microsoft.com&sz=128" height="40" alt="Azure OpenAI"/><br/><sub>Azure OpenAI</sub></td>
+    <td align="center" width="12%"><img src="https://www.google.com/s2/favicons?domain=anthropic.com&sz=128" height="40" alt="Anthropic"/><br/><sub>Anthropic</sub></td>
+    <td align="center" width="12%"><img src="https://www.google.com/s2/favicons?domain=gemini.google.com&sz=128" height="40" alt="Google Gemini"/><br/><sub>Google Gemini</sub></td>
+    <td align="center" width="12%"><img src="https://www.google.com/s2/favicons?domain=cloud.google.com&sz=128" height="40" alt="Vertex AI"/><br/><sub>Vertex AI</sub></td>
+    <td align="center" width="12%"><img src="https://www.google.com/s2/favicons?domain=aws.amazon.com&sz=128" height="40" alt="Amazon Bedrock"/><br/><sub>Amazon Bedrock</sub></td>
+    <td align="center" width="12%"><img src="https://www.google.com/s2/favicons?domain=microsoft.com&sz=128" height="40" alt="Microsoft Foundry"/><br/><sub>Microsoft Foundry</sub></td>
+    <td align="center" width="12%"><img src="https://www.google.com/s2/favicons?domain=ai.meta.com&sz=128" height="40" alt="Meta"/><br/><sub>Meta</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=mistral.ai&sz=128" height="40" alt="Mistral AI"/><br/><sub>Mistral AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=cohere.com&sz=128" height="40" alt="Cohere"/><br/><sub>Cohere</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=deepseek.com&sz=128" height="40" alt="DeepSeek"/><br/><sub>DeepSeek</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=x.ai&sz=128" height="40" alt="xAI"/><br/><sub>xAI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=moonshot.ai&sz=128" height="40" alt="Moonshot AI"/><br/><sub>Moonshot AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=minimax.io&sz=128" height="40" alt="MiniMax"/><br/><sub>MiniMax</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=z.ai&sz=128" height="40" alt="Z.ai"/><br/><sub>Z.ai</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=dashscope.aliyun.com&sz=128" height="40" alt="DashScope"/><br/><sub>DashScope</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=volcengine.com&sz=128" height="40" alt="Volcengine Ark"/><br/><sub>Volcengine Ark</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=xiaomi.com&sz=128" height="40" alt="Xiaomi MiMo"/><br/><sub>Xiaomi MiMo</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=upstage.ai&sz=128" height="40" alt="Upstage"/><br/><sub>Upstage</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=stepfun.ai&sz=128" height="40" alt="StepFun"/><br/><sub>StepFun</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=qianfan.cloud.baidu.com&sz=128" height="40" alt="Baidu Qianfan"/><br/><sub>Baidu Qianfan</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=aistudio.baidu.com&sz=128" height="40" alt="Baidu AI Studio"/><br/><sub>Baidu AI Studio</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=groq.com&sz=128" height="40" alt="Groq"/><br/><sub>Groq</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=together.ai&sz=128" height="40" alt="Together AI"/><br/><sub>Together AI</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=fireworks.ai&sz=128" height="40" alt="Fireworks AI"/><br/><sub>Fireworks AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=openrouter.ai&sz=128" height="40" alt="OpenRouter"/><br/><sub>OpenRouter</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=vercel.com&sz=128" height="40" alt="Vercel AI Gateway"/><br/><sub>Vercel AI Gateway</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=huggingface.co&sz=128" height="40" alt="Hugging Face"/><br/><sub>Hugging Face</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=deepinfra.com&sz=128" height="40" alt="DeepInfra"/><br/><sub>DeepInfra</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=novita.ai&sz=128" height="40" alt="Novita AI"/><br/><sub>Novita AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=nebius.com&sz=128" height="40" alt="Nebius"/><br/><sub>Nebius</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=cerebras.ai&sz=128" height="40" alt="Cerebras"/><br/><sub>Cerebras</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=sambanova.ai&sz=128" height="40" alt="SambaNova"/><br/><sub>SambaNova</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=perplexity.ai&sz=128" height="40" alt="Perplexity"/><br/><sub>Perplexity</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=friendli.ai&sz=128" height="40" alt="FriendliAI"/><br/><sub>FriendliAI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=featherless.ai&sz=128" height="40" alt="Featherless"/><br/><sub>Featherless</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=cometapi.com&sz=128" height="40" alt="CometAPI"/><br/><sub>CometAPI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=cloudflare.com&sz=128" height="40" alt="Cloudflare Workers AI"/><br/><sub>Cloudflare Workers AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=nvidia.com&sz=128" height="40" alt="NVIDIA NIM"/><br/><sub>NVIDIA NIM</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=writer.com&sz=128" height="40" alt="Writer"/><br/><sub>Writer</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=reka.ai&sz=128" height="40" alt="Reka AI"/><br/><sub>Reka AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=sarvam.ai&sz=128" height="40" alt="Sarvam AI"/><br/><sub>Sarvam AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=agnes-ai.com&sz=128" height="40" alt="Agnes AI"/><br/><sub>Agnes AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=www.aionlabs.ai&sz=128" height="40" alt="Aion Labs"/><br/><sub>Aion Labs</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=apodex.ai&sz=128" height="40" alt="Apodex AI"/><br/><sub>Apodex AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=celeris.ai&sz=128" height="40" alt="Celeris"/><br/><sub>Celeris</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=compactif.ai&sz=128" height="40" alt="CompactifAI"/><br/><sub>CompactifAI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=inceptionlabs.ai&sz=128" height="40" alt="Inception"/><br/><sub>Inception</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=sakana.ai&sz=128" height="40" alt="Sakana AI"/><br/><sub>Sakana AI</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=vllm.ai&sz=128" height="40" alt="vLLM"/><br/><sub>vLLM</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=docs.sglang.ai&sz=128" height="40" alt="SGLang"/><br/><sub>SGLang</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=amd.com&sz=128" height="40" alt="AMD ATOM"/><br/><sub>AMD ATOM</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=ollama.com&sz=128" height="40" alt="Ollama"/><br/><sub>Ollama</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=lmstudio.ai&sz=128" height="40" alt="LM Studio"/><br/><sub>LM Studio</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=inference.readthedocs.io&sz=128" height="40" alt="Xinference"/><br/><sub>Xinference</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=developer.nvidia.com&sz=128" height="40" alt="NVIDIA Triton"/><br/><sub>NVIDIA Triton</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=nvidia.com&sz=128" height="40" alt="NVIDIA Riva"/><br/><sub>NVIDIA Riva</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=lemonade-server.ai&sz=128" height="40" alt="Lemonade"/><br/><sub>Lemonade</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=docker.com&sz=128" height="40" alt="Docker Model Runner"/><br/><sub>Docker Model Runner</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=openai.com&sz=128" height="40" alt="OpenAI Compatible"/><br/><sub>OpenAI Compatible</sub></td>
+    <td align="center"><img src="https://www.google.com/s2/favicons?domain=anthropic.com&sz=128" height="40" alt="Anthropic Compatible"/><br/><sub>Anthropic Compatible</sub></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
+
 ## Getting Started
 
 ### Install
