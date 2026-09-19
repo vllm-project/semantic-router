@@ -10,8 +10,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const routerNamespace = "vllm-semantic-router-system"
-const activationStartupBudget = 60 * time.Minute
+const (
+	routerNamespace         = "vllm-semantic-router-system"
+	activationStartupBudget = 60 * time.Minute
+)
 
 func (p *Profile) waitForCRDReady(ctx context.Context, kubeconfig string) error {
 	ctx, cancel := context.WithTimeout(ctx, activationStartupBudget)

@@ -18,6 +18,7 @@ func (r *recordingInstaller) Install(_ context.Context, options helm.InstallOpti
 	r.options = options
 	return nil
 }
+
 func TestBootstrapDoesNotWaitForUnpublishedCRs(t *testing.T) {
 	installer := &recordingInstaller{}
 	if err := NewProfile().deploySemanticRouter(context.Background(), installer, &framework.SetupOptions{ImageTag: "test"}); err != nil {

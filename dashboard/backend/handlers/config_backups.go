@@ -128,8 +128,8 @@ func archivedDSLPath(configDir string) string {
 func RestrictExistingConfigSnapshots(configDir string) error {
 	backupDir := configBackupDir(configDir)
 	if _, err := os.Lstat(backupDir); err == nil {
-		if err := ensureConfigSnapshotDir(backupDir); err != nil {
-			return err
+		if restrictErr := ensureConfigSnapshotDir(backupDir); restrictErr != nil {
+			return restrictErr
 		}
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
