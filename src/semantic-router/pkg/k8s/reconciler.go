@@ -302,37 +302,30 @@ func (r *Reconciler) reportConflict(ctx context.Context, pools []v1alpha1.Intell
 func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.IntelligentPool, route *v1alpha1.IntelligentRoute) error {
 	// Validate
 	if err := r.validate(pool, route); err != nil {
-		// Update status to Invalid
-		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		return err
+		return r.rejectInvalidCandidate(ctx, pool, route, err)
 	}
 
 	canonicalBase := config.CanonicalStaticConfigFromRouterConfig(r.staticConfig)
 	canonicalCfg, err := r.converter.Convert(pool, route, &canonicalBase)
 	if err != nil {
-		return fmt.Errorf("failed to convert CRDs to canonical config: %w", err)
+		return r.rejectInvalidCandidate(ctx, pool, route, fmt.Errorf("failed to convert CRDs to canonical config: %w", err))
 	}
 
 	canonicalBytes, err := yamlv3.Marshal(canonicalCfg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal canonical config: %w", err)
+		return r.rejectInvalidCandidate(ctx, pool, route, fmt.Errorf("failed to marshal canonical config: %w", err))
 	}
 
 	newConfig, err := config.ParseYAMLBytes(canonicalBytes)
 	if err != nil {
-		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		return fmt.Errorf("failed to normalize canonical config: %w", err)
+		return r.rejectInvalidCandidate(ctx, pool, route, fmt.Errorf("failed to normalize canonical config: %w", err))
 	}
 	newConfig.ConfigSource = config.ConfigSourceKubernetes
 
 	// Parsing already validates static global settings. Now validate the complete
 	// routing graph from CRDs before publishing the candidate to the runtime.
 	if err := config.ValidateKubernetesConfigContracts(newConfig); err != nil {
-		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		return fmt.Errorf("kubernetes config validation failed: %w", err)
+		return r.rejectInvalidCandidate(ctx, pool, route, fmt.Errorf("kubernetes config validation failed: %w", err))
 	}
 
 	// Status publication is best-effort; it must never prevent runtime activation.
@@ -356,6 +349,15 @@ func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.Intel
 
 	logging.Infof("Configuration updated successfully from CRDs")
 	return nil
+}
+
+// Every pre-activation failure must replace a previous Ready condition with
+// the rejected generation and its cause, including converter/encoding errors.
+// The last successfully activated snapshot remains unchanged for retries.
+func (r *Reconciler) rejectInvalidCandidate(ctx context.Context, pool *v1alpha1.IntelligentPool, route *v1alpha1.IntelligentRoute, err error) error {
+	r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
+	r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
+	return err
 }
 
 // validate validates the CRDs
