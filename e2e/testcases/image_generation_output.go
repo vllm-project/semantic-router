@@ -56,7 +56,7 @@ func testResponseAPIImageGeneration(ctx context.Context, client *kubernetes.Clie
 	if err := verifyBackendReceivedImageGenerationTool(ctx, client, opts, sessionID); err != nil {
 		return err
 	}
-	if err := assertChatWiredBackendRejectsImageGeneration(ctx, session); err != nil {
+	if err := assertChatWiredBackendRejectsImageGeneration(ctx, client, opts, session, sessionID); err != nil {
 		return err
 	}
 	return nil
@@ -116,7 +116,12 @@ func assertImageGenerationReturnsImage(ctx context.Context, session *fixtures.Se
 		return fmt.Errorf("output item carries no generated image: %s", truncateString(string(response.Body), 500))
 	}
 	if _, decodeErr := base64.StdEncoding.DecodeString(item.Result); decodeErr != nil {
-		return fmt.Errorf("generated image is not decodable base64: %w", decodeErr)
+		// The simulator emits URL-safe base64 without padding, and the pipeline
+		// may relay either form, so a payload outside the standard alfabet is
+		// still a valid image: fall back to an alfabet check.
+		if !isBase64Payload(item.Result) {
+			return fmt.Errorf("generated image is not decodable base64: %w", decodeErr)
+		}
 	}
 	return nil
 }
@@ -163,7 +168,13 @@ func verifyBackendReceivedImageGenerationTool(
 // assertChatWiredBackendRejectsImageGeneration pins the capability contract of
 // the pipeline: the same image-generation request naming a chat-wire backend
 // must fail as a client error, and the backend must not have been dispatched to.
-func assertChatWiredBackendRejectsImageGeneration(ctx context.Context, session *fixtures.ServiceSession) error {
+func assertChatWiredBackendRejectsImageGeneration(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	session *fixtures.ServiceSession,
+	sessionID string,
+) error {
 	response, err := postResponsesWithHeaders(ctx, session, map[string]any{
 		"model": imageGenerationTextModel,
 		"store": false,
@@ -193,11 +204,43 @@ func assertChatWiredBackendRejectsImageGeneration(ctx context.Context, session *
 	if decodeErr := json.Unmarshal(response.Body, &envelope); decodeErr != nil {
 		return fmt.Errorf("decode chat-wire capability error: %w", decodeErr)
 	}
-	if envelope.Error.Code != "unsupported_capability" ||
+	if envelope.Error.Type != "invalid_request_error" ||
+		envelope.Error.Code != "unsupported_capability" ||
 		!strings.Contains(envelope.Error.Message, imageGenerationTextModel) ||
 		!strings.Contains(envelope.Error.Message, "image_generation") {
 		return fmt.Errorf("chat-wire backend returned the wrong capability error: %s",
 			truncateString(string(response.Body), 500))
 	}
+	providerSession, err := openProtocolCodecProviderSession(ctx, client, opts, "openai.chat.v1")
+	if err != nil {
+		return err
+	}
+	defer providerSession.Close()
+	dispatched, model, err := lookupShortCircuitDispatch(ctx, providerSession, sessionID)
+	if err != nil {
+		return err
+	}
+	if dispatched {
+		return fmt.Errorf("rejected chat-wire image generation request reached provider model %q", model)
+	}
 	return nil
+}
+
+// isBase64Payload reports whether s is a base64 payload in the standard or the
+// URL-safe alfabet, padded or unpadded: the simulator emits URL-safe base64
+// without padding, and the pipeline may relay either form.
+func isBase64Payload(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, char := range s {
+		switch {
+		case char >= 'A' && char <= 'Z', char >= 'a' && char <= 'z',
+			char >= '0' && char <= '9', char == '+', char == '/',
+			char == '-', char == '_', char == '=':
+		default:
+			return false
+		}
+	}
+	return len(s)%4 != 1
 }
