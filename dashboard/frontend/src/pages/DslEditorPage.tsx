@@ -287,10 +287,8 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
       setShowImportModal(false)
       setImportText('')
       setImportError(null)
-    } catch {
-      setImportError(
-        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
-      )
+    } catch (err) {
+      setImportError(`Failed to import YAML: ${err instanceof Error ? err.message : String(err)}`)
     }
   }, [importText, importYaml])
 
@@ -689,6 +687,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({ embedded = false, hideOut
             <div className={styles.outputContent}>
               {compileError && (
                 <div
+                  role="alert"
                   style={{
                     padding: 'var(--spacing-md)',
                     color: 'var(--color-danger)',
