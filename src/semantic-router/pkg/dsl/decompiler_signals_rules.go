@@ -251,7 +251,9 @@ func (d *decompiler) decompileComplexitySignals() {
 		if comp.PrototypeScoring != nil {
 			d.write("  prototype_scoring: %s\n", formatPluginConfigValue(fieldsToMap(prototypeScoringFields(comp.PrototypeScoring))))
 		}
-		if comp.Threshold != 0 {
+		// A written zero is kept as written, so the round trip does not turn
+		// a stated threshold into an absent one.
+		if comp.Threshold != 0 || comp.ThresholdSet {
 			d.write("  threshold: %v\n", comp.Threshold)
 		}
 		// The explicit boundary pair. Omitting these here would silently

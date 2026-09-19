@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
 type Signals struct {
@@ -461,7 +463,12 @@ type ComplexityRule struct {
 	// Threshold is the symmetric shorthand, kept because the local margin is
 	// signed and centred on zero: hard above +threshold, easy below
 	// -threshold. Mutually exclusive with the explicit pair below.
-	Threshold float32              `yaml:"threshold"`
+	//
+	// Zero and omitted mean the same thing to the local path, so a zero is
+	// not written back out: a rule that states a pair must not grow a
+	// `threshold: 0` on its way through the operator or the DSL emitter and
+	// then be refused for stating both.
+	Threshold float32              `yaml:"threshold,omitempty"`
 	Hard      ComplexityCandidates `yaml:"hard"`
 	Easy      ComplexityCandidates `yaml:"easy"`
 	// The explicit boundary pair, for a score whose scale is the model's own
@@ -475,6 +482,66 @@ type ComplexityRule struct {
 	EasyAbove   *float64         `yaml:"easy_above,omitempty"`
 	Description string           `yaml:"description,omitempty"`
 	Composer    *RuleCombination `yaml:"composer,omitempty"`
+
+	// ThresholdSet records that the threshold key was written, so that a
+	// written `threshold: 0` alongside an explicit pair can be refused the
+	// way the CRD refuses it, instead of passing as an absent key. Threshold
+	// is a float32 with no presence of its own, and widening it to a pointer
+	// would ripple through the DSL compiler, the operator and every literal
+	// that builds a rule. Never serialised: presence is a property of the
+	// document the rule came from, not of the rule.
+	ThresholdSet bool `yaml:"-" json:"-"`
+}
+
+// UnmarshalYAML decodes a rule and records whether `threshold` was written.
+// The value is decoded exactly as before; only the presence is added.
+func (r *ComplexityRule) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	type plain ComplexityRule
+	var decoded plain
+	if err := unmarshal(&decoded); err != nil {
+		return err
+	}
+	// A second pass into a map is the presence probe. A map rather than a
+	// one-field struct, because the strict loader refuses fields a struct
+	// does not name. A null value counts as absent, as it does for the CRD.
+	var raw map[interface{}]interface{}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+	*r = ComplexityRule(decoded)
+	value, written := raw["threshold"]
+	r.ThresholdSet = written && value != nil
+	return nil
+}
+
+// MarshalYAML writes the rule as its fields, with one exception. Threshold
+// carries omitempty so a pair rule does not grow a `threshold: 0` on its way
+// through the operator or the DSL emitter, but a zero that was written has to
+// survive emission: dropping it would let a rule the loader refuses pass once
+// it has been serialised and read back. That one case is written through a
+// map with the key restored. Every other rule is written exactly as before.
+func (r ComplexityRule) MarshalYAML() (interface{}, error) {
+	type plain ComplexityRule
+	if !r.ThresholdSet || r.Threshold != 0 {
+		return plain(r), nil
+	}
+	encoded, err := yaml.Marshal(plain(r))
+	if err != nil {
+		return nil, err
+	}
+	fields := map[string]interface{}{}
+	if err := yaml.Unmarshal(encoded, &fields); err != nil {
+		return nil, err
+	}
+	fields["threshold"] = r.Threshold
+	return fields, nil
+}
+
+// thresholdDeclared reports whether the rule states a threshold at all: a
+// written key, whatever its value, or a non-zero value from a caller that
+// assigned the field directly.
+func (r ComplexityRule) thresholdDeclared() bool {
+	return r.ThresholdSet || r.Threshold != 0
 }
 
 type Category struct {
