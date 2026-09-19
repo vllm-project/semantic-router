@@ -24,7 +24,7 @@ describe('Monitoring provisioned dashboard contract', () => {
     })
 
     const markup = renderToStaticMarkup(createElement(MonitoringPage))
-    const source = markup.match(/src="([^"]+)"/)?.[1].replaceAll('&amp;', '&')
+    const source = markup.match(/src="([^"]+)"/)?.[1].replace(/&amp;/g, '&')
     expect(source).toBeDefined()
     const target = new URL(source!, 'https://dashboard.example.test')
 
