@@ -144,6 +144,13 @@ Guard uses the window with the highest attack probability. Scanning can find
 local risks but may miss context that connects distant parts of a document.
 Evaluate the model, window size, and threshold together.
 
+A scanned score says which window produced it. Alongside `jailbreak:<rule>`,
+`signal_values` carries `jailbreak:<rule>:window_start`,
+`jailbreak:<rule>:window_end` and `jailbreak:<rule>:windows`, in content tokens
+and window count. A document inside one window reports one window, so a score
+that a tail window decided is distinguishable from one the whole document
+produced.
+
 Safety and custom Hazard heads have separate `window` settings under
 `modules.safety.safety` and `modules.safety.hazard`. For the published Vela Hazard
 operating point, keep its supplied 2,048-token windows and 32K whole-input policy.
