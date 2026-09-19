@@ -188,6 +188,6 @@ more of the total latency budget.
    Otherwise restore the baseline and preserve the failed evidence. Keep raw test
    outputs outside Git; publish intentional recipes, documentation and code fixes.
 
-Use the [evaluation loop](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md) for exact Preview, Probe, delivery
+Use the [evaluation loop](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md) for exact Preview, Probe, delivery
 and benchmark contracts. A partial benchmark can guide tuning, but it does not
 establish a full leaderboard score or performance on untested hardware.

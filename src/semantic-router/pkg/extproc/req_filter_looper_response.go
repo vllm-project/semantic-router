@@ -121,6 +121,9 @@ func (r *OpenAIRouter) prepareLooperResponse(
 		reqCtx.ResponseEnvelope = translated.Envelope
 		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, translated.Diagnostics...)
 	}
+	if headerValueCI(reqCtx, headers.SRBenchExpectedConfigHash) != "" {
+		reqCtx.BenchmarkModelUsage = r.benchmarkLooperUsage(resp, reqCtx)
+	}
 	body = restoreLooperWorkflowTrace(body, flow, reqCtx)
 	reqCtx.SemanticResponse = semantic
 	reqCtx.ImmediateResponseEncoded = true

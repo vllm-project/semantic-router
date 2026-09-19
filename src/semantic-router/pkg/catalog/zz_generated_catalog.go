@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:769b20dc9c8c8e4b309bc3cc306779f1155d8f6a5dedc4f53185be9bd60f6b2f"
+const builtInCatalogDigest = "sha256:cd25d4a6aaa6cedaec83af064ffdceb1716d1a33ce7749e45e3b886a68c49dd9"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -93896,12 +93896,14 @@ const builtInCatalogJSON = `{
     {
       "auth": {
         "header": "Authorization",
+        "injected_header": "x-user-cloudflare-workers-ai-key",
         "prefix": "Bearer",
         "strategy": "bearer"
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-19"
       },
       "default_protocol": "openai/chat-completions@1",
       "description": "Cloudflare Workers AI OpenAI-compatible inference.",

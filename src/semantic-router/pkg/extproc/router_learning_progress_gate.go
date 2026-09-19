@@ -44,6 +44,9 @@ func configureProgressEvidence(ctx *RequestContext, cfg config.ProgressGateConfi
 		return
 	}
 	ctx.VSRProgressGateConfig = &cfg
+	if ctx.learningPreview != nil {
+		return
+	}
 	ttl := time.Duration(cfg.WindowTTLSeconds) * time.Second
 	sessiontelemetry.ConfigureTurnOutcomeWindow(routingLearningStateKey(ctx), cfg.WindowSize, ttl, now)
 }
@@ -68,14 +71,24 @@ func (r *OpenAIRouter) switchGateVerdict(
 	now := time.Now()
 	windowTTL := time.Duration(gateCfg.WindowTTLSeconds) * time.Second
 	configureProgressEvidence(ctx, gateCfg, now)
-	window := sessiontelemetry.RecentTurnOutcomesWithPolicy(sessionKey, now, gateCfg.WindowSize, windowTTL)
+	var window []sessiontelemetry.TurnOutcome
+	var snapshot sessiontelemetry.RouterSessionSnapshot
+	var snapshotFound bool
+	if ctx != nil && ctx.learningPreview != nil {
+		now = ctx.learningPreview.CapturedAt
+		window = ctx.learningPreview.progressOutcomes(sessionKey, gateCfg.WindowSize, windowTTL)
+		snapshot, snapshotFound = ctx.learningPreview.session(sessionKey)
+	} else {
+		window = sessiontelemetry.RecentTurnOutcomesWithPolicy(sessionKey, now, gateCfg.WindowSize, windowTTL)
+		snapshot, snapshotFound = sessiontelemetry.GetRouterSessionSnapshot(sessionKey, now)
+	}
 	evidence := selection.EvaluateProgressEvidence(turnOutcomeFacts(window))
 
 	in := selection.SwitchGateInput{
 		Evidence:  evidence,
 		Downgrade: downgrade,
 	}
-	if snapshot, ok := sessiontelemetry.GetRouterSessionSnapshot(sessionKey, now); ok {
+	if snapshotFound {
 		// The oscillation guard is window-scoped: count the model changes
 		// inside the gate's own evidence window, not the session lifetime.
 		in.SwitchesInWindow = sessiontelemetry.CountRecentSwitches(snapshot.SwitchTimestamps, windowTTL, now)
@@ -153,6 +166,9 @@ func attachSwitchGateTrace(result *selection.SelectionResult, trace *selection.S
 
 // logSwitchGateSuppression records an enforced suppression for operators.
 func logSwitchGateSuppression(ctx *RequestContext, currentModel, proposedModel string, decision selection.SwitchGateDecision) {
+	if ctx != nil && ctx.learningPreview != nil {
+		return
+	}
 	requestID := ""
 	if ctx != nil {
 		requestID = ctx.RequestID

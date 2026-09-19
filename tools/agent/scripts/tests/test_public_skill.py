@@ -119,7 +119,8 @@ class PublicSkillTests(unittest.TestCase):
             {
                 "configuration-loop.md",
                 "deployment-loop.md",
-                "evaluation-loop.md",
+                "route-verification.md",
+                "sr-bench.md",
                 "recipe-tuning.md",
             },
         )
