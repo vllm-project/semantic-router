@@ -2,18 +2,16 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 )
 
-const (
-	fetchRawMaxSize = 2 * 1024 * 1024 // 2 MB
-	fetchRawTimeout = 15 * time.Second
-)
+const fetchRawTimeout = 15 * time.Second
 
 // FetchRawRequest is the request body for the fetch-raw endpoint.
 type FetchRawRequest struct {
@@ -54,8 +52,8 @@ func FetchRawHandler() http.HandlerFunc {
 			return
 		}
 
-		parsed, err := url.Parse(targetURL)
-		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		policy := outboundPolicy(fetchRawTimeout)
+		if _, err := policy.ValidateURL(targetURL); err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "invalid URL, must be http or https"})
 			return
@@ -63,15 +61,9 @@ func FetchRawHandler() http.HandlerFunc {
 
 		log.Printf("[FetchRaw] Fetching: %s", redactURLForLog(targetURL))
 
-		client := &http.Client{
-			Timeout: fetchRawTimeout,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return fmt.Errorf("too many redirects")
-				}
-				return nil
-			},
-		}
+		// The destination is rechecked after DNS and on every redirect, so a
+		// name that resolves to an internal address is refused at dial time.
+		client := policy.NewClient()
 
 		httpReq, err := http.NewRequest("GET", targetURL, nil)
 		if err != nil {
@@ -85,6 +77,13 @@ func FetchRawHandler() http.HandlerFunc {
 
 		resp, err := client.Do(httpReq)
 		if err != nil {
+			// A refused destination is the caller's error and must not echo the
+			// resolved address or the reason back to them.
+			if isForbiddenFetchTarget(err) {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "destination is not permitted"})
+				return
+			}
 			w.WriteHeader(http.StatusBadGateway)
 			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: fmt.Sprintf("fetch failed: %v", err)})
 			return
@@ -97,7 +96,14 @@ func FetchRawHandler() http.HandlerFunc {
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(resp.Body, fetchRawMaxSize))
+		// Bound the decoded body and say so, rather than silently handing back a
+		// truncated config the caller would parse as complete.
+		body, err := safefetch.ReadBounded(resp.Body, fetchRawMaxResponseBytes)
+		if errors.Is(err, safefetch.ErrResponseTooLarge) {
+			w.WriteHeader(http.StatusRequestEntityTooLarge)
+			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "remote content exceeds the size limit"})
+			return
+		}
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)
 			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: fmt.Sprintf("failed to read response: %v", err)})
