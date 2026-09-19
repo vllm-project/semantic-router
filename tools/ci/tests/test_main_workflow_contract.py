@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
 import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -34,45 +32,43 @@ class PullRequestGateContractTests(unittest.TestCase):
         )
         self.gate = self.workflow["jobs"]["pr-gate"]
 
-    def test_gate_aggregates_failures_without_retaining_cancelled_runs(self) -> None:
-        self.assertEqual(
-            self.gate["if"],
-            "${{ !cancelled() }}",
-            "an explicit status condition must run after failure but stop on cancellation",
-        )
+    def test_gates_evaluate_failed_or_cancelled_prerequisites(self) -> None:
+        for filename, job in (
+            ("pr.yml", "pr-gate"),
+            ("ci.yml", "gate"),
+            ("release.yml", "gate"),
+        ):
+            with self.subTest(workflow=filename):
+                workflow = yaml.safe_load(
+                    (REPO_ROOT / ".github" / "workflows" / filename).read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertEqual(
+                    workflow["jobs"][job]["if"],
+                    "always()",
+                    "skipping a required gate must not hide failed or cancelled prerequisites",
+                )
         self.assertTrue(self.workflow["concurrency"]["cancel-in-progress"])
 
-    def test_actual_gate_script_rejects_unsuccessful_selected_domains(self) -> None:
+    def test_stable_gate_rejects_unsuccessful_shared_qualification(self) -> None:
         script = self.gate["steps"][0]["run"]
+        self.assertEqual(self.gate["needs"], "ci")
         for result, expected_exit in (
             ("success", 0),
-            ("skipped", 0),
+            ("skipped", 1),
             ("failure", 1),
             ("cancelled", 1),
         ):
-            with self.subTest(
-                result=result
-            ), tempfile.TemporaryDirectory() as directory:
-                summary = Path(directory) / "summary.md"
+            with self.subTest(result=result):
                 actual = subprocess.run(
                     ["bash", "-e", "-c", script],
-                    env={
-                        **os.environ,
-                        "GITHUB_STEP_SUMMARY": str(summary),
-                        "DOMAIN_RESULTS": json.dumps(
-                            {
-                                "changes": {"result": "success"},
-                                "core-tests": {"result": result},
-                            }
-                        ),
-                    },
+                    env={**os.environ, "RESULT": result},
                     capture_output=True,
                     text=True,
                     check=False,
-                    timeout=10,
                 )
                 self.assertEqual(actual.returncode, expected_exit, actual.stderr)
-                self.assertIn(f"- core-tests: {result}", summary.read_text())
 
 
 if __name__ == "__main__":

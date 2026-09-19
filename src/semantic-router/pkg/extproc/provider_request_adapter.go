@@ -29,7 +29,7 @@ func (r *OpenAIRouter) adaptProviderRequest(
 		body,
 		dispatch.logicalModel,
 		dispatch.useReasoning,
-		ctx.VSRSelectedDecision,
+		ctx.decisionForCandidate(dispatch.logicalModel),
 		dispatch.profile,
 	)
 }

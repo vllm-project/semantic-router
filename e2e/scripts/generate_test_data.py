@@ -10,9 +10,7 @@ This script generates test data for:
 
 import json
 import random
-import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import requests
 from datasets import load_dataset
@@ -23,7 +21,7 @@ random.seed(42)
 
 def download_presidio_dataset() -> str:
     """Download the Microsoft Presidio research dataset."""
-    url = "https://raw.githubusercontent.com/microsoft/presidio-research/refs/heads/master/data/synth_dataset_v2.json"
+    url = "https://raw.githubusercontent.com/microsoft/presidio-research/refs/heads/main/data/synth_dataset_v2.json"
     dataset_path = "presidio_synth_dataset_v2.json"
 
     if not Path(dataset_path).exists():
@@ -45,7 +43,7 @@ def download_presidio_dataset() -> str:
     return dataset_path
 
 
-def generate_synthetic_pii_data(num_samples: int = 20) -> List[Dict]:
+def generate_synthetic_pii_data(num_samples: int = 20) -> list[dict]:
     """Generate synthetic PII test data when Presidio dataset is unavailable."""
     print("🔧 Generating synthetic PII test data...")
 
@@ -183,7 +181,7 @@ def generate_synthetic_pii_data(num_samples: int = 20) -> List[Dict]:
     return test_cases
 
 
-def generate_pii_test_data(num_samples: int = 20) -> List[Dict]:
+def generate_pii_test_data(num_samples: int = 20) -> list[dict]:
     """Generate PII detection test data from ai4privacy/pii-masking-200k dataset."""
     print(f"\n🔐 Generating {num_samples} PII detection test cases...")
 
@@ -345,7 +343,7 @@ def generate_pii_test_data(num_samples: int = 20) -> List[Dict]:
         from collections import Counter
 
         type_counts = Counter(case["pii_type"] for case in test_cases)
-        print(f"   PII type distribution:")
+        print("   PII type distribution:")
         for pii_type, count in sorted(type_counts.items()):
             print(f"     {pii_type}: {count}")
 
@@ -359,7 +357,7 @@ def generate_pii_test_data(num_samples: int = 20) -> List[Dict]:
 
 def generate_domain_classification_test_data(
     samples_per_category: int = 20,
-) -> List[Dict]:
+) -> list[dict]:
     """Generate domain classification test data from MMLU-Pro dataset.
 
     Args:
@@ -414,7 +412,7 @@ def generate_domain_classification_test_data(
     return test_cases
 
 
-def generate_jailbreak_test_data(num_samples: int = 20) -> List[Dict]:
+def generate_jailbreak_test_data(num_samples: int = 20) -> list[dict]:
     """Generate jailbreak detection test data from multiple sources."""
     print(f"\n🛡️  Generating {num_samples} jailbreak detection test cases...")
 
@@ -531,7 +529,7 @@ def main():
     print("\n" + "=" * 60)
     print("✅ All test data generated successfully!")
     print("=" * 60)
-    print(f"\nGenerated files:")
+    print("\nGenerated files:")
     print(f"  - {pii_output} ({len(pii_cases)} samples)")
     print(f"  - {domain_output} ({len(domain_cases)} samples)")
     print(f"  - {jailbreak_output} ({len(jailbreak_cases)} samples)")

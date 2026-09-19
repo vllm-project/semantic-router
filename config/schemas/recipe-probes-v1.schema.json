@@ -167,6 +167,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["message_index", "content_index", "target_text_bytes"],
+      "not": {"required": ["text", "character"]},
       "properties": {
         "message_index": {"type": "integer", "minimum": 0},
         "content_index": {"type": "integer", "minimum": 0},
@@ -180,6 +181,11 @@
           "minLength": 1,
           "maxLength": 1,
           "pattern": "^[\\x20-\\x7E]$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[\\x20-\\x7E\\t\\n\\r]+$"
         }
       }
     },

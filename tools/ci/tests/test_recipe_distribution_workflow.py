@@ -8,6 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
+from classify_pr_changes import classify  # noqa: E402
 from validate_workflows import Workflow, load_workflows, needs  # noqa: E402
 
 
@@ -16,66 +17,45 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         errors: list[str] = []
         workflows = load_workflows(errors)
         self.assertEqual(errors, [])
-        self.workflow: Workflow = workflows["recipe-distribution.yml"]
+        self.workflow: Workflow = workflows["package-check.yml"]
         self.release_workflow: Workflow = workflows["release.yml"]
         self.text = self.workflow.path.read_text(encoding="utf-8")
 
-    def test_workflow_validates_manually_and_after_catalog_merges(self) -> None:
-        self.assertIn("workflow_dispatch", self.workflow.events)
-        self.assertNotIn("release", self.workflow.events)
-        self.assertIn("pull_request", self.workflow.events)
-        self.assertIn("push", self.workflow.events)
-        push = self.workflow.events["push"]
-        self.assertEqual(push["branches"], ["main"])
-        pull_request = self.workflow.events["pull_request"]
-        self.assertEqual(
-            set(pull_request["paths"]),
-            set(push["paths"]),
-            "release-critical catalog inputs must run the same gate before and after merge",
+    def test_catalog_is_one_planned_read_only_package_verification(self) -> None:
+        self.assertEqual(set(self.workflow.events), {"workflow_call"})
+        self.assertFalse(
+            (REPO_ROOT / ".github/workflows/recipe-distribution.yml").exists()
         )
         for path in (
-            "config/recipes/**",
+            "config/recipes/built-in/latest/mom-v1/probes.yaml",
             "src/vllm-sr/MANIFEST.in",
             "src/vllm-sr/setup.py",
-            "src/vllm-sr/cli/model_assets/**",
-            "src/vllm-sr/cli/model_bundle.py",
             "src/vllm-sr/cli/model_catalog.py",
-            "src/vllm-sr/cli/model_catalog_export.py",
-            "src/vllm-sr/cli/model_catalog_types.py",
-            "src/vllm-sr/cli/model_catalog_validation.py",
-            "src/vllm-sr/pyproject.toml",
             "config/schemas/recipe-probes-v1.schema.json",
-            "tools/dev/router-calibration/**",
-            "tools/make/recipe-conformance.mk",
             "tools/release/stage_model_catalog_package.py",
             "tools/release/snapshot_model_catalog.py",
         ):
-            self.assertIn(path, push["paths"])
-
-    def test_workflow_rejects_changes_to_published_tag_snapshots(self) -> None:
-        self.assertIn("fetch-depth: 0", self.text)
-        self.assertIn("Protect snapshots already bound to release tags", self.text)
-        self.assertIn("--check-published --base-ref", self.text)
-        self.assertIn("github.event.pull_request.base.sha", self.text)
-        self.assertIn("github.event.before", self.text)
-        self.assertIn("github.sha", self.text)
-
-    def test_workflow_is_read_only_and_never_publishes_recipe_assets(self) -> None:
+            self.assertIn("cli-package", classify([path]).selected_jobs, path)
         self.assertEqual(self.workflow.data["permissions"], {"contents": "read"})
-        self.assertEqual(set(self.workflow.jobs), {"validate-built-in-models"})
-        validator = self.workflow.jobs["validate-built-in-models"]
-        self.assertEqual(validator["permissions"], {"contents": "read"})
-        self.assertNotIn("contents: write", self.text)
         self.assertNotIn("gh release", self.text)
-        self.assertNotIn("vllm-sr recipe pack", self.text)
-        self.assertNotIn(".vllm-sr-recipe.zip", self.text)
 
-    def test_workflow_stages_package_assets_and_checks_conformance(self) -> None:
-        self.assertIn("make model-catalog-package-check", self.text)
-        self.assertIn("make recipe-conformance-static", self.text)
-        self.assertIn("python -m cli.model_catalog_export", self.text)
-        self.assertNotIn("make model-catalog-package-stage", self.text)
-        self.assertNotIn("vllm-sr model ", self.text)
+    def test_unique_snapshot_compiler_install_and_resource_contracts_survive(
+        self,
+    ) -> None:
+        source = (REPO_ROOT / "tools/ci/package_contract.py").read_text()
+        for contract in (
+            "catalog.compiler",
+            "catalog.completeness",
+            "catalog.immutable",
+            "package.resources",
+            "package.installed",
+        ):
+            self.assertIn(contract, source)
+        self.assertIn('"--check-published"', source)
+        self.assertIn("check_wheel(wheels[0])", source)
+        self.assertIn("verify_resources(wheels[0], sources[0])", source)
+        self.assertIn("fetch-depth: 0", self.text)
+        self.assertIn("github.event.pull_request.base.sha", self.text)
 
     def test_source_package_build_stages_catalog_assets_automatically(self) -> None:
         setup_text = (REPO_ROOT / "src" / "vllm-sr" / "setup.py").read_text(
@@ -110,17 +90,6 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertIn("8080 + $(VLLM_SR_PORT_OFFSET)", make_text)
         self.assertIn("8080 + VLLM_SR_PORT_OFFSET", runner_text)
 
-    def test_workflow_keeps_only_a_short_lived_validation_receipt(self) -> None:
-        self.assertIn("built-in-model-catalog-receipt-${{ github.run_id }}", self.text)
-        self.assertIn("dist/model-catalog-receipt/", self.text)
-        self.assertIn("source-commit.txt", self.text)
-        self.assertIn(
-            "find config/recipes/built-in",
-            self.text,
-        )
-        self.assertIn("SHA256SUMS", self.text)
-        self.assertIn("retention-days: 30", self.text)
-
     def test_package_staging_tree_is_ignored_instead_of_committed(self) -> None:
         ignore = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8")
         self.assertIn(
@@ -143,7 +112,9 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertNotIn("managed-recipe-release-assets", release_text)
         self.assertNotIn("release-assets/recipes", release_text)
         self.assertNotIn(".vllm-sr-recipe.zip", release_text)
-        self.assertIn("needs: [validate, docker, helm, pypi, crate]", release_text)
+        self.assertIn(
+            "needs: [validate, gate, docker, helm, pypi, crate]", release_text
+        )
         self.assertIn("They are not published", release_text)
         self.assertIn("as separate GitHub Release assets", release_text)
         self.assertIn(

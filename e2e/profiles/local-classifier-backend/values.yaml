@@ -27,7 +27,7 @@ config:
         - name: local_jailbreak_score
           description: Deterministic in-process local classifier E2E signal (real candle inference, no mock)
           type: local
-          model_path: models/mmbert32k-jailbreak-detector-merged
+          model_path: models/Vela-1.0-Encoder-307M-Guard
           labels: [benign, jailbreak]
           use_cpu: true
     decisions:

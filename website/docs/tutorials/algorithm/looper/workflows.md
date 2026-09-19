@@ -206,6 +206,21 @@ setting it to `[]` isolates the step from prior outputs. Use a role id such as
 same agent id is emitted as `flow.steps[].responses[].agent_id` when
 `include_intermediate_responses` is enabled.
 
+Step IDs must be unique and must not collide with generated agent IDs. The
+router trims step IDs before validation; generated default IDs and normalized
+static role IDs follow the same uniqueness rule. Ambiguous plans are rejected
+before worker execution. In dynamic mode, `on_error: skip` uses the existing
+fallback plan instead of executing the invalid plan.
+
+This validation also applies when resuming a persisted workflow. A paused plan
+with conflicting IDs that an older version accepted is now rejected on resume,
+without dispatching further model calls. Resume validation failures do not start
+a fallback workflow, even with `on_error: skip`. Restart with an unambiguous
+plan rather than relying on the old continuation. Step IDs with surrounding
+whitespace are now trimmed consistently with access-list entries and agent IDs;
+older continuations whose stored step identity no longer matches may also be
+rejected.
+
 For local single-process development, `memory` is enough. For local restarts use
 `file`. For multi-replica deployments, use `redis` so a tool-result turn can be
 claimed by whichever router instance receives it.

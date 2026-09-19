@@ -101,7 +101,7 @@ func TestProfileRenderPreservesRequiredDefaultEnvironment(t *testing.T) {
 
 // The profile thresholds are not tuned to the three fixtures; they mirror the
 // calibrated values shipped in the image-routing pack, so the E2E run is an
-// acceptance test of what users deploy. cmd/image-routing-calibration
+// acceptance test of what users deploy. tools/calibration/image-routing
 // derives the pack values and CI gates them; this keeps the mirror honest.
 func TestImageRulesMirrorTheShippedPack(t *testing.T) {
 	raw, err := os.ReadFile("crds/intelligentroute.yaml")

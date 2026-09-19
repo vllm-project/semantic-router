@@ -10,13 +10,15 @@ import (
 )
 
 // CandidateDemand contains only request facts, never messages or tool schemas.
-// InputTokens is an estimate and excludes the output reserve.
+// InputTokens excludes the output reserve. It is normally estimated; resolved
+// automatic output uses the provider-rendered token count.
 type CandidateDemand struct {
 	Known             bool
 	Capabilities      llmprotocol.CapabilitySet
 	ModelCapabilities llmprotocol.CapabilitySet
 	InputTokens       int
 	MaxOutputTokens   *int64
+	AutomaticOutput   bool
 }
 
 func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
@@ -50,6 +52,10 @@ func DemandForRequest(request *llmprotocol.Request) CandidateDemand {
 	}
 	modelRequired, _ = llmprotocol.ParseCapabilities(filtered)
 	demand := CandidateDemand{Known: true, Capabilities: required, ModelCapabilities: modelRequired, InputTokens: llmprotocol.EstimateInput(request).Tokens}
+	demand.AutomaticOutput = request.Sampling.AutomaticOutput
+	if request.Sampling.AutomaticInputTokens != nil {
+		demand.InputTokens = int(*request.Sampling.AutomaticInputTokens)
+	}
 	if request.Sampling.MaxOutputTokens != nil {
 		value := *request.Sampling.MaxOutputTokens
 		demand.MaxOutputTokens = &value
