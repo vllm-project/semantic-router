@@ -40,6 +40,33 @@ DEFAULT_THRESHOLD = 0.5
 DEFAULT_BUDGETS = (0.001, 0.01)
 
 
+def token_windows(
+    count: int, size: int, overlap: int, specials: int = 2
+) -> list[tuple[int, int]]:
+    """The content ranges a windowed scan reads.
+
+    The router does not truncate a long document, it scans it in windows and
+    keeps the riskiest one, so a score quoted against a threshold belongs to a
+    window rather than to the whole text. `size` counts the special tokens the
+    model adds, the content width is what is left after them, and a window
+    starts every `width - overlap` tokens until the document is covered. This
+    is the geometry `candle-binding/src/core/sequence_windows.rs` scans with.
+    """
+    width = size - specials
+    if width <= 0 or overlap >= width:
+        raise ValueError("a window needs more content width than overlap")
+    stride = width - overlap
+    ranges: list[tuple[int, int]] = []
+    start = 0
+    while start < count:
+        end = min(start + width, count)
+        ranges.append((start, end))
+        if end == count:
+            break
+        start += stride
+    return ranges
+
+
 def band_of(words: int) -> str:
     """Name the length band a row of ``words`` words belongs to."""
     for low, high in BANDS:

@@ -8,6 +8,12 @@ same reason. So the model comes from the registry and the evaluation set never
 does: `--dataset` names the set a run is accountable to, and `--dataset-version`
 records which version of it produced the numbers.
 
+Scoring follows the router rather than the tokenizer's truncation. A long
+prompt is scanned in overlapping windows and the riskiest one is the score the
+router compares with the threshold (`classifier_jailbreak_window.go`), so a
+single truncated window measures a path nobody serves. The geometry comes from
+the shipped `prompt_guard.window` config, and the report records it.
+
 The report is `guard_metrics.guard_report`: separation, recall at a benign
 false-positive budget, the same macro-averaged over length bands, calibration,
 and any slice worth reading on its own. `--slice-col` takes the source column,
@@ -45,6 +51,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
+import yaml
 from datasets import load_dataset
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -54,10 +61,39 @@ import guard_metrics
 from constants import MODEL_REGISTRY
 
 DEFAULT_SPLIT = "test"
-# config/config.yaml leaves prompt_guard.max_sequence_length at 0, which keeps
-# the served budget at 512 tokens. Scoring past it measures input the router
-# never gives the model.
-SERVED_MAX_LEN = 512
+CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "config.yaml"
+# classifier_jailbreak_window_default.go gives the guard this window when the
+# config leaves one out, so a checkout without the entry still scans the way
+# the router does.
+DEFAULT_WINDOW = (512, 255)
+
+
+def served_window() -> tuple[int, int]:
+    """The window the shipped config gives prompt_guard."""
+    window = _guard_window(yaml.safe_load(CONFIG_PATH.read_text()))
+    if not window:
+        return DEFAULT_WINDOW
+    size, overlap = window.get("size"), window.get("overlap")
+    return (size or DEFAULT_WINDOW[0], overlap or 0)
+
+
+def _guard_window(node: Any) -> dict[str, int] | None:
+    """Find the guard entry wherever the config keeps it."""
+    if isinstance(node, dict):
+        if node.get("model_ref") == "prompt_guard" and isinstance(
+            node.get("window"), dict
+        ):
+            return node["window"]
+        children: Any = node.values()
+    elif isinstance(node, list):
+        children = node
+    else:
+        return None
+    for child in children:
+        found = _guard_window(child)
+        if found:
+            return found
+    return None
 
 
 def parse_args() -> argparse.Namespace:
@@ -109,7 +145,19 @@ def parse_args() -> argparse.Namespace:
         default=0.01,
         help="benign false-positive budget the threshold spends on the dev split",
     )
-    parser.add_argument("--max-length", type=int, default=SERVED_MAX_LEN)
+    size, overlap = served_window()
+    parser.add_argument(
+        "--window-size",
+        type=int,
+        default=size,
+        help="tokens per window, special tokens included",
+    )
+    parser.add_argument(
+        "--window-overlap",
+        type=int,
+        default=overlap,
+        help="tokens two neighbouring windows share",
+    )
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument(
         "--bootstrap",
@@ -156,25 +204,46 @@ def read_columns(
 def score(
     model_id: str,
     texts: list[str],
-    max_length: int,
+    window: tuple[int, int],
     batch_size: int,
     positive_index: int,
 ) -> list[float]:
+    """The riskiest window per text, which is the score the router keeps."""
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForSequenceClassification.from_pretrained(model_id)
     model.eval()
-    scores: list[float] = []
+    size, overlap = window
+    empty = tokenizer("", add_special_tokens=True)["input_ids"]
+    prefix, suffix = empty[:1], empty[1:]
+    padding = tokenizer.pad_token_id or 0
+    pending: list[list[int]] = []
+    owners: list[int] = []
+    for index, text in enumerate(texts):
+        content = tokenizer(text, add_special_tokens=False)["input_ids"]
+        for first, last in guard_metrics.token_windows(
+            len(content), size, overlap, len(empty)
+        ):
+            pending.append(prefix + content[first:last] + suffix)
+            owners.append(index)
+    scores = [0.0] * len(texts)
     with torch.no_grad():
-        for start in range(0, len(texts), batch_size):
-            encoded = tokenizer(
-                texts[start : start + batch_size],
-                truncation=True,
-                padding=True,
-                max_length=max_length,
-                return_tensors="pt",
+        for start in range(0, len(pending), batch_size):
+            batch = pending[start : start + batch_size]
+            longest = max(len(ids) for ids in batch)
+            encoded = torch.tensor(
+                [ids + [padding] * (longest - len(ids)) for ids in batch]
             )
-            probabilities = torch.softmax(model(**encoded).logits, dim=1)
-            scores.extend(probabilities[:, positive_index].tolist())
+            mask = torch.tensor(
+                [[1] * len(ids) + [0] * (longest - len(ids)) for ids in batch]
+            )
+            probabilities = torch.softmax(
+                model(input_ids=encoded, attention_mask=mask).logits, dim=1
+            )
+            for offset, probability in enumerate(
+                probabilities[:, positive_index].tolist()
+            ):
+                owner = owners[start + offset]
+                scores[owner] = max(scores[owner], probability)
     return scores
 
 
@@ -184,7 +253,11 @@ def choose_threshold(args: argparse.Namespace) -> tuple[float, str]:
         return args.threshold, "--threshold"
     texts, labels, _ = read_columns(load_rows(args.dev_dataset, args.split), args)
     scores = score(
-        args.model, texts, args.max_length, args.batch_size, args.positive_index
+        args.model,
+        texts,
+        (args.window_size, args.window_overlap),
+        args.batch_size,
+        args.positive_index,
     )
     reached = guard_metrics.recall_at_fpr(
         scores, [label == 1 for label in labels], args.budget
@@ -204,7 +277,11 @@ def main() -> None:
 
     threshold, source = choose_threshold(args)
     scores = score(
-        args.model, texts, args.max_length, args.batch_size, args.positive_index
+        args.model,
+        texts,
+        (args.window_size, args.window_overlap),
+        args.batch_size,
+        args.positive_index,
     )
     report = guard_metrics.guard_report(
         labels,
@@ -218,7 +295,7 @@ def main() -> None:
     report["dataset"] = f"{args.dataset}:{args.split}"
     report["dataset_version"] = args.dataset_version
     report["threshold_source"] = source
-    report["max_length"] = args.max_length
+    report["window"] = {"size": args.window_size, "overlap": args.window_overlap}
     report["scores"] = scores
 
     if args.baseline:

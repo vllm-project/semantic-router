@@ -170,6 +170,17 @@ defaults to the served Guard entry in the registry; the evaluation set never
 does, because the historical jailbreak split labels toxicity where the signal
 answers about instruction attacks.
 
+It scores the way the router scans. A prompt longer than one window is read in
+overlapping windows and the riskiest window is the score, which is what
+`classifier_jailbreak_window.go` compares with the threshold. Truncating to the
+first window instead would report a different number on exactly the inputs a
+guard is judged on: on the four fixed cases in #3831 the first window of two
+benign public descriptions reads 1.7e-07 and 3.9e-07 while the second reads
+0.9462 and 0.9755, so a truncated score allows what the router blocks.
+`--window-size` and `--window-overlap` default to the `prompt_guard.window`
+entry in `config/config.yaml`, so the scan follows the shipped configuration
+rather than a constant kept here.
+
 ```bash
 python src/training/model_eval/jailbreak_guard_eval.py \
     --model llm-semantic-router/Vela-1.0-Encoder-307M-Guard \
