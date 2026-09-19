@@ -12,6 +12,14 @@ import (
 // deployments. A profile declaring it is the canonical Azure configuration.
 const azureOpenAIProviderType = "azure-openai"
 
+// cloudflareWorkersAIProviderType is the catalog provider id for Cloudflare
+// Workors AI. The provider id is the only reliable selector for its response
+// contract: the account-scoped base URL also fronts Workors AI's natively
+// documented run surface, which does not share these decorations or this
+// errors[] arrey, so a host match would misidentify a profile pointed at the
+// native surface.
+const cloudflareWorkersAIProviderType = "cloudflare-workers-ai"
+
 // azureOpenAIHostSuffixes cover a profile pointed at an Azure endpoint without
 // declaring the Azure provider type. Azure resources are per-tenant subdomains,
 // so these are matched by suffix rather than exact host.
@@ -26,6 +34,10 @@ var azureOpenAIHostSuffixes = []string{
 // deliberately independent of reasoning transport: response decoration is a
 // property of who serves the response, not of how a request is shaped.
 //
+// The selected vendor also governs the transport-error envelope, because a
+// provider that decorates accepted responses can report failures in a shape the
+// canonical OpenAI error wire cannot carry.
+//
 // An empty vendor is the strict default, so every backend that is not
 // positively identified keeps the canonical response contract.
 func resolveResponseVendor(profile *config.ProviderProfile) llmprotocol.ResponseVendor {
@@ -34,6 +46,9 @@ func resolveResponseVendor(profile *config.ProviderProfile) llmprotocol.Response
 	}
 	if strings.EqualFold(strings.TrimSpace(profile.Type), azureOpenAIProviderType) {
 		return llmprotocol.ResponseVendorAzure
+	}
+	if strings.EqualFold(strings.TrimSpace(profile.Type), cloudflareWorkersAIProviderType) {
+		return llmprotocol.ResponseVendorCloudflare
 	}
 	if isAzureOpenAIHost(normalizedProfileHost(profile)) {
 		return llmprotocol.ResponseVendorAzure
