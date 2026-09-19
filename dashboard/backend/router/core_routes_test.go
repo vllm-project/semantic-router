@@ -388,7 +388,12 @@ func TestResolveToolsDBPathFallsBackWhenRouterContractCannotParse(t *testing.T) 
 		AbsConfigPath: configPath,
 		ConfigDir:     configDir,
 	})
-	want := filepath.Join(configDir, "config", "tools_db.json")
+	// Was filepath.Join(configDir, "config", ...), which repeated the config
+	// directory: ConfigDir is already the directory holding config.yaml, so the
+	// fallback named <dir>/config/config/tools_db.json in a real checkout. The
+	// default is relative to the project root, which is ConfigDir's parent —
+	// the same reading of ConfigDir that mlTrainingDir already uses.
+	want := filepath.Join(filepath.Dir(configDir), defaultToolsDBPath)
 	if got != want {
 		t.Fatalf("resolveToolsDBPath() = %q, want %q", got, want)
 	}
