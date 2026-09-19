@@ -216,21 +216,21 @@ var (
 		[]string{"model"},
 	)
 
-	// ModelTTFT tracks time to first token by model
-	ModelTTFT = promauto.NewHistogramVec(
+	// ModelFirstResponseObservation measures the first observed response boundary.
+	ModelFirstResponseObservation = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "llm_model_ttft_seconds",
-			Help:    "Time to first token for LLM model responses in seconds",
+			Name:    "llm_model_first_response_observation_seconds",
+			Help:    "Time from request processing to first stream chunk or non-stream response headers, not necessarily the first output token",
 			Buckets: prometheus.DefBuckets,
 		},
 		[]string{"model"},
 	)
 
-	// ModelTPOT tracks time per output token by model
-	ModelTPOT = promauto.NewHistogramVec(
+	// ModelResponseDurationPerOutputToken includes the complete response duration.
+	ModelResponseDurationPerOutputToken = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
-			Name:    "llm_model_tpot_seconds",
-			Help:    "Time per output token (completion latency / completion tokens) for LLM model responses in seconds",
+			Name:    "llm_model_response_duration_per_output_token_seconds",
+			Help:    "Complete observed response duration divided by reported output tokens; not inter-token decode latency",
 			Buckets: prometheus.DefBuckets,
 		},
 		[]string{"model"},
@@ -243,15 +243,6 @@ var (
 			Help:    "The latency of model routing operations in seconds",
 			Buckets: prometheus.DefBuckets,
 		},
-	)
-
-	// PIIViolations tracks PII policy violations by model and PII data type
-	PIIViolations = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_pii_violations_total",
-			Help: "The total number of PII policy violations by model and PII data type",
-		},
-		[]string{"model", "pii_type"},
 	)
 
 	// HallucinationDetectionLatency tracks the latency of hallucination detection
@@ -316,15 +307,6 @@ var (
 			Help: "Quality indicators for probability distributions from classification models",
 		},
 		[]string{"quality_check", "status"},
-	)
-
-	// EntropyFallbackUsage tracks when entropy-based routing falls back to traditional methods
-	EntropyFallbackUsage = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "llm_entropy_fallback_usage_total",
-			Help: "The number of times entropy-based routing falls back to traditional classification",
-		},
-		[]string{"fallback_reason", "fallback_strategy"},
 	)
 
 	// toolsRetrievalDuration tracks wall-clock time spent inside the retriever
@@ -435,43 +417,31 @@ func RecordModelCompletionLatency(model string, seconds float64) {
 	ModelCompletionLatency.WithLabelValues(model).Observe(seconds)
 }
 
-// RecordModelTTFT records time to first token for a model
-func RecordModelTTFT(model string, seconds float64) {
+// RecordModelFirstResponseObservation records first chunk/header latency for a model.
+func RecordModelFirstResponseObservation(model string, seconds float64) {
 	if seconds <= 0 {
 		return
 	}
 	if model == "" {
 		model = consts.UnknownLabel
 	}
-	ModelTTFT.WithLabelValues(model).Observe(seconds)
+	ModelFirstResponseObservation.WithLabelValues(model).Observe(seconds)
 }
 
-// RecordModelTPOT records time per output token (seconds per token) for a model
-func RecordModelTPOT(model string, secondsPerToken float64) {
+// RecordModelResponseDurationPerOutputToken records complete response duration per output token.
+func RecordModelResponseDurationPerOutputToken(model string, secondsPerToken float64) {
 	if secondsPerToken <= 0 {
 		return
 	}
 	if model == "" {
 		model = consts.UnknownLabel
 	}
-	ModelTPOT.WithLabelValues(model).Observe(secondsPerToken)
+	ModelResponseDurationPerOutputToken.WithLabelValues(model).Observe(secondsPerToken)
 }
 
 // RecordModelRoutingLatency records the latency of model routing
 func RecordModelRoutingLatency(seconds float64) {
 	ModelRoutingLatency.Observe(seconds)
-}
-
-// RecordPIIViolation records a PII policy violation for a specific model and PII data type
-func RecordPIIViolation(model string, piiType string) {
-	PIIViolations.WithLabelValues(model, piiType).Inc()
-}
-
-// RecordPIIViolations records multiple PII policy violations for a specific model
-func RecordPIIViolations(model string, piiTypes []string) {
-	for _, piiType := range piiTypes {
-		PIIViolations.WithLabelValues(model, piiType).Inc()
-	}
 }
 
 // RecordHallucinationDetectionLatency records the latency for hallucination detection
@@ -750,18 +720,6 @@ func RecordProbabilityDistributionQuality(qualityCheck string, status string) {
 	}
 
 	ProbabilityDistributionQuality.WithLabelValues(qualityCheck, status).Inc()
-}
-
-// RecordEntropyFallback records when entropy-based routing falls back to traditional methods
-func RecordEntropyFallback(fallbackReason string, fallbackStrategy string) {
-	if fallbackReason == "" {
-		fallbackReason = consts.UnknownLabel
-	}
-	if fallbackStrategy == "" {
-		fallbackStrategy = "unspecified"
-	}
-
-	EntropyFallbackUsage.WithLabelValues(fallbackReason, fallbackStrategy).Inc()
 }
 
 // RecordEntropyClassificationMetrics records comprehensive entropy-based classification metrics

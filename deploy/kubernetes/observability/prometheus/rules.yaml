@@ -12,16 +12,16 @@ data:
           - alert: HighRequestErrorRate
             expr: |
               (
-                sum(rate(llm_request_errors_total[5m]))
+                sum(rate(llm_request_outcomes_total{traffic_kind="inference",outcome!="success"}[5m]))
                 /
-                clamp_min(sum(rate(llm_model_requests_total[5m])), 1)
+                sum(rate(llm_request_outcomes_total{traffic_kind="inference"}[5m]))
               ) > 0.05
             for: 10m
             labels:
               severity: warning
             annotations:
               summary: Semantic Router request error rate is above 5%
-              dashboard_panel: Request Errors by Reason
+              dashboard_panel: Inference outcomes
 
           - alert: HighCompletionLatencyP95
             expr: |
@@ -31,27 +31,27 @@ data:
               severity: warning
             annotations:
               summary: Semantic Router completion latency p95 is above 30s
-              dashboard_panel: Request Latency (P50/P95/P99)
+              dashboard_panel: Response duration by model
 
-          - alert: HighTTFTP95
+          - alert: HighFirstResponseObservationP95
             expr: |
-              histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le)) > 5
+              histogram_quantile(0.95, sum(rate(llm_model_first_response_observation_seconds_bucket[5m])) by (le)) > 5
             for: 10m
             labels:
               severity: warning
             annotations:
-              summary: Semantic Router TTFT p95 is above 5s
-              dashboard_panel: TTFT (Time to First Token) by Model - P95
+              summary: Semantic Router first response observation p95 is above 5s
+              dashboard_panel: First response observation by model
 
-          - alert: HighTPOTP95
+          - alert: HighResponseDurationPerOutputTokenP95
             expr: |
-              histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le)) > 0.25
+              histogram_quantile(0.95, sum(rate(llm_model_response_duration_per_output_token_seconds_bucket[5m])) by (le)) > 0.25
             for: 10m
             labels:
               severity: warning
             annotations:
-              summary: Semantic Router TPOT p95 is above 250ms
-              dashboard_panel: TPOT (Time per Output Token) by Model - P95
+              summary: Semantic Router response duration per output token p95 is above 250ms
+              dashboard_panel: Response duration per output token
 
           - alert: HighRoutingLatencyP95
             expr: |
@@ -61,7 +61,7 @@ data:
               severity: warning
             annotations:
               summary: Semantic Router routing latency p95 is above 100ms
-              dashboard_panel: Router Routing Latency (P50/P95/P99)
+              description: Total routing time before dispatch; inspect the Recipe workflow section for stage timing.
 
           - alert: HighInflightRequests
             expr: |
@@ -71,20 +71,20 @@ data:
               severity: warning
             annotations:
               summary: Semantic Router has more than 50 in-flight requests for a model
-              dashboard_panel: Inflight Requests by Model
+              dashboard_panel: Requests in flight by model
 
           - alert: LowCacheHitRate
             expr: |
               (
-                sum(rate(llm_cache_plugin_hits_total[15m]))
+                (sum(rate(llm_cache_plugin_hits_total[15m])) or 0 * sum(rate(llm_cache_plugin_misses_total[15m])))
                 /
-                (sum(rate(llm_cache_plugin_hits_total[15m])) + sum(rate(llm_cache_plugin_misses_total[15m])))
+                ((sum(rate(llm_cache_plugin_hits_total[15m])) or 0 * sum(rate(llm_cache_plugin_misses_total[15m]))) + (sum(rate(llm_cache_plugin_misses_total[15m])) or 0 * sum(rate(llm_cache_plugin_hits_total[15m]))))
               ) < 0.2
               and
-              (sum(rate(llm_cache_plugin_hits_total[15m])) + sum(rate(llm_cache_plugin_misses_total[15m]))) > 0
+              ((sum(rate(llm_cache_plugin_hits_total[15m])) or 0 * sum(rate(llm_cache_plugin_misses_total[15m]))) + (sum(rate(llm_cache_plugin_misses_total[15m])) or 0 * sum(rate(llm_cache_plugin_hits_total[15m])))) > 0
             for: 15m
             labels:
               severity: info
             annotations:
               summary: Semantic Router cache hit rate is below 20%
-              dashboard_panel: Cache Hit Rate by Decision
+              dashboard_panel: Cache lookup outcomes

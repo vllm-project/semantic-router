@@ -70,7 +70,7 @@ func recordResponseHeaderErrorMetrics(ctx *RequestContext, statusCode int) {
 	}
 }
 
-func finishUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutcome) {
+func annotateUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutcome) {
 	if ctx == nil || ctx.UpstreamSpan == nil {
 		return
 	}
@@ -80,8 +80,6 @@ func finishUpstreamResponseSpan(ctx *RequestContext, outcome responseHeaderOutco
 		ctx.UpstreamSpan.SetStatus(codes.Error, "upstream request failed")
 	}
 
-	ctx.UpstreamSpan.End()
-	ctx.UpstreamSpan = nil
 }
 
 func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
@@ -98,7 +96,7 @@ func maybeRecordResponseHeaderTTFT(ctx *RequestContext) {
 		return
 	}
 
-	metrics.RecordModelTTFT(ctx.RequestModel, ttft)
+	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	latency.UpdateTTFT(ctx.RequestModel, ttft)

@@ -299,8 +299,12 @@ type RequestContext struct {
 	PIIBlocked  bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
-	TraceContext context.Context // OpenTelemetry trace context for span propagation
-	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
+	TraceContext      context.Context // OpenTelemetry trace context for span propagation
+	RequestSpan       trace.Span      // Spans the complete ext_proc request, including streaming
+	UpstreamSpan      trace.Span      // Spans provider dispatch through final response body
+	TraceReceiveError error           // Receive cancellation may be consumed by Process
+	TraceStatusCode   int             // Final client status, including local immediate responses
+	TraceTrafficKind  string          // Bounded HTTP route family; never a caller path or query
 
 	// ResponseObjectState is present only when optional Responses object
 	// persistence participates in this request. Generation never depends on it.

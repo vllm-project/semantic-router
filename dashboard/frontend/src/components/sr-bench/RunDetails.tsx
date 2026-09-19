@@ -8,6 +8,8 @@ import type { CaseResult, Run, TargetMetrics } from './types'
 import { useRunEvidence } from './useRunEvidence'
 import RunArtifacts from './RunArtifacts'
 import CallEvidence from './CallEvidence'
+import RunEvents from './RunEvents'
+import BenchPagination from './BenchPagination'
 import AccountingCorrection from './AccountingCorrection'
 import PreviewEvidence from './PreviewEvidence'
 import RunRecovery from './RunRecovery'
@@ -105,7 +107,6 @@ export default function RunDetails({
   const [selected, setSelected] = useState<CaseResult | null>(null)
   const [revision, setRevision] = useState(0)
   const [actionError, setActionError] = useState('')
-  const [eventLimit, setEventLimit] = useState(100)
   const {
     run,
     readAt,
@@ -113,6 +114,8 @@ export default function RunDetails({
     reportRead,
     results,
     events,
+    eventsPage,
+    loadMoreEvents,
     calls,
     error: readError,
     resultsPage,
@@ -151,6 +154,7 @@ export default function RunDetails({
       .toLowerCase()
       .includes(filter.toLowerCase()),
   )
+  const currentPage = Math.min(page, Math.max(0, Math.ceil(visible.length / 25) - 1))
   const progress = run?.progress
   const percentage = progress?.total
     ? Math.min(100, ((progress.completed + progress.failed) / progress.total) * 100)
@@ -453,16 +457,6 @@ export default function RunDetails({
             {!!report?.limitations.length && (
               <aside className={styles.notice}>
                 <p>{report.limitations[0]}</p>
-                {report.limitations.length > 1 && (
-                  <details>
-                    <summary>More limitations ({report.limitations.length - 1})</summary>
-                    <ul>
-                      {report.limitations.slice(1).map((limitation, i) => (
-                        <li key={i}>{limitation}</li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
               </aside>
             )}
           </div>
@@ -521,7 +515,7 @@ export default function RunDetails({
                     </tr>
                   </thead>
                   <tbody>
-                    {visible.slice(page * 25, (page + 1) * 25).map((result, i) => (
+                    {visible.slice(currentPage * 25, (currentPage + 1) * 25).map((result, i) => (
                       <tr key={`${result.case_id}-${result.target_id}-${i}`}>
                         <td>
                           <button className={styles.linkButton} onClick={() => setSelected(result)}>
@@ -551,22 +545,13 @@ export default function RunDetails({
                       : 'No matching persisted results.'}
                   </p>
                 )}
-              <div className={styles.actions}>
-                <button disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
-                  Previous results
-                </button>
-                <span>
-                  Showing {number(visible.length ? page * 25 + 1 : 0)}–
-                  {number(Math.min((page + 1) * 25, visible.length))} of {number(visible.length)}{' '}
-                  loaded matches · page {page + 1}
-                </span>
-                <button
-                  disabled={(page + 1) * 25 >= visible.length}
-                  onClick={() => setPage((value) => value + 1)}
-                >
-                  Next results
-                </button>
-              </div>
+              <BenchPagination
+                label="Results"
+                total={visible.length}
+                page={currentPage}
+                pageSize={25}
+                onChange={setPage}
+              />
               {resultsPage.error && (
                 <p className={styles.error} role="alert">
                   {resultsPage.error}
@@ -679,26 +664,7 @@ export default function RunDetails({
                 </table>
               </div>
             </details>
-            <details className={styles.details}>
-              <summary id="run-events">Run events ({events.length})</summary>
-              {events.length > eventLimit && (
-                <button onClick={() => setEventLimit((value) => value + 100)}>
-                  Show 100 earlier events
-                </button>
-              )}
-              <p className={styles.muted}>
-                Showing the latest {Math.min(eventLimit, events.length)} saved events.
-              </p>
-              <ol className={styles.events}>
-                {events.slice(-eventLimit).map((event, i) => (
-                  <li key={event.seq ?? event.sequence ?? i}>
-                    <strong>{event.kind ?? event.type ?? event.event ?? 'Event'}</strong>{' '}
-                    <time>{event.at ?? event.timestamp}</time>
-                    <pre>{JSON.stringify(event, null, 2)}</pre>
-                  </li>
-                ))}
-              </ol>
-            </details>
+            <RunEvents events={events} page={eventsPage} loadMore={loadMoreEvents} />
             <details className={styles.details}>
               <summary id="run-provenance">Frozen manifest and provenance</summary>
               <pre>{JSON.stringify(run.manifest, null, 2)}</pre>

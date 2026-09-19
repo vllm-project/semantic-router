@@ -1926,7 +1926,6 @@ global:
           enabled: true
           time_windows: [1m, 5m, 1h]
           update_interval: 30s
-          queue_depth_estimation: true
           max_models: 50
       profiling:
         enabled: false

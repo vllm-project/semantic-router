@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
@@ -65,7 +66,8 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
 					return
 				}
-				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) {
+				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) &&
+					!embeddedGrafanaQueryAllowed(r, service.allowedOrigins) {
 					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
 					return
 				}
@@ -316,6 +318,8 @@ func observabilityPermission(_ string, path string) (string, bool) {
 	case strings.HasPrefix(path, "/api/status"):
 		return PermTopologyRead, true
 	case strings.HasPrefix(path, "/api/logs"):
+		return PermLogsRead, true
+	case observability.IsGrafanaQueryPath(path), observability.IsJaegerAPIPath(path):
 		return PermLogsRead, true
 	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
 		return PermLogsRead, true

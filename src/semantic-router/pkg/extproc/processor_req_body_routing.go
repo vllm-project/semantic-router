@@ -371,7 +371,6 @@ func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
 	spanContext, upstreamSpan := tracing.StartSpan(
 		ctx.TraceContext, tracing.SpanUpstreamRequest, trace.WithSpanKind(trace.SpanKindClient),
 	)
-	ctx.TraceContext = spanContext
 	ctx.UpstreamSpan = upstreamSpan
 	tracing.SetSpanAttributes(upstreamSpan,
 		attribute.String(tracing.AttrModelName, model),

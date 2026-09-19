@@ -154,7 +154,7 @@ func recordStreamingTTFT(ctx *RequestContext) {
 		return
 	}
 
-	metrics.RecordModelTTFT(ctx.RequestModel, ttft)
+	metrics.RecordModelFirstResponseObservation(ctx.RequestModel, ttft)
 	ctx.TTFTSeconds = ttft
 	ctx.TTFTRecorded = true
 	latency.UpdateTTFT(ctx.RequestModel, ttft)
@@ -426,12 +426,10 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 		completionLatency.Seconds(),
 		int64(usage.promptTokens),
 		int64(usage.completionTokens),
-		false,
-		false,
 	)
 	if usage.completionTokens > 0 && completionLatency > 0 {
 		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
-		metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+		metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)

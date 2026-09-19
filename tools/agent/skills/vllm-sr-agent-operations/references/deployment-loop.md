@@ -124,3 +124,38 @@ Follow the main skill's UI path and the
 Playground completions. Server-backed preview and inference delivery are
 separate evidence. Keep credentials and raw private workload outputs out of
 source control and public receipts.
+
+## Observability retention and checks
+
+Local stacks provision Prometheus, Grafana and Jaeger unless `--minimal` is used.
+Open the provisioned **vLLM Semantic Router Dashboard**, then check Router and
+collector scrape health before interpreting an empty graph. A missing series
+is not a successful zero, and an exporter success counter is not proof that all
+requests were sampled or retained. Preserve the configured sampling policy.
+
+Local Jaeger uses a stack-specific `<jaeger-container-name>-data` named volume
+at `/tmp`, non-root Badger storage, and seven-day trace retention. Grafana uses
+`<grafana-container-name>-data` at `/var/lib/grafana` for its database and
+preferences, with the image's non-root user. Prometheus keeps its local TSDB with
+15-day retention. Container replacement preserves these stores. An explicitly
+authorized telemetry reset must remain separate from benchmark, authentication,
+learning and configuration stores. Switching an older in-memory Jaeger instance
+to Badger does not migrate its memory; a limited search is not a complete count.
+
+For an authorized observability update, verify the same known trace across a
+collector replacement using an isolated synthetic OTLP fixture without model
+generation. Then inspect request stage parentage and duration when an inference
+probe is separately authorized. The `semantic_router.request` root encloses
+signals, decision, algorithm, plugins and upstream response. Bounded traffic
+kinds separate public inference, authenticated internal attempts and catalog or
+health polling. The final client status remains distinct from the upstream
+status when a local guard blocks a response. Actual per-signal evidence preserves
+missing values; projection scores and backend resolution are trace events.
+Historical traces retain their original timing and attributes.
+
+Use `llm_request_outcomes_total{traffic_kind="inference"}` for public request
+outcomes, not model selections or error-event counters. Model first-response
+observation and response-duration-per-output-token metrics describe the available
+measurements, not first-token or decode-only latency. Missing measurements and
+unsupported looper attempt accounting remain unknown. Recipe selection counters
+describe selections, not completed model calls; consult usage separately.

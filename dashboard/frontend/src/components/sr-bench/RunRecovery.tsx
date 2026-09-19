@@ -3,6 +3,8 @@ import { benchApi, SrBenchRequestError } from './api'
 import { money, number } from './model'
 import type { RecoveryCell, RecoveryPlan, RecoveryRequest, Run } from './types'
 import styles from './SrBench.module.css'
+import BenchSelect from './BenchSelect'
+import BenchPagination from './BenchPagination'
 import {
   clearRecovery,
   readRecovery,
@@ -30,6 +32,7 @@ export default function RunRecovery({
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [acknowledged, setAcknowledged] = useState(false)
   const [page, setPage] = useState(0)
+  const [excludedPage, setExcludedPage] = useState(0)
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
   const mounted = useRef(false)
@@ -51,6 +54,7 @@ export default function RunRecovery({
     setSelected(new Set())
     setAcknowledged(false)
     setPage(0)
+    setExcludedPage(0)
     try {
       const reviewed = await benchApi.recoveryPlan(run.id, mode)
       if (current()) setPlan(reviewed)
@@ -144,22 +148,21 @@ export default function RunRecovery({
       ) : (
         <>
           <div className={styles.formGrid}>
-            <label>
-              Recovery scope
-              <select
-                disabled={!canRun || pending}
-                value={mode}
-                onChange={(event) => {
-                  setMode(event.target.value as RecoveryPlan['mode'])
-                  setPlan(null)
-                  setSelected(new Set())
-                  setAcknowledged(false)
-                }}
-              >
-                <option value="undispatched">Continue undispatched cases</option>
-                <option value="failed">Retry known failed cases as new attempts</option>
-              </select>
-            </label>
+            <BenchSelect
+              label="Recovery scope"
+              disabled={!canRun || pending}
+              value={mode}
+              onChange={(value) => {
+                setMode(value as RecoveryPlan['mode'])
+                setPlan(null)
+                setSelected(new Set())
+                setAcknowledged(false)
+              }}
+              options={[
+                { value: 'undispatched', label: 'Continue undispatched cases' },
+                { value: 'failed', label: 'Retry known failed cases as new attempts' },
+              ]}
+            />
           </div>
           <p className={styles.muted}>
             {mode === 'undispatched'
@@ -234,20 +237,13 @@ export default function RunRecovery({
                       </tbody>
                     </table>
                   </div>
-                  {plan.eligible_cells.length > 25 && (
-                    <div className={styles.actions}>
-                      <button disabled={page === 0} onClick={() => setPage(page - 1)}>
-                        Previous eligible cases
-                      </button>
-                      <span>Page {page + 1}</span>
-                      <button
-                        disabled={(page + 1) * 25 >= plan.eligible_cells.length}
-                        onClick={() => setPage(page + 1)}
-                      >
-                        Next eligible cases
-                      </button>
-                    </div>
-                  )}
+                  <BenchPagination
+                    label="Eligible cases"
+                    total={plan.eligible_cells.length}
+                    page={page}
+                    pageSize={25}
+                    onChange={setPage}
+                  />
                   {mode === 'failed' && (
                     <label className={styles.checkbox}>
                       <input
@@ -273,7 +269,35 @@ export default function RunRecovery({
               {!!plan.excluded.length && (
                 <details>
                   <summary>Excluded cases and reasons</summary>
-                  <pre>{JSON.stringify(plan.excluded, null, 2)}</pre>
+                  <div className={styles.tableScroll}>
+                    <table aria-label="Excluded recovery cases">
+                      <thead>
+                        <tr>
+                          <th>Target</th>
+                          <th>Case</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {plan.excluded
+                          .slice(excludedPage * 25, excludedPage * 25 + 25)
+                          .map((cell) => (
+                            <tr key={cellKey(cell)}>
+                              <td>{cell.target_id}</td>
+                              <td>{cell.case_id}</td>
+                              <td>{cell.reason}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <BenchPagination
+                    label="Excluded cases"
+                    total={plan.excluded.length}
+                    page={excludedPage}
+                    pageSize={25}
+                    onChange={setExcludedPage}
+                  />
                 </details>
               )}
             </div>

@@ -449,6 +449,8 @@ test('keeps comparison and create controls compact on desktop and within mobile 
   const baseline = page.getByRole('combobox', { name: 'Baseline run', exact: true })
   await expect(baseline).toBeVisible()
   expect((await baseline.boundingBox())!.width).toBeLessThanOrEqual(400)
+  await expect(page.getByText('Choose a baseline above to review available runs.')).toBeVisible()
+  await chooseOption(page, 'Baseline run', 'run-1')
   const selectAll = page.getByRole('button', { name: 'Select all', exact: true })
   expect((await selectAll.boundingBox())!.width).toBeLessThan(130)
   await baseline.click()
@@ -896,11 +898,15 @@ test('distinguishes pending, unavailable and genuinely empty run evidence', asyn
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
-test('recovers every event page after a temporary read failure', async ({ page }) => {
+test('bounds event reads and recovers an explicitly requested page without advancing a failed cursor', async ({
+  page,
+}) => {
   await mockBench(page)
-  await page.route('**/api/sr-bench/v1/runs/run-1', (route) =>
-    route.fulfill({ json: { ...run, status: 'running' } }),
-  )
+  let progressReads = 0
+  await page.route('**/api/sr-bench/v1/runs/run-1', (route) => {
+    progressReads += 1
+    return route.fulfill({ json: { ...run, status: 'running', updated_at: String(progressReads) } })
+  })
   const cursors: number[] = []
   let failed = false
   await page.route('**/api/sr-bench/v1/runs/run-1/events?*', async (route) => {
@@ -921,10 +927,23 @@ test('recovers every event page after a temporary read failure', async ({ page }
     })
   })
   await page.goto('/evaluation?view=runs&run=run-1')
-  await expect(page.getByRole('alert')).toContainText('Event page unavailable')
   await section(page, 'Evidence')
-  await expect(page.getByText('Run events (1001)', { exact: true })).toBeVisible({ timeout: 10000 })
-  expect(cursors.slice(0, 4)).toEqual([0, 1000, 0, 1000])
+  await expect(
+    page.getByRole('heading', { name: 'Run events (1000 loaded)', exact: true }),
+  ).toBeVisible()
+  await expect.poll(() => progressReads).toBeGreaterThan(1)
+  expect(cursors).toEqual([0])
+  await page.getByRole('button', { name: 'Next events', exact: true }).click()
+  expect(cursors).toEqual([0])
+  await page.getByRole('button', { name: 'Load more events', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('Event page unavailable')
+  await expect(
+    page.getByRole('heading', { name: 'Run events (1000 loaded)', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Load more events', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Run events (1001)', exact: true })).toBeVisible()
+  expect(cursors).toEqual([0, 1000, 1000])
+  await expect(page.getByRole('button', { name: 'Load more events', exact: true })).toHaveCount(0)
   await expect(page.getByRole('alert')).toHaveCount(0)
 })
 
@@ -1022,9 +1041,13 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
   ).toBeVisible()
   await section(page, 'Calls')
   await expect(
-    page.getByText('Showing 100 of 201 persisted call summaries.', { exact: false }),
+    page.getByText('Loaded 100 of 201 persisted call summaries.', { exact: false }),
   ).toBeVisible()
   const callTable = page.getByRole('region', { name: 'Persisted call records', exact: true })
+  await expect(callTable.locator('tbody tr')).toHaveCount(25)
+  await page.getByRole('button', { name: 'Next calls', exact: true }).click()
+  await expect(page.getByRole('button', { name: 'call-25', exact: true })).toBeVisible()
+  expect(callReads).toEqual([0])
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
     await callTable.evaluate((element) => {
@@ -1074,8 +1097,9 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
   await section(page, 'Calls')
   await page.getByRole('button', { name: 'Load more call records', exact: true }).click()
   await expect(
-    page.getByText('Showing 200 of 201 persisted call summaries.', { exact: false }),
+    page.getByText('Loaded 200 of 201 persisted call summaries.', { exact: false }),
   ).toBeVisible()
+  await page.getByLabel('Filter loaded calls').fill('call-150')
   await page.getByRole('button', { name: 'call-150', exact: true }).click()
   await page.getByText('Original call receipt', { exact: true }).click()
   await expect(page.getByText('Saved call prompt', { exact: false })).toBeVisible()
@@ -1227,8 +1251,8 @@ test('replays saved answers and labels estimated metrics separately', async ({ p
   })
   await page.goto('/evaluation?view=compare')
   await page.getByText('Reuse saved answers for diagnostic replay', { exact: true }).click()
-  await page.getByLabel('Saved single-model baseline').selectOption('run-1')
-  await page.getByLabel('Routing preview').selectOption('preview-1')
+  await chooseOption(page, 'Saved single-model baseline', 'run-1')
+  await chooseOption(page, 'Routing preview', 'preview-1')
   await page.getByRole('button', { name: 'Create diagnostic replay' }).click()
   await expect(page.getByRole('heading', { name: 'Diagnostic replay estimates' })).toBeVisible()
   await expect(page.getByRole('cell', { name: '75%', exact: true })).toBeVisible()
@@ -1292,7 +1316,7 @@ test('manages long-lived runs and uses a dataset from its frozen inventory', asy
   await page.getByLabel('Search runs').fill('Candidate')
   await expect(page.getByRole('button', { name: 'Baseline test', exact: true })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Candidate test', exact: true })).toBeVisible()
-  await page.getByLabel('Run status').selectOption('failed')
+  await chooseOption(page, 'Run status', 'failed')
   await expect(page.getByText('No runs match these filters.')).toBeVisible()
   await page.getByRole('button', { name: 'Datasets', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Dataset library' })).toBeVisible()
@@ -1449,8 +1473,12 @@ test('requires explicit recovery scope and reuses a lost-response submission aft
         parent_run_id: 'run-1',
         mode: route.request().postDataJSON().mode,
         eligible_cells: [{ target_id: 'single', case_id: 'failed-case' }],
-        excluded: [{ target_id: 'single', case_id: 'complete-case', reason: 'already completed' }],
-        counts: { eligible: 1, excluded: 1 },
+        excluded: Array.from({ length: 31 }, (_, index) => ({
+          target_id: 'single',
+          case_id: `complete-case-${index}`,
+          reason: 'already completed',
+        })),
+        counts: { eligible: 1, excluded: 31 },
         parent: {
           status: 'failed',
           progress: failedRun.progress,
@@ -1470,8 +1498,15 @@ test('requires explicit recovery scope and reuses a lost-response submission aft
     )
   })
   await page.goto('/evaluation?view=runs&run=run-1')
-  await page.getByLabel('Recovery scope').selectOption('failed')
+  await chooseOption(page, 'Recovery scope', 'failed')
   await page.getByRole('button', { name: 'Review recovery plan' }).click()
+  await page.getByText('Excluded cases and reasons', { exact: true }).click()
+  const excluded = page.getByRole('table', { name: 'Excluded recovery cases' })
+  await expect(excluded.locator('tbody tr')).toHaveCount(25)
+  await expect(excluded.locator('pre')).toHaveCount(0)
+  await page.getByRole('button', { name: 'Next excluded cases', exact: true }).click()
+  await expect(excluded.locator('tbody tr')).toHaveCount(6)
+  await expect(excluded.getByText('complete-case-30', { exact: true })).toBeVisible()
   await page.getByLabel('Recover single failed-case', { exact: true }).check()
   await expect(page.getByRole('button', { name: 'Create recovery run (1 cases)' })).toBeDisabled()
   await page.getByLabel('I acknowledge these are new model attempts', { exact: false }).check()
@@ -1777,9 +1812,11 @@ test('keeps recovery lineage separate from the child denominator and spend', asy
             spend_complete: false,
           },
         },
-        child_attempts: [
-          { id: 'child-1', status: 'completed', progress: { completed: 1, total: 1, failed: 0 } },
-        ],
+        child_attempts: Array.from({ length: 13 }, (_, index) => ({
+          id: `child-${index + 1}`,
+          status: 'completed',
+          progress: { completed: 1, total: 1, failed: 0 },
+        })),
       },
     }),
   )
@@ -1794,10 +1831,17 @@ test('keeps recovery lineage separate from the child denominator and spend', asy
     page.getByText('Parent snapshot: 30 / 50 completed', { exact: false }),
   ).toContainText('$2.50000 (incomplete accounting)')
   await expect(page.getByRole('link', { name: 'child-1', exact: true })).toBeVisible()
+  await expect(page.getByRole('link', { name: /^child-\d+$/ })).toHaveCount(10)
+  await page.getByRole('button', { name: 'Next recovery attempts', exact: true }).click()
+  await expect(page.getByRole('link', { name: /^child-\d+$/ })).toHaveCount(3)
+  await expect(page.getByRole('link', { name: 'child-13', exact: true })).toHaveAttribute(
+    'href',
+    '?view=runs&run=child-13',
+  )
   await section(page, 'Results')
   await expect(page.getByRole('cell', { name: '1 / 2', exact: true })).toBeVisible()
   await section(page, 'Evidence')
-  await expect(page.getByRole('cell', { name: '1 / 1', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: '1 / 1', exact: true })).toHaveCount(3)
 })
 
 const accountingCorrection = {
@@ -2218,4 +2262,168 @@ test('withholds trend charts for incompatible comparisons and never plots unknow
   await expect(
     page.getByRole('region', { name: 'Iteration progress chart', exact: true }),
   ).toHaveCount(0)
+})
+
+test('presents readable paginated events and removes the generic limitations disclosure', async ({
+  page,
+}, testInfo) => {
+  await mockBench(page)
+  await page.route('**/api/sr-bench/v1/runs/run-1/report', (route) =>
+    route.fulfill({
+      json: {
+        ...report,
+        limitations: [
+          report.limitations[0],
+          ...Array.from({ length: 11 }, (_, index) => `Generic limitation ${index}`),
+        ],
+      },
+    }),
+  )
+  await page.route('**/api/sr-bench/v1/runs/run-1/events?*', (route) =>
+    route.fulfill({
+      json: {
+        events: Array.from({ length: 419 }, (_, index) => ({
+          seq: index + 1,
+          at: '2026-09-18T00:00:00Z',
+          kind: index === 0 ? 'created' : index === 418 ? 'failure_observed' : 'case_completed',
+          data: {
+            case_id: `case-${index}`,
+            target_id: 'single',
+            ...(index === 418 ? { reason: 'Request deadline exceeded' } : {}),
+            opaque_payload: { secret: 'never render this event payload' },
+          },
+        })),
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=runs&run=run-1')
+  await expect(page.getByText(report.limitations[0], { exact: true })).toBeVisible()
+  await expect(page.getByText('More limitations', { exact: false })).toHaveCount(0)
+  await expect(page.getByText('Generic limitation', { exact: false })).toHaveCount(0)
+  await section(page, 'Evidence')
+  const events = page.getByRole('list', { name: 'Saved run events', exact: true })
+  await expect(page.getByRole('heading', { name: 'Run events (419)', exact: true })).toBeVisible()
+  await expect(events.locator('li')).toHaveCount(25)
+  await expect(events.getByText('Evaluation created', { exact: true })).toBeVisible()
+  await expect(events.locator('pre')).toHaveCount(0)
+  await expect(page.getByText('never render this event payload', { exact: false })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Next events', exact: true }).click()
+  await expect(events.getByText('Case: case-25 · Target: single', { exact: true })).toBeVisible()
+  await expect(events.getByText('Evaluation created', { exact: true })).toHaveCount(0)
+  await expect(page.getByRole('navigation', { name: 'Events pages' })).toContainText('Page 2 of 17')
+  await chooseOption(page, 'Event type', 'attention')
+  await expect(events.locator('li')).toHaveCount(1)
+  await expect(events.getByText('Failure recorded', { exact: true })).toBeVisible()
+  await expect(events.getByText('Request deadline exceeded', { exact: true })).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Events pages' })).toHaveCount(0)
+  await chooseOption(page, 'Event type', 'all')
+  await page
+    .getByRole('heading', { name: 'Run events (419)', exact: true })
+    .scrollIntoViewIfNeeded()
+  await page.screenshot({ path: testInfo.outputPath('readable-events-desktop.png') })
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('readable-events-mobile.png') })
+})
+
+test('guides comparable run selection, explains exclusions and paginates arbitrary iterations', async ({
+  page,
+}, testInfo) => {
+  await mockBench(page)
+  const protocol = { ...manifest, case_sha256: 'a'.repeat(64), limits: { max_output_tokens: 4096 } }
+  const baseline = { ...run, manifest: { ...protocol, name: 'Single-model reference' } }
+  const candidates = Array.from({ length: 12 }, (_, index) => ({
+    ...run,
+    id: `eligible-${index}`,
+    created_at: `2026-09-18T00:${String(index).padStart(2, '0')}:00Z`,
+    manifest: {
+      ...protocol,
+      name: `Balance iteration ${index + 1}`,
+      targets: [{ ...target, id: 'balance', kind: 'mom' }],
+    },
+  }))
+  const otherBaseline = {
+    ...baseline,
+    id: 'other-baseline',
+    manifest: { ...protocol, name: 'Different cases baseline', case_sha256: 'b'.repeat(64) },
+  }
+  await page.route('**/api/sr-bench/v1/runs', (route) =>
+    route.fulfill({
+      json: {
+        runs: [
+          baseline,
+          ...candidates,
+          otherBaseline,
+          {
+            ...candidates[0],
+            id: 'running',
+            status: 'running',
+            manifest: { ...protocol, name: 'Still running' },
+          },
+          {
+            ...candidates[0],
+            id: 'different-limits',
+            manifest: { ...protocol, name: 'Different limits', limits: { max_output_tokens: 512 } },
+          },
+          {
+            ...candidates[0],
+            id: 'preview',
+            manifest: { ...protocol, name: 'Preview evidence', mode: 'preview' },
+          },
+        ],
+      },
+    }),
+  )
+  const comparisons: Array<{ baseline_run_id: string; candidate_run_id: string }> = []
+  page.on('request', (request) => {
+    if (new URL(request.url()).pathname.endsWith('/comparisons'))
+      comparisons.push(request.postDataJSON())
+  })
+  await page.goto('/evaluation?view=compare')
+  await expect(page.getByText('Choose a baseline above to review available runs.')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toBeDisabled()
+  await chooseOption(page, 'Baseline run', 'run-1')
+  const choices = page.getByRole('group', { name: 'Comparison runs', exact: true })
+  await expect(choices.getByRole('checkbox')).toHaveCount(8)
+  await page.getByRole('button', { name: 'Select all', exact: true }).click()
+  await expect(page.getByText('12 selected', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Next comparison runs', exact: true }).click()
+  await expect(choices.getByRole('checkbox')).toHaveCount(4)
+  await expect(choices.getByRole('checkbox', { checked: true })).toHaveCount(4)
+  await page.getByRole('checkbox', { name: 'Show unavailable runs and reasons' }).check()
+  await page.getByLabel('Find comparison runs').fill('Different')
+  await expect(choices.getByRole('checkbox')).toHaveCount(2)
+  await expect(
+    choices.getByText('Frozen cases differ. Use the same evaluation protocol.'),
+  ).toBeVisible()
+  await expect(
+    choices.getByText('Execution limits differ. Use the same evaluation protocol.'),
+  ).toBeVisible()
+  await expect(choices.getByRole('checkbox').first()).toBeDisabled()
+  expect(comparisons).toEqual([])
+  await page.getByLabel('Find comparison runs').fill('')
+  await page.getByRole('checkbox', { name: 'Show unavailable runs and reasons' }).uncheck()
+  await page.screenshot({ path: testInfo.outputPath('guided-comparison-desktop.png') })
+  await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Comparison evidence' })).toBeVisible()
+  expect(comparisons).toHaveLength(12)
+  expect(comparisons.every((request) => request.candidate_run_id.startsWith('eligible-'))).toBe(
+    true,
+  )
+  await expect(page.getByRole('article')).toHaveCount(6)
+  await page.getByRole('button', { name: 'Next comparison results', exact: true }).click()
+  await expect(
+    page.getByRole('article').getByRole('heading', { name: 'Balance iteration 7', exact: true }),
+  ).toBeVisible()
+  await chooseOption(page, 'Baseline run', 'other-baseline')
+  await expect(page.getByText('0 selected', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Compare runs', exact: true })).toBeDisabled()
+  await expect(page.getByRole('heading', { name: 'Comparison evidence' })).toBeHidden()
+  await expect(page.getByText('Selection changed.', { exact: false })).toBeVisible()
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page
+    .getByRole('heading', { name: 'Choose a baseline', exact: true })
+    .scrollIntoViewIfNeeded()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: testInfo.outputPath('guided-comparison-mobile.png') })
 })

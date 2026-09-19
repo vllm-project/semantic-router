@@ -82,6 +82,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
 		}
+		finishRequestTrace(ctx, retErr)
 	}()
 
 	// Initialize request context
@@ -105,6 +106,13 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 }
 
 func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
+	if !errors.Is(err, io.EOF) {
+		ctx.TraceReceiveError = err
+	} else if ctx.RequestSpan != nil {
+		// A terminal response closes the span before the next Recv. EOF with
+		// an open request therefore means the response was never completed.
+		ctx.TraceReceiveError = io.ErrUnexpectedEOF
+	}
 	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
 		ctx.StreamingAborted = true
 		// The evidence window is count-bounded, so a turn that never reaches EOS
@@ -236,6 +244,7 @@ func (r *OpenAIRouter) processRequestHeaders(
 		logging.Errorf("sendResponse for headers failed: %v", err)
 		return err
 	}
+	finishImmediateResponseTrace(ctx, response)
 	return nil
 }
 
@@ -265,6 +274,7 @@ func (r *OpenAIRouter) processRequestBody(
 		logging.Errorf("sendResponse for body failed: %v", err)
 		return err
 	}
+	finishImmediateResponseTrace(ctx, response)
 	return nil
 }
 
@@ -297,7 +307,14 @@ func (r *OpenAIRouter) processResponseHeaders(
 		return err
 	}
 	r.bindBenchmarkConfigResponse(response, ctx)
-	return sendResponse(stream, response, "response header")
+	if err := sendResponse(stream, response, "response header"); err != nil {
+		return err
+	}
+	finishImmediateResponseTrace(ctx, response)
+	if v.ResponseHeaders.GetEndOfStream() {
+		finishRequestTrace(ctx, nil)
+	}
+	return nil
 }
 
 func (r *OpenAIRouter) processResponseBody(
@@ -310,7 +327,14 @@ func (r *OpenAIRouter) processResponseBody(
 		return err
 	}
 	r.bindBenchmarkConfigResponse(response, ctx)
-	return sendResponse(stream, response, "response body")
+	if err := sendResponse(stream, response, "response body"); err != nil {
+		return err
+	}
+	finishImmediateResponseTrace(ctx, response)
+	if v.ResponseBody.GetEndOfStream() || ctx.StreamingComplete {
+		finishRequestTrace(ctx, nil)
+	}
+	return nil
 }
 
 func processUnknownRequest(

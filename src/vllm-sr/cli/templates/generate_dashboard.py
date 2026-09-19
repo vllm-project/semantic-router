@@ -19,18 +19,16 @@ def generate_dashboard():
     return generate_all_dashboard_panels()
 
 
-def main():
-    """Main function to generate and save the dashboard"""
-    panels = generate_dashboard()
-
-    dashboard = {
+def generate_dashboard_document():
+    """Generate metadata and panels from the same reproducible source."""
+    return {
         "annotations": {"list": []},
         "editable": True,
         "fiscalYearStartMonth": 0,
         "graphTooltip": 1,
         "id": None,
         "links": [],
-        "panels": panels,
+        "panels": generate_dashboard(),
         "refresh": "10s",
         "schemaVersion": 39,
         "tags": ["llm", "router", "semantic"],
@@ -53,24 +51,43 @@ def main():
                     "regex": "",
                     "skipUrlSync": False,
                     "type": "datasource",
-                }
+                },
+                {
+                    "name": "router_instance",
+                    "label": "Router instance",
+                    "type": "query",
+                    "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+                    "query": 'label_values(up{job="semantic-router"}, instance)',
+                    "definition": 'label_values(up{job="semantic-router"}, instance)',
+                    "refresh": 1,
+                    "includeAll": True,
+                    "allValue": ".*",
+                    "multi": True,
+                    "current": {"text": "All", "value": "$__all"},
+                    "options": [],
+                },
             ]
         },
         "time": {"from": "now-3h", "to": "now"},
         "timepicker": {},
         "timezone": "browser",
-        "title": "vLLM Semantic Router Dashboard",
+        "title": "vLLM Semantic Router",
+        "description": "Measured inference outcomes, recipe routing, reported model usage, plugins and telemetry health. Missing observations remain No data.",
         "uid": "vllm-semantic-router",
-        "version": 1,
+        "version": 2,
         "weekStart": "",
     }
 
-    output_file = "llm-router-dashboard.serve.json"
+
+def main():
+    """Generate the checked-in dashboard without depending on the caller's cwd."""
+    dashboard = generate_dashboard_document()
+    output_file = _TEMPLATES_DIR / "llm-router-dashboard.serve.json"
     with open(output_file, "w") as f:
         json.dump(dashboard, f, indent=2)
 
     print(f"Dashboard generated successfully: {output_file}")
-    print(f"Total panels: {len(panels)}")
+    print(f"Top-level panels: {len(dashboard['panels'])}")
 
 
 if __name__ == "__main__":
