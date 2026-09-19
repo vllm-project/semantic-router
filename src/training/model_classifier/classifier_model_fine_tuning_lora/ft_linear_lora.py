@@ -640,7 +640,8 @@ def main(
         # PEFT optimization: Enhanced stability measures
         max_grad_norm=1.0,  # Gradient clipping to prevent explosion
         lr_scheduler_type="cosine",  # More stable learning rate schedule for LoRA
-        **warmup_kwargs(0.06),  # PEFT recommended warmup ratio for sequence classification
+        # PEFT recommended warmup ratio for sequence classification
+        **warmup_kwargs(0.06),
         # Additional stability measures for intent classification
         dataloader_drop_last=False,
         eval_accumulation_steps=1,

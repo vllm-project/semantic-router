@@ -44,15 +44,8 @@ def create_security_training_args(
     num_epochs: int,
     batch_size: int,
     learning_rate: float,
-    num_train_examples: int,
 ) -> TrainingArguments:
-    """Create the TrainingArguments for jailbreak LoRA fine-tuning.
-
-    `num_train_examples` is `len(train_data)`. It is a parameter rather than a
-    constant because warmup is expressed as a ratio here, and the ratio has to
-    be resolved against the number of optimizer steps the run will take —
-    `warmup_ratio` no longer exists in transformers 5.15+.
-    """
+    """Create the TrainingArguments for jailbreak LoRA fine-tuning."""
     return TrainingArguments(
         output_dir=output_dir,
         num_train_epochs=num_epochs,
