@@ -11,8 +11,17 @@ import (
 
 const vendorExtensionReason = "provider vendor extension field is not part of the canonical response contract"
 
+// providerVendorExtensionsAllowed reports whether the selected backend is a
+// positively identified provider whose documented decorations may be stripped.
+// The strip itself is provider-agnostic and reports every dropped path, so this
+// allowlist only decides who is known to decorate responses: an unrecognized
+// value keeps strict decoding instead of silently accepting decorations.
 func providerVendorExtensionsAllowed(policy llmprotocol.Policy) bool {
-	return policy.ResponseVendor == llmprotocol.ResponseVendorAzure
+	switch policy.ResponseVendor {
+	case llmprotocol.ResponseVendorAzure, llmprotocol.ResponseVendorCloudflare:
+		return true
+	}
+	return false
 }
 
 // stripProviderVendorExtensions removes non-canonical fields and returns their

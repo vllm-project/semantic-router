@@ -207,11 +207,14 @@ language, input length, use case, and session stage. Keep the candidate when it
 improves the chosen outcome without violating the quality floor or hard
 constraints; otherwise restore the baseline and preserve the evidence.
 
-Use `vllm-sr benchmark catalog` for broader routing workloads. For a full model
-or virtual-model comparison, discover the fixed suite with
-`vllm-sr benchmark intelligence list` and `plan --help`. A virtual model must be
-measured through its actual endpoint; its score cannot be assembled from member
-scores. Partial runs help guide tuning but do not establish a full suite score.
+Use [sr-bench 1.0](sr-bench) for frozen development/holdout datasets and reusable
+single-model/MoM comparisons. `benchmark preview` records live routing choices;
+`benchmark replay` estimates eligible direct routing changes from saved answers.
+`benchmark run` measures actual model execution, and `benchmark compare` reports
+paired quality uncertainty and cost saving against the best observed single.
+Replay is diagnostic; a measured MoM score requires its real routed endpoint.
+Keep partial runs and unknown costs visible instead of presenting them as a
+complete score or zero-cost success.
 
 The [agent tuning reference](https://vllm-sr.ai/install/agent/vllm-sr/references/recipe-tuning.md)
 provides a reusable checklist. Keep raw evaluation outputs outside Git and

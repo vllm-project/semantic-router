@@ -108,8 +108,10 @@ calibrate the backend's returned model identity with a direct request first.
 Choose completion and timeout budgets appropriate to the model.
 
 Test the branches affected by the task and retain failed attempts. Read
-[evaluation details](https://vllm-sr.ai/install/agent/vllm-sr/references/evaluation-loop.md) for tools, modalities,
-token boundaries, repeated tests, or benchmarks. Encoder input limits and
+[evaluation details](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md) for tools, modalities,
+token boundaries and repeated delivery checks. Use [sr-bench 1.0](https://vllm-sr.ai/install/agent/vllm-sr/references/sr-bench.md)
+for reusable single-model/MoM datasets, measured capability/cost comparisons and
+the preview/config/replay/live optimization loop. Encoder input limits and
 backend prompt-plus-output context are separate budgets. Readiness or one
 successful prompt does not prove all branches or sustained-load stability.
 
@@ -123,7 +125,7 @@ Capture the requested quality, cost, latency, resource, or reliability baseline.
 Make one coherent change and repeat the same requests and workload. Keep it when
 it meets the objective without violating hard constraints; otherwise recover
 the previous configuration. Use [Recipe tuning](https://vllm-sr.ai/install/agent/vllm-sr/references/recipe-tuning.md)
-for policy changes and the evaluation reference for requested benchmarks.
+for policy changes and [sr-bench](https://vllm-sr.ai/install/agent/vllm-sr/references/sr-bench.md) for requested benchmarks.
 
 Leave the user with the config path, stack identity, access method, active
 revision, package/image versions, verification results, and remaining limits.

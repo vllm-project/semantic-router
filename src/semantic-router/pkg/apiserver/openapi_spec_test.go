@@ -142,17 +142,29 @@ func TestOpenAPISpecPublishesInvocationParameters(t *testing.T) {
 	spec := server.generateOpenAPISpec()
 
 	eval := spec.Paths["/api/v1/routing/preview"].Post
-	for _, status := range []string{"429", "503", "504"} {
+	for _, status := range []string{"412", "429", "503", "504"} {
 		if _, ok := eval.Responses[status]; !ok {
 			t.Fatalf("Preview response %s is undocumented", status)
 		}
 	}
 	requireOpenAPIParameter(t, eval.Parameters, "trace", "query", false, "boolean")
+	requireOpenAPIParameter(t, eval.Parameters, "x-sr-bench-expected-config-hash", "header", false, "string")
+	if _, ok := eval.Responses["200"].Headers["x-vsr-config-hash"]; !ok {
+		t.Fatal("Preview snapshot receipt is undocumented")
+	}
 	if eval.RequestBody == nil || eval.RequestBody.Content["application/json"].Schema == nil {
 		t.Fatal("routing preview request schema is missing")
 	}
 	if got := eval.RequestBody.Content["application/json"].Schema.AdditionalProperties; got != false {
 		t.Fatalf("routing preview request schema must reject unknown fields, got %#v", got)
+	}
+	previewSchema := eval.RequestBody.Content["application/json"].Schema.Properties["preview_context"]
+	if previewSchema.Type != "object" || previewSchema.Properties["session_id"].Type != "string" || previewSchema.Properties["sampling_seed"].Type != "integer" {
+		t.Fatal("preview routing context is undocumented")
+	}
+	responseSchema := eval.Responses["200"].Content["application/json"].Schema
+	if responseSchema == nil || responseSchema.Properties["selection_provenance"].Type != "object" {
+		t.Fatal("preview selection provenance is undocumented")
 	}
 	configPatch := spec.Paths["/api/v1/config"].Patch
 	requireOpenAPIParameter(t, configPatch.Parameters, "If-Match", "header", true, "string")
