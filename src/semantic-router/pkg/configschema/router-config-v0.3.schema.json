@@ -6283,6 +6283,27 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ShadowDispatchBudgetConfig": {
+      "properties": {
+        "max_calls_per_request": {
+          "type": "integer"
+        },
+        "max_tokens_per_request": {
+          "type": "integer"
+        },
+        "max_cost_per_request": {
+          "type": "number"
+        },
+        "price_per_million_tokens": {
+          "type": "number"
+        },
+        "reserve_tokens_per_arm": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ShadowDispatchPluginConfig": {
       "properties": {
         "enabled": {
@@ -6290,6 +6311,15 @@
         },
         "model": {
           "type": "string"
+        },
+        "arms": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "budget": {
+          "$ref": "#/$defs/ShadowDispatchBudgetConfig"
         },
         "sample_rate": {
           "type": "number"

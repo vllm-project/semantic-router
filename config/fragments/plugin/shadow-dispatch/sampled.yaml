@@ -5,6 +5,17 @@ plugin:
     # A configured logical model that receives the shadow copy. It must have a
     # backend in providers.models; client credentials never travel with it.
     model: candidate-model
+    # Optional extra shadow candidate models beyond `model`. Every arm
+    # receives the same approved request under one aggregate budget (#3376).
+    # Provide `model`, `arms`, or both; enabled with neither is invalid.
+    arms: []
+    # Aggregate bounds across all arms for one request. 0 = unlimited.
+    budget:
+      max_calls_per_request: 0
+      max_tokens_per_request: 0
+      max_cost_per_request: 0.0
+      price_per_million_tokens: 0.0
+      reserve_tokens_per_arm: 0
     # Fraction of eligible requests to shadow. Omit for 1.0; 0 disables.
     sample_rate: 0.05
     # Resource bounds. Calls beyond max_concurrency wait up to max_queue_depth
