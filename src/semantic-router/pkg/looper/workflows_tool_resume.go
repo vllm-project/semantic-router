@@ -166,6 +166,7 @@ func workflowPendingStateForResumedModel(
 	streaming bool,
 ) *workflowPendingToolState {
 	return &workflowPendingToolState{
+		RecipeName:                  state.RecipeName,
 		DecisionName:                state.DecisionName,
 		Mode:                        state.Mode,
 		Template:                    state.Template,
@@ -224,6 +225,7 @@ func hydrateResumedWorkflowInterrupt(
 ) {
 	interrupt.state.Plan = state.Plan
 	interrupt.state.PlannerResp = state.PlannerResp
+	interrupt.state.RecipeName = state.RecipeName
 	interrupt.state.DecisionName = state.DecisionName
 	interrupt.state.Mode = state.Mode
 	interrupt.state.Template = state.Template
@@ -238,22 +240,26 @@ func (l *WorkflowsLooper) finishResumedWorkflow(
 	state *workflowPendingToolState,
 	originalRequest *openai.ChatCompletionNewParams,
 	results []workflowStepResult,
-) (*Response, error) {
+	claim *workflowStateClaim,
+) (*Response, bool, error) {
 	original := extractOriginalContent(originalRequest)
 	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, state.Plan, original, results, state.PlannerResp, state.WorkerModels)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if interrupt != nil {
-		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg, claim)
 	}
 	applyFinalOutputContract(req.OutputContractSpec, finalResp)
 	summary := summarizeWorkflowExecution(cfg, state.PlannerResp, results, finalResp)
 	trace := buildWorkflowTrace(cfg, state.WorkerModels, state.Plan, results, summary.failed)
+	var out *Response
 	if req.IsStreaming {
-		return formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
+		out, err = formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
+	} else {
+		out, err = formatWorkflowJSONResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
 	}
-	return formatWorkflowJSONResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
+	return out, false, err
 }
 
 func (l *WorkflowsLooper) finishResumedWorkflowFinal(

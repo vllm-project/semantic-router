@@ -37,8 +37,8 @@
 // -check turns the run into a gate (exit 2 unless every shipped threshold
 // equals the report-selected value; with -require-clean also unless the
 // worktree matches the recorded commit). The workflow
-// .github/workflows/image-routing-calibration.yml runs it that way at the
-// exact pull-request head and uploads the reports, so reviewers get
+// unified CI native.image-calibration-cpu verification runs it that way at
+// the planned source commit (the merge tree for pull requests) and uploads reports, so reviewers get
 // reproducible evidence.
 //
 // Known state at snapshot fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4:
@@ -226,8 +226,27 @@ type calibrationReport struct {
 		Dirty    bool              `json:"repo_dirty"`
 		Excluded []excludedFixture `json:"excluded_fixtures,omitempty"`
 	} `json:"source"`
-	Fixtures []fixtureReport `json:"fixtures"`
-	Rules    []ruleReport    `json:"rules"`
+	Fixtures []fixtureReport      `json:"fixtures"`
+	Rules    []ruleReport         `json:"rules"`
+	Checks   []thresholdAssertion `json:"checks,omitempty"`
+}
+
+type thresholdAssertion struct {
+	ID     string `json:"id"`
+	Passed bool   `json:"passed"`
+}
+
+func thresholdMatches(rule ruleReport) bool {
+	diff := rule.Shipped.Threshold - rule.Selected.Threshold
+	return math.Abs(diff) <= shippedThresholdTolerance && sameMatrix(rule.Shipped, rule.Selected)
+}
+
+func thresholdAssertions(rules []ruleReport) []thresholdAssertion {
+	checks := make([]thresholdAssertion, 0, len(rules))
+	for _, rule := range rules {
+		checks = append(checks, thresholdAssertion{ID: "threshold/" + rule.Name, Passed: thresholdMatches(rule)})
+	}
+	return checks
 }
 
 func main() {
@@ -322,6 +341,9 @@ func main() {
 		report.Rules = append(report.Rules, calibrateRule(rule, report.Fixtures))
 	}
 
+	if *check {
+		report.Checks = thresholdAssertions(report.Rules)
+	}
 	writeReports(report, *output, *markdown)
 	if *check {
 		os.Exit(checkShippedThresholds(report, *artifactRevision, *expectRevision, *requireClean))
@@ -373,7 +395,7 @@ func checkShippedThresholds(report calibrationReport, gotRevision, wantRevision 
 	for _, rule := range report.Rules {
 		shipped, selected := rule.Shipped.Threshold, rule.Selected.Threshold
 		status := "ok"
-		if diff := shipped - selected; diff > shippedThresholdTolerance || diff < -shippedThresholdTolerance || !sameMatrix(rule.Shipped, rule.Selected) {
+		if !thresholdMatches(rule) {
 			status = "MISMATCH"
 			code = 2
 		}

@@ -7,15 +7,19 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 // ROUTER_REPLAY_TEST_POSTGRES_CONFIG is a JSON PostgresConfig for a disposable
 // test database. Only a unique table owned by this test is altered or removed;
 // an operator-supplied table_name is deliberately ignored.
+// StorageIntegration: postgres
 func TestPostgresMetadataIntegration(t *testing.T) {
+	storagetest.Require(t, "postgres")
 	raw := os.Getenv("ROUTER_REPLAY_TEST_POSTGRES_CONFIG")
 	if raw == "" {
-		t.Skip("set ROUTER_REPLAY_TEST_POSTGRES_CONFIG to run against PostgreSQL")
+		storagetest.Unavailable(t, "postgres", "set ROUTER_REPLAY_TEST_POSTGRES_CONFIG to run against PostgreSQL")
 	}
 	var cfg PostgresConfig
 	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {

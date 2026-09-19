@@ -402,6 +402,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Routing & Selection',
           items: [
+            'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
             'proposals/prompt-classification-routing',
@@ -497,7 +498,7 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
-        'benchmarking/evaluation-plane',
+        'benchmarking/sr-bench',
       ],
     },
     {

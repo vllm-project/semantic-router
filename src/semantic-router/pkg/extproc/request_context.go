@@ -17,6 +17,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // EnhancedHallucinationSpan represents a hallucinated span with NLI explanation.
@@ -55,6 +57,10 @@ type EnhancedHallucinationInfo struct {
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
+	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
+	AutomaticCandidateDemands map[string]selection.CandidateDemand
+	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
+
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32
 	RAGRerankerIdentity string
@@ -164,8 +170,11 @@ type RequestContext struct {
 	VSRLearningProtectionPreflight      *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
 	VSRLearningSessionID                string                                      // Router Learning memory key used for this request
 	VSRLearningConversationID           string                                      // Client-declared conversation identity used by Router Learning
-	VSRCacheHit                         bool                                        // Whether this request hit the cache
-	VSRCacheSimilarity                  float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRProgressGateConfig               *config.ProgressGateConfig
+	VSRProgressOutcomeRecorded          bool
+	VSRProgressGateError                error
+	VSRCacheHit                         bool    // Whether this request hit the cache
+	VSRCacheSimilarity                  float32 // Similarity score from last cache lookup (0 = no lookup performed)
 	VSRCacheHitKind                     string
 	VSRCacheSource                      string
 	VSRCacheEntryAgeSeconds             float64
@@ -179,6 +188,13 @@ type RequestContext struct {
 	// VSRPolicyEligibleModelRefs is a selector's hard eligibility envelope.
 	// Unlike context-only filtering, it also constrains tier/global learning.
 	VSRPolicyEligibleModelRefs []config.ModelRef
+
+	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
+	// Never recover its reasoning settings by searching model names again.
+	VSRSelectedCandidate *config.ModelRef
+
+	// Selection stages ownership; only a validated provider continuation commits it.
+	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -317,6 +333,8 @@ type RequestContext struct {
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ResponseVendor           llmprotocol.ResponseVendor
+	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 

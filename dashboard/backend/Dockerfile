@@ -138,7 +138,9 @@ COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-back
 COPY --from=frontend-builder /workspace/dashboard/frontend/dist /app/frontend
 COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
-COPY src/vllm-sr/pyproject.toml /app/pyproject.toml
+# Public version metadata is imported by the nonroot Python catalog exporter.
+# Do not inherit restrictive permissions from a caller's build context.
+COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
@@ -157,10 +159,11 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
 RUN groupadd --gid 65532 nonroot && \
     useradd --uid 65532 --gid 65532 --create-home --shell /usr/sbin/nologin nonroot && \
     install -d -o nonroot -g root -m 0770 /app/data && \
+    find /app/frontend -type d -exec chmod 0755 {} + && \
+    find /app/frontend -type f -exec chmod 0644 {} + && \
     chown -R root:root /app/cli && \
     find /app/cli -type d -exec chmod 0555 {} + && \
     find /app/cli -type f -exec chmod 0444 {} + && \
-    chmod 0555 /app/cli/evaluation/sandbox_worker.py && \
     chown root:root \
       /app/entrypoint.sh \
       /app/entrypoint_permissions.py \
@@ -173,6 +176,9 @@ RUN groupadd --gid 65532 nonroot && \
       /app/start-dashboard.sh \
       /app/dashboard-backend \
       /usr/local/bin/dashboard-backend
+# Exercise the same interpreter, user and isolated working directory as the
+# catalog HTTP handler. A root-only smoke test misses unreadable package data.
+RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null
 EXPOSE 8700
 # Note: We run as root initially so entrypoint can fix ownership/permissions, then switch to nonroot
 ENTRYPOINT ["/app/entrypoint.sh"]

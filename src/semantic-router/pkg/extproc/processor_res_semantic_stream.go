@@ -173,7 +173,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 	if ctx.ProtocolResponseStream != nil {
 		return nil
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return err
 	}
@@ -399,7 +399,11 @@ func (r *OpenAIRouter) reportSemanticStreamingUsage(
 	completionLatency time.Duration,
 	usage responseUsageMetrics,
 ) {
-	if ctx == nil || usage.invalid {
+	if ctx == nil {
+		return
+	}
+	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
+	if usage.invalid {
 		return
 	}
 	totalTokens := responseUsageTotal(usage)

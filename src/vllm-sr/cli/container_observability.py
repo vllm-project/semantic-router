@@ -32,6 +32,9 @@ def _render_template_copy(
     for placeholder, value in replacements:
         rendered = rendered.replace(placeholder, value)
     destination.write_text(rendered, encoding="utf-8")
+    # These built-in templates contain no secrets and are mounted as individual
+    # files into non-root sidecars. Keep them readable under a private umask.
+    destination.chmod(0o644)
 
 
 def render_observability_template(

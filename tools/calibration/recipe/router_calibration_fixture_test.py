@@ -271,6 +271,125 @@ class CompactProbeFixtureTest(unittest.TestCase):
         self.assertNotIn('"text": "xxxxx"', report_json)
         self.assertIn('"target_text_bytes": 11', report_json)
         self.assertEqual(len(probe.messages[0]["content"]), 3)
+        self.assertEqual(
+            router_calibration_support.probe_generated_text_metadata(probe),
+            {
+                "message_index": 0,
+                "content_index": 2,
+                "target_text_bytes": 11,
+                "character": "x",
+            },
+        )
+
+    def test_generated_text_pattern_preserves_size_placement_and_json_limit(
+        self,
+    ) -> None:
+        pattern = 'record "A"\\B\t1\r\n'
+        original_content = [
+            {"type": "text", "text": "é"},
+            {"type": "metadata", "value": "unchanged"},
+            {"type": "output_text", "text": "done"},
+        ]
+        for content_index in (0, 1, 3):
+            for extra in (1, len(pattern) - 1, len(pattern), len(pattern) + 3):
+                with self.subTest(content_index=content_index, extra=extra):
+                    generated = {
+                        "message_index": 1,
+                        "content_index": content_index,
+                        "target_text_bytes": 6 + extra,
+                        "text": pattern,
+                    }
+                    probe = self._load_generated_text_probe(generated)
+                    expected = json.loads(json.dumps(original_content))
+                    expected.insert(
+                        content_index,
+                        {
+                            "type": "text",
+                            "text": (pattern * (extra // len(pattern) + 1))[:extra],
+                        },
+                    )
+                    expected_messages = [
+                        {"role": "assistant", "content": "history"},
+                        {"role": "user", "content": expected},
+                    ]
+                    payload = {"messages": expected_messages}
+                    request_bytes = len(
+                        json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                    )
+                    self.assertEqual(
+                        router_calibration_evaluation._build_request_payload(
+                            probe, max_request_bytes=request_bytes
+                        ),
+                        payload,
+                    )
+                    with self.assertRaisesRegex(ValueError, "messages exceed"):
+                        router_calibration_evaluation._build_request_payload(
+                            probe, max_request_bytes=request_bytes - 1
+                        )
+                    self.assertEqual(
+                        router_calibration_support.probe_generated_text_metadata(probe),
+                        generated,
+                    )
+                    receipt = (
+                        router_calibration_support.probe_materialized_messages_metadata(
+                            probe
+                        )
+                    )
+                    encoded = json.dumps(
+                        expected_messages, ensure_ascii=False, separators=(",", ":")
+                    ).encode("utf-8")
+                    self.assertEqual(
+                        receipt,
+                        {
+                            "json_bytes": len(encoded),
+                            "text_bytes": 7 + 6 + extra,
+                            "sha256": hashlib.sha256(encoded).hexdigest(),
+                        },
+                    )
+                    self.assertEqual(probe.messages[1]["content"], original_content)
+
+    def test_generated_text_pattern_rejects_invalid_or_ambiguous_inputs(self) -> None:
+        invalid_fields = [
+            {"text": text}
+            for text in ("", "café", "\x00", "\x7f", "\v", "\f", 42, None)
+        ]
+        invalid_fields.append({"text": "record", "character": "x"})
+        for fields in invalid_fields:
+            with self.subTest(fields=fields), self.assertRaises(ValueError):
+                self._load_generated_text_probe(
+                    {
+                        "message_index": 1,
+                        "content_index": 1,
+                        "target_text_bytes": 32,
+                        **fields,
+                    }
+                )
+
+    @staticmethod
+    def _load_generated_text_probe(generated: dict[str, Any]) -> Any:
+        decisions = f"""\
+  - id: records
+    expected_decision: long_context
+    variants:
+      - id: compact
+        messages:
+          - role: assistant
+            content: history
+          - role: user
+            content:
+              - type: text
+                text: é
+              - type: metadata
+                value: unchanged
+              - type: output_text
+                text: done
+        generated_text: {json.dumps(generated)}
+"""
+        with tempfile.TemporaryDirectory() as tempdir:
+            manifest_path = Path(tempdir) / "probes.yaml"
+            _write_probe_manifest(manifest_path, decisions)
+            _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
+        return probes[0]
 
     def test_image_fixture_type_requires_canonical_lowercase(self) -> None:
         fixtures = f"""\
@@ -610,8 +729,8 @@ fixtures:
         )
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
-        self.assertEqual(len(probes), 307)
-        original_probes, added_probes = probes[:269], probes[269:280]
+        self.assertEqual(len(probes), 315)
+        added_probes = probes[269:280]
         self.assertEqual(
             {probe.decision_id for probe in probes[280:285]},
             {
@@ -638,13 +757,21 @@ fixtures:
                 "contract-personal-support",
             },
         )
-        # Pin the original packet, including the bounded Vault context fixtures.
-        # Added contract probes keep their own inventory and comparison group.
-        receipt = _mom_materialization_receipt(original_probes)
+        self.assertEqual(
+            {probe.decision_id for probe in probes[307:]},
+            {
+                f"{recipe}_v2_facts_{domain}"
+                for recipe in ("balance", "accuracy")
+                for domain in ("health", "law", "business", "economics")
+            },
+        )
+        # Pin all maintained message fixtures, including the bounded Vault context
+        # and meaningful repeated-text records used by context-band probes.
+        receipt = _mom_materialization_receipt(probes)
         self.assertEqual(receipt["message_probes"], 90)
         self.assertEqual(receipt["generated_probes"], 42)
         self.assertEqual(receipt["image_parts"], 53)
-        self.assertEqual(receipt["text_bytes"], 18_741_471)
+        self.assertEqual(receipt["text_bytes"], 18_744_938)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -664,11 +791,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "9a7d3c6b91e2441b6f3148b74e128cb37830ea43330b9aa6e1a71258b04c351d",
+            "d4be8213feb553178492c7c3616fbe6ffb6a473b9c0120ee0b1e6c21e46b8f39",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "2382f3ff030d465233f1f7bdccb26e855ceaf0f34a924bd66ad046f131459fcc",
+            "0ab64db1b2f096761ea4133051ec80846dfb188449dcfe6d60785d1d32953bf3",
         )
         by_id = {probe.probe_id: probe for probe in probes}
         self.assertEqual(len(by_id), len(probes))

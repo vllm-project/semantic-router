@@ -111,9 +111,12 @@ thresholds. Check both normal inputs and failed-inference behavior.
 ## Scan longer inputs {#native-classifier-context}
 
 An explicit model binding uses its deployment's `input.max_tokens`. Otherwise,
-the native module's `max_sequence_length` controls capacity; omission or zero
-retains the 512-token default. The selected checkpoint and graph must support
-the budget. See [hardware and input limits](in-process.md#choose-an-input-budget).
+the native module's `max_sequence_length` controls the input budget; omission or
+zero retains that module's default. Whole-input inference requires the selected
+checkpoint and graph to support that budget. With window scanning, the budget
+admits the complete document and may exceed single-forward capacity; each
+window must fit that capacity. See
+[hardware and input limits](in-process.md#choose-an-input-budget).
 
 For a Guard model evaluated with window scanning, whole-input and window budgets
 can be configured separately:
@@ -123,14 +126,20 @@ global:
   model_catalog:
     modules:
       prompt_guard:
-        max_sequence_length: 32768
+        max_sequence_length: 65536
         window:
-          size: 2048
+          size: 32768
           overlap: 256
 ```
 
-This scans up to 32,768 tokens in overlapping 2,048-token windows. The whole
-budget and each window include special tokens; overlap counts content tokens.
+This scans up to 65,536 tokens in overlapping 32,768-token windows, provided the
+loaded checkpoint and graph support a 32K forward. For a named binding, use
+`input: {max_tokens: 65536, overflow: window}` on its deployment and keep the
+module's `window` block. The whole budget and each window include the classifier
+tokenizer's special tokens; overlap counts content tokens. The complete scan
+covers all admitted content tokens. An over-budget document or failed window
+produces an inference error, not a successful partial scan. Explicit non-window
+`reject` and `truncate` deployments retain their configured behavior.
 Guard uses the window with the highest attack probability. Scanning can find
 local risks but may miss context that connects distant parts of a document.
 Evaluate the model, window size, and threshold together.

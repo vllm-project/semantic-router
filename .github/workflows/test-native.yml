@@ -1,0 +1,106 @@
+name: Native Inference
+
+on:
+  workflow_call:
+    inputs:
+      verification:
+        description: One native verification selected by the shared plan.
+        type: string
+        required: true
+      native-artifact:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inference:
+    name: ${{ fromJSON(inputs.verification).display_name }}
+    runs-on: ${{ fromJSON(inputs.verification).runner }}
+    timeout-minutes: ${{ fromJSON(inputs.verification).timeout_minutes || 120 }}
+    env:
+      VERIFICATION: ${{ inputs.verification }}
+      CI: "true"
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      HF_HUB_DISABLE_XET: "1"
+      VLLM_SR_REQUIRE_MODEL_TESTS: "1"
+      MODEL_TEST_PROVIDER: ${{ fromJSON(inputs.verification).runtime }}
+      MODEL_TEST_DEVICE: ${{ fromJSON(inputs.verification).device }}
+      MODEL_TEST_REPORT_DIR: ${{ github.workspace }}/.agent-harness/model-tests/${{ fromJSON(inputs.verification).id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/free-disk-space
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: dtolnay/rust-toolchain@stable
+        if: fromJSON(inputs.verification).runtime != 'openvino' && inputs.native-artifact == ''
+        with:
+          toolchain: "1.90"
+      - uses: actions/cache@v4
+        with:
+          path: models/
+          key: ${{ runner.os }}-${{ fromJSON(inputs.verification).platform_id }}-models-${{ fromJSON(inputs.verification).id }}-${{ hashFiles('src/semantic-router/pkg/config/registry.go', 'src/semantic-router/pkg/config/canonical_defaults.go', 'src/semantic-router/tools/model-test-assets/*.go') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ fromJSON(inputs.verification).platform_id }}-models-${{ fromJSON(inputs.verification).id }}-
+            ${{ runner.os }}-${{ fromJSON(inputs.verification).platform_id }}-models-
+      - uses: actions/cache@v4
+        if: fromJSON(inputs.verification).runtime != 'openvino' && inputs.native-artifact == ''
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            candle-binding/target/
+            ml-binding/target/
+            nlp-binding/target/
+          key: ${{ runner.os }}-${{ fromJSON(inputs.verification).platform_id }}-native-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+      - name: Install native runtime dependencies
+        if: fromJSON(inputs.verification).runtime != 'openvino' && fromJSON(inputs.verification).execution.mode != 'qemu-user'
+        run: |
+          python -m pip install huggingface_hub onnxruntime==1.22.0
+          echo "ORT_DYLIB_PATH=$(python -c 'import onnxruntime,pathlib; print(next((pathlib.Path(onnxruntime.__file__).parent/"capi").glob("libonnxruntime.so.*")))')" >> "$GITHUB_ENV"
+      - name: Install RISC-V QEMU dependencies
+        if: fromJSON(inputs.verification).execution.mode == 'qemu-user'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-riscv64-linux-gnu g++-riscv64-linux-gnu libc6-dev-riscv64-cross pkg-config qemu-user-static
+          python -m pip install huggingface_hub PyYAML==6.0.3
+          rustup target add riscv64gc-unknown-linux-gnu
+      - name: Install OpenVINO dependencies
+        if: fromJSON(inputs.verification).runtime == 'openvino'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential pkg-config
+          python -m pip install -r openvino-binding/requirements-test.txt
+      - uses: ./.github/actions/load-native-artifact
+        if: inputs.native-artifact != ''
+        with:
+          artifact: ${{ inputs.native-artifact }}
+      - name: Execute selected inference contract
+        run: make ${{ fromJSON(inputs.verification).target }}
+      - name: Record inference qualification
+        if: always()
+        run: |
+          python tools/ci/runtime_evidence.py "${{ fromJSON(inputs.verification).evidence || 'native' }}" --directory "$MODEL_TEST_REPORT_DIR" --output .agent-harness/inference-evidence.json
+          python tools/ci/ci_results.py record --verification "$VERIFICATION" \
+            --evidence .agent-harness/inference-evidence.json --output .agent-harness/inference-result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-result-${{ fromJSON(inputs.verification).id }}
+          path: .agent-harness/inference-result.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Publish inference evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ fromJSON(inputs.verification).id }}
+          path: .agent-harness/model-tests/
+          include-hidden-files: true
+          if-no-files-found: error

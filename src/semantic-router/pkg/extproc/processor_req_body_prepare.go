@@ -61,7 +61,13 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		history,
 		ctx,
 	)
+	if decisionErr == nil {
+		decisionErr = r.benchmarkCallLimitCheck(ctx)
+	}
 	if decisionErr != nil {
+		if errors.Is(decisionErr, errBenchmarkCallLimit) {
+			return requestDecisionState{}, r.createErrorResponse(412, errBenchmarkCallLimit.Error())
+		}
 		if errors.Is(decisionErr, context.Canceled) ||
 			errors.Is(decisionErr, context.DeadlineExceeded) {
 			return requestDecisionState{}, r.createErrorResponse(499, "request canceled")
@@ -73,6 +79,9 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		if errors.Is(decisionErr, selection.ErrNoEligibleCandidates) {
 			logging.Warnf("[Request Body] Selection policy rejected all candidates: %v", decisionErr)
 			return requestDecisionState{}, r.respondSelectionRejected(ctx, originalModel, decisionErr)
+		}
+		if response, handled := r.processBodyRoutingError(decisionErr, ctx); handled {
+			return requestDecisionState{}, response
 		}
 		logging.Errorf("[Request Body] Decision evaluation failed: %v", decisionErr)
 		if errors.Is(decisionErr, decision.ErrDecisionUnresolved) {

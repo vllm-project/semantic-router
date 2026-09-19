@@ -1,10 +1,12 @@
 import json
 import os
 import time
+from asyncio import sleep as sleep_for_fixture
 from collections.abc import Iterator
 from typing import Any
 
 import uvicorn
+import workflow_chat
 from chat_request import ChatRequest, build_chat_content
 from classify import router as classify_router
 from fastapi import FastAPI, Request
@@ -48,6 +50,15 @@ app.state.shadow_control = (
 )
 if app.state.shadow_control is not None:
     app.include_router(shadow_router)
+
+
+async def apply_fixture_delay() -> None:
+    """Optional controlled backend work for wall-clock aggregation contracts."""
+    delay_ms = int(os.environ.get("MOCK_RESPONSE_DELAY_MS", "0"))
+    if delay_ms < 0:
+        raise ValueError("MOCK_RESPONSE_DELAY_MS must be non-negative")
+    if delay_ms:
+        await sleep_for_fixture(delay_ms / 1000)
 
 
 def is_hallucination_detection_request(req: ChatRequest) -> bool:
@@ -190,6 +201,22 @@ def generate_chat_midstream_error(
     )
 
 
+_chat_control = workflow_chat.ChatControlHelpers(
+    chat_contains=chat_contains,
+    chat_has_tool_result=chat_has_tool_result,
+    chat_requests_mock_tool=chat_requests_mock_tool,
+    build_chat_usage=build_chat_usage,
+    build_chat_response=build_chat_response,
+    mock_chat_tool_response=mock_chat_tool_response,
+    generate_chat_stream=generate_chat_stream,
+    generate_chat_tool_stream=generate_chat_tool_stream,
+)
+
+
+def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
+    return workflow_chat.mock_chat_control_response(req, created_ts, _chat_control)
+
+
 @app.post("/v1/chat/completions")
 async def chat_completions(request: Request):
     body, error_response = await parse_provider_request(
@@ -207,6 +234,7 @@ async def chat_completions(request: Request):
         field = ".".join(str(part) for part in detail.get("loc", ())) or None
         return invalid_request_response(detail["msg"], field)
 
+    await apply_fixture_delay()
     created_ts = int(time.time())
     control_response = mock_chat_control_response(req, created_ts)
     if control_response is not None:
@@ -251,41 +279,6 @@ async def chat_completions(request: Request):
             "Connection": "keep-alive",
         },
     )
-
-
-def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
-    if chat_contains(req, "__mock_provider_error__"):
-        return JSONResponse(
-            status_code=429,
-            content={
-                "error": {
-                    "message": "mock provider rate limit",
-                    "type": "rate_limit_error",
-                    "param": None,
-                    "code": "rate_limit_exceeded",
-                }
-            },
-        )
-    if chat_has_tool_result(req):
-        content = "tool result accepted"
-        usage = build_chat_usage(req, content)
-        response = build_chat_response(req, content, usage, created_ts)
-        if req.stream:
-            return StreamingResponse(
-                generate_chat_stream(req, response, content, usage, created_ts),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-            )
-        return response
-    if chat_requests_mock_tool(req):
-        if req.stream:
-            return StreamingResponse(
-                generate_chat_tool_stream(req, created_ts),
-                media_type="text/event-stream",
-                headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-            )
-        return mock_chat_tool_response(req, created_ts)
-    return None
 
 
 @app.post("/v1/responses")

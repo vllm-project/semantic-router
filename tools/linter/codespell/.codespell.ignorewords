@@ -106,3 +106,8 @@ FPR
 NCe
 # German possessive determiner in multilingual routing rules
 deine
+# French and Portuguese words in multilingual recipe probes
+espace
+analise
+# Evaluation terminology (grading saved answers again)
+regrading

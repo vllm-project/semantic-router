@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -102,5 +103,13 @@ func TestOpenAPIReplayHTTPMatchesScoreWireSchema(t *testing.T) {
 	metrics := api.generateOpenAPISpec().Paths[apiRoutingPreviewPath].Post.Responses["200"].Content["application/json"].Schema.Properties["metrics"].Properties["keyword"].Properties["confidence"]
 	if metrics.Type != "number" || !metrics.Nullable {
 		t.Fatalf("nested routing metrics must use wire representation: %+v", metrics)
+	}
+}
+
+func TestOpenAPIAutomaticOutputDefaultUsesWireUnion(t *testing.T) {
+	schema := openAPIRequestSchemaFor[config.RequestParamsPluginConfig]()
+	field := schema.Properties["default_max_tokens"]
+	if len(field.OneOf) != 2 || field.OneOf[0].Type != "integer" || field.OneOf[0].Minimum == nil || *field.OneOf[0].Minimum != 1 || field.OneOf[1].Type != "string" || !reflect.DeepEqual(field.OneOf[1].Enum, []string{"auto"}) || len(field.Properties) != 0 {
+		t.Fatalf("wrong output default wire schema: %+v", field)
 	}
 }

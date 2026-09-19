@@ -8,6 +8,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	modelselection "github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -23,9 +24,17 @@ func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req I
 	if err != nil {
 		return nil, err
 	}
-	classifier, candidates, recipeName, err := s.evalRoutingScopeSnapshot(req.Model)
+	classifier, candidates, recipeName, configHash, err := s.evalRoutingScopeSnapshot(req.Model)
 	if err != nil {
 		return nil, err
+	}
+	if req.ExpectedConfigHash != "" {
+		if !headers.ValidConfigHash(configHash) {
+			return nil, ErrConfigHashUnavailable
+		}
+		if req.ExpectedConfigHash != configHash {
+			return nil, ErrConfigHashMismatch
+		}
 	}
 
 	if classifier == nil {
@@ -71,13 +80,14 @@ func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req I
 		classifier,
 	)
 	resp.RequestedModel = strings.TrimSpace(req.Model)
+	resp.ConfigHash = configHash
 	resp.Recipe = recipeName
 	resp.EvalTrace = traces
 	if decisionErr != nil {
 		resp.DecisionError = decisionErr.Error()
 		return resp, decisionErr
 	}
-	s.populateEvalModelSelection(resp, input, decisionResult)
+	s.populateEvalModelSelection(resp, input, decisionResult, req.PreviewContext)
 	return resp, nil
 }
 
@@ -85,6 +95,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	response *EvalResponse,
 	input intentSignalInput,
 	decisionResult *decision.DecisionResult,
+	previewContext *PreviewContext,
 ) {
 	if response == nil || decisionResult == nil || decisionResult.Decision == nil {
 		return
@@ -97,6 +108,9 @@ func (s *ClassificationService) populateEvalModelSelection(
 	}
 	demand, _ := modelselection.EffectiveCandidateDemand(input.semanticRequest, decisionResult.Decision)
 	selection := selector.SelectModelForEval(EvalModelSelectionInput{
+		PreviewContext:    previewContext,
+		ConversationFacts: input.conversationFacts,
+		SemanticRequest:   input.semanticRequest,
 		Demand:            demand,
 		Recipe:            response.Recipe,
 		Decision:          decisionResult.Decision,
@@ -108,6 +122,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	response.SelectionStatus = selection.Status
 	response.SelectionMethod = selection.Method
 	response.SelectionReason = selection.Reason
+	response.SelectionProvenance = selection.Provenance
 }
 
 func evalDecisionCategory(matchedRules []string) string {
@@ -149,11 +164,17 @@ func (s *ClassificationService) evalRoutingScopeSnapshot(
 	*classification.Classifier,
 	[]config.Decision,
 	config.RecipeName,
+	string,
 	error,
 ) {
 	s.configMutex.RLock()
 	defer s.configMutex.RUnlock()
-	return s.evalRoutingScope(modelName)
+	classifier, decisions, recipe, err := s.evalRoutingScope(modelName)
+	hash := ""
+	if s.config != nil {
+		hash = s.config.DocumentHash
+	}
+	return classifier, decisions, recipe, hash, err
 }
 
 func (s *ClassificationService) evalRoutingScope(modelName string) (*classification.Classifier, []config.Decision, config.RecipeName, error) {

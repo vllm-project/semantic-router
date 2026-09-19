@@ -6,6 +6,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
+LINUX_PERMISSION_HELPER = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="The deployed permission helper requires Linux O_PATH and /proc/self/fd.",
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_DOCKERFILE = REPO_ROOT / "dashboard" / "backend" / "Dockerfile"
 VLLM_SR_DOCKERFILE = REPO_ROOT / "src" / "vllm-sr" / "Dockerfile"
@@ -99,10 +106,10 @@ def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -
     assert "DATA_GID=65532" in content
     assert 'python3 "$PERMISSION_HELPER" prepare-tree' in content
     assert "--credential-relative-path credentials/router-management.token" in content
-    assert "EVALUATION_DATA_DIR=${EVALUATION_DATA_DIR:-/app/data/evaluation}" in content
-    assert '--exclude-path "$EVALUATION_DATA_DIR"' in content
-    assert 'python3 "$PERMISSION_HELPER" prepare-private-tree' in content
-    assert "Evaluation Plane is disabled" in content
+    # Historical private evidence is not reopened or permission-normalized.
+    assert "--exclude-path /app/data/evaluation" in content
+    assert "EVALUATION_DATA_DIR" not in content
+    assert "prepare-private-tree" not in content
     assert 'python3 "$PERMISSION_HELPER" prepare-file "$CONFIG_FILE_PATH"' in content
     assert (
         'python3 "$PERMISSION_HELPER" probe-config "$STATE_DIR" "$CONFIG_FILE_PATH"'
@@ -139,6 +146,7 @@ def test_dashboard_logs_handler_never_executes_a_container_runtime() -> None:
     assert 'exec.Command("podman"' not in content
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_pins_and_validates_runtime_socket(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -232,6 +240,7 @@ def test_dashboard_permission_helper_pins_and_validates_runtime_socket(
     assert "must be a Unix socket" in result.stderr
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_creates_recipe_store_under_writable_parent(
     tmp_path: Path,
 ) -> None:
@@ -276,6 +285,7 @@ def test_dashboard_permission_helper_rejects_recipe_store_symlink(
     assert result.returncode != 0
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_preserves_private_management_token(
     tmp_path: Path,
 ) -> None:
@@ -311,6 +321,7 @@ def test_dashboard_permission_helper_preserves_private_management_token(
     assert stat.S_IMODE(credentials.stat().st_mode) & stat.S_ISGID
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_probes_recipe_store_without_residue(
     tmp_path: Path,
 ) -> None:
@@ -374,6 +385,7 @@ def test_dashboard_permission_helper_rejects_symlinked_shared_tree_entry(
     assert stat.S_IMODE(outside.stat().st_mode) == 0o600
 
 
+@LINUX_PERMISSION_HELPER
 def test_dashboard_permission_helper_rejects_fifo_without_blocking(
     tmp_path: Path,
 ) -> None:
@@ -399,7 +411,8 @@ def test_dashboard_permission_helper_rejects_fifo_without_blocking(
     assert "unsafe file" in result.stderr
 
 
-def test_dashboard_permission_helper_excludes_private_evaluation_store(
+@LINUX_PERMISSION_HELPER
+def test_dashboard_permission_helper_leaves_historical_evidence_untouched(
     tmp_path: Path,
 ) -> None:
     shared = tmp_path / "data"
@@ -435,65 +448,6 @@ def test_dashboard_permission_helper_excludes_private_evaluation_store(
     assert stat.S_IMODE(shared_file.stat().st_mode) & 0o060 == 0o060
 
 
-def test_dashboard_permission_helper_keeps_evaluation_store_private_on_restart(
-    tmp_path: Path,
-) -> None:
-    shared = tmp_path / "data"
-    evaluation = shared / "evaluation"
-    run = evaluation / "runs" / "run-1"
-    run.mkdir(parents=True)
-    evidence = run / "report.json"
-    evidence.write_text("{}", encoding="utf-8")
-    evaluation.chmod(0o770)
-    run.chmod(0o770)
-    evidence.chmod(0o660)
-
-    command = [
-        sys.executable,
-        str(DASHBOARD_PERMISSION_HELPER),
-        "prepare-private-tree",
-        str(evaluation),
-        str(os.getuid()),
-        str(os.getgid()),
-    ]
-    subprocess.run(command, check=True)
-    subprocess.run(command, check=True)
-
-    for directory in (evaluation, evaluation / "runs", run):
-        assert stat.S_IMODE(directory.stat().st_mode) == 0o700
-    assert stat.S_IMODE(evidence.stat().st_mode) == 0o600
-
-
-def test_dashboard_permission_helper_rejects_symlink_in_private_store(
-    tmp_path: Path,
-) -> None:
-    evaluation = tmp_path / "evaluation"
-    evaluation.mkdir()
-    outside = tmp_path / "outside"
-    outside.write_text("sentinel", encoding="utf-8")
-    outside.chmod(0o600)
-    (evaluation / "trap").symlink_to(outside)
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "prepare-private-tree",
-            str(evaluation),
-            str(os.getuid()),
-            str(os.getgid()),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode != 0
-    assert "contains symlink" in result.stderr
-    assert outside.read_text(encoding="utf-8") == "sentinel"
-    assert stat.S_IMODE(outside.stat().st_mode) == 0o600
-
-
 def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
@@ -506,15 +460,14 @@ def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> 
     )
 
 
-def test_dashboard_dockerfile_ships_evaluation_worker_without_legacy_model_eval() -> (
+def test_dashboard_dockerfile_ships_sr_bench_service_without_legacy_model_eval() -> (
     None
 ):
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
     assert "COPY src/vllm-sr/cli/ /app/cli/" in content
-    assert "libseccomp2" in content
-    assert (REPO_ROOT / "src/vllm-sr/cli/evaluation/sandbox_worker.py").is_file()
-    assert (REPO_ROOT / "src/vllm-sr/cli/evaluation/sandbox.py").is_file()
+    assert (REPO_ROOT / "src/vllm-sr/cli/sr_bench/service.py").is_file()
+    assert not (REPO_ROOT / "src/vllm-sr/cli/evaluation").exists()
     assert (
         '"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt'
         in content
@@ -527,13 +480,13 @@ def test_dashboard_dockerfile_ships_evaluation_worker_without_legacy_model_eval(
 def test_vllm_sr_dockerfile_stays_router_only() -> None:
     content = VLLM_SR_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye" in content
+    assert "ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bookworm" in content
     assert "ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm" in content
     assert (
         "FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE}"
         in content
     )
-    assert "GLIBC_2.39+" in content
+    assert "FROM ${IMAGE_REGISTRY}library/debian:bookworm-slim" in content
     assert 'ENTRYPOINT ["/app/start-router.sh"]' in content
     assert "COPY config/knowledge_bases/ /app/config/knowledge_bases/" in content
     assert "ENV VIRTUAL_ENV=/opt/vllm-sr-venv" in content
@@ -696,9 +649,19 @@ def test_gpu_onnx_builders_validate_the_preinstalled_native_toolchain() -> None:
 def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert "COPY src/vllm-sr/pyproject.toml /app/pyproject.toml" in content
-    assert content.index("COPY src/vllm-sr/pyproject.toml /app/pyproject.toml") < (
+    # Build contexts may have a restrictive umask and mode-0600 source files.
+    # Explicit COPY permissions make version imports readable after gosu.
+    version_copy = "COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml"
+    assert version_copy in content
+    assert content.index(version_copy) < (
         content.index("COPY src/vllm-sr/cli/ /app/cli/")
+    )
+    nonroot_catalog_check = (
+        "RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null"
+    )
+    assert nonroot_catalog_check in content
+    assert content.index(nonroot_catalog_check) > content.index(
+        "find /app/cli -type f -exec chmod 0444 {} +"
     )
 
 

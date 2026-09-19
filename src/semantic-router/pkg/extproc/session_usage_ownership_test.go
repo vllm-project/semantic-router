@@ -48,6 +48,10 @@ func TestLateResponsePreservesToolContinuationOwner(t *testing.T) {
 		if selectErr != nil || selected == nil {
 			t.Fatalf("selection failed: %v", selectErr)
 		}
+		// Model an accepted dispatch before delivering out-of-order responses.
+		if err := commitAgenticSessionDecision(ctx); err != nil {
+			t.Fatal(err)
+		}
 		ctx.RequestModel = selected.Model
 		return ctx
 	}
