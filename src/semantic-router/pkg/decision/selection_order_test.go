@@ -164,3 +164,81 @@ func TestPolicyLeavesLeavePriorityInCharge(t *testing.T) {
 		}
 	}
 }
+
+// A KB rule reports the similarity of the matched label, so it cannot be
+// ranked against a classifier probability and priority decides.
+func TestKnowledgeBaseSimilarityDoesNotOutrankProbability(t *testing.T) {
+	kb := config.Decision{Name: "kb_route", Priority: 10, Tier: 1, Rules: config.RuleNode{Type: "kb", Name: "handbook"}}
+	domain := config.Decision{Name: "domain_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "domain", Name: "law"}}
+
+	winner := rankedWinner(t, []config.Decision{kb, domain}, config.RoutingStrategyPriority, &SignalMatches{
+		KBRules:           []string{"handbook"},
+		DomainRules:       []string{"law"},
+		SignalConfidences: map[string]float64{"kb:handbook": 0.95, "domain:law": 0.80},
+	})
+	if winner.Decision.Name != "domain_route" {
+		t.Fatalf("winner = %s, want domain_route (a similarity does not rank against a probability)", winner.Decision.Name)
+	}
+}
+
+// A complexity rule reports a calibrated probability on one backend and the
+// magnitude of a prototype margin on another, so its score is not comparable.
+func TestComplexityScoreIsNotComparable(t *testing.T) {
+	complexity := config.Decision{Name: "complexity_route", Priority: 10, Tier: 1, Rules: config.RuleNode{Type: "complexity", Name: "reasoning:hard"}}
+	domain := config.Decision{Name: "domain_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "domain", Name: "law"}}
+
+	winner := rankedWinner(t, []config.Decision{complexity, domain}, config.RoutingStrategyPriority, &SignalMatches{
+		ComplexityRules:   []string{"reasoning:hard"},
+		DomainRules:       []string{"law"},
+		SignalConfidences: map[string]float64{"complexity:reasoning:hard": 0.95, "domain:law": 0.80},
+	})
+	if winner.Decision.Name != "domain_route" {
+		t.Fatalf("winner = %s, want domain_route (the complexity quantity depends on its backend)", winner.Decision.Name)
+	}
+}
+
+// An OR that can report either kind must not become comparable through the
+// branch that happened to match.
+func TestMixedKindORIsNotComparable(t *testing.T) {
+	mixed := config.Decision{Name: "mixed_or", Priority: 10, Tier: 1, Rules: config.RuleNode{
+		Operator: "OR",
+		Conditions: []config.RuleNode{
+			{Type: "domain", Name: "law"},
+			{Type: "embedding", Name: "legal_analysis"},
+		},
+	}}
+	embedding := config.Decision{Name: "embedding_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "embedding", Name: "support"}}
+
+	winner := rankedWinner(t, []config.Decision{mixed, embedding}, config.RoutingStrategyPriority, &SignalMatches{
+		DomainRules:    []string{"law"},
+		EmbeddingRules: []string{"legal_analysis", "support"},
+		SignalConfidences: map[string]float64{
+			"domain:law": 0.80, "embedding:legal_analysis": 0.95, "embedding:support": 0.90,
+		},
+	})
+	if winner.Decision.Name != "embedding_route" {
+		t.Fatalf("winner = %s, want embedding_route (the OR reports either kind, so priority decides)", winner.Decision.Name)
+	}
+}
+
+// A classifier that failed and matched through on_error keeps its decision out
+// of confidence ranking, the way it did before evidence roles existed.
+func TestErrorPolicyMatchIsNotComparable(t *testing.T) {
+	guarded := config.Decision{Name: "guarded_route", Priority: 10, Tier: 1, Rules: config.RuleNode{
+		Operator: "AND",
+		Conditions: []config.RuleNode{
+			{Type: "domain", Name: "law"},
+			{Type: "classifier", Name: "guard", Label: "safe", OnError: "match"},
+		},
+	}}
+	domain := config.Decision{Name: "domain_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "domain", Name: "health"}}
+
+	winner := rankedWinner(t, []config.Decision{guarded, domain}, config.RoutingStrategyPriority, &SignalMatches{
+		DomainRules:       []string{"law", "health"},
+		SignalConfidences: map[string]float64{"domain:law": 0.95, "domain:health": 0.90},
+		SignalErrors:      map[string]string{"classifier:guard": "classify_failed"},
+	})
+	if winner.Decision.Name != "domain_route" {
+		t.Fatalf("winner = %s, want domain_route (an error-policy match is not evidence)", winner.Decision.Name)
+	}
+}
