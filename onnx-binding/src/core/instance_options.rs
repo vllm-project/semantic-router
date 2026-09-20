@@ -523,6 +523,10 @@ impl InstanceOptions {
             Provider::Cpu => {
                 builder = builder
                     .with_execution_providers([CPUExecutionProvider::default()
+                        // Reuse CPU work buffers across operators and Loop iterations.
+                        // The crate default disables this arena, repeatedly faulting
+                        // and zeroing large attention buffers on long inputs.
+                        .with_arena_allocator(true)
                         .build()
                         .error_on_failure()])
                     .map_err(ort_error)?;
