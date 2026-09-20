@@ -73,13 +73,38 @@ from audit_lib.human_review import (
     write_sheet,
 )
 from audit_lib.judgment import build_user_message, parse_lines, save_judgments
-from audit_lib.report import DEFAULT_COMPARE, build_report_lines, load_predictions
+from audit_lib.report import (
+    DEFAULT_COMPARE,
+    PredictionIdentityError,
+    build_report_lines,
+    load_predictions,
+)
+
+
+def manifest_for(args: argparse.Namespace) -> Path:
+    """Return the file that pins the dataset the judgments in a checkpoint were made on.
+
+    The bundled checkpoint uses dataset_sha256.json. Any other checkpoint gets its own
+    manifest beside it, so custom inputs are bound to their dataset the same way.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        Path of the manifest.
+    """
+    checkpoint = Path(args.checkpoint)
+    if checkpoint.resolve() == CHECKPOINT.resolve():
+        return MANIFEST
+    return checkpoint.with_name(checkpoint.name + ".dataset_sha256.json")
 
 
 def load_split(args: argparse.Namespace) -> list[dict]:
-    """Load the split named in args, pinning the default dataset by hash.
+    """Load the split named in args, checking it against the dataset it was judged on.
 
-    A custom --data-dir (for example in tests) is not pinned.
+    Judgments are keyed by row position, so this runs on every command and for every
+    --data-dir. The first use pins the file. Later uses must match it, and judgments
+    that exist without a pinned hash are refused.
 
     Args:
         args: Parsed CLI arguments.
@@ -88,11 +113,12 @@ def load_split(args: argparse.Namespace) -> list[dict]:
         The split's rows.
 
     Raises:
-        DatasetMismatchError: If the default dataset differs from the pinned one.
+        DatasetMismatchError: If the split differs from the pinned one, or cannot be
+            checked against existing judgments.
     """
     path = Path(args.data_dir) / f"{args.split}.jsonl"
-    if path.resolve().parent == DATA_DIR.resolve():
-        verify_pinned(path, args.split, MANIFEST)
+    has_judgments = count_judged(read_checkpoint(args.checkpoint), args.split) > 0
+    verify_pinned(path, args.split, manifest_for(args), require_existing=has_judgments)
     return load_rows(args.data_dir, args.split)
 
 
@@ -316,7 +342,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         args.split,
         rows,
         records,
-        preds=load_predictions(args.eval_report, args.preds, len(rows)),
+        preds=load_predictions(args.eval_report, args.preds, rows),
         pairs=pairs,
         human=human,
         rejudged=records_for_split(
@@ -440,7 +466,8 @@ def add_review_commands(sub, common) -> None:
         "--preds",
         action="append",
         metavar="NAME=PATH",
-        help='JSON file with a "preds" list aligned to the split (repeatable)',
+        help='JSON file with "preds" and "input_hashes" (sha256 of each prompt), '
+        "checked against the split (repeatable)",
     )
     s.add_argument(
         "--compare",
@@ -500,7 +527,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return args.fn(args)
-    except (DatasetMismatchError, SheetSplitError) as e:
+    except (DatasetMismatchError, SheetSplitError, PredictionIdentityError) as e:
         print(e, file=sys.stderr)
         return 1
 

@@ -116,3 +116,77 @@ def test_api_dry_run_shows_the_first_batch_without_calling_the_api(workspace, ca
     code, out = run(workspace, capsys, "api", "--dry-run", "--batch-size", "2")
     assert code == 0
     assert "batch=2" in out and "0 prompt number 0" in out
+
+
+def rewrite_split(workspace, labels):
+    rows = [
+        {"text": f"changed prompt {i}", "label": 0, "label_name": name}
+        for i, name in enumerate(labels)
+    ]
+    (workspace / "data" / "test.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8"
+    )
+
+
+def judged_workspace(workspace, capsys, monkeypatch):
+    run(
+        workspace,
+        capsys,
+        "save",
+        stdin="0 A\n1 A\n2 D\n3 A\n4 B\n5 A\n",
+        monkeypatch=monkeypatch,
+    )
+
+
+def test_a_custom_data_dir_is_pinned_beside_its_checkpoint(
+    workspace, capsys, monkeypatch
+):
+    judged_workspace(workspace, capsys, monkeypatch)
+    manifest = workspace / "ck.jsonl.dataset_sha256.json"
+    assert list(json.loads(manifest.read_text())) == ["test"]
+
+
+def test_replacing_a_custom_split_after_judging_is_refused(
+    workspace, capsys, monkeypatch
+):
+    judged_workspace(workspace, capsys, monkeypatch)
+    rewrite_split(workspace, LABELS)
+    for command in ("report", "next", "sheet"):
+        code, _out = run(workspace, capsys, command)
+        assert code == 1, command
+
+
+def test_reordering_a_custom_split_after_judging_is_refused(
+    workspace, capsys, monkeypatch
+):
+    judged_workspace(workspace, capsys, monkeypatch)
+    path = workspace / "data" / "test.jsonl"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    path.write_text("\n".join(reversed(lines)) + "\n", encoding="utf-8")
+    code = judge_labels.main(
+        [
+            "report",
+            "--data-dir",
+            str(workspace / "data"),
+            "--checkpoint",
+            str(workspace / "ck.jsonl"),
+            "--rejudge-checkpoint",
+            str(workspace / "rj.jsonl"),
+        ]
+    )
+    assert code == 1
+    assert (
+        "does not match the file the test judgments were made on"
+        in capsys.readouterr().err
+    )
+
+
+def test_judgments_with_no_recorded_dataset_hash_are_refused(
+    workspace, capsys, monkeypatch
+):
+    judged_workspace(workspace, capsys, monkeypatch)
+    (
+        workspace / "ck.jsonl.dataset_sha256.json"
+    ).unlink()  # e.g. a checkpoint from before pinning
+    code, _ = run(workspace, capsys, "report")
+    assert code == 1

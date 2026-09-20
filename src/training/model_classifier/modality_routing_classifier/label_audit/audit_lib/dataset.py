@@ -30,6 +30,20 @@ def clip(text: str) -> tuple[str, bool]:
     return f"{norm[:CLIP_HEAD]} [...{cut} chars cut...] {norm[-CLIP_TAIL:]}", True
 
 
+def text_sha256(text: str) -> str:
+    """Hash a prompt so predictions can be tied to the row they were made for.
+
+    This matches the `input_hash_sha256` in the evaluation report.
+
+    Args:
+        text: Raw prompt text.
+
+    Returns:
+        Hex sha256 of the UTF-8 encoded text.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def rubric_hash(rubric_path: Path = RUBRIC) -> str:
     """Return the first 8 hex characters of the sha256 of the rubric.
 
@@ -58,7 +72,9 @@ def load_rows(data_dir: Path, split: str) -> list[dict]:
         return [json.loads(line) for line in f if line.strip()]
 
 
-def verify_pinned(path: Path, split: str, manifest_path: Path) -> None:
+def verify_pinned(
+    path: Path, split: str, manifest_path: Path, *, require_existing: bool = False
+) -> None:
     """Pin a dataset split by hash, or check it against the pinned hash.
 
     Judgments are keyed by row position, so a re-exported dataset would silently
@@ -69,12 +85,19 @@ def verify_pinned(path: Path, split: str, manifest_path: Path) -> None:
         path: Path to the split's JSONL file.
         split: Split name, "train", "validation" or "test".
         manifest_path: JSON file holding the pinned hash per split.
+        require_existing: Whether a split with no pinned hash is an error, because
+            judgments for it already exist and there is nothing to check them against.
 
     Raises:
         DatasetMismatchError: If the file differs from the one that was pinned.
     """
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     known = json.loads(manifest_path.read_text()) if manifest_path.exists() else {}
+    if split not in known and require_existing:
+        raise DatasetMismatchError(
+            f"judgments exist for the {split} split but {manifest_path.name} has no "
+            f"recorded hash for it, so {path.name} cannot be checked against them"
+        )
     if split not in known:
         known[split] = digest
         manifest_path.write_text(json.dumps(known, indent=2, sort_keys=True) + "\n")

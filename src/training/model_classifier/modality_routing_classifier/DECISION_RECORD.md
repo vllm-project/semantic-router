@@ -496,9 +496,14 @@ All in `label_audit/`:
   `sheet`, `api`.
 - `checkpoint.jsonl`: append-only, one record per judged row.
 - `dataset_sha256.json`: pins each split by hash, so judgments cannot be
-  joined to a re-exported dataset.
-- `predictions/`: the SCX and LFM2.5 test predictions used in §11.2. The
-  baseline and candidate predictions are in `modality_candidate_eval_report.json`.
+  joined to a re-exported dataset. This applies to every `--data-dir`: a custom
+  checkpoint gets its own manifest beside it, and judgments that exist without a
+  recorded hash are refused.
+- `predictions/`: the SCX and LFM2.5 test predictions used in §11.2, each with
+  the sha256 of every prompt. The baseline and candidate predictions are in
+  `modality_candidate_eval_report.json`. The report tool aligns predictions by
+  row and rejects any that were made for different prompts, instead of joining
+  them by position.
 - `audit_report_test.txt` and `audit_report_validation.txt`.
 - `human_review.tsv`: blinded sheet for a human spot-check (§11.5).
 

@@ -18,6 +18,7 @@ from audit_lib.dataset import (
     clip,
     load_rows,
     rubric_hash,
+    text_sha256,
     verify_pinned,
 )
 from audit_lib.judgment import (
@@ -80,6 +81,15 @@ def test_a_split_is_pinned_on_first_use_and_a_change_is_refused(tmp_path):
     with pytest.raises(DatasetMismatchError, match="does not match"):
         verify_pinned(data, "test", manifest)
     verify_pinned(data, "validation", manifest)  # another split is pinned separately
+
+
+def test_judgments_without_a_pinned_hash_cannot_be_checked(tmp_path):
+    data, manifest = tmp_path / "test.jsonl", tmp_path / "manifest.json"
+    data.write_text("row 1\n")
+    with pytest.raises(DatasetMismatchError, match="no recorded hash"):
+        verify_pinned(data, "test", manifest, require_existing=True)
+    verify_pinned(data, "test", manifest)  # pinning on first use is still fine
+    verify_pinned(data, "test", manifest, require_existing=True)
 
 
 # ------------------------------------------------------------------ judgments
@@ -291,11 +301,93 @@ def test_report_lines_cover_agreement_models_review_and_disagreements():
     assert "   2 BOTH->AR H" in text
 
 
-def test_load_predictions_drops_a_model_with_the_wrong_length(tmp_path):
-    path = tmp_path / "preds.json"
-    path.write_text(json.dumps({"preds": ["AR", "AR"]}))
-    assert report.load_predictions(None, [f"short={path}"], 3) == {}
-    assert report.load_predictions(None, [f"ok={path}"], 2) == {"ok": ["AR", "AR"]}
+def hashed(rows):
+    return [text_sha256(r["text"]) for r in rows]
+
+
+def write_eval_report(path, rows, labels, *, order=None):
+    """Write a minimal evaluation report; `order` reorders the records like a shuffled export."""
+    records = [
+        {
+            "row_index": i,
+            "input_hash_sha256": text_sha256(r["text"]),
+            "candidate_pred": labels[i],
+        }
+        for i, r in enumerate(rows)
+    ]
+    if order:
+        records = [records[i] for i in order]
+    path.write_text(json.dumps({"per_example_records": records}))
+    return str(path)
+
+
+TWO_ROWS = [
+    {"text": "first prompt", "label_name": "AR"},
+    {"text": "second prompt", "label_name": "DIFFUSION"},
+]
+
+
+def test_predictions_are_aligned_by_row_index_not_by_position(tmp_path):
+    path = write_eval_report(
+        tmp_path / "r.json", TWO_ROWS, ["AR", "DIFFUSION"], order=[1, 0]
+    )
+    assert report.load_predictions(path, None, TWO_ROWS) == {
+        "candidate": ["AR", "DIFFUSION"]
+    }
+
+
+def test_a_report_in_another_row_order_is_rejected_not_scored_as_zero_percent(tmp_path):
+    reversed_rows = list(
+        reversed(TWO_ROWS)
+    )  # the report was made on the rows in the other order
+    path = write_eval_report(tmp_path / "r.json", reversed_rows, ["DIFFUSION", "AR"])
+    with pytest.raises(report.PredictionIdentityError, match="different prompt"):
+        report.load_predictions(path, None, TWO_ROWS)
+
+
+def test_a_report_for_a_split_of_another_size_is_rejected(tmp_path):
+    path = write_eval_report(tmp_path / "r.json", TWO_ROWS, ["AR", "DIFFUSION"])
+    with pytest.raises(report.PredictionIdentityError, match="different split"):
+        report.load_predictions(path, None, TWO_ROWS[:1])
+
+
+def test_a_report_that_repeats_a_row_index_is_rejected(tmp_path):
+    path = tmp_path / "r.json"
+    record = {
+        "row_index": 0,
+        "input_hash_sha256": text_sha256("first prompt"),
+        "candidate_pred": "AR",
+    }
+    path.write_text(json.dumps({"per_example_records": [record, record]}))
+    with pytest.raises(report.PredictionIdentityError, match="repeats"):
+        report.load_predictions(str(path), None, TWO_ROWS)
+
+
+def write_preds(path, labels, hashes):
+    path.write_text(json.dumps({"preds": labels, "input_hashes": hashes}))
+    return f"model={path}"
+
+
+def test_a_predictions_file_with_matching_hashes_is_accepted(tmp_path):
+    spec = write_preds(tmp_path / "p.json", ["AR", "DIFFUSION"], hashed(TWO_ROWS))
+    assert report.load_predictions(None, [spec], TWO_ROWS) == {
+        "model": ["AR", "DIFFUSION"]
+    }
+
+
+def test_a_predictions_file_for_other_prompts_is_rejected(tmp_path):
+    spec = write_preds(
+        tmp_path / "p.json", ["DIFFUSION", "AR"], hashed(list(reversed(TWO_ROWS)))
+    )
+    with pytest.raises(report.PredictionIdentityError, match="different prompt"):
+        report.load_predictions(None, [spec], TWO_ROWS)
+
+
+def test_a_bare_list_of_labels_is_refused_because_it_carries_no_identity(tmp_path):
+    path = tmp_path / "p.json"
+    path.write_text(json.dumps({"preds": ["AR", "DIFFUSION"]}))
+    with pytest.raises(report.PredictionIdentityError, match="no input_hashes"):
+        report.load_predictions(None, [f"model={path}"], TWO_ROWS)
 
 
 # ------------------------------------------------------------------- API judging

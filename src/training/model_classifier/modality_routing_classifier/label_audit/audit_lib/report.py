@@ -9,7 +9,7 @@ from collections import Counter
 
 from audit_lib.checkpoint import Records
 from audit_lib.constants import CONFIDENCE_ORDER, LABELS
-from audit_lib.dataset import clip
+from audit_lib.dataset import clip, text_sha256
 from audit_lib.human_review import HumanReview
 from audit_lib.judgment import inclusive_label
 from audit_lib.stats import (
@@ -20,34 +20,135 @@ from audit_lib.stats import (
 )
 
 BASELINE_MODEL_KEYS = ("published_baseline", "clean_baseline", "candidate")
+
+
+class PredictionIdentityError(ValueError):
+    """Predictions cannot be tied to the rows of the split they are scored against."""
+
+
 DEFAULT_COMPARE = (("clean_baseline", "candidate"),)
 
 
+def align_predictions(
+    name: str, rows: list[dict], indexed: dict[int, tuple[str, str]]
+) -> list[str]:
+    """Check that predictions belong to the rows of the split, and put them in row order.
+
+    Every row must be covered exactly once and its prompt hash must match, so a report
+    from another export, another split or another row order is rejected instead of
+    being joined by position.
+
+    Args:
+        name: Model name, used in error messages.
+        rows: The split's rows.
+        indexed: Row index to (prompt hash, predicted label).
+
+    Returns:
+        The predicted labels in row order.
+
+    Raises:
+        PredictionIdentityError: If the predictions do not cover exactly these rows.
+    """
+    if set(indexed) != set(range(len(rows))):
+        raise PredictionIdentityError(
+            f"{name}: predictions cover {len(indexed)} rows but the split has "
+            f"{len(rows)}; they come from a different split or export"
+        )
+    labels = []
+    for i, row in enumerate(rows):
+        digest, label = indexed[i]
+        if digest != text_sha256(row["text"]):
+            raise PredictionIdentityError(
+                f"{name}: row {i} was predicted for a different prompt (input hash "
+                f"mismatch); the predictions come from a different export or row order"
+            )
+        labels.append(label)
+    return labels
+
+
+def eval_report_predictions(path: str, rows: list[dict]) -> dict[str, list[str]]:
+    """Load the model predictions in an evaluation report, checked against the rows.
+
+    Args:
+        path: Path to modality_candidate_eval_report.json.
+        rows: The split the predictions are scored against.
+
+    Returns:
+        Predicted label names per model name, in row order.
+
+    Raises:
+        PredictionIdentityError: If the report's rows are not these rows.
+    """
+    with open(path, encoding="utf-8") as f:
+        records = json.load(f)["per_example_records"]
+    preds: dict[str, list[str]] = {}
+    for name in BASELINE_MODEL_KEYS:
+        if not records or f"{name}_pred" not in records[0]:
+            continue
+        indexed = {
+            r["row_index"]: (r["input_hash_sha256"], r[f"{name}_pred"]) for r in records
+        }
+        if len(indexed) != len(records):
+            raise PredictionIdentityError(f"{name}: {path} repeats a row_index")
+        preds[name] = align_predictions(name, rows, indexed)
+    return preds
+
+
+def file_predictions(name: str, path: str, rows: list[dict]) -> list[str]:
+    """Load one model's predictions from a JSON file, checked against the rows.
+
+    The file needs "preds" and "input_hashes" (the sha256 of each prompt, in the same
+    order), because a bare list of labels cannot show which prompts it was made for.
+
+    Args:
+        name: Model name, used in error messages.
+        path: Path to the JSON file.
+        rows: The split the predictions are scored against.
+
+    Returns:
+        Predicted label names in row order.
+
+    Raises:
+        PredictionIdentityError: If the file has no hashes or they do not match.
+    """
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    hashes = data.get("input_hashes")
+    if not hashes or len(hashes) != len(data["preds"]):
+        raise PredictionIdentityError(
+            f"{name}: {path} has no input_hashes, one per prediction, so it cannot be "
+            f"tied to these prompts; regenerate it with the eval script that wrote it"
+        )
+    indexed = {
+        i: (h, p) for i, (h, p) in enumerate(zip(hashes, data["preds"], strict=True))
+    }
+    return align_predictions(name, rows, indexed)
+
+
 def load_predictions(
-    eval_report: str | None, pred_specs: list[str] | None, n_rows: int
+    eval_report: str | None, pred_specs: list[str] | None, rows: list[dict]
 ) -> dict[str, list[str]]:
     """Load model predictions for re-scoring against the judged labels.
 
+    Nothing is joined by position alone: every prediction is checked against the
+    prompt hash of the row it is scored on.
+
     Args:
         eval_report: Path to modality_candidate_eval_report.json, or None.
-        pred_specs: "NAME=PATH" entries, each a JSON file with a "preds" list.
-        n_rows: Number of rows in the split; predictions of another length are dropped.
+        pred_specs: "NAME=PATH" entries, each a JSON file with "preds" and "input_hashes".
+        rows: The split the predictions are scored against.
 
     Returns:
-        Predicted label names per model name.
+        Predicted label names per model name, in row order.
+
+    Raises:
+        PredictionIdentityError: If any predictions cannot be tied to these rows.
     """
-    preds: dict[str, list[str]] = {}
-    if eval_report:
-        with open(eval_report, encoding="utf-8") as f:
-            recs = json.load(f)["per_example_records"]
-        for name in BASELINE_MODEL_KEYS:
-            if recs and f"{name}_pred" in recs[0]:
-                preds[name] = [r[f"{name}_pred"] for r in recs]
+    preds = eval_report_predictions(eval_report, rows) if eval_report else {}
     for spec in pred_specs or []:
         name, path = spec.split("=", 1)
-        with open(path, encoding="utf-8") as f:
-            preds[name] = json.load(f)["preds"]
-    return {k: v for k, v in preds.items() if len(v) == n_rows}
+        preds[name] = file_predictions(name, path, rows)
+    return preds
 
 
 def agreement_lines(
