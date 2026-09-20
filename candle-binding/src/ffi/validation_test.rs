@@ -12,8 +12,10 @@ use std::os::raw::c_char;
 
 #[rstest]
 fn test_validate_text_input_null_pointer() {
-    let result = validate_text_input(std::ptr::null(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(std::ptr::null(), 0) };
     assert!(!result.is_valid, "Should reject null pointer");
+    free_validation_result(result);
 }
 
 #[rstest]
@@ -26,7 +28,8 @@ fn test_validate_text_input_valid(
     #[case] should_be_valid: bool,
 ) {
     let c_text = CString::new(text).unwrap();
-    let result = validate_text_input(c_text.as_ptr(), path_type);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), path_type) };
 
     assert_eq!(
         result.is_valid, should_be_valid,
@@ -41,7 +44,8 @@ fn test_validate_text_input_valid(
 #[rstest]
 fn test_validate_text_input_empty() {
     let c_text = CString::new("").unwrap();
-    let result = validate_text_input(c_text.as_ptr(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
 
     // Empty text should likely be invalid (too short)
     assert!(!result.is_valid, "Empty text should be invalid");
@@ -54,7 +58,8 @@ fn test_validate_text_input_very_long() {
     // Create a very long text
     let long_text = "a".repeat(100000);
     let c_text = CString::new(long_text).unwrap();
-    let result = validate_text_input(c_text.as_ptr(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
 
     // May or may not be valid depending on MAX_TEXT_LENGTH
     // Just verify it doesn't crash
@@ -68,7 +73,8 @@ fn test_validate_text_input_very_long() {
 #[case(1)]
 fn test_validate_text_input_path_types(#[case] path_type: i32) {
     let c_text = CString::new("Test text").unwrap();
-    let result = validate_text_input(c_text.as_ptr(), path_type);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), path_type) };
 
     // Should handle both path types
     let _ = result.is_valid;
@@ -79,7 +85,8 @@ fn test_validate_text_input_path_types(#[case] path_type: i32) {
 #[rstest]
 fn test_validate_text_input_invalid_path_type() {
     let c_text = CString::new("Test text").unwrap();
-    let result = validate_text_input(c_text.as_ptr(), 99);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), 99) };
 
     // Invalid path type should result in error
     assert!(!result.is_valid, "Invalid path type should fail");
@@ -93,7 +100,8 @@ fn test_validate_text_input_invalid_path_type() {
 
 #[rstest]
 fn test_validate_batch_input_null_pointer() {
-    let result = validate_batch_input(std::ptr::null(), 0, 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_batch_input(std::ptr::null(), 0, 0) };
     assert!(!result.is_valid, "Should reject null pointer");
 
     free_validation_result(result);
@@ -102,10 +110,12 @@ fn test_validate_batch_input_null_pointer() {
 #[rstest]
 fn test_validate_batch_input_zero_count() {
     // Even with valid pointer, zero count should fail
-    let texts = vec![CString::new("test").unwrap()];
+    let texts = [CString::new("test").unwrap()];
     let ptrs: Vec<*const c_char> = texts.iter().map(|s| s.as_ptr()).collect();
 
-    let result = validate_batch_input(ptrs.as_ptr(), 0, 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+
+    let result = unsafe { validate_batch_input(ptrs.as_ptr(), 0, 0) };
     assert!(!result.is_valid, "Zero count should be invalid");
 
     free_validation_result(result);
@@ -113,10 +123,12 @@ fn test_validate_batch_input_zero_count() {
 
 #[rstest]
 fn test_validate_batch_input_negative_count() {
-    let texts = vec![CString::new("test").unwrap()];
+    let texts = [CString::new("test").unwrap()];
     let ptrs: Vec<*const c_char> = texts.iter().map(|s| s.as_ptr()).collect();
 
-    let result = validate_batch_input(ptrs.as_ptr(), -1, 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+
+    let result = unsafe { validate_batch_input(ptrs.as_ptr(), -1, 0) };
     assert!(!result.is_valid, "Negative count should be invalid");
 
     free_validation_result(result);
@@ -124,14 +136,16 @@ fn test_validate_batch_input_negative_count() {
 
 #[rstest]
 fn test_validate_batch_input_valid_small_batch() {
-    let texts = vec![
+    let texts = [
         CString::new("First text").unwrap(),
         CString::new("Second text").unwrap(),
         CString::new("Third text").unwrap(),
     ];
     let ptrs: Vec<*const c_char> = texts.iter().map(|s| s.as_ptr()).collect();
 
-    let result = validate_batch_input(ptrs.as_ptr(), 3, 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+
+    let result = unsafe { validate_batch_input(ptrs.as_ptr(), 3, 0) };
 
     // Should be valid for small batch
     assert!(
@@ -146,13 +160,15 @@ fn test_validate_batch_input_valid_small_batch() {
 #[case(0)]
 #[case(1)]
 fn test_validate_batch_input_path_types(#[case] path_type: i32) {
-    let texts = vec![
+    let texts = [
         CString::new("Test one").unwrap(),
         CString::new("Test two").unwrap(),
     ];
     let ptrs: Vec<*const c_char> = texts.iter().map(|s| s.as_ptr()).collect();
 
-    let result = validate_batch_input(ptrs.as_ptr(), 2, path_type);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+
+    let result = unsafe { validate_batch_input(ptrs.as_ptr(), 2, path_type) };
 
     let _ = result.is_valid;
 
@@ -165,7 +181,8 @@ fn test_validate_batch_input_path_types(#[case] path_type: i32) {
 
 #[rstest]
 fn test_validate_model_path_null() {
-    let result = validate_model_path(std::ptr::null(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_model_path(std::ptr::null(), 0) };
     assert!(!result.is_valid, "Null path should be invalid");
 
     free_validation_result(result);
@@ -176,7 +193,8 @@ fn test_validate_model_path_null() {
 #[case("/another/path", 1)]
 fn test_validate_model_path_various_paths(#[case] path: &str, #[case] path_type: i32) {
     let c_path = CString::new(path).unwrap();
-    let result = validate_model_path(c_path.as_ptr(), path_type);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_model_path(c_path.as_ptr(), path_type) };
 
     // Path validation depends on actual file existence
     let _ = result.is_valid;
@@ -223,6 +241,19 @@ fn test_validate_confidence_threshold_out_of_range_high() {
 }
 
 #[rstest]
+#[case(f32::NAN)]
+#[case(f32::INFINITY)]
+#[case(f32::NEG_INFINITY)]
+fn test_validate_confidence_threshold_nonfinite(#[case] confidence: f32) {
+    for path_type in [0, 1] {
+        let result = validate_confidence_threshold(confidence, path_type);
+        assert!(!result.is_valid, "non-finite confidence must be rejected");
+        assert_eq!(result.error_code, ERROR_INVALID_CONFIDENCE);
+        free_validation_result(result);
+    }
+}
+
+#[rstest]
 fn test_validate_confidence_threshold_boundary_values() {
     let result_zero = validate_confidence_threshold(0.0, 1);
     let _ = result_zero.is_valid;
@@ -260,7 +291,8 @@ fn test_validate_memory_parameters(
 #[rstest]
 fn test_validation_result_structure() {
     let c_text = CString::new("Test").unwrap();
-    let result = validate_text_input(c_text.as_ptr(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
 
     // Verify structure fields exist
     let _ = result.is_valid;
@@ -278,7 +310,8 @@ fn test_validation_result_structure() {
 #[rstest]
 fn test_free_validation_result() {
     let c_text = CString::new("Test").unwrap();
-    let result = validate_text_input(c_text.as_ptr(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
 
     // Should not crash when freeing
     free_validation_result(result);
@@ -289,7 +322,8 @@ fn test_multiple_free_calls() {
     let c_text = CString::new("Test").unwrap();
 
     for _ in 0..10 {
-        let result = validate_text_input(c_text.as_ptr(), 0);
+        // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+        let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
         free_validation_result(result);
     }
 
@@ -306,7 +340,8 @@ fn test_validation_thread_safety() {
     (0..4).into_par_iter().for_each(|i| {
         let text = format!("Thread {} test", i);
         let c_text = CString::new(text).unwrap();
-        let result = validate_text_input(c_text.as_ptr(), 0);
+        // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+        let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
         let is_valid = result.is_valid;
         free_validation_result(result);
         assert!(is_valid, "Thread {} should validate successfully", i);
@@ -320,7 +355,8 @@ fn test_validation_thread_safety() {
 #[rstest]
 fn test_validate_text_input_ascii() {
     let c_text = CString::new("ASCII text only").unwrap();
-    let result = validate_text_input(c_text.as_ptr(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
 
     let _ = result.is_valid;
 
@@ -330,7 +366,8 @@ fn test_validate_text_input_ascii() {
 #[rstest]
 fn test_validate_text_input_unicode() {
     let c_text = CString::new("Unicode: 你好世界 🌍").unwrap();
-    let result = validate_text_input(c_text.as_ptr(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
 
     // Should handle valid UTF-8
     let _ = result.is_valid;
@@ -345,7 +382,8 @@ fn test_validate_text_input_unicode() {
 #[rstest]
 fn test_validation_error_codes() {
     // Test that error codes are set correctly
-    let result_null = validate_text_input(std::ptr::null(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result_null = unsafe { validate_text_input(std::ptr::null(), 0) };
     assert_eq!(result_null.error_code, ERROR_NULL_POINTER);
     free_validation_result(result_null);
 
@@ -364,7 +402,8 @@ fn test_validation_error_codes() {
 #[rstest]
 fn test_validation_success_case() {
     let c_text = CString::new("This is a valid test text for validation").unwrap();
-    let result = validate_text_input(c_text.as_ptr(), 0);
+    // SAFETY: pointers are null or refer to live CString storage and bounded arrays.
+    let result = unsafe { validate_text_input(c_text.as_ptr(), 0) };
 
     if result.is_valid {
         // On success, error_message and suggestion should be null or empty
