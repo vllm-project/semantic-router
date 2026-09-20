@@ -191,13 +191,9 @@ type PromptGuardConfig struct {
 	PositiveLabels       []string                  `yaml:"positive_labels,omitempty"`
 
 	// Variant selects a local Candle-backed model variant. Mutually
-	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when
-	// both are unset.
+	// exclusive with Backend. Defaults to PromptGuardVariantMmBERT32K when
+	// unset.
 	Variant string `yaml:"variant,omitempty"`
-	// Protocol selects a remote HTTP backend's wire contract. Mutually
-	// exclusive with Variant. Requires an external model configured with
-	// model_role="guardrail".
-	Protocol string `yaml:"protocol,omitempty"`
 
 	// ClassifierOnErrorConfig contributes OnError (allow|block), shared with
 	// every other pluggable classifier backend instead of being redeclared

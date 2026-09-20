@@ -1,6 +1,6 @@
 // Package jailbreakonerror provides the e2e test profile for #2918's
 // PromptGuardConfig.OnError contract. It deploys the router with
-// prompt_guard.protocol pointed at a deliberately unreachable endpoint and
+// prompt_guard.backend pointed at a deliberately unreachable endpoint and
 // on_error: block, then verifies that a classify failure closes the request
 // instead of silently letting it through.
 package jailbreakonerror
