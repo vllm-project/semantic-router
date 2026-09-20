@@ -69,7 +69,7 @@ func TestReportCarriesScoringProvenance(t *testing.T) {
 		}
 	}
 	markdown := renderMarkdown(report)
-	for _, want := range []string{"Target layer (candidate text embeddings): `0 (final layer)`", "Model file `vela_omni_manifest.json`: `sha256:abc`"} {
+	for _, want := range []string{"Target text layer: `0 (final layer)`", "Target dimension (all candidate modalities): `0`", "Model file `vela_omni_manifest.json`: `sha256:abc`"} {
 		if !strings.Contains(markdown, want) {
 			t.Errorf("Markdown report lacks %q", want)
 		}
