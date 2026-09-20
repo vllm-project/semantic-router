@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -54,6 +55,7 @@ type routerComponents struct {
 	lookupTable           lookuptable.LookupTable
 	memoryStore           memory.Store
 	memoryExtractor       *memory.MemoryExtractor
+	memoryPersistence     *memory.PersistenceRunner
 	protocolCodecs        *protocolcodec.Registry
 	looperClient          *looper.Client
 	credentialResolver    *authz.CredentialResolver
@@ -274,6 +276,15 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	if components.memoryStore != nil {
 		components.resources.add(components.memoryStore.Close)
 	}
+	// Resources close in reverse order, so retire writes before closing the store.
+	components.memoryPersistence = createMemoryPersistenceRunner(cfg, components.memoryExtractor)
+	if components.memoryPersistence != nil {
+		// RetireAndWait treats a non-positive grace as its own default.
+		grace := time.Duration(cfg.Memory.Persistence.ShutdownGraceSeconds) * time.Second
+		components.resources.addDraining(func() error {
+			return components.memoryPersistence.RetireAndWait(grace)
+		}, components.memoryPersistence.Done())
+	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
 	components.rateLimiter = buildRateLimitResolver(cfg)
@@ -361,6 +372,21 @@ func registerRouterSessionStore(
 	})
 }
 
+func createMemoryPersistenceRunner(cfg *config.RouterConfig, extractor *memory.MemoryExtractor) *memory.PersistenceRunner {
+	// Workers and queue storage follow the memory store that was actually built:
+	// enablement alone still yields a nil extractor when the backend is
+	// unreachable, and every write would then be suppressed as "no_extractor".
+	if cfg == nil || extractor == nil || !isMemoryEnabled(cfg) {
+		return nil
+	}
+	persistence := cfg.Memory.Persistence
+	return memory.NewPersistenceRunner(
+		time.Duration(persistence.TimeoutSeconds)*time.Second,
+		persistence.Concurrency,
+		persistence.Queue,
+	)
+}
+
 func registerModelSelectorResources(
 	resources *resourceScope,
 	registries map[config.RecipeName]*selection.Registry,
@@ -428,6 +454,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ShadowDispatcher:        components.shadowDispatcher,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
+		memoryPersistence:       components.memoryPersistence,
 		ProtocolCodecs:          components.protocolCodecs,
 		looperClient:            components.looperClient,
 		CredentialResolver:      components.credentialResolver,

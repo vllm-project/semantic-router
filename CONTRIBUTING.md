@@ -149,12 +149,23 @@ Run the branch check on demand with:
 make check
 ```
 
+Python formatting checks report trailing whitespace, file-ending, and Black
+formatting issues without rewriting source. To apply the native Python formatters
+deliberately, run:
+
+```bash
+.venv-agent/bin/pre-commit run python-format --hook-stage manual --files path/to/file.py
+```
+
+Pre-commit exits nonzero when a formatter changes files. Review the diff, then
+rerun `make check`.
+
 Follow the language's standard formatter and keep modules focused:
 
 - Go: `golangci-lint fmt` (gofumpt and gci, applied by the `go-fmt` pre-commit hook), meaningful exported API comments, and `make check-go-mod-tidy`.
 - Rust: `cargo fmt`, `cargo clippy`, explicit error handling, and public API
   documentation.
-- Python: Ruff-compatible formatting, type hints where they improve the
+- Python: Black formatting, type hints where they improve the
   interface, and tests for behavior changes.
 
 Behavior-visible config, routing, CLI, Docker, startup, or API changes require

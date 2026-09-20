@@ -29,7 +29,7 @@ func testResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clients
 		fmt.Println("[Test] Testing Response API streaming SSE: POST /v1/responses stream:true")
 	}
 
-	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, "openai/gpt-oss-20b", "response-api-streaming-sse", "Stream this response through the Responses API.")
+	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, "openai/gpt-oss-20b", "response-api-streaming-sse", "Stream this response through the Responses API.", nil)
 	if err != nil {
 		return err
 	}
@@ -53,12 +53,13 @@ func testResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clients
 }
 
 type responseAPIStreamingSSEResult struct {
-	statusCode  int
-	contentType string
-	body        []byte
+	statusCode       int
+	contentType      string
+	body             []byte
+	protocolWarnings string
 }
 
-func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, model string, testName string, input string) (responseAPIStreamingSSEResult, error) {
+func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, model string, testName string, input string, tools []map[string]any) (responseAPIStreamingSSEResult, error) {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
 		return responseAPIStreamingSSEResult{}, err
@@ -73,6 +74,9 @@ func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clie
 	}
 	if testName != "" {
 		body["metadata"] = map[string]string{"test": testName}
+	}
+	if tools != nil {
+		body["tools"] = tools
 	}
 	rawBody, err := json.Marshal(body)
 	if err != nil {
@@ -105,9 +109,10 @@ func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clie
 	}
 
 	return responseAPIStreamingSSEResult{
-		statusCode:  resp.StatusCode,
-		contentType: resp.Header.Get("Content-Type"),
-		body:        responseBody,
+		statusCode:       resp.StatusCode,
+		contentType:      resp.Header.Get("Content-Type"),
+		body:             responseBody,
+		protocolWarnings: resp.Header.Get("x-vsr-protocol-warnings"),
 	}, nil
 }
 

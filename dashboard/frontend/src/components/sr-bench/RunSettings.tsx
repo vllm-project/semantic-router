@@ -1,5 +1,6 @@
 import { useId } from 'react'
 import ProductIcon from '../ProductIcon'
+import BenchSelect from './BenchSelect'
 import type { Manifest, Target } from './types'
 import styles from './SrBench.module.css'
 import controls from './BenchControls.module.css'
@@ -62,6 +63,7 @@ interface Props {
   seed: number
   targets: Target[]
   costPolicy: Manifest['cost_policy']
+  onCostPolicyChange: (policy: 'require_priced' | 'capability_only') => void
   mode: Manifest['mode']
   previewContext: NonNullable<Manifest['preview_context']>
   onPreviewContextChange: (context: NonNullable<Manifest['preview_context']>) => void
@@ -75,6 +77,7 @@ export default function RunSettings({
   seed,
   targets,
   costPolicy,
+  onCostPolicyChange,
   mode,
   previewContext,
   onPreviewContextChange,
@@ -185,6 +188,36 @@ export default function RunSettings({
                 help="Reproduces preview sampling. Later live routing can change with the learning state."
               />
             </div>
+          </>
+        )}
+        {mode === 'live' && (
+          <>
+            <h4>Cost accounting</h4>
+            <BenchSelect
+              label="Cost accounting"
+              value={costPolicy ?? 'require_priced'}
+              onChange={(value) =>
+                onCostPolicyChange(value as 'require_priced' | 'capability_only')
+              }
+              options={[
+                {
+                  value: 'require_priced',
+                  label: 'Quality and cost',
+                  description: 'Require complete prices and a model-cost budget.',
+                },
+                {
+                  value: 'capability_only',
+                  label: 'Quality only',
+                  description: 'Allow incomplete prices. No cost-saving claims.',
+                },
+              ]}
+            />
+            {costPolicy === 'capability_only' && (
+              <p className={styles.notice}>
+                No USD budget is applied. Time, output and call limits still apply. Known costs are
+                recorded, but this run cannot prove cost savings.
+              </p>
+            )}
           </>
         )}
         <h4>Sampling defaults</h4>

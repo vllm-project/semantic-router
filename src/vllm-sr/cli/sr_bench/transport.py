@@ -182,6 +182,7 @@ def effective_request(target, messages, sampling, extra_body=None):
         "response_format",
         "functions",
         "function_call",
+        "metadata",
     }:
         raise CallFailure("Adapter attempted to override frozen request parameters")
     return {

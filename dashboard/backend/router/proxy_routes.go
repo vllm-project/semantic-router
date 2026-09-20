@@ -9,6 +9,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
+	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
@@ -204,10 +205,11 @@ func registerGrafanaRoutes(mux *http.ServeMux, cfg *config.Config) *httputil.Rev
 		return nil
 	}
 
-	grafanaProxy, err := proxy.NewReverseProxy(cfg.GrafanaURL, "/embedded/grafana", false)
+	grafanaProxy, err := proxy.NewGrafanaProxy(cfg.GrafanaURL)
 	if err != nil {
 		log.Fatalf("grafana proxy error: %v", err)
 	}
+	mux.HandleFunc(proxy.GrafanaAuthScriptPath, proxy.GrafanaAuthScriptHandler)
 	mux.HandleFunc("/embedded/grafana/", func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
@@ -323,7 +325,7 @@ func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
 		log.Printf("API request: %s %s (from: %s)",
 			r.Method, r.URL.Path, redactCredentialParams(r.Header.Get("Referer")))
 
-		if proxies.jaegerAPI != nil && isJaegerAPIPath(r.URL.Path) {
+		if proxies.jaegerAPI != nil && observability.IsJaegerAPIPath(r.URL.Path) {
 			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
 			proxies.jaegerAPI.ServeHTTP(w, r)
 			return
@@ -338,13 +340,6 @@ func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
 		w.Header().Set("Content-Type", "application/json")
 		http.Error(w, `{"error":"Service not available","message":"No API handler configured for this path"}`, http.StatusBadGateway)
 	})
-}
-
-func isJaegerAPIPath(path string) bool {
-	return strings.HasPrefix(path, "/api/services") ||
-		strings.HasPrefix(path, "/api/traces") ||
-		strings.HasPrefix(path, "/api/operations") ||
-		strings.HasPrefix(path, "/api/dependencies")
 }
 
 func registerMetricsRoutes(mux *http.ServeMux, cfg *config.Config) {

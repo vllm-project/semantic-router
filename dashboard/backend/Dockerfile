@@ -164,6 +164,9 @@ RUN groupadd --gid 65532 nonroot && \
     chown -R root:root /app/cli && \
     find /app/cli -type d -exec chmod 0555 {} + && \
     find /app/cli -type f -exec chmod 0444 {} + && \
+    chown -R root:root /app/config /app/skills && \
+    find /app/config /app/skills -type d -exec chmod 0755 {} + && \
+    find /app/config /app/skills -type f -exec chmod 0644 {} + && \
     chown root:root \
       /app/entrypoint.sh \
       /app/entrypoint_permissions.py \
@@ -179,6 +182,10 @@ RUN groupadd --gid 65532 nonroot && \
 # Exercise the same interpreter, user and isolated working directory as the
 # catalog HTTP handler. A root-only smoke test misses unreadable package data.
 RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null
+# These directories contain only bundled public ToolsDB, knowledge-base and
+# skill assets at build time. Keep them readable under a restrictive build
+# context umask without changing mounted runtime configuration or user state.
+RUN gosu nonroot find /app/config /app/skills -type f -exec head -c 0 {} + >/dev/null
 EXPOSE 8700
 # Note: We run as root initially so entrypoint can fix ownership/permissions, then switch to nonroot
 ENTRYPOINT ["/app/entrypoint.sh"]

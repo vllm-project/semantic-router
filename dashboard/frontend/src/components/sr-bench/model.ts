@@ -1,4 +1,5 @@
 import type { Dataset, Manifest, Target, TargetMetrics } from './types'
+import { targetLabel, targetName } from './targetPresentation'
 
 export const DEFAULT_LIMITS: Manifest['limits'] = {
   concurrency: 1,
@@ -88,9 +89,10 @@ export function validateManifest(manifest: Manifest): string | null {
   )
     return 'Temperature must be between 0 and 2.'
   if (
-    !Number.isFinite(manifest.sampling.top_p) ||
-    manifest.sampling.top_p < 0 ||
-    manifest.sampling.top_p > 1
+    manifest.sampling.top_p !== undefined &&
+    (!Number.isFinite(manifest.sampling.top_p) ||
+      manifest.sampling.top_p < 0 ||
+      manifest.sampling.top_p > 1)
   )
     return 'Top P must be between 0 and 1.'
   if (manifest.sampling.seed !== undefined && !Number.isSafeInteger(manifest.sampling.seed))
@@ -98,7 +100,7 @@ export function validateManifest(manifest: Manifest): string | null {
   for (const target of manifest.targets) {
     const fixed = target.request_params?.max_tokens
     if (typeof fixed === 'number' && fixed > manifest.limits.max_output_tokens)
-      return `Target ${target.id} has a registered output limit of ${fixed} tokens, above the run cap of ${manifest.limits.max_output_tokens}. Select another registered target profile or explicitly raise the run cap; registered overrides are not changed here.`
+      return `Target ${targetLabel(target)} has a registered output limit of ${fixed} tokens, above the run cap of ${manifest.limits.max_output_tokens}. Select another registered target profile or explicitly raise the run cap; registered overrides are not changed here.`
   }
   return null
 }
@@ -125,12 +127,16 @@ export const active = (status: string) => status === 'queued' || status === 'run
 export function reportDistribution(
   targets: TargetMetrics[],
   field: 'selected_models' | 'decisions' | 'selection_statuses' | 'selection_reasons',
+  manifest: Pick<Manifest, 'targets' | 'auxiliary_targets'>,
 ): Array<[string, number]> {
   return targets
     .flatMap((target) =>
       Object.entries(target[field] ?? {})
         .filter(([, count]) => Number.isFinite(count) && count > 0)
-        .map(([name, count]): [string, number] => [`${target.id}: ${name}`, count]),
+        .map(([name, count]): [string, number] => [
+          `${targetName(manifest, target.id)}: ${name}`,
+          count,
+        ]),
     )
     .sort((a, b) => b[1] - a[1])
 }

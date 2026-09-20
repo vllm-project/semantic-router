@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import { money, number, percent } from './model'
+import { changeDirection, formatSignedChange } from './comparisonMetrics'
 import styles from './SrBench.module.css'
 
 export interface QualityCostPoint {
@@ -23,6 +24,12 @@ export interface QualityCostPoint {
 }
 
 const colors = ['#82b8ff', '#b59cff', '#67d8b4', '#f4ba72', '#f28f9d']
+const changeColors = {
+  positive: 'var(--color-success, #67b993)',
+  negative: 'var(--color-danger, #f69494)',
+  neutral: 'var(--text-secondary, #9c9ca8)',
+  unknown: 'var(--text-secondary, #9c9ca8)',
+}
 
 export function QualityCostChart({ points }: { points: QualityCostPoint[] }) {
   return (
@@ -120,16 +127,44 @@ export function IterationChart({
             <CartesianGrid stroke="var(--border-color)" strokeDasharray="3 3" />
             <XAxis dataKey="stage" />
             <YAxis yAxisId="quality" domain={[0, 100]} width={48} tickFormatter={(v) => `${v}%`} />
-            <YAxis yAxisId="saving" orientation="right" width={48} tickFormatter={(v) => `${v}%`} />
+            <YAxis
+              yAxisId="saving"
+              orientation="right"
+              width={60}
+              domain={([minimum, maximum]: [number, number]) => [
+                Math.min(0, minimum),
+                Math.max(0, maximum),
+              ]}
+              tickFormatter={(v) => `${formatSignedChange(v)}%`}
+            />
             <Tooltip
               contentStyle={{
                 background: 'var(--bg-secondary)',
                 border: '1px solid var(--border-color)',
                 borderRadius: 8,
               }}
-              formatter={(value) => `${number(value, 2)}%`}
+              formatter={(value, name) =>
+                name === 'Cost saving' ? (
+                  <span
+                    style={{
+                      color:
+                        changeColors[changeDirection(typeof value === 'number' ? value : null)],
+                    }}
+                  >
+                    {formatSignedChange(typeof value === 'number' ? value : null)}%
+                  </span>
+                ) : (
+                  `${number(value, 2)}%`
+                )
+              }
             />
             <Legend />
+            <ReferenceLine
+              yAxisId="saving"
+              y={0}
+              stroke="var(--border-color)"
+              strokeDasharray="3 3"
+            />
             {baselineQuality !== null && (
               <ReferenceLine
                 yAxisId="quality"
@@ -155,9 +190,18 @@ export function IterationChart({
               type="linear"
               dataKey="saving"
               name="Cost saving"
-              stroke="#67d8b4"
+              stroke="var(--text-secondary, #9c9ca8)"
               strokeWidth={2}
-              dot={{ r: 4 }}
+              dot={({ cx, cy, value, key }) => (
+                <circle
+                  key={key}
+                  cx={cx}
+                  cy={cy}
+                  r={4}
+                  fill={changeColors[changeDirection(typeof value === 'number' ? value : null)]}
+                  stroke="none"
+                />
+              )}
               isAnimationActive={false}
               connectNulls={false}
             />

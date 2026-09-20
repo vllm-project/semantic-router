@@ -88,7 +88,7 @@ describe('sr-bench run contract', () => {
       seed: 42,
     })
     expect(validateManifest(manifest)).toContain(
-      'Target baseline has a registered output limit of 4096 tokens, above the run cap of 512',
+      'Target model-a has a registered output limit of 4096 tokens, above the run cap of 512',
     )
     expect(JSON.stringify(manifest)).toBe(before)
     expect(
@@ -107,11 +107,17 @@ describe('sr-bench run contract', () => {
           { id: 'unknown' },
         ],
         'selected_models',
+        {
+          targets: [
+            { ...single, id: 'single' },
+            { ...single, id: 'balance', model: 'connected-balance', kind: 'mom' },
+          ],
+        },
       ),
     ).toEqual([
-      ['single: model-a', 250],
-      ['balance: model-a', 200],
-      ['balance: model-b', 50],
+      ['model-a: model-a', 250],
+      ['connected-balance: model-a', 200],
+      ['connected-balance: model-b', 50],
     ])
   })
   it('validates typed sampling and limit fields before preparing a plan', () => {
@@ -151,5 +157,15 @@ describe('sr-bench run contract', () => {
       }),
     ).toBeNull()
     expect(manifest.limits).not.toHaveProperty('case_timeout_s')
+  })
+  it('preserves omitted provider sampling defaults in a frozen manifest', () => {
+    const manifest = makeManifest('Frozen', 'live', 'quick', dataset, [single], DEFAULT_LIMITS)
+    delete manifest.sampling.top_p
+    delete manifest.sampling.seed
+    const before = JSON.stringify(manifest)
+    expect(validateManifest(manifest)).toBeNull()
+    expect(JSON.stringify(manifest)).toBe(before)
+    expect(manifest.sampling).not.toHaveProperty('top_p')
+    expect(manifest.sampling).not.toHaveProperty('seed')
   })
 })
