@@ -41,19 +41,6 @@ const (
 	PromptGuardVariantMmBERT32K = "mmbert32k"
 )
 
-// PromptGuardConfig.Protocol values, selecting which remote HTTP wire
-// contract to use for an external model with role="guardrail". Mutually
-// exclusive with Variant.
-const (
-	// PromptGuardProtocolHTTPChat calls an external model through a
-	// generative chat-completion prompt (e.g. Qwen3Guard-style).
-	PromptGuardProtocolHTTPChat = "http_chat"
-	// PromptGuardProtocolHTTPClassify calls an external model through a
-	// lightweight sequence-classifier HTTP contract (text in, full
-	// label/score distribution out).
-	PromptGuardProtocolHTTPClassify = "http_classify"
-)
-
 // PromptGuardConfig.OnError values live in classifier_on_error.go as
 // OnErrorAllow/OnErrorBlock - shared with every other pluggable classifier
 // backend (CategoryModel, PIIModel, ClassifierSignalRule), not just prompt
