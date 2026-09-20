@@ -170,7 +170,13 @@ func embeddingCatalogSpec(cfg *config.RouterConfig, recipe config.RecipeName, mo
 	if model == primary {
 		provider, device = config.DefaultEmbeddingExecution(cfg.EmbeddingModels)
 	}
-	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: model}, Deployment: config.ModelDeployment{Artifact: path, Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: "truncate"}}, Admission: cfg.ModelAdmission["embedding:"+model]}
+	adapter, overflow := model, "truncate"
+	if catalog := config.GetModelByPath(path); catalog != nil && catalog.DefaultAdapter != "" {
+		adapter = catalog.DefaultAdapter
+		provider, device = catalog.DefaultProvider, catalog.DefaultDevice
+		overflow = "reject"
+	}
+	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: adapter}, Deployment: config.ModelDeployment{Artifact: path, Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: overflow}}, Admission: cfg.ModelAdmission["embedding:"+model]}
 }
 
 // EmbeddingState describes the already warmed generation without another call.

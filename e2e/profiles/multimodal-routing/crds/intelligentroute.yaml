@@ -7,15 +7,15 @@ spec:
   signals:
     # Image-modality embedding rules mirroring the opt-in pack shipped in
     # config/fragments/signal/embedding/image-routing.yaml (PR #1896). Each rule's
-    # candidates are short text anchors that get embedded in the shared
-    # multimodal text/image space; the request-path image embedding
-    # cosine-matches against them. Requires
+    # Positive and negative text/image banks share the prepared model space.
+    # Frozen image prototypes are packaged under /app/share/image-routing.
+    # Requires
     # global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal
     # in values.yaml.
     embeddings:
       - name: "identifier_document_imagery"
         queryModality: "image"
-        threshold: 0.61
+        threshold: 0.29
         aggregationMethod: "max"
         candidates:
           - "photograph of a passport page"
@@ -27,23 +27,200 @@ spec:
           - "photograph of a tax document or paystub with personal details"
           - "photograph of a paper form filled in with personal information"
 
-      - name: "code_or_terminal_imagery"
-        queryModality: "image"
-        threshold: 0.47
-        aggregationMethod: "max"
-        candidates:
-          - "screenshot of source code in an editor"
-          - "terminal or shell window screenshot"
-          - "screenshot of a log file or stack trace"
-          - "git diff or pull-request review screenshot"
-          - "screenshot of a debugger paused at a breakpoint"
-          - "command-line build output or test runner output"
-          - "screenshot of an API response or HTTP request body"
-          - "screenshot of a database client or SQL query result"
-
+      - name: code_or_terminal_imagery
+        threshold: 0.022578716
+        aggregationMethod: max
+        queryModality: image
+        imageCandidates:
+          - /app/share/image-routing/3ffbf76e801bbc910df65e7f27e54bb85b0461d9b64a0b93d278d32a89057c73.png
+          - /app/share/image-routing/86c5266af32f54f5e04728cdf87fbc4a67108748c67d7e82bb061e9699da82ef.png
+          - /app/share/image-routing/c947d2e4c56e8702a25f552ffa9872f4b11683580f72acf89303b40d0924b766.png
+          - /app/share/image-routing/aba7f60997c80d863dd3c522765c8a018ddaabffcf70b28d5cc2db7545f837b3.png
+          - /app/share/image-routing/ca9e993abb060c1a886a5d3926daf3580cfa6bd66aa70b23880d400025a6babd.png
+          - /app/share/image-routing/ca972842a9f6aef9601783b240646a46b7745ce324b999161d30c181549be134.png
+          - /app/share/image-routing/d13439ce5c5df91f3ddeeefea12af6f7980d98825ab1fd5ee9073be73f388016.png
+        negativeImageCandidates:
+          - /app/share/image-routing/b98d5771ce76b098e5d6978b25c925efc80e3021e6dc344608e0de44f024c9d5.png
+          - /app/share/image-routing/f3ba91ff5f677b7afd199aab9128c7a0d905275823e153fea551473b279879f3.png
+          - /app/share/image-routing/e77dce4b858781b8b6c52e9f3c74bdf24375f87577cefa7a505b149c925d04f2.png
+          - /app/share/image-routing/55df48de5c29fa8ae0243e22508bbec4f988ba626fb4c61651f3a0a4b885a180.png
+          - /app/share/image-routing/b98d5771ce76b098e5d6978b25c925efc80e3021e6dc344608e0de44f024c9d5.png
+          - /app/share/image-routing/05ec15b1e895a85782978dbc3f3facae27b8c8d9f11aed129bacc278f1b71b0d.png
+          - /app/share/image-routing/2483a80b0d6d218f5b07e1a757bf263d4a35d028cad8e82bebe3316676bb9ec6.jpg
+          - /app/share/image-routing/2d3f7ee9c2f07a1022624a6632bede886d50069cdb2e965942ea96ae0c48d0d0.jpg
+          - /app/share/image-routing/d797f442aeb9ba9ccd7a349702f9e3e214c509daa26c9196cf2c12af19551b8a.png
+          - /app/share/image-routing/008fa21dfc472b90d61c06e31336c4d13c88574ba51ffeafb209dc75ce3f0b05.jpg
+          - /app/share/image-routing/717f4c6b2bb9eb184a9b51973d2ce2e4819ebd265924f142e79cf77096248204.jpg
+          - /app/share/image-routing/55df48de5c29fa8ae0243e22508bbec4f988ba626fb4c61651f3a0a4b885a180.png
+          - /app/share/image-routing/7389c3a318319668b0fd7df4e1978c369d328e9167547ab1d1b885a57b4fbe05.png
+          - /app/share/image-routing/496447b887181c71b60d2e05491cab1f2cbe25d0624dfeddcc1209276dfad306.png
+          - /app/share/image-routing/a608ed29b6c75dede6893af2a57f8cef6e40275f1f835e2a829b1b3977e5a27f.png
+          - /app/share/image-routing/adfadc62c39e79b61182cb8d42a16ad6953cf0c5c8e6ee65563bf18d7a46efeb.png
+          - /app/share/image-routing/0e8122c71ebb7f168c7231ea605cdb04de1350ab8b3e671cb7140f4d79651d92.png
+          - /app/share/image-routing/656a15592568d725cfffe61b02704c2d9047d880c6b9e68cf4861f787475f490.png
+          - /app/share/image-routing/2d289ad65608bb2140de75a74d54829c5e62b20fd5e67e55fdf3a56d29ee373a.png
+          - /app/share/image-routing/1b74761356df1f4980b30d43e8e6a4b7dd8345e065d28ad3224f0df2cb1bbad4.png
+          - /app/share/image-routing/de8d9f60df01de13654ad8a8f77096346dcc623d1560300bb8c5439d26656112.png
+          - /app/share/image-routing/d88ba81255e4441d4c9ff182bb78fee98431f6637d6866fbee6a73f7dc95f58d.png
+          - /app/share/image-routing/750c3d9871159746618fccea70468a68296207c2a8205737b4f3631cc4fc0a5f.png
+          - /app/share/image-routing/babc03dea70029d624b0ce84ca0a979b8a8970ddd537719e6b12e97a3abbfdfc.png
+          - /app/share/image-routing/89e1d14cd6536e8af45ccc7a16e1dd7f682c2e3972fe72284e156603e83ce0dc.png
+          - /app/share/image-routing/3060bcab07e320b055a321a266ac882cdcdb7bc3f5c93eb4b88334e2d83c912b.png
+          - /app/share/image-routing/375dc9bb824681b3492e1788d8c3233b8850f2b01dcba869c21a12680a3a41cf.png
+          - /app/share/image-routing/26cb806564157bddc0e63c542bc976e42fc1d157fb7481da17a3f98f21068355.png
+          - /app/share/image-routing/64030cfd7d96d85f3d7f5c68e234cf034c8b4f8dcb6dc286beb0c034b8d4fda8.png
+          - /app/share/image-routing/93a94a7857225f9442fd42c8eb29e82a2d755585cd5ad951b52bf3d47818e630.png
+          - /app/share/image-routing/b53522db3aa7685f56f8b281cb5a3ae2bcc0b6dd1acf2bbd4c382ccfa893c85e.png
+          - /app/share/image-routing/cda5f68d140acf08493848ffc3bc57ca105d0bea650e9bffcdf14d3ac872a1e6.png
+          - /app/share/image-routing/40cec2cedf5e3ffdefb54655fb4906e632cbe82cc19104492b8df611bbf83f38.png
+          - /app/share/image-routing/2ab2bee30389e1c5bb3205e3035c4a8bc3db7fb0992fb1eafd1bfd030a2fde20.png
+          - /app/share/image-routing/6eee9a0c96114b5c4beffd059bdb97004661b6df959afa532961fc0406ec72c9.png
+          - /app/share/image-routing/7d4c491b707ef8700c33a8f03b46c30d73dc30f1fcea0b58e1a3abc804bbb3e4.png
+          - /app/share/image-routing/f9f34585cb86d056d4b71370034c865259d58bf4ef4aa60169245dbcdd76ff48.png
+          - /app/share/image-routing/f19df34122e6ab4d57aa3ddedd7a18dc952d311c84071fe11b3b0deb8f65219b.png
+          - /app/share/image-routing/0e9009ddca5825c9b99008025f2317778ea8f0b011fd89f435f5ce57caa4fda1.png
+          - /app/share/image-routing/aa9bfaa3ff6e99e1f98450902029727678704cd3e974271ea12f99a6a648b3f8.png
+          - /app/share/image-routing/70b291319d777976afe2f2de8192101166c4b5809046acae76a3b1a75421fb31.png
+          - /app/share/image-routing/4ccf4d33e665665604718ff287391a9295171630368eb169428ca48698403e4b.png
+          - /app/share/image-routing/d83aee82092144b8f8cea5c12bb3022d07b86d6a2dbc1dec5f40b790d6f34f66.png
+          - /app/share/image-routing/fb36a1a161350a9cd5575080f2e345687d12f9b6b39ac0fe7707e637f78073f9.png
+          - /app/share/image-routing/c9923db6bc4693de358f77061de5941e04317688395ae6fd2a243f8cdc006254.png
+          - /app/share/image-routing/ff9e5c420ab44312b22744e2be264c2bbbea44ccacd5cc8d5bd0d390e8103069.png
+          - /app/share/image-routing/c4ac35e84d19bca1730211d1ee84e32656292b5c1b9d7677454f1153f75e00e9.png
+          - /app/share/image-routing/b901c0f8837a07396e2c524335d81d23310c7d0b2ed6dea7dde6a2cfd29feb70.png
+          - /app/share/image-routing/e72a462b447def1d48bf860e540be1c687e16d572f6613ee105e2072e9d879b0.png
+          - /app/share/image-routing/0174cece4f5bf2c4771748fd4a2065e31728fac16b902f8e6f206d4e8a3eaf7c.png
+          - /app/share/image-routing/546e835f002282d195a83f0d226518f5e00f4180d1fd340d2dd2d4a2e6096aad.png
+          - /app/share/image-routing/fd396e7d46ed56894f0247771c5c414dce252baa89a3b2ddeef98796caaf8b1a.png
+          - /app/share/image-routing/2be864b94d06ffdba4209f63ebfee818b8dcd8705463e7d42ae1bfd3fdea4e06.png
+          - /app/share/image-routing/2c53167dc16137536456de34feb10aa3d6d2b438965ad97b945c5c5767ae11c9.png
+          - /app/share/image-routing/a230537862a01d98cc22032e405a6aa4c7e6839788d4609b9974431b7ab3daf2.png
+          - /app/share/image-routing/68343021fbe886a478af0ccc8203b70571c7990d97236aaa2ee746af9dc91017.png
+          - /app/share/image-routing/bf1848eb320bcd6b60283a319eef11a4a0fcb6bed580c75668c6df7d654bbb1c.png
+          - /app/share/image-routing/73829947e60ffc7f3081fb596ba8eeb63c7a1c3344e027e5da9dc1317bdfb8b4.png
+          - /app/share/image-routing/a663afcf6ad18aa0a66192216ae733de1413d92a5959e498303fc462fbccbc83.png
+          - /app/share/image-routing/d23a1c6aff95f52bf93d85a4d7e9ee538ea8063a78cb05bb77c1d0f6b4d1f5b4.png
+          - /app/share/image-routing/0f6ef99db75040a677f976f1302f4ac237d63478102497d79bcd3ce1b235acaa.png
+          - /app/share/image-routing/a608ed29b6c75dede6893af2a57f8cef6e40275f1f835e2a829b1b3977e5a27f.png
+          - /app/share/image-routing/adfadc62c39e79b61182cb8d42a16ad6953cf0c5c8e6ee65563bf18d7a46efeb.png
+          - /app/share/image-routing/2d289ad65608bb2140de75a74d54829c5e62b20fd5e67e55fdf3a56d29ee373a.png
+          - /app/share/image-routing/0e8122c71ebb7f168c7231ea605cdb04de1350ab8b3e671cb7140f4d79651d92.png
+          - /app/share/image-routing/1b74761356df1f4980b30d43e8e6a4b7dd8345e065d28ad3224f0df2cb1bbad4.png
+          - /app/share/image-routing/11929bf1b2fa05379449ab52276255899383298d51d87842494933235b975af9.png
+          - /app/share/image-routing/656a15592568d725cfffe61b02704c2d9047d880c6b9e68cf4861f787475f490.png
+          - /app/share/image-routing/4d5d6858be05dfe584536320b1f51b77c9e30280524488e43b0be5c894458d66.png
+          - /app/share/image-routing/89a2784a26f57d2e0ec5c5c572cf3d3be041975437678b79c549ee7d93f5552e.png
+          - /app/share/image-routing/09bbe31e6ef1371e405c9a395e0c52b6dd02ddd80e324a5439dd8181a0e24632.png
+          - /app/share/image-routing/bcd98c5d451bd8a0720e6bf3fab8f6b0b3b3d6190ce2fd2690de686dbca0b407.png
+          - /app/share/image-routing/df462ad7c09a66d0caadc47ec7f5d264a43019ab843bf71418344c1b2bb8ea8b.png
+          - /app/share/image-routing/6843b72b8a0f2109afdfdeda64f77578a7723bcea63225eba345c8a05d001f76.png
+          - /app/share/image-routing/a69f9253bbcaf96175960d55744c97b8e43d642a64a464e276000abb9fb14020.png
+          - /app/share/image-routing/de6f23f3287d0177ceacc8c81837c07575c232b8b945cd43f578520ad7fd9774.png
+          - /app/share/image-routing/5feabe43b8e060f86756ccb1a4e8c4fd3b1e2c13b1224de7597f92d7bed678b8.png
+          - /app/share/image-routing/690e2b35cfaa4e5424832437fc7c4388d3df534a6728ac4b1ac05b97d26dda16.png
+          - /app/share/image-routing/c223388bbfb3208affea54f81b35ad53fb1c5d6240c3b27370beb43807fe9cea.png
+          - /app/share/image-routing/4779f3e20bb7124d9cfe940a2c99ee270ce719ae29937be9b6f1dec68b3da44a.png
+          - /app/share/image-routing/e82b2ea85a8c23c2a2fb38c6aad595a77e24f7166fa5d49020a209f6b70e9776.png
+          - /app/share/image-routing/928d42c36e5bafc6f9a9a2cb7e427cc826f432d088b75da48e8edf1765706181.png
+          - /app/share/image-routing/3ba771a8f104cadcb528ef5d08b8411cfc7d009697ab526562599e95b11d3552.png
+          - /app/share/image-routing/ad305e537ade4eee357a467debdb2f6025e498e28ff26b0968c8d48661a93bfb.png
+          - /app/share/image-routing/c97d41c0df6807326eadb59d884c0d6090b5c715d8fb95d96dff74a77dbe4218.png
+          - /app/share/image-routing/65ce81f9aba925799f90bdaa67ef17a13245f6d8e886faf5c666d5fb0a51126e.png
+          - /app/share/image-routing/d3bf4d3833e8043e76fcec50ba9ff2a43ec31e4c0cc8271fa05363e8d006bbec.png
+          - /app/share/image-routing/fbfacd5cb4ded81705a2670d2403382d15ab3aeb0d12a28ea7e536d78bfae48f.png
+          - /app/share/image-routing/e8f4a53d08c0225d172fc3ee28d06beac6a9f3d462e2be187024a3bbec731a12.png
+          - /app/share/image-routing/21fc4d652ac17c61f9880237d9c0c9dc83e5e938b526628da6b3e14fb9dc3cef.png
+          - /app/share/image-routing/e49d677ab53b2b93b01d4d0f4db676ddaa0a744e9a45ca5e3b3433545887c24f.png
+          - /app/share/image-routing/802cf69d9d6f895bd71371981e8833832065abd0f9f31db759a4498edfef78f8.png
+          - /app/share/image-routing/30cfc555022ff255aa735870ddae5eabe1fb3fbecd0c1c0a6ff49c4bc922ae77.png
+          - /app/share/image-routing/580fa255ac5db60d371587b8d3f6ae8323f3e4be35788c2ec884ee36fee3d3a7.png
+          - /app/share/image-routing/769b705ffd35bcffd40a0d2d6002d9bd645ac9eea06da5281dbf0091cc8e9880.png
+          - /app/share/image-routing/cef890ae8b3629d7f8fd61b50eaa00353a95eb97f69a43cd985dc754c081c362.png
+          - /app/share/image-routing/b9a953f9100ed3cf6f5b9b4444e4e5b2a93d85c68c31a8eff692bb63b637f50a.png
+          - /app/share/image-routing/4457ad6a430da0adcd6af7eafc3ea3e6d043a2bf8faa07b7305e7c14a584bc99.png
+          - /app/share/image-routing/bd25463c23490fbfc34dd32f4c46c235acd58de361a69be4f7cbeb956645bbbc.png
+          - /app/share/image-routing/1de9a5df6f3b7a87f8a1aeb0d0829722b0994f1b3e95d3e5325bf1605df948cb.png
+          - /app/share/image-routing/721d5c7b085b23b80dbdcf404dfcdef6da3e5de60707177b4287f1e52f9b5a01.png
+          - /app/share/image-routing/5652e7cc1acb498f1c022a14afab83ea4e8f65a53f9f317be60f4c3ce5ba3a1a.png
+          - /app/share/image-routing/5ad0d68cde151e317489cd94d7a751ded6ceabcd7e3de1c46b5af3944c41c607.png
+          - /app/share/image-routing/be26f3d3300920cea51eef3e3e8a22467018146ef7605a2532188591ffdf9a29.png
+          - /app/share/image-routing/66f08bcf3c3ceeb363e7686166d86127da3b6079c8cdcbbf63f3b368a976360b.png
+          - /app/share/image-routing/d9a7293bc4c686d91c2a19e52cacc4d6cadb296920a45e5fabd907ac6d4e3444.png
+          - /app/share/image-routing/93f22e32d2414b5c77f9968b10c855beeb48fa35ad5d101da4c747b43293025b.png
+          - /app/share/image-routing/d54e6b54fa028771123ed849c812f5a6109d07c22b1e5d41cb095ee47c99eec7.png
+          - /app/share/image-routing/3f584c0a21f6c75626d7d81d070cd2f02363925a256ba78824320af12abdda8d.png
+          - /app/share/image-routing/585d4cdcbd6e0e1f8c25ff036cf10abfa702f4a8044fb0ed6338a2a64fd38928.png
+          - /app/share/image-routing/54c8bf1a042fa78dc433af0514ebdb553c5bdab64b570f1565802a1652686338.png
+          - /app/share/image-routing/e2a1576f731a46a78fdadbceb3bfb0232794dcdd0d2dc69b0c5bb53d4201942d.png
+          - /app/share/image-routing/ce082f2453748475fe9f71cd6e79a6039b007767b68f14f6552528086de69573.png
+          - /app/share/image-routing/cea6eba081dcc2f8de609550f8e4be176d823302180b4434f8508f638c7bfba0.png
+          - /app/share/image-routing/29addc07ce672a51e39ef2c5d46deecd64adc5bcc073bcf927172e5b891ad8db.png
+          - /app/share/image-routing/7ec7fcdd43af064afb09aeb2450fb6acaecd25bd6fe9e611d2061df344d88948.png
+          - /app/share/image-routing/821d35a0dee60645732bc3c3c274ed2ff30696320767604226dd915a008043e2.png
+          - /app/share/image-routing/198acb590dc05cd730e4211dca0488cc3316d906ed5a37ab4eb787e1db337237.png
+          - /app/share/image-routing/81e42ebba64fc5a546dc97925c74e1d01272c2a54a5f89bf68361e85caad3193.png
+          - /app/share/image-routing/eaa0fe81ac3014d040b5784092e9fd9a0cddbf77cd5471987409de8ec2d916d2.png
+          - /app/share/image-routing/922805d258d15413c8c717988468e5c1778e78fec29f05fed11dcce84720014a.png
+          - /app/share/image-routing/94876734161ddd5dc57295736145d9692c7e10cdf02bb8d58d8a32c5bbf201d7.png
+          - /app/share/image-routing/b1fc3ab99566b7736bf3f089d6c72821e8e9237048a2e851b7d202cfacac6cc0.png
+          - /app/share/image-routing/85d354ae8b01352b0b3b812616f3ad4cbca384f014f940a56bc4805a033f1914.png
+          - /app/share/image-routing/e774dc3fb559dc22879fd82e9b6e2b03afda3bc934735dfb4e141b356972296b.png
+          - /app/share/image-routing/c0c3c2b39342f84244efff757af72c3ca67ec3df2ced56887f7c12690e411ce0.png
+          - /app/share/image-routing/f70641443aa1ad883b895fa302b1019dc673f3798c1c3fe99ad64896902cd003.png
+          - /app/share/image-routing/dd5baa0ea46c17ff1ead0297dcee6f24f86253ce4bca78d5a042513de9b557dc.png
+          - /app/share/image-routing/dd36e0c49c0b8d0e6ccd69ffac9116b9c175cadacd1d9331963de88ffe42f3b8.png
+          - /app/share/image-routing/eea33e7ad74c6255809b913ecf420a46ab7282f3233ebb6020e1136defcb919b.png
+          - /app/share/image-routing/efd983b32c5384425daf87d089d3938d1ae25b357aff3f3a161c9c57a6c0006e.png
+          - /app/share/image-routing/673757b8a6b87f529c080ff8acf7fc1418664f4ea81ac3fb7d3297bcdebe3bcd.png
+          - /app/share/image-routing/bf9c3db446f7da2ca2b4217303c3cacc66b4cec6847de1676bfb2ba831995bff.png
+          - /app/share/image-routing/aaee9f1163c7ee61f2c096d3ddd25f7f65d0ade513686fae5985c852f33f5b4a.png
+          - /app/share/image-routing/b3932f7eeef46383c3a3afae9b9ea6a708a1fb9855a90995c96a5d27f86322b8.png
+          - /app/share/image-routing/f9ebb8cf01da854170a01ae35d71aa02db29bd3e6c504127f9e4dcdc2f367242.png
+          - /app/share/image-routing/203fe6ad9c503beff57052e0e93994e737d1d9c4315613c2cb5471eee6e1b771.png
+          - /app/share/image-routing/2f64e2a1f718b19db498285739e08428a263b831210ac8bab088ef38fb7b0835.png
+          - /app/share/image-routing/c705478fb6d121c6a05b5a33f6a01447a1e0697e3aebec08e508139acd4d96c7.png
+          - /app/share/image-routing/8e217480c525decb8bfc6292c0b2e0091b1f782b8ea8bc8f8061a6f694bd68bf.png
+          - /app/share/image-routing/6c83863f7177d56e0c6fce882147db62635f1db32301a66fa23e4bc2451bfd06.png
+          - /app/share/image-routing/0246b330419b520af72c15f204ca4180d10ee93fa6c2ed3c2383f6efdd6c1102.png
+          - /app/share/image-routing/2ae922b7161d7c0642b3d20f55ddedfc7828f74edb85e2d670c4f91aad30f602.png
+          - /app/share/image-routing/e017a8401dd9486b0fc54a755825c6e8bdb5f80ed45eb2c945b0ca38b9c8cde0.png
+          - /app/share/image-routing/07676cff547c229f223e7355b26c4e1b07658148fd2d70a7bc654ef19f0e0204.png
+          - /app/share/image-routing/43dd793c852909e8b2e705ad8cd74ef27836d29307757158e9b7013c1cdb2aa1.png
+          - /app/share/image-routing/4a5f588764f8e9a93d1df5714d268888c00769768d8227611eeba103b9d2b927.png
+          - /app/share/image-routing/a22a3b24215e9ed406b26fb34de5ad88572c8ee0163784db72699863992f2082.png
+          - /app/share/image-routing/29addc07ce672a51e39ef2c5d46deecd64adc5bcc073bcf927172e5b891ad8db.png
+          - /app/share/image-routing/2cd44f68b9035a6b114970027abd7f23481e9e7ca97ec278e17fa336a4ce606e.png
+          - /app/share/image-routing/e774dc3fb559dc22879fd82e9b6e2b03afda3bc934735dfb4e141b356972296b.png
+          - /app/share/image-routing/2fb119a687c4b58d73eb2745d43cde15c72a262c69352863c32a0d9780df5859.png
+          - /app/share/image-routing/99adef1e2ea91cb9428e83d7b09036bb6f3480b54190750a2d03d563a7d5f517.png
+          - /app/share/image-routing/aaee9f1163c7ee61f2c096d3ddd25f7f65d0ade513686fae5985c852f33f5b4a.png
+          - /app/share/image-routing/1f3247098dc74013800333ecf0290f932e2c8468c88ed9d225b65ac2bcd741ae.png
+          - /app/share/image-routing/98b073109389ade789694f1ea5a836ebf7754f59584b693971ac9377d13080f3.png
+          - /app/share/image-routing/beb354b075f3eed3b13f9a66151d8a8c22813ecff12430b06224f6d1189c142c.png
+          - /app/share/image-routing/67be4f34497fc9f4b941594f796119882f26b54b3b559da9335583b39323537b.png
+          - /app/share/image-routing/8cd443a8ffafba8395adc34b07b2dc12f8b11ef02315dccebd36ee0890ff0d35.png
+          - /app/share/image-routing/76cff40e354769da96d1253f04348e48605285c27126e34caf5d1ee44866c2e6.png
+          - /app/share/image-routing/aae3db291a56302bc0aa3cf55c049da4d1d8ae7530442d9c7146f8ea3d19c4b7.png
+          - /app/share/image-routing/b3932f7eeef46383c3a3afae9b9ea6a708a1fb9855a90995c96a5d27f86322b8.png
+          - /app/share/image-routing/b853412620f5dead733ea6e97c810ec01f3930b2048d1b9ececef7b3e82bd01e.png
+          - /app/share/image-routing/2997006da4798cf5a706d800a6f2060666568315779e26898d0e079bd4fcadb7.jpeg
+          - /app/share/image-routing/c93ee4d4000134afeaad2f1783cac0367bf054891a10f55eda6ce00cc0c58906.jpeg
+          - /app/share/image-routing/cd0e184b8ff4e12f260bc96281009a9760290d32408f0acea48f4f44bdcfb158.jpeg
+          - /app/share/image-routing/dd82e6cb9ddaa084a0cd0c53f986f5ec160383010ebd8b1ec8d922270ebc17b7.jpeg
+          - /app/share/image-routing/8bdb3a60d6731fa2d60022251d05a5a222292dc703b6116565446691807fbf9b.jpeg
+          - /app/share/image-routing/8646b07d4d619c0c42cfd41917a7eac058908011fbe6540cca70291824e6c1eb.jpg
+          - /app/share/image-routing/9419db5e4ce300d4755bc2d52a1ee62f9f4a473df4b71f21e051d9e741f6a306.png
+          - /app/share/image-routing/3e729a1dc61fa20d4f47a1568d015fc3ea0c33311b15849e397fdeb725119e76.png
+          - /app/share/image-routing/6cdaea6a5b97d4cdcf4dde4a0ad88b282779edd2ce8316aa33e043d961e64cf4.jpeg
+          - /app/share/image-routing/513c3cee33b9995555aaed47f592c6c4d2ef30a3db08415774d8fb7070de00e1.jpeg
+          - /app/share/image-routing/8a9b2558633ac54eba0144c8ddd4ef3f45a4cd3d9aee3920d12a6aaa4616b00e.png
+          - /app/share/image-routing/9c2b6739a43f617990c7245cd574be9f785557364cd948d1afca11a8700fcba9.png
+          - /app/share/image-routing/bcd6aacee500f534b0f00ca69b2fd6a7253949bf6b977f20a72c60585dcb33e9.png
+          - /app/share/image-routing/e77dce4b858781b8b6c52e9f3c74bdf24375f87577cefa7a505b149c925d04f2.png
+          - /app/share/image-routing/55df48de5c29fa8ae0243e22508bbec4f988ba626fb4c61651f3a0a4b885a180.png
       - name: "ambient_office_imagery"
         queryModality: "image"
-        threshold: 0.54
+        threshold: 0.054949798
         aggregationMethod: "max"
         candidates:
           - "photograph of a whiteboard with handwritten notes"
@@ -54,6 +231,36 @@ spec:
           - "photograph of a coffee cup or notebook on a desk"
           - "photograph of indoor potted plants or office decor"
           - "photograph of a wide factory floor or warehouse aisle"
+        negativeCandidates:
+          - "screenshot of source code in an editor"
+          - "terminal or shell window screenshot"
+          - "screenshot of a log file or stack trace"
+          - "git diff or pull-request review screenshot"
+          - "screenshot of a debugger paused at a breakpoint"
+          - "command-line build output or test runner output"
+          - "screenshot of an API response or HTTP request body"
+          - "screenshot of a database client or SQL query result"
+          - "Screenshot of a code editor displaying programming language source code."
+          - "A computer terminal showing shell commands and their text output."
+          - "A terminal window filled with error logs and a stack trace."
+          - "A programming IDE with syntax highlighted source code."
+          - "A screenshot showing JSON response text in a command line terminal."
+          - "A source code file open in a text editor with line numbers."
+          - "A software developer's screen with code, brackets, functions and variables."
+          - "Screenshot of a command-line test runner showing test results."
+          - "A side-by-side source code diff with added and removed lines."
+          - "A terminal displaying a curl command and an HTTP JSON response."
+          - "A screenshot of structured text logs from a running program."
+          - "A SQL query editor with a database query written as source text."
+          - "A flowchart with connected boxes and arrows."
+          - "An architecture diagram explaining a software system."
+          - "A chart or graph showing benchmark results."
+          - "A presentation slide with a large title and bullet points."
+          - "An illustration or promotional banner for a software product."
+          - "A website or dashboard with charts, panels and navigation menus."
+          - "A company logo or icon on a plain background."
+          - "A table comparing numbers, features or performance metrics."
+          - "A user interface form with buttons and text fields."
 
   decisions:
     - name: "route_identifier_document_on_prem"

@@ -270,7 +270,12 @@ def test_plan_rejects_tampered_source_and_changed_digest_before_policy(
         for index, line in enumerate(lines(*args, **kwargs)):
             yield line
             if index == 0:
-                path.write_bytes(original.replace(b'"answer":"A"', b'"answer":"B"'))
+                # Buffered reads can retain the original bytes, and some
+                # filesystems coalesce timestamps for same-size writes. Grow
+                # the source too so the concurrent mutation is deterministic.
+                path.write_bytes(
+                    original.replace(b'"answer":"A"', b'"answer":"CHANGED"')
+                )
 
     monkeypatch.setattr(contracts, "verified_lines", change_during_scan)
     with pytest.raises(ValueError, match=r"changed|digest"):

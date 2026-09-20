@@ -68,9 +68,16 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 	// Normalize metric type to uppercase so configs using e.g. "cosine" match the
 	// expected enum values (COSINE, IP, L2) without triggering fallback warnings.
 	valkeyConfig.Index.VectorField.MetricType = strings.ToUpper(valkeyConfig.Index.VectorField.MetricType)
+	var err error
+	copiedConfig := *valkeyConfig
+	valkeyConfig = &copiedConfig
+	valkeyConfig.Index.VectorField.Dimension, err = resolveCacheDimension(valkeyConfig.Index.VectorField.Dimension, options.EmbeddingProvider)
+	if err != nil {
+		return nil, err
+	}
 	logging.Debugf("ValkeyCache: config loaded - host=%s:%d, index=%s, dimension=%d",
 		valkeyConfig.Connection.Host, valkeyConfig.Connection.Port, valkeyConfig.Index.Name,
-		semanticCacheEmbeddingDimension(valkeyConfig.Index.VectorField.Dimension, options.EmbeddingModel))
+		semanticCacheEmbeddingDimension(valkeyConfig.Index.VectorField.Dimension, options.EmbeddingProvider))
 
 	resolvedHost := normalizeLocalHostForContainerRuntimes(valkeyConfig.Connection.Host)
 	logging.Debugf("ValkeyCache: connecting to Valkey at %s:%d (configured host=%s)",
@@ -114,7 +121,7 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(valkeyConfig.Index.VectorField.Dimension, embeddingModel), 0)),
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(valkeyConfig.Index.VectorField.Dimension, options.EmbeddingProvider), 0)),
 	}
 
 	releaseClient := func() { valkeyClient.Close() }
@@ -206,9 +213,9 @@ func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32,
 
 func (c *ValkeyCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return 0
 	}
-	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingProvider)
 }
 
 // createIndex builds the Valkey index with the appropriate schema

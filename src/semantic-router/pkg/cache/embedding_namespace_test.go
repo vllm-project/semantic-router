@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
@@ -25,7 +26,7 @@ func physicalNamespace(cfg CacheConfig) []string {
 }
 
 func namespaceFixture(backend CacheBackendType, dimension int) CacheConfig {
-	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingModel: "mmbert"}
+	cfg := CacheConfig{Enabled: true, BackendType: backend, EmbeddingModel: "mmbert", EmbeddingProvider: storagetest.Vectors{Size: 768}}
 	switch backend {
 	case RedisCacheType:
 		cfg.Redis = &config.RedisConfig{}
@@ -59,7 +60,7 @@ func TestEmbeddingNamespaceIsolatesPhysicalIndexesAndPrefixesBeforeOpening(t *te
 				if settings.Layer != 0 || settings.Dimension != 768 {
 					t.Fatalf("wrong effective settings: %#v", settings)
 				}
-				return embedding.ContentIdentity{Fingerprint: "old-weights-768"}, nil
+				return embedding.ContentIdentity{Fingerprint: "old-weights-768", Descriptor: embedding.RuntimeDescriptor{Dimension: 768}}, nil
 			}
 			first, identity, err := PrepareEmbeddingNamespace(original, resolve)
 			if err != nil || identity == "" {
@@ -70,7 +71,7 @@ func TestEmbeddingNamespaceIsolatesPhysicalIndexesAndPrefixesBeforeOpening(t *te
 				t.Fatal("same identity was not stable")
 			}
 			changed, _, err := PrepareEmbeddingNamespace(original, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
-				return embedding.ContentIdentity{Fingerprint: "new-weights-768"}, nil
+				return embedding.ContentIdentity{Fingerprint: "new-weights-768", Descriptor: embedding.RuntimeDescriptor{Dimension: 768}}, nil
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -88,7 +89,7 @@ func TestEmbeddingNamespaceIsolatesPhysicalIndexesAndPrefixesBeforeOpening(t *te
 					if settings.Dimension != 256 {
 						t.Fatalf("reduced dimension ignored: %#v", settings)
 					}
-					return embedding.ContentIdentity{Fingerprint: fmt.Sprintf("new-weights-%d", settings.Dimension)}, nil
+					return embedding.ContentIdentity{Fingerprint: fmt.Sprintf("new-weights-%d", settings.Dimension), Descriptor: embedding.RuntimeDescriptor{Dimension: settings.Dimension}}, nil
 				})
 				if err != nil {
 					t.Fatal(err)

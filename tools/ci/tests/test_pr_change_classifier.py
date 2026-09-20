@@ -55,6 +55,25 @@ class SelectionTests(unittest.TestCase):
             classify(["src/semantic-router/pkg/extproc/processor.go"]).selected_jobs,
         )
 
+    def test_prepared_image_dependencies_select_calibration_and_routing(self):
+        expected = {IMAGE_CALIBRATION, "e2e.multimodal-routing"}
+        for path in (
+            "config/assets/image-routing/manifest.json",
+            "tools/calibration/image-routing/prepare_assets.py",
+            "tools/calibration/image-routing/testdata/prototype-protocol.json",
+            "tools/models/vela_omni/export.py",
+            "onnx-binding/src/model_architectures/embedding/omni/image.rs",
+            "onnx-binding/src/core/session.rs",
+            "onnx-binding/Cargo.lock",
+            "src/semantic-router/pkg/embedding/embedding.go",
+            "src/semantic-router/pkg/modelruntime/embedding_owned.go",
+            "src/semantic-router/pkg/modelruntime/native/embedding.go",
+            "src/semantic-router/pkg/modelruntime/native/embedding_omni.go",
+            "src/semantic-router/pkg/modelruntime/native/ort_execution.go",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(expected <= set(classify([path]).selected_jobs))
+
     def test_every_authored_calibration_asset_selects_its_consumer(self):
         path = ROOT / "tools/calibration/image-routing/testdata/calibration-set.json"
         manifest = json.loads(path.read_text())
@@ -73,7 +92,7 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(plan["publish_images"])
         record = plan["verifications"][0]
         self.assertEqual(record["source_sha"], SHA)
-        self.assertEqual(record["platform_id"], "candle-cpu")
+        self.assertEqual(record["platform_id"], "ort-cpu")
         self.assertEqual(record["workflow"], ".github/workflows/test-native.yml")
         self.assertEqual(record["reasons"], ["manual-selection"])
         self.assertIn(IMAGE_CALIBRATION, full_cpu_ids())

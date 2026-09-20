@@ -32,7 +32,6 @@ func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	}
 
 	embeddingModel := memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg))
-	normalizeValkeyDimension(vc, embeddingModel)
 
 	embeddingConfig := &memory.EmbeddingConfig{
 		Model:     embeddingModel,
@@ -45,6 +44,15 @@ func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		}
 		embeddingConfig.Provider = provider
 	}
+
+	dimension, err := memory.StorageDimension(vc.Dimension, *embeddingConfig)
+	if err != nil {
+		return nil, err
+	}
+	copied := *vc
+	vc = &copied
+	vc.Dimension = dimension
+	embeddingConfig.Dimension = dimension
 
 	logging.Infof("Memory: connecting to Valkey at %s:%d, embedding=%s", host, port, embeddingConfig.Model)
 

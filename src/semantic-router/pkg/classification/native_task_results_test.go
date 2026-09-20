@@ -49,21 +49,3 @@ func TestNativeTaskResultsKeepByteOffsetsAndPartialError(t *testing.T) {
 		t.Fatal("adapter invented a native truncation offset")
 	}
 }
-
-func TestNativeTaskResultsEmbeddingMetadataAndOwnership(t *testing.T) {
-	native := &candle_binding.EmbeddingOutput{
-		Embedding: []float32{3, 4}, ModelType: "mmbert", SequenceLength: 5, ProcessingTimeMs: 1.25,
-	}
-	result, err := nativeEmbeddingResult(native, nil)
-	if err != nil || result.ModelType != "mmbert" || result.SequenceLength != 5 || result.ProcessingTimeMs != 1.25 {
-		t.Fatalf("lost embedding metadata: %+v, %v", result, err)
-	}
-	native.Embedding[0] = 0
-	if !reflect.DeepEqual(result.Embedding, []float32{3, 4}) {
-		t.Fatalf("adapter normalized or aliased the embedding: %v", result.Embedding)
-	}
-	wantErr := errors.New("execution failed")
-	if result, err := nativeEmbeddingResult(nil, wantErr); result != nil || !errors.Is(err, wantErr) {
-		t.Fatalf("nil failed native output changed: %+v, %v", result, err)
-	}
-}

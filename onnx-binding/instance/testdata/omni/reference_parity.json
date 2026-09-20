@@ -1,0 +1,16 @@
+{
+  "fixture_only": true,
+  "format_version": 1,
+  "passed": true,
+  "source": {
+    "repo_id": "test/constant-graphs",
+    "revision": "0000000000000000000000000000000000000000"
+  },
+  "tests": [
+    {
+      "name": "constant graph fixture",
+      "passed": true
+    }
+  ],
+  "variant": "nano"
+}

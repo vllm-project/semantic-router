@@ -37,6 +37,11 @@ type ModelSpec struct {
 	// Only applied when the resolved repository still matches this entry.
 	DownloadExcludePatterns []string `json:"-" yaml:"-"`
 
+	// PreparedArtifact identifies an offline, manifest-verified runtime bundle.
+	// These releases cannot be provisioned by downloading native HF weights.
+	PreparedArtifact string `json:"prepared_artifact,omitempty" yaml:"prepared_artifact,omitempty"`
+	ArtifactBundle   string `json:"artifact_bundle,omitempty" yaml:"artifact_bundle,omitempty"`
+
 	// Alternative names/aliases for this model
 	Aliases []string `json:"aliases,omitempty" yaml:"aliases,omitempty"`
 
@@ -65,6 +70,15 @@ type ModelSpec struct {
 
 	// Whether this model uses LoRA adapters
 	UsesLoRA bool `json:"uses_lora,omitempty" yaml:"uses_lora,omitempty"`
+
+	// DefaultAdapter declares task semantics for implicit built-in bindings.
+	// Explicit recipe bindings always take precedence.
+	DefaultAdapter string `json:"default_adapter,omitempty" yaml:"default_adapter,omitempty"`
+
+	// DefaultProvider and DefaultDevice select a published artifact's supported
+	// implicit execution format. Explicit deployments remain authoritative.
+	DefaultProvider string `json:"default_provider,omitempty" yaml:"default_provider,omitempty"`
+	DefaultDevice   string `json:"default_device,omitempty" yaml:"default_device,omitempty"`
 
 	// Number of classification classes (for classifiers)
 	NumClasses int `json:"num_classes,omitempty" yaml:"num_classes,omitempty"`
@@ -281,6 +295,26 @@ var DefaultModelRegistry = []ModelSpec{
 		Tags:                []string{"safety", "jailbreak", "prompt-injection", "modernbert"},
 	},
 
+	// Vela Halu has a pair-input contract distinct from the legacy detector.
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Halu",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Halu",
+		Revision:                "ca87531211e414ac21c641b2faa8b8e21619de8f",
+		DownloadExcludePatterns: velaTrainingArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Halu"},
+		Purpose:                 PurposeHallucinationDetector,
+		Description:             "Answer grounding against evidence and a user request with token-level hallucination spans.",
+		ParameterSize:           "307M",
+		EmbeddingDim:            768,
+		NumClasses:              2,
+		MaxContextLength:        8192,
+		BaseModelMaxContext:     32768,
+		DefaultAdapter:          "vela_halu",
+		DefaultProvider:         "candle",
+		DefaultDevice:           "cpu",
+		Tags:                    []string{"vela", "hallucination", "multilingual", "token-classification"},
+	},
+
 	// Hallucination Detection - Sentinel
 	{
 		LocalPath:        "models/mom-halugate-sentinel",
@@ -410,6 +444,33 @@ var DefaultModelRegistry = []ModelSpec{
 		EmbeddingDim:     768, // Default, supports 512/256/128/64 via Matryoshka
 		MaxContextLength: 32768,
 		Tags:             []string{"embedding", "matryoshka", "2d-matryoshka", "multilingual", "modernbert", "long-context", "early-exit", "flash-attention-2"},
+	},
+
+	// Omni runtime bundles contain four verified ONNX graphs and the exact
+	// published processors. Native source snapshots are not runtime artifacts.
+	{
+		LocalPath:     "models/vela-1.0-omni-nano",
+		RepoID:        "llm-semantic-router/Vela-1.0-Omni-Nano",
+		Revision:      "2ff2d66385dbdd661a560ec3e8bcb45a0527d92e",
+		Aliases:       []string{"Vela-1.0-Omni-Nano", "vela-1.0-omni-nano", "omni-nano"},
+		Purpose:       PurposeEmbedding,
+		Description:   "Vela Omni Nano text, image, and raw audio embeddings in one normalized 384-dimensional space.",
+		ParameterSize: "164M", EmbeddingDim: 384, MaxContextLength: 512,
+		DefaultAdapter: "vela_omni", DefaultProvider: "ort", DefaultDevice: "cpu",
+		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-nano",
+		Tags: []string{"embedding", "multimodal", "text", "image", "audio"},
+	},
+	{
+		LocalPath:     "models/vela-1.0-omni-mini",
+		RepoID:        "llm-semantic-router/Vela-1.0-Omni-Mini",
+		Revision:      "801bae3ad28df6891408f0e0441c676b30e132e3",
+		Aliases:       []string{"Vela-1.0-Omni-Mini", "vela-1.0-omni-mini", "omni-mini"},
+		Purpose:       PurposeEmbedding,
+		Description:   "Vela Omni Mini text, image, and raw audio embeddings in one normalized 768-dimensional space with 32K text input.",
+		ParameterSize: "1.36B", EmbeddingDim: 768, MaxContextLength: 32768,
+		DefaultAdapter: "vela_omni", DefaultProvider: "ort", DefaultDevice: "cpu",
+		PreparedArtifact: "vela_omni", ArtifactBundle: "vela-1.0-omni-mini",
+		Tags: []string{"embedding", "multimodal", "text", "image", "audio", "long-context"},
 	},
 
 	// Embedding Models - Multi-Modal (Text/Image/Audio)

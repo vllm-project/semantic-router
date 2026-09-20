@@ -40,7 +40,7 @@ func (p *Profile) Name() string {
 
 // Description returns a description of what this profile tests.
 func (p *Profile) Description() string {
-	return "Tests image-modality EmbeddingSignal routing via IntelligentRoute with the multi-modal-embed-small model"
+	return "Tests image-modality EmbeddingSignal routing via IntelligentRoute with the Vela-1.0-Omni-Nano model"
 }
 
 // Setup deploys all required components for Multimodal Routing testing.

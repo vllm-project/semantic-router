@@ -2442,6 +2442,24 @@
           },
           "type": "array"
         },
+        "image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "aggregation_method": {
           "type": "string"
         },

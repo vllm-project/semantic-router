@@ -631,7 +631,7 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, 
 | `POST` | `/api/v1/diagnostics/classify/combined` | Perform combined classification (intent, PII, and security) |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Batch classification with configurable task_type parameter |
 | `POST` | `/api/v1/diagnostics/nli` | Natural language inference classification for premise and hypothesis pairs |
-| `POST` | `/api/v1/diagnostics/embeddings` | Generate text and image embeddings |
+| `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |
 | `GET` | `/api/v1/diagnostics/models` | List prepared model bindings in an explicitly selected recipe |

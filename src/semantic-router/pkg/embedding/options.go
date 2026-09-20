@@ -28,7 +28,7 @@ type ImageProvider interface {
 	EmbedImage(context.Context, []byte, int) ([]float32, error)
 }
 type AudioProvider interface {
-	EmbedAudio(context.Context, []float32, int, int, int) ([]float32, error)
+	EmbedAudio(context.Context, AudioRequest) ([]float32, error)
 }
 
 // Window offsets are UTF-8 bytes in the original text, with End exclusive.
@@ -55,7 +55,7 @@ func Embed(ctx context.Context, provider Provider, text string, options Options)
 func Image(ctx context.Context, provider Provider, imageRef string, dimension int) ([]float32, error) {
 	p, ok := provider.(ImageProvider)
 	if !ok {
-		return nil, fmt.Errorf("embedding provider does not support images")
+		return nil, fmt.Errorf("%w: embedding provider does not support images", binding.ErrCapability)
 	}
 	var payload []byte
 	var err error
@@ -68,7 +68,7 @@ func Image(ctx context.Context, provider Provider, imageRef string, dimension in
 		payload, err = base64.StdEncoding.DecodeString(imageRef)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("decode embedding image: %w", err)
+		return nil, fmt.Errorf("%w: decode embedding image: %w", binding.ErrInvalidInput, err)
 	}
 	return p.EmbedImage(ctx, payload, dimension)
 }
@@ -118,17 +118,17 @@ func (p *providerView) EmbedBatch(ctx context.Context, texts []string) ([][]floa
 func (p *providerView) EmbedImage(ctx context.Context, data []byte, dim int) ([]float32, error) {
 	q, ok := p.Provider.(ImageProvider)
 	if !ok {
-		return nil, fmt.Errorf("embedding provider does not support images")
+		return nil, fmt.Errorf("%w: embedding provider does not support images", binding.ErrCapability)
 	}
 	return q.EmbedImage(ctx, data, dim)
 }
 
-func (p *providerView) EmbedAudio(ctx context.Context, data []float32, bins, frames, dim int) ([]float32, error) {
+func (p *providerView) EmbedAudio(ctx context.Context, request AudioRequest) ([]float32, error) {
 	q, ok := p.Provider.(AudioProvider)
 	if !ok {
-		return nil, fmt.Errorf("embedding provider does not support audio")
+		return nil, fmt.Errorf("%w: embedding provider does not support audio", binding.ErrCapability)
 	}
-	return q.EmbedAudio(ctx, data, bins, frames, dim)
+	return q.EmbedAudio(ctx, request)
 }
 
 // Windows reports a missing tokenizer as a capability mismatch, the same way a
@@ -177,4 +177,14 @@ func (p *providerView) RepresentationIdentity(options Options, inputPolicy strin
 		return ContentIdentity{}, ErrIdentityUnsupported
 	}
 	return owned.RepresentationIdentity(options, inputPolicy)
+}
+
+// EmbeddingInfo preserves capabilities when a consumer selects an output view.
+func (p *providerView) EmbeddingInfo() ModelInfo {
+	info := ModelInfo{Backend: p.Backend(), Dimension: p.Dimension()}
+	if described, ok := p.Provider.(Described); ok {
+		info = described.EmbeddingInfo()
+		info.Dimension = p.Dimension()
+	}
+	return info
 }

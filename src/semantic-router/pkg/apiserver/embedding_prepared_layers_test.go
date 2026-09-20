@@ -4,7 +4,6 @@ package apiserver
 
 import (
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -25,14 +24,14 @@ func TestOwnedEmbeddingRequestUsesPreparedLayers(t *testing.T) {
 	api := &ClassificationAPIServer{config: cfg}
 	set := embedding.NewSet(map[string]embedding.Provider{"mmbert": layerMetadataProvider{}}, "mmbert")
 	for _, tc := range []struct {
-		layer string
+		layer int
 		want  bool
-	}{{"16", true}, {"22", false}} {
-		request := httptest.NewRequest("POST", "/embeddings", strings.NewReader(`{"texts":["hello"],"model":"mmbert","dimension":256,"target_layer":`+tc.layer+`}`))
+	}{{16, true}, {22, false}} {
+		request := EmbeddingRequest{Texts: []string{"hello"}, Model: "mmbert", Dimension: 256, TargetLayer: tc.layer}
 		recorder := httptest.NewRecorder()
-		_, ok := api.parseEmbeddingRequest(recorder, request, set)
+		_, ok := api.prepareEmbeddingRequest(recorder, request, set)
 		if ok != tc.want {
-			t.Fatalf("layer %s accepted=%v, response=%s", tc.layer, ok, recorder.Body.String())
+			t.Fatalf("layer %d accepted=%v, response=%s", tc.layer, ok, recorder.Body.String())
 		}
 	}
 }

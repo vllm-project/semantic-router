@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
 func preparedEmbeddings(service classificationService) (*embedding.Set, error) {
@@ -78,8 +79,33 @@ func ownedEmbeddingOutput(ctx context.Context, set *embedding.Set, request Embed
 	return EmbeddingResult{Text: text, Embedding: vector, Dimension: len(vector), ModelUsed: model, ProcessingTimeMs: time.Since(start).Milliseconds()}, err
 }
 
+func selectOwnedEmbeddingMediaModel(set *embedding.Set, request EmbeddingRequest) (EmbeddingRequest, error) {
+	if (request.Model != "" && request.Model != "auto") || (len(request.Images) == 0 && len(request.Audios) == 0) {
+		return request, nil
+	}
+	var modalities []string
+	if len(request.Texts) > 0 {
+		modalities = append(modalities, "text")
+	}
+	if len(request.Images) > 0 {
+		modalities = append(modalities, "image")
+	}
+	if len(request.Audios) > 0 {
+		modalities = append(modalities, "audio")
+	}
+	selected, err := set.SelectModalities(modalities, request.Dimension, request.TargetLayer)
+	request.Model = selected
+	return request, err
+}
+
 func buildOwnedEmbeddingResults(ctx context.Context, set *embedding.Set, request EmbeddingRequest) ([]EmbeddingResult, int64, error) {
-	results := make([]EmbeddingResult, 0, len(request.Texts)+len(request.Images))
+	var err error
+	request, err = selectOwnedEmbeddingMediaModel(set, request)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	results := make([]EmbeddingResult, 0, len(request.Texts)+len(request.Images)+len(request.Audios))
 	var elapsed int64
 	for _, text := range request.Texts {
 		output, err := ownedEmbeddingOutput(ctx, set, request, text)
@@ -89,20 +115,36 @@ func buildOwnedEmbeddingResults(ctx context.Context, set *embedding.Set, request
 		elapsed += output.ProcessingTimeMs
 		results = append(results, output)
 	}
-	for index, image := range request.Images {
-		provider, err := set.Get("multimodal", request.Dimension, 0)
-		if err != nil {
-			return nil, 0, err
-		}
-		start := time.Now()
-		vector, err := embedding.Image(ctx, provider, image, request.Dimension)
-		if err != nil {
-			return nil, 0, &imageEncodeError{index: index, err: err}
-		}
-		duration := time.Since(start).Milliseconds()
-		elapsed += duration
-		results = append(results, EmbeddingResult{Modality: "image", Embedding: vector, Dimension: len(vector), ModelUsed: "multi-modal-embed", ProcessingTimeMs: duration})
+	media := []struct {
+		modality string
+		inputs   []string
+		encode   func(context.Context, embedding.Provider, string, int) ([]float32, error)
+	}{
+		{"image", request.Images, embedding.Image}, {"audio", request.Audios, embedding.Audio},
 	}
+	for _, batch := range media {
+		for index, payload := range batch.inputs {
+			model := request.Model
+			provider, err := set.Get(model, request.Dimension, request.TargetLayer)
+			if err != nil {
+				return nil, 0, err
+			}
+			start := time.Now()
+			if batch.modality == "image" {
+				if canonical, ok := imageurl.CanonicalDataURL(payload); ok {
+					payload = canonical
+				}
+			}
+			vector, err := batch.encode(ctx, provider, payload, request.Dimension)
+			if err != nil {
+				return nil, 0, &mediaEncodeError{modality: batch.modality, index: index, err: err}
+			}
+			duration := time.Since(start).Milliseconds()
+			elapsed += duration
+			results = append(results, EmbeddingResult{Modality: batch.modality, Embedding: vector, Dimension: len(vector), ModelUsed: model, ProcessingTimeMs: duration})
+		}
+	}
+
 	return results, elapsed, nil
 }
 
@@ -172,11 +214,6 @@ func (s *ClassificationAPIServer) acquireEmbeddingRuntimeForRecipe(recipe string
 	prepared, err := classifierEmbeddings(classifier)
 	var once sync.Once
 	return cfg, prepared, func() { once.Do(func() { snapshotRelease(); release() }) }, err
-}
-
-func (s *ClassificationAPIServer) acquireEmbeddingsForRecipe(recipe string) (*embedding.Set, func(), error) {
-	_, prepared, release, err := s.acquireEmbeddingRuntimeForRecipe(recipe)
-	return prepared, release, err
 }
 
 // Both leases span the complete operation: the outer generation can retire

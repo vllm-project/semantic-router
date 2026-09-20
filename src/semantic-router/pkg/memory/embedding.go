@@ -42,6 +42,9 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 		return nil, err
 	}
 	if cfg.Provider == nil && deterministicEmbeddingsEnabled() {
+		if strings.EqualFold(strings.TrimSpace(string(cfg.Model)), "multimodal") && cfg.Dimension <= 0 {
+			return nil, fmt.Errorf("simulated multimodal memory requires an explicit dimension")
+		}
 		return generateDeterministicEmbedding(text, cfg), nil
 	}
 	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
@@ -55,16 +58,20 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 			options.Dimension = 256
 		}
 	case "multimodal":
-		options.Dimension = cfg.Dimension
-		if options.Dimension <= 0 {
-			options.Dimension = 384
+		dimension, err := embedding.ResolveDimension(cfg.Provider, cfg.Dimension)
+		if err != nil {
+			return nil, err
 		}
+		options.Dimension = dimension
 	default:
 		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", modelName)
 	}
 	vector, err := embedding.Embed(ctx, cfg.Provider, text, options)
 	if err != nil {
 		return nil, fmt.Errorf("%s embedding failed: %w", modelName, err)
+	}
+	if modelName == "multimodal" && len(vector) != options.Dimension {
+		return nil, fmt.Errorf("multimodal embedding returned %d values, expected %d", len(vector), options.Dimension)
 	}
 	return vector, nil
 }
@@ -81,4 +88,22 @@ func embedForWrite(ctx context.Context, text string, cfg EmbeddingConfig) ([]flo
 		return nil, cause
 	}
 	return vector, nil
+}
+
+// StorageDimension binds a fixed-width index to its prepared representation.
+// Store-only callers without a provider must supply an explicit schema width.
+func StorageDimension(configured int, cfg EmbeddingConfig) (int, error) {
+	if configured == 0 {
+		configured = cfg.Dimension
+	}
+	if configured == 0 && cfg.Model == EmbeddingModelMMBERT {
+		configured = 256
+	}
+	if cfg.Provider != nil {
+		return embedding.ResolveDimension(cfg.Provider, configured)
+	}
+	if configured > 0 {
+		return configured, nil
+	}
+	return 0, fmt.Errorf("memory vector storage needs an explicit dimension or prepared embedding provider")
 }
