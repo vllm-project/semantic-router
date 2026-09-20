@@ -1909,14 +1909,6 @@ spec:
                         items:
                           type: string
                         type: array
-                      protocol:
-                        description: |-
-                          Protocol is retired and rejected at admission. Configure Backend with
-                          the protocol, contract and explicit external model name instead.
-                        enum:
-                        - http_chat
-                        - http_classify
-                        type: string
                       threshold:
                         default: "0.5"
                         description: Jailbreak detection threshold (0.0-1.0). Stored
@@ -1960,13 +1952,11 @@ spec:
                     x-kubernetes-validations:
                     - message: max_sequence_length requires the local mmbert32k variant
                       rule: '!has(self.max_sequence_length) || self.max_sequence_length
-                        == 0 || (!has(self.backend) && (!has(self.protocol) || size(self.protocol)
-                        == 0) && (!has(self.variant) || size(self.variant) == 0 ||
-                        self.variant == ''mmbert32k''))'
-                    - message: window requires the local mmbert32k variant
-                      rule: '!has(self.window) || (!has(self.backend) && (!has(self.protocol)
-                        || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant)
+                        == 0 || (!has(self.backend) && (!has(self.variant) || size(self.variant)
                         == 0 || self.variant == ''mmbert32k''))'
+                    - message: window requires the local mmbert32k variant
+                      rule: '!has(self.window) || (!has(self.backend) && (!has(self.variant)
+                        || size(self.variant) == 0 || self.variant == ''mmbert32k''))'
                     - message: window.size must not exceed max_sequence_length (512
                         when omitted or zero)
                       rule: '!has(self.window) || self.window.size <= (has(self.max_sequence_length)

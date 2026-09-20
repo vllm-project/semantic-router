@@ -241,10 +241,13 @@ class Engine:
         recovery=False,
         *,
         actor_role="local",
+        manifest_policy=None,
     ):
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest must be an object")
         if manifest.get("recovery") and not recovery:
             raise ValueError("Recovery lineage requires the explicit recovery endpoint")
-        frozen = plan(manifest)
+        frozen = plan(manifest, policy=manifest_policy)
         with self.store.lock:
             if request_key and (existing := self.store.request(owner, request_key)):
                 if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
