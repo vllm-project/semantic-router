@@ -127,7 +127,8 @@ class TestShadowDispatchPluginConfig:
                 budget=ShadowDispatchBudgetConfig(max_tokens_per_request=100),
             )
         with pytest.raises(
-            PydanticValidationError, match="requires price_per_million_tokens"
+            PydanticValidationError,
+            match="requires reserve_tokens_per_arm and price_per_million_tokens",
         ):
             ShadowDispatchPluginConfig(
                 enabled=True,
