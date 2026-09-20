@@ -6,13 +6,13 @@ from __future__ import annotations
 import json
 import os
 import stat
+import subprocess
 import sys
 import tempfile
 import textwrap
-import time
 import unittest
-import unittest.mock as mock
 from pathlib import Path
+from unittest import mock
 
 from same_run_harness import (
     host_identity,
@@ -97,7 +97,6 @@ class HostPairTests(unittest.TestCase):
             out_path = Path(tmp) / "p.json"
             base_path.write_text(json.dumps(baseline))
             cand_path.write_text(json.dumps(candidate))
-            import subprocess
 
             proc = subprocess.run(
                 [
@@ -112,6 +111,7 @@ class HostPairTests(unittest.TestCase):
                 ],
                 capture_output=True,
                 text=True,
+                check=False,
             )
             self.assertNotEqual(proc.returncode, 0)
             self.assertIn("refusing to pair cross-host", proc.stderr + proc.stdout)
@@ -158,7 +158,7 @@ class MultiPassTests(unittest.TestCase):
         self.assertEqual(
             len(latency_samples),
             4,
-            "all-pass latency samples retained (2 rows × 2 passes)",
+            "all-pass latency samples retained (2 rows x 2 passes)",
         )
         self.assertEqual(meta["scored_queries"], 4)
         self.assertEqual(meta["n_latency_samples"], 4)
@@ -189,9 +189,10 @@ class CandleAdapterTests(unittest.TestCase):
     def test_missing_helper_raises_system_exit(self) -> None:
         """SystemExit with a build hint when no binary is available."""
         self._clear_helper_env()
-        with mock.patch("shutil.which", return_value=None):
-            with self.assertRaises(SystemExit) as ctx:
-                load_candle_adapter("any-model", 256)
+        with mock.patch("shutil.which", return_value=None), self.assertRaises(
+            SystemExit
+        ) as ctx:
+            load_candle_adapter("any-model", 256)
         msg = str(ctx.exception)
         self.assertIn("candle-classify", msg)
         self.assertIn("CANDLE_CLASSIFY_HELPER", msg)

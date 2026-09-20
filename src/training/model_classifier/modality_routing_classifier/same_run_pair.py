@@ -41,8 +41,8 @@ def refuse_cross_host(baseline: dict, candidate: dict) -> None:
     if left != right:
         raise SystemExit(
             "refusing to pair cross-host runs "
-            f"(baseline={dict(zip(('cpu_model', 'core_count', 'ram_gb'), left))}, "
-            f"candidate={dict(zip(('cpu_model', 'core_count', 'ram_gb'), right))})"
+            f"(baseline={dict(zip(('cpu_model', 'core_count', 'ram_gb'), left, strict=True))}, "
+            f"candidate={dict(zip(('cpu_model', 'core_count', 'ram_gb'), right, strict=True))})"
         )
 
 

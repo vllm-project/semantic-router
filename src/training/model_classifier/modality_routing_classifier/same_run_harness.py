@@ -11,16 +11,21 @@ harness outputs. Pair two runs from the same host with same_run_pair.py.
 from __future__ import annotations
 
 import argparse
+import atexit
 import hashlib
 import json
 import os
 import platform
 import resource
+import shutil
+import subprocess
 import sys
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
+from importlib.metadata import version as _package_version_lookup
 from pathlib import Path
-from typing import Callable, TypedDict
+from typing import TypedDict
 
 LABELS = ("AR", "DIFFUSION", "BOTH")
 HOST_IDENTITY_KEYS = ("cpu_model", "core_count", "ram_gb")
@@ -71,9 +76,7 @@ def _ram_gb() -> float:
 
 def _package_version(name: str) -> str | None:
     try:
-        from importlib.metadata import version
-
-        return version(name)
+        return _package_version_lookup(name)
     except Exception:
         return None
 
@@ -81,7 +84,7 @@ def _package_version(name: str) -> str | None:
 def host_fingerprint(binding: str) -> dict:
     torch_version = None
     try:
-        import torch
+        import torch  # noqa: PLC0415 — optional heavy dep, only probed here
 
         torch_version = torch.__version__
     except Exception:
@@ -123,11 +126,11 @@ def percentile(values: list[float], p: float) -> float:
 def load_qsl(path: Path) -> list[dict]:
     rows = []
     with path.open() as handle:
-        for index, line in enumerate(handle):
-            line = line.strip()
-            if not line:
+        for index, raw_line in enumerate(handle):
+            stripped = raw_line.strip()
+            if not stripped:
                 continue
-            raw = json.loads(line)
+            raw = json.loads(stripped)
             text = raw["text"]
             rows.append(
                 {
@@ -142,8 +145,12 @@ def load_qsl(path: Path) -> list[dict]:
 
 
 def load_hf_adapter(model_id: str, max_length: int):
-    import torch
-    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    # Lazy: --binding candle must not require torch/transformers installed.
+    import torch  # noqa: PLC0415
+    from transformers import (  # noqa: PLC0415  # fmt: skip
+        AutoModelForSequenceClassification,
+        AutoTokenizer,
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     model = AutoModelForSequenceClassification.from_pretrained(model_id)
@@ -203,10 +210,6 @@ def load_candle_adapter(model_id: str, max_length: int):
       export CANDLE_CLASSIFY_HELPER=/path/to/candle-classify
       # or put candle-classify on PATH
     """
-    import json as _json
-    import shutil
-    import subprocess
-
     helper = os.environ.get("CANDLE_CLASSIFY_HELPER") or shutil.which("candle-classify")
     if not helper:
         raise SystemExit(
@@ -214,8 +217,6 @@ def load_candle_adapter(model_id: str, max_length: int):
             "Build:  cd candle-binding && go build -o candle-classify ./cmd/classify-helper/\n"
             "Export: CANDLE_CLASSIFY_HELPER=/path/to/candle-classify"
         )
-
-    import atexit
 
     try:
         proc = subprocess.Popen(
@@ -253,7 +254,7 @@ def load_candle_adapter(model_id: str, max_length: int):
     atexit.register(_terminate_helper)
 
     def classify(text: str) -> ClassifyResult:  # type: ignore[return]
-        request = _json.dumps({"text": text, "max_length": max_length}) + "\n"
+        request = json.dumps({"text": text, "max_length": max_length}) + "\n"
         t_submit = time.perf_counter_ns()
         try:
             proc.stdin.write(request)
@@ -267,7 +268,7 @@ def load_candle_adapter(model_id: str, max_length: int):
         if not line:
             err = proc.stderr.read()
             raise RuntimeError(f"candle helper closed stdout: {err.strip()}")
-        data = _json.loads(line)
+        data = json.loads(line)
         if "error" in data:
             raise RuntimeError(f"candle helper returned error: {data['error']}")
         classify.helper_stats["cpu_s"] = float(data.get("helper_cpu_s", 0.0))
