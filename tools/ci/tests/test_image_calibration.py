@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import yaml
@@ -121,11 +122,14 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
                 "commands": {
                     "profile-discovery": 0,
                     "profile-tests": 0,
+                    "owned-discovery": 0,
+                    "owned-tests": 0,
                     "calibration": 0,
                 },
             },
         )
         self.write_profile()
+        self.write_owned()
         self.source_patch = patch.object(
             image_calibration.subprocess, "check_output", return_value=SOURCE
         )
@@ -156,6 +160,24 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         self.write("report.json", self.report)
         return image_calibration.evidence(self.output, root=self.root)
 
+    def write_owned(self, *, action="pass", omit=None):
+        cases = sorted(image_calibration.owned_omni_case_ids())
+        discovery, executed = [], []
+        for identity in cases:
+            package, name = identity.rsplit("/", 1)
+            discovery.append(
+                {"Action": "output", "Package": package, "Output": name + "\n"}
+            )
+            if identity != omit:
+                executed.append({"Action": action, "Package": package, "Test": name})
+        for filename, rows in (
+            ("owned-discovery.jsonl", discovery),
+            ("owned-tests.jsonl", executed),
+        ):
+            (self.output / filename).write_text(
+                "".join(json.dumps(row) + "\n" for row in rows)
+            )
+
     def test_source_inventory_includes_scoring_threshold_and_profile_but_not_exclusions(
         self,
     ):
@@ -167,7 +189,8 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
                 "score/negative.png",
                 "threshold/office",
                 "profile/profile/TestMirror",
-            },
+            }
+            | {"owned/" + name for name in image_calibration.owned_omni_case_ids()},
         )
         self.assertEqual(collection_errors(result, "test"), [])
         self.assertEqual(result["excluded_fixtures"][0]["reason"], "ambiguous")
@@ -270,6 +293,49 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         self.write("execution.json", execution)
         with self.assertRaisesRegex(ValueError, "complete"):
             self.evaluate()
+
+    def test_owned_integrations_cannot_be_missing_skipped_or_failed(self):
+        for name in image_calibration.owned_omni_case_ids():
+            with self.subTest(missing=name):
+                self.write_owned(omit=name)
+                with self.assertRaises(ValueError):
+                    self.evaluate()
+        for action in ("skip", "fail"):
+            with self.subTest(action=action):
+                self.write_owned(action=action)
+                with self.assertRaises(ValueError):
+                    self.evaluate()
+        self.write_owned()
+        (self.output / "owned-discovery.jsonl").write_text("")
+        with self.assertRaisesRegex(ValueError, "inventory differs"):
+            self.evaluate()
+
+    def test_owned_commands_use_the_attested_artifact_and_exact_inventory(self):
+        normalized = {
+            "cases": [{"id": "case", "status": "passed"}],
+            "expected_cases": ["case"],
+        }
+        with (
+            patch.object(image_calibration, "ROOT", self.root),
+            patch.object(image_calibration, "evidence", return_value=normalized),
+            patch.object(
+                image_calibration.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=0),
+            ) as run,
+        ):
+            image_calibration.run(self.output / "models.json", self.root / "execution")
+        owned = run.call_args_list[:2]
+        self.assertEqual(len(run.call_args_list), 5)
+        for call in owned:
+            self.assertEqual(call.kwargs["cwd"], self.root / "src/semantic-router")
+            self.assertEqual(call.kwargs["env"]["VELA_OMNI_ARTIFACT"], str(self.model))
+            self.assertEqual(call.kwargs["env"]["REQUIRE_OMNI_TESTS"], "1")
+            for package, tests in image_calibration.OWNED_OMNI_TESTS.items():
+                self.assertIn("./pkg/" + package, call.args[0])
+                self.assertTrue(all(name in " ".join(call.args[0]) for name in tests))
+        self.assertIn("-list", owned[0].args[0])
+        self.assertIn("-run", owned[1].args[0])
 
 
 if __name__ == "__main__":

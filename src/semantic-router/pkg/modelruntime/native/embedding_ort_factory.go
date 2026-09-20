@@ -32,6 +32,12 @@ var ortTextFactory = ortEmbeddingFactory{
 }
 
 var ortEmbeddingFactories = map[string]ortEmbeddingFactory{
+	// Complete exported text graphs own token pooling and projection. Keep all
+	// public text embedding adapters on this graph-defined execution path.
+	"bert":             ortTextFactory,
+	"qwen3":            ortTextFactory,
+	"gemma":            ortTextFactory,
+	"gemma3":           ortTextFactory,
 	"mmbert":           ortTextFactory,
 	"mmbert_embedding": ortTextFactory,
 	"modernbert":       ortTextFactory,

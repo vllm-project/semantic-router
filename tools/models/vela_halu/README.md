@@ -40,6 +40,18 @@ export parity alone does not qualify that execution provider. `make verify PROFI
 exercises supported, contradictory, and Unicode answers plus input rejection
 through a deployed router's hallucination plugin probe API.
 
+The lower-level ORT instance reference check is also explicit:
+
+```sh
+VELA_HALU_ARTIFACT=/models/halu-ort \
+go -C onnx-binding test ./instance -run '^TestPublishedGroundedParity$' -count=1 -v
+```
+
+Both reference checks require prepared model inputs and are excluded from the
+model-free Core inventory. Routine native CI does not provision their Halu
+reference artifacts; the `vela-halu` E2E profile owns deployed behavior coverage.
+Set `ORT_DYLIB_PATH` to the installed ONNX Runtime library for ORT tests.
+
 The plugin's optional span filters and NLI policy remain separate from the
 published token operating point. The defaults retain single-token spans and
 leave NLI filtering disabled. Explicit legacy detector configurations keep their

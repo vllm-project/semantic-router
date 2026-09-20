@@ -17,10 +17,6 @@ MULTIMODAL_BINDING = (
     "TestMultiModalEncodeText",
     "TestMultiModalInputValidation",
 )
-MULTIMODAL_CLASSIFICATION = (
-    "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
-    "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
-)
 
 
 def invoke_runner(
@@ -29,7 +25,7 @@ def invoke_runner(
     """Exercise CLI selection, subprocess construction, and receipt validation."""
     if events is None:
         expected = (
-            (MULTIMODAL_BINDING, MULTIMODAL_CLASSIFICATION)
+            (MULTIMODAL_BINDING,)
             if suite == "multimodal"
             else (
                 tuple("TestPublishedVelaModels/" + name for name in runner.FAMILIES),
@@ -95,7 +91,7 @@ def invoke_runner(
 
 
 class ModelResultTests(unittest.TestCase):
-    def test_multimodal_runs_only_the_five_cpu_compatibility_cases(self):
+    def test_multimodal_runs_only_the_three_candle_binding_compatibility_cases(self):
         code, receipt, calls, logs = invoke_runner()
         self.assertEqual(code, 0)
         self.assertTrue(receipt["success"])
@@ -103,13 +99,13 @@ class ModelResultTests(unittest.TestCase):
         self.assertEqual(receipt["provider"], "candle")
         self.assertEqual(receipt["device"], "cpu")
         self.assertEqual(receipt["source_sha"], "source-sha")
-        self.assertEqual(set(logs), {"binding.jsonl", "classification.jsonl"})
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(set(logs), {"binding.jsonl"})
+        self.assertEqual(len(calls), 1)
         for call, module, package, names in zip(
             calls,
-            ("candle-binding", "src/semantic-router"),
-            (".", "./pkg/classification"),
-            (MULTIMODAL_BINDING, MULTIMODAL_CLASSIFICATION),
+            ("candle-binding",),
+            (".",),
+            (MULTIMODAL_BINDING,),
             strict=True,
         ):
             args = call.args[0]
@@ -125,7 +121,7 @@ class ModelResultTests(unittest.TestCase):
             self.assertEqual(call.kwargs["env"]["VLLM_SR_REQUIRE_MODEL_TESTS"], "1")
 
     def test_multimodal_rejects_each_missing_skipped_or_failed_case(self):
-        for name in (*MULTIMODAL_BINDING, *MULTIMODAL_CLASSIFICATION):
+        for name in MULTIMODAL_BINDING:
             for action in (None, "skip", "fail"):
                 with self.subTest(test=name, action=action):
                     events = [
@@ -134,14 +130,14 @@ class ModelResultTests(unittest.TestCase):
                             for test in names
                             if test != name or action is not None
                         ]
-                        for names in (MULTIMODAL_BINDING, MULTIMODAL_CLASSIFICATION)
+                        for names in (MULTIMODAL_BINDING,)
                     ]
                     code, receipt, _, _ = invoke_runner(events=events)
                     self.assertEqual(code, 1)
                     self.assertFalse(receipt["success"])
 
     def test_multimodal_rejects_empty_execution_and_process_failure(self):
-        for arguments in ({"events": [[], []]}, {"codes": (1, 0)}, {"codes": (0, 1)}):
+        for arguments in ({"events": [[]]}, {"codes": (1,)}):
             with self.subTest(arguments=arguments):
                 code, receipt, _, _ = invoke_runner(**arguments)
                 self.assertEqual(code, 1)
