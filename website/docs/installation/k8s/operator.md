@@ -314,6 +314,31 @@ Apply least-privilege RBAC and restrict who can read the generated ConfigMaps,
 Secrets, logs, and custom resources. See
 [Security Hardening](../security-hardening).
 
+## Model download without direct hub access
+
+Clusters that cannot reach the model hub directly must point model download at
+an approved mirror. The chart carries the name with the canonical endpoint as
+its default; override it per deployment from the custom resource:
+
+```yaml
+spec:
+  env:
+    - name: HF_ENDPOINT
+      value: https://your-approved-hugging-face-mirror.example
+```
+
+The values form is an `extraEnv` entry, which the chart appends after `env`:
+
+```yaml
+extraEnv:
+  - name: HF_ENDPOINT
+    value: https://your-approved-hugging-face-mirror.example
+```
+
+With no reachable endpoint the model step fails at startup
+(`ensure models are downloaded: failed to download 1 out of 1 models`) and the
+release stays `not ready`.
+
 ## Verify the deployment
 
 ```bash
