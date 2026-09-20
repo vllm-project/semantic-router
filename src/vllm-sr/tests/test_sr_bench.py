@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import json
 import threading
 import time
@@ -164,6 +165,35 @@ def test_live_http_usage_final_channel_and_idempotency(tmp_path, target):
     assert store.calls(run["id"])[0]["reasoning"] == "The answer might be B."
 
 
+@pytest.mark.parametrize("field", ["sampling", "benchmark_options", "plan_sha256"])
+def test_reviewed_plan_drift_rejects_before_capture_or_dispatch(
+    tmp_path, target, monkeypatch, field
+):
+    store = Store(tmp_path)
+    engine = Engine(store)
+    frozen = plan(manifest(target))
+    changed = copy.deepcopy(frozen)
+    if field == "sampling":
+        changed[field]["temperature"] = 0.7
+    elif field == "benchmark_options":
+        changed[field] = {"mmlu-pro": {"protocol_note": "changed after review"}}
+    else:
+        changed[field] = "0" * 64
+    changes = store.db.total_changes
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            "cli.sr_bench.engine.capture_runner",
+            lambda *_: pytest.fail("Rejected plan must not capture live configuration"),
+        )
+        with pytest.raises(ValueError, match="Reviewed plan changed"):
+            engine.start(changed, request_key="reviewed")
+    assert store.db.total_changes == changes
+    assert store.list() == [] and target.requests == []
+    run = engine.start(frozen, request_key="reviewed")
+    assert wait_run(store, run["id"])["status"] == "completed"
+    assert len(target.requests) == 1
+
+
 def test_truncated_final_counts_incorrect_and_continues(tmp_path, target):
     target.truncated = True
     m = manifest(target)
@@ -178,6 +208,54 @@ def test_truncated_final_counts_incorrect_and_continues(tmp_path, target):
     assert result["details"]["quality_failure"] == "output_limit"
     assert store.calls(run["id"])[0]["final"] == "A"
     assert make_report(store, run["id"])["summary"]["targets"][0]["accuracy"] == 0
+
+
+def test_http_reviewed_plan_rejects_new_operator_options_without_dispatch(
+    tmp_path, target, monkeypatch
+):
+    (tmp_path / "targets.json").write_text(json.dumps(manifest(target)["targets"]))
+    service = Server(("127.0.0.1", 0), Store(tmp_path), "fixture-token")
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{service.server_port}" + PREFIX
+    headers = {
+        "Authorization": "Bearer fixture-token",
+        "X-SR-Bench-Actor-ID": "alice",
+        "X-SR-Bench-Actor-Role": "write",
+    }
+    try:
+        review = requests.post(
+            url + "/plans",
+            headers=headers,
+            json={"manifest": manifest(target)},
+            timeout=2,
+        )
+        assert review.status_code == 200
+        frozen = review.json()["manifest"]
+        (tmp_path / "benchmark-options.json").write_text(
+            json.dumps({"mmlu-pro": {"protocol_note": "changed after review"}})
+        )
+        monkeypatch.setattr(
+            "cli.sr_bench.engine.capture_runner",
+            lambda *_: pytest.fail("Rejected plan must not capture live configuration"),
+        )
+        changes = service.store.db.total_changes
+        response = requests.post(
+            url + "/runs",
+            headers=headers,
+            json={"manifest": frozen, "idempotency_key": "reviewed"},
+            timeout=2,
+        )
+        assert response.status_code == 400
+        assert response.json()["code"] == "reviewed_plan_changed"
+        assert response.json()["dispatch_started"] is False
+        assert response.json()["model_requests"] == 0
+        assert service.store.db.total_changes == changes
+        assert service.store.list() == [] and target.requests == []
+    finally:
+        service.shutdown()
+        service.server_close()
+        thread.join(timeout=1)
 
 
 def test_wall_deadline_stops_even_with_stream_progress(target):
@@ -326,7 +404,7 @@ def test_shared_api_enforces_actor_scope(tmp_path, target):
     headers = {
         "Authorization": "Bearer test-service-token",
         "X-SR-Bench-Actor-ID": "alice",
-        "X-SR-Bench-Actor-Role": "editor",
+        "X-SR-Bench-Actor-Role": "write",
     }
     try:
         run = requests.post(
@@ -578,6 +656,28 @@ def test_training_export_refuses_unknown_split(tmp_path, target):
     wait_run(store, run["id"])
     with pytest.raises(ValueError, match="holdout and unknown"):
         export_training(store, run["id"])
+
+
+def test_capability_only_ignores_usd_cap_but_retains_measured_cost(tmp_path, target):
+    store = Store(tmp_path)
+    document = manifest(target)
+    document["cost_policy"] = "capability_only"
+    document["limits"]["max_cost_usd"] = 0.000000001
+    document["cases"].append({**document["cases"][0], "id": "q2"})
+    run = Engine(store).start(document)
+    wait_run(store, run["id"])
+    assert store.get(run["id"])["status"] == "completed"
+    assert len(target.requests) == 2
+    assert (
+        make_report(store, run["id"])["summary"]["total_spend_usd"]
+        > document["limits"]["max_cost_usd"]
+    )
+    document["cost_policy"] = "require_priced"
+    priced = Engine(store).start(document)
+    wait_run(store, priced["id"])
+    assert store.get(priced["id"])["status"] == "failed"
+    assert store.calls(priced["id"]) == []
+    assert len(target.requests) == 2
 
 
 def test_native_target_params_are_frozen_sent_and_journaled(tmp_path, target):

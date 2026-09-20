@@ -19,12 +19,20 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr`](#vllm-sr) | vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints. |
 | [`vllm-sr benchmark`](#vllm-sr-benchmark) | Prepare, run, inspect, and compare sr-bench 1.0 evaluations. |
 | [`vllm-sr benchmark cancel`](#vllm-sr-benchmark-cancel) | Cancel remaining work while retaining all existing evidence. |
+| [`vllm-sr benchmark candidate-plan`](#vllm-sr-benchmark-candidate-plan) | Reuse a terminal baseline's frozen protocol without repeating its requests. |
 | [`vllm-sr benchmark catalog`](#vllm-sr-benchmark-catalog) | Show the nine benchmark adapters and evaluation profiles. |
 | [`vllm-sr benchmark compare`](#vllm-sr-benchmark-compare) | Compare matched cases against the best observed single model. |
+| [`vllm-sr benchmark comparison-options`](#vllm-sr-benchmark-comparison-options) | List eligible baselines, or comparable live runs for BASELINE; no model calls. |
 | [`vllm-sr benchmark dataset`](#vllm-sr-benchmark-dataset) | Prepare reproducible fixed benchmark case sets. |
 | [`vllm-sr benchmark dataset combine`](#vllm-sr-benchmark-dataset-combine) | Create a reusable multi-benchmark dataset from prepared manifests. |
 | [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download or read a pinned source and freeze a reusable dataset. |
 | [`vllm-sr benchmark dataset show`](#vllm-sr-benchmark-dataset-show) | Inspect a frozen dataset or list datasets in the shared store. |
+| [`vllm-sr benchmark experiment`](#vllm-sr-benchmark-experiment) | Group durable baseline, routing checks, candidates and validation runs. |
+| [`vllm-sr benchmark experiment attach`](#vllm-sr-benchmark-experiment-attach) | Link existing evidence without changing or rerunning it. |
+| [`vllm-sr benchmark experiment create`](#vllm-sr-benchmark-experiment-create) | Create an experiment without submitting model work. |
+| [`vllm-sr benchmark experiment delete`](#vllm-sr-benchmark-experiment-delete) | Delete a finished experiment's grouping and links; keep every run and result. |
+| [`vllm-sr benchmark experiment list`](#vllm-sr-benchmark-experiment-list) | Read one page of experiments. |
+| [`vllm-sr benchmark experiment show`](#vllm-sr-benchmark-experiment-show) | Read the experiment and one page of its linked runs. |
 | [`vllm-sr benchmark export`](#vllm-sr-benchmark-export) | Export a dev response matrix for training; holdout export is rejected. |
 | [`vllm-sr benchmark plan`](#vllm-sr-benchmark-plan) | Validate and freeze all cases, targets, profiles, and limits without inference. |
 | [`vllm-sr benchmark preview`](#vllm-sr-benchmark-preview) | Inspect routing decisions without producing quality scores. |
@@ -33,6 +41,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark recover-plan`](#vllm-sr-benchmark-recover-plan) | Inspect eligible continuation cells without making model requests. |
 | [`vllm-sr benchmark regrade`](#vllm-sr-benchmark-regrade) | Regrade saved MCQ/grid final outputs without mutating original evidence. |
 | [`vllm-sr benchmark replay`](#vllm-sr-benchmark-replay) | Estimate eligible static routes from saved answers without inference. |
+| [`vllm-sr benchmark replay-options`](#vllm-sr-benchmark-replay-options) | List eligible baselines, or compatible previews for BASELINE; no model calls. |
 | [`vllm-sr benchmark report`](#vllm-sr-benchmark-report) | Show quality, four-bucket usage, cost, latency, time, and limitations. |
 | [`vllm-sr benchmark run`](#vllm-sr-benchmark-run) | Execute one frozen live evaluation through the shared service. |
 | [`vllm-sr benchmark runs`](#vllm-sr-benchmark-runs) |  |
@@ -127,6 +136,27 @@ Cancel remaining work while retaining all existing evidence.
 | `RUN_ID` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
+### `vllm-sr benchmark candidate-plan` {#vllm-sr-benchmark-candidate-plan}
+
+```text
+Usage: vllm-sr benchmark candidate-plan [OPTIONS] BASELINE_RUN_ID
+```
+
+Reuse a terminal baseline's frozen protocol without repeating its requests.
+
+Failed, cancelled and interrupted full-plan baselines may supply the same
+questions and settings. This does not qualify their measurements for Compare.
+
+| Parameter | Description |
+| --- | --- |
+| `BASELINE_RUN_ID` | Required argument. Type: text. |
+| `--target TEXT` | Registered MoM target; may be repeated.  [required] May be repeated. |
+| `--mode CHOICE` | [default: live] Choices: live, preview. |
+| `--name TEXT` | — |
+| `--experiment TEXT` | — |
+| `--hypothesis TEXT` | Default: . |
+| `--help` | Show this message and exit. Default: false. |
+
 ### `vllm-sr benchmark catalog` {#vllm-sr-benchmark-catalog}
 
 ```text
@@ -151,6 +181,21 @@ Compare matched cases against the best observed single model.
 | --- | --- |
 | `BASELINE_RUN_ID` | Required argument. Type: text. |
 | `CANDIDATE_RUN_ID` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark comparison-options` {#vllm-sr-benchmark-comparison-options}
+
+```text
+Usage: vllm-sr benchmark comparison-options [OPTIONS] [BASELINE]
+```
+
+List eligible baselines, or comparable live runs for BASELINE; no model calls.
+
+| Parameter | Description |
+| --- | --- |
+| `[BASELINE]` | Optional argument. Type: text. |
+| `--after TEXT` | Opaque cursor from the previous eligible options page. |
+| `--limit INTEGER RANGE` | [default: 10; 1&lt;=x&lt;=25] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark dataset` {#vllm-sr-benchmark-dataset}
@@ -207,6 +252,90 @@ Inspect a frozen dataset or list datasets in the shared store.
 | Parameter | Description |
 | --- | --- |
 | `[PATH]` | Optional argument. Type: path. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment` {#vllm-sr-benchmark-experiment}
+
+```text
+Usage: vllm-sr benchmark experiment [OPTIONS] COMMAND [ARGS]...
+```
+
+Group durable baseline, routing checks, candidates and validation runs.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment attach` {#vllm-sr-benchmark-experiment-attach}
+
+```text
+Usage: vllm-sr benchmark experiment attach [OPTIONS] EXPERIMENT_ID
+```
+
+Link existing evidence without changing or rerunning it.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--run TEXT` | [required] |
+| `--role CHOICE` | [required] Choices: baseline, candidate, estimate, initial, preview, recovery, smoke, validation. |
+| `--hypothesis TEXT` | Default: . |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment create` {#vllm-sr-benchmark-experiment-create}
+
+```text
+Usage: vllm-sr benchmark experiment create [OPTIONS] NAME
+```
+
+Create an experiment without submitting model work.
+
+| Parameter | Description |
+| --- | --- |
+| `NAME` | Required argument. Type: text. |
+| `--idempotency-key TEXT` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment delete` {#vllm-sr-benchmark-experiment-delete}
+
+```text
+Usage: vllm-sr benchmark experiment delete [OPTIONS] EXPERIMENT_ID
+```
+
+Delete a finished experiment's grouping and links; keep every run and result.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment list` {#vllm-sr-benchmark-experiment-list}
+
+```text
+Usage: vllm-sr benchmark experiment list [OPTIONS]
+```
+
+Read one page of experiments.
+
+| Parameter | Description |
+| --- | --- |
+| `--after INTEGER RANGE` | [x&gt;=0] Default: 0. |
+| `--limit INTEGER RANGE` | [1&lt;=x&lt;=50] Default: 20. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment show` {#vllm-sr-benchmark-experiment-show}
+
+```text
+Usage: vllm-sr benchmark experiment show [OPTIONS] EXPERIMENT_ID
+```
+
+Read the experiment and one page of its linked runs.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--after INTEGER RANGE` | [x&gt;=0] Default: 0. |
+| `--limit INTEGER RANGE` | [1&lt;=x&lt;=50] Default: 20. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark export` {#vllm-sr-benchmark-export}
@@ -323,6 +452,21 @@ Estimate eligible static routes from saved answers without inference.
 | `--baseline TEXT` | Completed single-model answer matrix run ID.  [required] |
 | `--preview TEXT` | Completed deterministic routing preview run ID.  [required] |
 | `--idempotency-key TEXT` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark replay-options` {#vllm-sr-benchmark-replay-options}
+
+```text
+Usage: vllm-sr benchmark replay-options [OPTIONS] [BASELINE]
+```
+
+List eligible baselines, or compatible previews for BASELINE; no model calls.
+
+| Parameter | Description |
+| --- | --- |
+| `[BASELINE]` | Optional argument. Type: text. |
+| `--after TEXT` | Opaque cursor from the previous eligible options page. |
+| `--limit INTEGER RANGE` | [default: 10; 1&lt;=x&lt;=25] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark report` {#vllm-sr-benchmark-report}
@@ -1082,6 +1226,10 @@ Preview signals and the selected route without calling a model backend.
 | `--prompt TEXT` | Plain text prompt to evaluate. |
 | `--messages TEXT` | OpenAI-style messages JSON array string. |
 | `--model TEXT` | Routing model or entrypoint whose recipe should be evaluated. |
+| `--request-file FILE` | JSON Router Preview request; supported Chat messages and prompt fields only. |
+| `--session-id TEXT` | Read-only Learning session identity. |
+| `--conversation-id TEXT` | Read-only Learning conversation identity. |
+| `--sampling-seed INTEGER RANGE` | Preview-only exploration seed; does not fix a later live random draw.  [-9223372036854775808&lt;=x&lt;=9223372036854775807] |
 | `--endpoint TEXT` | Router management origin or /api/v1 root; defaults to the local management port. |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--trace / --no-trace` | Include per-decision routing trace trees. Default: false. |

@@ -41,11 +41,10 @@ type ProfilingConfig struct {
 }
 
 type WindowedMetricsConfig struct {
-	Enabled              bool     `yaml:"enabled"`
-	TimeWindows          []string `yaml:"time_windows,omitempty"`
-	UpdateInterval       string   `yaml:"update_interval,omitempty"`
-	QueueDepthEstimation bool     `yaml:"queue_depth_estimation"`
-	MaxModels            int      `yaml:"max_models,omitempty"`
+	Enabled        bool     `yaml:"enabled"`
+	TimeWindows    []string `yaml:"time_windows,omitempty"`
+	UpdateInterval string   `yaml:"update_interval,omitempty"`
+	MaxModels      int      `yaml:"max_models,omitempty"`
 }
 
 type TracingConfig struct {

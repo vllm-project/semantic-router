@@ -5,7 +5,8 @@ from __future__ import annotations
 import copy
 
 from .accounting import correction_metadata, effective_calls
-from .contracts import digest, planned_cells
+from .contracts import digest, plan_digest, planned_cells
+from .experiments import inherit_membership
 from .store import TERMINAL, RecoveryClaimError
 
 MODES = {"undispatched", "failed"}
@@ -82,10 +83,10 @@ def recovery_plan(store, parent_id, mode="undispatched"):
         "requires_new_attempt_acknowledgment": mode == "failed",
         "scope": "Selected cells only; parent evidence and spend remain separate.",
     }
-    return {**proposed, "plan_sha256": digest(proposed)}
+    return {**proposed, "plan_sha256": plan_digest(proposed)}
 
 
-def recover(engine, parent_id, body, owner="local"):
+def recover(engine, parent_id, body, owner="local", *, actor_role="local"):
     mode = body.get("mode", "undispatched")
     key = body.get("idempotency_key")
     if not isinstance(key, str) or not key.strip():
@@ -166,9 +167,10 @@ def recover(engine, parent_id, body, owner="local"):
         "recovery_subset": True,
         "new_attempt_acknowledged": mode == "failed",
     }
+    inherit_membership(engine.store, manifest, owner, actor_role, "recovery")
     manifest.pop("plan_sha256", None)
     try:
-        return engine.start(manifest, owner, key, recovery=True)
+        return engine.start(manifest, owner, key, recovery=True, actor_role=actor_role)
     except RecoveryClaimError as exc:
         raise RecoveryPlanError(
             "Recovery eligibility changed; inspect a fresh recovery plan"

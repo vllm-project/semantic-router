@@ -12,6 +12,8 @@ from http import HTTPStatus
 
 import requests
 
+from cli.routing_preview import build_preview_request, case_request_fields
+
 from .adapters import get_adapter
 from .contracts import digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
@@ -21,6 +23,10 @@ from .store import TERMINAL, now
 from .transport import CallFailure, chat, effective_request
 
 ARC_MAX_COLOR = 9
+
+
+class ReviewedPlanChangedError(ValueError):
+    """A new submission differs from its reviewed hash before any dispatch."""
 
 
 def basic_grade(case, final):
@@ -118,6 +124,10 @@ class Context:
                 raise ValueError("Unknown auxiliary target reference")
         if role not in {"subject", "judge", "simulator"}:
             raise ValueError("Unknown call role")
+        if role == "subject" and not any(
+            call["role"] == "subject" for call in self.calls
+        ):
+            extra_body = {**case_request_fields(self.case), **(extra_body or {})}
         request_body = effective_request(
             selected, messages, self.manifest["sampling"], extra_body
         )
@@ -155,7 +165,7 @@ class Context:
             committed = self.engine.spent.get(
                 self.run_id, 0
             ) + self.engine.reserved.get(self.run_id, 0)
-            if (
+            if self.manifest["cost_policy"] == "require_priced" and (
                 committed + reservation > self.limits["max_cost_usd"]
                 or committed >= self.limits["max_cost_usd"]
             ):
@@ -259,17 +269,39 @@ class Engine:
         self.first_failures = {}
         self.store.recover()
 
-    def start(self, manifest, owner="local", request_key=None, recovery=False):
+    def start(
+        self,
+        manifest,
+        owner="local",
+        request_key=None,
+        recovery=False,
+        *,
+        actor_role="local",
+    ):
         if manifest.get("recovery") and not recovery:
             raise ValueError("Recovery lineage requires the explicit recovery endpoint")
         frozen = plan(manifest)
-        if request_key and (existing := self.store.request(owner, request_key)):
-            if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
-                raise ValueError("idempotency key is already bound to a different plan")
-            return existing
-        run, created = self.store.create(
-            frozen, owner, request_key, provenance=capture_runner(frozen)
-        )
+        with self.store.lock:
+            if request_key and (existing := self.store.request(owner, request_key)):
+                if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
+                    raise ValueError(
+                        "idempotency key is already bound to a different plan"
+                    )
+                return existing
+            if (
+                "plan_sha256" in manifest
+                and manifest["plan_sha256"] != frozen["plan_sha256"]
+            ):
+                raise ReviewedPlanChangedError(
+                    "Reviewed plan changed; review a new frozen plan before starting"
+                )
+            run, created = self.store.create(
+                frozen,
+                owner,
+                request_key,
+                provenance=capture_runner(frozen),
+                actor_role=actor_role,
+            )
         if created:
             cancel = threading.Event()
             with self.lock:
@@ -327,26 +359,16 @@ class Engine:
                 url = target["preview_url"]
                 if target.get("config_hash"):
                     headers["X-SR-Bench-Expected-Config-Hash"] = target["config_hash"]
-                payload = {
-                    "messages": case["messages"],
-                    "model": target["model"],
-                    "max_tokens": target.get("request_params", {}).get(
-                        "max_tokens", manifest["sampling"]["max_tokens"]
-                    ),
-                    "options": {"trace": True},
-                    "preview_context": manifest["preview_context"],
-                }
-                payload.update(
+                payload = build_preview_request(
                     {
-                        k: case[k]
-                        for k in (
-                            "tools",
-                            "tool_choice",
-                            "functions",
-                            "function_call",
-                            "response_format",
-                        )
-                        if k in case
+                        "messages": case["messages"],
+                        **case_request_fields(case),
+                        "model": target["model"],
+                        "max_tokens": target.get("request_params", {}).get(
+                            "max_tokens", manifest["sampling"]["max_tokens"]
+                        ),
+                        "options": {"trace": True},
+                        "preview_context": manifest["preview_context"],
                     }
                 )
                 response = requests.post(
