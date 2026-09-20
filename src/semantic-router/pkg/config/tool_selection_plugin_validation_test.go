@@ -7,7 +7,6 @@ import (
 )
 
 func float32Ptr(v float32) *float32 { return &v }
-func intPtr(v int) *int             { return &v }
 
 func TestToolSelectionPluginValidate_FilterModeNilThresholdOK(t *testing.T) {
 	c := ToolSelectionPluginConfig{
