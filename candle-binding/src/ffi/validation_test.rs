@@ -147,11 +147,13 @@ fn test_validate_batch_input_valid_small_batch() {
 
     let result = unsafe { validate_batch_input(ptrs.as_ptr(), 3, 0) };
 
-    // Should be valid for small batch
     assert!(
-        result.is_valid || !result.is_valid,
-        "Should complete validation"
+        result.is_valid,
+        "Valid traditional batch must pass validation"
     );
+    assert_eq!(result.error_code, VALIDATION_SUCCESS);
+    assert!(result.error_message.is_null());
+    assert!(result.suggestions.is_null());
 
     free_validation_result(result);
 }
