@@ -1,5 +1,6 @@
 import type { Dataset, Manifest, Target, TargetMetrics } from './types'
 import { targetLabel, targetName } from './targetPresentation'
+import { nativeOutputIssue } from './nativeOutput'
 
 export const DEFAULT_LIMITS: Manifest['limits'] = {
   concurrency: 1,
@@ -46,6 +47,9 @@ export function validateManifest(manifest: Manifest): string | null {
   if (!manifest.dataset && !manifest.cases?.length)
     return 'Select a prepared dataset. Prepare datasets with the sr-bench CLI first.'
   if (!manifest.targets?.length) return 'Add at least one single model or MoM target.'
+  if (manifest.output_policy && !['bounded', 'native'].includes(manifest.output_policy))
+    return 'Choose a supported output policy.'
+  const native = manifest.output_policy === 'native'
   if (new Set(manifest.targets.map((target) => target.id)).size !== manifest.targets.length)
     return 'Each target needs a unique name.'
   for (const target of manifest.targets) {
@@ -57,7 +61,13 @@ export function validateManifest(manifest: Manifest): string | null {
     } catch {
       return 'Enter a valid target endpoint URL.'
     }
+    if (native) {
+      const issue = nativeOutputIssue(target)
+      if (issue) return `${targetLabel(target)}: ${issue}`
+    }
   }
+  if (native && Object.prototype.hasOwnProperty.call(manifest.sampling, 'max_tokens'))
+    return 'Native capacity does not use a fixed sampling output cap.'
   if (manifest.mode === 'preview' && manifest.targets.some((target) => target.kind !== 'mom'))
     return 'Route preview requires MoM targets.'
   if (
@@ -78,7 +88,10 @@ export function validateManifest(manifest: Manifest): string | null {
   if (!Number.isInteger(manifest.limits.concurrency) || manifest.limits.concurrency > 32)
     return 'Concurrency must be a whole number from 1 to 32.'
   if (
-    !Number.isInteger(manifest.limits.max_output_tokens) ||
+    (!native && !Number.isInteger(manifest.limits.max_output_tokens)) ||
+    (native &&
+      manifest.limits.max_output_tokens !== undefined &&
+      !Number.isInteger(manifest.limits.max_output_tokens)) ||
     !Number.isInteger(manifest.limits.max_calls_per_case)
   )
     return 'Output tokens and calls per case must be whole numbers.'
@@ -99,7 +112,7 @@ export function validateManifest(manifest: Manifest): string | null {
     return 'Sampling seed must be a whole number.'
   for (const target of manifest.targets) {
     const fixed = target.request_params?.max_tokens
-    if (typeof fixed === 'number' && fixed > manifest.limits.max_output_tokens)
+    if (!native && typeof fixed === 'number' && fixed > (manifest.limits.max_output_tokens ?? 0))
       return `Target ${targetLabel(target)} has a registered output limit of ${fixed} tokens, above the run cap of ${manifest.limits.max_output_tokens}. Select another registered target profile or explicitly raise the run cap; registered overrides are not changed here.`
   }
   return null
@@ -123,6 +136,22 @@ export const money = (value: unknown): string =>
 export const seconds = (value: unknown): string =>
   typeof value === 'number' && Number.isFinite(value) ? `${number(value, 2)} s` : '—'
 export const active = (status: string) => status === 'queued' || status === 'running'
+
+export function hasScoredOutcomes(target: TargetMetrics): boolean {
+  const { total, completed, scored, failed, pending } = target
+  return (
+    typeof total === 'number' &&
+    total > 0 &&
+    typeof scored === 'number' &&
+    scored >= 0 &&
+    typeof failed === 'number' &&
+    failed >= 0 &&
+    [total, scored, failed].every(Number.isInteger) &&
+    pending === 0 &&
+    completed === scored &&
+    scored + failed === total
+  )
+}
 
 export function reportDistribution(
   targets: TargetMetrics[],

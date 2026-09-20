@@ -272,6 +272,9 @@ def runs_command(client):
 @click.argument("run_id")
 @click.option("--results", is_flag=True)
 @click.option("--calls", is_flag=True)
+@click.option(
+    "--active", is_flag=True, help="Read only in-progress calls; requires --calls."
+)
 @click.option("--events", is_flag=True)
 @click.option(
     "--after",
@@ -290,15 +293,19 @@ def runs_command(client):
 )
 @click.pass_obj
 @guarded
-def show_command(client, run_id, results, calls, events, after, limit, call_id):
+def show_command(client, run_id, results, calls, active, events, after, limit, call_id):
     """Read a run, bounded evidence page, or one complete saved call."""
     if sum((results, calls, events, bool(call_id))) > 1:
         raise ValueError("Choose one evidence view")
+    if active and not calls:
+        raise ValueError("--active requires --calls")
     path = "/runs/" + run_id
     if call_id:
         path += "/calls/" + call_id
     elif results or calls:
         path += ("/results" if results else "/calls") + f"?after={after}&limit={limit}"
+        if active:
+            path += "&active=true"
     elif events:
         path += f"/events?after={after}"
     output(client.request("GET", path))

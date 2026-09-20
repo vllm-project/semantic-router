@@ -37,8 +37,10 @@ export default function FrozenBaselineProtocol({ run }: { run: Run }) {
         </dd>
         <dt>Execution limits</dt>
         <dd>
-          {number(manifest.limits.max_output_tokens)} output tokens ·{' '}
-          {number(manifest.limits.concurrency)} concurrent cases ·{' '}
+          {manifest.output_policy === 'native'
+            ? 'Native capacity · no shared token cap'
+            : `${number(manifest.limits.max_output_tokens)} output tokens`}{' '}
+          · {number(manifest.limits.concurrency)} concurrent cases ·{' '}
           {number(manifest.limits.max_run_seconds)} seconds
         </dd>
       </dl>

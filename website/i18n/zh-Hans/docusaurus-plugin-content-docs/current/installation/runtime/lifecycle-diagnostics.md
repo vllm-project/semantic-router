@@ -37,7 +37,7 @@ vllm-sr logs router
 
 ## 查看实际执行路径 {#inspect-the-executed-path}
 
-Route Preview 执行配置的信号，但不调用生成后端：
+Route Preview 执行配置的信号，不生成答案。原生输出选模可能调用后端的 render 端点检查容量：
 
 ```bash
 curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \
