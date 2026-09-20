@@ -15,6 +15,8 @@ from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import Protocol
 
+from .grading import MCQ_GRADER_VERSION, basic_grade
+
 
 class AdapterContext(Protocol):
     manifest: dict
@@ -75,9 +77,6 @@ def _validate(adapter):
 
 
 def _basic_execute(case, context):
-    # The engine dispatches adapters; defer this edge to avoid an import cycle.
-    from .engine import basic_grade  # noqa: PLC0415
-
     response = context.call(case["messages"])
     return basic_grade(case, response["final"])
 
@@ -112,7 +111,11 @@ def _initialize():
                 title,
                 kind,
                 url,
-                "sr-bench-1.0",
+                (
+                    MCQ_GRADER_VERSION
+                    if identity in {"mmlu-pro", "gpqa-diamond"}
+                    else "sr-bench-1.0"
+                ),
                 _basic_execute if identity in basic else _external_execute,
                 None if identity in basic else _external_preflight,
                 requires_answer=identity in basic | {"hle", "simpleqa-verified"},

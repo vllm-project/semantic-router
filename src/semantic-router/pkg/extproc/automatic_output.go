@@ -57,7 +57,7 @@ func (r *OpenAIRouter) resolveAutomaticOutput(request *llmprotocol.Request, disp
 	if err != nil {
 		return err
 	}
-	body, err = r.adaptProviderRequest(body, dispatch, &renderCtx)
+	body, _, err = r.projectProviderRequest(body, dispatch, &renderCtx)
 	if err != nil {
 		return err
 	}

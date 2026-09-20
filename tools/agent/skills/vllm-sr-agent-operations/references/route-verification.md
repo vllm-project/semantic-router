@@ -14,6 +14,11 @@ A resolved preview model may differ from a later live choice; `execution_require
 is unresolved execution, not a completed selection. Do not disable Learning to
 make a diagnostic look deterministic.
 
+Native-output preview may call provider render APIs without generating an answer.
+Inspect its selection status: dynamic input changes or required compression can
+leave selection unresolved. Do not add a fixed output cap to force a selection;
+that would test a different request policy.
+
 For chat context, `route preview --request-file FILE` accepts the supported request
 subset with messages, tools and response constraints. Discover its schema;
 arbitrary Chat Completions fields are not all accepted. Preserve actual history,

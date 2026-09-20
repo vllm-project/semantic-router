@@ -53,6 +53,11 @@ class ReplayValidator:
             reasons.setdefault(code, {"code": code, "message": message})
 
         bm, pm = self.baseline["manifest"], preview["manifest"]
+        if any(m.get("output_policy", "bounded") == "native" for m in (bm, pm)):
+            reject(
+                "native_output_not_replayable",
+                "Native output replay requires actual per-case provider request and rendered-budget equivalence; routing preview does not prove it.",
+            )
         if self.baseline["status"] != "completed" or bm.get("mode") != "live":
             reject(
                 "baseline_not_completed_live",

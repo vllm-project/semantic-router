@@ -259,7 +259,10 @@ func validateAnthropicEventFieldPresence(eventType string, body []byte) error {
 		return err
 	}
 	if eventType == "message_delta" {
-		return requireProviderFields(delta, "stop_reason", "stop_sequence")
+		// Compatible providers may omit this nullable field, as they do on
+		// buffered Messages. The typed validation above still requires the
+		// matched value when stop_reason is stop_sequence.
+		return requireProviderFields(delta, "stop_reason")
 	}
 	var deltaType string
 	if err := json.Unmarshal(delta["type"], &deltaType); err != nil {

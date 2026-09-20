@@ -36,6 +36,7 @@ const report = {
         total: 2,
         completed: 2,
         failed: 0,
+        pending: 0,
         correct: 1,
         scored: 2,
         accuracy: 0.5,
@@ -601,7 +602,7 @@ test('shows truthful metrics, routing distribution and case evidence', async ({ 
   await expect(page.getByRole('cell', { name: '$0.00000' })).toHaveCount(0)
   await section(page, 'Questions')
   await page.getByRole('button', { name: 'case-a' }).click()
-  await expect(page.getByRole('heading', { name: 'Final answer' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Parsed answer' })).toBeVisible()
   await section(page, 'Evidence')
   await expect(page.getByRole('link', { name: 'Open report JSON' })).toHaveAttribute(
     'href',
@@ -2391,7 +2392,7 @@ test('navigates paginated runs to a dedicated detail view with persistent tabs a
     'true',
   )
   await page.getByRole('button', { name: 'case-a', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Final answer', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Parsed answer', exact: true })).toBeVisible()
   await expect(page.getByLabel('Filter loaded results')).not.toBeVisible()
   await page.getByRole('button', { name: 'Back to questions', exact: true }).click()
   await section(page, 'Results')

@@ -13,6 +13,7 @@ from . import VERSION
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
 from .contracts import BENCHMARK_WEIGHTS, planned_cells
 from .failures import first_saved_failure
+from .native_output import model_limits
 from .target_contracts import effective_auxiliary_targets, target_inventory
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
@@ -51,6 +52,40 @@ def sum_cost(calls):
     if not calls or any(c.get("cost_usd") is None for c in calls):
         return None
     return sum(c["cost_usd"] for c in calls)
+
+
+def output_diagnostics(results, subject_calls, total):
+    """Count saved checks and call endings, without inferring absent output text."""
+    details = [row.get("details") or {} for row in results]
+    format_checks = [
+        row["strict_format"]
+        for row in details
+        if isinstance(row.get("strict_format"), bool)
+    ]
+    finish_reasons = Counter(
+        call["finish_reason"]
+        for call in subject_calls
+        if isinstance(call.get("finish_reason"), str) and call["finish_reason"]
+    )
+    return {
+        "planned_cases": total,
+        "result_cases": len(results),
+        # This is a count of recorded flags, not proof that all other outputs
+        # were complete. Missing result/check fields remain unassessed below.
+        "output_limit_cases": sum(
+            row.get("quality_failure") == "output_limit" for row in details
+        ),
+        "strict_format": {
+            "checked_cases": len(format_checks),
+            "failed_cases": format_checks.count(False),
+            "unassessed_cases": total - len(format_checks),
+        },
+        "subject_calls": {
+            "total": len(subject_calls),
+            "finish_reasons": dict(sorted(finish_reasons.items())),
+            "unknown_finish_reason": len(subject_calls) - sum(finish_reasons.values()),
+        },
+    }
 
 
 def metric(target_id, results, calls, total):
@@ -95,6 +130,7 @@ def metric(target_id, results, calls, total):
         "accuracy": correct / total if total else None,
         "accuracy_denominator": "all_planned_cases; failures and unanswered count as incorrect",
         "complete": len(completed) == total and len(scored) == total,
+        "output_diagnostics": output_diagnostics(results, subject, total),
         "accuracy_ci95": wilson(correct, total),
         "cost_usd": sum_cost(subject) if cost_complete else None,
         "cache_neutral_cost_usd": (
@@ -406,6 +442,14 @@ def make_report(store, run_id):
 
 
 def _comparison_protocol(baseline, candidate):
+    if baseline.get("output_policy", "bounded") != candidate.get(
+        "output_policy", "bounded"
+    ):
+        raise ValueError("Cannot compare different output_policy")
+    if baseline.get("output_policy", "bounded") == "native" and model_limits(
+        baseline
+    ) != model_limits(candidate):
+        raise ValueError("Cannot compare changed frozen native model limits")
     for key in (
         "case_sha256",
         "sampling",

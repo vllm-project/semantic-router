@@ -53,6 +53,10 @@ export default function ExpressionBuilderContextMenu({
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Tab') {
+      closeAndRestoreFocus()
+      return
+    }
     if (event.key === 'Escape') {
       event.preventDefault()
       event.stopPropagation()
