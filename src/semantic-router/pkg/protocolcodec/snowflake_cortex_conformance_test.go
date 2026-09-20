@@ -72,6 +72,9 @@ func TestSnowflakeCortexFailureEnvelopeSurvivesTheSnowflakeVendor(t *testing.T) 
 	if strings.TrimSpace(transportError.Error.Message) == "" {
 		t.Fatal("transport error message is empty; the provider message was lost")
 	}
+	if strings.TrimSpace(transportError.ProviderRequestID) == "" {
+		t.Fatal("transport error request ID is empty; the vendor request ID was lost")
+	}
 }
 
 // Snowflake declares the Anthropic Messages operation along with the chat

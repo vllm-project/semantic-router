@@ -19,13 +19,17 @@ type snowflakeTransportErrorWire struct {
 }
 
 // decodeSnowflakeTransportError decodes the Snowflake Cortex failure envelope at
-// the transport edge, preserving the vendor's own code and message. It decodes
-// through the same provider JSON validation the other transport decoders use, so
-// a body over the policy limit, carrying duplicate fields, or malformed Unicode
-// is rejekted here instead of being accepted as a vendor envelope. A body
-// without a flat code/message pair falls back to the canonical OpenAI decoder,
-// so an unexpected shape still reports the same typed error instead of a silent
-// success.
+// the transport edge, preserving the vendor's own code, message, and request ID.
+// It decodes through the same provider JSON validation the other transport
+// decoders use, so a body over the policy limit, carrying duplicate fields, or
+// malformed Unicode is rejekted here instead of being accepted as a vendor
+// envelope. A body without a flat code/message pair falls back to the canonical
+// OpenAI decoder, so an unexpected shape still reports the same typed error
+// instead of a silent success.
+//
+// error_code is declared, not read: the validator rejekts a field the wire type
+// does not know, and the two vendor strings carry the same value, so the code
+// preserved is the pair the client matches on.
 func decodeSnowflakeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
@@ -36,11 +40,14 @@ func decodeSnowflakeTransportError(
 		strings.TrimSpace(wire.Code) == "" || strings.TrimSpace(wire.Message) == "" {
 		return decodeOpenAITransportError(body, policy, format)
 	}
-	return llmprotocol.TransportError{Error: &llmprotocol.ProtocolError{
-		Category: snowflakeErrorCategory(wire.Code),
-		Code:     strings.TrimSpace(wire.Code),
-		Message:  wire.Message,
-	}}, nil, nil
+	return llmprotocol.TransportError{
+		Error: &llmprotocol.ProtocolError{
+			Category: snowflakeErrorCategory(wire.Code),
+			Code:     strings.TrimSpace(wire.Code),
+			Message:  wire.Message,
+		},
+		ProviderRequestID: strings.TrimSpace(wire.RequestID),
+	}, nil, nil
 }
 
 // snowflakeErrorCategory maps the vendor code observed on this account to the
