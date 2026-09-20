@@ -13,7 +13,8 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 from ci_plan import github_outputs, make_plan, previous_release  # noqa: E402
 from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
-from run_model_tests import CLASSIFIER_TESTS, MULTIMODAL_CLASSIFIER_TESTS  # noqa: E402
+from image_calibration import OWNED_OMNI_TESTS  # noqa: E402
+from run_model_tests import CLASSIFIER_TESTS  # noqa: E402
 from verification_catalog import (  # noqa: E402
     full_cpu_ids,
     load_catalog,
@@ -301,11 +302,27 @@ class SelectionTests(unittest.TestCase):
                 definitions.setdefault(name, []).append(
                     path.relative_to(ROOT).as_posix()
                 )
-        for name in (*CLASSIFIER_TESTS, *MULTIMODAL_CLASSIFIER_TESTS):
+        for name in CLASSIFIER_TESTS:
             self.assertEqual(len(definitions.get(name, [])), 1, name)
             self.assertTrue(
                 set(classify(definitions[name]).selected_jobs) >= NATIVE, name
             )
+
+    def test_owned_omni_definitions_select_prepared_artifact_lane(self):
+        for package, tests in OWNED_OMNI_TESTS.items():
+            paths = ROOT / "src/semantic-router/pkg" / package
+            for name in tests:
+                definitions = [
+                    path.relative_to(ROOT).as_posix()
+                    for path in paths.glob("*_test.go")
+                    if re.search(rf"^func {re.escape(name)}\(", path.read_text(), re.M)
+                ]
+                self.assertEqual(len(definitions), 1, name)
+                self.assertIn(
+                    "native.image-calibration-cpu",
+                    classify(definitions).selected_jobs,
+                    name,
+                )
 
     def test_owning_workflow_edits_select_executor_contracts(self):
         cases = {

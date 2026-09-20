@@ -207,6 +207,8 @@ domains:
       - src/semantic-router/tools/model-test-assets/**
       - src/semantic-router/pkg/config/registry*.go
       - src/semantic-router/pkg/modeldownload/**
+      - src/semantic-router/pkg/cache/**
+      - src/semantic-router/pkg/memory/**
       - e2e/testcases/testdata/image-fixtures/**
       # The whole profile: the CRD mirror, the chart values, and the package
       # test that asserts the mirror, which runs only inside this gate.

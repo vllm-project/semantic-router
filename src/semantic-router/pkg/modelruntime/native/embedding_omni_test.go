@@ -8,6 +8,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
+func TestORTEmbeddingFactoryRejectsUnknownAdapter(t *testing.T) {
+	if _, err := resolveORTEmbeddingFactory("unknown"); !errors.Is(err, binding.ErrCapability) {
+		t.Fatalf("unknown adapter must not silently select a text graph: %v", err)
+	}
+}
+
 func TestOmniFactoryPreservesDynamicCPUAndRequiresExplicitGPUBudget(t *testing.T) {
 	factory, err := resolveORTEmbeddingFactory("vela_omni")
 	if err != nil {
