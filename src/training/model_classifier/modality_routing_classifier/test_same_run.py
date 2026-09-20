@@ -198,7 +198,8 @@ class CandleAdapterTests(unittest.TestCase):
 
     def test_helper_protocol_with_mock_binary(self) -> None:
         """A compliant Go helper binary produces a valid ClassifyResult."""
-        helper_src = textwrap.dedent(f"""\
+        helper_src = textwrap.dedent(
+            f"""\
             #!{sys.executable}
             import sys, json
             for line in sys.stdin:
@@ -210,7 +211,8 @@ class CandleAdapterTests(unittest.TestCase):
                     "forward_ns": 5_000_000,
                 }}
                 print(json.dumps(resp), flush=True)
-            """)
+            """
+        )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as fh:
             fh.write(helper_src)
             helper_path = fh.name
@@ -233,12 +235,14 @@ class CandleAdapterTests(unittest.TestCase):
 
     def test_helper_error_response_raises(self) -> None:
         """A helper that returns an error dict raises RuntimeError."""
-        helper_src = textwrap.dedent(f"""\
+        helper_src = textwrap.dedent(
+            f"""\
             #!{sys.executable}
             import sys, json
             for line in sys.stdin:
                 print(json.dumps({{"error": "model not found"}}), flush=True)
-            """)
+            """
+        )
         with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as fh:
             fh.write(helper_src)
             helper_path = fh.name
