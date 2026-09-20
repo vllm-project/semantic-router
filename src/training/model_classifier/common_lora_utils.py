@@ -10,7 +10,7 @@ import gc
 import json
 import logging
 import os
-from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING
 
 import torch
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def get_target_modules_for_model(model_name: str) -> List[str]:
+def get_target_modules_for_model(model_name: str) -> list[str]:
     """
     Get appropriate target_modules for LoRA based on model architecture.
 
@@ -106,7 +106,7 @@ def get_target_modules_for_model(model_name: str) -> List[str]:
         )
 
 
-def validate_lora_config(lora_config: Dict) -> Dict:
+def validate_lora_config(lora_config: dict) -> dict:
     """
     Validate and normalize LoRA configuration parameters.
 
@@ -125,7 +125,7 @@ def validate_lora_config(lora_config: Dict) -> Dict:
     rank = validated_config.get("rank", 8)
     if not isinstance(rank, int) or rank <= 0:
         raise ValueError(f"LoRA rank must be a positive integer, got: {rank}")
-    if rank > 256:
+    if rank > 256:  # noqa: PLR2004
         logger.warning(
             f"LoRA rank {rank} is very large, consider using smaller values (8-64)"
         )
@@ -146,7 +146,7 @@ def validate_lora_config(lora_config: Dict) -> Dict:
         raise ValueError("target_modules must be a non-empty list")
 
     # Log configuration
-    logger.info(f"LoRA Configuration validated:")
+    logger.info("LoRA Configuration validated:")
     logger.info(f"  Rank: {rank}")
     logger.info(f"  Alpha: {alpha}")
     logger.info(f"  Dropout: {dropout}")
@@ -155,7 +155,7 @@ def validate_lora_config(lora_config: Dict) -> Dict:
     return validated_config
 
 
-def get_all_gpu_info() -> List[Dict]:
+def get_all_gpu_info() -> list[dict]:
     """
     Get information about all available GPUs.
 
@@ -197,7 +197,7 @@ def get_all_gpu_info() -> List[Dict]:
     return gpu_info
 
 
-def find_free_gpu(min_free_memory_gb: float = 2.0) -> Optional[int]:
+def find_free_gpu(min_free_memory_gb: float = 2.0) -> int | None:
     """
     Find the GPU with the most free memory.
 
@@ -242,8 +242,8 @@ def find_free_gpu(min_free_memory_gb: float = 2.0) -> Optional[int]:
 
 
 def set_gpu_device(
-    gpu_id: Optional[int] = None, auto_select: bool = True
-) -> Tuple[str, int]:
+    gpu_id: int | None = None, auto_select: bool = True
+) -> tuple[str, int]:
     """
     Set the GPU device to use for training.
 
@@ -308,7 +308,7 @@ def clear_gpu_memory():
         logger.info("GPU memory cache cleared")
 
 
-def get_memory_usage() -> Dict:
+def get_memory_usage() -> dict:
     """
     Get current memory usage information.
 
@@ -326,7 +326,7 @@ def get_memory_usage() -> Dict:
     else:
         # For CPU, we can use psutil if available, otherwise return empty
         try:
-            import psutil
+            import psutil  # noqa: PLC0415
 
             memory_info = {
                 "system_memory_gb": psutil.virtual_memory().total / 1024**3,
@@ -349,17 +349,16 @@ def log_memory_usage(stage: str = ""):
                 f"{stage_prefix}GPU Memory - Allocated: {memory_info['allocated_gb']:.2f}GB, "
                 f"Reserved: {memory_info['reserved_gb']:.2f}GB"
             )
-        else:
-            if "system_memory_gb" in memory_info:
-                logger.info(
-                    f"{stage_prefix}System Memory - Used: {memory_info['used_memory_gb']:.2f}GB, "
-                    f"Available: {memory_info['available_memory_gb']:.2f}GB"
-                )
+        elif "system_memory_gb" in memory_info:
+            logger.info(
+                f"{stage_prefix}System Memory - Used: {memory_info['used_memory_gb']:.2f}GB, "
+                f"Available: {memory_info['available_memory_gb']:.2f}GB"
+            )
 
 
 def create_lora_config(
     model_name: str, rank: int = 8, alpha: int = 16, dropout: float = 0.1
-) -> Dict:
+) -> dict:
     """
     Create a complete LoRA configuration for a given model.
 
@@ -390,7 +389,7 @@ def create_lora_config(
     return validated_config
 
 
-def get_model_mapping() -> Dict[str, str]:
+def get_model_mapping() -> dict[str, str]:
     """
     Get mapping from short model names to full HuggingFace model paths.
 
@@ -458,7 +457,7 @@ def resolve_model_path(model_name: str) -> str:
     return resolved_path
 
 
-def verify_target_modules(model, target_modules: List[str]) -> bool:
+def verify_target_modules(model, target_modules: list[str]) -> bool:
     """
     Verify that target_modules exist in the model architecture.
 
@@ -475,13 +474,13 @@ def verify_target_modules(model, target_modules: List[str]) -> bool:
         if "encoder.layer" in name:
             # Convert encoder.layer.0.attention.self.query -> attention.self.query
             parts = name.split(".")
-            if len(parts) >= 4 and parts[2].isdigit():
+            if len(parts) >= 4 and parts[2].isdigit():  # noqa: PLR2004
                 pattern = ".".join(parts[3:])
                 model_module_names.add(pattern)
         elif "layers." in name:  # ModernBERT style
             # Convert layers.0.attn.Wqkv -> attn.Wqkv
             parts = name.split(".")
-            if len(parts) >= 3 and parts[1].isdigit():
+            if len(parts) >= 3 and parts[1].isdigit():  # noqa: PLR2004
                 pattern = ".".join(parts[2:])
                 model_module_names.add(pattern)
 
@@ -500,8 +499,8 @@ def verify_target_modules(model, target_modules: List[str]) -> bool:
 
 
 def load_sequence_classifier_for_inference(
-    model_path: str, num_labels: Optional[int] = None
-) -> Tuple["torch.nn.Module", "PreTrainedTokenizerBase", Dict[int, str]]:
+    model_path: str, num_labels: int | None = None
+) -> tuple["torch.nn.Module", "PreTrainedTokenizerBase", dict[int, str]]:
     """
     Load a sequence classification model + tokenizer for inference, transparently
     handling either a raw PEFT LoRA-adapter directory or a fully-merged HF
@@ -522,10 +521,13 @@ def load_sequence_classifier_for_inference(
     """
     # Lazy on purpose: this module only hard-depends on torch, so peft and
     # transformers stay optional for callers that never load a classifier.
-    from peft import PeftConfig, PeftModel
-    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    from peft import PeftConfig, PeftModel  # noqa: PLC0415
+    from transformers import (  # noqa: PLC0415
+        AutoModelForSequenceClassification,
+        AutoTokenizer,
+    )
 
-    def _tokenizer_for(path: str, base_model_name: Optional[str] = None):
+    def _tokenizer_for(path: str, base_model_name: str | None = None):
         # Mirrors modality_routing_bert_finetuning_lora.create_tokenizer_for_model;
         # duplicated (not imported) to avoid a circular import, since this module
         # is imported by that script, not the other way around.
@@ -534,7 +536,7 @@ def load_sequence_classifier_for_inference(
             return AutoTokenizer.from_pretrained(path, add_prefix_space=True)
         return AutoTokenizer.from_pretrained(path)
 
-    id2label: Dict[int, str] = {}
+    id2label: dict[int, str] = {}
     label_mapping_path = os.path.join(model_path, "label_mapping.json")
     if os.path.isfile(label_mapping_path):
         with open(label_mapping_path, encoding="utf-8") as f:

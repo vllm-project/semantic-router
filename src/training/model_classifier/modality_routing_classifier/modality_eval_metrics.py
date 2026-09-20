@@ -11,14 +11,13 @@ import re
 from datetime import datetime
 
 import numpy as np
+from modality_label_mapping import MODALITY_LABELS
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
     f1_score,
     precision_recall_fscore_support,
 )
-
-from modality_label_mapping import MODALITY_LABELS
 
 MODEL_KEYS = ["published_baseline", "clean_baseline", "candidate"]
 AGREEMENT_PAIRS = [

@@ -1,6 +1,8 @@
 """End-to-end tests of the judge_labels command line on a tiny synthetic dataset."""
 
+import io
 import json
+import sys
 
 import judge_labels
 import pytest
@@ -32,9 +34,6 @@ def run(workspace, capsys, *argv, stdin=None, monkeypatch=None):
         str(workspace / "rj.jsonl"),
     ]
     if stdin is not None:
-        import io
-        import sys
-
         monkeypatch.setattr(sys, "stdin", io.StringIO(stdin))
     code = judge_labels.main([argv[0], *common, *argv[1:]])
     return code, capsys.readouterr().out

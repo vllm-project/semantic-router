@@ -338,7 +338,7 @@ def run_api(tmp_path, client, rows, **settings):
 def test_api_judging_saves_replies_and_reasks_for_missing_ids(tmp_path):
     rows = make_rows(["AR", "AR", "AR"])
     client = FakeClient(["0 A\n1 D\n", "2 B\n"])
-    skipped, records, lines = run_api(tmp_path, client, rows, batch_size=3)
+    skipped, records, _lines = run_api(tmp_path, client, rows, batch_size=3)
     assert skipped == set()
     assert {i: r["label"] for (_, i), r in records.items()} == {
         0: "AR",

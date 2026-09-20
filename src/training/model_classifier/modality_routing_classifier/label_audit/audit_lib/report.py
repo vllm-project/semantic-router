@@ -157,11 +157,13 @@ def human_lines(review: HumanReview) -> list[str]:
         f"({review.n_disagreement_rows} disagreement rows, {review.n_agreement_rows} agreement rows) =="
     ]
     if not review.n_disagreement_rows or not review.n_agreement_rows:
-        return lines + [
-            "  need at least one labeled row in each stratum for the estimate"
+        return [
+            *lines,
+            "  need at least one labeled row in each stratum for the estimate",
         ]
     side = review.sides
-    return lines + [
+    return [
+        *lines,
         f"  on disagreement rows the human sides with: judge {side['judge']} | "
         f"original {side['original']} | neither {side['neither']}",
         f"  on agreement rows the human agrees with the shared label: "
