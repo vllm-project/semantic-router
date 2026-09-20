@@ -204,6 +204,7 @@ spec:
       labels:
         app: semantic-router
     spec:
+      serviceAccountName: semantic-router
       initContainers:
       - name: model-downloader
         image: python:3.11-slim
@@ -330,6 +331,14 @@ spec:
         env:
         - name: LD_LIBRARY_PATH
           value: "/app/lib"
+        # Lets the config write API patch this ConfigMap through the
+        # Kubernetes API instead of the read-only mounted file (#3688).
+        - name: VLLM_SR_K8S_CONFIGMAP_NAME
+          value: "semantic-router-config"
+        - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         - name: HF_HOME
           value: "/app/cache/hf"
         - name: TRANSFORMERS_CACHE

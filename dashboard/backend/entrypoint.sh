@@ -15,10 +15,16 @@ LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}
 
 # OpenShift restricted SCCs run images with an arbitrary non-root UID that is
 # a member of the root group. Such a process cannot prepare users or bind
-# mounts, so keep runtime mutations fail-closed and start directly. The image
-# grants group 0 write access only to /app/data for Dashboard-owned state.
+# mounts, so keep local-file mutations fail-closed and start directly. The
+# image grants group 0 write access only to /app/data for Dashboard-owned
+# state. Runtime config writes are the one exception: when a Kubernetes
+# ConfigMap target is configured (issue #3688), that write goes through the
+# Kubernetes API instead of the local filesystem, so it does not need the
+# permission preparation this branch skips.
 if [ "$(id -u)" -ne 0 ]; then
-    DASHBOARD_RUNTIME_CONFIG_WRITABLE=false
+    if [ -z "${VLLM_SR_K8S_CONFIGMAP_NAME:-}" ]; then
+        DASHBOARD_RUNTIME_CONFIG_WRITABLE=false
+    fi
     DASHBOARD_RECIPE_STORE_WRITABLE=false
     OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
     export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE \

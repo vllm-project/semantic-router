@@ -10,7 +10,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 const (
@@ -69,8 +72,48 @@ func formatRuntimeApplyError(prefix string, err error) string {
 // atomicRename is os.Rename by default; tests override it to simulate a rename failure.
 var atomicRename = os.Rename
 
-// writeConfigAtomically writes via a temp file and rename, and fails on a rename error instead of falling back to a non-atomic direct write.
+const configMapWriteTimeout = 10 * time.Second
+
+var (
+	configMapWriterMu       sync.Mutex
+	configMapWriterResult   *configwriter.ConfigMapWriter
+	configMapWriterErr      error
+	configMapWriterResolved bool
+	// newInClusterConfigMapWriter is a seam for tests; production always uses
+	// configwriter.NewInClusterConfigMapWriter.
+	newInClusterConfigMapWriter = configwriter.NewInClusterConfigMapWriter
+)
+
+// resolvedConfigMapWriter builds the in-cluster ConfigMap client once and
+// reuses it. Every shipped Kubernetes deployment mounts the config file
+// read-only (issue #3688); this is that mount's write path.
+func resolvedConfigMapWriter() (*configwriter.ConfigMapWriter, error) {
+	configMapWriterMu.Lock()
+	defer configMapWriterMu.Unlock()
+	if !configMapWriterResolved {
+		configMapWriterResult, configMapWriterErr = newInClusterConfigMapWriter()
+		configMapWriterResolved = true
+	}
+	return configMapWriterResult, configMapWriterErr
+}
+
+// writeConfigAtomically persists a canonical config document. On a
+// Kubernetes deployment that has declared a ConfigMap write target (see
+// configwriter.ConfigMapTargetFromEnv), it writes there via the Kubernetes API instead
+// of the local file, since that file is a read-only ConfigMap mount on every
+// shipped manifest (issue #3688). Every other deployment (local CLI, VM,
+// plain Docker) keeps writing the local file exactly as before.
 func writeConfigAtomically(configPath string, yamlData []byte) error {
+	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		writer, err := resolvedConfigMapWriter()
+		if err != nil {
+			return fmt.Errorf("config write target is declared but no Kubernetes client is available: %w", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+		defer cancel()
+		return writer.Write(ctx, target, yamlData)
+	}
+
 	tmpConfigFile := configPath + ".tmp"
 	tmpFile, err := os.OpenFile(tmpConfigFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {

@@ -3,6 +3,7 @@
 package apiserver
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -12,11 +13,13 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -412,7 +415,7 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	}
 
 	etag := configDocumentETag(yamlBytes)
-	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath, afterAttempt)
+	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(paths.runtimePath, yamlBytes, afterAttempt)
 	responseStatus := "success"
 	responseCode := statusCode
 	switch runtimeStatus {
@@ -424,6 +427,10 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 		responseStatus = "accepted"
 		responseCode = http.StatusAccepted
 		message += " The config is persisted but runtime activation is still pending; poll /api/v1/config/hash until activation_status is active."
+	case "persisted":
+		responseStatus = "accepted"
+		responseCode = http.StatusAccepted
+		message += " The config is durably saved to the Kubernetes ConfigMap; it takes effect on the router's next restart. Live activation without a restart is not yet supported for Kubernetes deployments."
 	case "active":
 		message += " Runtime activation is complete."
 	default:
@@ -479,7 +486,18 @@ func (s *ClassificationAPIServer) activeConfigDocumentHash() string {
 // hash only after the new router and classification service are atomically
 // available. Legacy/test servers without a runtime registry keep their
 // asynchronous behavior.
-func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath string, afterAttempt uint64) (string, string) {
+//
+// generatedDocument is the document this write just persisted. On a
+// Kubernetes ConfigMap target, runtimePath is a read-only mount that this
+// write never touches, so hashing it and comparing against the active
+// runtime would find the old, unrelated match and falsely report "active"
+// (review on #3814). Report the honest "persisted" status instead, hashing
+// the document that was actually written rather than the untouched file.
+func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath string, generatedDocument []byte, afterAttempt uint64) (string, string) {
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		return configDocumentETagHash(generatedDocument), "persisted"
+	}
+
 	runtimeHash, err := configFileHash(runtimePath)
 	if err != nil {
 		return "", "unknown"
@@ -502,6 +520,13 @@ func (s *ClassificationAPIServer) waitForRuntimeConfigActivation(runtimePath str
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
+}
+
+// configDocumentETagHash is configDocumentETag without the quoting an ETag
+// header needs, for reuse anywhere a plain hex digest is expected instead.
+func configDocumentETagHash(data []byte) string {
+	digest := sha256.Sum256(data)
+	return hex.EncodeToString(digest[:])
 }
 
 func syncRuntimeConfigOrRestore(paths configPersistencePaths, previousData []byte) error {
@@ -534,8 +559,56 @@ func restoreSourceConfig(sourcePath string, previousData []byte) error {
 // atomicRename is os.Rename by default; tests override it to simulate a rename failure.
 var atomicRename = os.Rename
 
-// writeConfigAtomically writes via a temp file and rename, and fails on a rename error instead of falling back to a non-atomic direct write.
+const configMapWriteTimeout = 10 * time.Second
+
+var (
+	configMapWriterMu       sync.Mutex
+	configMapWriterResult   *configwriter.ConfigMapWriter
+	configMapWriterErr      error
+	configMapWriterResolved bool
+	// newInClusterConfigMapWriter is a seam for tests; production always uses
+	// configwriter.NewInClusterConfigMapWriter.
+	newInClusterConfigMapWriter = configwriter.NewInClusterConfigMapWriter
+)
+
+// resolvedConfigMapWriter builds the in-cluster ConfigMap client once and
+// reuses it. Every shipped Kubernetes deployment mounts the config file
+// read-only (issue #3688); this is that mount's write path.
+func resolvedConfigMapWriter() (*configwriter.ConfigMapWriter, error) {
+	configMapWriterMu.Lock()
+	defer configMapWriterMu.Unlock()
+	if !configMapWriterResolved {
+		configMapWriterResult, configMapWriterErr = newInClusterConfigMapWriter()
+		configMapWriterResolved = true
+	}
+	return configMapWriterResult, configMapWriterErr
+}
+
+// writeConfigAtomically persists a canonical config document. On a
+// Kubernetes deployment that has declared a ConfigMap write target (see
+// configwriter.ConfigMapTargetFromEnv), it writes there via the Kubernetes API instead
+// of the local file, since that file is a read-only ConfigMap mount on every
+// shipped manifest. Every other deployment (local CLI, VM, plain Docker)
+// keeps writing the local file exactly as before: this only branches when the
+// deployment has opted in.
 func writeConfigAtomically(configPath string, yamlBytes []byte) error {
+	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		writer, err := resolvedConfigMapWriter()
+		if err != nil {
+			return fmt.Errorf("config write target is declared but no Kubernetes client is available: %w", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+		defer cancel()
+		if err := writer.Write(ctx, target, yamlBytes); err != nil {
+			return err
+		}
+		return nil
+	}
+	return writeConfigFileAtomically(configPath, yamlBytes)
+}
+
+// writeConfigFileAtomically writes via a temp file and rename, and fails on a rename error instead of falling back to a non-atomic direct write.
+func writeConfigFileAtomically(configPath string, yamlBytes []byte) error {
 	tmpConfigFile := configPath + ".tmp"
 	tmpFile, err := os.OpenFile(tmpConfigFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
 	if err != nil {
