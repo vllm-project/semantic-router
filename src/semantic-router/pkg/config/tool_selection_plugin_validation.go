@@ -98,11 +98,8 @@ func (c *ToolSelectionPluginConfig) validateStickyBounds() error {
 			)
 		}
 	}
-	if c.Sticky.MaxNewToolsPerTurn == nil {
-		return nil
-	}
 	maxTools := c.Sticky.EffectiveMaxTools()
-	if v := *c.Sticky.MaxNewToolsPerTurn; v < 0 || v > maxTools {
+	if v := c.Sticky.EffectiveMaxNewToolsPerTurn(); v < 0 || v > maxTools {
 		return fmt.Errorf(
 			"tool_selection plugin: sticky.max_new_tools_per_turn must be between 0 and max_tools (%d)",
 			maxTools,
