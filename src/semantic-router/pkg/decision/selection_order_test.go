@@ -36,9 +36,9 @@ func TestUntieredDecisionOutranksTieredDecision(t *testing.T) {
 	}
 }
 
-// The tiered case never reads routing.strategy, so an unrelated tiered match
-// switches an untiered pool from priority ordering to confidence ordering.
-func TestMatchedTieredDecisionSwitchesUntieredPoolToConfidence(t *testing.T) {
+// routing.strategy decides inside a tier as well, so an unrelated tiered
+// match no longer switches an untiered pool to confidence ordering.
+func TestMatchedTieredDecisionKeepsConfiguredOrdering(t *testing.T) {
 	highPriority := config.Decision{Name: "high_priority", Priority: 160, Rules: config.RuleNode{Type: "domain", Name: "law"}}
 	highConfidence := config.Decision{Name: "high_confidence", Priority: 135, Rules: config.RuleNode{Type: "domain", Name: "health"}}
 	tiered := config.Decision{Name: "tiered_fallback", Priority: 200, Tier: 2, Rules: config.RuleNode{Type: "keyword", Name: "marker"}}
@@ -58,20 +58,25 @@ func TestMatchedTieredDecisionSwitchesUntieredPoolToConfidence(t *testing.T) {
 	}
 
 	withTiered := rankedWinner(t, []config.Decision{highPriority, highConfidence, tiered}, config.RoutingStrategyPriority, signals)
-	if withTiered.Decision.Name != "high_confidence" {
-		t.Fatalf("winner = %s, want high_confidence (the tiered case ignores strategy: priority)", withTiered.Decision.Name)
+	if withTiered.Decision.Name != "high_priority" {
+		t.Fatalf("winner = %s, want high_priority (a tiered match must not change the ordering rule)", withTiered.Decision.Name)
+	}
+
+	underConfidence := rankedWinner(t, []config.Decision{highPriority, highConfidence, tiered}, config.RoutingStrategyConfidence, signals)
+	if underConfidence.Decision.Name != "high_confidence" {
+		t.Fatalf("winner = %s, want high_confidence (strategy: confidence applies inside the tier)", underConfidence.Decision.Name)
 	}
 }
 
-// A catch-all ranks last everywhere except under strategy: priority.
-func TestCatchAllOutranksRealMatchUnderPriorityStrategy(t *testing.T) {
+// A catch-all ranks last under either strategy, however high its priority.
+func TestCatchAllRanksLastUnderEitherStrategy(t *testing.T) {
 	catchAll := config.Decision{Name: "catch_all", Priority: 500, Rules: config.RuleNode{Operator: "AND"}}
 	match := config.Decision{Name: "real_match", Priority: 100, Rules: config.RuleNode{Type: "domain", Name: "law"}}
 	signals := &SignalMatches{DomainRules: []string{"law"}, SignalConfidences: map[string]float64{"domain:law": 0.90}}
 
 	underPriority := rankedWinner(t, []config.Decision{catchAll, match}, config.RoutingStrategyPriority, signals)
-	if underPriority.Decision.Name != "catch_all" {
-		t.Fatalf("winner = %s, want catch_all (strategy: priority has no catch-all rule)", underPriority.Decision.Name)
+	if underPriority.Decision.Name != "real_match" {
+		t.Fatalf("winner = %s, want real_match (a catch-all ranks after a real match)", underPriority.Decision.Name)
 	}
 
 	underConfidence := rankedWinner(t, []config.Decision{catchAll, match}, config.RoutingStrategyConfidence, signals)
@@ -94,14 +99,14 @@ func TestExtraKeywordMatchKeepsReportedEvidence(t *testing.T) {
 	decisions := []config.Decision{mixed, scored}
 	confidences := map[string]float64{"embedding:semantic": 0.95, "embedding:support": 0.80}
 
-	withoutKeyword := rankedWinner(t, decisions, config.RoutingStrategyPriority, &SignalMatches{
+	withoutKeyword := rankedWinner(t, decisions, config.RoutingStrategyConfidence, &SignalMatches{
 		EmbeddingRules: []string{"semantic", "support"}, SignalConfidences: confidences,
 	})
 	if withoutKeyword.Decision.Name != "mixed_or" {
 		t.Fatalf("winner = %s, want mixed_or (both members reported scores)", withoutKeyword.Decision.Name)
 	}
 
-	withKeyword := rankedWinner(t, decisions, config.RoutingStrategyPriority, &SignalMatches{
+	withKeyword := rankedWinner(t, decisions, config.RoutingStrategyConfidence, &SignalMatches{
 		EmbeddingRules: []string{"semantic", "support"}, KeywordRules: []string{"marker"}, SignalConfidences: confidences,
 	})
 	if withKeyword.Decision.Name != "mixed_or" {
