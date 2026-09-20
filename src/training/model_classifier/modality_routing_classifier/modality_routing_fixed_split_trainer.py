@@ -74,7 +74,6 @@ from common_lora_utils import (  # noqa: E402
 from modality_data import (  # noqa: E402
     ClassStats,
     compute_class_stats,
-    compute_warmup_steps,
     load_jsonl,
     oversample_minority_classes,
 )
@@ -94,6 +93,7 @@ from modality_routing_bert_finetuning_lora import (  # noqa: E402
     recommend_lora_rank,
     tokenize_modality_data,
 )
+from training_args_compat import create_training_arguments  # noqa: E402
 
 logger = setup_logging()
 
@@ -298,27 +298,20 @@ def prepare_training_rows(
     return train_rows, val_rows, stats
 
 
-def build_training_args(
-    config: TrainConfig, output_dir: str, num_train_rows: int
-) -> TrainingArguments:
+def build_training_args(config: TrainConfig, output_dir: str) -> TrainingArguments:
     """Build the TrainingArguments shared by both modes.
 
     Args:
         config: The run configuration.
         output_dir: Where the Trainer writes checkpoints.
-        num_train_rows: Number of rows in the (oversampled) training set.
 
     Returns:
         The TrainingArguments for the run.
     """
-    warmup_steps = compute_warmup_steps(
-        num_train_rows,
-        config.batch_size,
-        GRADIENT_ACCUMULATION_STEPS,
-        config.num_epochs,
-        WARMUP_RATIO,
-    )
-    return TrainingArguments(
+    # Shared with the other training scripts: transformers >=5.15 removed
+    # warmup_ratio, and this helper maps it onto warmup_steps (a fraction there).
+    return create_training_arguments(
+        TrainingArguments,
         output_dir=output_dir,
         num_train_epochs=config.num_epochs,
         per_device_train_batch_size=config.batch_size,
@@ -326,7 +319,7 @@ def build_training_args(
         learning_rate=config.learning_rate,
         max_grad_norm=1.0,
         lr_scheduler_type="cosine",
-        warmup_steps=warmup_steps,
+        warmup_ratio=WARMUP_RATIO,
         weight_decay=0.1,
         logging_steps=10,
         eval_strategy="epoch",
@@ -553,7 +546,7 @@ def main(config: TrainConfig) -> None:
         focal_gamma=stats.focal_gamma if stats else DEFAULT_FOCAL_GAMMA,
         distillation=config.distillation,
         model=model,
-        args=build_training_args(config, output_dir, len(train_dataset)),
+        args=build_training_args(config, output_dir),
         train_dataset=train_dataset,
         eval_dataset=val_dataset,
         compute_metrics=compute_modality_metrics,

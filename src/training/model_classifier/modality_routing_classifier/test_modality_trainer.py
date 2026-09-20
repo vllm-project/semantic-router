@@ -83,13 +83,14 @@ def test_class_weighting_can_be_switched_off(tmp_path):
     assert len(train) == 90
 
 
-def test_training_arguments_carry_seed_and_warmup_steps(tmp_path):
+def test_training_arguments_carry_seed_and_the_warmup_ratio(tmp_path):
     args = trainer.build_training_args(
-        make_config(tmp_path, seed=5, num_epochs=4), str(tmp_path), 90
+        make_config(tmp_path, seed=5, num_epochs=4), str(tmp_path)
     )
     assert isinstance(args, TrainingArguments)
     assert args.seed == 5 and args.data_seed == 5
-    assert args.warmup_steps == 1
+    # transformers >=5.15 reads the ratio from warmup_steps, older versions from warmup_ratio
+    assert 0.06 in (args.warmup_steps, getattr(args, "warmup_ratio", None))
     assert args.remove_unused_columns is False
 
 

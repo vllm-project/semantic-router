@@ -127,31 +127,3 @@ def oversample_minority_classes(
             oversampled.extend(items)
     rng.shuffle(oversampled)
     return oversampled
-
-
-def compute_warmup_steps(
-    num_train_rows: int,
-    batch_size: int,
-    gradient_accumulation_steps: int,
-    num_epochs: int,
-    warmup_ratio: float,
-) -> int:
-    """Convert a warmup ratio into optimizer steps.
-
-    transformers >=5.15 removed TrainingArguments(warmup_ratio=...), so the step
-    count is computed here and passed as warmup_steps, which every version accepts.
-
-    Args:
-        num_train_rows: Number of rows in the (oversampled) training set.
-        batch_size: Per-device batch size.
-        gradient_accumulation_steps: Batches accumulated per optimizer step.
-        num_epochs: Number of training epochs.
-        warmup_ratio: Share of all optimizer steps used for warmup.
-
-    Returns:
-        The warmup step count, at least 1.
-    """
-    steps_per_epoch = math.ceil(
-        num_train_rows / (batch_size * gradient_accumulation_steps)
-    )
-    return max(1, round(warmup_ratio * steps_per_epoch * num_epochs))

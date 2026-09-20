@@ -6,7 +6,6 @@ import random
 import pytest
 from modality_data import (
     compute_class_stats,
-    compute_warmup_steps,
     load_jsonl,
     oversample_minority_classes,
 )
@@ -87,9 +86,3 @@ def test_oversampling_leaves_a_mild_imbalance_alone():
         oversample_minority_classes(rows, {0: 40, 1: 40, 2: 30}, random.Random(1))
         is rows
     )
-
-
-def test_warmup_steps_round_up_and_never_reach_zero():
-    # 3538 rows, batch 32, accumulation 2 -> 56 steps per epoch; 10 epochs at 6%.
-    assert compute_warmup_steps(3538, 32, 2, 10, 0.06) == 34
-    assert compute_warmup_steps(1, 32, 2, 1, 0.06) == 1

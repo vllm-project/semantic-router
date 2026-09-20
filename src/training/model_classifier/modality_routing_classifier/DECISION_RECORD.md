@@ -376,7 +376,7 @@ Each file has one job, and the heavy parts (torch, checkpoints) sit at the edges
 - `modality_routing_fixed_split_trainer.py`: the training entry point. A
   `TrainConfig` goes in, and one `ModalityTrainer` handles both plain
   fine-tuning and distillation.
-- `modality_data.py`: class weights, oversampling and warmup steps. No torch.
+- `modality_data.py`: class weights and oversampling. No torch.
 - `modality_losses.py`: the distillation loss.
 - `modality_label_mapping.py`: the canonical labels and the checks that a
   checkpoint's labels map onto them. No torch.
