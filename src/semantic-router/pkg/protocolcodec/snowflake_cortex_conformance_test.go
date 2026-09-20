@@ -74,6 +74,33 @@ func TestSnowflakeCortexFailureEnvelopeSurvivesTheSnowflakeVendor(t *testing.T) 
 	}
 }
 
+// Snowflake declares the Anthropic Messages operation along with the chat
+// completion one, so the same failure envelope must decode through the vendor
+// path there too. Without that dispatch the flat envelope fails the Anthropic
+// error shape and the vendor's code and category are lost behind a generic error.
+func TestSnowflakeCortexFailureEnvelopeSurvivesTheSnowflakeVendorOnAnthropicMessages(t *testing.T) {
+	body := snowflakeFixture(t, snowflakeFailureFixture, snowflakeFailureBytes)
+
+	transportError, _, err := (AnthropicMessagesCodec{}).DecodeTransportError(
+		body, snowflakePolicy(llmprotocol.ResponseVendorSnowflake),
+	)
+	if err != nil {
+		t.Fatalf("DecodeTransportError() error = %v", err)
+	}
+	if transportError.Error == nil {
+		t.Fatal("no transport error decoded")
+	}
+	if transportError.Error.Code != "003001" {
+		t.Fatalf("transport error code = %q, want 003001", transportError.Error.Code)
+	}
+	if transportError.Error.Category != llmprotocol.ErrorPermission {
+		t.Fatalf("transport error category = %q, want a permission failure", transportError.Error.Category)
+	}
+	if strings.TrimSpace(transportError.Error.Message) == "" {
+		t.Fatal("transport error message is empty; the provider message was lost")
+	}
+}
+
 // The vendor envelope must not become a validation hatch. The shared provider
 // JSON validation runs before it is accepted, so a body over the policy limit is
 // rejekted exactly as it is on the canonical path.
