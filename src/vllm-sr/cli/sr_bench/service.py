@@ -19,7 +19,7 @@ from cli.runtime_env_names import runtime_env_name_is_allowed
 from . import VERSION
 from .accounting import reconcile_usage
 from .candidate_plans import candidate_manifest, validate_candidate_protocol
-from .contracts import catalog, plan, planned_cells, resolve_dataset
+from .contracts import catalog, plan, planned_cells
 from .datasets import DatasetReader
 from .engine import Engine, ReviewedPlanChangedError
 from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
@@ -97,7 +97,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def _plan(self, manifest, role, actor):
-        frozen = plan(self._manifest(manifest, role))
+        frozen = plan(manifest, policy=lambda resolved: self._manifest(resolved, role))
         if membership := frozen.get("experiment"):
             self.server.experiments.get(
                 membership["id"], None if role == "admin" else actor
@@ -176,7 +176,6 @@ class Handler(BaseHTTPRequestHandler):
             return manifest
         if not isinstance(manifest, dict):
             raise ValueError("manifest must be an object")
-        manifest = resolve_dataset(manifest)
         cases = manifest.get("cases")
         if (
             not isinstance(cases, list)
@@ -398,10 +397,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(
                     201,
                     self.server.engine.start(
-                        self._manifest(manifest, role),
+                        manifest,
                         actor,
                         body.get("idempotency_key"),
                         actor_role=role,
+                        manifest_policy=lambda resolved: self._manifest(resolved, role),
                     ),
                 )
             if route == ["replays"] and method == "POST":
