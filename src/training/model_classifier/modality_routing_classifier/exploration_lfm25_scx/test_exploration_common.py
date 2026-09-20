@@ -1,5 +1,6 @@
 """Tests for the helpers shared by the exploration scripts."""
 
+import hashlib
 import json
 import re
 
@@ -61,9 +62,10 @@ def test_summary_lines_name_the_model_and_show_accuracy():
 
 def test_saved_predictions_use_the_format_the_audit_report_reads(tmp_path):
     path = tmp_path / "nested" / "preds.json"
-    common.save_predictions(path, "demo", 0.75, PREDS)
-    assert json.loads(path.read_text(encoding="utf-8")) == {
-        "model": "demo",
-        "accuracy": 0.75,
-        "preds": PREDS,
-    }
+    rows = [{"text": f"prompt {i}"} for i in range(len(PREDS))]
+    common.save_predictions(path, "demo", 0.75, PREDS, rows)
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["preds"] == PREDS and saved["model"] == "demo"
+    assert saved["input_hashes"] == [
+        hashlib.sha256(row["text"].encode("utf-8")).hexdigest() for row in rows
+    ]

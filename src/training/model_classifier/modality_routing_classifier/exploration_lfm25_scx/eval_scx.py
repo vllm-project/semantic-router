@@ -86,7 +86,9 @@ def main(args: argparse.Namespace) -> None:
     )
     metrics = summarize_predictions([r["label_name"] for r in rows], preds)
     print("\n".join(format_summary(args.model_path, metrics)))
-    save_predictions(Path(args.out_json), args.model_path, metrics["accuracy"], preds)
+    save_predictions(
+        Path(args.out_json), args.model_path, metrics["accuracy"], preds, rows
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

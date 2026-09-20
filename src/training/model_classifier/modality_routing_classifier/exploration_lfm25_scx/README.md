@@ -31,8 +31,9 @@ python eval_scx.py runs/scx_router_finetuned runs/scx_finetuned_preds.json
 python try_scx_zeroshot.py
 ```
 
-The prediction files can be passed to the label audit, for example
-`judge_labels.py report --preds scx_finetuned=<file>`.
+The prediction files carry the sha256 of every prompt, so they can be passed to the
+label audit, for example `judge_labels.py report --preds scx_finetuned=<file>`. The
+audit refuses predictions it cannot tie to the rows it scores them on.
 
 ## Things to know
 

@@ -5,6 +5,7 @@ summarised and saved live here once, so the training, evaluation and zero-shot
 scripts do not each carry their own copy.
 """
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -164,20 +165,32 @@ def format_summary(model_name: str, metrics: dict) -> list[str]:
 
 
 def save_predictions(
-    path: Path, model_name: str, accuracy: float, preds: list[str]
+    path: Path, model_name: str, accuracy: float, preds: list[str], rows: list[dict]
 ) -> None:
     """Write predictions in the format `judge_labels.py report --preds` reads.
+
+    The file records the sha256 of every prompt, because the report tool refuses
+    predictions it cannot tie to the rows it scores them against.
 
     Args:
         path: Output JSON path; parent directories are created.
         model_name: Name to record for the model.
         accuracy: Accuracy on the test split.
-        preds: Predicted label names, in test-split order.
+        preds: Predicted label names, aligned with rows.
+        rows: The rows the predictions were made for, with "text".
     """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "model": model_name,
+        "accuracy": accuracy,
+        "preds": preds,
+        "input_hashes": [
+            hashlib.sha256(row["text"].encode("utf-8")).hexdigest() for row in rows
+        ],
+    }
     with open(path, "w", encoding="utf-8") as f:
-        json.dump({"model": model_name, "accuracy": accuracy, "preds": preds}, f)
+        json.dump(payload, f)
 
 
 __all__ = [

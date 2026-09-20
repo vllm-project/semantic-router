@@ -75,7 +75,7 @@ def main(args: argparse.Namespace) -> None:
     )
     metrics = summarize_predictions([r["label_name"] for r in rows], preds)
     print("\n".join(format_summary("LFM2.5-Encoder-350M + LoRA (fine-tuned)", metrics)))
-    save_predictions(Path(args.out_json), "lfm25", metrics["accuracy"], preds)
+    save_predictions(Path(args.out_json), "lfm25", metrics["accuracy"], preds, rows)
 
 
 def build_parser() -> argparse.ArgumentParser:
