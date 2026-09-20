@@ -54,7 +54,16 @@ func candleSharesBackbone(adapter string) bool {
 }
 
 func (r *Runtime) candleResource(ctx context.Context, spec config.ResolvedModelBinding, tokenTask bool) (*binding.Resource, error) {
+	return r.candleResourceWithWindow(ctx, spec, tokenTask, 0)
+}
+
+func (r *Runtime) candleResourceWithWindow(ctx context.Context, spec config.ResolvedModelBinding, tokenTask bool, windowSize int) (*binding.Resource, error) {
 	options := candleOptions(spec)
+	if windowSize > 0 {
+		options.MaxInputTokens = windowSize
+		options.DocumentMaxInputTokens = spec.Deployment.Input.MaxTokens
+		options.Overflow = "reject"
+	}
 	revision, err := r.artifactRevision(ctx, options.ModelPath)
 	if err != nil {
 		return nil, err
@@ -112,45 +121,14 @@ func (r *Runtime) Sequence(ctx context.Context, spec config.ResolvedModelBinding
 	if spec.Deployment.Provider == "ort" {
 		return r.ortSequence(ctx, spec)
 	}
+	if spec.Deployment.Provider == "openvino" {
+		return r.openvinoSequence(ctx, spec)
+	}
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: sequence provider %q is unavailable", binding.ErrCapability, spec.Deployment.Provider)
 	}
-	resource, err := r.candleResource(ctx, spec, false)
+	resource, model, err := r.prepareCandleSequence(ctx, spec, 0)
 	if err != nil {
-		return nil, err
-	}
-	var model *candle.SequenceClassifier
-	err = resource.Use(ctx, func(value io.Closer) error {
-		backbone := value.(*candleBackbone)
-		head := spec.Binding.Head
-		if head == "" && backbone.sequence != nil {
-			model, err = backbone.sequence.Clone()
-			return err
-		}
-		if head == "" {
-			head = spec.Deployment.Artifact
-		}
-		if backbone.encoder != nil {
-			model, err = backbone.encoder.BindSequenceHead(head)
-		} else if backbone.sequence != nil {
-			model, err = backbone.sequence.BindSequenceHead(head)
-		} else {
-			model, err = backbone.tokens.BindSequenceHead(head)
-		}
-		return err
-	})
-	if err != nil {
-		// Use may observe cancellation after Clone/BindHead completed.
-		// Ownership has not yet transferred to the resource in this branch.
-		if model != nil {
-			_ = model.Close()
-		}
-		_ = resource.Close()
-		return nil, err
-	}
-	if err = resource.Own(model); err != nil {
-		_ = model.Close()
-		_ = resource.Close()
 		return nil, err
 	}
 	info, err := model.Info()
@@ -176,15 +154,47 @@ func (r *Runtime) Sequence(ctx context.Context, spec config.ResolvedModelBinding
 
 func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) (_ *binding.Resolved[string, tasks.TokenClassificationResult], callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
+	if spec.Deployment.Input.Overflow == "window" {
+		return nil, fmt.Errorf("%w: token window policy requires the typed window task", binding.ErrCapability)
+	}
 	if spec.Deployment.Provider == "ort" {
 		return r.ortTokens(ctx, spec)
 	}
 	if spec.Deployment.Provider != "candle" {
 		return nil, fmt.Errorf("%w: token provider %q is unavailable", binding.ErrCapability, spec.Deployment.Provider)
 	}
-	resource, err := r.candleResource(ctx, spec, true)
+	resource, model, info, err := r.prepareCandleTokens(ctx, spec, 0)
 	if err != nil {
 		return nil, err
+	}
+	bound, err := r.tokens.Resolve(taskIdentity(spec), candleCapability(spec, info), resource, func(_ context.Context, _ io.Closer, text string) (tasks.TokenClassificationResult, error) {
+		result, inferErr := model.ClassifyTokens(text)
+		available := true
+		out := tasks.TokenClassificationResult{Input: candleInputUsage(result.Input), ScoresAvailable: &available, Entities: make([]tasks.TokenEntity, len(result.Spans))}
+		for i, span := range result.Spans {
+			out.Entities[i] = tasks.TokenEntity{EntityType: span.Label, Start: span.Start, End: span.End, Text: span.Text, Confidence: span.Confidence}
+		}
+		if result.Input.Truncated && inferErr == nil {
+			inferErr = tasks.ErrTokenSpansTruncated
+		}
+		return out, nativeError(inferErr)
+	})
+	if err == nil {
+		_, err = bound.Call(ctx, string(spec.Recipe), "warmup")
+	}
+	if err != nil {
+		_ = resource.Close()
+		return nil, err
+	}
+	bound.Ready()
+	return bound, nil
+}
+
+// prepareCandleTokens binds one token head while preserving pooled ownership.
+func (r *Runtime) prepareCandleTokens(ctx context.Context, spec config.ResolvedModelBinding, windowSize int) (*binding.Resource, *candle.TokenClassifier, candle.InstanceInfo, error) {
+	resource, err := r.candleResourceWithWindow(ctx, spec, true, windowSize)
+	if err != nil {
+		return nil, nil, candle.InstanceInfo{}, err
 	}
 	var model *candle.TokenClassifier
 	err = resource.Use(ctx, func(value io.Closer) error {
@@ -213,43 +223,23 @@ func (r *Runtime) Tokens(ctx context.Context, spec config.ResolvedModelBinding) 
 			_ = model.Close()
 		}
 		_ = resource.Close()
-		return nil, err
+		return nil, nil, candle.InstanceInfo{}, err
 	}
 	if err = resource.Own(model); err != nil {
 		_ = model.Close()
 		_ = resource.Close()
-		return nil, err
+		return nil, nil, candle.InstanceInfo{}, err
 	}
 	info, err := model.Info()
 	if err != nil {
 		_ = resource.Close()
-		return nil, err
+		return nil, nil, candle.InstanceInfo{}, err
 	}
-	bound, err := r.tokens.Resolve(taskIdentity(spec), candleCapability(spec, info), resource, func(_ context.Context, _ io.Closer, text string) (tasks.TokenClassificationResult, error) {
-		result, inferErr := model.ClassifyTokens(text)
-		available := true
-		out := tasks.TokenClassificationResult{Input: candleInputUsage(result.Input), ScoresAvailable: &available, Entities: make([]tasks.TokenEntity, len(result.Spans))}
-		for i, span := range result.Spans {
-			out.Entities[i] = tasks.TokenEntity{EntityType: span.Label, Start: span.Start, End: span.End, Text: span.Text, Confidence: span.Confidence}
-		}
-		if result.Input.Truncated && inferErr == nil {
-			inferErr = tasks.ErrTokenSpansTruncated
-		}
-		return out, nativeError(inferErr)
-	})
-	if err == nil {
-		_, err = bound.Call(ctx, string(spec.Recipe), "warmup")
-	}
-	if err != nil {
-		_ = resource.Close()
-		return nil, err
-	}
-	bound.Ready()
-	return bound, nil
+	return resource, model, info, nil
 }
 
 func candleCapability(spec config.ResolvedModelBinding, info candle.InstanceInfo) binding.Capability {
-	return binding.Capability{Contract: spec.Binding.Contract, Provider: "candle", Device: info.Device, Precision: info.Precision, Labels: info.Labels, Limits: binding.Limits{ModelTokens: info.ArchitecturalMaxTokens, TaskTokens: 512, DeploymentTokens: spec.Deployment.Input.MaxTokens, Overflow: info.Overflow}}
+	return binding.Capability{Contract: spec.Binding.Contract, Provider: "candle", Device: info.Device, Precision: info.Precision, Labels: info.Labels, Limits: binding.Limits{ModelTokens: info.ArchitecturalMaxTokens, TaskTokens: info.MaxInputTokens, DeploymentTokens: spec.Deployment.Input.MaxTokens, Overflow: info.Overflow}}
 }
 
 func nativeError(err error) error {
@@ -275,4 +265,46 @@ func candleInputUsage(input candle.InputMetadata) *tasks.InputUsage {
 		return nil
 	}
 	return &tasks.InputUsage{OriginalTokens: input.InputTokens, ProcessedTokens: input.ProcessedTokens, Truncated: input.Truncated}
+}
+
+func (r *Runtime) prepareCandleSequence(ctx context.Context, spec config.ResolvedModelBinding, windowSize int) (*binding.Resource, *candle.SequenceClassifier, error) {
+	resource, err := r.candleResourceWithWindow(ctx, spec, false, windowSize)
+	if err != nil {
+		return nil, nil, err
+	}
+	var model *candle.SequenceClassifier
+	err = resource.Use(ctx, func(value io.Closer) error {
+		backbone := value.(*candleBackbone)
+		head := spec.Binding.Head
+		if head == "" && backbone.sequence != nil {
+			model, err = backbone.sequence.Clone()
+			return err
+		}
+		if head == "" {
+			head = spec.Deployment.Artifact
+		}
+		if backbone.encoder != nil {
+			model, err = backbone.encoder.BindSequenceHead(head)
+		} else if backbone.sequence != nil {
+			model, err = backbone.sequence.BindSequenceHead(head)
+		} else {
+			model, err = backbone.tokens.BindSequenceHead(head)
+		}
+		return err
+	})
+	if err != nil {
+		// Use may observe cancellation after Clone/BindHead completed.
+		// Ownership has not yet transferred to the resource in this branch.
+		if model != nil {
+			_ = model.Close()
+		}
+		_ = resource.Close()
+		return nil, nil, err
+	}
+	if err = resource.Own(model); err != nil {
+		_ = model.Close()
+		_ = resource.Close()
+		return nil, nil, err
+	}
+	return resource, model, nil
 }

@@ -92,50 +92,25 @@ Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
 
-### Isolate Evaluation broker credentials
+### Isolate sr-bench credentials
 
-Production Evaluation uses a server-owned HTTP broker. The sandboxed Python
-worker receives neither origins nor credential values in its environment and
-can request only the operation, frozen case identity, bounded timeout, and
-validated payload allowed by the run manifest. The Go broker selects the exact
-Router, Envoy, or evidence-ledger origin and attaches its bearer token.
+The Dashboard proxies a server-owned sr-bench origin and forwards authenticated
+user ownership. `SR_BENCH_TOKEN_ENV` names the service token environment variable
+(default `SR_BENCH_TOKEN`). Keep this token separate from model API credentials
+and Router management credentials. Browser manifests cannot change registered
+target endpoints, prices, credential references or execution harness options.
 
-Use a dedicated Router Evaluation token:
+The managed core worker receives only the registered model credential references
+and its service token through inherited environment variables, not command-line
+values. Its private store and adjacent token file live outside the common Router
+and Dashboard mounts; the worker has no Docker socket or GPU passthrough.
+Dashboard receives the service token but not model credential values.
 
-```yaml
-global:
-  services:
-    management_api:
-      auth:
-        mode: bearer
-        tokens:
-          - env: ROUTER_EVAL_TOKEN
-            role: evaluation
-        roles:
-          evaluation:
-            - classify.invoke
-```
-
-Then reference its name, never its value:
-
-```bash
-export ROUTER_EVAL_TOKEN="<secret-manager value>"
-export EVALUATION_ROUTER_API_KEY_ENV=ROUTER_EVAL_TOKEN
-```
-
-The Evaluation token must differ from
-`VLLM_SR_DASHBOARD_RECIPE_TOKEN`, which is the Dashboard control-plane
-identity. Envoy, fault-recovery, hard-policy, and production-experiment
-ledgers must each use another environment reference. Reusing a reference or a
-ledger origin is rejected. `vllm-sr serve` renders referenced secret names as
-inheriting `-e NAME` container arguments, so values stay out of process
-arguments, generated manifests, API responses, reports, and logs. A configured
-reference with no non-empty host value fails startup; an authenticated Router
-with no dedicated Evaluation reference keeps routing Evaluation unavailable
-instead of falling back to the broader Dashboard credential.
-
-See [Evaluation Plane](../benchmarking/evaluation-plane#configure-production-evidence-services)
-for the complete endpoint and timeout surface.
+For code/agent evaluation, use an independently prepared worker host and set
+`SR_BENCH_URL` to an authenticated origin reachable by the Dashboard. The
+standalone service binds loopback by default and requires a service token for
+non-loopback binding. Keep its source, sandbox and model credentials confined to
+that host. See [sr-bench 1.0](../benchmarking/sr-bench) for setup and limits.
 
 ## Secure the local stack's storage credentials
 

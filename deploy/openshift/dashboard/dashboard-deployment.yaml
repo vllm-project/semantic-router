@@ -16,7 +16,7 @@ data:
   DASHBOARD_RUNTIME_CONFIG_WRITABLE: "false"
   DASHBOARD_RECIPE_STORE_WRITABLE: "false"
   # ML service sidecar: connect to localhost since it's in the same pod
-  ML_SERVICE_URL: "http://localhost:8686"
+  ML_SERVICE_URL: "http://127.0.0.1:8686"
   ML_PIPELINE_ENABLED: "true"
 
 ---
@@ -83,11 +83,10 @@ spec:
         - name: ml-service
           image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/ml-training-service:latest
           imagePullPolicy: Always
-          ports:
-            - name: ml-http
-              containerPort: 8686
-              protocol: TCP
           env:
+            # This unauthenticated API is only for the co-located dashboard.
+            - name: ML_SERVICE_HOST
+              value: "127.0.0.1"
             - name: ML_SERVICE_PORT
               value: "8686"
             - name: PYTHONUNBUFFERED
@@ -103,15 +102,27 @@ spec:
               memory: "4Gi"
               cpu: "2"
           readinessProbe:
-            httpGet:
-              path: /api/health
-              port: 8686
+            exec:
+              command:
+                - curl
+                - --fail
+                - --silent
+                - --max-time
+                - "5"
+                - http://127.0.0.1:8686/api/health
+            timeoutSeconds: 6
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /api/health
-              port: 8686
+            exec:
+              command:
+                - curl
+                - --fail
+                - --silent
+                - --max-time
+                - "5"
+                - http://127.0.0.1:8686/api/health
+            timeoutSeconds: 6
             initialDelaySeconds: 30
             periodSeconds: 30
 

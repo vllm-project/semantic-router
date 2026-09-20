@@ -48,12 +48,12 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		if err != nil {
 			return fmt.Errorf("config.prompt_guard: %w", err)
 		}
-		// Variant/Protocol are mutually exclusive and, unlike the CRD's other
+		// Variant/Backend are mutually exclusive and, unlike the CRD's other
 		// PromptGuardConfig fields, deliberately carry no kubebuilder default
 		// for Variant (a per-field CRD default would be injected even when
-		// only Protocol is set, tripping mutual-exclusion validation). Apply
+		// only Backend is set, tripping mutual-exclusion validation). Apply
 		// the "neither set" default here instead, once both fields are read.
-		if promptGuard.Variant == "" && promptGuard.Protocol == "" && promptGuard.Backend == nil {
+		if promptGuard.Variant == "" && promptGuard.Backend == nil {
 			promptGuard.Variant = routerconfig.PromptGuardVariantMmBERT32K
 		}
 		if promptGuard.Enabled && promptGuard.JailbreakMappingPath == "" {
@@ -172,7 +172,7 @@ func (r *SemanticRouterReconciler) convertClassifierModule(spec *vllmv1alpha1.Cl
 		return routerconfig.CanonicalClassifierModule{}, nil
 	}
 
-	var classifier routerconfig.CanonicalClassifierModule
+	classifier := routerconfig.DefaultCanonicalGlobal().ModelCatalog.Modules.Classifier
 
 	if spec.CategoryModel != nil {
 		domain, err := convertToTypedConfig[routerconfig.CanonicalCategoryModule](r, spec.CategoryModel)

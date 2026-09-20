@@ -43,7 +43,7 @@ func toolsBoolPtr(v bool) *bool {
 	return &v
 }
 
-var _ = Describe("Tool Selection Request Filter", func() {
+var _ = Describe("Tool Selection Request Filter", Label("model-artifacts"), func() {
 	var (
 		tempDir     string
 		toolsDBPath string

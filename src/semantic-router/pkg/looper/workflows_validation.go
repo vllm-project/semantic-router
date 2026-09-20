@@ -18,7 +18,9 @@ func validateWorkflowPlan(plan *workflowPlan, workerModels []string, cfg workflo
 		if err := validateWorkflowPlanStep(&plan.Steps[i], i, allowed, previousAccessIDs, cfg); err != nil {
 			return err
 		}
-		registerWorkflowAccessIDs(previousAccessIDs, plan.Steps[i])
+		if err := registerWorkflowAccessIDs(previousAccessIDs, plan.Steps[i]); err != nil {
+			return err
+		}
 	}
 	return validateWorkflowFinal(plan.Final, allowed)
 }
@@ -38,7 +40,9 @@ func validateWorkflowPlanStep(
 	previousAccessIDs map[string]bool,
 	cfg workflowsExecutionConfig,
 ) error {
-	if strings.TrimSpace(step.ID) == "" {
+	// Step selectors and generated agent IDs must use the same canonical ID.
+	step.ID = strings.TrimSpace(step.ID)
+	if step.ID == "" {
 		step.ID = fmt.Sprintf("step-%d", index+1)
 	}
 	if strings.TrimSpace(step.Role) == "" {
@@ -78,11 +82,20 @@ func validateWorkflowPlanStep(
 	return nil
 }
 
-func registerWorkflowAccessIDs(ids map[string]bool, step workflowPlanStep) {
-	ids[step.ID] = true
+func registerWorkflowAccessIDs(ids map[string]bool, step workflowPlanStep) error {
+	// Step and agent selectors share one namespace. Check both kinds so a
+	// selector cannot expose multiple outputs because of an identity collision.
+	accessIDs := []string{step.ID}
 	for modelIndex, model := range step.Models {
-		ids[workflowAgentID(workflowToolPhaseStep, step, model, modelIndex)] = true
+		accessIDs = append(accessIDs, workflowAgentID(workflowToolPhaseStep, step, model, modelIndex))
 	}
+	for _, id := range accessIDs {
+		if ids[id] {
+			return fmt.Errorf("workflows plan step %q has conflicting access identity %q", step.ID, id)
+		}
+		ids[id] = true
+	}
+	return nil
 }
 
 func normalizeWorkflowAccessList(values []string) []string {

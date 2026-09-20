@@ -233,13 +233,20 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	// Log routing decision
 	r.logRoutingDecision(ctx, "entrypoint_routing", originalModel, matchedModel, decisionName, reasoningDecision.UseReasoning)
 
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
-
-	// Capture router replay information if enabled
-	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+	// Persist the final dispatch demand, including automatic output resolved
+	// below. Defer also preserves a record when finalization fails or panics;
+	// Process owns its terminal lifecycle and response headers run afterwards.
+	//
+	// The shadow goes out from here too. Its job copies ctx.RouterReplayID when
+	// the job is built, and a job built before the record exists carries an
+	// empty one, which makes every shadow outcome drop silently.
+	dispatched := false
+	defer func() {
+		r.startRouterReplay(ctx, originalModel, dispatch.logicalModel, decisionName)
+		if dispatched {
+			r.dispatchShadowIfConfigured(ctx, dispatch)
+		}
+	}()
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)
@@ -247,7 +254,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
-	r.dispatchShadowIfConfigured(ctx, dispatch)
+	dispatched = true
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)
@@ -284,16 +291,12 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(request *llmprotocol.Request,
 	}
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 
-	// Handle route cache clearing
-	if r.shouldClearRouteCache() {
-		r.setClearRouteCache(response)
-	}
-
 	// Log routing decision
 	r.logRoutingDecision(ctx, "model_specified", originalModel, originalModel, decisionName, false)
 
-	// Capture router replay information if enabled even when the client pins a model.
-	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
+	// Capture the final dispatch demand for pinned Models too, retaining a
+	// record on finalization failure before Process handles the terminal state.
+	defer r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)

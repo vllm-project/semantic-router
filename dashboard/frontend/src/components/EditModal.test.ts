@@ -35,6 +35,21 @@ describe('EditModal accessibility contract', () => {
     expect(source).toContain('aria-busy={saving}')
   })
 
+  it('supplies current form state to custom dependent fields', () => {
+    const render = vi.fn(() => createElement('span', null, 'Dependent value'))
+    renderToStaticMarkup(
+      createElement(EditModal, {
+        isOpen: true,
+        onClose: vi.fn(),
+        onSave: vi.fn(async () => undefined),
+        title: 'Edit model',
+        data: null,
+        fields: [{ name: 'api_format', label: 'API Format', type: 'custom', customRender: render }],
+      }),
+    )
+    expect(render).toHaveBeenCalledWith(undefined, expect.any(Function), {})
+  })
+
   it('groups simple and complex fields into a shared responsive layout', () => {
     const markup = renderToStaticMarkup(
       createElement(EditModal, {

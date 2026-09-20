@@ -199,9 +199,9 @@ func (s *ClassificationAPIServer) handleListFiles(w http.ResponseWriter, r *http
 		records = filtered
 	}
 
-	response := map[string]interface{}{
-		"object": "list",
-		"data":   records,
+	response := objectListResponse[*vectorstore.FileRecord]{
+		Object: "list",
+		Data:   records,
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -246,10 +246,10 @@ func (s *ClassificationAPIServer) handleDeleteFile(w http.ResponseWriter, r *htt
 		return
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"id":      id,
-		"object":  "file",
-		"deleted": true,
+	s.writeJSONResponse(w, http.StatusOK, objectDeletedResponse{
+		ID:      id,
+		Object:  "file",
+		Deleted: true,
 	})
 }
 

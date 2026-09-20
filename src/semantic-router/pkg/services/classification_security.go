@@ -11,6 +11,7 @@ import (
 
 // SecurityRequest represents a request for security detection
 type SecurityRequest struct {
+	Recipe  string           `json:"recipe,omitempty"`
 	Text    string           `json:"text"`
 	Options *SecurityOptions `json:"options,omitempty"`
 }
@@ -24,6 +25,7 @@ type SecurityOptions struct {
 
 // SecurityResponse represents the response from security detection
 type SecurityResponse struct {
+	Recipe           string               `json:"recipe,omitempty"`
 	IsJailbreak      bool                 `json:"is_jailbreak"`
 	RiskScore        *float64             `json:"risk_score"`
 	DetectionTypes   []string             `json:"detection_types"`
@@ -48,7 +50,13 @@ func (s *ClassificationService) CheckSecurity(ctx context.Context, req SecurityR
 		return nil, ErrEmptyText
 	}
 
-	classifier := s.classifierSnapshot()
+	classifier, _, recipe, scopeErr := s.diagnosticClassifierSnapshot(req.Recipe)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	if req.Recipe != "" && (classifier == nil || !classifier.IsJailbreakEnabled()) {
+		return nil, ErrClassifierUnavailable
+	}
 	if classifier == nil {
 		return nil, fmt.Errorf("security detector is unavailable")
 	}
@@ -61,7 +69,9 @@ func (s *ClassificationService) CheckSecurity(ctx context.Context, req SecurityR
 	processingTime := time.Since(start).Milliseconds()
 	includeReasoning := req.Options != nil && req.Options.IncludeReasoning
 
-	return buildSecurityVerdictResponse(verdict, includeReasoning, processingTime), nil
+	response := buildSecurityVerdictResponse(verdict, includeReasoning, processingTime)
+	response.Recipe = recipe
+	return response, nil
 }
 
 // buildSecurityResponse assembles the security detection response. The risk_score

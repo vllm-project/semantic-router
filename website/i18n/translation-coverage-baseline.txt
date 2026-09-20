@@ -9,9 +9,9 @@ zh-Hans	api/session-identification.md
 zh-Hans	benchmarking/agent-evaluation-loop.md
 zh-Hans	benchmarking/agent-routing-protection.md
 zh-Hans	benchmarking/custom-evaluations.md
-zh-Hans	benchmarking/evaluation-plane.md
 zh-Hans	benchmarking/open-intelligence-index.md
 zh-Hans	benchmarking/overview.md
+zh-Hans	benchmarking/sr-bench.md
 zh-Hans	community/code-style.md
 zh-Hans	community/development.md
 zh-Hans	community/documentation.md
@@ -138,6 +138,7 @@ zh-Hans	tutorials/global/models-entrypoints-serving.md
 zh-Hans	tutorials/global/overview.md
 zh-Hans	tutorials/global/recipes.md
 zh-Hans	tutorials/global/stores-and-tools.md
+zh-Hans	tutorials/global/vela-models.md
 zh-Hans	tutorials/learning/adaptations.md
 zh-Hans	tutorials/learning/decision-adaptations.md
 zh-Hans	tutorials/learning/experience.md

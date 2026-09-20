@@ -54,18 +54,31 @@ type Identity struct {
 	Head       string
 }
 
-// Limits separates architectural capacity, the implemented task limit and
-// the operator's budget. Zero means unknown/unset, never unlimited capability.
+// Limits separates physical forward capacity, a complete window scan capability
+// and the operator's budget. Zero means unknown/unset, never unlimited capability.
 type Limits struct {
 	ModelTokens      int
 	TaskTokens       int
+	DocumentTokens   int
 	DeploymentTokens int
 	Overflow         string
 }
 
 func (l Limits) EffectiveTokens() int {
+	if l.Overflow == "window" && l.DocumentTokens > 0 {
+		return minimumPositive(l.DocumentTokens, l.DeploymentTokens)
+	}
+	return minimumPositive(l.ModelTokens, l.TaskTokens, l.DeploymentTokens)
+}
+
+// ForwardTokens is the actual capacity of one native model invocation.
+func (l Limits) ForwardTokens() int {
+	return minimumPositive(l.ModelTokens, l.TaskTokens)
+}
+
+func minimumPositive(limits ...int) int {
 	limit := 0
-	for _, n := range []int{l.ModelTokens, l.TaskTokens, l.DeploymentTokens} {
+	for _, n := range limits {
 		if n > 0 && (limit == 0 || n < limit) {
 			limit = n
 		}
@@ -74,13 +87,22 @@ func (l Limits) EffectiveTokens() int {
 }
 
 func (l Limits) Validate() error {
-	if l.ModelTokens < 0 || l.TaskTokens < 0 || l.DeploymentTokens < 0 {
+	if l.ModelTokens < 0 || l.TaskTokens < 0 || l.DocumentTokens < 0 || l.DeploymentTokens < 0 {
 		return fmt.Errorf("%w: token limits must not be negative", ErrCapability)
 	}
 	switch l.Overflow {
 	case "", "reject", "truncate", "window":
 	default:
 		return fmt.Errorf("%w: unsupported overflow policy %q", ErrCapability, l.Overflow)
+	}
+	if l.DocumentTokens > 0 {
+		if l.Overflow != "window" || l.ForwardTokens() <= 0 {
+			return fmt.Errorf("%w: document capacity requires a window task with known forward capacity", ErrCapability)
+		}
+		if l.DeploymentTokens > l.DocumentTokens {
+			return fmt.Errorf("%w: deployment budget exceeds complete document scan capacity", ErrCapability)
+		}
+		return nil
 	}
 	if l.DeploymentTokens > 0 && l.TaskTokens > 0 && l.DeploymentTokens > l.TaskTokens {
 		return fmt.Errorf("%w: deployment budget %d exceeds task limit %d", ErrCapability, l.DeploymentTokens, l.TaskTokens)
@@ -97,7 +119,7 @@ func (l Limits) CheckInput(tokens int) error {
 	if tokens < 0 {
 		return fmt.Errorf("%w: negative token count", ErrInputLimit)
 	}
-	if max := l.EffectiveTokens(); max > 0 && tokens > max && (l.Overflow == "" || l.Overflow == "reject") {
+	if max := l.EffectiveTokens(); max > 0 && tokens > max && (l.Overflow == "" || l.Overflow == "reject" || l.Overflow == "window") {
 		return fmt.Errorf("%w: got %d tokens, maximum %d", ErrInputLimit, tokens, max)
 	}
 	return nil
@@ -113,6 +135,13 @@ type Capability struct {
 	Limits    Limits
 	Labels    []string
 	Embedding *EmbeddingCapability
+	Window    *WindowCapability
+}
+
+// WindowCapability fixes the scan geometry selected during preparation.
+type WindowCapability struct {
+	Size    int
+	Overlap int
 }
 
 // EmbeddingCapability describes actual vector semantics. Empty strings and
@@ -127,6 +156,10 @@ type EmbeddingCapability struct {
 
 func cloneCapability(capability Capability) Capability {
 	capability.Labels = append([]string(nil), capability.Labels...)
+	if capability.Window != nil {
+		window := *capability.Window
+		capability.Window = &window
+	}
 	if capability.Embedding != nil {
 		value := *capability.Embedding
 		value.Modalities = append([]string(nil), value.Modalities...)
@@ -141,6 +174,9 @@ func (c Capability) Validate(id Identity) error {
 	}
 	if c.Contract == "" || c.Contract != id.Contract || c.Provider == "" || c.Device == "" || c.Precision == "" {
 		return fmt.Errorf("%w: task contract and effective execution configuration must be explicit", ErrCapability)
+	}
+	if c.Limits.DocumentTokens > 0 && (c.Window == nil || c.Window.Size <= 0 || c.Window.Size > c.Limits.ForwardTokens() || c.Window.Size > c.Limits.EffectiveTokens()) {
+		return fmt.Errorf("%w: complete document scans require a valid physical window", ErrCapability)
 	}
 	return c.Limits.Validate()
 }

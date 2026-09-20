@@ -20,6 +20,7 @@ func (r *OpenAIRouter) resolveEntrypointForRequest(originalModel string, ctx *Re
 		return
 	}
 	ctx.Routing.SelectRecipe(recipe)
+	observeRoutingIdentity(ctx, originalModel)
 	logging.ComponentDebugEvent("extproc", "entrypoint_recipe_resolved", map[string]interface{}{
 		"request_id": ctx.RequestID,
 		"model":      originalModel,

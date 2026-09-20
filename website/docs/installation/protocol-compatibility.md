@@ -102,7 +102,8 @@ instead of being silently dropped.
 | Prompt-cache directives | Supported | Not supported | Supported |
 | Reasoning token budget | Supported extension | Not supported | Supported |
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
-| `top_k` sampling | Not supported | Not supported | Supported |
+| `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
+| `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
 
@@ -159,9 +160,18 @@ schema, streaming, tools, or error translation.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
+- For Anthropic-compatible providers, an absent nullable `stop_sequence` is
+  interpreted as null with a bounded compatibility diagnostic. This applies to
+  buffered Messages, `message_start.message`, and `message_delta.delta`.
+  Explicit null needs no diagnostic; a `stop_sequence` stop reason still
+  requires a non-empty matched sequence, and terminal deltas still require
+  `stop_reason`.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).
+  Diagnostics discovered after streaming headers have been sent are recorded
+  in translation-warning metrics and structured debug logs; they cannot be
+  added to the already-sent response header.
 
 The repository verifies all three protocols pairwise in codec tests, at the
 Envoy ExtProc boundary, and in an 18-cell deployment matrix: three client

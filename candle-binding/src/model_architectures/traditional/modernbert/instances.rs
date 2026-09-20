@@ -50,13 +50,10 @@ fn load_head(
     source: &Config,
     device: &Device,
     variant: ModernBertVariant,
+    max_input_tokens: usize,
 ) -> Result<HeadBinding> {
     let raw = std::fs::read_to_string(format!("{path}/config.json"))?;
-    let raw_config: serde_json::Value = serde_json::from_str(&raw)?;
-    let pooling = match raw_config["classifier_pooling"].as_str() {
-        Some("cls") => ClassifierPooling::CLS,
-        _ => ClassifierPooling::MEAN,
-    };
+    let pooling = TraditionalModernBertClassifier::parse_classifier_pooling(&raw)?;
     let config = TraditionalModernBertClassifier::parse_model_config(&raw)?;
     // Classifier metadata may differ; every backbone execution parameter must match.
     let mut actual = config.clone();
@@ -77,7 +74,8 @@ fn load_head(
         tokenizer.get_vocab_size(true) <= config.vocab_size,
         "head tokenizer exceeds backbone vocabulary"
     );
-    let max_length = TraditionalModernBertClassifier::resolve_sequence_length(&config, None)?;
+    let max_length =
+        TraditionalModernBertClassifier::resolve_sequence_length(&config, Some(max_input_tokens))?;
     let tokenizer = TraditionalModernBertClassifier::tokenizer_for_config(
         tokenizer,
         &config,
@@ -92,11 +90,7 @@ fn load_head(
     } else {
         vb.pp("_orig_mod")
     };
-    let head = if vb.contains_tensor("head.dense.weight") {
-        Some(FixedModernBertHead::load(vb.pp("head"), &config)?)
-    } else {
-        None
-    };
+    let head = FixedModernBertHead::load_for_artifact(vb.pp("head"), &config, &raw)?;
     let classifier = candle_nn::Linear::new(
         vb.get((labels.len(), config.hidden_size), "classifier.weight")?,
         Some(vb.get((labels.len(),), "classifier.bias")?),
@@ -123,8 +117,15 @@ macro_rules! impl_bindings {
             pub fn bind_sequence_head(
                 &self,
                 path: &str,
+                max_input_tokens: usize,
             ) -> Result<TraditionalModernBertClassifier> {
-                let binding = load_head(path, &self.config, &self.device, self.variant)?;
+                let binding = load_head(
+                    path,
+                    &self.config,
+                    &self.device,
+                    self.variant,
+                    max_input_tokens,
+                )?;
                 Ok(TraditionalModernBertClassifier {
                     model: Arc::clone(&self.model),
                     head: binding.head,
@@ -144,8 +145,15 @@ macro_rules! impl_bindings {
             pub fn bind_token_head(
                 &self,
                 path: &str,
+                max_input_tokens: usize,
             ) -> Result<TraditionalModernBertTokenClassifier> {
-                let binding = load_head(path, &self.config, &self.device, self.variant)?;
+                let binding = load_head(
+                    path,
+                    &self.config,
+                    &self.device,
+                    self.variant,
+                    max_input_tokens,
+                )?;
                 Ok(TraditionalModernBertTokenClassifier {
                     model: Arc::clone(&self.model),
                     head: binding.head,

@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"hash/fnv"
 	"math"
 	"os"
@@ -9,6 +10,16 @@ import (
 )
 
 const deterministicEmbeddingsEnv = "VLLM_SR_DETERMINISTIC_EMBEDDINGS"
+
+// DeterministicEmbeddingFingerprint identifies the simulation representation
+// without loading or claiming to use neural weights. Keep it separate from
+// native model identities and increment its version if feature math changes.
+func DeterministicEmbeddingFingerprint(cfg EmbeddingConfig) (string, bool) {
+	if !deterministicEmbeddingsEnabled() {
+		return "", false
+	}
+	return fmt.Sprintf("memory-fnv64a-unicode-tokens-l2-v1-dim-%d", deterministicEmbeddingDimension(cfg)), true
+}
 
 func deterministicEmbeddingsEnabled() bool {
 	switch strings.ToLower(strings.TrimSpace(os.Getenv(deterministicEmbeddingsEnv))) {

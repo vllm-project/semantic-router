@@ -93,6 +93,14 @@ const (
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
 
+	// VSREffectiveInputTokens is the selected backend's rendered input size for
+	// the finalized automatic-output dispatch, including its chat template.
+	VSREffectiveInputTokens = "x-vsr-effective-input-tokens" // #nosec G101 -- public header name, not a credential
+
+	// VSREffectiveMaxOutputTokens is the resolved output token limit sent to the
+	// selected backend for that automatic-output dispatch, including reasoning.
+	VSREffectiveMaxOutputTokens = "x-vsr-effective-max-output-tokens" // #nosec G101 -- public header name, not a credential
+
 	// VSRSelectedAlgorithm indicates the model-selection algorithm used after
 	// the routing decision matched. Example values: "static", "elo", "knn",
 	// "router_dc", "fusion", "remom", "workflows".
@@ -271,6 +279,9 @@ const (
 	// Example: "jailbreak_detected,strict_jailbreak"
 	VSRMatchedJailbreak = "x-vsr-matched-jailbreak"
 
+	// VSRMatchedSafety contains matched content safety rule names.
+	VSRMatchedSafety = "x-vsr-matched-safety"
+
 	// VSRMatchedHallucination contains comma-separated list of matched
 	// hallucination rule names. Written in the response body phase, once the
 	// model's answer has been checked against its grounding context.
@@ -371,6 +382,11 @@ const (
 	// UserMiniMaxKey carries the user's MiniMax API key, injected by the auth backend.
 	// Used by the ext_proc when routing requests to MiniMax models.
 	UserMiniMaxKey = "x-user-minimax-key"
+
+	// UserCloudflareWorkersAIKey carries the user's Cloudflare Workors AI API token,
+	// injected by the auth backend. The endpoint is account-scoped, so the account
+	// identifier travels in the operator's base URL and only the token is per user.
+	UserCloudflareWorkersAIKey = "x-user-cloudflare-workers-ai-key"
 
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).

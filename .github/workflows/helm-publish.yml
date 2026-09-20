@@ -28,7 +28,7 @@ env:
 
 jobs:
   package:
-    name: Validate and package Helm
+    name: Helm Package
     runs-on: ubuntu-latest
     outputs:
       chart: ${{ steps.package.outputs.chart }}
@@ -77,9 +77,6 @@ jobs:
             echo "app_version=$APP_VERSION"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Lint chart
-        run: helm lint "${{ env.CHART_PATH }}"
-
       - name: Package chart
         id: package
         run: |
@@ -89,14 +86,39 @@ jobs:
             --destination .
           echo "chart=$(ls semantic-router-*.tgz)" >> "$GITHUB_OUTPUT"
 
+      - name: Qualify the final chart archive
+        env:
+          CHART: ${{ steps.package.outputs.chart }}
+          VERSION: ${{ steps.versions.outputs.chart_version }}
+          APP_VERSION: ${{ steps.versions.outputs.app_version }}
+        run: |
+          helm lint "$CHART"
+          helm template qualification "$CHART" > "$RUNNER_TEMP/rendered-chart.yaml"
+          test -s "$RUNNER_TEMP/rendered-chart.yaml"
+          python3 -m pip install PyYAML==6.0.3
+          helm show chart "$CHART" > "$RUNNER_TEMP/chart-metadata.yaml"
+          python3 - <<'PY_METADATA'
+          import os
+          from pathlib import Path
+          import yaml
+          chart = yaml.safe_load((Path(os.environ['RUNNER_TEMP']) / 'chart-metadata.yaml').read_text())
+          assert chart['version'] == os.environ['VERSION']
+          assert chart['appVersion'] == os.environ['APP_VERSION']
+          PY_METADATA
+          sha256sum "$CHART" > qualified-chart.sha256
+          printf '%s\n' "$GITHUB_SHA" > chart-source.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: helm-chart-${{ github.run_id }}
-          path: ${{ steps.package.outputs.chart }}
+          path: |
+            ${{ steps.package.outputs.chart }}
+            qualified-chart.sha256
+            chart-source.txt
           retention-days: 1
 
   publish:
-    name: Publish Helm to GHCR
+    name: Publish Helm Chart
     needs: package
     runs-on: ubuntu-latest
     permissions:
@@ -110,6 +132,11 @@ jobs:
       - uses: azure/setup-helm@v4
         with:
           version: ${{ env.HELM_VERSION }}
+
+      - name: Verify the qualified archive
+        run: |
+          test "$(cat chart-source.txt)" = "$GITHUB_SHA"
+          sha256sum --check qualified-chart.sha256
 
       - name: Publish chart
         run: |

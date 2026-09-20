@@ -3,15 +3,16 @@
 package apiserver
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
 	"sync"
 )
 
-// API-created services outlive every accepted handler, including a native call
-// that continues after its HTTP connection is canceled. Borrowed router/global
-// services are never added here.
+// API-created services outlive every accepted handler and registered worker,
+// including native calls that continue after an HTTP response or cancellation.
+// Borrowed router/global services are never added as owners.
 type serverOwnedResources struct {
 	mu        sync.Mutex
 	stopping  bool
@@ -28,11 +29,10 @@ func newServerOwnedResources(owners []io.Closer) *serverOwnedResources {
 			resources.owners = append(resources.owners, owner)
 		}
 	}
-	if len(resources.owners) == 0 {
-		return nil
-	}
 	return resources
 }
+
+type serverOwnedResourcesContextKey struct{}
 
 func (r *serverOwnedResources) handler(next http.Handler) http.Handler {
 	if next == nil {
@@ -48,8 +48,25 @@ func (r *serverOwnedResources) handler(next http.Handler) http.Handler {
 		r.requests.Add(1)
 		r.mu.Unlock()
 		defer r.requests.Done()
-		next.ServeHTTP(w, req)
+		ctx := context.WithValue(req.Context(), serverOwnedResourcesContextKey{}, r)
+		next.ServeHTTP(w, req.WithContext(ctx))
 	})
+}
+
+// retainAPIWorker registers before its HTTP handler can finish. Drain closes
+// registration under the same lock, so Wait cannot race a late Add.
+func retainAPIWorker(ctx context.Context) (func(), bool) {
+	r, _ := ctx.Value(serverOwnedResourcesContextKey{}).(*serverOwnedResources)
+	if r == nil { // Direct handler invocations do not own a listener or resources.
+		return func() {}, true
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.stopping {
+		return nil, false
+	}
+	r.requests.Add(1)
+	return r.requests.Done, true
 }
 
 func (r *serverOwnedResources) beginDrain() {

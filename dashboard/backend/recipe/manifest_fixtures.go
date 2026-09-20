@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 type probeFixtures struct {
@@ -20,10 +22,33 @@ type probeImageFixture struct {
 }
 
 type probeGeneratedText struct {
-	MessageIndex    *int   `yaml:"message_index"`
-	ContentIndex    *int   `yaml:"content_index"`
-	TargetTextBytes *int   `yaml:"target_text_bytes"`
-	Character       string `yaml:"character"`
+	MessageIndex    *int    `yaml:"message_index"`
+	ContentIndex    *int    `yaml:"content_index"`
+	TargetTextBytes *int    `yaml:"target_text_bytes"`
+	Character       *string `yaml:"character"`
+	Text            *string `yaml:"text"`
+}
+
+func (generated *probeGeneratedText) UnmarshalYAML(node *yaml.Node) error {
+	for index := 0; index+1 < len(node.Content); index += 2 {
+		key, value := node.Content[index], node.Content[index+1]
+		switch key.Value {
+		case "message_index", "content_index", "target_text_bytes":
+		case "character", "text":
+			if value.Tag != "!!str" {
+				return fmt.Errorf("generated_text.%s must be a string", key.Value)
+			}
+		default:
+			return fmt.Errorf("unknown generated_text field %q", key.Value)
+		}
+	}
+	type decodedGeneratedText probeGeneratedText
+	var decoded decodedGeneratedText
+	if err := node.Decode(&decoded); err != nil {
+		return err
+	}
+	*generated = probeGeneratedText(decoded)
+	return nil
 }
 
 func validateProbeFixtures(fixtures *probeFixtures, issues *[]string) {
@@ -184,11 +209,21 @@ func validateProbeGeneratedText(variant *probeVariant, variantLabel string, issu
 	if *generated.TargetTextBytes < 1 || *generated.TargetTextBytes > maxGeneratedTextBytes {
 		*issues = append(*issues, fmt.Sprintf("%s.target_text_bytes must be between 1 and %d", label, maxGeneratedTextBytes))
 	}
-	if generated.Character == "" {
-		generated.Character = "x"
-	}
-	if len(generated.Character) != 1 || generated.Character[0] < 0x20 || generated.Character[0] > 0x7e {
+	if generated.Text != nil && generated.Character != nil {
+		*issues = append(*issues, label+".text and character are mutually exclusive")
+	} else if generated.Text != nil && *generated.Text == "" {
+		*issues = append(*issues, label+".text must be a non-empty ASCII string")
+	} else if generated.Character != nil && *generated.Character == "" {
 		*issues = append(*issues, label+".character must be one printable ASCII character")
+	} else {
+		if generated.Text == nil && generated.Character == nil {
+			character := "x"
+			generated.Character = &character
+		}
+		normalized := normalizedGeneratedText(generated)
+		if _, err := generatedTextPattern(normalized.Character, normalized.Text); err != nil {
+			*issues = append(*issues, label+": "+err.Error())
+		}
 	}
 	existingTextBytes := messageContentTextBytes(content)
 	if *generated.TargetTextBytes <= existingTextBytes {
@@ -204,12 +239,39 @@ func normalizedGeneratedText(source *probeGeneratedText) *GeneratedText {
 	if source == nil || source.MessageIndex == nil || source.ContentIndex == nil || source.TargetTextBytes == nil {
 		return nil
 	}
-	return &GeneratedText{
+	result := &GeneratedText{
 		MessageIndex:    *source.MessageIndex,
 		ContentIndex:    *source.ContentIndex,
 		TargetTextBytes: *source.TargetTextBytes,
-		Character:       source.Character,
 	}
+	if source.Character != nil {
+		result.Character = *source.Character
+	}
+	if source.Text != nil {
+		result.Text = *source.Text
+	}
+	return result
+}
+
+func generatedTextPattern(character, text string) (string, error) {
+	if text != "" {
+		if character != "" {
+			return "", fmt.Errorf("text and character are mutually exclusive")
+		}
+		for _, value := range []byte(text) {
+			if (value < 0x20 || value > 0x7e) && value != '\t' && value != '\n' && value != '\r' {
+				return "", fmt.Errorf("text must contain printable ASCII or tab/newline/carriage return")
+			}
+		}
+		return text, nil
+	}
+	if character == "" {
+		character = "x"
+	}
+	if len(character) != 1 || character[0] < 0x20 || character[0] > 0x7e {
+		return "", fmt.Errorf("character must be one printable ASCII character")
+	}
+	return character, nil
 }
 
 func referencedImageFixtureMetadata(

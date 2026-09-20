@@ -49,7 +49,7 @@ func TestAuthenticateRequestAcceptsSessionCookie(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/router/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)
 	req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
@@ -163,7 +163,7 @@ func TestLogoutHandlerRevokesSessionToken(t *testing.T) {
 	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/api/router/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)
 	req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)

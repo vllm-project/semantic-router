@@ -37,6 +37,7 @@ type RouterOutcome struct {
 	Verdict        RouterOutcomeVerdict
 	Reason         string
 	Score          float64
+	ScoreProvided  bool
 	Metadata       map[string]string
 	IdempotencyKey string
 	// RecordOnly persists the outcome on Router Replay without updating the

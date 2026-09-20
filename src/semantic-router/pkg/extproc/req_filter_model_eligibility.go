@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 var errNoContextEligibleDecisionModel = errors.New("no decision model can satisfy the request context")
@@ -81,6 +82,22 @@ func (r *OpenAIRouter) decisionRouteActionDestination(
 	destination := strings.TrimSpace(decision.Action.Destination)
 	if destination == "" {
 		return "", false, nil
+	}
+	if decisionUsesAutomaticOutput(ctx.SemanticRequest, decision) {
+		refs := append([]config.ModelRef{{Model: destination}}, decision.ModelRefs...)
+		eligible, err := r.automaticEligibleRefs(refs, ctx)
+		if err != nil {
+			return "", false, err
+		}
+		return eligible[0].Model, true, nil
+	}
+	if requirements := r.candidateRequirements(ctx); selection.CandidateRequirementsEnabled(requirements) {
+		demand, err := selection.EffectiveCandidateDemand(ctx.SemanticRequest, decision)
+		if err != nil {
+			return "", false, err
+		}
+		model, err := r.strictRouteActionDestination(decision, demand, requirements)
+		return model, err == nil, err
 	}
 	if !r.modelNameExceedsContextWindow(destination, ctx.VSRContextTokenCount) {
 		logging.ComponentEvent("extproc", "route_action_applied", map[string]interface{}{

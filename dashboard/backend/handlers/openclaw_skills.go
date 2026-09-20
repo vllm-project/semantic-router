@@ -7,10 +7,29 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
 // --- Skills ---
+
+var openClawSkillIDPattern = regexp.MustCompile(`^[a-z0-9]+(?:[-_][a-z0-9]+)*$`)
+
+func validateOpenClawSkillIDs(ids []string, catalog []SkillTemplate) error {
+	allowed := make(map[string]struct{}, len(catalog))
+	for _, skill := range catalog {
+		allowed[skill.ID] = struct{}{}
+	}
+	for _, id := range ids {
+		if !openClawSkillIDPattern.MatchString(id) {
+			return fmt.Errorf("invalid skill ID %q", id)
+		}
+		if _, ok := allowed[id]; !ok {
+			return fmt.Errorf("unknown skill ID %q", id)
+		}
+	}
+	return nil
+}
 
 func (h *OpenClawHandler) SkillsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
