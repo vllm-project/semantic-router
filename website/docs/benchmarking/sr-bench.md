@@ -49,6 +49,19 @@ is `<state-root>/.sr-bench/<stack>/store` and its host API is loopback port
 from the same workspace. Dashboard reloads and configuration replacement preserve
 the worker. `vllm-sr stop` stops it without deleting saved evidence.
 
+To avoid a host port conflict, set `VLLM_SR_BENCH_PORT` to an absolute port from
+1 through 65535 for both `vllm-sr serve` and `vllm-sr benchmark`. This overrides
+only the worker's loopback host port; its container port remains 8090 and the
+stack port offset is not added to the override.
+
+When only the selected Dashboard image changes, `serve` upgrades its managed
+worker after verifying the same launch settings, store and credentials. The CLI
+briefly pauses the worker to check its durable journal before replacing it.
+Active runs block the upgrade and resume unchanged; finish or cancel them before
+retrying. Saved results remain in the same store. A stopped worker, changed
+credentials or changed launch settings still require explicit reconciliation.
+The container runtime must support pausing for this image upgrade.
+
 The core container has no Docker socket or GPU passthrough and does not include
 all upstream harness dependencies. For the code and agent adapters, prepare a
 dedicated host worker with pinned interpreters, source checkouts and sandbox

@@ -21,6 +21,7 @@ PREBUILT_RUNTIME_IMAGES ?= 0
 # ────────────────────────────────────────────────────────────────────────────
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
+LLM_KATAN_IMAGE ?= $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
 
 # Build all Docker images
 # Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
@@ -58,7 +59,7 @@ docker-build-llm-katan:
 ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
 	@$(CONTAINER_RUNTIME) image inspect $(LLM_KATAN_IMAGE) >/dev/null
 else
-	@$(CONTAINER_RUNTIME) build -f e2e/testing/llm-katan/Dockerfile -t $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) e2e/testing/llm-katan/
+	@$(CONTAINER_RUNTIME) build -f e2e/testing/llm-katan/Dockerfile -t $(LLM_KATAN_IMAGE) e2e/testing/llm-katan/
 endif
 
 # Build dashboard Docker image
@@ -80,7 +81,7 @@ docker-build-vllm-sr-router: ## Build vllm-sr-router Docker image
 docker-build-vllm-sr-router:
 	@$(LOG_TARGET)
 	@echo "Building vllm-sr-router Docker image..."
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(DOCKER_REGISTRY)/vllm-sr-router:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(VLLM_SR_ROUTER_IMAGE) .
 
 # Build vllm-sr-sim Docker image
 docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
@@ -96,13 +97,30 @@ docker-build-precommit:
 	@echo "Building precommit Docker image..."
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.precommit -t $(DOCKER_REGISTRY)/precommit:$(DOCKER_TAG) .
 
-# Test llm-katan Docker image locally
+# Smoke-test the echo backend without downloading a model or claiming host ports.
+# Cleanup only the container created by this invocation, including on failure.
 docker-test-llm-katan: ## Test llm-katan Docker image locally
-docker-test-llm-katan:
+docker-test-llm-katan: docker-build-llm-katan
 	@$(LOG_TARGET)
-	@echo "Testing llm-katan Docker image..."
-	@curl -f http://localhost:8000/v1/models || (echo "Models endpoint failed" && exit 1)
-	@echo "\nllm-katan Docker image test passed"
+	@set -eu; \
+	container_id=$$($(CONTAINER_RUNTIME) run --detach --network none $(LLM_KATAN_IMAGE) \
+		llm-katan --model smoke-test --host 127.0.0.1 --port 8000 --backend echo); \
+	trap '$(CONTAINER_RUNTIME) rm --force "$$container_id" >/dev/null 2>&1 || true' EXIT; \
+	trap 'exit 130' INT; trap 'exit 143' TERM; \
+	ready=0; attempts=0; \
+	while [ $$attempts -lt 60 ]; do \
+		if $(CONTAINER_RUNTIME) exec "$$container_id" curl --fail --silent --max-time 5 http://127.0.0.1:8000/health >/dev/null; then \
+			ready=1; break; \
+		fi; \
+		if [ "$$($(CONTAINER_RUNTIME) inspect --format '{{.State.Running}}' "$$container_id")" != true ]; then break; fi; \
+		attempts=$$((attempts + 1)); sleep 1; \
+	done; \
+	if [ $$ready -ne 1 ]; then \
+		$(CONTAINER_RUNTIME) logs "$$container_id"; \
+		echo "llm-katan did not become healthy" >&2; exit 1; \
+	fi; \
+	$(CONTAINER_RUNTIME) exec "$$container_id" curl --fail --silent --max-time 5 http://127.0.0.1:8000/v1/models; \
+	echo "llm-katan Docker image test passed"
 
 # Run llm-katan Docker image locally
 docker-run-llm-katan: ## Run llm-katan Docker image locally
@@ -111,7 +129,7 @@ docker-run-llm-katan: docker-build-llm-katan
 	@echo "Running llm-katan Docker image on port 8000..."
 	@echo "Access the server at: http://localhost:8000"
 	@echo "Press Ctrl+C to stop"
-	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
+	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(LLM_KATAN_IMAGE)
 
 # Run llm-katan with custom served model name
 docker-run-llm-katan-custom: ## Run with custom served model name, by append SERVED_NAME=name
@@ -124,7 +142,7 @@ docker-run-llm-katan-custom:
 		echo "Example: make docker-run-llm-katan-custom SERVED_NAME=claude-3-haiku"; \
 		exit 1; \
 	fi
-	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) \
+	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(LLM_KATAN_IMAGE) \
 		llm-katan --model "Qwen/Qwen3-0.6B" --served-model-name "$(SERVED_NAME)" --host 0.0.0.0 --port 8000
 
 # Pull a specific release of all production images
@@ -172,7 +190,7 @@ docker-push-llm-katan: ## Push llm-katan Docker image
 docker-push-llm-katan:
 	@$(LOG_TARGET)
 	@echo "Pushing llm-katan Docker image..."
-	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
+	@$(CONTAINER_RUNTIME) push $(LLM_KATAN_IMAGE)
 
 docker-push-dashboard: ## Push dashboard Docker image
 docker-push-dashboard:
@@ -184,7 +202,7 @@ docker-push-vllm-sr-router: ## Push vllm-sr-router Docker image
 docker-push-vllm-sr-router:
 	@$(LOG_TARGET)
 	@echo "Pushing vllm-sr-router Docker image..."
-	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-router:$(DOCKER_TAG)
+	@$(CONTAINER_RUNTIME) push $(VLLM_SR_ROUTER_IMAGE)
 
 docker-push-vllm-sr-envoy: ## Push vllm-sr-envoy Docker image
 docker-push-vllm-sr-envoy:
@@ -220,9 +238,9 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 
 # vLLM-SR specific variables — image tags default to DOCKER_TAG so that a
 # single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
-VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:$(DOCKER_TAG)
-VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:$(DOCKER_TAG)
-VLLM_SR_IMAGE_CUDA ?= ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:$(DOCKER_TAG)
+VLLM_SR_IMAGE ?= $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
+VLLM_SR_IMAGE_ROCM ?= $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG)
+VLLM_SR_IMAGE_CUDA ?= $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
 VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
 VLLM_SR_ROUTER_IMAGE_CUDA ?= $(VLLM_SR_IMAGE_CUDA)

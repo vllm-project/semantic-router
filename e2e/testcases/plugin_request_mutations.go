@@ -130,8 +130,8 @@ func validatePluginMutationResponse(body []byte) error {
 
 func validatePluginMutationProviderRequest(observed []byte) error {
 	var request struct {
-		Body    map[string]any    `json:"body"`
-		Headers map[string]string `json:"headers"`
+		Body         map[string]any      `json:"body"`
+		HeaderValues map[string][]string `json:"header_values"`
 	}
 	if err := json.Unmarshal(observed, &request); err != nil {
 		return fmt.Errorf("decode provider-bound request: %w", err)
@@ -154,15 +154,19 @@ func validatePluginMutationProviderRequest(observed []byte) error {
 			return fmt.Errorf("request_params did not remove %q from provider request: %s", field, truncateString(string(observed), 800))
 		}
 	}
-	if request.Headers["x-vsr-e2e-added"] != "added-by-router" {
-		return fmt.Errorf("header_mutation add was not observed: %#v", request.Headers)
+	for name, expected := range map[string]string{
+		"x-vsr-e2e-added":   "added-by-router",
+		"x-vsr-e2e-updated": "updated-by-router",
+	} {
+		values := request.HeaderValues[name]
+		if len(values) != 1 || values[0] != expected {
+			return fmt.Errorf("header_mutation expected exactly one %s=%q, observed %#v", name, expected, values)
+		}
 	}
-	if request.Headers["x-vsr-e2e-updated"] != "updated-by-router" {
-		return fmt.Errorf("header_mutation update was not observed: %#v", request.Headers)
+	if _, exists := request.HeaderValues["x-vsr-e2e-deleted"]; exists {
+		return fmt.Errorf("header_mutation delete was not observed: %#v", request.HeaderValues)
 	}
-	if _, exists := request.Headers["x-vsr-e2e-deleted"]; exists {
-		return fmt.Errorf("header_mutation delete was not observed: %#v", request.Headers)
-	}
+
 	return nil
 }
 

@@ -275,6 +275,20 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
     setContextMenu({ x: e.clientX, y: e.clientY, path: node.data.path })
   }, [])
 
+  const onNodeMenuKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) return
+      const element = (event.target as HTMLElement).closest<HTMLElement>('.react-flow__node')
+      const node = nodes.find((candidate) => candidate.id === element?.dataset.id)
+      if (!element || !node) return
+      event.preventDefault()
+      event.stopPropagation()
+      const bounds = element.getBoundingClientRect()
+      setContextMenu({ x: bounds.left, y: bounds.bottom, path: node.data.path })
+    },
+    [nodes],
+  )
+
   const onPaneClick = useCallback(() => {
     setSelectedPath(null)
     setContextMenu(null)
@@ -372,6 +386,7 @@ const ExpressionBuilderInner: React.FC<ExpressionBuilderInnerProps> = ({
 
           <div className={styles.rfCanvas}
             ref={reactFlowRef}
+            onKeyDown={onNodeMenuKeyDown}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
           >

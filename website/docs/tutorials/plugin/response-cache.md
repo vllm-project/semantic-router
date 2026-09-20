@@ -97,10 +97,18 @@ is shared across management operations at `/api/v1/observability/audit`
 to dry-run. Flush requires the explicit confirmation phrase
 `flush response cache` and never calls backend-wide `FLUSHALL`.
 
-The in-memory backend can verify a semantic hit against opposite-meaning
-queries before serving it (`global.stores.response_cache.polarity_guard`; see
-[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With the
-optional NLI tier enabled, a rejected candidate is logged as
+All six cache backends apply an always-on English lexical check before serving
+a semantic hit. Near-identical questions with explicit negation or a known
+antonym swap are rejected even when their vector similarity is high. Remote
+entries without their original question are also misses. A rejected candidate
+does not prevent a later eligible fetched candidate from being used; remote
+search remains bounded by its candidate limit. This check does not establish
+semantic equivalence for word-order-only, cue-less, or non-English changes.
+
+The in-memory backend additionally supports the optional NLI verifier
+(`global.stores.response_cache.polarity_guard`; see
+[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With this
+optional tier enabled, an NLI-rejected candidate is logged as
 `cache_negation_reject` with `tier: nli`, is reported as a miss, and its
 similarity still appears on `x-vsr-cache-similarity` so near-threshold
 rejections stay diagnosable.
