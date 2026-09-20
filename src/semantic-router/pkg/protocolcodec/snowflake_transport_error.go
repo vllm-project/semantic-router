@@ -49,8 +49,7 @@ func decodeSnowflakeTransportError(
 // keep the neutral unavailability category and still carry their own code and
 // message to the client.
 func snowflakeErrorCategory(code string) llmprotocol.ErrorCategory {
-	switch strings.TrimSpace(code) {
-	case "003001":
+	if strings.TrimSpace(code) == "003001" {
 		return llmprotocol.ErrorPermission
 	}
 	return llmprotocol.ErrorUpstreamUnavailable
