@@ -73,3 +73,40 @@ func TestSnowflakeCortexFailureEnvelopeSurvivesTheSnowflakeVendor(t *testing.T) 
 		t.Fatal("transport error message is empty; the provider message was lost")
 	}
 }
+
+// The vendor envelope must not become a validation hatch. The shared provider
+// JSON validation runs before it is accepted, so a body over the policy limit is
+// rejekted exactly as it is on the canonical path.
+func TestSnowflakeCortexFailureEnvelopeKeepsTheSharedValidation(t *testing.T) {
+	body := snowflakeFixture(t, snowflakeFailureFixture, snowflakeFailureBytes)
+
+	policy := snowflakePolicy(llmprotocol.ResponseVendorSnowflake)
+	policy.Limits.BodyBytes = len(body)
+	engine, err := NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, decoded := engine.DecodeTransportError(llmprotocol.OpenAIChatV1, body); decoded != nil {
+		t.Fatalf("Snowflake failure envelope exactly at the body limit was rejected: %v", decoded)
+	}
+
+	policy.Limits.BodyBytes--
+	engine, err = NewEngine(NewBuiltinRegistry(), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = engine.DecodeTransportError(llmprotocol.OpenAIChatV1, body)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit")
+}
+
+// A duplicated field is malformed input, not a later value to keep: accepting it
+// would let a repeated code silently reclassify the refusal.
+func TestSnowflakeCortexFailureEnvelopeRejectsDuplicatedFields(t *testing.T) {
+	body := []byte(`{"code":"003001","code":"000000","message":"duplicate"}`)
+	engine, err := NewEngine(NewBuiltinRegistry(), snowflakePolicy(llmprotocol.ResponseVendorSnowflake))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = engine.DecodeTransportError(llmprotocol.OpenAIChatV1, body)
+	assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "upstream_duplicate_json_field")
+}

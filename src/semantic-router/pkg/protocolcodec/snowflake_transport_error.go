@@ -1,8 +1,6 @@
 package protocolcodec
 
 import (
-	"bytes"
-	"encoding/json"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -21,7 +19,10 @@ type snowflakeTransportErrorWire struct {
 }
 
 // decodeSnowflakeTransportError decodes the Snowflake Cortex failure envelope at
-// the transport edge, preserving the vendor's own code and message. A body
+// the transport edge, preserving the vendor's own code and message. It decodes
+// through the same provider JSON validation the other transport decoders use, so
+// a body over the policy limit, carrying duplicate fields, or malformed Unicode
+// is rejekted here instead of being accepted as a vendor envelope. A body
 // without a flat code/message pair falls back to the canonical OpenAI decoder,
 // so an unexpected shape still reports the same typed error instead of a silent
 // success.
@@ -31,7 +32,7 @@ func decodeSnowflakeTransportError(
 	format llmprotocol.WireFormat,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
 	var wire snowflakeTransportErrorWire
-	if err := json.Unmarshal(bytes.TrimSpace(body), &wire); err != nil ||
+	if _, _, err := decodeProviderWireVendorAware(body, &wire, policy); err != nil ||
 		strings.TrimSpace(wire.Code) == "" || strings.TrimSpace(wire.Message) == "" {
 		return decodeOpenAITransportError(body, policy, format)
 	}
