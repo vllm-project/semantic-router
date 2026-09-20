@@ -34,7 +34,7 @@ export function DslImportModal({
   const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: true, onClose })
 
   return (
-    <div className={styles.modalOverlay} onClick={onClose}>
+    <div className={styles.modalOverlay} onClick={onClose} role="presentation">
       <div
         ref={dialogRef}
         id={dialogId}
@@ -44,6 +44,7 @@ export function DslImportModal({
         aria-labelledby={titleId}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
       >
         <div className={styles.modalHeader}>
           <h3 id={titleId} className={styles.modalTitle}>
