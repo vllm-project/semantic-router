@@ -82,6 +82,7 @@ const chatUsageOmissionReason = "provider accounting detail has no separate prot
 // inventory and report the same omissions under their own field prefix.
 func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool {
 	return map[string]bool{
+		prefix + "service_tier":                                         wire.ServiceTier != nil,
 		prefix + "compute_units":                                        len(wire.ComputeUnits) > 0,
 		prefix + "prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
 		prefix + "prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,
@@ -188,7 +189,7 @@ func decodeChatUsage(wire chatUsageWire) (llmprotocol.Usage, error) {
 	}
 	if wire.PromptTokensDetails != nil {
 		details := wire.PromptTokensDetails
-		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens); err != nil {
+		if err := decodeInputCacheUsage(&usage, details.CachedTokens, details.CacheWriteTokens, details.CreatedCacheTokens, details.CacheCreationTokens); err != nil {
 			return llmprotocol.Usage{}, err
 		}
 	}
@@ -338,6 +339,9 @@ func (OpenAIChatCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	if policy.ResponseVendor == llmprotocol.ResponseVendorCloudflare {
+		return decodeCloudflareTransportError(body, policy, llmprotocol.OpenAIChatV1)
+	}
 	return decodeOpenAITransportError(body, policy, llmprotocol.OpenAIChatV1)
 }
 

@@ -88,11 +88,11 @@
                   "type": "number",
                   "minimum": 0
                 },
-                "ttftP95Seconds": {
+                "firstResponseObservationP95Seconds": {
                   "type": "number",
                   "minimum": 0
                 },
-                "tpotP95Seconds": {
+                "responseDurationPerOutputTokenP95Seconds": {
                   "type": "number",
                   "minimum": 0
                 },

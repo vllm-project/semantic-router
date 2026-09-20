@@ -418,8 +418,8 @@ test.describe('Layout top navigation', () => {
   }) => {
     await mockCommon(page, {
       settings: {
-        evaluationAvailable: false,
-        evaluationUnavailableReason: 'Evaluation is disabled for this deployment.',
+        srBenchAvailable: false,
+        srBenchUnavailableReason: 'Evaluation is disabled for this deployment.',
       },
     })
     await page.goto('/dashboard')

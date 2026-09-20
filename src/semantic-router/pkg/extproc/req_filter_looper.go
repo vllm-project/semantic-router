@@ -23,6 +23,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -118,6 +119,7 @@ func (r *OpenAIRouter) handleLooperExecution(
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
+	ctx = looper.WithExpectedConfigHash(ctx, headerValueCI(reqCtx, headers.SRBenchExpectedConfigHash))
 	if r.WorkflowStateService != nil && decision != nil && decision.Algorithm != nil &&
 		decision.Algorithm.Type == config.DecisionAlgorithmWorkflows {
 		if !r.WorkflowStateService.Acquire() {
@@ -195,9 +197,10 @@ func (r *OpenAIRouter) buildLooperRequest(
 		modelRefs = reqCtx.VSREligibleModelRefs
 	}
 	// Build looper request.
-	// Looper currently aggregates a buffered semantic result for non-Chat
-	// clients. The common immediate-response codec encodes that result into the
-	// inbound wire format after execution.
+	// Responses uses buffered aggregation so its codec can enforce the existing
+	// target capability and projection gates on the complete neutral result.
+	// This controls internal execution only: the final transport gate renders
+	// the client's requested JSON or SSE representation independently.
 	streaming := reqCtx.ExpectStreamingResponse
 	if isResponseAPIRequest(reqCtx) {
 		streaming = false

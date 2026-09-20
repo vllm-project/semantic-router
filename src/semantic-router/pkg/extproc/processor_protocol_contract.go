@@ -89,7 +89,12 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
-	registry := r.ProtocolCodecs
+	return protocolEngineFor(r.ProtocolCodecs)
+}
+
+// protocolEngineFor serves callers that hold only the registry, such as
+// detached work that must not capture the router.
+func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
@@ -139,6 +144,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream

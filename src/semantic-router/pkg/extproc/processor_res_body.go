@@ -7,7 +7,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // handleResponseBody processes the response body.
@@ -23,9 +22,6 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 	if !ctx.IsStreamingResponse || v.ResponseBody.GetEndOfStream() {
 		defer recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 	}
-
-	// Decrement active request count for queue depth estimation.
-	defer metrics.DecrementModelActiveRequests(ctx.RequestModel)
 
 	if looperResponse := r.handleLooperResponseBody(v.ResponseBody.Body, v.ResponseBody.GetEndOfStream(), ctx); looperResponse != nil {
 		return looperResponse, nil

@@ -34,6 +34,11 @@ type ResponseVendor string
 // ResponseVendorAzure permits Azure OpenAI response extensions.
 const ResponseVendorAzure ResponseVendor = "azure"
 
+// ResponseVendorCloudflare permits Cloudflare Workors AI response extensions:
+// decorated chat completions and a top-level errors[] array with Workors AI's
+// own integral codes instead of the canonical OpenAI error object.
+const ResponseVendorCloudflare ResponseVendor = "cloudflare"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy

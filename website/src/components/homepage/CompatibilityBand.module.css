@@ -81,20 +81,20 @@
 
 .deployCard:hover strong,
 .deployCard:focus-visible strong {
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
 }
 
 .deployCard:hover .deployArrow,
 .deployCard:focus-visible .deployArrow {
   opacity: 1;
   transform: translateX(0);
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
 }
 
 .signalChip:hover,
 .signalChip:focus-visible {
   background: var(--site-hover-surface-bg);
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
   box-shadow: var(--site-hover-inset);
   text-decoration: none;
 }

@@ -57,7 +57,9 @@ type EnhancedHallucinationInfo struct {
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
+	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
 	AutomaticCandidateDemands map[string]selection.CandidateDemand
+	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
 
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32
@@ -299,8 +301,12 @@ type RequestContext struct {
 	PIIBlocked  bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
-	TraceContext context.Context // OpenTelemetry trace context for span propagation
-	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
+	TraceContext      context.Context // OpenTelemetry trace context for span propagation
+	RequestSpan       trace.Span      // Spans the complete ext_proc request, including streaming
+	UpstreamSpan      trace.Span      // Spans provider dispatch through final response body
+	TraceReceiveError error           // Receive cancellation may be consumed by Process
+	TraceStatusCode   int             // Final client status, including local immediate responses
+	TraceTrafficKind  string          // Bounded HTTP route family; never a caller path or query
 
 	// ResponseObjectState is present only when optional Responses object
 	// persistence participates in this request. Generation never depends on it.
@@ -355,6 +361,10 @@ type RequestContext struct {
 	MemoryFailOpen       bool
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
+
+	// RequestAutoStore snapshots the client's memory persistence override before
+	// provider preparation removes router controls. Nil uses configured defaults.
+	RequestAutoStore *bool
 
 	ContextCompressionTargetTokens *int
 	ContextCompressionRecoveryKeys []string
