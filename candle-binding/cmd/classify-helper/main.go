@@ -100,38 +100,47 @@ func helperResourceUsage() (cpuSeconds float64, rssMB float64) {
 	return cpuSeconds, rssMB
 }
 
-func emit(w *bufio.Writer, resp response) {
+func emit(w *bufio.Writer, resp response) error {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		// Marshalling our own struct should never fail; if it does, there is
 		// nothing more useful to report than the error itself.
-		fmt.Fprintf(os.Stderr, "failed to marshal response: %v\n", err)
-		return
+		return fmt.Errorf("failed to marshal response: %w", err)
 	}
-	w.Write(data)
-	w.WriteByte('\n')
-	w.Flush()
+	if _, err := w.Write(data); err != nil {
+		return fmt.Errorf("failed to write response: %w", err)
+	}
+	if err := w.WriteByte('\n'); err != nil {
+		return fmt.Errorf("failed to write response: %w", err)
+	}
+	return w.Flush()
 }
 
 func main() {
+	os.Exit(run())
+}
+
+// run holds all of main's logic and returns an exit code instead of calling
+// os.Exit directly, so writer's deferred flush always runs before exit.
+func run() int {
 	model := flag.String("model", "", "Local directory holding the mmBERT-32K modality model (config.json, model.safetensors, tokenizer files) — required")
 	flag.Int("max-length", 256, "Default max tokenisation length (accepted for CLI parity; per-request max_length is not forwarded to the C ABI, which manages its own context window)")
 	flag.Parse()
 
 	if *model == "" {
 		fmt.Fprintln(os.Stderr, "error: --model is required")
-		os.Exit(1)
+		return 1
 	}
 
 	if err := checkLocalModelDir(*model); err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
 
 	fmt.Fprintf(os.Stderr, "classify-helper: initializing %s\n", *model)
 	if err := candle.InitMmBert32KModalityClassifier(*model, true); err != nil {
 		fmt.Fprintf(os.Stderr, "classify-helper: init failed: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	fmt.Fprintln(os.Stderr, "classify-helper: ready")
 
@@ -148,7 +157,10 @@ func main() {
 
 		var req request
 		if err := json.Unmarshal([]byte(line), &req); err != nil {
-			emit(writer, response{Error: fmt.Sprintf("invalid request: %v", err)})
+			if emitErr := emit(writer, response{Error: fmt.Sprintf("invalid request: %v", err)}); emitErr != nil {
+				fmt.Fprintf(os.Stderr, "classify-helper: %v\n", emitErr)
+				return 1
+			}
 			continue
 		}
 
@@ -158,26 +170,33 @@ func main() {
 		cpuSeconds, rssMB := helperResourceUsage()
 
 		if err != nil {
-			emit(writer, response{
+			if emitErr := emit(writer, response{
 				Error:       err.Error(),
 				HelperCPUs:  cpuSeconds,
 				HelperRSSMB: rssMB,
-			})
+			}); emitErr != nil {
+				fmt.Fprintf(os.Stderr, "classify-helper: %v\n", emitErr)
+				return 1
+			}
 			continue
 		}
 
-		emit(writer, response{
+		if err := emit(writer, response{
 			Label:       result.Modality,
 			SeqLen:      0,
 			TokenizeNs:  0,
 			ForwardNs:   forwardNs,
 			HelperCPUs:  cpuSeconds,
 			HelperRSSMB: rssMB,
-		})
+		}); err != nil {
+			fmt.Fprintf(os.Stderr, "classify-helper: %v\n", err)
+			return 1
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintf(os.Stderr, "classify-helper: stdin read error: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
