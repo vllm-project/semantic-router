@@ -25,9 +25,6 @@ from pathlib import Path
 
 import torch
 from datasets import Dataset
-from peft import LoraConfig, TaskType, get_peft_model
-from transformers import Trainer, TrainingArguments, set_seed
-
 from exploration_common import (
     DATA_DIR,
     LFM25_MODEL_ID,
@@ -42,6 +39,8 @@ from lfm25_classifier import (
     load_lfm25_tokenizer,
 )
 from modality_data import compute_class_stats
+from peft import LoraConfig, TaskType, get_peft_model
+from transformers import Trainer, TrainingArguments, set_seed
 
 LORA_RANK = 16
 LORA_ALPHA = 32

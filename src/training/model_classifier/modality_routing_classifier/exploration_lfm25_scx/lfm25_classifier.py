@@ -6,11 +6,10 @@ wrapper and the prediction loop can be tested with a fake encoder.
 """
 
 import torch
-import torch.nn as nn
-from transformers.modeling_outputs import SequenceClassifierOutput
-
 from exploration_common import LFM25_MODEL_ID, LFM25_REVISION, MODALITY_LABELS
 from modality_routing_bert_finetuning_lora import FocalLoss
+from torch import nn
+from transformers.modeling_outputs import SequenceClassifierOutput
 
 # LoRA target modules, from direct introspection of named_modules() on the correctly
 # loaded body. The architecture interleaves two block types:

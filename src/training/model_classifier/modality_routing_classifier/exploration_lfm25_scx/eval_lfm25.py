@@ -13,9 +13,6 @@ import argparse
 from pathlib import Path
 
 import torch
-import torch.nn as nn
-from peft import PeftModel
-
 from exploration_common import (
     DATA_DIR,
     MODALITY_LABELS,
@@ -32,6 +29,8 @@ from lfm25_classifier import (
     load_lfm25_tokenizer,
     predict_labels,
 )
+from peft import PeftModel
+from torch import nn
 
 
 def load_trained_model(run_dir: Path, device: str):

@@ -3,9 +3,7 @@
 import types
 
 import pytest
-
 import torch
-import torch.nn as nn
 import train_lfm25_encoder as trainer
 from lfm25_classifier import (
     Lfm2ForModalityClassification,
@@ -13,6 +11,7 @@ from lfm25_classifier import (
     mean_pool,
     predict_labels,
 )
+from torch import nn
 
 
 class FakeBody(nn.Module):
