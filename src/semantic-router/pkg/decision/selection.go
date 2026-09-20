@@ -38,8 +38,13 @@ func (e *DecisionEngine) selectBestDecision(results []DecisionResult) *DecisionR
 	return &results[0]
 }
 
+// comparableConfidencePools reports the pools whose confidences rank against
+// each other. A pool qualifies when every member that is not a catch-all
+// reported a score and every one of those scores is the same kind, since a
+// classifier probability and a vector similarity are different quantities.
 func comparableConfidencePools(results []DecisionResult, useTieredSelection bool) map[int]bool {
 	pools := make(map[int]bool)
+	kinds := make(map[int]config.ScoreKind)
 	for _, result := range results {
 		key := 0
 		if useTieredSelection {
@@ -49,8 +54,14 @@ func comparableConfidencePools(results []DecisionResult, useTieredSelection bool
 		if !seen {
 			comparable = true
 		}
-		if !result.CatchAll && !result.ConfidenceScored {
-			comparable = false
+		if !result.CatchAll {
+			if !result.ConfidenceScored {
+				comparable = false
+			} else if kind, ranked := kinds[key]; !ranked {
+				kinds[key] = result.ScoreKind
+			} else if kind != result.ScoreKind {
+				comparable = false
+			}
 		}
 		pools[key] = comparable
 	}

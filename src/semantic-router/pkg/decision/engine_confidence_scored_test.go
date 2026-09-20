@@ -49,11 +49,11 @@ func confidenceScenarioSignals() *SignalMatches {
 	}
 }
 
-// Within one tier, a keyword leaf with no reported confidence defaults to the
-// structural constant 1.0. That constant is not comparable with reported
-// scores, so the pool must fall back to priority ordering: legal_specific
-// (priority 180) wins over the unscored generic_catch (priority 60) instead
-// of losing to its default 1.0.
+// Within one tier, a keyword leaf reports no measurement at all, so the pool
+// falls back to priority ordering: legal_specific (priority 180) wins over
+// generic_catch (priority 60) instead of losing to a structural constant.
+// legal_specific is itself not comparable here, because its confidence would
+// be a mean over two evidence leaves, which moves as leaves are added.
 func TestTieredSelectionUnscoredPoolFallsBackToPriority(t *testing.T) {
 	engine := NewDecisionEngine(nil, nil, nil, confidenceScenarioDecisions(1), "priority")
 
@@ -69,30 +69,56 @@ func TestTieredSelectionUnscoredPoolFallsBackToPriority(t *testing.T) {
 	if result.Decision.Name != "legal_specific" {
 		t.Fatalf("winner = %s, want legal_specific via priority fallback in a pool with unscored confidence", result.Decision.Name)
 	}
-	if !result.ConfidenceScored {
-		t.Fatalf("legal_specific should be confidence-scored (domain and complexity both reported)")
+	if result.ConfidenceScored {
+		t.Fatalf("legal_specific must not be comparable: it aggregates two evidence leaves")
 	}
 }
 
-// The same pool with every competitor reporting a confidence keeps the
-// existing within-tier confidence ordering: generic_catch's honestly
-// reported 0.95 beats legal_specific's 0.735 mean.
-func TestTieredSelectionFullyScoredPoolStillRanksByConfidence(t *testing.T) {
-	engine := NewDecisionEngine(nil, nil, nil, confidenceScenarioDecisions(1), "priority")
+// A pool whose members each report one score of the same kind still ranks by
+// confidence inside the tier: the reported 0.95 beats the reported 0.86 even
+// though the higher priority sits on the other decision.
+func TestTieredSelectionSameKindPoolRanksByConfidence(t *testing.T) {
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+		{Name: "legal_route", Tier: 1, Priority: 180, Rules: config.RuleNode{Type: "domain", Name: "law"}},
+		{Name: "health_route", Tier: 1, Priority: 60, Rules: config.RuleNode{Type: "domain", Name: "health"}},
+	}, "priority")
 
-	signals := confidenceScenarioSignals()
-	signals.SignalConfidences["keyword:question_markers"] = 0.95
-
-	result, err := engine.EvaluateDecisionsWithSignals(signals)
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		DomainRules:       []string{"law", "health"},
+		SignalConfidences: map[string]float64{"domain:law": 0.86, "domain:health": 0.95},
+	})
 	if err != nil {
 		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
 	}
 	if result == nil || result.Decision == nil {
 		t.Fatal("no decision matched")
 	}
-	t.Logf("winner=%s confidence=%.3f", result.Decision.Name, result.Confidence)
-	if result.Decision.Name != "generic_catch" {
-		t.Fatalf("winner = %s, want generic_catch (reported 0.95 vs 0.735 in a fully scored pool)", result.Decision.Name)
+	if result.Decision.Name != "health_route" {
+		t.Fatalf("winner = %s, want health_route (0.95 against 0.86, both probabilities)", result.Decision.Name)
+	}
+}
+
+// A probability and a similarity are different quantities, so a pool holding
+// both ranks by priority even though every member reported a score.
+func TestPoolWithDifferentScoreKindsFallsBackToPriority(t *testing.T) {
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+		{Name: "domain_route", Tier: 1, Priority: 180, Rules: config.RuleNode{Type: "domain", Name: "law"}},
+		{Name: "embedding_route", Tier: 1, Priority: 60, Rules: config.RuleNode{Type: "embedding", Name: "legal_analysis"}},
+	}, "priority")
+
+	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{
+		DomainRules:       []string{"law"},
+		EmbeddingRules:    []string{"legal_analysis"},
+		SignalConfidences: map[string]float64{"domain:law": 0.70, "embedding:legal_analysis": 0.99},
+	})
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals() error = %v", err)
+	}
+	if result == nil || result.Decision == nil {
+		t.Fatal("no decision matched")
+	}
+	if result.Decision.Name != "domain_route" {
+		t.Fatalf("winner = %s, want domain_route (priority decides across score kinds)", result.Decision.Name)
 	}
 }
 

@@ -39,18 +39,16 @@ func TestUntieredDecisionOutranksTieredDecision(t *testing.T) {
 // The tiered case never reads routing.strategy, so an unrelated tiered match
 // switches an untiered pool from priority ordering to confidence ordering.
 func TestMatchedTieredDecisionSwitchesUntieredPoolToConfidence(t *testing.T) {
-	highPriority := config.Decision{Name: "high_priority", Priority: 160, Rules: config.RuleNode{Type: "preference", Name: "terse_answers"}}
-	highConfidence := config.Decision{Name: "high_confidence", Priority: 135, Rules: config.RuleNode{Type: "language", Name: "es"}}
-	tiered := config.Decision{Name: "tiered_fallback", Priority: 200, Tier: 2, Rules: config.RuleNode{Type: "domain", Name: "business"}}
+	highPriority := config.Decision{Name: "high_priority", Priority: 160, Rules: config.RuleNode{Type: "domain", Name: "law"}}
+	highConfidence := config.Decision{Name: "high_confidence", Priority: 135, Rules: config.RuleNode{Type: "domain", Name: "health"}}
+	tiered := config.Decision{Name: "tiered_fallback", Priority: 200, Tier: 2, Rules: config.RuleNode{Type: "keyword", Name: "marker"}}
 
 	signals := &SignalMatches{
-		PreferenceRules: []string{"terse_answers"},
-		LanguageRules:   []string{"es"},
-		DomainRules:     []string{"business"},
+		DomainRules:  []string{"law", "health"},
+		KeywordRules: []string{"marker"},
 		SignalConfidences: map[string]float64{
-			"preference:terse_answers": 0.70,
-			"language:es":              0.99,
-			"domain:business":          0.80,
+			"domain:law":    0.70,
+			"domain:health": 0.99,
 		},
 	}
 
@@ -92,19 +90,19 @@ func TestExtraKeywordMatchKeepsReportedEvidence(t *testing.T) {
 			{Type: "keyword", Name: "marker"},
 		},
 	}}
-	scored := config.Decision{Name: "scored_route", Priority: 20, Tier: 1, Rules: config.RuleNode{Type: "domain", Name: "law"}}
+	scored := config.Decision{Name: "scored_route", Priority: 20, Tier: 1, Rules: config.RuleNode{Type: "embedding", Name: "support"}}
 	decisions := []config.Decision{mixed, scored}
-	confidences := map[string]float64{"embedding:semantic": 0.95, "domain:law": 0.80}
+	confidences := map[string]float64{"embedding:semantic": 0.95, "embedding:support": 0.80}
 
 	withoutKeyword := rankedWinner(t, decisions, config.RoutingStrategyPriority, &SignalMatches{
-		EmbeddingRules: []string{"semantic"}, DomainRules: []string{"law"}, SignalConfidences: confidences,
+		EmbeddingRules: []string{"semantic", "support"}, SignalConfidences: confidences,
 	})
 	if withoutKeyword.Decision.Name != "mixed_or" {
 		t.Fatalf("winner = %s, want mixed_or (both members reported scores)", withoutKeyword.Decision.Name)
 	}
 
 	withKeyword := rankedWinner(t, decisions, config.RoutingStrategyPriority, &SignalMatches{
-		EmbeddingRules: []string{"semantic"}, KeywordRules: []string{"marker"}, DomainRules: []string{"law"}, SignalConfidences: confidences,
+		EmbeddingRules: []string{"semantic", "support"}, KeywordRules: []string{"marker"}, SignalConfidences: confidences,
 	})
 	if withKeyword.Decision.Name != "mixed_or" {
 		t.Fatalf("winner = %s, want mixed_or (the extra keyword match is support, not a demotion)", withKeyword.Decision.Name)
@@ -114,9 +112,9 @@ func TestExtraKeywordMatchKeepsReportedEvidence(t *testing.T) {
 	}
 }
 
-// AND averages its matched children, so an aggregate falls as a decision
-// gains evidence.
-func TestANDAggregateFallsAsEvidenceGrows(t *testing.T) {
+// A conjunction that rests on several evidence leaves is not comparable, so
+// the pool ranks by priority instead of by a mean that moves with leaf count.
+func TestMultiEvidenceDecisionRanksByPriority(t *testing.T) {
 	twoLeaf := config.Decision{Name: "two_leaf", Priority: 100, Tier: 1, Rules: config.RuleNode{
 		Operator:   "AND",
 		Conditions: []config.RuleNode{{Type: "embedding", Name: "a"}, {Type: "embedding", Name: "b"}},
@@ -133,19 +131,22 @@ func TestANDAggregateFallsAsEvidenceGrows(t *testing.T) {
 			"embedding:a": 0.90, "embedding:b": 0.90, "domain:law": 0.88,
 		},
 	})
-	if winner.Decision.Name != "two_leaf" {
-		t.Fatalf("winner = %s, want two_leaf (mean of two leaves beats the mean of three)", winner.Decision.Name)
+	if winner.Decision.Name != "three_leaf" {
+		t.Fatalf("winner = %s, want three_leaf (priority decides when neither aggregate is comparable)", winner.Decision.Name)
+	}
+	if winner.ConfidenceScored {
+		t.Fatal("a decision aggregating several evidence leaves must not be comparable")
 	}
 }
 
-// A matched conversation rule reports 1.0 as a score, so a boolean condition
-// outranks reported evidence under either strategy.
-func TestBooleanConversationScoreOutranksReportedEvidence(t *testing.T) {
+// A conversation predicate and a projection output are policy, so neither
+// ranks as evidence and the operator's priority decides under either strategy.
+func TestPolicyLeavesLeavePriorityInCharge(t *testing.T) {
 	boolean := config.Decision{Name: "boolean_route", Priority: 250, Tier: 2, Rules: config.RuleNode{
 		Operator:   "AND",
 		Conditions: []config.RuleNode{{Type: "conversation", Name: "has_images"}},
 	}}
-	measured := config.Decision{Name: "measured_route", Priority: 900, Tier: 2, Rules: config.RuleNode{
+	measured := config.Decision{Name: "policy_route", Priority: 900, Tier: 2, Rules: config.RuleNode{
 		Operator:   "AND",
 		Conditions: []config.RuleNode{{Type: "projection", Name: "sensitive"}},
 	}}
@@ -158,8 +159,8 @@ func TestBooleanConversationScoreOutranksReportedEvidence(t *testing.T) {
 
 	for _, strategy := range []config.RoutingStrategy{config.RoutingStrategyPriority, config.RoutingStrategyConfidence} {
 		winner := rankedWinner(t, decisions, strategy, signals)
-		if winner.Decision.Name != "boolean_route" {
-			t.Fatalf("strategy %s: winner = %s, want boolean_route (its reported 1.0 ranks as evidence)", strategy, winner.Decision.Name)
+		if winner.Decision.Name != "policy_route" {
+			t.Fatalf("strategy %s: winner = %s, want policy_route (priority 900 against 250)", strategy, winner.Decision.Name)
 		}
 	}
 }
