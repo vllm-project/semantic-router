@@ -56,6 +56,7 @@ func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cach
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.CacheBackendType(semanticCacheCfg.BackendType),
 		Enabled:             storeNeeded,
+		ExactOnly:           !semanticNeeded,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          semanticCacheCfg.MaxEntries,
 		TTLSeconds:          semanticCacheCfg.TTLSeconds,

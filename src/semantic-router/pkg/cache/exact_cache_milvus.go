@@ -133,7 +133,7 @@ func (c *MilvusCache) AddExact(
 		entity.NewColumnVarChar("request_body", []string{""}),
 		entity.NewColumnVarChar("response_body", []string{string(responseBody)}),
 		entity.NewColumnFloatVector(
-			c.config.Collection.VectorField.Name,
+			c.vectorFieldName(),
 			dimension,
 			[][]float32{exactCacheSentinelVector(dimension)},
 		),

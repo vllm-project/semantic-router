@@ -1,13 +1,78 @@
 package extproc
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
+
+type memoryIdentityContractProvider struct{}
+
+func (memoryIdentityContractProvider) Embed(context.Context, string) ([]float32, error) {
+	return make([]float32, 768), nil
+}
+
+func (memoryIdentityContractProvider) EmbedBatch(context.Context, []string) ([][]float32, error) {
+	return nil, errors.New("batch embedding is not used")
+}
+
+func (memoryIdentityContractProvider) Dimension() int { return 768 }
+
+func (memoryIdentityContractProvider) Backend() string { return "memory-identity-test" }
+
+func (memoryIdentityContractProvider) EmbeddingDimensionContract() (embedding.DimensionContract, error) {
+	return embedding.DimensionContract{
+		NativeDimension:     768,
+		SupportedDimensions: []int{768, 512, 256, 128, 64},
+	}, nil
+}
+
+func (memoryIdentityContractProvider) RepresentationIdentity(options embedding.Options, policy string) (embedding.ContentIdentity, error) {
+	return embedding.ContentIdentity{
+		Fingerprint: fmt.Sprintf("memory-identity:%s:%d:%d", policy, options.Layer, options.Dimension),
+	}, nil
+}
+
+func TestBindMemoryEmbeddingUsesPreparedNativeDimension(t *testing.T) {
+	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
+	cfg := &config.RouterConfig{Memory: config.MemoryConfig{EmbeddingModel: "mmbert"}}
+	set := embedding.NewSet(
+		map[string]embedding.Provider{"mmbert": memoryIdentityContractProvider{}},
+		"mmbert",
+	)
+
+	bound, err := bindMemoryEmbedding(cfg, set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bound.Memory.Milvus.Dimension != 768 {
+		t.Fatalf("prepared native dimension = %d, want 768", bound.Memory.Milvus.Dimension)
+	}
+}
+
+func TestBindMemoryEmbeddingRejectsUndeclaredDimension(t *testing.T) {
+	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
+	cfg := &config.RouterConfig{Memory: config.MemoryConfig{
+		EmbeddingModel: "mmbert",
+		Milvus:         config.MemoryMilvusConfig{Dimension: 384},
+	}}
+	set := embedding.NewSet(
+		map[string]embedding.Provider{"mmbert": memoryIdentityContractProvider{}},
+		"mmbert",
+	)
+
+	if _, err := bindMemoryEmbedding(cfg, set); err == nil {
+		t.Fatal("undeclared memory dimension was accepted")
+	}
+}
 
 func TestMemoryEmbeddingIdentityIsolatesBackendAndHotCache(t *testing.T) {
 	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
@@ -68,6 +133,33 @@ func TestMemoryEmbeddingIdentityIsolatesBackendAndHotCache(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestMemoryEmbeddingIdentityPreservesLegacyNamespaceLayout(t *testing.T) {
+	t.Setenv("VLLM_SR_DETERMINISTIC_EMBEDDINGS", "")
+	cfg := &config.RouterConfig{Memory: config.MemoryConfig{
+		Backend:        "milvus",
+		EmbeddingModel: "mmbert",
+		Milvus:         config.MemoryMilvusConfig{Address: "localhost:19530", Collection: "memory"},
+	}}
+
+	bound, err := memoryConfigForIdentity(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+		return embedding.ContentIdentity{Fingerprint: "stable-loaded-model"}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	legacyInputs := []string{"milvus", "localhost:19530", "memory", "stable-loaded-model"}
+	encoded, err := json.Marshal(legacyInputs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(encoded)
+	want := "memory_" + hex.EncodeToString(digest[:])
+	if bound.Memory.Milvus.Collection != want {
+		t.Fatalf("memory collection = %q, want legacy-compatible %q", bound.Memory.Milvus.Collection, want)
 	}
 }
 

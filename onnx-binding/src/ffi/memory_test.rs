@@ -15,13 +15,17 @@
 //! through the element pointer is reported as a layout mismatch and fails the
 //! test; the full-length `slice_from_raw_parts_mut` form passes.
 
+use super::embedding_contract::{
+    ort_free_embedding_dimension_contract, write_embedding_dimension_contract,
+};
 use super::memory::{free_batch_similarity_result, free_embedding_models_info};
 use super::types::{
-    BatchSimilarityResult, EmbeddingModelInfo, EmbeddingModelsInfoResult, SimilarityMatch,
+    BatchSimilarityResult, EmbeddingDimensionContractResult, EmbeddingModelInfo,
+    EmbeddingModelsInfoResult, SimilarityMatch,
 };
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::sync::Mutex;
 
 /// One allocation observed while the tracking window is armed.
@@ -198,6 +202,51 @@ fn test_free_batch_similarity_result_uses_full_slice_layout() {
     );
     assert!(result.matches.is_null());
     assert_eq!(result.num_matches, 0);
+}
+
+/// Exercises the production FFI writer, reads its buffer using the C-facing
+/// `i32` element type, and releases it through the exported free function.
+#[test]
+fn test_embedding_dimension_contract_ffi_round_trip() {
+    let _guard = WINDOW_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    const DIMENSIONS: [usize; 3] = [768, 512, 256];
+
+    let mut result = EmbeddingDimensionContractResult::default();
+    arm();
+    assert_eq!(
+        write_embedding_dimension_contract(&mut result, "mmbert", 768, &DIMENSIONS),
+        0
+    );
+
+    let dimensions_ptr = result.supported_dimensions;
+    let dimensions = unsafe {
+        std::slice::from_raw_parts(
+            result.supported_dimensions,
+            result.num_supported_dimensions as usize,
+        )
+    };
+    assert_eq!(dimensions, &[768_i32, 512, 256]);
+    assert_eq!(result.native_dimension, 768);
+    assert_eq!(
+        unsafe { CStr::from_ptr(result.model_name) }
+            .to_str()
+            .unwrap(),
+        "mmbert"
+    );
+
+    ort_free_embedding_dimension_contract(&mut result);
+    let report = disarm();
+
+    assert_full_layout_free(
+        &report,
+        dimensions_ptr as usize,
+        DIMENSIONS.len() * std::mem::size_of::<i32>(),
+        "EmbeddingDimensionContractResult.supported_dimensions array",
+    );
+    assert!(result.model_name.is_null());
+    assert!(result.supported_dimensions.is_null());
+    assert_eq!(result.num_supported_dimensions, 0);
+    assert!(result.error);
 }
 
 /// Mirrors the producer's allocation pattern (`Vec<EmbeddingModelInfo>` ->

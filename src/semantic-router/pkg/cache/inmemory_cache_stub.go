@@ -4,13 +4,20 @@ package cache
 
 import (
 	"context"
+	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // InMemoryCache provides high-performance in-memory semantic caching
 type InMemoryCache struct {
-	enabled bool
+	enabled           bool
+	embeddingProvider embedding.Provider
+	embeddingModel    string
+	maxEntries        int
+	ttlSeconds        int
+	mu                sync.RWMutex
+	exactEntries      map[string]exactMemoryEntry
 }
 
 // InMemoryCacheOptions contains configuration for the in-memory cache
@@ -31,7 +38,12 @@ type InMemoryCacheOptions struct {
 // NewInMemoryCache creates a new in-memory cache instance
 func NewInMemoryCache(options InMemoryCacheOptions) *InMemoryCache {
 	return &InMemoryCache{
-		enabled: options.Enabled,
+		enabled:           options.Enabled,
+		embeddingProvider: embedding.WithOptions(options.EmbeddingProvider, inMemoryEmbeddingOptions(normalizeEmbeddingModel(options.EmbeddingModel))),
+		embeddingModel:    normalizeEmbeddingModel(options.EmbeddingModel),
+		maxEntries:        options.MaxEntries,
+		ttlSeconds:        options.TTLSeconds,
+		exactEntries:      make(map[string]exactMemoryEntry),
 	}
 }
 

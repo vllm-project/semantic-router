@@ -100,7 +100,7 @@ func defaultCanonicalStoreGlobal() CanonicalStoreGlobal {
 		Memory: MemoryConfig{
 			Enabled:                    false,
 			AutoStore:                  false,
-			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory", Dimension: 384},
+			Milvus:                     MemoryMilvusConfig{Collection: "agentic_memory"},
 			DefaultRetrievalLimit:      5,
 			DefaultSimilarityThreshold: 0.70,
 		},

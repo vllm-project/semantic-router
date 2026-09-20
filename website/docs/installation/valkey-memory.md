@@ -153,7 +153,8 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384               # Must match your embedding model
+        # Omit to use the loaded model's native dimension. A positive value
+        # must be declared by that model's embedding contract.
         metric_type: COSINE           # COSINE, L2, or IP
         index_m: 16
         index_ef_construction: 256
@@ -176,13 +177,18 @@ global:
 | `timeout` | `10` | Connection timeout in seconds |
 | `collection_prefix` | `mem:` | Key prefix for HASH documents |
 | `index_name` | `mem_idx` | FT.CREATE index name |
-| `dimension` | derived | Embedding vector dimension; when omitted, `mmbert` uses 256 and current other memory embedding models use 384 |
+| `dimension` | derived | Embedding vector dimension; when omitted, the loaded model's contract supplies its native width; a positive value must be declared by that contract |
 | `metric_type` | `COSINE` | Distance metric: `COSINE`, `L2`, or `IP` |
 | `index_m` | `16` | HNSW M parameter (links per node) |
 | `index_ef_construction` | `256` | HNSW build-time search width |
 | `tls_enabled` | `false` | Connect to Valkey with TLS |
 | `tls_ca_path` | _(empty)_ | PEM-encoded CA file mounted in the Router; an empty value uses the system trust store |
 | `tls_insecure_skip_verify` | `false` | Skip certificate verification; keep `false` outside isolated development |
+
+If an existing Valkey index was built at 384 dimensions and the embedding
+contract changes to another width, do not reuse that index. Change the index
+name and collection prefix (or remove and rebuild the old index), then
+re-embed the stored memories before enabling writes with the new contract.
 
 For a production TLS endpoint, mount the CA certificate into the Router and
 keep the password in an environment-backed secret:

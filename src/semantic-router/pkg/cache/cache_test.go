@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	"github.com/qdrant/go-client/qdrant"
 	"gopkg.in/yaml.v3"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -1850,6 +1851,35 @@ func TestSemanticCacheEmbeddingDimensionUsesConfiguredValue(t *testing.T) {
 func TestSemanticCacheEmbeddingDimensionReturnsContractError(t *testing.T) {
 	if _, err := semanticCacheEmbeddingDimension(nil, 0, "not-a-model"); err == nil {
 		t.Fatal("expected contract lookup failure to be returned")
+	}
+}
+
+func TestExactOnlyCacheDimensionDoesNotLoadEmbeddingContract(t *testing.T) {
+	for _, configured := range []int{0, 384} {
+		got, err := resolveCacheBackendDimension(nil, configured, "not-a-loaded-model", true)
+		if err != nil {
+			t.Fatalf("exact-only dimension resolution failed for %d: %v", configured, err)
+		}
+		if got != configured {
+			t.Fatalf("exact-only dimension = %d, want %d", got, configured)
+		}
+	}
+}
+
+func TestQdrantCollectionDimension(t *testing.T) {
+	info := &qdrant.CollectionInfo{
+		Config: &qdrant.CollectionConfig{
+			Params: &qdrant.CollectionParams{
+				VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{Size: 256}),
+			},
+		},
+	}
+	got, err := qdrantCollectionDimension(info)
+	if err != nil {
+		t.Fatalf("qdrantCollectionDimension() error = %v", err)
+	}
+	if got != 256 {
+		t.Fatalf("qdrant collection dimension = %d, want 256", got)
 	}
 }
 

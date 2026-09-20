@@ -63,7 +63,7 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 	// Use provided parameters or fall back to cache config defaults
 	actualVectorFieldName := vectorFieldName
 	if actualVectorFieldName == "" {
-		actualVectorFieldName = c.config.Collection.VectorField.Name
+		actualVectorFieldName = c.vectorFieldName()
 	}
 
 	actualMetricType := metricType

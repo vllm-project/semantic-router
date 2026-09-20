@@ -34,7 +34,8 @@ func createMemoryRuntime(
 	memoryStore, err := createStore(cfg)
 	if err != nil {
 		var mismatch *milvuslifecycle.VectorDimensionMismatchError
-		if errors.As(err, &mismatch) {
+		var memoryMismatch *memory.MemoryVectorDimensionMismatchError
+		if errors.As(err, &mismatch) || errors.As(err, &memoryMismatch) {
 			return nil, nil, fmt.Errorf("failed to initialize Memory: %w", err)
 		}
 		logging.Warnf("Failed to create memory store: %v, Memory will be disabled", err)

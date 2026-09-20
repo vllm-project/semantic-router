@@ -53,6 +53,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 		build: func(config CacheConfig) (LegacyCacheBackend, error) {
 			return NewRedisCache(RedisCacheOptions{
 				Enabled:             config.Enabled,
+				ExactOnly:           config.ExactOnly,
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Redis,
@@ -72,6 +73,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 		build: func(config CacheConfig) (LegacyCacheBackend, error) {
 			return NewValkeyCache(ValkeyCacheOptions{
 				Enabled:             config.Enabled,
+				ExactOnly:           config.ExactOnly,
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Valkey,
@@ -91,6 +93,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 		build: func(config CacheConfig) (LegacyCacheBackend, error) {
 			return NewMilvusCache(MilvusCacheOptions{
 				Enabled:             config.Enabled,
+				ExactOnly:           config.ExactOnly,
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Milvus,
@@ -107,6 +110,7 @@ var cacheBackendRegistry = map[CacheBackendType]cacheBackendRegistration{
 		build: func(config CacheConfig) (LegacyCacheBackend, error) {
 			return NewQdrantCache(QdrantCacheOptions{
 				Enabled:             config.Enabled,
+				ExactOnly:           config.ExactOnly,
 				SimilarityThreshold: config.SimilarityThreshold,
 				TTLSeconds:          config.TTLSeconds,
 				Config:              config.Qdrant,

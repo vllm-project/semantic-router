@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/md5" //nolint:gosec
 	"fmt"
+	"math"
 	"sync/atomic"
 	"time"
 
@@ -30,10 +31,13 @@ type QdrantCache struct {
 	hitCount            int64
 	missCount           int64
 	embeddingModel      string
+	effectiveDimension  int
+	exactOnly           bool
 }
 
 type QdrantCacheOptions struct {
 	EmbeddingProvider   embedding.Provider
+	ExactOnly           bool
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
@@ -59,9 +63,13 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		collectionName = "semantic_cache"
 	}
 	embeddingModel := normalizeEmbeddingModel(opts.EmbeddingModel)
-	effectiveDimension, err := semanticCacheEmbeddingDimension(opts.EmbeddingProvider, 0, embeddingModel)
-	if err != nil {
-		return nil, err
+	effectiveDimension := 0
+	if !opts.ExactOnly {
+		var err error
+		effectiveDimension, err = resolveCacheBackendDimension(opts.EmbeddingProvider, 0, embeddingModel, false)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	client, err := qdrant.NewClient(&qdrant.Config{
@@ -82,6 +90,8 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		ttlSeconds:          opts.TTLSeconds,
 		enabled:             true,
 		embeddingModel:      embeddingModel,
+		effectiveDimension:  effectiveDimension,
+		exactOnly:           opts.ExactOnly,
 		embeddingProvider:   embedding.WithOptions(opts.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, effectiveDimension, 0)),
 	}
 
@@ -114,12 +124,33 @@ func (c *QdrantCache) ensureCollection() error {
 		return fmt.Errorf("failed to check qdrant collection: %w", err)
 	}
 	if exists {
+		info, err := c.client.GetCollectionInfo(ctx, c.collectionName)
+		if err != nil {
+			return fmt.Errorf("failed to inspect qdrant cache collection: %w", err)
+		}
+		storedDimension, err := qdrantCollectionDimension(info)
+		if err != nil {
+			return err
+		}
+		if c.effectiveDimension <= 0 {
+			c.effectiveDimension = storedDimension
+		} else if storedDimension != c.effectiveDimension {
+			return &VectorDimensionMismatchError{
+				Backend:           "qdrant",
+				CollectionName:    c.collectionName,
+				StoredDimension:   storedDimension,
+				ExpectedDimension: c.effectiveDimension,
+			}
+		}
 		return nil
 	}
-
-	dim, err := semanticCacheEmbeddingDimension(c.embeddingProvider, 0, c.embeddingModel)
-	if err != nil {
-		return err
+	dim := c.effectiveDimension
+	if dim <= 0 && c.exactOnly {
+		dim = exactCacheSentinelDimension
+		c.effectiveDimension = dim
+	}
+	if dim <= 0 {
+		return fmt.Errorf("qdrant cache requires a positive embedding dimension to create collection")
 	}
 
 	if err := c.client.CreateCollection(ctx, &qdrant.CreateCollection{
@@ -158,7 +189,38 @@ func (c *QdrantCache) embeddingDimension() (int, error) {
 	if c == nil {
 		return semanticCacheEmbeddingDimension(nil, 0, "")
 	}
+	if c.effectiveDimension > 0 || c.exactOnly {
+		return c.effectiveDimension, nil
+	}
 	return semanticCacheEmbeddingDimension(c.embeddingProvider, 0, c.embeddingModel)
+}
+
+func qdrantCollectionDimension(info *qdrant.CollectionInfo) (int, error) {
+	if info == nil || info.GetConfig() == nil || info.GetConfig().GetParams() == nil {
+		return 0, fmt.Errorf("qdrant cache collection has no vector configuration")
+	}
+	vectors := info.GetConfig().GetParams().GetVectorsConfig()
+	if vectors == nil {
+		return 0, fmt.Errorf("qdrant cache collection has no vector configuration")
+	}
+	if params := vectors.GetParams(); params != nil && params.GetSize() > 0 {
+		return qdrantCacheDimension(params.GetSize())
+	}
+	if params := vectors.GetParamsMap(); params != nil {
+		for _, vector := range params.GetMap() {
+			if vector != nil && vector.GetSize() > 0 {
+				return qdrantCacheDimension(vector.GetSize())
+			}
+		}
+	}
+	return 0, fmt.Errorf("qdrant cache collection has no positive vector dimension")
+}
+
+func qdrantCacheDimension(size uint64) (int, error) {
+	if size > uint64(math.MaxInt) {
+		return 0, fmt.Errorf("qdrant cache collection vector dimension %d exceeds the platform integer range", size)
+	}
+	return int(size), nil
 }
 
 // Qdrant only allows UUIDs and +ve integers.

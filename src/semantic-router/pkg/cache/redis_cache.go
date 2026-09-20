@@ -36,11 +36,13 @@ type RedisCache struct {
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
 	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	exactOnly           bool
 }
 
 // RedisCacheOptions contains configuration parameters for Redis cache initialization
 type RedisCacheOptions struct {
 	EmbeddingProvider   embedding.Provider
+	ExactOnly           bool
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
@@ -74,10 +76,11 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 	} else {
 		redisConfig = options.Config
 	}
-	effectiveDimension, err := semanticCacheEmbeddingDimension(
+	effectiveDimension, err := resolveCacheBackendDimension(
 		options.EmbeddingProvider,
 		redisConfig.Index.VectorField.Dimension,
 		options.EmbeddingModel,
+		options.ExactOnly,
 	)
 	if err != nil {
 		return nil, err
@@ -115,6 +118,7 @@ func NewRedisCache(options RedisCacheOptions) (*RedisCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
+		exactOnly:           options.ExactOnly,
 		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, effectiveDimension, 0)),
 	}
 
@@ -200,7 +204,7 @@ func (c *RedisCache) initializeIndex() error {
 	ctx := context.Background()
 
 	// Check if index exists
-	_, err := c.client.FTInfo(ctx, c.indexName).Result()
+	info, err := c.client.FTInfo(ctx, c.indexName).Result()
 	indexExists := err == nil
 
 	// Handle development mode index reset
@@ -219,9 +223,29 @@ func (c *RedisCache) initializeIndex() error {
 			"reason":  "development_mode",
 		})
 	}
+	if indexExists && !c.exactOnly && c.config.Index.VectorField.Dimension > 0 {
+		storedDimension, dimensionErr := redisIndexVectorDimension(info, c.config.Index.VectorField.Name)
+		if dimensionErr != nil {
+			return dimensionErr
+		}
+		if storedDimension != c.config.Index.VectorField.Dimension {
+			return &VectorDimensionMismatchError{
+				Backend:           "redis",
+				CollectionName:    c.indexName,
+				StoredDimension:   storedDimension,
+				ExpectedDimension: c.config.Index.VectorField.Dimension,
+			}
+		}
+	}
 
 	// Create index if it doesn't exist
 	if !indexExists {
+		if c.exactOnly {
+			// Exact lookups use hashes and do not need RediSearch. Leaving the
+			// vector index absent also avoids inventing a dimension when no
+			// embedding provider was prepared.
+			return nil
+		}
 		if !c.config.Development.AutoCreateIndex {
 			return fmt.Errorf("index %s does not exist and auto-creation is disabled", c.indexName)
 		}
@@ -242,6 +266,22 @@ func (c *RedisCache) initializeIndex() error {
 	return nil
 }
 
+func redisIndexVectorDimension(info redis.FTInfoResult, vectorFieldName string) (int, error) {
+	for _, attribute := range info.Attributes {
+		if attribute.Identifier != vectorFieldName && attribute.Attribute != vectorFieldName {
+			continue
+		}
+		if !strings.EqualFold(attribute.Type, "VECTOR") {
+			return 0, fmt.Errorf("redis index vector field %s has type %q, expected VECTOR", vectorFieldName, attribute.Type)
+		}
+		if attribute.Dim <= 0 {
+			return 0, fmt.Errorf("redis index vector field %s has non-positive dimension %d", vectorFieldName, attribute.Dim)
+		}
+		return attribute.Dim, nil
+	}
+	return 0, fmt.Errorf("redis index vector field %s was not found", vectorFieldName)
+}
+
 // getEmbedding generates an embedding based on the configured embedding model.
 // Cancellation is best-effort here; see ctxErr.
 func (c *RedisCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
@@ -252,7 +292,7 @@ func (c *RedisCache) embeddingDimension() (int, error) {
 	if c == nil || c.config == nil {
 		return semanticCacheEmbeddingDimension(nil, 0, "")
 	}
-	return semanticCacheEmbeddingDimension(c.embeddingProvider, c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return resolveCacheBackendDimension(c.embeddingProvider, c.config.Index.VectorField.Dimension, c.embeddingModel, c.exactOnly)
 }
 
 // createIndex builds the Redis index with the appropriate schema

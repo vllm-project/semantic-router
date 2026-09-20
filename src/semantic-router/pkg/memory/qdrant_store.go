@@ -3,6 +3,8 @@ package memory
 import (
 	"context"
 	"fmt"
+	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,16 +41,28 @@ func NewQdrantStore(opts QdrantStoreOptions) (*QdrantStore, error) {
 	if opts.QdrantConfig == nil {
 		return nil, fmt.Errorf("qdrant config is required")
 	}
+	opts.Config = withMemoryConfigDefaults(opts.Config)
 
 	collectionName := opts.QdrantConfig.Collection
 	if collectionName == "" {
 		collectionName = "agentic_memory"
 	}
 
-	embCfg := EmbeddingConfig{Model: EmbeddingModelBERT}
+	embCfg := EmbeddingConfig{
+		Model: EmbeddingModelType(strings.ToLower(strings.TrimSpace(opts.Config.EmbeddingModel))),
+	}
+	if embCfg.Model == "" {
+		embCfg.Model = EmbeddingModelBERT
+	}
 	if opts.EmbeddingConfig != nil {
 		embCfg = *opts.EmbeddingConfig
 	}
+	effectiveDimension, err := resolveMemoryEmbeddingDimension(embCfg, opts.QdrantConfig.Dimension)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve Qdrant memory embedding dimension: %w", err)
+	}
+	embCfg.Dimension = effectiveDimension
+	opts.QdrantConfig.Dimension = effectiveDimension
 
 	s := &QdrantStore{
 		client:          opts.Client,
@@ -78,13 +92,26 @@ func (s *QdrantStore) ensureCollection(ctx context.Context) error {
 		return fmt.Errorf("failed to check qdrant collection: %w", err)
 	}
 	if exists {
+		info, err := s.client.GetCollectionInfo(ctx, s.collectionName)
+		if err != nil {
+			return fmt.Errorf("failed to inspect qdrant memory collection: %w", err)
+		}
+		storedDimension, err := qdrantMemoryCollectionDimension(info)
+		if err != nil {
+			return err
+		}
+		if storedDimension != s.embeddingConfig.Dimension {
+			return &MemoryVectorDimensionMismatchError{
+				Backend:           "qdrant",
+				CollectionName:    s.collectionName,
+				StoredDimension:   storedDimension,
+				ExpectedDimension: s.embeddingConfig.Dimension,
+			}
+		}
 		return nil
 	}
 
-	dim := s.qdrantConfig.Dimension
-	if dim <= 0 {
-		dim = 384
-	}
+	dim := s.embeddingConfig.Dimension
 
 	if err := s.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: s.collectionName,
@@ -111,6 +138,37 @@ func (s *QdrantStore) ensureCollection(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func qdrantMemoryCollectionDimension(info *qdrant.CollectionInfo) (int, error) {
+	if info == nil || info.GetConfig() == nil || info.GetConfig().GetParams() == nil {
+		return 0, fmt.Errorf("qdrant memory collection has no vector configuration")
+	}
+	vectors := info.GetConfig().GetParams().GetVectorsConfig()
+	if vectors == nil {
+		return 0, fmt.Errorf("qdrant memory collection has no vector configuration")
+	}
+	if params := vectors.GetParams(); params != nil && params.GetSize() > 0 {
+		return qdrantMemoryDimension(params.GetSize())
+	}
+	if params := vectors.GetParamsMap(); params != nil {
+		if named, ok := params.GetMap()["embedding"]; ok && named != nil && named.GetSize() > 0 {
+			return qdrantMemoryDimension(named.GetSize())
+		}
+		for _, named := range params.GetMap() {
+			if named != nil && named.GetSize() > 0 {
+				return qdrantMemoryDimension(named.GetSize())
+			}
+		}
+	}
+	return 0, fmt.Errorf("qdrant memory collection has no positive vector dimension")
+}
+
+func qdrantMemoryDimension(size uint64) (int, error) {
+	if size > uint64(math.MaxInt) {
+		return 0, fmt.Errorf("qdrant memory collection vector dimension %d exceeds the platform integer range", size)
+	}
+	return int(size), nil
 }
 
 // Qdrant only allows UUIDs and +ve integers.

@@ -15,6 +15,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
+// exactCacheSentinelDimension is used only when an exact-only vector backend
+// creates a new physical collection. Exact lookups do not perform vector
+// search, so a one-dimensional sentinel keeps the storage schema valid without
+// requiring an embedding model at startup. Existing collections are inspected
+// and keep their established width.
+const exactCacheSentinelDimension = 1
+
 // extractUserContent returns the text portion of a user message's content.
 // Handles both plain string and multimodal content array variants via the
 // official openai-go SDK union type.
@@ -213,4 +220,21 @@ func semanticCacheEmbeddingDimension(provider embedding.Provider, configured int
 		)
 	}
 	return dimension, nil
+}
+
+// resolveCacheBackendDimension keeps exact-only response-cache startup
+// independent from the embedding runtime. Exact entries still use a sentinel
+// vector, so an explicit storage dimension remains authoritative; an omitted
+// dimension is resolved later from an existing vector collection or rejected
+// when a new collection would have to be created.
+func resolveCacheBackendDimension(
+	provider embedding.Provider,
+	configured int,
+	embeddingModel string,
+	exactOnly bool,
+) (int, error) {
+	if exactOnly {
+		return configured, nil
+	}
+	return semanticCacheEmbeddingDimension(provider, configured, embeddingModel)
 }

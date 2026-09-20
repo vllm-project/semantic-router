@@ -1,3 +1,5 @@
+//go:build !windows && cgo && !riscv64
+
 package cache
 
 import (
@@ -5,42 +7,6 @@ import (
 	"fmt"
 	"time"
 )
-
-func parseValkeyHashFields(raw any) map[string]string {
-	fields := make(map[string]string)
-	switch v := raw.(type) {
-	case map[string]string:
-		return v
-	case map[string]interface{}:
-		for k, val := range v {
-			fields[k] = fmt.Sprint(val)
-		}
-	case map[interface{}]interface{}:
-		for k, val := range v {
-			fields[fmt.Sprint(k)] = fmt.Sprint(val)
-		}
-	case []interface{}:
-		for i := 0; i+1 < len(v); i += 2 {
-			fields[fmt.Sprint(v[i])] = fmt.Sprint(v[i+1])
-		}
-	case []string:
-		for i := 0; i+1 < len(v); i += 2 {
-			fields[v[i]] = v[i+1]
-		}
-	}
-	return fields
-}
-
-func valkeyFallbackBytes(raw any) []byte {
-	switch val := raw.(type) {
-	case string:
-		return []byte(val)
-	case []byte:
-		return append([]byte(nil), val...)
-	default:
-		return []byte(fmt.Sprint(val))
-	}
-}
 
 func (c *ValkeyCache) fallbackGetExact(ctx context.Context, key string) (LookupResult, bool) {
 	rawStr, getErr := c.client.CustomCommand(ctx, []string{"GET", key})

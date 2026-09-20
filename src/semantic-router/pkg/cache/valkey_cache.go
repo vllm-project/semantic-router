@@ -1,3 +1,5 @@
+//go:build !windows && cgo && !riscv64
+
 package cache
 
 import (
@@ -34,11 +36,13 @@ type ValkeyCache struct {
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
 	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
+	exactOnly           bool
 }
 
 // ValkeyCacheOptions contains configuration parameters for Valkey cache initialization
 type ValkeyCacheOptions struct {
 	EmbeddingProvider   embedding.Provider
+	ExactOnly           bool
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
@@ -63,10 +67,11 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 	}
 
 	valkeyConfig := options.Config
-	effectiveDimension, err := semanticCacheEmbeddingDimension(
+	effectiveDimension, err := resolveCacheBackendDimension(
 		options.EmbeddingProvider,
 		valkeyConfig.Index.VectorField.Dimension,
 		options.EmbeddingModel,
+		options.ExactOnly,
 	)
 	if err != nil {
 		return nil, err
@@ -121,6 +126,7 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
+		exactOnly:           options.ExactOnly,
 		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, effectiveDimension, 0)),
 	}
 
@@ -151,6 +157,12 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 // initializeSearchIndex runs the valkey-search module version pre-check and
 // then sets up the FT index.
 func (c *ValkeyCache) initializeSearchIndex() error {
+	if c.exactOnly {
+		// Exact lookups use hashes and do not need valkey-search. Skipping the
+		// module check and vector index creation keeps exact-only startup
+		// independent of an embedding model and search-module installation.
+		return nil
+	}
 	versionCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := valkeyutil.EnsureSearchModuleVersion(versionCtx, c.client, valkeyutil.SearchModuleMinVersion); err != nil {
@@ -166,7 +178,7 @@ func (c *ValkeyCache) initializeSearchIndex() error {
 func (c *ValkeyCache) initializeIndex() error {
 	ctx := context.Background()
 
-	_, err := c.client.CustomCommand(ctx, []string{"FT.INFO", c.indexName})
+	info, err := c.client.CustomCommand(ctx, []string{"FT.INFO", c.indexName})
 	indexExists := err == nil
 
 	if c.config.Development.DropIndexOnStartup && indexExists {
@@ -183,8 +195,25 @@ func (c *ValkeyCache) initializeIndex() error {
 			"reason":  "development_mode",
 		})
 	}
+	if indexExists && c.config.Index.VectorField.Dimension > 0 {
+		storedDimension, dimensionErr := valkeyIndexVectorDimension(info, c.config.Index.VectorField.Name)
+		if dimensionErr != nil {
+			return dimensionErr
+		}
+		if storedDimension != c.config.Index.VectorField.Dimension {
+			return &VectorDimensionMismatchError{
+				Backend:           "valkey",
+				CollectionName:    c.indexName,
+				StoredDimension:   storedDimension,
+				ExpectedDimension: c.config.Index.VectorField.Dimension,
+			}
+		}
+	}
 
 	if !indexExists {
+		if c.exactOnly {
+			return nil
+		}
 		if !c.config.Development.AutoCreateIndex {
 			return fmt.Errorf("index %s does not exist and auto-creation is disabled", c.indexName)
 		}
@@ -205,6 +234,104 @@ func (c *ValkeyCache) initializeIndex() error {
 	return nil
 }
 
+// valkeyIndexVectorDimension extracts the configured vector field's DIM from
+// the nested FT.INFO response. Valkey Search returns RESP arrays, while some
+// clients normalize the same metadata into maps, so both shapes are accepted.
+func valkeyIndexVectorDimension(raw any, vectorFieldName string) (int, error) {
+	if dimension, found := findValkeyVectorDimension(raw, vectorFieldName); found && dimension > 0 {
+		return dimension, nil
+	}
+	return 0, fmt.Errorf("valkey index vector field %s was not found or has no positive dimension", vectorFieldName)
+}
+
+func findValkeyVectorDimension(raw any, vectorFieldName string) (int, bool) {
+	checkAttribute := func(fieldName, fieldType string, dimension int) (int, bool) {
+		if fieldName == vectorFieldName && strings.EqualFold(fieldType, "VECTOR") && dimension > 0 {
+			return dimension, true
+		}
+		return 0, false
+	}
+
+	switch value := raw.(type) {
+	case map[string]interface{}:
+		fieldName, fieldType, dimension := "", "", 0
+		for key, nested := range value {
+			switch strings.ToLower(valkeyMetadataKey(key)) {
+			case "identifier", "attribute", "field", "name":
+				fieldName = valkeyMetadataKey(nested)
+			case "type":
+				fieldType = valkeyMetadataKey(nested)
+			case "dim":
+				dimension, _ = parseValkeyDimension(nested)
+			}
+		}
+		if foundDimension, ok := checkAttribute(fieldName, fieldType, dimension); ok {
+			return foundDimension, true
+		}
+		for _, nested := range value {
+			if foundDimension, ok := findValkeyVectorDimension(nested, vectorFieldName); ok {
+				return foundDimension, true
+			}
+		}
+	case map[interface{}]interface{}:
+		fieldName, fieldType, dimension := "", "", 0
+		for key, nested := range value {
+			switch strings.ToLower(valkeyMetadataKey(key)) {
+			case "identifier", "attribute", "field", "name":
+				fieldName = valkeyMetadataKey(nested)
+			case "type":
+				fieldType = valkeyMetadataKey(nested)
+			case "dim":
+				dimension, _ = parseValkeyDimension(nested)
+			}
+		}
+		if foundDimension, ok := checkAttribute(fieldName, fieldType, dimension); ok {
+			return foundDimension, true
+		}
+		for _, nested := range value {
+			if foundDimension, ok := findValkeyVectorDimension(nested, vectorFieldName); ok {
+				return foundDimension, true
+			}
+		}
+	case []interface{}:
+		fieldName, fieldType, dimension := "", "", 0
+		for index := 0; index+1 < len(value); index += 2 {
+			switch strings.ToLower(valkeyMetadataKey(value[index])) {
+			case "identifier", "attribute", "field", "name":
+				fieldName = valkeyMetadataKey(value[index+1])
+			case "type":
+				fieldType = valkeyMetadataKey(value[index+1])
+			case "dim":
+				dimension, _ = parseValkeyDimension(value[index+1])
+			}
+		}
+		if foundDimension, ok := checkAttribute(fieldName, fieldType, dimension); ok {
+			return foundDimension, true
+		}
+		for _, nested := range value {
+			if foundDimension, ok := findValkeyVectorDimension(nested, vectorFieldName); ok {
+				return foundDimension, true
+			}
+		}
+	case []string:
+		fieldName, fieldType, dimension := "", "", 0
+		for index := 0; index+1 < len(value); index += 2 {
+			switch strings.ToLower(value[index]) {
+			case "identifier", "attribute", "field", "name":
+				fieldName = value[index+1]
+			case "type":
+				fieldType = value[index+1]
+			case "dim":
+				dimension, _ = parseValkeyDimension(value[index+1])
+			}
+		}
+		if foundDimension, ok := checkAttribute(fieldName, fieldType, dimension); ok {
+			return foundDimension, true
+		}
+	}
+	return 0, false
+}
+
 // getEmbedding generates an embedding based on the configured embedding model.
 // Cancellation is best-effort here; see ctxErr.
 func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
@@ -215,7 +342,7 @@ func (c *ValkeyCache) embeddingDimension() (int, error) {
 	if c == nil || c.config == nil {
 		return semanticCacheEmbeddingDimension(nil, 0, "")
 	}
-	return semanticCacheEmbeddingDimension(c.embeddingProvider, c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return resolveCacheBackendDimension(c.embeddingProvider, c.config.Index.VectorField.Dimension, c.embeddingModel, c.exactOnly)
 }
 
 // createIndex builds the Valkey index with the appropriate schema

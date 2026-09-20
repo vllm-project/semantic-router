@@ -129,3 +129,21 @@ func TestEmbeddingNamespaceLeavesUnsupportedProvidersAndDisabledCachesUntouched(
 		}
 	}
 }
+
+func TestEmbeddingNamespaceSeparatesWidthsWithSameIdentity(t *testing.T) {
+	resolve := func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+		return embedding.ContentIdentity{Fingerprint: "same-model"}, nil
+	}
+
+	narrow, _, err := PrepareEmbeddingNamespace(namespaceFixture(MilvusCacheType, 256), resolve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wide, _, err := PrepareEmbeddingNamespace(namespaceFixture(MilvusCacheType, 512), resolve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if narrow.Milvus.Collection == wide.Milvus.Collection {
+		t.Fatalf("different dimensions reused Milvus collection %q", narrow.Milvus.Collection)
+	}
+}

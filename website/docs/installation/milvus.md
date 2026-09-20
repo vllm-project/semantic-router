@@ -104,7 +104,7 @@ global:
 ```
 
 Leave `dimension` unset to use the loaded model's native width. If you set a
-positive value, it must be one of the model-declared Matryoshka dimensions.
+positive value, it must be declared by the loaded model's embedding contract.
 The router validates existing collections at startup and refuses to load a
 collection whose stored vector width differs. See the
 [Milvus dimension migration](../tutorials/plugin/response-cache.md#milvus-dimension-migration)

@@ -254,10 +254,12 @@ func (c MemoryReflectionConfig) ReflectionEnabled() bool {
 }
 
 type MemoryMilvusConfig struct {
-	Address       string `yaml:"address"`
-	Collection    string `yaml:"collection,omitempty"`
-	Dimension     int    `yaml:"dimension,omitempty"`
-	NumPartitions int    `yaml:"num_partitions,omitempty"`
+	Address    string `yaml:"address"`
+	Collection string `yaml:"collection,omitempty"`
+	// Dimension is the requested embedding width. Zero resolves to the loaded
+	// model's native width; a positive value must be declared by its contract.
+	Dimension     int `yaml:"dimension,omitempty"`
+	NumPartitions int `yaml:"num_partitions,omitempty"`
 }
 
 // MemoryValkeyConfig holds configuration for the Valkey memory store backend.
@@ -277,7 +279,8 @@ type MemoryValkeyConfig struct {
 	CollectionPrefix string `yaml:"collection_prefix,omitempty"`
 	// IndexName is the FT index name (default "mem_idx").
 	IndexName string `yaml:"index_name,omitempty"`
-	// Dimension is the embedding vector dimension (default 384).
+	// Dimension is the requested embedding width. Zero resolves to the loaded
+	// model's native width; a positive value must be declared by its contract.
 	Dimension int `yaml:"dimension,omitempty"`
 	// MetricType is the distance metric: "COSINE", "L2", or "IP" (default "COSINE").
 	MetricType string `yaml:"metric_type,omitempty"`
@@ -302,7 +305,9 @@ type MemoryQdrantConfig struct {
 	UseTLS         bool   `yaml:"use_tls,omitempty"`
 	ConnectTimeout int    `yaml:"connect_timeout,omitempty"`
 	Collection     string `yaml:"collection,omitempty"`
-	Dimension      int    `yaml:"dimension,omitempty"`
+	// Dimension is the requested embedding width. Zero resolves to the loaded
+	// model's native width; a positive value must be declared by its contract.
+	Dimension int `yaml:"dimension,omitempty"`
 }
 
 // ResponseAPIConfig controls response and conversation history storage.

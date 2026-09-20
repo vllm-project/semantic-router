@@ -181,6 +181,48 @@ impl Default for MatryoshkaConfig {
 }
 
 impl MatryoshkaConfig {
+    /// Read optional Matryoshka metadata from the loaded model directory.
+    /// Exported artifacts use `dimensions`; older native artifacts may use
+    /// `matryoshka_dims`. The built-in values remain a compatibility fallback
+    /// for checkpoints that predate the metadata manifest.
+    pub fn from_model_dir<P: AsRef<Path>>(model_path: P) -> Self {
+        let model_dir = model_path.as_ref();
+        let candidates = [
+            model_dir.join("config.json"),
+            model_dir.join("onnx").join("model_config.json"),
+            model_dir.join("model_config.json"),
+        ];
+        let mut config = Self::default();
+        let mut dimensions_loaded = false;
+        let mut layers_loaded = false;
+        for path in candidates {
+            let Some(json) = std::fs::read_to_string(path)
+                .ok()
+                .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            else {
+                continue;
+            };
+            if !dimensions_loaded {
+                if let Some(dimensions) =
+                    model_metadata_array(&json, &["matryoshka_dims", "dimensions"])
+                {
+                    config.dimensions = dimensions;
+                    dimensions_loaded = true;
+                }
+            }
+            if !layers_loaded {
+                if let Some(layers) = model_metadata_array(&json, &["available_layers", "layers"]) {
+                    config.layers = layers;
+                    layers_loaded = true;
+                }
+            }
+            if dimensions_loaded && layers_loaded {
+                break;
+            }
+        }
+        config
+    }
+
     pub fn validate_dimension(&self, dim: usize) -> bool {
         self.dimensions.contains(&dim)
     }
@@ -213,6 +255,18 @@ impl MatryoshkaConfig {
     pub fn estimate_speedup(&self, layer: usize) -> f32 {
         22.0 / layer as f32
     }
+}
+
+fn model_metadata_array(json: &serde_json::Value, keys: &[&str]) -> Option<Vec<usize>> {
+    keys.iter().find_map(|key| {
+        let values = json.get(*key)?.as_array()?;
+        let values = values
+            .iter()
+            .filter_map(|value| value.as_u64().map(|value| value as usize))
+            .filter(|value| *value > 0)
+            .collect::<Vec<_>>();
+        (!values.is_empty()).then_some(values)
+    })
 }
 
 // ============================================================================
@@ -593,7 +647,7 @@ impl MmBertEmbeddingModel {
         Ok(Self {
             encoder,
             config: config.clone(),
-            matryoshka_config: MatryoshkaConfig::default(),
+            matryoshka_config: MatryoshkaConfig::from_model_dir(model_path),
             device: device.clone(),
         })
     }
@@ -924,6 +978,24 @@ mod tests {
         let config = MatryoshkaConfig::default();
         assert_eq!(config.dimensions, vec![768, 512, 256, 128, 64]);
         assert_eq!(config.layers, vec![3, 6, 11, 22]);
+    }
+
+    #[test]
+    fn test_matryoshka_config_reads_each_declared_field_from_available_manifests() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("config.json"), r#"{"hidden_size":768}"#).unwrap();
+        let onnx_dir = dir.path().join("onnx");
+        std::fs::create_dir_all(&onnx_dir).unwrap();
+        std::fs::write(
+            onnx_dir.join("model_config.json"),
+            r#"{"available_layers":[6,11],"dimensions":[768,256]}"#,
+        )
+        .unwrap();
+
+        let config = MatryoshkaConfig::from_model_dir(dir.path());
+
+        assert_eq!(config.layers, vec![6, 11]);
+        assert_eq!(config.dimensions, vec![768, 256]);
     }
 
     /// Test that RoPE can be computed for 32K positions with checkpoint theta

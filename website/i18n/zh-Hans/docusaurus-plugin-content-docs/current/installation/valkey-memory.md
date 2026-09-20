@@ -146,7 +146,8 @@ global:
         timeout: 10
         collection_prefix: "mem:"
         index_name: mem_idx
-        dimension: 384               # 必须与嵌入模型匹配
+        # 省略时使用已加载模型 contract 声明的 native dimension。
+        # 显式值必须是该模型 contract 声明的维度。
         metric_type: COSINE           # COSINE、L2 或 IP
         index_m: 16
         index_ef_construction: 256
@@ -169,13 +170,15 @@ global:
 | `timeout` | `10` | 连接超时（秒） |
 | `collection_prefix` | `mem:` | HASH 文档的键前缀 |
 | `index_name` | `mem_idx` | FT.CREATE 索引名称 |
-| `dimension` | 派生 | 嵌入向量维度；省略时，`mmbert` 使用 256，当前其他记忆嵌入模型使用 384 |
+| `dimension` | 派生 | 嵌入向量维度；省略时由已加载模型 contract 提供 native dimension；显式值必须由该 contract 声明 |
 | `metric_type` | `COSINE` | 距离度量：`COSINE`、`L2` 或 `IP` |
 | `index_m` | `16` | HNSW M 参数（每个节点的链接数） |
 | `index_ef_construction` | `256` | HNSW 构建时搜索宽度 |
 | `tls_enabled` | `false` | 使用 TLS 连接 Valkey |
 | `tls_ca_path` | _(空)_ | 挂载到 Router 中的 PEM 编码 CA 文件；空值使用系统信任存储 |
 | `tls_insecure_skip_verify` | `false` | 跳过证书验证；在隔离开发之外保持 `false` |
+
+如果已有 384 维 Valkey 索引，不能原地修改向量维度。升级前请停止写入，创建新的索引名称和 collection prefix（或删除旧索引后重建），并按新的模型 contract 重新生成记忆向量；旧索引中的向量不能与新的向量空间混用。
 
 对于生产 TLS 端点，将 CA 证书挂载到 Router，并将密码保留在由环境提供的密钥中：
 

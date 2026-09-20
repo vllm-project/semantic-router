@@ -91,6 +91,21 @@ func TestRedisMetricTypeNormalization(t *testing.T) {
 	}
 }
 
+func TestRedisIndexVectorDimension(t *testing.T) {
+	info := redis.FTInfoResult{Attributes: []redis.FTAttribute{
+		{Identifier: "query", Type: "TEXT"},
+		{Identifier: "embedding", Type: "VECTOR", Dim: 512},
+	}}
+
+	got, err := redisIndexVectorDimension(info, "embedding")
+	if err != nil || got != 512 {
+		t.Fatalf("redis index dimension = %d, err=%v; want 512", got, err)
+	}
+	if _, err := redisIndexVectorDimension(info, "other_embedding"); err == nil {
+		t.Fatal("missing Redis vector field was accepted")
+	}
+}
+
 // TestRedisExtractSearchResultMissingDistance covers the parse failures that
 // must be reported as "not ok" rather than as a similarity of zero, which the
 // caller would otherwise store and expose as x-vsr-cache-similarity.

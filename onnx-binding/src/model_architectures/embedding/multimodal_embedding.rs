@@ -67,6 +67,21 @@ impl MultiModalConfig {
         if let Some(d) = v["embedding_dim"].as_u64() {
             cfg.embedding_dim = d as usize;
         }
+        if let Some(dims) = ["matryoshka_dims", "dimensions"].iter().find_map(|key| {
+            v.get(*key)
+                .and_then(|value| value.as_array())
+                .map(|values| {
+                    values
+                        .iter()
+                        .filter_map(|value| value.as_u64().map(|value| value as usize))
+                        .filter(|value| *value > 0)
+                        .collect::<Vec<_>>()
+                })
+        }) {
+            if !dims.is_empty() {
+                cfg.matryoshka_dims = dims;
+            }
+        }
         if let Some(s) = v
             .get("image_encoder")
             .and_then(|o| o["image_size"].as_u64())

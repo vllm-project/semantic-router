@@ -334,7 +334,9 @@ func TestMilvusStore_LegacyAndOmittedDimensionsKeepSameResult(t *testing.T) {
 	}
 
 	legacyStore := newStore("legacy_dimension", 384, 384)
-	omittedStore := newStore("omitted_dimension", 512, 0)
+	// An omitted embedding dimension keeps the existing configured collection
+	// width for legacy callers that do not pass a prepared provider.
+	omittedStore := newStore("omitted_dimension", 384, 0)
 
 	assert.Equal(t, legacyStore.effectiveDimension, omittedStore.effectiveDimension)
 	assert.Equal(t, legacyStore.embeddingConfig.Dimension, omittedStore.embeddingConfig.Dimension)

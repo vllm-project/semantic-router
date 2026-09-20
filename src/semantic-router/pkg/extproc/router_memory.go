@@ -172,7 +172,6 @@ func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	}
 
 	embeddingModel := memory.EmbeddingModelType(detectMemoryEmbeddingModel(cfg))
-	normalizeValkeyDimension(vc, embeddingModel)
 
 	embeddingConfig := &memory.EmbeddingConfig{
 		Model:     embeddingModel,
@@ -214,20 +213,6 @@ func createValkeyMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		host, port, embeddingConfig.Model)
 
 	return store, nil
-}
-
-// normalizeValkeyDimension sets vc.Dimension to the model's default if not explicitly configured.
-func normalizeValkeyDimension(vc *config.MemoryValkeyConfig, model memory.EmbeddingModelType) {
-	if vc.Dimension > 0 {
-		return
-	}
-	switch model {
-	case memory.EmbeddingModelMMBERT:
-		vc.Dimension = 256
-	default:
-		vc.Dimension = 384
-	}
-	logging.Infof("Memory: Valkey dimension not set, defaulting to %d for model %s", vc.Dimension, model)
 }
 
 // buildValkeyClientConfig constructs the valkey-glide client configuration.
@@ -367,7 +352,7 @@ func detectMemoryEmbeddingModel(cfg *config.RouterConfig) string {
 
 	switch {
 	case embeddingModels.BertModelPath != "":
-		logging.Infof("Memory: Auto-selected bert from embedding_models config (384-dim, recommended for memory)")
+		logging.Infof("Memory: Auto-selected bert from embedding_models config")
 		return "bert"
 	case embeddingModels.MmBertModelPath != "":
 		logging.Infof("Memory: Auto-selected mmbert from embedding_models config")

@@ -12,7 +12,6 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 	"sigs.k8s.io/yaml"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	milvuslifecycle "github.com/vllm-project/semantic-router/src/semantic-router/pkg/milvus"
@@ -36,14 +35,17 @@ type MilvusCache struct {
 	lastCleanupTime     *time.Time
 	mu                  sync.RWMutex
 	embeddingModel      string // "bert", "qwen3", "gemma", "mmbert", or "multimodal"
-	// effectiveDimension is resolved once from the binding contract and reused
-	// for collection creation, existing-collection validation, and embeddings.
+	// effectiveDimension is resolved once from the binding contract (or from the
+	// storage schema for exact-only caches) and reused for collection creation,
+	// validation, and embeddings.
 	effectiveDimension int
+	exactOnly          bool
 }
 
 // MilvusCacheOptions contains configuration parameters for Milvus cache initialization
 type MilvusCacheOptions struct {
 	EmbeddingProvider   embedding.Provider
+	ExactOnly           bool
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
@@ -77,10 +79,11 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		milvusConfig = options.Config
 	}
 	embeddingModel := normalizeEmbeddingModel(options.EmbeddingModel)
-	effectiveDimension, err := resolveMilvusCacheEmbeddingDimension(
+	effectiveDimension, err := resolveCacheBackendDimension(
 		options.EmbeddingProvider,
-		embeddingModel,
 		milvusConfig.Collection.VectorField.Dimension,
+		embeddingModel,
+		options.ExactOnly,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Milvus cache embedding dimension: %w", err)
@@ -123,6 +126,7 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
 		effectiveDimension:  effectiveDimension,
+		exactOnly:           options.ExactOnly,
 		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, effectiveDimension, 0)),
 	}
 
@@ -144,21 +148,6 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	logging.Debugf("MilvusCache: initialization complete")
 
 	return cache, nil
-}
-
-func resolveMilvusCacheEmbeddingDimension(provider embedding.Provider, model string, configured int) (int, error) {
-	if provider != nil {
-		contractProvider, ok := provider.(embedding.DimensionContractProvider)
-		if !ok {
-			return 0, fmt.Errorf("prepared embedding provider does not expose a dimension contract")
-		}
-		contract, err := contractProvider.EmbeddingDimensionContract()
-		if err != nil {
-			return 0, fmt.Errorf("failed to get embedding dimension contract: %w", err)
-		}
-		return contract.Resolve(configured)
-	}
-	return candle_binding.ResolveEmbeddingDimension(model, configured)
 }
 
 // loadMilvusConfig reads and parses the Milvus configuration from file (Deprecated)
@@ -503,7 +492,7 @@ func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	queryColumn := entity.NewColumnVarChar("query", queries)
 	requestColumn := entity.NewColumnVarChar("request_body", requestBodies)
 	responseColumn := entity.NewColumnVarChar("response_body", responseBodies)
-	embeddingColumn := entity.NewColumnFloatVector(c.config.Collection.VectorField.Name, embeddingDim, embeddings)
+	embeddingColumn := entity.NewColumnFloatVector(c.vectorFieldName(), embeddingDim, embeddings)
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
 
 	// Upsert all entries at once
@@ -594,7 +583,7 @@ func (c *MilvusCache) addEntry(ctx context.Context, id string, requestID string,
 	queryColumn := entity.NewColumnVarChar("query", queries)
 	requestColumn := entity.NewColumnVarChar("request_body", requestBodies)
 	responseColumn := entity.NewColumnVarChar("response_body", responseBodies)
-	embeddingColumn := entity.NewColumnFloatVector(c.config.Collection.VectorField.Name, len(embedding), embeddings)
+	embeddingColumn := entity.NewColumnFloatVector(c.vectorFieldName(), len(embedding), embeddings)
 	timestampColumn := entity.NewColumnInt64("timestamp", timestamps)
 	ttlSecondsColumn := entity.NewColumnInt64("ttl_seconds", ttlSecondsSlice)
 	expiresAtColumn := entity.NewColumnInt64("expires_at", expiresAtSlice)

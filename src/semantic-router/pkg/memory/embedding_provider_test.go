@@ -128,3 +128,30 @@ func TestGenerateEmbeddingUsesResolvedReducedWidth(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateEmbeddingResolvesZeroDimensionFromContract(t *testing.T) {
+	provider := &reducedWidthMemoryProvider{}
+	vector, err := GenerateEmbedding("native width", EmbeddingConfig{
+		Provider: provider,
+		Model:    EmbeddingModelQwen3,
+	})
+	if err != nil {
+		t.Fatalf("GenerateEmbedding() error = %v", err)
+	}
+	if len(vector) != 768 || provider.options.Dimension != 768 {
+		t.Fatalf("native width = %d, options=%+v; want 768", len(vector), provider.options)
+	}
+}
+
+func TestResolveMemoryEmbeddingDimensionUsesContractBeforeConfiguredFallback(t *testing.T) {
+	provider := &reducedWidthMemoryProvider{}
+
+	got, err := resolveMemoryEmbeddingDimension(EmbeddingConfig{Provider: provider}, 384)
+	if err != nil || got != 768 {
+		t.Fatalf("zero requested dimension = %d, err=%v; want native 768", got, err)
+	}
+
+	if _, err := resolveMemoryEmbeddingDimension(EmbeddingConfig{Provider: provider, Dimension: 384}, 0); err == nil {
+		t.Fatal("undeclared configured dimension was accepted")
+	}
+}

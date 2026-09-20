@@ -68,7 +68,7 @@ func (c *MilvusCache) milvusSearchSimilarVectors(
 		milvusActiveEntryFilterExpr(model),
 		[]string{"response_body", "timestamp", "expires_at"},
 		[]entity.Vector{entity.FloatVector(queryEmbedding)},
-		c.config.Collection.VectorField.Name,
+		c.vectorFieldName(),
 		entity.MetricType(c.config.Collection.VectorField.MetricType),
 		c.config.Search.TopK,
 		searchParam,

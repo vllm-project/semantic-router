@@ -388,6 +388,10 @@ pub struct GemmaEmbeddingModel {
 
     /// Device (CPU/GPU)
     device: Device,
+
+    /// Matryoshka widths declared by the loaded artifact, or the maintained
+    /// checkpoint defaults when the artifact has no width metadata.
+    matryoshka_dimensions: Vec<usize>,
 }
 
 /// Dimensions declared by the maintained EmbeddingGemma checkpoint.
@@ -395,6 +399,25 @@ pub struct GemmaEmbeddingModel {
 /// Keep this next to the implementation that validates and produces these
 /// widths so callers can consume the model contract without another allowlist.
 pub const SUPPORTED_EMBEDDING_DIMENSIONS: &[usize] = &[768, 512, 256, 128];
+
+fn matryoshka_dimensions_from_model_dir(model_path: &str) -> Vec<usize> {
+    let config_path = Path::new(model_path).join("config.json");
+    let dimensions = std::fs::read_to_string(config_path)
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|json| {
+            ["matryoshka_dims", "dimensions"].iter().find_map(|key| {
+                let values = json.get(*key)?.as_array()?;
+                let values = values
+                    .iter()
+                    .filter_map(|value| value.as_u64().map(|value| value as usize))
+                    .filter(|value| *value > 0)
+                    .collect::<Vec<_>>();
+                (!values.is_empty()).then_some(values)
+            })
+        });
+    dimensions.unwrap_or_else(|| SUPPORTED_EMBEDDING_DIMENSIONS.to_vec())
+}
 
 impl GemmaEmbeddingModel {
     /// Load GemmaEmbedding model from pretrained weights
@@ -432,12 +455,17 @@ impl GemmaEmbeddingModel {
 
         // Load Dense Bottleneck (from separate safetensors files in 2_Dense/ and 3_Dense/)
         let dense_bottleneck = BottleneckDenseNet::load_from_path(model_path, &device)?;
+        let mut matryoshka_dimensions = matryoshka_dimensions_from_model_dir(model_path);
+        if !matryoshka_dimensions.contains(&config.hidden_size) {
+            matryoshka_dimensions.insert(0, config.hidden_size);
+        }
 
         Ok(Self {
             gemma_backbone,
             dense_bottleneck,
             config: config.clone(),
             device,
+            matryoshka_dimensions,
         })
     }
 
@@ -453,10 +481,7 @@ impl GemmaEmbeddingModel {
 
     /// Return the model's native width and its declared Matryoshka widths.
     pub fn embedding_dimension_contract(&self) -> (usize, Vec<usize>) {
-        (
-            self.config.hidden_size,
-            SUPPORTED_EMBEDDING_DIMENSIONS.to_vec(),
-        )
+        (self.config.hidden_size, self.matryoshka_dimensions.clone())
     }
 
     /// Get access to Gemma3 Transformer backbone (for testing)
@@ -584,10 +609,10 @@ impl GemmaEmbeddingModel {
         embedding_dim: usize,
     ) -> UnifiedResult<Tensor> {
         // Validate embedding dimension
-        if !SUPPORTED_EMBEDDING_DIMENSIONS.contains(&embedding_dim) {
+        if !self.matryoshka_dimensions.contains(&embedding_dim) {
             return Err(UnifiedError::Validation {
                 field: "embedding_dim".to_string(),
-                expected: "768, 512, 256, or 128".to_string(),
+                expected: format!("{:?}", self.matryoshka_dimensions),
                 actual: embedding_dim.to_string(),
                 context: Some("Matryoshka embedding dimension".to_string()),
             });
@@ -598,7 +623,7 @@ impl GemmaEmbeddingModel {
         let full_embeddings = self.embedding_forward(input_ids, attention_mask)?;
 
         // If target dimension is 768, return full embeddings (already L2 normalized)
-        if embedding_dim == 768 {
+        if embedding_dim == self.config.hidden_size {
             return Ok(full_embeddings);
         }
 

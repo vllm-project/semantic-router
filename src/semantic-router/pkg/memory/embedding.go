@@ -45,6 +45,13 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 		return generateDeterministicEmbedding(text, cfg), nil
 	}
 	modelName := strings.ToLower(strings.TrimSpace(string(cfg.Model)))
+	if modelName != "bert" && modelName != "" {
+		if dimension, supported, err := resolvePreparedEmbeddingDimension(cfg.Provider, cfg.Dimension); err != nil {
+			return nil, err
+		} else if supported {
+			cfg.Dimension = dimension
+		}
+	}
 	options := embedding.Options{}
 	switch modelName {
 	case "qwen3", "gemma":

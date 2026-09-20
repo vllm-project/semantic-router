@@ -26,6 +26,7 @@ func NewCacheBackend(config CacheConfig) (LegacyCacheBackend, error) {
 
 func hybridCacheOptionsFromConfig(config CacheConfig) HybridCacheOptions {
 	return HybridCacheOptions{
+		ExactOnly:           config.ExactOnly,
 		Enabled:             config.Enabled,
 		SimilarityThreshold: config.SimilarityThreshold,
 		TTLSeconds:          config.TTLSeconds,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -63,19 +64,27 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 		return nil, fmt.Errorf("valkey config is required")
 	}
 
-	cfg := options.Config
-	if cfg.EmbeddingModel == "" {
-		cfg = DefaultMemoryConfig()
-	}
+	cfg := withMemoryConfigDefaults(options.Config)
 
 	var embeddingCfg EmbeddingConfig
 	if options.EmbeddingConfig != nil {
 		embeddingCfg = *options.EmbeddingConfig
 	} else {
-		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
+		embeddingCfg = EmbeddingConfig{
+			Model: EmbeddingModelType(strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel))),
+		}
+		if embeddingCfg.Model == "" {
+			embeddingCfg.Model = EmbeddingModelBERT
+		}
 	}
 
 	vc := options.ValkeyConfig
+	effectiveDimension, err := resolveMemoryEmbeddingDimension(embeddingCfg, vc.Dimension)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve Valkey memory embedding dimension: %w", err)
+	}
+	embeddingCfg.Dimension = effectiveDimension
+	vc.Dimension = effectiveDimension
 
 	indexName := vc.IndexName
 	if indexName == "" {
@@ -89,10 +98,7 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	if metricType == "" {
 		metricType = "COSINE"
 	}
-	dimension := vc.Dimension
-	if dimension <= 0 {
-		dimension = 384
-	}
+	dimension := effectiveDimension
 
 	store := &ValkeyStore{
 		client:           options.Client,
@@ -142,9 +148,21 @@ func (v *ValkeyStore) initializeSearchIndex(ctx context.Context) error {
 
 // ensureIndex checks if the FT index exists and creates it if not.
 func (v *ValkeyStore) ensureIndex(ctx context.Context) error {
-	_, err := v.client.CustomCommand(ctx, []string{"FT.INFO", v.indexName})
+	info, err := v.client.CustomCommand(ctx, []string{"FT.INFO", v.indexName})
 	if err == nil {
 		logging.Debugf("ValkeyStore: index '%s' already exists", v.indexName)
+		storedDimension, dimensionErr := valkeyIndexVectorDimension(info)
+		if dimensionErr != nil {
+			return fmt.Errorf("failed to inspect Valkey index '%s': %w", v.indexName, dimensionErr)
+		}
+		if storedDimension != v.dimension {
+			return &MemoryVectorDimensionMismatchError{
+				Backend:           "valkey",
+				CollectionName:    v.indexName,
+				StoredDimension:   storedDimension,
+				ExpectedDimension: v.dimension,
+			}
+		}
 		return nil
 	}
 
@@ -189,6 +207,165 @@ func (v *ValkeyStore) ensureIndex(ctx context.Context) error {
 
 	logging.Infof("ValkeyStore: index '%s' created successfully", v.indexName)
 	return nil
+}
+
+// valkeyIndexVectorDimension extracts the DIM value from the nested FT.INFO
+// response. Valkey-Search and Redisearch have returned both flat RESP arrays
+// and map-shaped values across client versions, so the parser intentionally
+// accepts both representations.
+func valkeyIndexVectorDimension(raw any) (int, error) {
+	if dimension, found := findValkeyDimension(raw, "embedding"); found && dimension > 0 {
+		return dimension, nil
+	}
+	return 0, fmt.Errorf("index metadata does not contain a positive vector DIM")
+}
+
+func findValkeyDimension(raw any, vectorFieldName string) (int, bool) {
+	switch value := raw.(type) {
+	case map[string]interface{}:
+		fieldName, fieldType, dimension := "", "", 0
+		for key, nested := range value {
+			switch strings.ToLower(key) {
+			case "identifier", "attribute", "field", "name":
+				fieldName = valkeyMetadataKey(nested)
+			case "type":
+				fieldType = valkeyMetadataKey(nested)
+			case "dim":
+				dimension, _ = parseValkeyDimension(nested)
+			}
+		}
+		if dimension > 0 && (fieldName == "" || strings.EqualFold(fieldName, vectorFieldName)) && strings.EqualFold(fieldType, "VECTOR") {
+			return dimension, true
+		}
+		for _, nested := range value {
+			if dimension, ok := findValkeyDimension(nested, vectorFieldName); ok {
+				return dimension, true
+			}
+		}
+	case map[interface{}]interface{}:
+		fieldName, fieldType, dimension := "", "", 0
+		for key, nested := range value {
+			switch strings.ToLower(valkeyMetadataKey(key)) {
+			case "identifier", "attribute", "field", "name":
+				fieldName = valkeyMetadataKey(nested)
+			case "type":
+				fieldType = valkeyMetadataKey(nested)
+			case "dim":
+				dimension, _ = parseValkeyDimension(nested)
+			}
+		}
+		if dimension > 0 && (fieldName == "" || strings.EqualFold(fieldName, vectorFieldName)) && strings.EqualFold(fieldType, "VECTOR") {
+			return dimension, true
+		}
+		for _, nested := range value {
+			if dimension, ok := findValkeyDimension(nested, vectorFieldName); ok {
+				return dimension, true
+			}
+		}
+	case []interface{}:
+		fieldName, fieldType, dimension := "", "", 0
+		for index, nested := range value {
+			if index%2 == 0 && index+1 < len(value) {
+				switch strings.ToLower(valkeyMetadataKey(nested)) {
+				case "identifier", "attribute", "field", "name":
+					fieldName = valkeyMetadataKey(value[index+1])
+				case "type":
+					fieldType = valkeyMetadataKey(value[index+1])
+				case "dim":
+					dimension, _ = parseValkeyDimension(value[index+1])
+				}
+			}
+		}
+		if dimension > 0 && (fieldName == "" || strings.EqualFold(fieldName, vectorFieldName)) && strings.EqualFold(fieldType, "VECTOR") {
+			return dimension, true
+		}
+		for _, nested := range value {
+			if dimension, ok := findValkeyDimension(nested, vectorFieldName); ok {
+				return dimension, true
+			}
+		}
+	case []string:
+		fieldName, fieldType, dimension := "", "", 0
+		for index, nested := range value {
+			if index%2 == 0 && index+1 < len(value) {
+				switch strings.ToLower(nested) {
+				case "identifier", "attribute", "field", "name":
+					fieldName = value[index+1]
+				case "type":
+					fieldType = value[index+1]
+				case "dim":
+					dimension, _ = parseValkeyDimension(value[index+1])
+				}
+			}
+		}
+		if dimension > 0 && (fieldName == "" || strings.EqualFold(fieldName, vectorFieldName)) && strings.EqualFold(fieldType, "VECTOR") {
+			return dimension, true
+		}
+	}
+	return 0, false
+}
+
+func valkeyMetadataKey(raw any) string {
+	switch value := raw.(type) {
+	case string:
+		return value
+	case []byte:
+		return string(value)
+	default:
+		return fmt.Sprint(value)
+	}
+}
+
+func parseValkeyDimension(raw any) (int, bool) {
+	var dimension int64
+	switch value := raw.(type) {
+	case int:
+		dimension = int64(value)
+	case int8:
+		dimension = int64(value)
+	case int16:
+		dimension = int64(value)
+	case int32:
+		dimension = int64(value)
+	case int64:
+		dimension = value
+	case uint:
+		if uint64(value) > math.MaxInt64 {
+			return 0, false
+		}
+		dimension = int64(value)
+	case uint8:
+		dimension = int64(value)
+	case uint16:
+		dimension = int64(value)
+	case uint32:
+		dimension = int64(value)
+	case uint64:
+		if value > uint64(^uint(0)>>1) {
+			return 0, false
+		}
+		dimension = int64(value)
+	case float64:
+		dimension = int64(value)
+	case string:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		dimension = parsed
+	case []byte:
+		parsed, err := strconv.ParseInt(strings.TrimSpace(string(value)), 10, 64)
+		if err != nil {
+			return 0, false
+		}
+		dimension = parsed
+	default:
+		return 0, false
+	}
+	if dimension <= 0 || dimension > int64(^uint(0)>>1) {
+		return 0, false
+	}
+	return int(dimension), true
 }
 
 // hashKey returns the HASH key for a memory document.

@@ -48,7 +48,7 @@ collection:
 
     # Leave dimension unset to use the loaded model's native dimension.
     # A positive value is authoritative and must be declared by the model's
-    # Matryoshka contract. Existing collections must have the same dimension.
+    # Embedding contract. Existing collections must have the same dimension.
 
     # Metric type for similarity calculation
     metric_type: "IP"  # Inner Product (cosine similarity for normalized vectors)

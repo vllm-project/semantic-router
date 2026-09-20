@@ -36,7 +36,7 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 			`response_body != "" && query != %s`,
 			milvusStringLiteral(exactCacheQueryMarker),
 		),
-		[]string{"request_id", c.config.Collection.VectorField.Name}, // Get IDs and embeddings
+		[]string{"request_id", c.vectorFieldName()}, // Get IDs and embeddings
 		c.searchQueryOptions()...,
 	)
 	if err != nil {

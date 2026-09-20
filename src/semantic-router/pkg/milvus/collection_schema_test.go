@@ -41,6 +41,18 @@ func TestValidateVectorDimension_MatchingDimension(t *testing.T) {
 	}
 }
 
+func TestVectorDimension(t *testing.T) {
+	reader := fakeCollectionSchemaReader{collection: collectionWithVectorDimension(256)}
+
+	got, err := VectorDimension(context.Background(), reader, "cache", "embedding")
+	if err != nil {
+		t.Fatalf("VectorDimension() error = %v", err)
+	}
+	if got != 256 {
+		t.Fatalf("VectorDimension() = %d, want 256", got)
+	}
+}
+
 func TestValidateVectorDimension_Mismatch(t *testing.T) {
 	reader := fakeCollectionSchemaReader{collection: collectionWithVectorDimension(3)}
 

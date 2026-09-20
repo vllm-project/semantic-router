@@ -11,12 +11,14 @@ import (
 
 // HybridCache combines in-memory HNSW index with external Milvus storage
 type HybridCache struct {
-	enabled bool
+	enabled     bool
+	milvusCache *MilvusCache
 }
 
 // HybridCacheOptions contains configuration for the hybrid cache
 type HybridCacheOptions struct {
 	EmbeddingProvider       embedding.Provider
+	ExactOnly               bool
 	Enabled                 bool
 	SimilarityThreshold     float32
 	TTLSeconds              int
@@ -31,8 +33,16 @@ type HybridCacheOptions struct {
 
 // NewHybridCache creates a new hybrid cache instance
 func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
+	milvusCache := &MilvusCache{
+		embeddingProvider: options.EmbeddingProvider,
+		embeddingModel:    normalizeEmbeddingModel(options.EmbeddingModel),
+		exactOnly:         options.ExactOnly,
+		enabled:           options.Enabled,
+		config:            options.Milvus,
+	}
 	return &HybridCache{
-		enabled: options.Enabled,
+		enabled:     options.Enabled,
+		milvusCache: milvusCache,
 	}, nil
 }
 

@@ -43,8 +43,10 @@ index:
     # Name of the vector field
     name: "embedding"
 
-    # Dimension of the embeddings (auto-detected from model at runtime)
-    dimension: 384  # This value is ignored - dimension is auto-detected from the embedding model
+    # Leave dimension unset to use the loaded model's native dimension.
+    # A positive value is authoritative and must be declared by the model's
+    # Embedding contract. Existing Valkey indexes must be recreated when their
+    # vector dimension changes.
 
     # Distance metric for similarity calculation
     # Options: COSINE (cosine similarity), L2 (Euclidean distance), IP (inner product)
@@ -77,4 +79,3 @@ development:
 
   # Create index if it doesn't exist
   auto_create_index: true
-

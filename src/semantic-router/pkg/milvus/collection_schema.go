@@ -46,32 +46,9 @@ func ValidateVectorDimension(
 		return fmt.Errorf("expected vector dimension must be positive: %d", expectedDimension)
 	}
 
-	collection, err := reader.DescribeCollection(ctx, collectionName)
-	if err != nil {
-		return fmt.Errorf("failed to describe collection %s: %w", collectionName, err)
-	}
-	field, err := findVectorField(collection, collectionName, vectorFieldName)
+	storedDimension, err := VectorDimension(ctx, reader, collectionName, vectorFieldName)
 	if err != nil {
 		return err
-	}
-
-	rawDimension, ok := field.TypeParams["dim"]
-	if !ok {
-		return fmt.Errorf(
-			"collection %s vector field %s has no dimension",
-			collectionName,
-			vectorFieldName,
-		)
-	}
-
-	storedDimension, err := strconv.Atoi(rawDimension)
-	if err != nil {
-		return fmt.Errorf(
-			"collection %s vector field %s has invalid dimension %q",
-			collectionName,
-			vectorFieldName,
-			rawDimension,
-		)
 	}
 
 	if storedDimension != expectedDimension {
@@ -83,6 +60,55 @@ func ValidateVectorDimension(
 	}
 
 	return nil
+}
+
+// VectorDimension reads the dimension declared by an existing collection.
+// It is used by exact-only startup, where no embedding model is available to
+// supply a dimension but exact writes still need the collection's sentinel
+// vector width.
+func VectorDimension(
+	ctx context.Context,
+	reader CollectionSchemaReader,
+	collectionName string,
+	vectorFieldName string,
+) (int, error) {
+	if reader == nil {
+		return 0, fmt.Errorf("collection schema reader is required")
+	}
+	collection, err := reader.DescribeCollection(ctx, collectionName)
+	if err != nil {
+		return 0, fmt.Errorf("failed to describe collection %s: %w", collectionName, err)
+	}
+	field, err := findVectorField(collection, collectionName, vectorFieldName)
+	if err != nil {
+		return 0, err
+	}
+	rawDimension, ok := field.TypeParams["dim"]
+	if !ok {
+		return 0, fmt.Errorf(
+			"collection %s vector field %s has no dimension",
+			collectionName,
+			vectorFieldName,
+		)
+	}
+	storedDimension, err := strconv.Atoi(rawDimension)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"collection %s vector field %s has invalid dimension %q",
+			collectionName,
+			vectorFieldName,
+			rawDimension,
+		)
+	}
+	if storedDimension <= 0 {
+		return 0, fmt.Errorf(
+			"collection %s vector field %s has non-positive dimension %d",
+			collectionName,
+			vectorFieldName,
+			storedDimension,
+		)
+	}
+	return storedDimension, nil
 }
 
 func findVectorField(collection *entity.Collection, collectionName, vectorFieldName string) (*entity.Field, error) {

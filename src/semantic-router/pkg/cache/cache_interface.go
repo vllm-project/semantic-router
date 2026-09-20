@@ -200,6 +200,10 @@ type CacheConfig struct {
 	// EmbeddingProvider is prepared by the generation owner and is never serialized.
 	EmbeddingProvider embedding.Provider `yaml:"-" json:"-"`
 
+	// ExactOnly keeps storage initialization independent from the embedding
+	// runtime when every reachable response-cache consumer uses exact mode.
+	ExactOnly bool `yaml:"-" json:"-"`
+
 	// BackendType specifies which cache implementation to use
 	BackendType CacheBackendType `yaml:"backend_type"`
 

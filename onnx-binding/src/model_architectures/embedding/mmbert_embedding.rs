@@ -143,12 +143,14 @@ impl Default for MatryoshkaConfig {
 
 impl MatryoshkaConfig {
     /// Build a config for a specific model directory, reading the early-exit
-    /// layer list from the model's own `onnx/model_config.json`
-    /// (`available_layers`) so the layers are a single source of truth rather
-    /// than a hardcoded list that can drift from the shipped model.
+    /// layer list and Matryoshka dimensions from the model's own
+    /// `onnx/model_config.json` (`available_layers` and `dimensions`) so the
+    /// contract is a single source of truth rather than a hardcoded list that
+    /// can drift from the shipped model.
     ///
-    /// Falls back to the built-in default layers when the manifest is absent
-    /// or does not declare `available_layers`.
+    /// Falls back to the built-in defaults for fields absent from the
+    /// manifest. This keeps older artifacts loadable while ensuring a
+    /// declared field is authoritative.
     pub fn from_model_dir<P: AsRef<Path>>(model_path: P) -> Self {
         let model_dir = model_path.as_ref();
         let manifest_candidates = [
@@ -156,29 +158,34 @@ impl MatryoshkaConfig {
             model_dir.join("model_config.json"),
         ];
 
-        let layers = manifest_candidates
-            .iter()
-            .find(|p| p.exists())
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-            .and_then(|json| {
-                json.get("available_layers")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|l| l.as_u64().map(|n| n as usize))
-                            .collect::<Vec<usize>>()
-                    })
-            })
-            .filter(|layers| !layers.is_empty());
-
-        match layers {
-            Some(layers) => Self {
-                layers,
-                ..Self::default()
-            },
-            None => Self::default(),
+        let mut config = Self::default();
+        let mut layers_loaded = false;
+        let mut dimensions_loaded = false;
+        for path in manifest_candidates {
+            let Some(json) = std::fs::read_to_string(path)
+                .ok()
+                .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+            else {
+                continue;
+            };
+            if !layers_loaded {
+                if let Some(layers) = manifest_array(&json, &["available_layers", "layers"]) {
+                    config.layers = layers;
+                    layers_loaded = true;
+                }
+            }
+            if !dimensions_loaded {
+                if let Some(dimensions) = manifest_array(&json, &["dimensions", "matryoshka_dims"])
+                {
+                    config.dimensions = dimensions;
+                    dimensions_loaded = true;
+                }
+            }
+            if layers_loaded && dimensions_loaded {
+                break;
+            }
         }
+        config
     }
 
     pub fn validate_dimension(&self, dim: usize) -> bool {
@@ -216,6 +223,18 @@ impl MatryoshkaConfig {
     pub fn estimate_speedup(&self, layer: usize) -> f32 {
         22.0 / layer as f32
     }
+}
+
+fn manifest_array(json: &serde_json::Value, keys: &[&str]) -> Option<Vec<usize>> {
+    keys.iter().find_map(|key| {
+        let values = json.get(*key)?.as_array()?;
+        let values = values
+            .iter()
+            .filter_map(|value| value.as_u64().map(|value| value as usize))
+            .filter(|value| *value > 0)
+            .collect::<Vec<_>>();
+        (!values.is_empty()).then_some(values)
+    })
 }
 
 // ============================================================================
@@ -1786,21 +1805,44 @@ mod tests {
 
     #[test]
     fn test_matryoshka_from_model_dir_reads_manifest() {
-        // SSoT: early-exit layers must come from the model's own
-        // onnx/model_config.json (available_layers), NOT a hardcoded list.
+        // SSoT: early-exit layers and dimensions must come from the model's
+        // own onnx/model_config.json, NOT a hardcoded list.
         // The official mmbert-embed-32k-2d-matryoshka ships [6, 11, 16, 22].
         let dir = tempfile::tempdir().unwrap();
         let onnx_dir = dir.path().join("onnx");
         std::fs::create_dir_all(&onnx_dir).unwrap();
         std::fs::write(
             onnx_dir.join("model_config.json"),
-            r#"{"total_layers": 22, "available_layers": [6, 11, 16, 22]}"#,
+            r#"{"total_layers": 22, "available_layers": [6, 11, 16, 22], "dimensions": [768, 256]}"#,
         )
         .unwrap();
 
         let config = MatryoshkaConfig::from_model_dir(dir.path());
 
         assert_eq!(config.layers, vec![6, 11, 16, 22]);
+        assert_eq!(config.dimensions, vec![768, 256]);
+    }
+
+    #[test]
+    fn test_matryoshka_from_model_dir_merges_available_manifest_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("model_config.json"),
+            r#"{"dimensions":[768,256]}"#,
+        )
+        .unwrap();
+        let onnx_dir = dir.path().join("onnx");
+        std::fs::create_dir_all(&onnx_dir).unwrap();
+        std::fs::write(
+            onnx_dir.join("model_config.json"),
+            r#"{"available_layers":[6,11]}"#,
+        )
+        .unwrap();
+
+        let config = MatryoshkaConfig::from_model_dir(dir.path());
+
+        assert_eq!(config.layers, vec![6, 11]);
+        assert_eq!(config.dimensions, vec![768, 256]);
     }
 
     #[test]

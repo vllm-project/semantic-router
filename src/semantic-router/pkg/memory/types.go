@@ -121,11 +121,23 @@ type RetrieveOptions struct {
 func DefaultMemoryConfig() config.MemoryConfig {
 	return config.MemoryConfig{
 		Milvus: config.MemoryMilvusConfig{
-			Dimension: 384, // Safe default, will be overridden by router
+			// Zero lets the prepared embedding contract select the native width.
+			Dimension: 0,
 		},
 		DefaultRetrievalLimit:      5,
 		DefaultSimilarityThreshold: 0.70,
 	}
+}
+
+func withMemoryConfigDefaults(cfg config.MemoryConfig) config.MemoryConfig {
+	defaults := DefaultMemoryConfig()
+	if cfg.DefaultRetrievalLimit <= 0 {
+		cfg.DefaultRetrievalLimit = defaults.DefaultRetrievalLimit
+	}
+	if cfg.DefaultSimilarityThreshold <= 0 {
+		cfg.DefaultSimilarityThreshold = defaults.DefaultSimilarityThreshold
+	}
+	return cfg
 }
 
 // ListOptions configures memory listing (non-semantic, filter-based retrieval)

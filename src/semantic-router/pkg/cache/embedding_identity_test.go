@@ -146,7 +146,7 @@ func (p *cacheIdentityContractProvider) EmbeddingDimensionContract() (embedding.
 	if p.err != nil {
 		return embedding.DimensionContract{}, p.err
 	}
-	return embedding.DimensionContract{NativeDimension: 768, SupportedDimensions: []int{256, 768}}, nil
+	return embedding.DimensionContract{NativeDimension: 768, SupportedDimensions: []int{256, 512, 768}}, nil
 }
 
 func TestCacheIdentityAndNamespacePropagateDimensionErrors(t *testing.T) {

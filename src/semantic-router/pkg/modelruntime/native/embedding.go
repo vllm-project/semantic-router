@@ -187,6 +187,19 @@ type preparedEmbedding struct {
 	dimensionContract *embedding.DimensionContract
 }
 
+// nativeOnlyDimensionContract describes providers whose graph can only emit
+// its native width. OpenVINO has no Matryoshka crop operation, so its loaded
+// width is both the native and the only supported dimension.
+func nativeOnlyDimensionContract(dimension int) *embedding.DimensionContract {
+	if dimension <= 0 {
+		return nil
+	}
+	return &embedding.DimensionContract{
+		NativeDimension:     dimension,
+		SupportedDimensions: []int{dimension},
+	}
+}
+
 // ORT exits own separate graphs. Every advertised graph must execute before
 // publication, while a Candle backbone only needs its selected view warmed.
 func warmEmbeddingModel(engine *embeddingEngine, view embedding.Options, exits []int) (int, error) {

@@ -82,8 +82,8 @@ canonical names.
 
 Milvus response-cache configurations may omit
 `collection.vector_field.dimension` to use the loaded embedding model's native
-dimension. An explicit positive dimension is authoritative and must appear in
-the model-declared Matryoshka dimensions. The router validates an existing
+dimension. An explicit positive dimension is authoritative and must be declared
+by the loaded model's embedding contract. The router validates an existing
 collection against that effective dimension before loading it.
 
 The previous Milvus sample specified `dimension: 384` while describing the
@@ -95,7 +95,7 @@ without generating their embeddings again.
 For an existing 384-dimensional response-cache collection:
 
 1. Choose either an omitted dimension for the model-native width or an
-   explicitly declared Matryoshka width.
+   explicitly declared contract width.
 2. Stop writers to the old collection.
 3. Point the router at a new collection name, manually drop the old cache
    collection, or set `drop_collection_on_startup: true` for one restart.
@@ -105,6 +105,17 @@ For an existing 384-dimensional response-cache collection:
 Dropping the collection deletes cached responses. Do not apply this cache
 migration to an agentic-memory collection; preserve its source records and
 re-embed them into a new collection instead.
+
+### Redis and Valkey dimension migration
+
+Redis and Valkey response-cache configurations may also omit the vector
+dimension to use the loaded model's native width. An explicit positive value
+must be declared by that model's embedding contract. Existing Redis indexes
+and Valkey indexes cannot change vector width in place; create a new index and
+key prefix, or stop writers, remove the old index, and allow it to be rebuilt.
+Cached responses in the old index are not reusable after changing the model or
+dimension and should be allowed to expire or be explicitly removed according
+to the deployment's retention policy.
 
 For local `mmbert` embeddings, including Vela Embedding, changing the model,
 tokenizer, representation size, or inference settings starts a separate cache

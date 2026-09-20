@@ -9,9 +9,7 @@ import (
 
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -46,13 +44,14 @@ type MilvusStore struct {
 //	CollectionName is the name of the Milvus collection
 //	Config is the memory configuration
 //	Enabled controls whether the store is active
-//	EmbeddingConfig is the unified embedding configuration (optional, defaults to mmbert/768)
+//	EmbeddingConfig is the unified embedding configuration. If nil, the model
+//	comes from Config.EmbeddingModel and the loaded contract resolves its width.
 type MilvusStoreOptions struct {
 	Client          client.Client
 	CollectionName  string
 	Config          config.MemoryConfig
 	Enabled         bool
-	EmbeddingConfig *EmbeddingConfig // Optional: if nil, derived from Config.Embedding
+	EmbeddingConfig *EmbeddingConfig // Optional: if nil, derived from Config.EmbeddingModel
 }
 
 // NewMilvusStore creates a new MilvusStore instance
@@ -76,11 +75,7 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 		return nil, fmt.Errorf("collection name is required")
 	}
 
-	// Use default config if not provided
-	cfg := options.Config
-	if cfg.EmbeddingModel == "" {
-		cfg = DefaultMemoryConfig()
-	}
+	cfg := withMemoryConfigDefaults(options.Config)
 
 	// Initialize embedding configuration
 	var embeddingCfg EmbeddingConfig
@@ -136,38 +131,7 @@ func resolveMilvusStoreEmbeddingDimension(
 	embeddingCfg EmbeddingConfig,
 	configuredMilvusDimension int,
 ) (int, error) {
-	if !deterministicEmbeddingsEnabled() {
-		if embeddingCfg.Provider != nil {
-			contractProvider, ok := embeddingCfg.Provider.(embedding.DimensionContractProvider)
-			if !ok {
-				return 0, fmt.Errorf("prepared embedding provider does not expose a dimension contract")
-			}
-			contract, err := contractProvider.EmbeddingDimensionContract()
-			if err != nil {
-				return 0, fmt.Errorf("failed to get embedding dimension contract: %w", err)
-			}
-			return contract.Resolve(embeddingCfg.Dimension)
-		}
-		return candle_binding.ResolveEmbeddingDimension(
-			string(embeddingCfg.Model),
-			embeddingCfg.Dimension,
-		)
-	}
-
-	// Deterministic integration mode intentionally runs without loading a
-	// native model. Preserve its configured vector width instead of querying a
-	// runtime contract that cannot exist in this mode.
-	dimension := embeddingCfg.Dimension
-	if dimension <= 0 {
-		dimension = configuredMilvusDimension
-	}
-	if dimension <= 0 {
-		dimension = deterministicEmbeddingDimension(embeddingCfg)
-	}
-	if dimension <= 0 {
-		return 0, fmt.Errorf("deterministic memory embedding dimension must be positive: %d", dimension)
-	}
-	return dimension, nil
+	return resolveMemoryEmbeddingDimension(embeddingCfg, configuredMilvusDimension)
 }
 
 func (m *MilvusStore) IsEnabled() bool {

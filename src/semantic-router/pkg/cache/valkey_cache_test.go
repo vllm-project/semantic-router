@@ -79,6 +79,23 @@ func TestValkeyCacheGetStats(t *testing.T) {
 	assert.Equal(t, 0.6666666666666666, stats.HitRatio)
 }
 
+func TestValkeyIndexVectorDimension(t *testing.T) {
+	raw := []interface{}{
+		"attributes", []interface{}{
+			[]interface{}{"identifier", "query", "type", "TEXT"},
+			[]interface{}{"identifier", "embedding", "type", "VECTOR", "dim", int64(512)},
+		},
+	}
+
+	got, err := valkeyIndexVectorDimension(raw, "embedding")
+	if err != nil || got != 512 {
+		t.Fatalf("valkey index dimension = %d, err=%v; want 512", got, err)
+	}
+	if _, err := valkeyIndexVectorDimension(raw, "other_embedding"); err == nil {
+		t.Fatal("missing Valkey vector field was accepted")
+	}
+}
+
 func TestValkeyMetricTypeNormalization(t *testing.T) {
 	tests := []struct {
 		name     string

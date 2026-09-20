@@ -31,19 +31,30 @@ func (c *MilvusCache) initializeCollection() error {
 			"collection": c.collectionName,
 			"reason":     "development_mode",
 		})
+		hasCollection = false
 	}
 
 	expectedDimension, err := c.embeddingDimension()
 	if err != nil {
 		return fmt.Errorf("failed to resolve semantic cache embedding dimension: %w", err)
 	}
-	if expectedDimension <= 0 {
+	if c.exactOnly && hasCollection {
+		expectedDimension, err = milvuslifecycle.VectorDimension(
+			ctx,
+			c.client,
+			c.collectionName,
+			c.vectorFieldName(),
+		)
+		if err != nil {
+			return fmt.Errorf("failed to inspect exact-only collection dimension: %w", err)
+		}
+		c.effectiveDimension = expectedDimension
+		c.config.Collection.VectorField.Dimension = expectedDimension
+	}
+	if expectedDimension <= 0 && !c.exactOnly {
 		return fmt.Errorf("invalid semantic cache embedding dimension: %d", expectedDimension)
 	}
-	vectorFieldName := c.config.Collection.VectorField.Name
-	if vectorFieldName == "" {
-		vectorFieldName = "embedding"
-	}
+	vectorFieldName := c.vectorFieldName()
 
 	if err := milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(
 		ctx,
@@ -68,6 +79,9 @@ func (c *MilvusCache) initializeCollection() error {
 			return nil
 		},
 		func(innerCtx context.Context) error {
+			if expectedDimension <= 0 || c.exactOnly {
+				return nil
+			}
 			return milvuslifecycle.ValidateVectorDimension(
 				innerCtx,
 				c.client,
@@ -85,6 +99,13 @@ func (c *MilvusCache) initializeCollection() error {
 	return nil
 }
 
+func (c *MilvusCache) vectorFieldName() string {
+	if c != nil && c.config != nil && c.config.Collection.VectorField.Name != "" {
+		return c.config.Collection.VectorField.Name
+	}
+	return "embedding"
+}
+
 func (c *MilvusCache) embeddingDimension() (int, error) {
 	if c == nil {
 		return 0, fmt.Errorf("milvus cache is nil")
@@ -95,10 +116,11 @@ func (c *MilvusCache) embeddingDimension() (int, error) {
 	if c.config == nil {
 		return 0, fmt.Errorf("milvus cache config is not initialized")
 	}
-	return resolveMilvusCacheEmbeddingDimension(
+	return resolveCacheBackendDimension(
 		c.embeddingProvider,
-		c.embeddingModel,
 		c.config.Collection.VectorField.Dimension,
+		c.embeddingModel,
+		c.exactOnly,
 	)
 }
 
@@ -107,6 +129,10 @@ func (c *MilvusCache) createCollection(ctx context.Context) error {
 	actualDimension, err := c.embeddingDimension()
 	if err != nil {
 		return fmt.Errorf("failed to resolve semantic cache embedding dimension: %w", err)
+	}
+	if actualDimension <= 0 && c.exactOnly {
+		actualDimension = exactCacheSentinelDimension
+		c.effectiveDimension = actualDimension
 	}
 	if actualDimension <= 0 {
 		return fmt.Errorf("invalid semantic cache embedding dimension: %d", actualDimension)
@@ -152,7 +178,7 @@ func (c *MilvusCache) createCollection(ctx context.Context) error {
 				TypeParams: map[string]string{"max_length": "65535"},
 			},
 			{
-				Name:     c.config.Collection.VectorField.Name,
+				Name:     c.vectorFieldName(),
 				DataType: entity.FieldTypeFloatVector,
 				TypeParams: map[string]string{
 					"dim": fmt.Sprintf("%d", actualDimension),
@@ -183,7 +209,7 @@ func (c *MilvusCache) createCollection(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to create HNSW index: %w", err)
 	}
-	if err := c.client.CreateIndex(ctx, c.collectionName, c.config.Collection.VectorField.Name, index, false); err != nil {
+	if err := c.client.CreateIndex(ctx, c.collectionName, c.vectorFieldName(), index, false); err != nil {
 		return err
 	}
 

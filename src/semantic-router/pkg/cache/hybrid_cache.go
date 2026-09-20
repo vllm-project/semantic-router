@@ -81,6 +81,7 @@ type HybridCache struct {
 	maxMemoryEntries    int // Max entries in HNSW index
 	ttlSeconds          int
 	enabled             bool
+	exactOnly           bool
 
 	// Statistics
 	hitCount   int64
@@ -103,6 +104,7 @@ type HybridCache struct {
 // HybridCacheOptions contains configuration for the hybrid cache
 type HybridCacheOptions struct {
 	EmbeddingProvider embedding.Provider
+	ExactOnly         bool
 	// Core settings
 	Enabled             bool
 	SimilarityThreshold float32
@@ -175,6 +177,7 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 		maxMemoryEntries:    options.MaxMemoryEntries,
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             true,
+		exactOnly:           options.ExactOnly,
 	}
 
 	logging.ComponentEvent("cache", "hybrid_cache_initialized", map[string]interface{}{
@@ -189,7 +192,7 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 	// Rebuild HNSW index from Milvus on startup (enabled by default)
 	// This ensures the in-memory index is populated after a restart
 	// Set DisableRebuildOnStartup=true to skip this step (not recommended for production)
-	if !options.DisableRebuildOnStartup {
+	if !options.DisableRebuildOnStartup && !options.ExactOnly {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
@@ -206,7 +209,7 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 		// on the rebuild mechanism being enabled so the DisableRebuildOnStartup
 		// opt-out also suppresses the recurring Milvus re-query.
 		cache.startBackgroundReclaim()
-	} else {
+	} else if !options.ExactOnly {
 		logging.ComponentWarnEvent("cache", "hybrid_cache_rebuild_skipped", map[string]interface{}{
 			"source":      "startup",
 			"reason":      "disabled_on_startup",
@@ -220,6 +223,7 @@ func NewHybridCache(options HybridCacheOptions) (*HybridCache, error) {
 func milvusCacheOptionsFromHybridOptions(options HybridCacheOptions) MilvusCacheOptions {
 	milvusOptions := MilvusCacheOptions{
 		Enabled:             true,
+		ExactOnly:           options.ExactOnly,
 		SimilarityThreshold: options.SimilarityThreshold,
 		TTLSeconds:          options.TTLSeconds,
 		EmbeddingModel:      options.EmbeddingModel,

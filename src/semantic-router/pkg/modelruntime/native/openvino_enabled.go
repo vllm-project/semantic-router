@@ -105,6 +105,7 @@ func (r *Runtime) openvinoEmbedding(ctx context.Context, spec config.ResolvedMod
 	err = resource.Use(ctx, func(value io.Closer) error {
 		dimension, warmErr := warmEmbeddingModel(value.(*embeddingEngine), view, nil)
 		prepared.capability.Embedding = &binding.EmbeddingCapability{Dimension: dimension, Pooling: "mean_or_exported", Normalization: "none", Modalities: []string{"text"}}
+		prepared.dimensionContract = nativeOnlyDimensionContract(dimension)
 		return warmErr
 	})
 	if err != nil {

@@ -72,19 +72,6 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 		if cfg.Memory.Backend == "qdrant" && cfg.Memory.Qdrant != nil {
 			dimension = cfg.Memory.Qdrant.Dimension
 		}
-		// Existing memory paths use complete output for BERT/Qwen/Gemma.
-		switch model {
-		case "mmbert":
-			if dimension <= 0 {
-				dimension = 256
-			}
-		case "multimodal":
-			if dimension <= 0 {
-				dimension = 384
-			}
-		default:
-			dimension = 0
-		}
 		result = append(result, EmbeddingRequirement{Model: model, Consumer: "memory", Dimension: dimension, SharedService: true})
 	}
 	if cfg.VectorStore != nil && cfg.VectorStore.Enabled {

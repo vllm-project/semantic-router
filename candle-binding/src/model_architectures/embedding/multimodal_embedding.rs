@@ -121,10 +121,14 @@ impl MultiModalEmbeddingConfig {
         if let Some(d) = v["text_num_layers"].as_u64() {
             cfg.text_num_layers = d as usize;
         }
-        if let Some(dims) = v["matryoshka_dims"].as_array() {
+        if let Some(dims) = ["matryoshka_dims", "dimensions"]
+            .iter()
+            .find_map(|key| v.get(*key).and_then(|value| value.as_array()))
+        {
             cfg.matryoshka_dims = dims
                 .iter()
                 .filter_map(|d| d.as_u64().map(|x| x as usize))
+                .filter(|dimension| *dimension > 0)
                 .collect();
         }
         Ok(cfg)
@@ -1557,6 +1561,20 @@ mod tests {
         assert_eq!(config.image_hidden_size, 768);
         assert_eq!(config.audio_hidden_size, 384);
         assert_eq!(config.num_image_patches(), 1024); // (512/16)^2
+    }
+
+    #[test]
+    fn test_pretrained_config_reads_declared_dimensions_alias() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("config.json"),
+            r#"{"embedding_dim":384,"dimensions":[384,192]}"#,
+        )
+        .unwrap();
+
+        let config = MultiModalEmbeddingConfig::from_pretrained(dir.path()).unwrap();
+
+        assert_eq!(config.matryoshka_dims, vec![384, 192]);
     }
 
     #[test]

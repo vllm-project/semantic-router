@@ -119,7 +119,10 @@ func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerS
 	if identity.Fingerprint == "" {
 		return cfg, "", fmt.Errorf("embedding content identity is empty")
 	}
-	logical = append([]string{string(backend), identity.Fingerprint}, logical...)
+	// Keep the resolved width in the physical namespace key even when a custom
+	// identity provider returns the same fingerprint for multiple views. A
+	// vector collection/index cannot safely be reused across widths.
+	logical = append([]string{string(backend), identity.Fingerprint, fmt.Sprint(settings.Dimension)}, logical...)
 	encoded, err := json.Marshal(logical)
 	if err != nil {
 		return cfg, "", err
