@@ -35,6 +35,7 @@ const (
 	DecisionPluginRequestParams      = "request_params"
 	DecisionPluginToolSelection      = "tool_selection"
 	DecisionPluginContextCompression = "context_compression"
+	DecisionPluginContextDedup       = "context_dedup"
 	DecisionPluginShadowDispatch     = "shadow_dispatch"
 )
 
@@ -115,6 +116,7 @@ var decisionPluginRegistry = []decisionPluginRegistryEntry{
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginRequestParams, DisplayName: "Request Parameters", Description: "Constrain or remove provider request parameters."}, NewPayload: func() interface{} { return &RequestParamsPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginResponseJailbreak, DisplayName: "Response Jailbreak", Description: "Screen generated responses for jailbreak-like output."}, NewPayload: func() interface{} { return &ResponseJailbreakPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginContextCompression, DisplayName: "Context Compression", Description: "Compress selected context before provider dispatch."}, NewPayload: func() interface{} { return &ContextCompressionPluginConfig{} }},
+	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginContextDedup, DisplayName: "Context Dedup", Description: "Remove adjacent repeated history turns before provider dispatch."}, NewPayload: func() interface{} { return &ContextDedupPluginConfig{} }},
 	{Catalog: DecisionPluginCatalogEntry{Type: DecisionPluginShadowDispatch, DisplayName: "Shadow Dispatch", Description: "Send a bounded asynchronous copy to a secondary model."}, NewPayload: func() interface{} { return &ShadowDispatchPluginConfig{} }},
 }
 

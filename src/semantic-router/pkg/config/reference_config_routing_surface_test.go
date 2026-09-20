@@ -96,6 +96,10 @@ func assertReferenceCorePluginCoverage(t testingT, pluginsByType map[string][]ma
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "scoring", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionScoringConfig{}), "plugins(context_compression).configuration.scoring")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "recovery", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionRecoveryConfig{}), "plugins(context_compression).configuration.recovery")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, compressionConfigs, "request_controls", "plugins(context_compression).configuration"), reflect.TypeOf(ContextCompressionRequestControlsConfig{}), "plugins(context_compression).configuration.request_controls")
+	dedupPlugins := pluginsByType["context_dedup"]
+	assertPluginConfigCoverage(t, dedupPlugins, reflect.TypeOf(ContextDedupPluginConfig{}), "context_dedup")
+	dedupConfigs := collectChildMapsFromSlice(t, dedupPlugins, "configuration", "plugins(context_dedup)")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, dedupConfigs, "limits", "plugins(context_dedup).configuration"), reflect.TypeOf(ContextDedupLimitsConfig{}), "plugins(context_dedup).configuration.limits")
 	assertPluginConfigCoverage(t, pluginsByType["memory"], reflect.TypeOf(MemoryPluginConfig{}), "memory")
 	assertPluginConfigCoverage(t, pluginsByType["fast_response"], reflect.TypeOf(FastResponsePluginConfig{}), "fast_response")
 	assertPluginConfigCoverage(t, pluginsByType["system_prompt"], reflect.TypeOf(SystemPromptPluginConfig{}), "system_prompt")

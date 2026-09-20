@@ -18,6 +18,17 @@ describe('capability plugin field schemas', () => {
     expect(fields?.find((field) => field.key === 'targets')?.type).toBe('object')
   })
 
+  it('exposes the context dedup contract', () => {
+    const fields = resolveCapabilityPluginFieldSchema('context_dedup')
+    expect(fields?.map((field) => field.key)).toEqual([
+      'enabled',
+      'normalization',
+      'failure_mode',
+      'limits',
+    ])
+    expect(fields?.find((field) => field.key === 'limits')?.type).toBe('object')
+  })
+
   it('exposes the shadow dispatch bounds', () => {
     const fields = resolveCapabilityPluginFieldSchema('shadow_dispatch')
     expect(fields?.map((field) => field.key)).toEqual([

@@ -232,6 +232,33 @@ export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[
           options: ['fail_open', 'fail_closed'],
         },
       ]
+    case 'context_dedup':
+      return [
+        { key: 'enabled', label: 'Enabled', type: 'boolean' },
+        {
+          key: 'normalization',
+          label: 'Normalization',
+          type: 'select',
+          options: ['exact', 'whitespace'],
+        },
+        {
+          key: 'failure_mode',
+          label: 'Failure Mode',
+          type: 'select',
+          options: ['fail_open', 'fail_closed'],
+        },
+        {
+          key: 'limits',
+          label: 'Planning Limits',
+          type: 'object',
+          fields: [
+            { key: 'max_history_turns', label: 'Maximum History Turns', type: 'number' },
+            { key: 'max_history_bytes', label: 'Maximum History Bytes', type: 'number' },
+            { key: 'max_segment_turns', label: 'Maximum Segment Turns', type: 'number' },
+            { key: 'timeout_ms', label: 'Timeout (ms)', type: 'number' },
+          ],
+        },
+      ]
     default:
       return null
   }
