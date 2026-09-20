@@ -153,8 +153,11 @@ func TestSnowflakeCortexProviderContractFixture(t *testing.T) {
 	if provider.Presentation.Monogram != "SF" {
 		t.Fatalf("unexpected presentation: %+v", provider.Presentation)
 	}
-	if provider.Conformance.Status != "unverified" {
-		t.Fatalf("conformance = %+v, want unverified until wire-level conformance exists", provider.Conformance)
+	// The failure envelope has an observed fixture and a vendor decode; the
+	// accepted envelope of both declared protocols is still uncovered, so this
+	// must not claim live_verified.
+	if provider.Conformance.Status != "fixture_verified" {
+		t.Fatalf("conformance = %+v, want fixture_verified until accepted-wire conformance exists", provider.Conformance)
 	}
 }
 

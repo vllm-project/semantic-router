@@ -31,8 +31,11 @@ def call(messages, role="subject", extra_body=None):
             "Content-Type": "application/json",
         },
     )
-    # No HTTP retry. The parent enforces deadlines/cancellation and journals calls.
-    with urllib.request.urlopen(request, timeout=900) as response:
+    # The bridge replies only after inference finishes. Its parent owns the
+    # frozen call/case deadlines and cancellation; an independent socket timeout
+    # would interrupt healthy long generations without backend progress here.
+    # No HTTP retry: the parent journals the single dispatch and its outcome.
+    with urllib.request.urlopen(request, timeout=None) as response:
         return json.load(response)
 
 
