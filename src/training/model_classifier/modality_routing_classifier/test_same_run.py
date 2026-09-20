@@ -219,11 +219,14 @@ class CandleAdapterTests(unittest.TestCase):
         try:
             os.environ["CANDLE_CLASSIFY_HELPER"] = helper_path
             classify = load_candle_adapter("stub-model", 256)
-            result = classify("hello world test")
-            self.assertEqual(result["output"], "AR")
-            self.assertEqual(result["seq_len"], 3)
-            self.assertEqual(result["tokenize_ns"], 1_000_000)
-            self.assertGreater(result["e2e_ns"], 0)
+            try:
+                result = classify("hello world test")
+                self.assertEqual(result["output"], "AR")
+                self.assertEqual(result["seq_len"], 3)
+                self.assertEqual(result["tokenize_ns"], 1_000_000)
+                self.assertGreater(result["e2e_ns"], 0)
+            finally:
+                classify.close()
         finally:
             self._clear_helper_env()
             os.unlink(helper_path)
@@ -244,9 +247,12 @@ class CandleAdapterTests(unittest.TestCase):
         try:
             os.environ["CANDLE_CLASSIFY_HELPER"] = helper_path
             classify = load_candle_adapter("bad-model", 256)
-            with self.assertRaises(RuntimeError) as ctx:
-                classify("some text")
-            self.assertIn("model not found", str(ctx.exception))
+            try:
+                with self.assertRaises(RuntimeError) as ctx:
+                    classify("some text")
+                self.assertIn("model not found", str(ctx.exception))
+            finally:
+                classify.close()
         finally:
             self._clear_helper_env()
             os.unlink(helper_path)

@@ -234,10 +234,16 @@ def load_candle_adapter(model_id: str, max_length: int):
             proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
             proc.kill()
+        for stream in (proc.stdin, proc.stdout, proc.stderr):
+            try:
+                if stream and not stream.closed:
+                    stream.close()
+            except Exception:
+                pass
 
     atexit.register(_terminate_helper)
 
-    def classify(text: str) -> ClassifyResult:
+    def classify(text: str) -> ClassifyResult:  # type: ignore[return]
         request = _json.dumps({"text": text, "max_length": max_length}) + "\n"
         t_submit = time.perf_counter_ns()
         try:
@@ -263,6 +269,7 @@ def load_candle_adapter(model_id: str, max_length: int):
             "seq_len": int(data.get("seq_len", 0)),
         }
 
+    classify.close = _terminate_helper  # type: ignore[attr-defined]
     return classify
 
 
