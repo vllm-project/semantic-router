@@ -60,7 +60,7 @@ func preparePrototypeEvaluation(root, manifestPath, protocolPath string, rules [
 	}
 	result := &prototypeEvaluation{root: root, assets: map[string][]prototypeAsset{}, assignment: protocol.Split.Assignment, groups: protocol.Split.Group, hashes: protocol.ContentSHA256, classifiers: map[string]*classification.EmbeddingClassifier{}, rules: rules, options: options, provider: &calibrationEmbeddingCache{Provider: provider, values: map[string][]float32{}}, ManifestSHA: fileSHA(manifestPath), ProtocolSHA: fileSHA(protocolPath)}
 	for source, assignment := range result.assignment {
-		real, _, err := resolveInput(root, source)
+		real, err := resolvePrototypeSource(root, source)
 		if err != nil {
 			return nil, err
 		}
@@ -76,7 +76,7 @@ func preparePrototypeEvaluation(root, manifestPath, protocolPath string, rules [
 		if result.assignment[asset.Source] != "development" || result.groups[asset.Source] != asset.SourceGroup {
 			return nil, fmt.Errorf("prototype %q is not in its declared development group", asset.Source)
 		}
-		real, _, err := resolveInput(root, asset.Source)
+		real, err := resolvePrototypeSource(root, asset.Source)
 		if err != nil {
 			return nil, err
 		}
@@ -104,6 +104,23 @@ func preparePrototypeEvaluation(root, manifestPath, protocolPath string, rules [
 		}
 	}
 	return result, nil
+}
+
+// Frozen sources are canonical repository-relative paths, independently of the
+// command's working directory. CLI flag paths instead retain resolveInput's
+// working-directory semantics.
+func resolvePrototypeSource(root, source string) (string, error) {
+	if err := checkCanonical(source); err != nil {
+		return "", err
+	}
+	real, relative, err := resolveInput(root, filepath.Join(root, filepath.FromSlash(source)))
+	if err != nil {
+		return "", err
+	}
+	if relative != source {
+		return "", fmt.Errorf("prototype source %q resolves through a symlink (%s)", source, real)
+	}
+	return real, nil
 }
 
 func (p *prototypeEvaluation) classifier(path string) (*classification.EmbeddingClassifier, error) {
