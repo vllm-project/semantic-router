@@ -235,7 +235,7 @@ func (c *Classifier) IsJailbreakModelReady() bool {
 	if c.Config == nil {
 		return false
 	}
-	return c.Config.PromptGuard.Backend != nil || c.Config.PromptGuard.Protocol != ""
+	return c.Config.PromptGuard.Backend != nil
 }
 
 // newClassifierWithOptions creates a new classifier with the given options

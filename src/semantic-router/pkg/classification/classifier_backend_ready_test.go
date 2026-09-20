@@ -35,6 +35,20 @@ func TestJailbreakBackendAssemblyMarksModelReady(t *testing.T) {
 	}
 }
 
+// A classifier with an unset Protocol field and no remote Backend or local
+// model lifecycle must not report ready; the readiness check then keeps
+// returning 503 instead of trusting an uninitialized detector.
+func TestJailbreakModelNotReadyWithoutBackendOrLocalInit(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.PromptGuard.Enabled = true
+
+	c := &Classifier{Config: cfg}
+
+	if c.IsJailbreakModelReady() {
+		t.Fatal("jailbreak detector with no remote backend and no local lifecycle must not report ready")
+	}
+}
+
 // Remote (Backend) PII classifiers have no local model lifecycle to execute
 // during initializePIIClassifier; they must still report ready.
 func TestPIIBackendAssemblyMarksModelReady(t *testing.T) {

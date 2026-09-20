@@ -66,15 +66,6 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		c.jailbreakModelReady = true
 		return nil
 	}
-	if c.Config.PromptGuard.Protocol != "" {
-		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-			"mode":      c.Config.PromptGuard.Protocol,
-			"model_ref": externalCfg.ModelName,
-		})
-		c.jailbreakModelReady = true
-		return nil
-	}
 
 	if c.jailbreakInitializer == nil {
 		return fmt.Errorf("jailbreak initializer is required for Candle-based inference")
