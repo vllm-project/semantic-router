@@ -7,10 +7,22 @@ import hashlib
 import io
 import json
 import subprocess
+import tempfile
 from collections import defaultdict
 from pathlib import Path
 
 from .contracts import VERSION, canonical, digest
+from .dataset_io import (
+    MAX_ROW_BYTES,
+    MAX_ROWS,
+    MAX_SCAN_BYTES,
+    DatasetSizeLimitError,
+    publish_dataset,
+    verified_lines,
+)
+from .dataset_io import (
+    identity as file_identity,
+)
 from .source_records import normalize_records
 
 # (repository, immutable revision, source files). No moving branch is used.
@@ -328,72 +340,103 @@ def prepare_dataset(
 
 
 def _write_dataset(root, cases, profile, seed, sources, custom=False):
-    content = "".join(canonical(c) + "\n" for c in cases).encode()
-    sha = hashlib.sha256(content).hexdigest()
-    identity = digest(
-        {
-            "cases_sha256": sha,
-            "sources": sources,
+    """Stream canonical rows to a private stage, then publish immutable artifacts."""
+    root = Path(root).expanduser().resolve()
+    datasets = root / "datasets"
+    datasets.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if datasets.is_symlink() or datasets.resolve() != datasets:
+        raise ValueError("Prepared datasets must remain inside their store")
+    with tempfile.TemporaryDirectory(prefix=".dataset-", dir=root) as temporary:
+        staged = Path(temporary) / "cases.jsonl"
+        checksum, count, total = hashlib.sha256(), 0, 0
+        with staged.open("xb") as output:
+            for case in cases:
+                content = (canonical(case) + "\n").encode()
+                if len(content) > MAX_ROW_BYTES:
+                    raise DatasetSizeLimitError(staged, len(content), MAX_ROW_BYTES)
+                count += 1
+                total += len(content)
+                if count > MAX_ROWS or total > MAX_SCAN_BYTES:
+                    raise ValueError(
+                        "Prepared dataset exceeds the supported size limit"
+                    )
+                output.write(content)
+                checksum.update(content)
+        sha = checksum.hexdigest()
+        identity = digest(
+            {
+                "cases_sha256": sha,
+                "sources": sources,
+                "profile": profile,
+                "seed": seed,
+                "custom_subset": custom,
+                "selection": "stratified-hash-v1",
+            }
+        )
+        destination = datasets / identity
+        destination.mkdir(exist_ok=True, mode=0o700)
+        if destination.is_symlink() or destination.resolve() != destination:
+            raise ValueError("Prepared dataset must not be a symlink")
+        data_path = destination / "cases.jsonl"
+        manifest = {
+            "version": VERSION,
+            "id": identity,
+            "name": "+".join(sorted(sources)) + "/" + profile,
+            "path": str(data_path),
+            "sha256": sha,
+            "case_count": count,
             "profile": profile,
-            "seed": seed,
             "custom_subset": custom,
+            "benchmarks": sorted(sources),
+            "sources": sources,
+            "seed": seed,
             "selection": "stratified-hash-v1",
+            "split": "holdout" if profile == "standard" else "dev",
         }
-    )
-    destination = root / "datasets" / identity
-    destination.mkdir(parents=True, exist_ok=True, mode=0o700)
-    data_path = destination / "cases.jsonl"
-    if data_path.is_symlink():
-        raise ValueError("Prepared dataset must not be a symlink")
-    if data_path.exists() and data_path.read_bytes() != content:
-        raise ValueError("Existing immutable dataset content changed")
-    if not data_path.exists():
-        with data_path.open("xb") as handle:
-            handle.write(content)
-    manifest = {
-        "version": VERSION,
-        "id": identity,
-        "name": "+".join(sorted(sources)) + "/" + profile,
-        "path": str(data_path),
-        "sha256": sha,
-        "case_count": len(cases),
-        "profile": profile,
-        "custom_subset": custom,
-        "benchmarks": sorted(sources),
-        "sources": sources,
-        "seed": seed,
-        "selection": "stratified-hash-v1",
-        "split": "holdout" if profile == "standard" else "dev",
-    }
-    manifest_path = destination / "manifest.json"
-    rendered = json.dumps(manifest, indent=2) + "\n"
-    if manifest_path.is_symlink():
-        raise ValueError("Prepared manifest must not be a symlink")
-    if manifest_path.exists() and manifest_path.read_text() != rendered:
-        raise ValueError("Existing immutable dataset manifest changed")
-    if not manifest_path.exists():
-        with manifest_path.open("x") as handle:
-            handle.write(rendered)
-    data_path.chmod(0o600)
-    (destination / "manifest.json").chmod(0o600)
-    return manifest
+        manifest_stage = Path(temporary) / "manifest.json"
+        rendered = (json.dumps(manifest, indent=2) + "\n").encode()
+        manifest_stage.write_bytes(rendered)
+        publish_dataset(destination, staged, sha, manifest_stage, rendered)
+        return manifest
 
 
 def combine_datasets(manifests, store):
     if not manifests or len({(m["profile"], m["seed"]) for m in manifests}) != 1:
         raise ValueError("Combining datasets requires one profile and seed")
-    cases, sources = [], {}
-    for m in manifests:
-        p = Path(m["path"])
-        if hashlib.sha256(p.read_bytes()).hexdigest() != m["sha256"]:
-            raise ValueError("Prepared dataset digest changed")
-        if set(sources) & set(m["sources"]):
+    sources, total = {}, 0
+    for manifest in manifests:
+        if set(sources) & set(manifest["sources"]):
             raise ValueError("Duplicate benchmark in dataset bundle")
-        cases.extend(read_records(p))
-        sources.update(m["sources"])
+        sources.update(manifest["sources"])
+
+    def cases():
+        nonlocal total
+        ids = set()
+        for manifest in manifests:
+            path, count = Path(manifest["path"]), 0
+            source_size = file_identity(path)[2]
+            for line in verified_lines(
+                path, manifest["sha256"], maximum=MAX_SCAN_BYTES - total
+            ):
+                case = json.loads(line)
+                if (
+                    not isinstance(case, dict)
+                    or not isinstance(case.get("id"), str)
+                    or case["id"] in ids
+                ):
+                    raise ValueError(
+                        "Combined dataset contains invalid or duplicate case IDs"
+                    )
+                ids.add(case["id"])
+                count += 1
+                yield case
+            total += source_size
+            if count != manifest["case_count"]:
+                raise ValueError("Prepared dataset case count does not match")
+
     return _write_dataset(
         Path(store).expanduser().resolve(),
-        cases,
+        cases(),
         manifests[0]["profile"],
         manifests[0]["seed"],
         sources,

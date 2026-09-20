@@ -158,6 +158,8 @@ export interface TargetMetrics {
   correct?: number
   accuracy?: number | null
   cost_usd?: number | null
+  evaluation_cost_usd?: number | null
+  total_spend_usd?: number | null
   cache_neutral_cost_usd?: number | null
   cache_neutral_cost_basis?: string
   tokens?: number | null | Record<string, number | null>
@@ -339,9 +341,15 @@ export interface Comparison {
     quality_delta_ci95_method?: string
     quality_delta_ci95_qualification?: string
     quality_delta_bootstrap_ci95?: [number, number]
-    cost_saving_percent: number | null
-    baseline_cost_usd: number | null
-    candidate_cost_usd: number | null
+    subject_cost_saving_percent: number | null
+    baseline_subject_cost_usd: number | null
+    candidate_subject_cost_usd: number | null
+    total_cost_saving_percent: number | null
+    baseline_total_cost_usd: number | null
+    candidate_total_cost_usd: number | null
+    baseline_evaluation_cost_usd: number | null
+    candidate_evaluation_cost_usd: number | null
+    total_cost_comparison_reason?: string | null
     cache_neutral_baseline_cost_usd?: number | null
     cache_neutral_candidate_cost_usd?: number | null
     cache_neutral_cost_saving_percent?: number | null
