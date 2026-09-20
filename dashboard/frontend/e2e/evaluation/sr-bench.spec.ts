@@ -1229,7 +1229,7 @@ test('compares complete runs using paired results', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Comparison evidence' })).toBeVisible()
   await expect(
     page.getByText(
-      'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
+      'Total cost includes model answers and evaluation calls, priced from recorded usage at frozen rates. These are estimates, not invoices or hardware costs.',
       { exact: true },
     ),
   ).toBeVisible()
