@@ -173,7 +173,7 @@ export default function ConfigPageMixtureDialog({
 
   return (
     <div
-      className={styles.backdrop}
+      className={styles.backdrop} role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && !saving) onClose()
       }}
