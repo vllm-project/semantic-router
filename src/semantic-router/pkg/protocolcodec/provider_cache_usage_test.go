@@ -89,26 +89,44 @@ func TestProviderPromptCacheUsagePreservesBufferedFieldPresence(t *testing.T) {
 
 func TestProviderPromptCacheUsageRejectsKnownSubtotalAboveTotal(t *testing.T) {
 	tests := []struct {
-		name   string
-		format llmprotocol.WireFormat
-		body   []byte
+		name      string
+		format    llmprotocol.WireFormat
+		body      []byte
+		streaming bool
 	}{
 		{
-			name:   "chat",
+			name:   "chat buffered",
 			format: llmprotocol.OpenAIChatV1,
 			body:   chatCacheUsageBody(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":5},"completion_tokens":2,"total_tokens":6}`),
 		},
 		{
-			name:   "responses",
+			name:      "chat streaming",
+			format:    llmprotocol.OpenAIChatV1,
+			body:      chatCacheUsageStream(`{"prompt_tokens":4,"prompt_tokens_details":{"cached_tokens":5},"completion_tokens":2,"total_tokens":6}`),
+			streaming: true,
+		},
+		{
+			name:   "responses buffered",
 			format: llmprotocol.OpenAIResponsesV1,
 			body:   responsesCacheUsageBody(`{"input_tokens":4,"input_tokens_details":{"cached_tokens":5},"output_tokens":2,"total_tokens":6}`),
+		},
+		{
+			name:      "responses streaming",
+			format:    llmprotocol.OpenAIResponsesV1,
+			body:      responsesCacheUsageStream(`{"input_tokens":4,"input_tokens_details":{"cached_tokens":5},"output_tokens":2,"total_tokens":6}`),
+			streaming: true,
 		},
 	}
 
 	engine := NewBuiltinEngine()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, _, _, err := engine.DecodeResponse(test.format, test.body)
+			var err error
+			if test.streaming {
+				_, _, err = engine.DecodeResponseStream(test.format, test.body, llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"})
+			} else {
+				_, _, _, err = engine.DecodeResponse(test.format, test.body)
+			}
 			assertProtocolError(t, err, llmprotocol.ErrorUpstreamUnavailable, "usage_total_mismatch")
 		})
 	}
