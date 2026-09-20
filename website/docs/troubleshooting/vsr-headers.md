@@ -67,6 +67,8 @@ Router Learning observability, require `x-vsr-debug`.
 | `x-vsr-applied-unknown-policy` | default | Decisions whose unknown result was resolved by `rules.on_unknown`, as `decision=policy` pairs. Also set on the `fail_request` 503. | `guarded=no_match` |
 | `x-vsr-selected-algorithm` | default | Model-selection algorithm used after the decision matched. | `static` |
 | `x-vsr-selected-model` | default | Logical model alias selected by the router. | `reasoning-model` |
+| `x-vsr-effective-input-tokens` | default | Actual selected-backend rendered input tokens for the finalized automatic-output dispatch, including its chat template. | `512` |
+| `x-vsr-effective-max-output-tokens` | default | Resolved output token limit sent in that automatic-output dispatch, including reasoning. This is a budget, not consumed tokens. | `261632` |
 | `x-vsr-routing-latency-ms` | default | Time the router spent choosing the model, in milliseconds with sub-millisecond precision. | `0.412` |
 | `x-vsr-selected-category` | debug | Domain/category classifier result when domain routing runs. | `math` |
 | `x-vsr-selected-reasoning` | debug | Reasoning mode selected for the request. | `on` |
@@ -83,6 +85,13 @@ phrases such as `tool/protocol pinned`, `model switched`, or `learning bypassed`
 Fresh conversation or session-start diagnostics are usually useful only in debug
 views, where they should be shown as neutral status text rather than a primary
 route state.
+
+The two effective-token headers are emitted together on successful upstream
+responses only when automatic output was resolved. They are available in the
+initial headers for both streaming and buffered responses. Explicit output
+limits, cache hits, skipped processing, and Looper responses omit them. Their
+values come from the final dispatch after request changes and backend rendering;
+they are not estimates or the model's configured maximum context length.
 
 ## Matched signal headers
 

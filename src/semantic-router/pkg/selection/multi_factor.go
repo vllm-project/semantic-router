@@ -190,7 +190,7 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		return s.applyNoCandidatePolicy(selCtx, "quality_evidence", qualityExcluded)
 	}
 	mins, maxs := signalExtrema(signals)
-	bestIdx, allScores, bestScore, secondBest, survivors := s.chooseCandidate(signals, mins, maxs)
+	bestIdx, allScores, bestScore, secondBest, survivors, trace := s.chooseCandidate(signals, mins, maxs)
 
 	chosen := kept[bestIdx]
 	confidence := 0.5
@@ -233,6 +233,7 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		Reasoning:         reasoning,
 		AllScores:         allScores.Diagnostics(),
 		CandidateScores:   allScores,
+		MultiFactor:       trace,
 	}, nil
 }
 
@@ -255,16 +256,17 @@ func (s *MultiFactorSelector) eligibleModels(kept []config.ModelRef, survivors [
 }
 
 type signalSet struct {
-	candidate config.ModelRef
-	model     string
-	quality   float64
-	hasQ      bool
-	evidence  *modelcatalog.IndexResult
-	latency   float64
-	hasLat    bool
-	cost      float64
-	hasCost   bool
-	load      float64
+	candidate     config.ModelRef
+	model         string
+	quality       float64
+	hasQ          bool
+	evidence      *modelcatalog.IndexResult
+	latency       float64
+	hasLat        bool
+	latencyMetric string
+	cost          float64
+	hasCost       bool
+	load          float64
 }
 
 func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef, selCtx *SelectionContext) []signalSet {
@@ -283,9 +285,10 @@ func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef, selCtx
 				sig.hasCost = true
 			}
 		}
-		if v, ok := s.latencySignal(c.Model); ok {
+		if v, ok, metric := s.latencyMeasurement(c.Model); ok {
 			sig.latency = v
 			sig.hasLat = true
+			sig.latencyMetric = metric
 		}
 		sig.load = float64(s.getInflight(c.Model))
 		out = append(out, sig)
@@ -360,23 +363,25 @@ func (s *MultiFactorSelector) qualityRelevant() bool {
 	return false
 }
 
-// latencySignal keeps explicitly selected metrics comparable across candidates.
+// latencyMeasurement keeps explicitly selected metrics comparable across candidates.
 // Missing measurements stay unavailable; another metric cannot fill the gap.
 // Omission retains the legacy TPOT-prioritized behavior.
-func (s *MultiFactorSelector) latencySignal(model string) (float64, bool) {
+func (s *MultiFactorSelector) latencyMeasurement(model string) (float64, bool, string) {
 	switch s.config.LatencyMetric {
 	case "ttft":
-		return s.getTTFT(model, s.config.LatencyPercentile)
+		value, available := s.getTTFT(model, s.config.LatencyPercentile)
+		return value, available, "ttft"
 	case "tpot":
-		return s.getTPOT(model, s.config.LatencyPercentile)
+		value, available := s.getTPOT(model, s.config.LatencyPercentile)
+		return value, available, "tpot"
 	}
 	if v, ok := s.getTPOT(model, s.config.LatencyPercentile); ok {
-		return v, true
+		return v, true, "tpot"
 	}
 	if v, ok := s.getTTFT(model, s.config.LatencyPercentile); ok {
-		return v, true
+		return v, true, "ttft"
 	}
-	return 0, false
+	return 0, false, ""
 }
 
 // CandidateEligible rechecks hard filters without invoking on_no_candidates

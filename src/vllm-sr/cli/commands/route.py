@@ -275,7 +275,7 @@ def preview(
     output_json: bool,
     timeout: float,
 ) -> None:
-    """Preview signals and the selected route without calling a model backend."""
+    """Preview signals and model selection without generating an answer."""
 
     if sum(value is not None for value in (prompt, messages_json, request_file)) != 1:
         raise ValueError(

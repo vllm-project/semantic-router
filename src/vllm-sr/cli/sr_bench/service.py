@@ -165,6 +165,7 @@ class Handler(BaseHTTPRequestHandler):
             "preview_api_key_env",
             "request_params",
             "capture_recipe",
+            "native_limits",
         }
         if any(set(t) - safe for t in data):
             raise ValueError("Server target registry contains unsupported fields")
@@ -496,11 +497,28 @@ class Handler(BaseHTTPRequestHandler):
                             ),
                         )
                     if action in {"results", "calls"} and method == "GET":
-                        query = parse_qs(parsed.query)
+                        query = parse_qs(
+                            parsed.query, keep_blank_values=True, max_num_fields=3
+                        )
+                        allowed = (
+                            {"after", "limit", "active"}
+                            if action == "calls"
+                            else {"after", "limit"}
+                        )
+                        if set(query) - allowed or any(
+                            len(values) != 1 for values in query.values()
+                        ):
+                            raise ValueError("Invalid evidence page filters")
+                        active = query.get("active", ["false"])[0]
+                        if active not in {"true", "false"}:
+                            raise ValueError("active must be true or false")
                         after = int(query.get("after", ["0"])[0])
                         limit = int(query.get("limit", ["100"])[0])
                         return self._send(
-                            200, self.server.store.page(run_id, action, after, limit)
+                            200,
+                            self.server.store.page(
+                                run_id, action, after, limit, active=active == "true"
+                            ),
                         )
                     if action == "report" and method == "GET":
                         return self._send(200, make_report(self.server.store, run_id))

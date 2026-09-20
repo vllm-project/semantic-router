@@ -16,6 +16,7 @@ from cli.routing_preview import case_request_fields
 from . import VERSION
 from .adapters import get_adapter, list_adapters
 from .experiments import validate_membership, validate_role
+from .native_output import configure as configure_output_policy
 
 MAX_PARAMETER_BYTES = 65536
 MAX_INFERENCE_CALLS = 256
@@ -465,6 +466,7 @@ def plan(manifest):
                     "prices must be finite nonnegative USD per million tokens"
                 )
     limits = {**DEFAULT_LIMITS, **m.get("limits", {})}
+    configure_output_policy(m, targets + list(auxiliary.values()), limits)
     unknown = set(limits) - set(DEFAULT_LIMITS)
     if unknown:
         raise ValueError(f"unknown limits: {sorted(unknown)}")
@@ -492,7 +494,11 @@ def plan(manifest):
         raise ValueError("sampling must be an object")
     sampling = {
         "temperature": 0,
-        "max_tokens": limits["max_output_tokens"],
+        **(
+            {"max_tokens": limits["max_output_tokens"]}
+            if m["output_policy"] == "bounded"
+            else {}
+        ),
         **m.get("sampling", {}),
     }
     validate_request_params(sampling, limits, "sampling")

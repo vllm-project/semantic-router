@@ -93,6 +93,22 @@
   color: var(--text-primary);
   overflow-wrap: anywhere;
 }
+.activeRun {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.activeRun > span,
+.activeProgress {
+  font-size: 0.8rem;
+}
+.activeProgress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
 .resultsHeading {
   margin: 1.5rem 0 1rem;
 }
