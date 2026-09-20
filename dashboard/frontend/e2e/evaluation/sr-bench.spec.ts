@@ -36,6 +36,7 @@ const report = {
         total: 2,
         completed: 2,
         failed: 0,
+        pending: 0,
         correct: 1,
         scored: 2,
         accuracy: 0.5,

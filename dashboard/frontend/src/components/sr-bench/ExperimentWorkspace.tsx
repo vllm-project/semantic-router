@@ -6,6 +6,8 @@ import ExperimentDelete from './ExperimentDelete'
 import ExperimentEvidence from './ExperimentEvidence'
 import { experimentRoleLabels } from './experimentEvidencePresentation'
 import { canReuseBaseline } from './baselineReuse'
+import { active } from './model'
+import { RunStatus } from './RunList'
 import useExperimentMembers from './useExperimentMembers'
 import { SrBenchRequestError } from './api'
 import { experimentApi, type Experiment, type ExperimentPage } from './experimentApi'
@@ -64,6 +66,7 @@ export default function ExperimentWorkspace({
   const [showCreate, setShowCreate] = useState(false)
   const [showSaved, setShowSaved] = useState(false)
   const [referenceID, setReferenceID] = useState('')
+  const [activeRunID, setActiveRunID] = useState('')
   const membership = useExperimentMembers(id, revision)
   const knownRoles = Object.fromEntries(
     membership.members.map((member) => [member.run_id, member.role]),
@@ -172,6 +175,16 @@ export default function ExperimentWorkspace({
     (run) => knownRoles[run.id] === 'baseline' && canReuseBaseline(run),
   )
   const reference = references.find((run) => run.id === referenceID) ?? references[0]
+  const activeRuns = runs.filter((run) => knownRoles[run.id] && active(run.status))
+  const activeRun =
+    activeRuns.find((run) => run.id === activeRunID) ??
+    activeRuns.find((run) => knownRoles[run.id] === 'baseline') ??
+    activeRuns[0]
+  const loadedRunIDs = new Set(runs.map((run) => run.id))
+  const activeRunCount =
+    membership.complete && membership.members.every((member) => loadedRunIDs.has(member.run_id))
+      ? activeRuns.length
+      : undefined
   const hasStartingRecipe = Object.values(knownRoles).includes('initial')
   const hasRecipeResults = runs.some(
     (run) =>
@@ -182,7 +195,7 @@ export default function ExperimentWorkspace({
   )
   const compareAction = reference && (
     <button
-      className={`${hasRecipeResults ? styles.primary : ''} ${controls.compactButton}`}
+      className={`${hasRecipeResults && !activeRun ? styles.primary : ''} ${controls.compactButton}`}
       onClick={() => onCompare(reference.id)}
     >
       <ProductIcon name="chart" /> Compare results
@@ -381,8 +394,7 @@ export default function ExperimentWorkspace({
               </div>
               <span className={layout.count}>
                 {runCount !== undefined && `${runCount} saved ${runCount === 1 ? 'run' : 'runs'}`}
-                {!!detail?.experiment.active_run_count &&
-                  ` · ${detail.experiment.active_run_count} active`}
+                {!!activeRunCount && ` · ${activeRunCount} active`}
               </span>
             </div>
             {membership.loading ? (
@@ -398,28 +410,72 @@ export default function ExperimentWorkspace({
               membership.complete && (
                 <div className={layout.nextStep}>
                   <div className={layout.nextHeading}>
-                    <ProductIcon name={reference ? 'mixture' : 'model'} />
+                    <ProductIcon name={activeRun ? 'logs' : reference ? 'mixture' : 'model'} />
                     <div>
                       <h3>
-                        {empty
-                          ? 'Start with your single models'
-                          : reference
-                            ? hasRecipeResults
-                              ? 'Review your recipe versions'
-                              : 'Test a recipe on the same questions'
-                            : 'Choose your reference results'}
+                        {activeRun
+                          ? knownRoles[activeRun.id] === 'baseline'
+                            ? 'Reference evaluation in progress'
+                            : 'Evaluation in progress'
+                          : empty
+                            ? 'Start with your single models'
+                            : reference
+                              ? hasRecipeResults
+                                ? 'Review your recipe versions'
+                                : 'Test a recipe on the same questions'
+                              : 'Choose your reference results'}
                       </h3>
                       <p>
-                        {empty
-                          ? 'Run the connected models on shared questions, or use results you already have.'
-                          : reference
-                            ? hasRecipeResults
-                              ? 'Compare saved results to see how quality and cost changed. Test another version when you have a change to evaluate.'
-                              : 'A reference fixes the questions and settings. Measure your starting recipe, then compare changes against your best single model.'
-                            : 'Use a finished single-model run as the reference for recipe versions. Running evaluations remain visible below.'}
+                        {activeRun
+                          ? 'Open the run to follow response activity and results as attempts finish.'
+                          : empty
+                            ? 'Run the connected models on shared questions, or use results you already have.'
+                            : reference
+                              ? hasRecipeResults
+                                ? 'Compare saved results to see how quality and cost changed. Test another version when you have a change to evaluate.'
+                                : 'A reference fixes the questions and settings. Measure your starting recipe, then compare changes against your best single model.'
+                              : 'Use a finished single-model run as the reference for recipe versions. Running evaluations remain visible below.'}
                       </p>
                     </div>
                   </div>
+                  {activeRun && (
+                    <section className={layout.activeRun} aria-label="Active evaluation">
+                      {activeRuns.length > 1 ? (
+                        <BenchSelect
+                          label="Active run"
+                          value={activeRun.id}
+                          options={activeRuns.map((run) => ({
+                            value: run.id,
+                            label: run.manifest.name,
+                            description: `${experimentRoleLabels[knownRoles[run.id]]} · ${run.status}`,
+                          }))}
+                          onChange={setActiveRunID}
+                        />
+                      ) : (
+                        <strong>{activeRun.manifest.name}</strong>
+                      )}
+                      <span className={styles.muted}>
+                        {experimentRoleLabels[knownRoles[activeRun.id]]}
+                        {activeRuns.length > 1 && ` · ${activeRuns.length} active runs`}
+                      </span>
+                      <div className={layout.activeProgress}>
+                        <RunStatus status={activeRun.status} />
+                        <span>
+                          {activeRun.progress.completed.toLocaleString()} /{' '}
+                          {activeRun.progress.total.toLocaleString()} attempts completed
+                        </span>
+                        <span>{activeRun.progress.failed.toLocaleString()} failed</span>
+                      </div>
+                      <div className={styles.actions}>
+                        <button
+                          className={`${styles.primary} ${controls.compactButton}`}
+                          onClick={() => onOpenRun(activeRun.id)}
+                        >
+                          <ProductIcon name="arrow-right" /> Open run
+                        </button>
+                      </div>
+                    </section>
+                  )}
                   {reference ? (
                     <>
                       {references.length > 1 ? (
@@ -446,7 +502,7 @@ export default function ExperimentWorkspace({
                         {canRun && (
                           <>
                             <button
-                              className={`${hasRecipeResults ? '' : styles.primary} ${controls.compactButton}`}
+                              className={`${hasRecipeResults || activeRun ? '' : styles.primary} ${controls.compactButton}`}
                               onClick={() =>
                                 onCandidate(
                                   reference.id,
@@ -480,7 +536,7 @@ export default function ExperimentWorkspace({
                     </>
                   ) : (
                     <div className={styles.actions}>
-                      {canRun && (
+                      {canRun && !activeRun && (
                         <button
                           className={`${styles.primary} ${controls.compactButton}`}
                           onClick={() => onCandidate('', id, 'live', 'baseline')}

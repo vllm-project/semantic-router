@@ -137,6 +137,22 @@ export const seconds = (value: unknown): string =>
   typeof value === 'number' && Number.isFinite(value) ? `${number(value, 2)} s` : '—'
 export const active = (status: string) => status === 'queued' || status === 'running'
 
+export function hasScoredOutcomes(target: TargetMetrics): boolean {
+  const { total, completed, scored, failed, pending } = target
+  return (
+    typeof total === 'number' &&
+    total > 0 &&
+    typeof scored === 'number' &&
+    scored >= 0 &&
+    typeof failed === 'number' &&
+    failed >= 0 &&
+    [total, scored, failed].every(Number.isInteger) &&
+    pending === 0 &&
+    completed === scored &&
+    scored + failed === total
+  )
+}
+
 export function reportDistribution(
   targets: TargetMetrics[],
   field: 'selected_models' | 'decisions' | 'selection_statuses' | 'selection_reasons',

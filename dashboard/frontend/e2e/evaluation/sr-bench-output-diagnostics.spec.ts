@@ -14,15 +14,27 @@ async function mockOutputEvidence(
     mode = 'live',
     partial = false,
     parsedFormatAnswer = false,
-  }: { mode?: string; partial?: boolean; parsedFormatAnswer?: boolean } = {},
+    stopped = false,
+    explicitFailure = false,
+  }: {
+    mode?: string
+    partial?: boolean
+    parsedFormatAnswer?: boolean
+    stopped?: boolean
+    explicitFailure?: boolean
+  } = {},
 ) {
   await mockAuthenticatedAppShell(page)
   const run = {
     id: 'output-run',
-    status: partial ? 'running' : 'completed',
+    status: stopped || explicitFailure ? 'failed' : partial ? 'running' : 'completed',
     created_at: '2026-09-20T00:00:00Z',
     updated_at: '2026-09-20T00:01:00Z',
-    progress: { total: 84, completed: partial ? 58 : 84, failed: 0 },
+    progress: {
+      total: 84,
+      completed: partial ? 58 : explicitFailure ? 83 : 84,
+      failed: explicitFailure ? 1 : 0,
+    },
     manifest: {
       version: 'sr-bench-1.0',
       name: 'Output evidence fixture',
@@ -59,13 +71,14 @@ async function mockOutputEvidence(
     return {
       id: target.id,
       total: 28,
-      completed: partial && index === 0 ? 2 : 28,
-      failed: 0,
-      scored: partial && index === 0 ? 2 : 28,
+      completed: index === 0 ? (partial ? 2 : explicitFailure ? 27 : 28) : 28,
+      failed: explicitFailure && index === 0 ? 1 : 0,
+      scored: index === 0 ? (partial ? 2 : explicitFailure ? 27 : 28) : 28,
+      pending: partial && index === 0 ? 25 : 0,
       correct: index === 0 && parsedFormatAnswer ? 1 : 0,
       accuracy: index === 0 && parsedFormatAnswer ? 1 / 28 : 0,
       macro_accuracy: index === 0 && parsedFormatAnswer ? 1 / 28 : 0,
-      complete: !(partial && index === 0),
+      complete: !((partial || explicitFailure) && index === 0),
       cost_usd: null,
       tokens: null,
       output_diagnostics:
@@ -106,7 +119,11 @@ async function mockOutputEvidence(
         run_id: run.id,
         status: run.status,
         summary: { targets: metrics, wall_time_s: 60 },
-        benchmarks: [],
+        benchmarks: metrics.map((metric) => ({
+          ...metric,
+          benchmark: 'mmlu-pro',
+          target_id: metric.id,
+        })),
         limitations: [],
         provenance: {},
       }
@@ -262,6 +279,64 @@ test('unassessed cases and unknown finish reasons are not zero failures or norma
   await expect(ended).toContainText('Unknown2 / 3')
   await expect(ended.getByText('Stop', { exact: true })).toHaveCount(0)
   await expect(output.getByText(/tool calls can continue a task/i)).toBeVisible()
+})
+
+test('unfinished targets show scored coverage instead of a provisional accuracy', async ({
+  page,
+}) => {
+  const writes = await mockOutputEvidence(page, { partial: true, parsedFormatAnswer: true })
+  const table = page
+    .getByRole('table')
+    .filter({ has: page.getByRole('columnheader', { name: 'Macro accuracy', exact: true }) })
+  const row = table
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: targets[0].model, exact: true }) })
+  await expect(row.getByRole('cell', { name: 'Pending', exact: true })).toBeVisible()
+  await expect(row.getByRole('cell', { name: '2 / 28', exact: true })).toBeVisible()
+  await expect(row).not.toContainText('3.57%')
+  const finished = table
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: targets[1].model, exact: true }) })
+  await expect(finished.getByRole('cell', { name: '0%', exact: true })).toBeVisible()
+  await page.getByText('Benchmark results', { exact: true }).click()
+  const benchmarkTable = page
+    .getByRole('table')
+    .filter({ has: page.getByRole('columnheader', { name: 'Accuracy', exact: true }) })
+  const benchmarkRow = benchmarkTable
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: targets[0].model, exact: true }) })
+  await expect(benchmarkRow.getByRole('cell', { name: 'Pending', exact: true })).toBeVisible()
+  await expect(benchmarkRow).not.toContainText('95% CI')
+  expect(writes).toEqual([])
+})
+
+test('a stopped target with missing outcomes remains incomplete', async ({ page }) => {
+  await mockOutputEvidence(page, { partial: true, parsedFormatAnswer: true, stopped: true })
+  const table = page
+    .getByRole('table')
+    .filter({ has: page.getByRole('columnheader', { name: 'Macro accuracy', exact: true }) })
+  const row = table
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: targets[0].model, exact: true }) })
+  await expect(row.getByRole('cell', { name: 'Incomplete', exact: true })).toBeVisible()
+  await expect(row).not.toContainText('3.57%')
+})
+
+test('explicit failures retain the full denominator once all outcomes are known', async ({
+  page,
+}) => {
+  await mockOutputEvidence(page, { parsedFormatAnswer: true, explicitFailure: true })
+  const table = page
+    .getByRole('table')
+    .filter({ has: page.getByRole('columnheader', { name: 'Macro accuracy', exact: true }) })
+  const row = table
+    .getByRole('row')
+    .filter({ has: page.getByRole('rowheader', { name: targets[0].model, exact: true }) })
+  await expect(row.getByRole('cell', { name: '3.57%', exact: true })).toBeVisible()
+  await expect(row.getByRole('cell', { name: '1 / 28', exact: true })).toBeVisible()
+  await expect(row.getByRole('cell', { name: '27 / 28', exact: true })).toBeVisible()
+  await expect(row).not.toContainText('Incomplete')
+  await expect(row).not.toContainText('Pending')
 })
 
 test('a Markdown final with no parsed answer is explained separately from an output-limit result', async ({

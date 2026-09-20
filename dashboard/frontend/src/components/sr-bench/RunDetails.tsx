@@ -3,7 +3,16 @@ import ProductIcon from '../ProductIcon'
 import ProductLoadingState from '../ProductLoadingState'
 import { QualityCostChart, RoutingBars } from './EvaluationCharts'
 import { benchApi, SR_BENCH_API } from './api'
-import { active, reportDistribution, money, number, percent, seconds, tokenTotal } from './model'
+import {
+  active,
+  hasScoredOutcomes,
+  reportDistribution,
+  money,
+  number,
+  percent,
+  seconds,
+  tokenTotal,
+} from './model'
 import type { CaseResult, Manifest, Run, TargetMetrics } from './types'
 import { targetName } from './targetPresentation'
 import { canReuseBaseline } from './baselineReuse'
@@ -28,11 +37,13 @@ function MetricsTable({
   targets,
   manifest,
   preview,
+  running,
   summary = false,
 }: {
   targets: TargetMetrics[]
   manifest: Manifest
   preview: boolean
+  running: boolean
   summary?: boolean
 }) {
   return (
@@ -43,6 +54,7 @@ function MetricsTable({
             <th>Target</th>
             <th>{summary ? 'Macro accuracy' : 'Accuracy'}</th>
             <th>Correct / denominator</th>
+            <th>Scored / planned</th>
             <th>Failures</th>
             <th>Observed model cost</th>
             <th>Tokens</th>
@@ -56,14 +68,22 @@ function MetricsTable({
               <td>
                 {preview
                   ? 'Preview only'
-                  : percent(summary ? target.macro_accuracy : target.accuracy)}
-                {!preview && !summary && Array.isArray(target.accuracy_ci95) && (
-                  <small>
-                    95% CI {target.accuracy_ci95.map((value) => percent(value)).join(' – ')}
-                  </small>
-                )}
+                  : hasScoredOutcomes(target)
+                    ? percent(summary ? target.macro_accuracy : target.accuracy)
+                    : running
+                      ? 'Pending'
+                      : 'Incomplete'}
+                {!preview &&
+                  !summary &&
+                  hasScoredOutcomes(target) &&
+                  Array.isArray(target.accuracy_ci95) && (
+                    <small>
+                      95% CI {target.accuracy_ci95.map((value) => percent(value)).join(' – ')}
+                    </small>
+                  )}
               </td>
               <td>{preview ? '—' : `${number(target.correct)} / ${number(target.total)}`}</td>
+              <td>{preview ? '—' : `${number(target.scored)} / ${number(target.total)}`}</td>
               <td>{number(target.failed)}</td>
               <td>{money(target.cost_usd)}</td>
               <td>{number(tokenTotal(target.tokens))}</td>
@@ -177,7 +197,9 @@ export default function RunDetails({
   const chartPoints =
     run?.status === 'completed' && run.manifest.mode === 'live'
       ? metrics.flatMap((target) =>
-          typeof target.macro_accuracy === 'number' && typeof target.cost_usd === 'number'
+          hasScoredOutcomes(target) &&
+          typeof target.macro_accuracy === 'number' &&
+          typeof target.cost_usd === 'number'
             ? [
                 {
                   name: targetName(run.manifest, target.id),
@@ -407,6 +429,7 @@ export default function RunDetails({
                 manifest={run.manifest}
                 targets={metrics}
                 preview={run.manifest.mode === 'preview'}
+                running={active(run.status)}
                 summary
               />
             ) : reportRead.loading ? (
@@ -419,7 +442,8 @@ export default function RunDetails({
               <p className={styles.muted}>Summary metrics will appear as results are persisted.</p>
             )}
             <p className={styles.muted}>
-              Unknown usage and cost remain “—”; incomplete evidence cannot establish a cost saving.
+              Scores wait for every planned outcome; failures count as incorrect. Unknown usage and
+              cost remain “—”; incomplete evidence cannot establish a cost saving.
             </p>
             {run.manifest.mode === 'live' && report && (
               <OutputDiagnostics targets={report.summary.targets} manifest={run.manifest} />
@@ -452,6 +476,7 @@ export default function RunDetails({
                           ) as TargetMetrics[]
                         }
                         preview={run.manifest.mode === 'preview'}
+                        running={active(run.status)}
                       />
                     </div>
                   ))}
