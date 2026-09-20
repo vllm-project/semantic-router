@@ -3,6 +3,7 @@
 import hashlib
 import importlib
 import json
+import threading
 from unittest.mock import Mock
 
 import pytest
@@ -10,6 +11,8 @@ import requests
 from cli.runtime_stack import resolve_runtime_stack
 from cli.sr_bench import VERSION, service
 from cli.sr_bench.client import Client
+from cli.sr_bench.contracts import plan
+from cli.sr_bench.store import Store
 from click.testing import CliRunner
 
 command = importlib.import_module("cli.commands.benchmark")
@@ -272,3 +275,96 @@ def test_submission_transport_failure_is_never_retried(tmp_path, monkeypatch):
     with pytest.raises(ValueError, match="requests are never retried"):
         client.request("POST", "/runs", {"manifest": {}})
     request.assert_called_once()
+
+
+def test_cli_compare_exposes_subject_and_total_spend_from_local_service(
+    tmp_path, monkeypatch
+):
+    store = Store(tmp_path)
+    run_ids = []
+    for target_id, kind, subject_cost, auxiliary_cost in (
+        ("single", "single", 2, 0),
+        ("balance", "mom", 1, 2),
+    ):
+        target = {
+            "id": target_id,
+            "kind": kind,
+            "model": target_id,
+            "base_url": "http://127.0.0.1:1/v1",
+            "prices": {
+                target_id: {
+                    "input": 1,
+                    "cached_input": 1,
+                    "cache_write": 1,
+                    "output": 1,
+                }
+            },
+        }
+        if kind == "mom":
+            target.update(config_hash="frozen", max_inference_calls=1)
+        run, _ = store.create(
+            plan(
+                {
+                    "version": VERSION,
+                    "targets": [target],
+                    "cases": [
+                        {
+                            "id": "one",
+                            "benchmark": "mmlu-pro",
+                            "messages": [{"role": "user", "content": "A"}],
+                            "answer": "A",
+                        }
+                    ],
+                }
+            )
+        )
+        run_ids.append(run["id"])
+        store.result(
+            run["id"],
+            "one",
+            target_id,
+            "completed",
+            {"benchmark": "mmlu-pro", "correct": True},
+        )
+        for role, cost in (("subject", subject_cost), ("judge", auxiliary_cost)):
+            call_id = store.start_call(run["id"], "one", target_id, role, {})
+            store.finish_call(call_id, "completed", {"cost_usd": cost})
+        store.status(run["id"], "completed")
+    server = service.Server(("127.0.0.1", 0), store, "fixture-token")
+    monkeypatch.setenv("SR_BENCH_TOKEN", "fixture-token")
+    monkeypatch.setattr(
+        server.engine, "start", lambda *_: pytest.fail("Comparison cannot dispatch")
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    original = list(store.db.iterdump())
+    try:
+        result = CliRunner().invoke(
+            command.benchmark,
+            [
+                "--url",
+                f"http://127.0.0.1:{server.server_port}",
+                "--store",
+                str(tmp_path),
+                "--no-autostart",
+                "compare",
+                *run_ids,
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        row = json.loads(result.output)["comparisons"][0]
+        assert row["subject_cost_saving_percent"] == 50
+        assert row["total_cost_saving_percent"] == -50
+        assert row["baseline_subject_cost_usd"] == row["baseline_total_cost_usd"] == 2
+        assert row["candidate_subject_cost_usd"] == 1
+        assert row["candidate_evaluation_cost_usd"] == 2
+        assert row["candidate_total_cost_usd"] == 3
+        assert (
+            not {"cost_saving_percent", "baseline_cost_usd", "candidate_cost_usd"}
+            & row.keys()
+        )
+        assert list(store.db.iterdump()) == original
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

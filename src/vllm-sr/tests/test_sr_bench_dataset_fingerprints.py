@@ -39,20 +39,21 @@ def test_verified_large_bundle_does_not_block_small_equivalent_standalone(
     small = [_row("small", "mmlu-pro")]
     large = [_row(f"large-{i}", "livecodebench") for i in range(12)]
     standalone = _save(tmp_path, small)
-    _save(tmp_path, large)
+    large_source = _save(tmp_path, large)
     bundle = _save(tmp_path, small + large)
-    monkeypatch.setattr(datasets, "MAX_DATA_BYTES", 1024)
+    monkeypatch.setattr(datasets, "MAX_ROW_BYTES", 1024)
     reader = DatasetReader(tmp_path)
     result = _choices(reader)
-    assert Path(bundle["path"]).stat().st_size > datasets.MAX_DATA_BYTES
+    assert Path(bundle["path"]).stat().st_size > datasets.MAX_ROW_BYTES
     assert result["mmlu-pro"]["eligible"]
     assert result["mmlu-pro"]["source_ids"] == [standalone["id"]]
-    assert not result["livecodebench"]["eligible"]
-    assert result["livecodebench"]["reason_code"] == "source_size_limit"
-    assert "Full content was verified" in result["livecodebench"]["reason"]
+    assert result["livecodebench"]["eligible"]
+    assert result["livecodebench"]["source_ids"] == [large_source["id"]]
     assert reader.compose([standalone["id"]], ["mmlu-pro"])["id"] == standalone["id"]
-    with pytest.raises(ValueError, match="size limit"):
-        reader.compose([bundle["id"]], ["mmlu-pro"])
+    assert reader.compose([bundle["id"]], ["mmlu-pro"])["id"] == standalone["id"]
+    assert (
+        reader.page(bundle["id"], benchmark="livecodebench", limit="5")["total"] == 12
+    )
 
 
 def test_streaming_proof_includes_answers_and_ignores_row_order(tmp_path):
@@ -119,7 +120,7 @@ def test_sources_rejected_early_still_consume_scan_budget(tmp_path, monkeypatch)
         for identity in ("first", "second")
     ]
     maximum = max(Path(manifest["path"]).stat().st_size for manifest in manifests)
-    monkeypatch.setattr(datasets, "MAX_DATA_BYTES", 1024)
+    monkeypatch.setattr(datasets, "MAX_ROW_BYTES", 1024)
     monkeypatch.setattr(datasets, "MAX_FINGERPRINT_SCAN_BYTES", maximum)
     result = _choices(DatasetReader(tmp_path))["mmlu-pro"]
     assert not result["eligible"] and not result["source_ids"]

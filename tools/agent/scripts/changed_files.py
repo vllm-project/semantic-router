@@ -80,7 +80,9 @@ def git_changed_files(base_ref: str | None) -> list[str]:
             merge_base = result.stdout.strip()
 
     if merge_base:
-        result = run_git("diff", "--name-only", "-z", f"{merge_base}...HEAD")
+        result = run_git(
+            "diff", "--name-only", "--no-renames", "-z", f"{merge_base}...HEAD"
+        )
         if result.returncode == 0:
             changed.update(
                 normalize_changed_path(path)
@@ -91,9 +93,9 @@ def git_changed_files(base_ref: str | None) -> list[str]:
     # Local checks must include work that has not been committed yet. `git diff
     # HEAD` covers staged and unstaged tracked paths; the final query adds
     # untracked paths without pulling ignored build artifacts into the result.
-    result = run_git("diff", "--name-only", "-z", "HEAD")
+    result = run_git("diff", "--name-only", "--no-renames", "-z", "HEAD")
     if result.returncode != 0:
-        result = run_git("diff", "--cached", "--name-only", "-z")
+        result = run_git("diff", "--cached", "--name-only", "--no-renames", "-z")
     if result.returncode == 0:
         changed.update(
             normalize_changed_path(path) for path in result.stdout.split("\0") if path
