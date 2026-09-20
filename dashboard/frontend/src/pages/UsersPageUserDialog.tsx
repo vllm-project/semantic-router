@@ -83,11 +83,12 @@ export default function UsersPageUserDialog({
   }
 
   return (
-    <div className={styles.overlay} onClick={!isSubmitting ? onClose : undefined}>
+    <div className={styles.overlay} onClick={!isSubmitting ? onClose : undefined} role="presentation">
       <div
         ref={dialogRef}
         className={styles.modal}
         onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="users-dialog-title"
