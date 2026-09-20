@@ -144,6 +144,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	snapshotClientMaxOutputTokens(request, ctx)
 	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)

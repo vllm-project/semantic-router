@@ -14,6 +14,8 @@ var looperInternalContextHeaders = []string{
 	headers.VSRLooperRequest,
 	headers.VSRLooperIteration,
 	headers.VSRLooperDecision,
+	headers.VSRLooperClientMaxOutputTokens,
+	headers.VSRLooperStageMaxOutputTokens,
 	headers.VSRFusionDepth,
 	headers.VSRSelectedRecipe,
 }

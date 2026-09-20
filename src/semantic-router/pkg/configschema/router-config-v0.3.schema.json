@@ -4136,6 +4136,10 @@
         "weight": {
           "type": "number"
         },
+        "max_completion_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
         "use_reasoning": {
           "type": "boolean"
         },

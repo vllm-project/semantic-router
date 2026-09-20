@@ -1,0 +1,207 @@
+package extproc
+
+import (
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
+)
+
+func snapshotClientMaxOutputTokens(request llmprotocol.Request, ctx *RequestContext) {
+	if ctx == nil || ctx.LooperRequest {
+		return
+	}
+	ctx.ClientMaxOutputTokens = outputtokens.Clone(request.Sampling.MaxOutputTokens)
+}
+
+func parseLooperOutputTokenBoundHeaders(ctx *RequestContext) {
+	if ctx == nil || !ctx.LooperRequest {
+		return
+	}
+	ctx.ClientMaxOutputTokens = nil
+	ctx.AlgorithmStageMaxOutputTokens = nil
+	if value, ok := parsePositiveInt64Header(ctx, headers.VSRLooperClientMaxOutputTokens); ok {
+		ctx.ClientMaxOutputTokens = &value
+	}
+	if value, ok := parsePositiveInt64Header(ctx, headers.VSRLooperStageMaxOutputTokens); ok {
+		ctx.AlgorithmStageMaxOutputTokens = &value
+	}
+}
+
+func parsePositiveInt64Header(ctx *RequestContext, name string) (int64, bool) {
+	raw := strings.TrimSpace(headerValueCI(ctx, name))
+	if raw == "" {
+		return 0, false
+	}
+	value, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || value < 1 {
+		return 0, false
+	}
+	return value, true
+}
+
+// prepareAutomaticDispatchWithOutputLimit renders automatic output first, then
+// composes the strictest ceiling. Rendered capacity is an upper bound and
+// cannot replace a stricter ModelRef, plugin, client, stage, or ledger limit.
+func (r *OpenAIRouter) prepareAutomaticDispatchWithOutputLimit(
+	ctx *RequestContext,
+	request *llmprotocol.Request,
+	dispatch *providerDispatch,
+) error {
+	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
+		return err
+	}
+	changed, err := r.applyDispatchOutputTokenLimit(request, dispatch, ctx)
+	if changed && request != nil {
+		request.Generation++
+	}
+	return err
+}
+
+func (r *OpenAIRouter) applyDispatchOutputTokenLimit(
+	request *llmprotocol.Request,
+	dispatch *providerDispatch,
+	ctx *RequestContext,
+) (bool, error) {
+	if request == nil || ctx == nil {
+		return false, nil
+	}
+	sources := r.outputTokenLimitSources(dispatch, ctx)
+	if request.Sampling.AutomaticOutput {
+		sources.Automatic = outputtokens.Clone(request.Sampling.MaxOutputTokens)
+	}
+	result := outputtokens.Compose(sources)
+	if outputTokenLimitBlocked(ctx) && sources.Client == nil && result.Effective == nil {
+		result.Fallback = outputtokens.FallbackBlockedParam
+	}
+	if !wireFormatSupportsOutputTokenLimit(dispatch) && result.Effective != nil {
+		result.Fallback = outputtokens.FallbackCodecUnsupported
+		result.Effective = nil
+		result.Source = ""
+	}
+	if result.Effective == nil && result.Fallback == "" {
+		// No composed ceiling and no fallback that must clear one. Keep an
+		// already-encoded hop or caller bound instead of treating silence as a wipe.
+		ctx.EffectiveMaxOutputTokens = outputtokens.Clone(request.Sampling.MaxOutputTokens)
+		ctx.EffectiveMaxOutputTokensSource = ""
+		ctx.EffectiveMaxOutputTokensFallback = ""
+		return false, nil
+	}
+	previous := outputtokens.Clone(request.Sampling.MaxOutputTokens)
+	request.Sampling.MaxOutputTokens = outputtokens.Clone(result.Effective)
+	ctx.EffectiveMaxOutputTokens = outputtokens.Clone(result.Effective)
+	ctx.EffectiveMaxOutputTokensSource = result.Source
+	ctx.EffectiveMaxOutputTokensFallback = result.Fallback
+	if sources.Plugin != nil && result.Source == outputtokens.SourcePlugin {
+		decisionKey := ""
+		if ctx.VSRSelectedDecision != nil {
+			decisionKey = config.RoutingDecisionKey(ctx.Routing.RecipeName(), ctx.VSRSelectedDecision.Name)
+		}
+		metrics.RecordMaxTokensCapped(decisionKey)
+	}
+	changed := !int64PointersEqual(previous, request.Sampling.MaxOutputTokens)
+	if responsesOutputTokenLimitUnsupported(dispatch, result.Effective) {
+		return changed, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_responses_max_output_tokens",
+			fmt.Sprintf("composed output token limit %d is below the Responses API minimum of %d", *result.Effective, outputtokens.ResponsesMinOutputTokens),
+			nil,
+		)
+	}
+	return changed, nil
+}
+
+func (r *OpenAIRouter) outputTokenLimitSources(
+	dispatch *providerDispatch,
+	ctx *RequestContext,
+) outputtokens.Sources {
+	sources := outputtokens.Sources{
+		Client:         outputtokens.Clone(ctx.ClientMaxOutputTokens),
+		AlgorithmStage: outputtokens.Clone(ctx.AlgorithmStageMaxOutputTokens),
+		Ledger:         ctx.OutputTokenLedger,
+	}
+	if outputTokenLimitBlocked(ctx) {
+		sources.Client = nil
+	}
+	if ctx.VSRSelectedDecision != nil {
+		if params := ctx.VSRSelectedDecision.GetRequestParamsConfig(); params != nil {
+			sources.Plugin = outputtokens.FromInt(params.MaxTokensLimit)
+		}
+		if dispatch != nil {
+			sources.ModelRef = modelRefMaxCompletionTokens(r, ctx.VSRSelectedDecision, dispatch.logicalModel)
+		}
+	}
+	return sources
+}
+
+func outputTokenLimitBlocked(ctx *RequestContext) bool {
+	if ctx == nil {
+		return false
+	}
+	return decisionBlocksOutputTokenLimit(ctx.VSRSelectedDecision)
+}
+
+func decisionBlocksOutputTokenLimit(decision *config.Decision) bool {
+	if decision == nil {
+		return false
+	}
+	params := decision.GetRequestParamsConfig()
+	if params == nil {
+		return false
+	}
+	for _, field := range params.BlockedParams {
+		switch strings.TrimSpace(field) {
+		case "max_tokens", "max_completion_tokens", "max_output_tokens":
+			return true
+		}
+	}
+	return false
+}
+
+func modelRefMaxCompletionTokens(router *OpenAIRouter, decision *config.Decision, modelName string) *int64 {
+	if decision == nil || modelName == "" {
+		return nil
+	}
+	for _, ref := range decision.ModelRefs {
+		matchesModel := ref.Model == modelName || ref.LoRAName == modelName
+		if router != nil && router.Config != nil {
+			matchesModel = router.Config.ModelNameMatches(ref.Model, modelName) || ref.LoRAName == modelName
+		}
+		if !matchesModel {
+			continue
+		}
+		return outputtokens.FromInt(ref.MaxCompletionTokens)
+	}
+	return nil
+}
+
+func wireFormatSupportsOutputTokenLimit(dispatch *providerDispatch) bool {
+	if dispatch == nil {
+		return true
+	}
+	switch dispatch.targetFormat {
+	case llmprotocol.OpenAIChatV1, llmprotocol.AnthropicMessagesV1, llmprotocol.OpenAIResponsesV1:
+		return true
+	default:
+		return false
+	}
+}
+
+func responsesOutputTokenLimitUnsupported(dispatch *providerDispatch, effective *int64) bool {
+	if dispatch == nil || effective == nil || dispatch.targetFormat != llmprotocol.OpenAIResponsesV1 {
+		return false
+	}
+	return *effective < outputtokens.ResponsesMinOutputTokens
+}
+
+func int64PointersEqual(left, right *int64) bool {
+	if left == nil || right == nil {
+		return left == right
+	}
+	return *left == *right
+}

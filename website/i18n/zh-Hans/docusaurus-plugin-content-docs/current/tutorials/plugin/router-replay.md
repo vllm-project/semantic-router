@@ -56,9 +56,12 @@ plugins:
       max_tool_trace_steps: 100
 ```
 
+要让某条路由退出采集，使用 `configuration: {enabled: false}`。
+要更改部署级默认值，设置 `global.services.router_replay.enabled: false`；单条路由仍可选择开启。
+
 ## Looper 诊断 {#looper-diagnostics}
 
-Confidence Looper 记录包含版本化的 `route_diagnostics.looper` 对象。它包含有界的 attempt 元数据、token 和成本记账、延迟、处置原因码、tracing 启用时的 OpenTelemetry trace ID，以及 `final_attempt_ordinal`。Attempt 详情会从对查看者脱敏的响应中省略，仍可供具有回放-detail 权限的主体使用。
+Confidence Looper 记录包含版本化的 `route_diagnostics.looper` 对象。它包含有界的 attempt 元数据、token 和成本记账、延迟、处置原因码、tracing 启用时的 OpenTelemetry trace ID，以及 `final_attempt_ordinal`。普通记录还会在 `route_diagnostics` 上包含 `effective_max_output_tokens`、`effective_max_output_tokens_source` 和 `effective_max_output_tokens_fallback`。Looper attempt 会重复这三个字段，以便 Confidence 升级能显示每个模型合成后的上限。Attempt 详情会从对查看者脱敏的响应中省略，仍可供具有回放-detail 权限的主体使用。
 
 Looper 诊断永不包含提示词、响应、隐藏推理、工具参数、端点 URL、凭据或原始错误。Attempt 数量和编码大小有上限；截断是显式的，被丢弃的 token 用量仍会计入。
 

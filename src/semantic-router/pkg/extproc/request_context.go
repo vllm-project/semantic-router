@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -325,6 +326,17 @@ type RequestContext struct {
 	LooperRequest   bool                  // True only for token-authenticated in-process looper requests
 	LooperIteration int                   // The iteration number if this is a looper request
 	LooperLogprobs  *looperLogprobOptions // Native Chat evidence requested by an authenticated internal hop
+
+	// Output-token limit composition. ClientMaxOutputTokens is the immutable
+	// ingress snapshot, or the Looper hop client header. A missing snapshot
+	// means the client omitted a limit. AlgorithmStage comes from an authored
+	// Looper hop header. Ledger is reserved for #2861.
+	ClientMaxOutputTokens            *int64
+	AlgorithmStageMaxOutputTokens    *int64
+	OutputTokenLedger                outputtokens.Contributor
+	EffectiveMaxOutputTokens         *int64
+	EffectiveMaxOutputTokensSource   string
+	EffectiveMaxOutputTokensFallback string
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.

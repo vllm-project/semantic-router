@@ -145,6 +145,7 @@ func dispatchReplayFixture(t *testing.T, explicit bool, handler http.HandlerFunc
 	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true}
 	if explicit {
 		ctx.SemanticRequest.Sampling.MaxOutputTokens = llmprotocol.Int64(12)
+		snapshotClientMaxOutputTokens(*ctx.SemanticRequest, ctx)
 	}
 	captureRequestDemand(ctx, requestDemandStageOriginal, ctx.SemanticRequest, "auto")
 	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
