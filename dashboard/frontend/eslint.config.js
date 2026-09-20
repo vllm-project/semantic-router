@@ -50,7 +50,7 @@ export default tseslint.config(
     // This list only shrinks. Delete a path once its violations are fixed; do
     // not add one to quiet a new violation.
     //
-    // 28 files, 82 reported violations when this list was written.
+    // 23 files, 10 reported violations when this list was written.
     files: [
       "src/components/ChatComposerAddMenu.tsx",
       "src/components/ChatTaskQueue.tsx",
@@ -59,15 +59,10 @@ export default tseslint.config(
       "src/components/ExpressionBuilderInner.tsx",
       "src/components/ExpressionBuilderNodes.tsx",
       "src/components/ExpressionBuilderToolbox.tsx",
-      "src/components/ViewModal.tsx",
       "src/pages/ConfigPageConnectModelsDialogView.tsx",
-      "src/pages/ConfigPageMixtureDialog.tsx",
-      "src/pages/ConfigPageModelUsageDialog.tsx",
       "src/pages/DslEditorPage.tsx",
-      "src/pages/DslImportModal.tsx",
       "src/pages/MLSetupBenchmarkStep.tsx",
       "src/pages/MLSetupPage.tsx",
-      "src/pages/UsersPageUserDialog.tsx",
       "src/pages/builderPageDashboardViews.tsx",
       "src/pages/builderPageFieldControls.tsx",
       "src/pages/builderPageGlobalSettingsObservabilitySections.tsx",
