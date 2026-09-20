@@ -75,6 +75,7 @@ docker-build-vllm-sr-envoy:
 	@$(LOG_TARGET)
 	@echo "Ensuring official Envoy image is available..."
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
+	@$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
 
 # Build router runtime image using the existing vllm-sr Dockerfile
 docker-build-vllm-sr-router: ## Build vllm-sr-router Docker image
@@ -244,7 +245,7 @@ VLLM_SR_IMAGE_CUDA ?= $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
 VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
 VLLM_SR_ROUTER_IMAGE_CUDA ?= $(VLLM_SR_IMAGE_CUDA)
-VLLM_SR_ENVOY_IMAGE_DEFAULT ?= envoyproxy/envoy:v1.34-latest
+VLLM_SR_ENVOY_IMAGE_DEFAULT ?= envoyproxy/envoy:v1.35.3
 VLLM_SR_DASHBOARD_IMAGE_DEFAULT ?= ghcr.io/vllm-project/semantic-router/dashboard:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE ?= $(VLLM_SR_ROUTER_IMAGE_DEFAULT)
 VLLM_SR_ENVOY_IMAGE ?= $(VLLM_SR_ENVOY_IMAGE_DEFAULT)
@@ -413,6 +414,7 @@ vllm-sr-dev:
 		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
 		$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE); \
+		$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null; \
 		echo ""; \
 		echo "Envoy image available: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
@@ -481,6 +483,7 @@ vllm-sr-envoy-build:
 	@$(LOG_TARGET)
 	@echo "Ensuring official Envoy image is available..."
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
+	@$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
 	@echo "Image available: $(VLLM_SR_ENVOY_IMAGE)"
 
 vllm-sr-dashboard-build: ## Build vLLM Semantic Router dashboard Docker image
