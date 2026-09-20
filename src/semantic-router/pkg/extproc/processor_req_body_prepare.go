@@ -89,6 +89,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		}
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
+	bindContextDedupPolicy(ctx)
 	if resp := r.handleFastResponse(ctx, decisionName); resp != nil {
 		r.startRouterReplay(ctx, originalModel, selectedModel, decisionName)
 		r.updateRouterReplayStatus(ctx, 200, false)
@@ -223,8 +224,10 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
-	if compressionErr := r.applyContextTransformationPlan(ctx, request); compressionErr != nil {
-		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
+	r.prepareContextDedupStep(ctx, request)
+	if contextErr := r.applyContextTransformationPlan(ctx, request); contextErr != nil {
+		status, message := contextTransformationFailure(ctx)
+		return nil, r.createErrorResponse(status, message), nil
 	}
 	return request, nil, nil
 }

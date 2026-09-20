@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextdedup"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
@@ -335,7 +336,14 @@ type RequestContext struct {
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
-	SemanticResponse         *llmprotocol.Response
+
+	// Context deduplication state. The policy binds once the decision is
+	// known, the action registers its step before the shared context stage,
+	// and the diagnostic is the reconciled, content-free receipt.
+	ContextDedupPolicy      *config.ContextDedupPluginConfig
+	ContextDedupAction      *contextdedup.Action
+	ContextDedupDiagnostics *contextdedup.Diagnostics
+	SemanticResponse        *llmprotocol.Response
 	// PrimaryOutputDigest hashes the answer the selected model produced, taken
 	// before any response-stage plugin rewrites it. A body warning prepends
 	// router text to SemanticResponse in place, so hashing that later would
