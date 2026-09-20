@@ -11,6 +11,7 @@ type Sources struct {
 	Plugin         *int64
 	ModelRef       *int64
 	AlgorithmStage *int64
+	Automatic      *int64
 	Ledger         Contributor
 }
 
@@ -19,17 +20,17 @@ const (
 	SourcePlugin         = "plugin"
 	SourceModelRef       = "model_ref"
 	SourceAlgorithmStage = "algorithm_stage"
+	SourceAutomatic      = "automatic"
 	SourceLedger         = "ledger"
 )
 
 const (
 	FallbackCodecUnsupported = "codec_unsupported"
 	FallbackBlockedParam     = "blocked_param"
-	FallbackResponsesMinimum = "responses_minimum"
 )
 
 // ResponsesMinOutputTokens is the smallest max_output_tokens the Responses
-// wire format accepts. Dispatch must not encode a stricter composed ceiling.
+// wire format accepts. Dispatch must not drop a stricter composed ceiling.
 const ResponsesMinOutputTokens int64 = 16
 
 // Result is the strictest applicable bound and the source that produced it.
@@ -40,13 +41,14 @@ type Result struct {
 }
 
 // Compose returns the minimum of all present positive bounds. Request input
-// may only narrow operator, model, plugin, algorithm, or ledger ceilings.
+// may only narrow operator, model, plugin, algorithm, automatic-render, or
+// ledger ceilings.
 func Compose(sources Sources) Result {
 	type bound struct {
 		source string
 		value  int64
 	}
-	bounds := make([]bound, 0, 5)
+	bounds := make([]bound, 0, 6)
 	add := func(source string, value *int64) {
 		if value != nil && *value >= 1 {
 			bounds = append(bounds, bound{source: source, value: *value})
@@ -56,6 +58,7 @@ func Compose(sources Sources) Result {
 	add(SourcePlugin, sources.Plugin)
 	add(SourceModelRef, sources.ModelRef)
 	add(SourceAlgorithmStage, sources.AlgorithmStage)
+	add(SourceAutomatic, sources.Automatic)
 	if sources.Ledger != nil {
 		if value, source, ok := sources.Ledger.UpperBound(); ok && value >= 1 {
 			if source == "" {

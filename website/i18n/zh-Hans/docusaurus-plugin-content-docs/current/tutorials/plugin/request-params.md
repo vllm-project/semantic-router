@@ -13,7 +13,7 @@ translation:
 
 ## 主要优势
 
-- 按路由限制昂贵参数（`max_tokens`、`n`）。`max_tokens_limit` 是补全 token 上限：客户端未设置上限时注入该值，否则与 `modelRefs[].max_completion_tokens` 以及任何 Looper 阶段上限按最严格值合成。
+- 按路由限制昂贵参数（`max_tokens`、`n`）。`max_tokens_limit` 是补全 token 上限：客户端未设置上限时注入该值，否则与 `modelRefs[].max_completion_tokens`、任何 Looper 阶段上限以及自动渲染后的剩余容量按最严格值合成。
 - 对不应暴露 token 分布的层级阻止敏感参数，例如 `logprobs` / `top_logprobs`。
 - 可选剥离未知的顶层 JSON 字段，以减少意外透传。
 

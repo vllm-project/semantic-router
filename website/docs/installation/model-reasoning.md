@@ -124,10 +124,12 @@ one valid deployment-wide default should take precedence.
 `max_completion_tokens` is an optional per-model completion ceiling. When set,
 provider dispatch takes the strictest (minimum) of the client request, the
 decision `request_params.max_tokens_limit` plugin, this ModelRef value, any
-Looper algorithm/stage bound, and a future request-wide ledger. Omission leaves
-current behavior unchanged. The same ceiling applies to ordinary routes and to
-Looper hops, including Confidence escalation, so each selected model is capped
-independently at dispatch.
+Looper algorithm/stage bound, automatic `default_max_tokens: auto` rendered
+capacity, and a future request-wide ledger. Omission leaves current behavior
+unchanged. The same ceiling applies to ordinary routes and to Looper hops,
+including Confidence escalation, so each selected model is capped
+independently at dispatch. A composed ceiling below the Responses API minimum
+of 16 fails dispatch instead of omitting the bound.
 
 In the Dashboard decision editor, select the Model first. The UI derives the
 mode and effort choices from its effective family and disables controls that

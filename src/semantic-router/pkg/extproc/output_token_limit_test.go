@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -150,7 +151,9 @@ func TestApplyDispatchOutputTokenLimitDropsUnsupportedWire(t *testing.T) {
 	}
 	dispatch := &providerDispatch{logicalModel: model, targetFormat: llmprotocol.OpenAIImagesV1}
 
-	router.applyDispatchOutputTokenLimit(request, dispatch, ctx)
+	if _, err := router.applyDispatchOutputTokenLimit(request, dispatch, ctx); err != nil {
+		t.Fatalf("applyDispatchOutputTokenLimit: %v", err)
+	}
 	if request.Sampling.MaxOutputTokens != nil {
 		t.Fatalf("MaxOutputTokens = %v, want dropped on images wire", request.Sampling.MaxOutputTokens)
 	}
@@ -237,7 +240,7 @@ func TestPrepareProviderDispatchRerouteOmitsPriorDispatchAsClient(t *testing.T) 
 	}
 }
 
-func TestPrepareProviderDispatchResponsesSubMinimumModelRefDoesNotEncode(t *testing.T) {
+func TestPrepareProviderDispatchResponsesSubMinimumModelRefFails(t *testing.T) {
 	router, model := routingTestRouterForFormat(llmprotocol.OpenAIResponsesV1)
 	request := testNeutralRequest(model, "hello")
 	ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, request)
@@ -249,31 +252,36 @@ func TestPrepareProviderDispatchResponsesSubMinimumModelRefDoesNotEncode(t *test
 		}},
 	}
 
-	if _, err := router.prepareProviderDispatch(request, model, "route", false, ctx); err != nil {
-		t.Fatalf("prepareProviderDispatch: %v", err)
+	_, err := router.prepareProviderDispatch(request, model, "route", false, ctx)
+	if err == nil {
+		t.Fatal("prepareProviderDispatch: expected Responses minimum error")
 	}
-	if request.Sampling.MaxOutputTokens != nil {
-		t.Fatalf("MaxOutputTokens = %v, want omitted instead of widening below 16", request.Sampling.MaxOutputTokens)
+	var protocolErr *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolErr) || protocolErr.Code != "unsupported_responses_max_output_tokens" {
+		t.Fatalf("prepareProviderDispatch error = %v, want unsupported_responses_max_output_tokens", err)
 	}
-	if ctx.EffectiveMaxOutputTokens != nil || ctx.EffectiveMaxOutputTokensSource != "" {
-		t.Fatalf("effective bound must be cleared for the Responses minimum, got %v source %q", ctx.EffectiveMaxOutputTokens, ctx.EffectiveMaxOutputTokensSource)
+	if request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens != 8 {
+		t.Fatalf("MaxOutputTokens = %v, want retained ModelRef ceiling 8", request.Sampling.MaxOutputTokens)
 	}
-	if ctx.EffectiveMaxOutputTokensFallback != outputtokens.FallbackResponsesMinimum {
-		t.Fatalf("fallback = %q, want %s", ctx.EffectiveMaxOutputTokensFallback, outputtokens.FallbackResponsesMinimum)
+	if ctx.EffectiveMaxOutputTokens == nil || *ctx.EffectiveMaxOutputTokens != 8 {
+		t.Fatalf("effective = %v, want retained 8", ctx.EffectiveMaxOutputTokens)
+	}
+	if ctx.EffectiveMaxOutputTokensSource != outputtokens.SourceModelRef {
+		t.Fatalf("source = %q, want %s", ctx.EffectiveMaxOutputTokensSource, outputtokens.SourceModelRef)
+	}
+	if ctx.EffectiveMaxOutputTokensFallback != "" {
+		t.Fatalf("fallback = %q, want empty when the strict bound is retained", ctx.EffectiveMaxOutputTokensFallback)
 	}
 
-	encoded, err := protocolcodec.NewBuiltinEngine().EncodeRequest(
+	_, encodeErr := protocolcodec.NewBuiltinEngine().EncodeRequest(
 		llmprotocol.OpenAIResponsesV1, *request, llmprotocol.Envelope{},
 	)
-	if err != nil {
-		t.Fatalf("EncodeRequest: %v", err)
+	if encodeErr == nil {
+		t.Fatal("EncodeRequest: expected Responses minimum error for retained ceiling 8")
 	}
-	var body map[string]any
-	if err := json.Unmarshal(encoded.Body, &body); err != nil {
-		t.Fatalf("decode encoded body: %v", err)
-	}
-	if _, ok := body["max_output_tokens"]; ok {
-		t.Fatalf("encoded Responses body must omit max_output_tokens below 16: %s", encoded.Body)
+	var encodeProtocolErr *llmprotocol.ProtocolError
+	if !errors.As(encodeErr, &encodeProtocolErr) || encodeProtocolErr.Code != "unsupported_responses_max_output_tokens" {
+		t.Fatalf("EncodeRequest error = %v, want unsupported_responses_max_output_tokens", encodeErr)
 	}
 }
 

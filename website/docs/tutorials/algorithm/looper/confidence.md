@@ -139,7 +139,7 @@ are never included in this structure.
 Set `routing.decisions[].modelRefs[].max_completion_tokens` when candidates
 should have different completion ceilings. Provider dispatch applies that
 optional ModelRef bound with the client request, `request_params.max_tokens_limit`,
-and any algorithm/stage cap as strictest-wins. Confidence has no separate token
+any algorithm/stage cap, and automatic rendered capacity as strictest-wins. Confidence has no separate token
 or reasoning mutation path; each internal hop reuses the shared dispatch seam
 and records its own effective limit on the attempt.
 

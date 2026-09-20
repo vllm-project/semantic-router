@@ -13,6 +13,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outputtokens"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -163,6 +164,70 @@ func TestAutomaticOutputRendererErrorsAndHiddenCapsNeverCompress(t *testing.T) {
 			require.False(t, ctx.ContextCompressionApplied)
 		})
 	}
+}
+
+func TestAutomaticOutputModelRefCeilingWinsOverRenderedCapacity(t *testing.T) {
+	calls := 0
+	r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
+	model := ctx.VSRSelectedDecision.ModelRefs[0].Model
+	ctx.VSRSelectedDecision.ModelRefs[0].MaxCompletionTokens = outputTokenTestInt(32)
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	refs, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
+	require.NoError(t, err)
+	require.Len(t, refs, 1)
+	require.Greater(t, *ctx.AutomaticCandidateDemands[model].MaxOutputTokens, int64(32))
+
+	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, model, ctx.VSRSelectedDecision.Name, false, ctx)
+	require.NoError(t, err)
+	require.EqualValues(t, 32, *ctx.SemanticRequest.Sampling.MaxOutputTokens)
+	require.Equal(t, outputtokens.SourceModelRef, ctx.EffectiveMaxOutputTokensSource)
+
+	ctx.SemanticRequest.Messages[0].Content[0].Text += "more"
+	ctx.SemanticRequest.Generation++
+	response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}}}}
+	response, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+	require.NoError(t, err)
+	var wire map[string]any
+	require.NoError(t, json.Unmarshal(response.GetRequestBody().Response.BodyMutation.GetBody(), &wire))
+	wireMax := wire["max_tokens"]
+	if wireMax == nil {
+		wireMax = wire["max_completion_tokens"]
+	}
+	require.EqualValues(t, 32, wireMax)
+	require.EqualValues(t, 32, *ctx.SemanticRequest.Sampling.MaxOutputTokens)
+	require.Equal(t, outputtokens.SourceModelRef, ctx.EffectiveMaxOutputTokensSource)
+	require.Empty(t, ctx.EffectiveMaxOutputTokensFallback)
+
+	diagnostics := buildReplayRouteDiagnostics(ctx, "auto", model, ctx.VSRSelectedDecision.Name, 0, 0)
+	require.EqualValues(t, 32, *diagnostics.EffectiveMaxOutputTokens)
+	require.Equal(t, outputtokens.SourceModelRef, diagnostics.EffectiveMaxOutputTokensSource)
+	require.Empty(t, diagnostics.EffectiveMaxOutputTokensFallback)
+}
+
+func TestAutomaticOutputRenderedCapacityCapsWiderModelRef(t *testing.T) {
+	calls := 0
+	r, ctx := automaticFixture(t, "hello", renderMock(t, &calls, 0, 0))
+	model := ctx.VSRSelectedDecision.ModelRefs[0].Model
+	ctx.VSRSelectedDecision.ModelRefs[0].MaxCompletionTokens = outputTokenTestInt(1_000_000)
+	require.NoError(t, r.prepareDecisionContextOverflow(ctx, "auto"))
+	_, err := r.decisionEligibleModelRefs(ctx.VSRSelectedDecision, ctx)
+	require.NoError(t, err)
+	want := *ctx.AutomaticCandidateDemands[model].MaxOutputTokens
+
+	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, model, ctx.VSRSelectedDecision.Name, false, ctx)
+	require.NoError(t, err)
+	response := &ext_proc.ProcessingResponse{Response: &ext_proc.ProcessingResponse_RequestBody{RequestBody: &ext_proc.BodyResponse{Response: &ext_proc.CommonResponse{}}}}
+	response, err = r.finalizeProviderDispatchResponse(dispatch, response, ctx)
+	require.NoError(t, err)
+	var wire map[string]any
+	require.NoError(t, json.Unmarshal(response.GetRequestBody().Response.BodyMutation.GetBody(), &wire))
+	wireMax := wire["max_tokens"]
+	if wireMax == nil {
+		wireMax = wire["max_completion_tokens"]
+	}
+	require.EqualValues(t, want, wireMax)
+	require.EqualValues(t, want, *ctx.EffectiveMaxOutputTokens)
+	require.Equal(t, outputtokens.SourceAutomatic, ctx.EffectiveMaxOutputTokensSource)
 }
 
 func TestAutomaticOutputExplicitCallerHasNoRenderCalls(t *testing.T) {

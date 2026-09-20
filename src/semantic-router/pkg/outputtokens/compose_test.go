@@ -76,3 +76,18 @@ func TestComposeSkipsUnavailableLedger(t *testing.T) {
 		t.Fatalf("compose = %+v, want client 400", result)
 	}
 }
+
+func TestComposeAutomaticRenderIsUpperBound(t *testing.T) {
+	model := int64(32)
+	rendered := int64(1024)
+	result := Compose(Sources{ModelRef: &model, Automatic: &rendered})
+	if result.Effective == nil || *result.Effective != 32 || result.Source != SourceModelRef {
+		t.Fatalf("compose = %+v, want model_ref 32 over rendered 1024", result)
+	}
+
+	wide := int64(4096)
+	result = Compose(Sources{ModelRef: &wide, Automatic: &rendered})
+	if result.Effective == nil || *result.Effective != 1024 || result.Source != SourceAutomatic {
+		t.Fatalf("compose = %+v, want automatic 1024 as upper bound", result)
+	}
+}

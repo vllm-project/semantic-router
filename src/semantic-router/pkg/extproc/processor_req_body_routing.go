@@ -67,7 +67,7 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.logicalModel); err != nil {
 		return nil, err
 	}
-	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
+	if err := r.prepareAutomaticDispatchWithOutputLimit(ctx, request, dispatch); err != nil {
 		return nil, err
 	}
 	// Selection already compared capable candidates. Late mutations may still
@@ -199,8 +199,7 @@ func (r *OpenAIRouter) prepareProviderRequest(
 	if err != nil {
 		return false, err
 	}
-	limitChanged := r.applyDispatchOutputTokenLimit(request, dispatch, ctx)
-	return paramsChanged || limitChanged || changed, nil
+	return paramsChanged || changed, nil
 }
 
 func (r *OpenAIRouter) applyDispatchDecision(
@@ -299,7 +298,7 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		return response, nil
 	}
 	if ctx != nil && ctx.SemanticRequest != nil {
-		if err := r.prepareAutomaticDispatch(ctx, ctx.SemanticRequest, dispatch); err != nil {
+		if err := r.prepareAutomaticDispatchWithOutputLimit(ctx, ctx.SemanticRequest, dispatch); err != nil {
 			return nil, err
 		}
 		if err := r.rejectDispatchCapabilityMismatch(ctx.SemanticRequest, dispatch, ctx); err != nil {

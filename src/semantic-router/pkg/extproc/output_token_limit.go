@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -44,15 +45,36 @@ func parsePositiveInt64Header(ctx *RequestContext, name string) (int64, bool) {
 	return value, true
 }
 
+// prepareAutomaticDispatchWithOutputLimit renders automatic output first, then
+// composes the strictest ceiling. Rendered capacity is an upper bound and
+// cannot replace a stricter ModelRef, plugin, client, stage, or ledger limit.
+func (r *OpenAIRouter) prepareAutomaticDispatchWithOutputLimit(
+	ctx *RequestContext,
+	request *llmprotocol.Request,
+	dispatch *providerDispatch,
+) error {
+	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
+		return err
+	}
+	changed, err := r.applyDispatchOutputTokenLimit(request, dispatch, ctx)
+	if changed && request != nil {
+		request.Generation++
+	}
+	return err
+}
+
 func (r *OpenAIRouter) applyDispatchOutputTokenLimit(
 	request *llmprotocol.Request,
 	dispatch *providerDispatch,
 	ctx *RequestContext,
-) bool {
+) (bool, error) {
 	if request == nil || ctx == nil {
-		return false
+		return false, nil
 	}
 	sources := r.outputTokenLimitSources(dispatch, ctx)
+	if request.Sampling.AutomaticOutput {
+		sources.Automatic = outputtokens.Clone(request.Sampling.MaxOutputTokens)
+	}
 	result := outputtokens.Compose(sources)
 	if outputTokenLimitBlocked(ctx) && sources.Client == nil && result.Effective == nil {
 		result.Fallback = outputtokens.FallbackBlockedParam
@@ -62,18 +84,13 @@ func (r *OpenAIRouter) applyDispatchOutputTokenLimit(
 		result.Effective = nil
 		result.Source = ""
 	}
-	if responsesOutputTokenLimitUnsupported(dispatch, result.Effective) {
-		result.Fallback = outputtokens.FallbackResponsesMinimum
-		result.Effective = nil
-		result.Source = ""
-	}
 	if result.Effective == nil && result.Fallback == "" {
 		// No composed ceiling and no fallback that must clear one. Keep an
 		// already-encoded hop or caller bound instead of treating silence as a wipe.
 		ctx.EffectiveMaxOutputTokens = outputtokens.Clone(request.Sampling.MaxOutputTokens)
 		ctx.EffectiveMaxOutputTokensSource = ""
 		ctx.EffectiveMaxOutputTokensFallback = ""
-		return false
+		return false, nil
 	}
 	previous := outputtokens.Clone(request.Sampling.MaxOutputTokens)
 	request.Sampling.MaxOutputTokens = outputtokens.Clone(result.Effective)
@@ -87,7 +104,16 @@ func (r *OpenAIRouter) applyDispatchOutputTokenLimit(
 		}
 		metrics.RecordMaxTokensCapped(decisionKey)
 	}
-	return !int64PointersEqual(previous, request.Sampling.MaxOutputTokens)
+	changed := !int64PointersEqual(previous, request.Sampling.MaxOutputTokens)
+	if responsesOutputTokenLimitUnsupported(dispatch, result.Effective) {
+		return changed, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_responses_max_output_tokens",
+			fmt.Sprintf("composed output token limit %d is below the Responses API minimum of %d", *result.Effective, outputtokens.ResponsesMinOutputTokens),
+			nil,
+		)
+	}
+	return changed, nil
 }
 
 func (r *OpenAIRouter) outputTokenLimitSources(

@@ -8,8 +8,8 @@
 
 - Caps expensive parameters (`max_tokens`, `n`) per route. `max_tokens_limit`
   is a completion-token ceiling: it injects when the client omitted a limit and
-  otherwise composes with `modelRefs[].max_completion_tokens` and any Looper
-  stage bound as strictest-wins.
+  otherwise composes with `modelRefs[].max_completion_tokens`, any Looper
+  stage bound, and automatic rendered capacity as strictest-wins.
 - Blocks sensitive parameters such as `logprobs` / `top_logprobs` for tiers that should not expose token distributions.
 - Optionally strips unknown top-level JSON fields to reduce surprise passthrough behavior.
 
