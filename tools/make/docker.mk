@@ -565,6 +565,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_routing_preview.py \
 		src/vllm-sr/tests/test_sr_bench_grading.py \
 		src/vllm-sr/tests/test_sr_bench_harness.py \
+		src/vllm-sr/tests/test_sr_bench_history_exclusions.py \
 		src/vllm-sr/tests/test_sr_bench_bridge.py \
 		src/vllm-sr/tests/test_sr_bench_native_output.py \
 		src/vllm-sr/tests/test_sr_bench_plan_hash.py \

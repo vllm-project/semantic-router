@@ -23,7 +23,9 @@ from .dataset_io import (
 from .dataset_io import (
     identity as file_identity,
 )
+from .preparation import SELECTION, select_cases, validate_cases
 from .source_records import normalize_records
+from .task_identity import source_identity
 
 # (repository, immutable revision, source files). No moving branch is used.
 HF_SOURCES = {
@@ -277,8 +279,19 @@ def prepare_dataset(
     revision=None,
     seed=20260918,
     limit=None,
+    exclusion_snapshot=None,
+    source_partition=None,
+    evaluation_role=None,
 ):
     if benchmark not in COUNTS:
+        if (
+            exclusion_snapshot is not None
+            or source_partition is not None
+            or evaluation_role is not None
+        ):
+            raise ValueError(
+                "This adapter does not support source-bound history preparation"
+            )
         # Adapter registration imports source preparation.
         from .adapters import (  # noqa: PLC0415
             get_adapter,
@@ -304,7 +317,12 @@ def prepare_dataset(
         if source_path
         else _acquire(benchmark, root)
     )
-    cases = normalize_records(benchmark, rows, seed)
+    task_source = (
+        source_identity(source, source_partition)
+        if source_partition is not None
+        else None
+    )
+    cases = normalize_records(benchmark, rows, seed, task_source=task_source)
     ids = [c["id"] for c in cases]
     if len(ids) != len(set(ids)):
         raise ValueError("Duplicate source task IDs")
@@ -322,7 +340,30 @@ def prepare_dataset(
             )
         desired = limit
     offset = quick if profile == "standard" else 0
-    selected = ordered[offset : offset + desired]
+    preparation = None
+    if (
+        exclusion_snapshot is not None
+        or source_partition is not None
+        or evaluation_role is not None
+    ):
+        from .history_snapshot import load_snapshot  # noqa: PLC0415
+
+        snapshot = (
+            load_snapshot(exclusion_snapshot)
+            if exclusion_snapshot is not None
+            else None
+        )
+        selected, preparation = select_cases(
+            ordered,
+            benchmark,
+            offset,
+            desired,
+            snapshot=snapshot,
+            role=evaluation_role,
+            task_source=task_source,
+        )
+    else:
+        selected = ordered[offset : offset + desired]
     if len(selected) != desired:
         raise ValueError(
             f"Source has insufficient tasks for disjoint {profile}: need {offset + desired}, found {len(ordered)}"
@@ -335,11 +376,19 @@ def prepare_dataset(
             }
         )
     return _write_dataset(
-        root, selected, profile, seed, {benchmark: source}, limit is not None
+        root,
+        selected,
+        profile,
+        seed,
+        {benchmark: source},
+        limit is not None,
+        preparation=preparation,
     )
 
 
-def _write_dataset(root, cases, profile, seed, sources, custom=False):
+def _write_dataset(
+    root, cases, profile, seed, sources, custom=False, *, preparation=None
+):
     """Stream canonical rows to a private stage, then publish immutable artifacts."""
     root = Path(root).expanduser().resolve()
     datasets = root / "datasets"
@@ -349,6 +398,7 @@ def _write_dataset(root, cases, profile, seed, sources, custom=False):
     with tempfile.TemporaryDirectory(prefix=".dataset-", dir=root) as temporary:
         staged = Path(temporary) / "cases.jsonl"
         checksum, count, total = hashlib.sha256(), 0, 0
+        identities = []
         with staged.open("xb") as output:
             for case in cases:
                 content = (canonical(case) + "\n").encode()
@@ -362,6 +412,18 @@ def _write_dataset(root, cases, profile, seed, sources, custom=False):
                     )
                 output.write(content)
                 checksum.update(content)
+                if preparation:
+                    identities.append(
+                        {
+                            "id": case["id"],
+                            "benchmark": case["benchmark"],
+                            "metadata": {
+                                "task_identity": case.get("metadata", {}).get(
+                                    "task_identity"
+                                )
+                            },
+                        }
+                    )
         sha = checksum.hexdigest()
         identity = digest(
             {
@@ -370,13 +432,11 @@ def _write_dataset(root, cases, profile, seed, sources, custom=False):
                 "profile": profile,
                 "seed": seed,
                 "custom_subset": custom,
-                "selection": "stratified-hash-v1",
+                "selection": SELECTION if preparation else "stratified-hash-v1",
+                **({"preparation": preparation} if preparation else {}),
             }
         )
         destination = datasets / identity
-        destination.mkdir(exist_ok=True, mode=0o700)
-        if destination.is_symlink() or destination.resolve() != destination:
-            raise ValueError("Prepared dataset must not be a symlink")
         data_path = destination / "cases.jsonl"
         manifest = {
             "version": VERSION,
@@ -390,12 +450,20 @@ def _write_dataset(root, cases, profile, seed, sources, custom=False):
             "benchmarks": sorted(sources),
             "sources": sources,
             "seed": seed,
-            "selection": "stratified-hash-v1",
+            "selection": SELECTION if preparation else "stratified-hash-v1",
+            **({"preparation": preparation} if preparation else {}),
             "split": "holdout" if profile == "standard" else "dev",
         }
+        if preparation:
+            validate_cases(manifest, identities)
         manifest_stage = Path(temporary) / "manifest.json"
         rendered = (json.dumps(manifest, indent=2) + "\n").encode()
+        if len(rendered) > 2 * 1024 * 1024:
+            raise ValueError("Prepared manifest exceeds its supported byte limit")
         manifest_stage.write_bytes(rendered)
+        destination.mkdir(exist_ok=True, mode=0o700)
+        if destination.is_symlink() or destination.resolve() != destination:
+            raise ValueError("Prepared dataset must not be a symlink")
         publish_dataset(destination, staged, sha, manifest_stage, rendered)
         return manifest
 
@@ -403,11 +471,15 @@ def _write_dataset(root, cases, profile, seed, sources, custom=False):
 def combine_datasets(manifests, store):
     if not manifests or len({(m["profile"], m["seed"]) for m in manifests}) != 1:
         raise ValueError("Combining datasets requires one profile and seed")
-    sources, total = {}, 0
+    sources, total, preparation = {}, 0, {}
     for manifest in manifests:
         if set(sources) & set(manifest["sources"]):
             raise ValueError("Duplicate benchmark in dataset bundle")
         sources.update(manifest["sources"])
+        from .preparation import validate_manifest  # noqa: PLC0415
+
+        validate_manifest(manifest)
+        preparation.update(manifest.get("preparation", {}))
 
     def cases():
         nonlocal total
@@ -441,4 +513,5 @@ def combine_datasets(manifests, store):
         manifests[0]["seed"],
         sources,
         any(m.get("custom_subset") for m in manifests),
+        preparation=preparation or None,
     )
