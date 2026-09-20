@@ -794,7 +794,6 @@ _Appears in:_
 | `window` _[PromptGuardWindowConfig](#promptguardwindowconfig)_ | Window enables explicit scanning of all input tokens. Omission or null<br />keeps whole-input inference. Only the local mmbert32k variant supports it. |  | Optional: \{\} <br /> |
 | `enabled` _boolean_ |  | true | Optional: \{\} <br /> |
 | `variant` _string_ | Variant selects a local Candle-backed model variant. It is mutually<br />exclusive with Backend. When both are omitted, the operator uses mmbert32k. |  | Enum: [candle mmbert32k] <br />Optional: \{\} <br /> |
-| `protocol` _string_ | Protocol is retired and rejected at admission. Configure Backend with<br />the protocol, contract and explicit external model name instead. |  | Enum: [http_chat http_classify] <br />Optional: \{\} <br /> |
 | `model_id` _string_ |  | models/Vela-1.0-Encoder-307M-Guard | Optional: \{\} <br /> |
 | `threshold` _string_ | Jailbreak detection threshold (0.0-1.0). Stored as string to avoid float precision issues. | 0.5 | Pattern: `^0(\.[0-9]+)?$\|^1(\.0+)?$` <br />Optional: \{\} <br /> |
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |

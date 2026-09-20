@@ -36,6 +36,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 ) (chosen *config.ModelRef, chosenMethod string, selectionErr error) {
 	if ctx != nil {
 		ctx.VSRSelectedCandidate = nil
+		ctx.VSRSelectionTrace = nil
 		ctx.pendingSessionDecision = nil
 	}
 	defer func() {
@@ -189,6 +190,7 @@ func (r *OpenAIRouter) selectWithSelector(
 	if err := r.validateProtectedCandidateOwnership(selCtx, ctx); err != nil {
 		return nil, string(method), err
 	}
+	ctx.VSRSelectionTrace = result.MultiFactor.Clone()
 	recordCtx, result, selectedModel, learningApplied, learningErr := r.applyRouterLearning(
 		selCtx,
 		result.WithCandidate(*selectedModel),

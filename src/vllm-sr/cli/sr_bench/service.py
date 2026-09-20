@@ -19,7 +19,7 @@ from cli.runtime_env_names import runtime_env_name_is_allowed
 from . import VERSION
 from .accounting import reconcile_usage
 from .candidate_plans import candidate_manifest, validate_candidate_protocol
-from .contracts import catalog, plan, planned_cells, resolve_dataset
+from .contracts import catalog, plan, planned_cells
 from .datasets import DatasetReader
 from .engine import Engine, ReviewedPlanChangedError
 from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
@@ -97,7 +97,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def _plan(self, manifest, role, actor):
-        frozen = plan(self._manifest(manifest, role))
+        frozen = plan(manifest, policy=lambda resolved: self._manifest(resolved, role))
         if membership := frozen.get("experiment"):
             self.server.experiments.get(
                 membership["id"], None if role == "admin" else actor
@@ -165,6 +165,7 @@ class Handler(BaseHTTPRequestHandler):
             "preview_api_key_env",
             "request_params",
             "capture_recipe",
+            "native_limits",
         }
         if any(set(t) - safe for t in data):
             raise ValueError("Server target registry contains unsupported fields")
@@ -175,7 +176,6 @@ class Handler(BaseHTTPRequestHandler):
             return manifest
         if not isinstance(manifest, dict):
             raise ValueError("manifest must be an object")
-        manifest = resolve_dataset(manifest)
         cases = manifest.get("cases")
         if (
             not isinstance(cases, list)
@@ -397,10 +397,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(
                     201,
                     self.server.engine.start(
-                        self._manifest(manifest, role),
+                        manifest,
                         actor,
                         body.get("idempotency_key"),
                         actor_role=role,
+                        manifest_policy=lambda resolved: self._manifest(resolved, role),
                     ),
                 )
             if route == ["replays"] and method == "POST":
@@ -496,11 +497,28 @@ class Handler(BaseHTTPRequestHandler):
                             ),
                         )
                     if action in {"results", "calls"} and method == "GET":
-                        query = parse_qs(parsed.query)
+                        query = parse_qs(
+                            parsed.query, keep_blank_values=True, max_num_fields=3
+                        )
+                        allowed = (
+                            {"after", "limit", "active"}
+                            if action == "calls"
+                            else {"after", "limit"}
+                        )
+                        if set(query) - allowed or any(
+                            len(values) != 1 for values in query.values()
+                        ):
+                            raise ValueError("Invalid evidence page filters")
+                        active = query.get("active", ["false"])[0]
+                        if active not in {"true", "false"}:
+                            raise ValueError("active must be true or false")
                         after = int(query.get("after", ["0"])[0])
                         limit = int(query.get("limit", ["100"])[0])
                         return self._send(
-                            200, self.server.store.page(run_id, action, after, limit)
+                            200,
+                            self.server.store.page(
+                                run_id, action, after, limit, active=active == "true"
+                            ),
                         )
                     if action == "report" and method == "GET":
                         return self._send(200, make_report(self.server.store, run_id))

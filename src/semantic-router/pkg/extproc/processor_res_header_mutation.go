@@ -151,6 +151,9 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 	inbound := normalizeProtocol(string(ctx.SourceFormat))
 	outbound := normalizeProtocol(string(ctx.TargetFormat))
 
+	// Reserve the largest possible truncation trailer before appending entries.
+	// A single diagnostic obeys the same bound as a longer warning list.
+	trailerBudget := len(fmt.Sprintf("%s;%s;count=%d", llmprotocol.DiagnosticTruncated, "diagnostics_truncated", len(diagnostics))) + 1
 	var sb strings.Builder
 	truncatedAt := -1
 	for i, diagnostic := range diagnostics {
@@ -159,7 +162,7 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 		if sb.Len() > 0 {
 			separatorLen = 1
 		}
-		if sb.Len()+separatorLen+len(entry) > lossinessHeaderSizeLimit && sb.Len() > 0 {
+		if sb.Len()+separatorLen+len(entry) > lossinessHeaderSizeLimit-trailerBudget {
 			truncatedAt = i
 			break
 		}

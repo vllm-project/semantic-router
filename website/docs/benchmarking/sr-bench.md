@@ -49,6 +49,19 @@ is `<state-root>/.sr-bench/<stack>/store` and its host API is loopback port
 from the same workspace. Dashboard reloads and configuration replacement preserve
 the worker. `vllm-sr stop` stops it without deleting saved evidence.
 
+To avoid a host port conflict, set `VLLM_SR_BENCH_PORT` to an absolute port from
+1 through 65535 for both `vllm-sr serve` and `vllm-sr benchmark`. This overrides
+only the worker's loopback host port; its container port remains 8090 and the
+stack port offset is not added to the override.
+
+When only the selected Dashboard image changes, `serve` upgrades its managed
+worker after verifying the same launch settings, store and credentials. The CLI
+briefly pauses the worker to check its durable journal before replacing it.
+Active runs block the upgrade and resume unchanged; finish or cancel them before
+retrying. Saved results remain in the same store. A stopped worker, changed
+credentials or changed launch settings still require explicit reconciliation.
+The container runtime must support pausing for this image upgrade.
+
 The core container has no Docker socket or GPU passthrough and does not include
 all upstream harness dependencies. For the code and agent adapters, prepare a
 dedicated host worker with pinned interpreters, source checkouts and sandbox
@@ -140,6 +153,47 @@ store. External adapters discover the pinned environments installed by
 corresponding `_ROOT` variables to override those locations. Exact source
 revisions and, for code or terminal tasks, digest-pinned sandbox images remain
 required. Preflight reports missing prerequisites before dispatch.
+
+## Native output capacity
+
+Set `output_policy: native` to explore each model's available output capacity
+without a shared generation-token cap. Register `native_limits` on every selected
+target, keyed by the physical response model, with verified `context_window` and
+`max_output_tokens` values. Keep model-specific reasoning settings in
+`request_params`. Omit `max_tokens` from both sampling and target overrides.
+
+The single-model adapter uses the vLLM Chat render API to count the actual
+prompt, then generates once with the smaller of the configured output capacity
+and remaining context. A MoM recipe must use `request_params.default_max_tokens:
+auto` on every reachable decision, without a smaller output limit. Its Router
+response records the actual selected-model input and output budget. Missing or
+inconsistent evidence stops qualification; the harness does not guess a budget
+from generated token usage. Native mode currently requires physical response
+identities to match selected model identities and one fully accounted dispatch.
+
+The plan derives its evidence token ceiling from the frozen native limits. Allow
+sufficient call/run time and output storage for that capacity; idle, cancellation
+and repetition controls remain active. Model maximum output and total context are
+different values, and normal end-of-answer stopping remains enabled. Native
+capacity does not force a model to fill its context. Compare native candidates
+against native baselines with the same model limits. Offline replay is unavailable
+when equivalent per-call native budget evidence cannot be established.
+
+## Answer grading
+
+The MMLU-Pro and GPQA adapters use `sr-bench-mcq-final-v2`. Capability scoring
+extracts an unambiguous answer from the visible final channel: a leading answer
+line, an explicit answer declaration, or a boxed choice. Markdown emphasis does
+not change the answer. Conflicting declarations and prose without an explicit
+answer remain unparsed; the grader does not guess from isolated letters or use
+hidden reasoning. This is a conservative sr-bench adaptation, not an exact
+reproduction of the upstream extraction heuristics.
+
+Strict answer-format compliance is reported separately from correctness.
+Truncated responses still count as output failures. Adapter versions are frozen
+in each plan, so different graders cannot silently share a comparison. Existing
+run scores remain unchanged. `benchmark regrade RUN_ID` returns a separate,
+versioned result from saved final answers without generating or rewriting them.
 
 ## Plan and run
 
@@ -252,6 +306,15 @@ candidates. Record the intended state conditions and treat uncontrolled live
 state differences as a comparison limitation. Non-Learning selectors that depend
 on telemetry can also return state-dependent snapshots.
 
+With automatic output budgets, supported single-backend previews call the
+provider's render API to resolve each candidate's input size and available output
+capacity. Rendering does not generate an answer. Selection uses the configured
+cost forecast, not the maximum output capacity as an expected token count.
+Requests needing dynamic enrichment or overflow compression remain unresolved;
+inspect `selection_status` and `selection_reason` before relying on a model choice.
+These checks cover the supported preview envelope and configured request policy,
+not unsupported caller-specific generation fields.
+
 For a single request, `vllm-sr route preview --request-file request.json` accepts
 the Router's supported request envelope: role/content/tool-call messages, tools,
 function selection, response format, output-budget fields, string metadata and
@@ -344,10 +407,14 @@ its subset label and is not the full score.
 Paired comparison selects the strongest observed single model by the same
 aggregate over identical cases and records that selection.
 Exact weighted-quality ties prefer the single with the lowest complete known
-subject cost, then a stable target ID. The report lists every tied-best single.
-If any tied-best single has incomplete cost, savings remain unknown. Savings are
-`100 × (1 − candidate subject cost / baseline subject cost)` with complete,
-compatible accounting. A small dev sample shows direction; a quality
+total cost, then a stable target ID. The report lists every tied-best single.
+If any tied-best single has incomplete total cost, savings remain unknown.
+Comparisons report **total cost savings** across subject and judge/simulator
+calls, with **subject cost savings** shown separately. Both use
+`100 × (1 − candidate cost / baseline cost)` with the same scope and complete,
+compatible accounting. The API names these `total_cost_saving_percent` and
+`subject_cost_saving_percent`; cache-neutral comparisons remain subject-only.
+A small dev sample shows direction; a quality
 non-inferiority claim needs a prespecified margin and a holdout confidence
 interval. Token-equivalent self-hosted prices do not establish GPU invoice savings.
 
@@ -357,6 +424,11 @@ including all-wrong samples. The stratified bootstrap interval is retained as a
 diagnostic; a degenerate `[0, 0]` bootstrap from a small tied sample does not prove
 equivalence. Neither interval includes selection of the strongest observed
 baseline, tuning selection or dataset contamination uncertainty.
+
+Before reserving a Standard holdout, exclude previously generated, inspected or
+tuned-on cases by stable ID and input fingerprint. A different seed or a
+`holdout` split label does not establish independence. Retests remain useful,
+but report their exposure separately from unseen validation.
 
 Dashboard opens on **Runs**, with filters for name/model, status and mode. Each
 row shows the completed denominator, failures, persisted update time and target
@@ -392,6 +464,14 @@ overlap, so this is not a count of unique questions or the selected run's denomi
 Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
 **Recipe**. Start with the aggregate results, then inspect individual responses,
 accounting and frozen configuration as needed.
+
+While a run is active, elapsed time continues updating even when no additional
+question has finished. Active calls show their phase, elapsed time, latest
+recorded response activity and received bytes. This activity helps distinguish a
+long response from one that has stopped arriving; it does not establish answer
+quality or billable token usage. Tokens and costs require a complete usage receipt.
+Use `vllm-sr benchmark show RUN_ID --calls --active` to read the same activity
+through the CLI; `--after` and `--limit` bound each page.
 
 **Compare iterations** guides two choices: a live single-model baseline with
 compatible saved outcomes, then any number of eligible candidate runs. Baselines

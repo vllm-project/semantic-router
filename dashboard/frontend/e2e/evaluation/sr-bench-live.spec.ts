@@ -226,12 +226,6 @@ test('live comparison retains current Balance and two optimization revisions', a
   )
   const blocked = await openAcceptance(page)
   await page.getByRole('button', { name: 'Compare iterations', exact: true }).click()
-  await expect(
-    page.getByText(
-      'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
-      { exact: true },
-    ),
-  ).toBeVisible()
   await page.getByRole('combobox', { name: 'Reference run', exact: true }).click()
   await page
     .locator(`[role="option"][data-value=${JSON.stringify(plan!.baseline_run_id!)}]`)
@@ -255,6 +249,12 @@ test('live comparison retains current Balance and two optimization revisions', a
   await page.getByRole('button', { name: 'Compare runs', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Comparison evidence', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText(
+      'Total cost includes model answers and evaluation calls, priced from recorded usage at frozen rates. These are estimates, not invoices or hardware costs.',
+      { exact: true },
+    ),
   ).toBeVisible()
   await expect(page.getByText('Comparison withheld:', { exact: false })).toHaveCount(0)
   await expect(page.getByRole('alert')).toHaveCount(0)

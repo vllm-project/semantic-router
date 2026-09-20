@@ -22,6 +22,8 @@ type Config struct {
 	ConfigFile             string
 	AbsConfigPath          string
 	ConfigDir              string
+	// ConfigBaseDir is the shared resource root, independent of mutable state.
+	ConfigBaseDir string
 
 	// Upstream targets
 	GrafanaURL    string
@@ -259,7 +261,8 @@ func resolveConfigPaths(cfg *Config) error {
 		return err
 	}
 	cfg.ConfigDir = absConfigDir
-	return nil
+	cfg.ConfigBaseDir, err = resolveConfigBaseDir()
+	return err
 }
 
 func bindCoreFlags() parsedFlags {

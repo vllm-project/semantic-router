@@ -160,6 +160,11 @@ export const benchApi = {
       `${runPath(id)}/calls?after=${after}&limit=100`,
       { signal },
     ),
+  activeCalls: (id: string, after = 0, signal?: AbortSignal) =>
+    request<EvidencePage & { calls: CallRecord[] }>(
+      `${runPath(id)}/calls?active=true&after=${after}&limit=100`,
+      { signal },
+    ),
   call: (id: string, callId: string, signal?: AbortSignal) =>
     request<CallRecord>(`${runPath(id)}/calls/${encodeURIComponent(callId)}`, { signal }),
   results: (id: string, after = 0, signal?: AbortSignal) =>

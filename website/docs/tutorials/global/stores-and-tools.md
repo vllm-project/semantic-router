@@ -50,11 +50,14 @@ global:
 Bi-encoder similarity cannot tell *"turn on dark mode"* from *"turn off dark
 mode"*: opposite-meaning queries often score above `similarity_threshold`
 while genuine paraphrases score below it, so raising the threshold does not
-fix the false hit. `polarity_guard` verifies the winning candidate before the
-in-memory backend serves it:
+reliably prevent false hits. All cache backends apply the lexical tier before
+serving a semantic candidate. The `polarity_guard` configuration additionally
+selects an optional verifier for the in-memory backend:
 
 - `lexical` (default): the model-free tier that catches negation cues and
-  known antonym swaps. It is always on and needs no model.
+  known antonym swaps in near-identical English token sets. It is always on
+  for in-memory, Redis, Valkey, Milvus, Qdrant, and hybrid caches and needs no
+  model. It does not cover cue-less, word-order-only, or non-English changes.
 - `nli` / `lexical+nli`: additionally runs the router's NLI model once per
   lookup on the single best candidate and rejects the hit when the
   contradiction probability exceeds `nli.contradiction_threshold`. The tier
@@ -71,7 +74,9 @@ in-memory backend serves it:
 
 Rejections are logged as `cache_negation_reject` with `tier: nli`, count as
 misses, and still surface the rejected score on `x-vsr-cache-similarity`. Remote
-and hybrid cache backends do not run the guard.
+and hybrid backends run the lexical tier only. They reject candidates without
+an original query and continue checking the bounded fetched candidate set.
+The same lexical check also applies to hybrid's Milvus fallback.
 
 ### Memory
 

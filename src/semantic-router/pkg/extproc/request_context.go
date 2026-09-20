@@ -19,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
@@ -159,6 +160,7 @@ type RequestContext struct {
 	VSRSelectedModel                    string                                      // The model selected by VSR
 	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
+	VSRSelectionTrace                   *selectiontrace.MultiFactorObjective        // Base objective evidence, before Router Learning
 	VSRFusionQuorum                     *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRLooperDiagnostics                *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
 	VSRPromptHelperModel                string                                      // Concrete prompt-selector helper model
@@ -346,6 +348,13 @@ type RequestContext struct {
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
 	SemanticResponse         *llmprotocol.Response
+	// PrimaryOutputDigest hashes the answer the selected model produced, taken
+	// before any response-stage plugin rewrites it. A body warning prepends
+	// router text to SemanticResponse in place, so hashing that later would
+	// attribute the warning to the model and stop the digest comparing with a
+	// shadow arm's.
+	PrimaryOutputDigest      string
+	PrimaryOutputChars       int
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics

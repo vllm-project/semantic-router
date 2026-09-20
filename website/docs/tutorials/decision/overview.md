@@ -91,11 +91,64 @@ Choose the smallest shape that expresses the policy clearly:
 
 Add [Algorithm](../algorithm/overview) when `modelRefs` contains more than one candidate, and add [Plugin](../plugin/overview) when the route needs post-selection behavior.
 
+## Selection Order
+
+Matching and ranking are separate steps. Every decision whose rules evaluate to
+true becomes a candidate, and ranking then picks one of them.
+
+`decision.tier` is the hard precedence boundary: a lower tier wins, and a
+decision that omits `tier` is tier 0, so it ranks ahead of every decision that
+sets one. Tiered ranking activates per request, as soon as one matched decision
+carries a tier above 0. Otherwise `routing.strategy` decides.
+
+| Case | Keys, in order |
+| --- | --- |
+| a matched decision sets `tier` | tier ascending, catch-all last, confidence descending, priority descending, name ascending |
+| no tier, `strategy: confidence` | catch-all last, confidence descending, priority descending, name ascending |
+| no tier, `strategy: priority` | priority descending, confidence descending, name ascending |
+
+Confidence ranks a comparable pool only. A pool is one tier under tiered
+ranking and the whole candidate set otherwise. Every leaf is either policy or
+evidence. Keyword rules, `NOT` guards, predicates, conversation and metadata
+rules, and projection outputs restate policy the operator already wrote, so
+they decide whether a decision matches and carry no weight in its confidence.
+Only a signal that reports a measurement is evidence, and selection ranks on
+it only where the quantity it reports is established.
+
+| Evidence signal | Score kind |
+| --- | --- |
+| `domain`, `classifier`, `safety`, `preference` | classifier probability |
+| `embedding`, `reask`, `kb` | vector similarity |
+| `complexity`, `jailbreak` | depends on the configured backend |
+
+A decision is comparable when exactly one evidence leaf produced its score,
+since a mean over several leaves falls as a decision gains evidence. A pool
+ranks by confidence when every member that is not a catch-all is comparable
+and all of those scores are the same kind. Otherwise the pool ranks by
+priority, and the router warns at startup about a pool that mixes kinds. Three
+cases are never comparable: a score whose kind depends on the backend that
+produced it, a tree that reports one kind or another depending on which branch
+of an `OR` matched, and a match an `on_error` policy manufactured. Inside an
+`OR`, a branch that reported a score outranks one that did not, so an extra
+matching gate adds support without removing evidence. Name ascending is the
+final tie-break, so ranking never depends on map or file order.
+
+Two consequences are easy to miss:
+
+- The tiered case never reads `routing.strategy`. A profile that mixes tiered
+  and untiered decisions therefore ranks its untiered pool by confidence
+  whenever a tiered decision happens to match as well.
+- The `strategy: priority` case has no catch-all rule, unlike the other two, so
+  a catch-all with a high priority can outrank a real match there.
+
+The [Decision Ranking Semantics](../../proposals/decision-ranking-semantics)
+proposal tracks the contract that replaces both.
+
 ## Operational Boundaries
 
 - Every leaf must reference a signal or projection output declared in the same
   recipe.
-- Higher `priority` wins when more than one decision matches. Keep an explicit
+- Ranking follows [Selection Order](#selection-order). Keep an explicit
   unconditional fallback or configure `providers.defaults.model`.
 - Decision names and route diagnostics can become operational metadata; avoid
   secrets or personal identifiers in names and descriptions.

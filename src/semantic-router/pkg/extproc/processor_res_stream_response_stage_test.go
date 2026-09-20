@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -44,7 +46,7 @@ func streamResponseStageAnswer(t *testing.T, router *OpenAIRouter, ctx *RequestC
 }
 
 // assertStreamedOutcome checks the one outcome for the requested response-stage
-// signal, independently of asynchronous memory persistence receipts.
+// signal, independently of memory receipts and the primary response digest.
 func assertStreamedOutcome(t *testing.T, outcomes []routerreplay.Outcome, target, verdict string) {
 	t.Helper()
 	var matches []routerreplay.Outcome
@@ -65,6 +67,31 @@ func assertStreamedOutcome(t *testing.T, outcomes []routerreplay.Outcome, target
 	}
 	if action, named := outcome.Metadata["action"]; named {
 		t.Fatalf("the record named action %q, yet no plugin ran on a streamed response", action)
+	}
+}
+
+// assertPrimaryOutputDigest checks that a finished response recorded the digest
+// an offline comparison reads as the primary arm. It hashes the assistant text,
+// not the encoded body, because a shadow arm is hashed the same way and the two
+// have to be comparable.
+func assertPrimaryOutputDigest(t *testing.T, outcomes []routerreplay.Outcome, answer string) {
+	t.Helper()
+	recorded := make([]routerreplay.Outcome, 0, 1)
+	for _, candidate := range outcomes {
+		if candidate.Source == primaryResponseOutcomeSource {
+			recorded = append(recorded, candidate)
+		}
+	}
+	if len(recorded) != 1 {
+		t.Fatalf("primary digest outcomes = %+v, want exactly one", recorded)
+	}
+	sum := sha256.Sum256([]byte(answer))
+	want := hex.EncodeToString(sum[:])
+	if got := recorded[0].Metadata["response_sha256"]; got != want {
+		t.Fatalf("primary digest = %q, want the hash of the answer text %q", got, want)
+	}
+	if recorded[0].Verdict != "completed" {
+		t.Fatalf("primary digest verdict = %q, want completed", recorded[0].Verdict)
 	}
 }
 
@@ -90,7 +117,9 @@ func TestStreamedResponseJailbreakIsObservedAndNotEnforced(t *testing.T) {
 	if ctx.ResponseJailbreakDetected {
 		t.Fatal("a streamed response was already delivered, so the block action must not have run")
 	}
-	assertStreamedOutcome(t, replayOutcomes(t, recorder, ctx.RouterReplayID), responseStageSignalKey, "detected")
+	outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID)
+	assertStreamedOutcome(t, outcomes, responseStageSignalKey, "detected")
+	assertPrimaryOutputDigest(t, outcomes, content)
 }
 
 // The same for the hallucination rule: the streamed answer is checked against
@@ -134,7 +163,11 @@ func TestAbortedStreamIsNotCheckedForHallucination(t *testing.T) {
 	if calls.Load() != 0 {
 		t.Fatalf("an aborted stream has no terminal answer, yet the detector was asked %d time(s)", calls.Load())
 	}
-	if outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID); len(outcomes) != 0 {
-		t.Fatalf("outcomes = %+v, want none for a stream that never answered", outcomes)
+	// Lifecycle receipts (such as disabled memory persistence) can still be
+	// recorded; only a hallucination verdict requires a completed answer.
+	for _, outcome := range replayOutcomes(t, recorder, ctx.RouterReplayID) {
+		if outcome.TargetRef == hallucinationSignalKey {
+			t.Fatalf("hallucination outcome = %+v for a stream that never answered", outcome)
+		}
 	}
 }
