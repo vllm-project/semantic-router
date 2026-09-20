@@ -34,13 +34,21 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         self.output = self.root / "reports"
         self.output.mkdir()
         self.model = self.root / "models"
-        metadata = self.model / ".cache/huggingface/download"
-        metadata.mkdir(parents=True)
-        for name in image_calibration.MODEL_FILES:
-            (self.model / name).write_text("pinned bytes for " + name)
-            (metadata / (name + ".metadata")).write_text(REVISION + "\nchecksum\n")
+        self.model.mkdir()
+        (self.model / "image.onnx").write_text("pinned graph")
+        artifact = {
+            "format_version": 1,
+            "adapter": "vela_omni",
+            "source": {"repo_id": "fixture/model", "revision": REVISION},
+            "files": {
+                "image.onnx": image_calibration.file_sha(
+                    self.model / "image.onnx"
+                ).removeprefix("sha256:")
+            },
+        }
+        (self.model / image_calibration.OMNI_MANIFEST).write_text(json.dumps(artifact))
         manifest = {
-            "provider": "candle",
+            "provider": "ort",
             "models": [
                 {
                     "name": "Multimodal",
@@ -167,6 +175,47 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         # executable Go threshold assertion, not invented perfect accuracy, gates.
         self.assertEqual(result["cases"][0]["scores"], result["cases"][1]["scores"])
 
+    def test_prototype_quality_requires_frozen_inputs_and_zero_holdout_errors(self):
+        rules = self.root / image_calibration.RULES
+        config = yaml.safe_load(rules.read_text())
+        config["routing"]["signals"]["embeddings"][0]["image_candidates"] = [
+            "./positive.png"
+        ]
+        rules.write_text(yaml.safe_dump(config))
+        for field, relative in (
+            ("prototype_manifest_sha256", "config/assets/image-routing/manifest.json"),
+            (
+                "prototype_protocol_sha256",
+                "tools/calibration/image-routing/testdata/prototype-protocol.json",
+            ),
+        ):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}")
+            self.report["source"][field] = image_calibration.file_sha(path)
+        self.report["rules"][0]["validation"] = {
+            "true_positive": 1,
+            "false_positive": 0,
+            "false_negative": 0,
+            "true_negative": 1,
+        }
+        self.report["checks"].append({"id": "validation/office", "passed": True})
+        self.assertIn("validation/office", self.evaluate()["expected_cases"])
+        original = copy.deepcopy(self.report)
+        for mutation in (
+            lambda r: r["rules"][0]["validation"].update(false_positive=1),
+            lambda r: r["rules"][0]["validation"].update(false_negative=1),
+            lambda r: r["rules"][0]["validation"].update(true_positive=0),
+            lambda r: r["rules"][0].pop("validation"),
+            lambda r: r["source"].update(prototype_protocol_sha256="changed"),
+            lambda r: r["source"].update(prototype_manifest_sha256="changed"),
+            lambda r: r["checks"].pop(),
+        ):
+            self.report = copy.deepcopy(original)
+            mutation(self.report)
+            with self.assertRaises(ValueError):
+                self.evaluate()
+
     def test_threshold_failure_is_preserved_for_required_gate(self):
         self.report["checks"][0]["passed"] = False
         self.assertTrue(collection_errors(self.evaluate(), "test"))
@@ -201,13 +250,12 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.evaluate()
 
-    def test_every_model_file_requires_pinned_download_metadata(self):
-        for name in image_calibration.MODEL_FILES:
-            metadata = self.model / ".cache/huggingface/download" / (name + ".metadata")
-            metadata.write_text("c" * 40 + "\n")
-            with self.assertRaisesRegex(ValueError, "snapshot metadata"):
-                self.evaluate()
-            metadata.write_text(REVISION + "\n")
+    def test_every_model_file_requires_manifest_checksum(self):
+        (self.model / "image.onnx").write_text("replaced graph")
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            image_calibration.model_identity(
+                image_calibration.read(self.output / "models.json")
+            )
 
     def test_profile_missing_or_skipped_tests_and_crashed_process_fail(self):
         self.write_profile(action="skip")

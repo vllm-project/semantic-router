@@ -69,7 +69,7 @@ func TestORTGlobalServingSharesEngineAcrossConsumerViews(t *testing.T) {
 		if engine != serviceEngine {
 			t.Fatal("dimension/reload view loaded another native engine")
 		}
-		info, infoErr := engine.(*embeddingEngine).ort.Info()
+		info, infoErr := engine.(*ortTextEmbeddingEngine).Info()
 		if infoErr != nil {
 			return infoErr
 		}

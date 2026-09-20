@@ -57,6 +57,7 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		HasPriorAssistantReply: signalInput.hasAssistantReply,
 		Headers:                ctx.Headers,
 		ImageURL:               ctx.RequestImageURL,
+		Audio:                  ctx.RequestAudio,
 		UncompressedText:       signalInput.evaluationText,
 		SkipCompressionSignals: signalInput.skipCompressionSignals,
 		ConversationFacts:      signalInput.conversationFacts,
@@ -469,18 +470,6 @@ func (r *OpenAIRouter) selectDecisionRuntimeModel(
 		evaluationConfidence,
 		ctx,
 	), nil
-}
-
-func firstDecisionModelName(modelRefs []config.ModelRef) string {
-	for _, modelRef := range modelRefs {
-		if model := strings.TrimSpace(modelRef.LoRAName); model != "" {
-			return model
-		}
-		if model := strings.TrimSpace(modelRef.Model); model != "" {
-			return model
-		}
-	}
-	return ""
 }
 
 func applyReasoningModeFromSelectedModel(

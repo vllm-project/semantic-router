@@ -170,8 +170,8 @@ verifications:
     boundary: [unit, integration]
     executor: native
     workflow: .github/workflows/test-native.yml
-    platform_id: candle-cpu
-    runtime: candle
+    platform_id: ort-cpu
+    runtime: ort
     device: cpu
     native: true
     target: verify-image-routing-calibration

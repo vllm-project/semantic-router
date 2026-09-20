@@ -10854,8 +10854,8 @@
     },
     "/api/v1/diagnostics/embeddings": {
       "post": {
-        "summary": "Generate text and image embeddings",
-        "description": "Generate text and image embeddings",
+        "summary": "Generate text, image, and audio embeddings",
+        "description": "Generate text, image, and audio embeddings",
         "operationId": "post_api_v1_diagnostics_embeddings",
         "tags": [
           "diagnostics"
@@ -11260,6 +11260,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "audios": {
+                    "nullable": true,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "dimension": {
                     "type": "integer"
                   },
@@ -11369,8 +11376,46 @@
                             "nullable": true,
                             "type": "object",
                             "properties": {
+                              "audio": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "layout": {
+                                    "type": "string"
+                                  },
+                                  "max_channels": {
+                                    "type": "integer"
+                                  },
+                                  "max_sample_rate": {
+                                    "type": "integer"
+                                  },
+                                  "max_seconds": {
+                                    "type": "integer"
+                                  },
+                                  "sample_rates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "max_sample_rate",
+                                  "max_seconds",
+                                  "max_channels",
+                                  "layout"
+                                ]
+                              },
                               "dimension": {
                                 "type": "integer"
+                              },
+                              "dimensions": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
                               },
                               "layer": {
                                 "type": "integer"
@@ -11799,8 +11844,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -12420,8 +12503,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -13085,8 +13206,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -13733,8 +13892,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -14380,8 +14577,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
