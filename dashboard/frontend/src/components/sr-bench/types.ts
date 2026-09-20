@@ -75,33 +75,59 @@ export interface Target {
   kind: 'single' | 'mom'
   base_url: string
   model: string
+  expected_response_model?: string
   api_key_env?: string
   config_hash?: string
   capture_recipe?: boolean
   preview_url?: string
   max_inference_calls?: number
   request_params?: Record<string, unknown>
+  native_limits?: Record<string, { context_window: number; max_output_tokens: number }>
   prices?: Record<
     string,
     { input: number; cached_input: number; cache_write: number; output: number }
   >
 }
 
+export interface ExperimentRunContext {
+  id: string
+  role:
+    | 'baseline'
+    | 'initial'
+    | 'candidate'
+    | 'validation'
+    | 'preview'
+    | 'smoke'
+    | 'estimate'
+    | 'recovery'
+  hypothesis?: string
+}
+
 export interface Manifest {
+  experiment?: ExperimentRunContext
+  baseline_run_id?: string
+  recovery?: Record<string, unknown>
+  execution_cells?: RecoveryCell[]
   version: 'sr-bench-1.0'
+  case_sha256?: string
+  benchmark_weights?: Record<string, number>
+  adapter_versions?: Record<string, string>
+  benchmark_options?: Record<string, unknown>
   name: string
   mode: 'live' | 'preview' | 'replay'
   cost_policy?: 'require_priced' | 'capability_only'
+  output_policy?: 'bounded' | 'native'
   profile: string
   seed: number
   targets: Target[]
+  auxiliary_targets?: Record<string, Target>
   dataset?: { path: string; sha256: string }
   cases?: unknown[]
   limits: {
     concurrency: number
     total_timeout_s: number
     idle_timeout_s: number
-    max_output_tokens: number
+    max_output_tokens?: number
     max_output_chars: number
     repetition_window: number
     repetition_limit: number
@@ -110,7 +136,7 @@ export interface Manifest {
     max_calls_per_case: number
     case_timeout_s?: number
   }
-  sampling: { temperature: number; top_p: number; max_tokens: number; seed?: number }
+  sampling: { temperature: number; top_p?: number; max_tokens?: number; seed?: number }
   preview_context?: { session_id?: string; conversation_id?: string; sampling_seed?: number }
 }
 
@@ -126,6 +152,9 @@ export interface TargetMetrics {
   completed?: number
   failed?: number
   scored?: number
+  pending?: number
+  complete?: boolean
+  cost_complete?: boolean
   correct?: number
   accuracy?: number | null
   cost_usd?: number | null
@@ -139,7 +168,24 @@ export interface TargetMetrics {
   decisions?: Record<string, number>
   selection_statuses?: Record<string, number>
   selection_reasons?: Record<string, number>
+  output_diagnostics?: OutputDiagnosticsMetrics
   [key: string]: unknown
+}
+
+export interface OutputDiagnosticsMetrics {
+  planned_cases: number
+  result_cases: number
+  output_limit_cases: number
+  strict_format: {
+    checked_cases: number
+    failed_cases: number
+    unassessed_cases: number
+  }
+  subject_calls: {
+    total: number
+    finish_reasons: Record<string, number>
+    unknown_finish_reason: number
+  }
 }
 
 export interface EvidencePage {
@@ -156,6 +202,7 @@ export interface PageState {
 }
 
 export interface Run {
+  experiment_roles?: ExperimentRunContext['role'][]
   id: string
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted'
   created_at: string
@@ -244,6 +291,14 @@ export interface RunEvent {
   [key: string]: unknown
 }
 
+export interface CallActivity {
+  phase: 'preparing' | 'waiting' | 'streaming'
+  phase_started_at: string
+  last_activity_at: string | null
+  received_bytes: number
+  updated_at: string
+}
+
 export interface CallRecord {
   id: string
   target_id: string
@@ -253,6 +308,8 @@ export interface CallRecord {
   model?: string
   decision?: string
   status: string
+  started_at?: string
+  activity?: CallActivity
   [key: string]: unknown
 }
 
@@ -260,7 +317,15 @@ export interface Comparison {
   version: string
   baseline_run_id: string
   candidate_run_id: string
+  baseline_status: Run['status']
+  candidate_status: Run['status']
+  baseline_quality_complete: boolean
+  candidate_quality_complete: boolean
+  baseline_targets: TargetMetrics[]
+  candidate_targets: TargetMetrics[]
+  quality_denominator: string
   baseline_selection: string
+  baseline_selection_qualification: string
   baseline_tied_best_target_ids?: string[]
   baseline_tie_policy?: string
   baseline_cost_comparison_eligible?: boolean
@@ -314,4 +379,46 @@ export interface RecoveryRequest {
   cells: RecoveryCell[]
   idempotency_key: string
   acknowledge_new_attempt?: boolean
+}
+
+export interface RunChoice {
+  run_id: string
+  name: string
+  profile: string
+  case_count: number
+}
+
+export interface RunOptions {
+  baseline: RunChoice | null
+  baselines: RunChoice[]
+  options: RunChoice[]
+  next_cursor: string | null
+  has_more: boolean
+  scanned_pairs: number
+  scan_limited: boolean
+  unverified_pairs: number
+  unverified_baselines: number
+  model_requests: 0
+  empty_reason?: string
+}
+
+export interface ReplayRequest {
+  baseline_run_id: string
+  preview_run_id: string
+  idempotency_key: string
+}
+
+export interface DatasetSelection {
+  profile: string
+  seed: number | null
+  split: 'dev' | 'holdout'
+  benchmarks: Array<{
+    id: string
+    title: string
+    eligible: boolean
+    case_count: number
+    source_ids: string[]
+    reason: string | null
+  }>
+  model_requests: 0
 }

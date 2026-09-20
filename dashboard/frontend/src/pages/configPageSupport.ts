@@ -535,7 +535,6 @@ export interface ObservabilityConfig {
       enabled?: boolean
       time_windows?: string[]
       update_interval?: string
-      queue_depth_estimation?: boolean
       max_models?: number
     }
   }

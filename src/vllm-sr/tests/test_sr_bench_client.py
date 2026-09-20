@@ -139,6 +139,62 @@ def capture_client(monkeypatch):
     return captured
 
 
+@pytest.mark.parametrize("active", [False, True])
+def test_show_calls_preserves_activity_and_bounded_page(active, tmp_path, monkeypatch):
+    activity = {"phase": "streaming", "received_bytes": 64}
+    request = Mock(return_value={"calls": [{"activity": activity}], "next_cursor": 9})
+    monkeypatch.setattr(Client, "request", request)
+    args = [
+        "--store",
+        str(tmp_path),
+        "--no-autostart",
+        "show",
+        "run-test",
+        "--calls",
+        "--after",
+        "7",
+        "--limit",
+        "2",
+    ]
+    if active:
+        args.append("--active")
+    result = CliRunner().invoke(command.benchmark, args)
+    assert result.exit_code == 0, result.output
+    request.assert_called_once_with(
+        "GET",
+        "/runs/run-test/calls?after=7&limit=2" + ("&active=true" if active else ""),
+    )
+    assert json.loads(result.output) == {
+        "calls": [{"activity": activity}],
+        "next_cursor": 9,
+    }
+
+
+@pytest.mark.parametrize(
+    "view", [[], ["--results"], ["--events"], ["--call-id", "call-test"]]
+)
+def test_show_active_requires_calls_without_sending_request(
+    view, tmp_path, monkeypatch
+):
+    request = Mock()
+    monkeypatch.setattr(Client, "request", request)
+    result = CliRunner().invoke(
+        command.benchmark,
+        [
+            "--store",
+            str(tmp_path),
+            "--no-autostart",
+            "show",
+            "run-test",
+            "--active",
+            *view,
+        ],
+    )
+    assert result.exit_code == 1
+    assert "--active requires --calls" in result.output
+    request.assert_not_called()
+
+
 def managed_store(tmp_path, monkeypatch):
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(tmp_path))
     root = tmp_path / ".sr-bench" / resolve_runtime_stack().stack_name

@@ -280,3 +280,34 @@ async def test_simulator_rejects_invalid_provider_extension_type(path: str) -> N
         response = await client.post(path, json=body)
     assert response.status_code == HTTPStatus.BAD_REQUEST
     assert response.json()["error"]["param"] == "chat_template_kwargs"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "values",
+    [
+        ["client-value", "updated-by-router"],
+        ["updated-by-router", "client-value"],
+        ["client-value,updated-by-router"],
+        ["updated-by-router"],
+    ],
+)
+async def test_provider_observation_preserves_every_header_value(
+    values: list[str],
+) -> None:
+    session_id = "header-cardinality-" + str(len(values))
+    headers = [("x-vsr-test-session-id", session_id)] + [
+        ("x-vsr-e2e-updated", value) for value in values
+    ]
+    body = {
+        "model": "provider-model",
+        "messages": [{"role": "user", "content": "hello"}],
+    }
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://simulator"
+    ) as client:
+        response = await client.post("/v1/chat/completions", json=body, headers=headers)
+        assert response.status_code == HTTPStatus.OK
+        observed = await client.get("/debug/last-request", headers=headers)
+    assert observed.status_code == HTTPStatus.OK
+    assert observed.json()["header_values"]["x-vsr-e2e-updated"] == values

@@ -1,214 +1,111 @@
-# sr-bench 1.0 evaluation loop
+# sr-bench evaluation loop
 
-Use this reference for measured single-model/MoM comparison, route optimization,
-or reusable evaluation data. Use [route verification](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md) for
-individual API/tool/context-boundary checks. Discover installed commands with
-`vllm-sr benchmark --help`; the [product guide](https://vllm-sr.ai/docs/benchmarking/sr-bench)
-contains manifest examples and the nine-adapter scope.
+Use sr-bench to compare single models and MoM on shared cases, then improve a
+recipe with measured quality, cost and latency. Discover commands with
+`vllm-sr benchmark --help`; use the [product guide](https://vllm-sr.ai/docs/benchmarking/sr-bench)
+for adapters, dataset preparation, manifests and accounting details.
 
-## Select work that answers the objective
+## Choose the scope
 
-State the candidate, strongest single-model baseline, dataset identity, quality
-margin, cost basis and time/call/output budget before launching paid work.
-Quick/dev is for tuning; standard is a disjoint holdout. Smoke demonstrates the
-protocol, not statistical capability. Use a capability slice for small routing
-changes, then expand only when the evidence warrants it. A slice is never a full
-upstream benchmark result or a complete sr-bench score.
+**Profile controls the questions:** Smoke checks the pipeline cheaply; Quick/dev
+supports tuning; Standard is a disjoint holdout for a frozen candidate. Select
+benchmarks relevant to the capability change and inspect the planned case count
+and limits. A slice is not a full benchmark score. Whole agent tasks may consume
+many generation, simulator and judge calls.
 
-The defaults per target are smoke 36, quick 740, standard 3,183 whole tasks across
-MMLU-Pro, GPQA Diamond, HLE text, LiveCodeBench v6, SciCode, Terminal-Bench 2.1,
-SimpleQA Verified, ARC-AGI-2 and τ³ text. MMLU-Pro quick is 500 subject-stratified
-questions, not 12,032. Agent trajectories, code subtasks and grading can require
-multiple calls. Keep whole tasks together and report simulator/judge spend.
+**Mode controls execution:** Preview diagnoses routing without generating answers;
+Live measures capability, usage and latency. Replay estimates a route from saved
+single-model answers only when the service finds compatible evidence. It does not
+replace live validation or measure new latency.
 
-## Establish one execution owner
+For a new mixture, discover actual providers/entrypoint and verify basic delivery
+first. `benchmark setup` checks adapter prerequisites; use its install/sandbox
+options only when needed. CLI and Dashboard must point to the same service/store.
+Remote dataset paths are worker-local paths, not uploads. Discover registered
+targets and datasets before preparing duplicates; credentials stay server-side.
 
-Use the service already selected by the CLI and Dashboard. `vllm-sr serve` owns
-an independent core worker at `<state-root>/.sr-bench/<stack>/store`; normal
-Dashboard/config reloads preserve it. `SR_BENCH_URL` selects an externally
-prepared worker without creating another container. For remote URLs, prepare
-data and register targets on that worker's host/shared store; local paths are
-not uploads. Confirm the service/store identity before dispatch.
+## Run one improvement cycle
 
-```bash
-vllm-sr benchmark catalog
-vllm-sr benchmark setup --benchmark all
-vllm-sr benchmark --no-autostart runs
-vllm-sr benchmark target list
-```
+1. Create an experiment to group the work. Define the capability objective, allowed
+   quality loss, cost basis and execution policy. Use Smoke preview and live
+   Smoke to verify routing, final-answer grading and accounting.
+2. Freeze a Quick/dev dataset and run the relevant single-model baselines plus
+   the current MoM. Link those runs to the experiment. Reuse compatible saved
+   baselines in later iterations rather than regenerate them.
+3. Inspect dev failures and route/cost distributions. Make one coherent recipe
+   change through [config validate/plan/apply](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md),
+   then verify its active revision and update the registered MoM target's
+   `config_hash` to match. Existing runs retain their frozen target definitions.
+   Preserve the previous recipe for recovery.
+4. Use `benchmark candidate-plan BASELINE_ID --target REGISTERED_MOM` to inherit
+   the exact baseline cases and request protocol; select Preview or Live and
+   attach the experiment. Its output wraps the manifest; extract `.manifest`
+   before passing it to `run` or `preview`. Preview the candidate first. If useful, discover replay
+   combinations with `replay-options`; otherwise proceed to live evaluation.
+5. Compare the live candidate with the strongest observed single on the same
+   cases using `comparison-options` and `compare`. Keep or revert according to the
+   stated objective. Repeat on dev when warranted; freeze the chosen recipe
+   before the Standard holdout. Do not tune on holdout failures.
+6. Inspect the same experiment in Dashboard and deliver its runs, recipe and
+   report. For a functionality demonstration, a Smoke cycle may exercise the
+   whole workflow, but explicitly leave capability/holdout qualification pending.
 
-`setup` inspects prerequisites by default. `--install` explicitly prepares pinned
-optional source/interpreter environments and downloads SHA256-verified SciCode
-test data. `--build-sandbox` builds the offline code grader and records image and
-base-image digests with pinned dependencies. These steps make no model calls.
-Terminal task images, source access and fixed judge/simulator targets remain
-prerequisites; the core container is not an all-adapter runtime. Read
-setup/preflight errors before requesting paid work.
+Use command-specific help for experiment create/attach/delete, candidate planning,
+run submission and reports. Experiment membership organizes evidence; it neither
+starts evaluation nor makes incompatible runs comparable. Deleting an experiment
+removes its grouping, not run evidence; active runs must be resolved first.
 
-Service tokens stay server-side. Targets name environment references rather than
-secret values. Dashboard selects an operator-owned registry and cannot redirect
-credentials or choose executables. Distinguish service authentication, Router
-management credentials, subject-model credentials and judge/simulator targets.
+## Preserve comparability
 
-## Freeze, inspect, execute
+- Freeze cases, targets, grader/source versions, effective request parameters,
+  prices and recipe identity. Target request overrides take precedence over run
+  defaults; keep fixed judges/simulators consistent across candidates.
+- Preview accepts supported chat messages/tools and optional session context.
+  Learning preview is a read-only state snapshot, not a promise of the next live
+  choice. Live state is not automatically isolated/reset between candidates.
+  Keep Learning when it is the policy being tested and disclose state differences.
+- Replay/Compare discovery is authoritative. Follow bounded pages when needed;
+  an unfinished or size-limited scan does not prove no compatible result exists.
+  Never change cases, parameters or Learning merely to force replay eligibility.
+- A terminal full baseline can supply a candidate's frozen protocol even after
+  failure. Compare requires an explicit outcome for every planned cell; failures
+  count as incorrect and remain visible. Missing or ungraded results are not zero.
+- Route only on user-request evidence, never answers, benchmark names or split
+  labels. Keep tuning and holdout separate. Disclose previously inspected tasks
+  or labels.
 
-Prepare data with `benchmark dataset prepare --benchmark ID --profile PROFILE`;
-combine compatible prepared manifests with `dataset combine`. Sources, revision,
-case IDs, stratification, seed and content digest accompany each dataset. Never
-edit bound task files. Changing a source or selection creates a new identity.
-The Dashboard follows the same contract: choose the actual `smoke`, `quick` or
-`standard` profile, then select prepared benchmarks or select all. Composition
-only uses existing sources with matching profile, seed and split. It keeps whole
-benchmark groups, makes zero model calls, and does not download or resample data.
-Using one complete source preserves its identity. Conflicting source selections
-must be resolved explicitly; never mix dev and holdout to make a checkbox work.
-Use the typed sampling, budget and request/case-limit controls without editing
-JSON. Fixed registered target parameters override run defaults and remain
-read-only. Route Preview accepts optional session and conversation context for
-session-dependent routing; plan review does not generate model answers.
-The dataset library supports pagination, question search, coverage and subject
-groups. Its input-only question view excludes reference answers, hidden tests and
-tool credentials; reproducibility hashes are behind disclosure controls. Each
-profile's total questions sums prepared sets that may overlap; it is not a
-deduplicated count or a run denominator. Treat
-inspected holdout tasks as unsuitable tuning evidence even when labels are hidden.
-Do not route on benchmark names, expected answers or split labels. Previously
-seen GPQA labels require a retest disclosure; public tasks are not guaranteed
-uncontaminated.
+## Run reliability
 
-A run manifest binds targets and runtime hashes, messages/tools, source/grader
-versions, sampling, prices and limits. Register Dashboard targets with
-`benchmark target register --file targets.json` on the worker host. MoM targets
-must use their actual routed endpoint. Price all four exclusive token buckets
-for every billed model; unsupported compound usage cannot be priced from only
-the selected model. The direct MoM adapter requires complete single-call
-accounting. Choose `capability_only` explicitly if prices are unavailable and
-make no savings claim.
+Inspect the plan before dispatch. Choose output capacity for the objective: use
+verified native capacity and highest reasoning for capability exploration, or an
+explicit fixed budget for constrained comparisons. Align single-model and MoM
+profiles and allow time and evidence storage for that capacity. Before scaling,
+inspect effective reasoning effort, final-answer presence, finish reasons, and
+truncation/timeout rates. Changes to
+budgets or request profiles require new compatible baselines; never grade hidden
+reasoning as a final answer. Submit with a stable idempotency key. After a lost
+acknowledgement, look up that run before acting; do not substitute a new key or
+repeat generations.
+`cancel` stops actual work; Ctrl-C only stops the CLI wait.
 
-Resolve the effective request as run sampling plus the target's frozen
-`request_params` overrides. Do not mistake form defaults for native settings.
-An output cap below a target's fixed `max_tokens` is invalid; select another
-operator-registered profile instead of silently changing the existing one.
+Inspect failures and saved receipts before recovery. `recover-plan`/`recover`
+create explicit child attempts for eligible cells; they do not rewrite a parent
+or make an incomplete run complete. Usage reconciliation and supported regrading
+operate on retained evidence, not fresh generations. Discover their specific
+contracts only when that failure occurs. Poll durable progress with a deadline;
+notify on meaningful completion, failure or required action, not every counter.
 
-```bash
-vllm-sr benchmark plan --manifest candidate.json --output frozen.json
-vllm-sr benchmark run --manifest frozen.json --detach --idempotency-key loop-1
-vllm-sr benchmark show RUN_ID
-vllm-sr benchmark show RUN_ID --events
-vllm-sr benchmark show RUN_ID --calls
-vllm-sr benchmark report RUN_ID --output report.json
-```
+## Read the outcome
 
-An idempotency key must remain attached to the same plan after a lost submission
-acknowledgement. Inspect the existing run before another submission. Do not use
-a fresh key, retry a generation, resume an interrupted run or restart a stopped
-worker as automatic recovery. `Ctrl-C` stops the CLI wait; `benchmark cancel
-RUN_ID` stops actual work and retains partial evidence.
+Check planned/completed/scored/failed denominators, final-channel scores, model
+and config identity, four token buckets, subject versus judge/simulator spend,
+latency and elapsed time. Unknown usage is not zero. `capability_only` permits
+unpriced evaluation but cannot support savings claims. With cache effects, report
+observed cost and the separate cache-neutral estimate; neither is a GPU invoice.
 
-Explicit recovery is a new child attempt, not mutation of a failed parent. Use
-`benchmark recover-plan RUN_ID --mode undispatched --output recovery.json` to
-inspect never-dispatched cells. `--mode failed` additionally excludes unknown
-billing, ambiguous or completed generations and requires deliberate new-attempt
-authorization. Review `eligible_cells` and `excluded`; use `selected_cells` for an
-explicit subset, then `benchmark recover RUN_ID --plan recovery.json
---idempotency-key KEY`. Failed-case recovery also requires
-`--acknowledge-new-attempt`. Preserve this exact request/key after lost responses.
-The child reports only its execution cells; inherited parent progress and spend
-stay separate. A completed child does not qualify an incomplete parent.
-
-For frozen recipe artifacts, register MoM targets with `capture_recipe: true` and
-the expected config hash/canonical preview URL. The server captures a redacted
-projection only when generated/active runtime hashes match the target before and
-after capture, with an unchanged source config ETag. Preserve this snapshot
-and the separate runtime-call hash acknowledgements; never substitute the latest
-configuration for missing historical evidence.
-
-Absolute/idle deadlines, output/repetition guards and task/run call/time limits
-bound work. Spend reservations and reported actual-cost stopping are not a
-provider-enforced universal hard USD cap. Unknown usage remains unknown; do not
-silently substitute zero or continue a cost-qualified claim through it.
-
-## Perform the optimization loop
-
-1. Save live single-model and MoM baselines on identical dev tasks. Inspect
-   routing decisions, errors, final answers, usage and time before changing config.
-2. Make one coherent policy change using the existing config schema, validate,
-   plan and apply flow. Wait for the expected active runtime hash. Restart-required
-   changes use the authorized `serve --replace-active-config` path.
-3. Bind a new manifest to that hash and run `benchmark preview`. Preview checks
-   actual Router decisions and selections but has no capability score. Keep
-   Learning enabled: its preview selects against a read-only snapshot of the
-   active learning state without updating it. Inspect `selection_provenance`
-   for the config/state hashes, capture time and sampling seed. A sampled
-   snapshot choice is not a promise of the later live choice. Preserve unresolved
-   `execution_required` selections with their reasons.
-4. For eligible direct/static routing, use `benchmark replay --baseline BASELINE_ID
-   --preview PREVIEW_ID`. It reuses saved matrix cells and makes no model calls.
-   State-dependent Learning previews, plugin, agent, changed-prompt and compound
-   paths require live evaluation.
-5. Run the candidate live on the same dev cases and use `benchmark compare
-   BASELINE_ID CANDIDATE_ID`. Expand to the untouched standard split only for
-   the prespecified acceptance decision; never tune against its failures.
-
-Offline `benchmark regrade RUN_ID --output PATH` currently regrades saved MCQ/grid
-final answers with a separate artifact and zero model calls. `benchmark export
-DEV_RUN_ID --output PATH` creates an explicit dev training matrix and rejects
-holdout/unknown splits. Neither command trains a model or changes original results.
-
-## Review evidence and hand off
-
-Validate actual planned/completed/scored/failed counts, final-channel grading,
-model/config acknowledgements, all four token buckets, subject cost versus
-simulator/judge overhead, TTFT/latency, actual wall time and accounting coverage.
-Partial or failed runs cannot be presented as qualified. Replay estimates remain
-separate from measured live metrics. Regrading does not erase the prior grader.
-
-For a terminal live run with a discovered usage-normalization issue, use
-`benchmark reconcile-usage RUN_ID`. This offline action verifies retained SSE
-usage, preserves original call/result receipts and appends an idempotent versioned
-correction. Check `provenance.accounting_correction`, verified/changed counts,
-evidence hash and old/new known spend before using corrected reports/comparisons.
-Missing/conflicting usage stays unknown; final-stream evidence cannot reconstruct
-multi-call MoM billing. Never repeat generations to repair accounting.
-Keep raw detail receipts visibly distinct from corrected report totals.
-Show observed four-bucket costs and `cache_neutral_cost_usd` together when run
-order may warm caches. The latter reprices all input tokens as fresh input and
-is counterfactual token-equivalent cost, not billed spend or a cache-free rerun.
-
-The full score requires all nine complete benchmarks with fixed versioned
-weights. Show per-benchmark denominators and uncertainty with every aggregate.
-The baseline is the best observed single by the stated aggregate over identical
-cases, not a per-question oracle. Exact weighted-quality ties choose the lowest
-complete known subject cost, then stable target ID. Show all tied-best IDs and
-suppress savings when any tied-best single has incomplete cost. Never choose an
-expensive quality tie to inflate savings. Savings use complete compatible subject costs:
-`100 * (1 - candidate_cost / baseline_cost)`. Small quick results show direction;
-quality equivalence requires a prespecified margin and holdout interval. Token
-prices for self-hosted inference are not GPU invoice savings.
-
-Use the default conservative weighted paired interval for quality claims.
-`quality_delta_bootstrap_ci95` is diagnostic: zero observed discordance can yield
-`[0, 0]` without proving equivalence. The Hoeffding interval assumes independent
-case differences and frozen benchmark weights; strongest-baseline selection,
-tuning selection and source contamination remain outside its coverage.
-
-For requested Dashboard acceptance, verify the same service/run IDs, launch a
-bounded run, inspect metrics and case artifacts, compare, cancel and reload the
-page. Verify task filters, data-set identity, read reconnection, explicit recovery
-scope/lineage, and same-key reconciliation after a lost recovery response. Check
-the Results, Questions, Calls, Evidence and Recipe tabs instead of relying on one
-large raw-data view. Compare a compatible single-model baseline with any number
-of completed candidate runs using the URL-persisted checkboxes; verify creation
-order, quality/cost and iteration charts, and CSV/JSON comparison exports. For a
-two-loop study, include current Balance and both optimization revisions, while
-keeping the interface usable for subsequent candidates. Inspect/download the captured recipe
-and verify cost/quality uncertainty and full denominators. Review narrow-screen
-layout and avoid clipping controls or claiming gains from incompatible datasets.
-A page load or mocked browser test alone is not live acceptance.
-
-Periodic follow-ups observe durable status and deadlines. Notify on meaningful
-stage completion, a failure or required action; ordinary counter changes need no
-message. A stale heartbeat is not proof that generation is healthy. Reconcile
-saved dispatch/call receipts before action, preserve failed evidence, and stop
-repeat notifications for an unchanged acknowledged blocker. Deliver artifact
-links and limitations; disable a completion-only follow-up after delivery.
+Savings are `100 × (1 − candidate subject cost / baseline subject cost)`, with
+complete compatible accounting. The baseline is the best observed single over
+the same aggregate, not a per-question oracle; quality ties use the lowest known
+cost. Show signed quality/cost changes, uncertainty and benchmark coverage.
+A small dev win or zero observed difference does not establish equivalence.
+Keep essential limitations with the result and detailed evidence accessible.

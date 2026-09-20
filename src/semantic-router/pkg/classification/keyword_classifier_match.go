@@ -51,7 +51,7 @@ func matchAND(text string, rule preppedKeywordRule, regexpsToUse []*regexp.Regex
 		if err := validateRegexp(rule.Name, i, re); err != nil {
 			return false, nil, 0, err
 		}
-		if re.MatchString(text) {
+		if matchesKeywordPattern(text, rule, i, re) {
 			matchedKeywords = append(matchedKeywords, rule.OriginalKeywords[i])
 			continue
 		}
@@ -72,7 +72,7 @@ func matchOR(text string, rule preppedKeywordRule, regexpsToUse []*regexp.Regexp
 			return false, nil, 0, err
 		}
 		keyword := rule.OriginalKeywords[i]
-		if re.MatchString(text) {
+		if matchesKeywordPattern(text, rule, i, re) {
 			addMatchedKeyword(keyword, matchedSet, &matchedKeywords)
 			continue
 		}
@@ -91,7 +91,7 @@ func matchNOR(text string, rule preppedKeywordRule, regexpsToUse []*regexp.Regex
 		if err := validateRegexp(rule.Name, i, re); err != nil {
 			return false, nil, 0, err
 		}
-		if re.MatchString(text) || hasFuzzyMatch(rule, i, lowerTextWords) {
+		if matchesKeywordPattern(text, rule, i, re) || hasFuzzyMatch(rule, i, lowerTextWords) {
 			return false, nil, 0, nil
 		}
 	}

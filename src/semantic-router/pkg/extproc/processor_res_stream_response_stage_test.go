@@ -45,24 +45,20 @@ func streamResponseStageAnswer(t *testing.T, router *OpenAIRouter, ctx *RequestC
 	}
 }
 
-// assertStreamedOutcome checks the one rule outcome a streamed response leaves:
-// the verdict it observed, and that nothing enforced it.
-//
-// A finished response also records the digest of what the selected model
-// answered, which is not a rule verdict, so the rule outcomes are selected by
-// source rather than counted from the whole record.
+// assertStreamedOutcome checks the one outcome for the requested response-stage
+// signal, independently of memory receipts and the primary response digest.
 func assertStreamedOutcome(t *testing.T, outcomes []routerreplay.Outcome, target, verdict string) {
 	t.Helper()
-	rules := make([]routerreplay.Outcome, 0, len(outcomes))
-	for _, candidate := range outcomes {
-		if candidate.Source != primaryResponseOutcomeSource {
-			rules = append(rules, candidate)
+	var matches []routerreplay.Outcome
+	for _, outcome := range outcomes {
+		if outcome.Target == target {
+			matches = append(matches, outcome)
 		}
 	}
-	if len(rules) != 1 {
-		t.Fatalf("rule outcomes = %+v, want one per declared rule", rules)
+	if len(matches) != 1 {
+		t.Fatalf("outcomes = %+v, want one for declared rule %q", outcomes, target)
 	}
-	outcome := rules[0]
+	outcome := matches[0]
 	if outcome.Target != target || outcome.Verdict != verdict {
 		t.Fatalf("outcome = %+v, want verdict %q under %s", outcome, verdict, target)
 	}
@@ -167,7 +163,11 @@ func TestAbortedStreamIsNotCheckedForHallucination(t *testing.T) {
 	if calls.Load() != 0 {
 		t.Fatalf("an aborted stream has no terminal answer, yet the detector was asked %d time(s)", calls.Load())
 	}
-	if outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID); len(outcomes) != 0 {
-		t.Fatalf("outcomes = %+v, want none for a stream that never answered", outcomes)
+	// Lifecycle receipts (such as disabled memory persistence) can still be
+	// recorded; only a hallucination verdict requires a completed answer.
+	for _, outcome := range replayOutcomes(t, recorder, ctx.RouterReplayID) {
+		if outcome.TargetRef == hallucinationSignalKey {
+			t.Fatalf("hallucination outcome = %+v for a stream that never answered", outcome)
+		}
 	}
 }

@@ -198,7 +198,12 @@ vllm-sr benchmark report RUN_ID
 vllm-sr benchmark compare BASELINE_ID CANDIDATE_ID
 ```
 
-The managed core worker survives Dashboard/config reloads. For optional code and
+The managed core worker survives Dashboard/config reloads. An image-only upgrade
+replaces an idle worker while preserving its journal; active runs must finish or
+be cancelled first. Set `VLLM_SR_BENCH_PORT` for both `serve` and `benchmark` when
+the default `8090 + stack port offset` host port is occupied. The override is an
+absolute loopback host port and does not change Dashboard's internal connection.
+For optional code and
 agent harnesses, prepare a dedicated worker and select it with `SR_BENCH_URL`;
 this suppresses managed worker creation. Keep service/model credential values
 in the worker environment. Register targets on its host with

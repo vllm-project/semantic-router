@@ -1926,7 +1926,6 @@ global:
           enabled: true
           time_windows: [1m, 5m, 1h]
           update_interval: 30s
-          queue_depth_estimation: true
           max_models: 50
       profiling:
         enabled: false
@@ -2156,6 +2155,11 @@ global:
         block_patterns:
           - api key
           - password
+      persistence:
+        timeout_seconds: 30
+        concurrency: 8
+        queue: 64
+        shutdown_grace_seconds: 5
     vector_store:
       enabled: true
       backend_type: llama_stack

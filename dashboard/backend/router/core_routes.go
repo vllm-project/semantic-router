@@ -107,6 +107,9 @@ func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupR
 }
 
 func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions ...configRouteOptions) {
+	if err := handlers.RestrictExistingConfigSnapshots(cfg.ConfigDir); err != nil {
+		log.Printf("Warning: could not restrict existing config snapshots: %v", err)
+	}
 	options := configRouteOptions{}
 	if len(routeOptions) > 0 {
 		options = routeOptions[0]
@@ -139,8 +142,11 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions .
 }
 
 func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
-	toolsDBPath := resolveToolsDBPath(cfg)
-	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(toolsDBPath))
+	mux.HandleFunc("/api/tools-db", func(w http.ResponseWriter, r *http.Request) {
+		// Configuration saves can change the selected database without restarting
+		// Dashboard. Resolve the current canonical path for each refresh.
+		handlers.ToolsDBHandler(resolveToolsDBPath(cfg))(w, r)
+	})
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
 	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
@@ -156,17 +162,27 @@ func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
 	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
 }
 
+// defaultToolsDBPath mirrors the canonical Router default. Both configured and
+// fallback paths use the explicit asset root, independently of the directory
+// containing the runtime config or Dashboard's writable state.
+const defaultToolsDBPath = "config/tools_db.json"
+
 func resolveToolsDBPath(cfg *config.Config) string {
-	toolsDBPath := filepath.Join(cfg.ConfigDir, "config", "tools_db.json")
+	projectRoot := cfg.ConfigBaseDir
+	fallback := filepath.Join(projectRoot, defaultToolsDBPath)
+
 	toolSelection, err := routercontract.ReadToolSelection(cfg.AbsConfigPath)
 	if err != nil {
-		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", toolsDBPath, err)
-		return toolsDBPath
+		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", fallback, err)
+		return fallback
 	}
-	if toolSelection.ToolsDBPath != "" {
+	if toolSelection.ToolsDBPath == "" {
+		return fallback
+	}
+	if filepath.IsAbs(toolSelection.ToolsDBPath) {
 		return toolSelection.ToolsDBPath
 	}
-	return toolsDBPath
+	return filepath.Join(projectRoot, toolSelection.ToolsDBPath)
 }
 
 func registerStatusRoutes(mux *http.ServeMux, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {

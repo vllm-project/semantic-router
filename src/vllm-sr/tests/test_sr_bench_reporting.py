@@ -4,16 +4,19 @@ import copy
 import time
 
 import pytest
+from cli.sr_bench.candidate_plans import candidate_manifest
 from cli.sr_bench.contracts import plan
 from cli.sr_bench.engine import Engine
 from cli.sr_bench.offline import replay
 from cli.sr_bench.provenance import capture_runner
 from cli.sr_bench.report import (
+    ComparisonValidator,
     compare,
     make_report,
     metric,
     paired_conservative_interval,
 )
+from cli.sr_bench.run_options import run_options
 from cli.sr_bench.store import Store
 from cli.sr_bench.transport import CallFailure
 
@@ -183,6 +186,38 @@ def test_best_single_quality_tie_uses_cheapest_independent_of_manifest_order(
     assert paired["baseline_target_id"] == "cheap"
     assert paired["quality_delta"] == 0
     assert paired["cost_saving_percent"] == 50
+
+
+@pytest.mark.parametrize(
+    "baseline_correct,candidate_correct,candidate_cost,quality_delta,saving",
+    [
+        ({"0", "1", "2", "3", "4"}, set(), 3, -1, -50),
+        (set(), {"0", "1", "2", "3", "4"}, 1, 1, 50),
+        ({"0"}, {"0"}, 2, 0, 0),
+    ],
+)
+def test_comparison_retains_negative_positive_and_zero_changes(
+    tmp_path,
+    baseline_correct,
+    candidate_correct,
+    candidate_cost,
+    quality_delta,
+    saving,
+):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(
+        store, ["flash"], {"flash": 2}, {"flash": baseline_correct}
+    )
+    candidate = _weighted_matrix(
+        store,
+        ["balance"],
+        {"balance": candidate_cost},
+        {"balance": candidate_correct},
+        candidate=True,
+    )
+    row = compare(store, baseline, candidate)["comparisons"][0]
+    assert row["quality_delta"] == pytest.approx(quality_delta)
+    assert row["cost_saving_percent"] == pytest.approx(saving)
 
 
 @pytest.mark.parametrize(
@@ -376,3 +411,427 @@ def test_failed_run_explains_first_failure_and_legacy_report_is_read_only(
     assert old_report["failure"]["reason"] == "Target idle/read timeout"
     assert old_report["failure"]["inferred_from_saved_results"] is True
     assert store.get(old["id"])["error"] is None
+
+
+def test_output_diagnostics_keep_length_and_nonempty_format_failures_distinct(
+    tmp_path, monkeypatch
+):
+    def respond(_target, messages, *_args, **_kwargs):
+        name = messages[0]["content"]
+        return {
+            "final": "I cannot select one option." if name == "format" else "A",
+            "finish_reason": "length" if name == "length" else "stop",
+            "output_complete": name != "length",
+            "cost_usd": 0.001,
+            "latency_s": 1,
+        }
+
+    monkeypatch.setattr("cli.sr_bench.engine.chat", respond)
+    document = _manifest()
+    document["cases"] = [
+        {
+            **document["cases"][0],
+            "id": name,
+            "messages": [{"role": "user", "content": name}],
+        }
+        for name in ("length", "format", "valid")
+    ]
+    store = Store(tmp_path)
+    run = Engine(store).start(document)
+    deadline = time.monotonic() + 5
+    while store.get(run["id"])["status"] in {"queued", "running"}:
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    assert store.get(run["id"])["status"] == "completed"
+    before = store.results(run["id"])
+    report = make_report(store, run["id"])
+    target = report["summary"]["targets"][0]
+    assert (target["complete"], target["completed"], target["correct"]) == (True, 3, 1)
+    assert target["output_diagnostics"] == {
+        "planned_cases": 3,
+        "result_cases": 3,
+        "output_limit_cases": 1,
+        "strict_format": {
+            "checked_cases": 2,
+            "failed_cases": 1,
+            "unassessed_cases": 1,
+        },
+        "subject_calls": {
+            "total": 3,
+            "finish_reasons": {"length": 1, "stop": 2},
+            "unknown_finish_reason": 0,
+        },
+    }
+    assert report["benchmarks"][0]["output_diagnostics"] == target["output_diagnostics"]
+    rows = {row["case_id"]: row for row in before}
+    calls = {call["case_id"]: call for call in store.calls(run["id"])}
+    assert rows["length"]["correct"] is False
+    assert rows["length"]["answer"] is None
+    assert rows["format"]["answer"] is None
+    assert calls["length"]["final"] == "A"
+    assert calls["format"]["final"] == "I cannot select one option."
+    assert store.results(run["id"]) == before
+
+
+def test_output_diagnostics_leave_missing_checks_and_call_reasons_unassessed():
+    results = [
+        {
+            "case_id": name,
+            "status": "completed",
+            "correct": True,
+            "answer": None,
+            "details": details,
+        }
+        for name, details in (("tool", {}), ("missing", {"strict_format": 0}))
+    ]
+    calls = [
+        {"case_id": "tool", "role": "subject", "finish_reason": "tool_calls"},
+        {"case_id": "missing", "role": "subject", "finish_reason": None},
+        {"case_id": "pending", "role": "subject", "finish_reason": ""},
+        {"case_id": "judge", "role": "judge", "finish_reason": "length"},
+    ]
+    result = metric("flash", results, calls, 4)
+    assert result["cost_usd"] is None
+    assert result["complete"] is False
+    assert result["output_diagnostics"] == {
+        "planned_cases": 4,
+        "result_cases": 2,
+        "output_limit_cases": 0,
+        "strict_format": {
+            "checked_cases": 0,
+            "failed_cases": 0,
+            "unassessed_cases": 4,
+        },
+        "subject_calls": {
+            "total": 3,
+            "finish_reasons": {"tool_calls": 1},
+            "unknown_finish_reason": 2,
+        },
+    }
+
+
+def test_output_diagnostics_cover_all_pages_targets_and_benchmarks(
+    tmp_path, monkeypatch
+):
+    document = _manifest()
+    document["targets"].append({**document["targets"][0], "id": "other"})
+    document["cases"] = [
+        {
+            **document["cases"][0],
+            "id": str(index),
+            "benchmark": "gpqa-diamond" if index == 501 else "mmlu-pro",
+        }
+        for index in range(502)
+    ]
+    store = Store(tmp_path)
+    run, _ = store.create(plan(document))
+    for index, case in enumerate(document["cases"]):
+        details = (
+            {"quality_failure": "output_limit", "output_complete": False}
+            if index == 500
+            else {"strict_format": index != 501}
+        )
+        store.result(
+            run["id"],
+            case["id"],
+            "flash",
+            "completed",
+            {"correct": index < 500, "score": int(index < 500), "details": details},
+        )
+        call = store.start_call(run["id"], case["id"], "flash", "subject", {})
+        store.finish_call(
+            call,
+            "completed",
+            {"finish_reason": "length" if index == 500 else "stop"},
+        )
+    assert store.page(run["id"], "results", limit=500)["next_cursor"] is not None
+    assert store.page(run["id"], "calls", limit=500)["next_cursor"] is not None
+    original_calls = store.calls
+
+    def summary_calls(run_id, summary=False):
+        assert summary is True, "Report must not load full response bodies"
+        return original_calls(run_id, summary=summary)
+
+    monkeypatch.setattr(store, "calls", summary_calls)
+    report = make_report(store, run["id"])
+    targets = {
+        row["id"]: row["output_diagnostics"] for row in report["summary"]["targets"]
+    }
+    assert targets["flash"]["planned_cases"] == 502
+    assert targets["flash"]["output_limit_cases"] == 1
+    assert targets["flash"]["strict_format"] == {
+        "checked_cases": 501,
+        "failed_cases": 1,
+        "unassessed_cases": 1,
+    }
+    assert targets["flash"]["subject_calls"]["finish_reasons"] == {
+        "length": 1,
+        "stop": 501,
+    }
+    assert targets["other"]["result_cases"] == 0
+    assert targets["other"]["strict_format"]["unassessed_cases"] == 502
+    assert targets["other"]["subject_calls"]["total"] == 0
+    benchmarks = {
+        (row["target_id"], row["benchmark"]): row["output_diagnostics"]
+        for row in report["benchmarks"]
+    }
+    assert benchmarks["flash", "mmlu-pro"]["planned_cases"] == 501
+    assert benchmarks["flash", "mmlu-pro"]["output_limit_cases"] == 1
+    assert benchmarks["flash", "mmlu-pro"]["strict_format"]["failed_cases"] == 0
+    assert benchmarks["flash", "gpqa-diamond"]["planned_cases"] == 1
+    assert benchmarks["flash", "gpqa-diamond"]["strict_format"]["failed_cases"] == 1
+
+
+def test_full_timeout_matrix_remains_comparable_without_retry_or_evidence_edits(
+    tmp_path, monkeypatch
+):
+    requested = []
+
+    def respond(target, messages, *_args, **_kwargs):
+        index = int(messages[0]["content"])
+        requested.append((target["id"], index))
+        if target["id"] == "glm" and index == 13:
+            raise CallFailure("total request deadline exceeded")
+        return {
+            "final": "A" if index < (9 if target["id"] == "glm" else 11) else "B",
+            "model": target["model"],
+            "usage": {
+                "input_tokens": 10,
+                "cached_input_tokens": 0,
+                "cache_write_tokens": 0,
+                "output_tokens": 1,
+            },
+            "cost_usd": {
+                "flash": 0.003,
+                "qwen": 0.001,
+                "glm": 0.002,
+                "balance": 0.0005,
+            }[target["id"]],
+            "latency_s": 1,
+            "inference_call_count": 1,
+        }
+
+    monkeypatch.setattr("cli.sr_bench.engine.chat", respond)
+    document = _manifest()
+    prototype = document["targets"][0]
+    document["benchmark_options"] = {}
+    document["targets"] = [
+        {
+            **prototype,
+            "id": name,
+            "model": name,
+            "prices": {name: prototype["prices"]["flash"]},
+        }
+        for name in ("flash", "qwen", "glm")
+    ]
+    document["cases"] = [
+        {
+            **document["cases"][0],
+            "id": str(i),
+            "messages": [{"role": "user", "content": str(i)}],
+        }
+        for i in range(14)
+    ]
+    document["limits"] = {"concurrency": 1}
+    store = Store(tmp_path)
+    engine = Engine(store)
+    baseline = engine.start(document)
+    engine.threads[baseline["id"]].join(timeout=5)
+    baseline = store.get(baseline["id"])
+    assert baseline["status"] == "failed"
+    assert baseline["progress"]["completed"] == 41
+    assert baseline["progress"]["failed"] == 1
+    assert len(requested) == len(set(requested)) == 42
+    target = {
+        **prototype,
+        "id": "balance",
+        "kind": "mom",
+        "config_hash": "frozen",
+        "max_inference_calls": 1,
+    }
+    candidate = engine.start(candidate_manifest(baseline, [target]))
+    engine.threads[candidate["id"]].join(timeout=5)
+    original = list(store.db.iterdump())
+    result = compare(store, baseline["id"], candidate["id"])
+    assert list(store.db.iterdump()) == original
+    assert result["baseline_status"] == "failed"
+    assert result["baseline_quality_complete"] is False
+    assert result["candidate_quality_complete"] is True
+    metrics = {row["id"]: row for row in result["baseline_targets"]}
+    assert set(metrics) == {"glm", "flash", "qwen"}
+    assert metrics["glm"]["correct"] == 9
+    assert metrics["glm"]["accuracy"] == 9 / 14
+    assert (
+        metrics["glm"]["total"],
+        metrics["glm"]["scored"],
+        metrics["glm"]["failed"],
+        metrics["glm"]["pending"],
+    ) == (14, 13, 1, 0)
+    assert metrics["glm"]["cost_usd"] is None
+    assert metrics["glm"]["known_cost_usd"] == pytest.approx(0.026)
+    assert result["baseline_tied_best_target_ids"] == ["flash", "qwen"]
+    assert result["baseline_selected_target_id"] == "qwen"
+    assert result["comparisons"][0]["paired_cases"] == 14
+    assert result["comparisons"][0]["quality_delta"] == 0
+    assert result["comparisons"][0]["cost_saving_percent"] == pytest.approx(50)
+    assert run_options(store, "comparison")["baselines"][0]["run_id"] == baseline["id"]
+    assert (
+        run_options(store, "comparison", baseline["id"])["options"][0]["run_id"]
+        == candidate["id"]
+    )
+    assert run_options(store, "replay", baseline["id"])["baseline"] is None
+    assert len(requested) == 56  # Only the explicit candidate start adds calls.
+
+
+@pytest.mark.parametrize(
+    "failed_target,correct", [("unknown", {"0", "1"}), ("unknown", {"0"})]
+)
+def test_failed_best_or_quality_tie_keeps_unknown_cost_and_suppresses_savings(
+    tmp_path, failed_target, correct
+):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(
+        store,
+        ["known", "unknown"],
+        {"known": 2, "unknown": None},
+        {"known": {"0"}, "unknown": correct},
+    )
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"0"}}, candidate=True
+    )
+    store.result(
+        baseline,
+        "4",
+        failed_target,
+        "failed",
+        {"error": "total request deadline exceeded", "benchmark": "gpqa-diamond"},
+    )
+    store.status(baseline, "failed")
+    original = list(store.db.iterdump())
+    result = compare(store, baseline, candidate)
+    assert not result["baseline_cost_comparison_eligible"]
+    assert result["comparisons"][0]["cost_saving_percent"] is None
+    assert result["comparisons"][0]["cache_neutral_cost_saving_percent"] is None
+    assert {r["id"] for r in result["baseline_targets"]} == {"known", "unknown"}
+    assert list(store.db.iterdump()) == original
+
+
+@pytest.mark.parametrize("side", ["baseline", "candidate"])
+@pytest.mark.parametrize(
+    "invalid", ["missing", "running", "ungraded", "cancelled", "duplicate", "extra"]
+)
+def test_comparison_rejects_ambiguous_or_absent_outcomes(
+    tmp_path, monkeypatch, side, invalid
+):
+    store = Store(tmp_path)
+    baseline = _record(store, _manifest())
+    candidate = _record(store, _manifest())
+    original_results = store.results
+    chosen = baseline if side == "baseline" else candidate
+
+    def altered(run_id):
+        rows = original_results(run_id)
+        if run_id != chosen:
+            return rows
+        row = rows[0]
+        return {
+            "missing": [],
+            "running": [{**row, "status": "running"}],
+            "ungraded": [{**row, "correct": None}],
+            "cancelled": [{**row, "status": "cancelled"}],
+            "duplicate": [row, row],
+            "extra": [row, {**row, "case_id": "unplanned"}],
+        }[invalid]
+
+    monkeypatch.setattr(store, "results", altered)
+    with pytest.raises(ValueError, match="quality results"):
+        compare(store, baseline, candidate)
+
+
+def test_failed_candidate_uses_zero_outcome_and_planned_population(tmp_path):
+    store = Store(tmp_path)
+    baseline = _record(store, _manifest())
+    candidate = _record(store, _manifest())
+    store.result(
+        candidate, "one", "flash", "failed", {"correct": True, "benchmark": "mmlu-pro"}
+    )
+    store.status(candidate, "failed")
+    original = list(store.db.iterdump())
+    comparison = compare(store, baseline, candidate)
+    assert comparison["candidate_quality_complete"] is False
+    assert comparison["comparisons"][0]["quality_delta"] == -1
+    assert comparison["comparisons"][0]["losses"] == 1
+    assert list(store.db.iterdump()) == original
+    changed = copy.deepcopy(store.get(candidate))
+    # A nonempty subset must not gain zero-filled results from a larger plan.
+    changed["manifest"]["execution_cells"] = [
+        {"case_id": "elsewhere", "target_id": "flash"}
+    ]
+    with pytest.raises(ValueError, match="planned cases"):
+        ComparisonValidator(store, store.get(baseline)).validate(changed)
+
+
+@pytest.mark.parametrize("receipt", ["missing", "unknown_usage"])
+@pytest.mark.parametrize("outcome", ["completed", "failed"])
+def test_cell_without_complete_billing_never_sums_remaining_cost_as_total(
+    tmp_path, receipt, outcome
+):
+    store = Store(tmp_path)
+    baseline = _weighted_matrix(store, ["flash"], {"flash": 2}, {"flash": {"0"}})
+    candidate = _weighted_matrix(
+        store, ["balance"], {"balance": 1}, {"balance": {"0"}}, candidate=True
+    )
+    call = next(c for c in store.calls(baseline) if c["case_id"] == "4")
+    if receipt == "missing":
+        store.db.execute("DELETE FROM calls WHERE id=?", (call["id"],))
+        store.db.commit()
+    else:
+        store.finish_call(call["id"], "failed", {"cost_usd": None, "usage": None})
+    store.result(
+        baseline,
+        "4",
+        "flash",
+        outcome,
+        {
+            "error": "Request deadline exceeded",
+            "benchmark": "gpqa-diamond",
+            "correct": False,
+        },
+    )
+    store.status(baseline, "failed")
+    original = list(store.db.iterdump())
+    result = compare(store, baseline, candidate)
+    metric = result["baseline_targets"][0]
+    assert metric["known_cost_usd"] == pytest.approx(1.6)
+    assert metric["cost_usd"] is None
+    assert metric["total_spend_usd"] is None
+    assert metric["cost_complete"] is False
+    assert result["comparisons"][0]["cost_saving_percent"] is None
+    assert make_report(store, baseline)["summary"]["total_spend_usd"] is None
+    assert list(store.db.iterdump()) == original
+
+
+def test_mixed_baseline_still_requires_outcomes_for_every_planned_target(
+    tmp_path, monkeypatch
+):
+    store = Store(tmp_path)
+    document = _manifest()
+    document["targets"].append(
+        {
+            **document["targets"][0],
+            "id": "mom",
+            "kind": "mom",
+            "config_hash": "frozen",
+            "max_inference_calls": 1,
+        }
+    )
+    baseline = _record(store, document)
+    store.status(baseline, "failed")
+    original_results = store.results
+    monkeypatch.setattr(
+        store,
+        "results",
+        lambda run_id: [r for r in original_results(run_id) if r["target_id"] != "mom"],
+    )
+    with pytest.raises(ValueError, match="quality results"):
+        ComparisonValidator(store, store.get(baseline))

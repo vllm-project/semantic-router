@@ -162,7 +162,38 @@ config:
           keywords:
             - __LOOPER_FUSION_NONE_PROBE__
           case_sensitive: true
+        - name: looper_fusion_synthesis_trace_keywords
+          operator: OR
+          keywords:
+            - __LOOPER_FUSION_SYNTHESIS_TRACE_PROBE__
+          case_sensitive: true
     decisions:
+      - name: looper_fusion_synthesis_trace_decision
+        description: Serve a successful synthesis carrying optional panel evidence
+        priority: 125
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: looper_fusion_synthesis_trace_keywords
+        modelRefs:
+          - model: fusion-panel-valid
+            use_reasoning: false
+          - model: fusion-panel-fail
+            use_reasoning: false
+        algorithm:
+          type: fusion
+          fusion:
+            model: fusion-judge
+            analysis_models:
+              - fusion-panel-valid
+              - fusion-panel-fail
+            analysis_mode: none
+            max_concurrent: 2
+            min_successful_responses: 1
+            on_error: skip
+            # Trace controls retain their enabled defaults. Failed-model
+            # evidence must survive the same strict response boundary.
       - name: looper_fusion_separate_decision
         description: Preserve separate Fusion analysis as the compatibility default
         priority: 123
