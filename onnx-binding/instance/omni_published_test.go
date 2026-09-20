@@ -112,29 +112,29 @@ func TestPublishedOmniParity(t *testing.T) {
 		if record.FormattedText != "" {
 			text = record.FormattedText
 		}
-		out, err := model.EncodeText(text, 0)
+		out, encodeErr := model.EncodeText(text, 0)
 		if record.Tokens > initialInfo.EffectiveLimit {
 			var boundary *Error
-			if !errors.As(err, &boundary) || boundary.Kind != "input_limit" {
-				t.Fatalf("text%d with %d tokens must reject deployment budget %d with input_limit: %v", i, record.Tokens, initialInfo.EffectiveLimit, err)
+			if !errors.As(encodeErr, &boundary) || boundary.Kind != "input_limit" {
+				t.Fatalf("text%d with %d tokens must reject deployment budget %d with input_limit: %v", i, record.Tokens, initialInfo.EffectiveLimit, encodeErr)
 			}
 			t.Logf("text%d: %d tokens rejected by explicit %d-token deployment budget; not a numerical qualification", i, record.Tokens, initialInfo.EffectiveLimit)
 			continue
 		}
-		if err != nil {
-			t.Fatalf("text%d: %v", i, err)
+		if encodeErr != nil {
+			t.Fatalf("text%d: %v", i, encodeErr)
 		}
 		completedText++
 		compareOmniVector(t, "text", out.Values, readOmniArray(t, golden, record.Embedding))
 	}
 	for i, record := range index.Images {
-		data, err := os.ReadFile(filepath.Join(golden, record.File))
-		if err != nil {
-			t.Fatal(err)
+		data, readErr := os.ReadFile(filepath.Join(golden, record.File))
+		if readErr != nil {
+			t.Fatal(readErr)
 		}
-		out, err := model.EncodeImageBytes(data, 0)
-		if err != nil {
-			t.Fatalf("image%d: %v", i, err)
+		out, encodeErr := model.EncodeImageBytes(data, 0)
+		if encodeErr != nil {
+			t.Fatalf("image%d: %v", i, encodeErr)
 		}
 		compareOmniVector(t, "image", out.Values, readOmniArray(t, golden, record.Embedding))
 	}
@@ -143,9 +143,9 @@ func TestPublishedOmniParity(t *testing.T) {
 		if len(record.PCM.Shape) == 2 {
 			channels = record.PCM.Shape[0]
 		}
-		out, err := model.EncodeAudioPCM(readOmniArray(t, golden, record.PCM), record.SamplingRate, channels, 0)
-		if err != nil {
-			t.Fatalf("audio%d: %v", i, err)
+		out, encodeErr := model.EncodeAudioPCM(readOmniArray(t, golden, record.PCM), record.SamplingRate, channels, 0)
+		if encodeErr != nil {
+			t.Fatalf("audio%d: %v", i, encodeErr)
 		}
 		compareOmniVector(t, "audio", out.Values, readOmniArray(t, golden, record.Embedding))
 	}

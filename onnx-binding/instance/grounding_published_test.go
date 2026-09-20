@@ -58,9 +58,9 @@ func TestPublishedGroundedParity(t *testing.T) {
 	defer model.Close()
 	for _, probe := range reference.Probes {
 		t.Run(probe.Name, func(t *testing.T) {
-			out, err := model.Detect(probe.Context, probe.Question, probe.Answer)
-			if err != nil {
-				t.Fatal(err)
+			out, detectErr := model.Detect(probe.Context, probe.Question, probe.Answer)
+			if detectErr != nil {
+				t.Fatal(detectErr)
 			}
 			if out.Input.Truncated || out.Input.OriginalTokens != probe.InputTokens || out.Input.ProcessedTokens != probe.InputTokens || len(out.Spans) != len(probe.Spans) {
 				t.Fatalf("input or spans differ: %+v", out)

@@ -20,7 +20,7 @@ func groundingFixture(t *testing.T) Options {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(filepath.Join(options.ModelPath, "operating_point.json"), data, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(options.ModelPath, "operating_point.json"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return options

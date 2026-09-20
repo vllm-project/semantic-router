@@ -24,6 +24,7 @@ func LoadOmni(options Options) (*OmniModel, error) {
 	}
 	return &OmniModel{o}, nil
 }
+
 func (m *OmniModel) Clone() (*OmniModel, error) {
 	o, err := m.owner.clone()
 	if err != nil {
@@ -31,15 +32,19 @@ func (m *OmniModel) Clone() (*OmniModel, error) {
 	}
 	return &OmniModel{o}, nil
 }
+
 func (m *OmniModel) EncodeText(text string, dimension int) (EmbeddingResult, error) {
 	return (&MultiModalModel{m.owner}).EncodeText(text, dimension)
 }
+
 func (m *OmniModel) EncodeImageBytes(data []byte, dimension int) (EmbeddingResult, error) {
 	return (&MultiModalModel{m.owner}).EncodeImageBytes(data, dimension)
 }
+
 func (m *OmniModel) Windows(text string, maxTokens int) ([]TextWindow, error) {
 	return m.textWindows(text, maxTokens)
 }
+
 func (m *OmniModel) RuntimeDescriptor(layer, dimension int) (string, error) {
 	return (&EmbeddingModel{m.owner}).RuntimeDescriptor(layer, dimension)
 }

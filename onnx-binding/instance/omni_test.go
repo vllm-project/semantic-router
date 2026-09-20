@@ -5,6 +5,7 @@ package instance
 import (
 	"bytes"
 	"crypto/sha256"
+	"embed"
 	"encoding/hex"
 	"encoding/json"
 	"image"
@@ -18,11 +19,14 @@ import (
 	"testing"
 )
 
+//go:embed testdata/omni
+var omniFixtureFiles embed.FS
+
 func omniFixture(t *testing.T) Options {
 	t.Helper()
 	source := filepath.Join("testdata", "omni")
 	root := t.TempDir()
-	err := filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
+	err := fs.WalkDir(omniFixtureFiles, source, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -32,19 +36,20 @@ func omniFixture(t *testing.T) Options {
 		}
 		target := filepath.Join(root, rel)
 		if entry.IsDir() {
-			return os.MkdirAll(target, 0700)
+			return os.MkdirAll(target, 0o700)
 		}
-		data, err := os.ReadFile(path)
+		data, err := omniFixtureFiles.ReadFile(path)
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, data, 0600)
+		return os.WriteFile(target, data, 0o600)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return Options{ModelPath: root, Provider: "cpu", IntraThreads: 1}
 }
+
 func changeOmniManifest(t *testing.T, options Options, change func(map[string]any)) {
 	t.Helper()
 	path := filepath.Join(options.ModelPath, "vela_omni_manifest.json")
@@ -61,10 +66,11 @@ func changeOmniManifest(t *testing.T, options Options, change func(map[string]an
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(path, raw, 0600); err != nil {
+	if err = os.WriteFile(path, raw, 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
+
 func TestOmniOwnedModalitiesIdentityAndInputContracts(t *testing.T) {
 	options := omniFixture(t)
 	options.MaxInputTokens = 8
@@ -154,6 +160,7 @@ func TestOmniOwnedModalitiesIdentityAndInputContracts(t *testing.T) {
 		t.Fatal("closing original destroyed clone", err)
 	}
 }
+
 func TestOmniIdentityIgnoresArtifactLocation(t *testing.T) {
 	first, err := LoadOmni(omniFixture(t))
 	if err != nil {
@@ -177,6 +184,7 @@ func TestOmniIdentityIgnoresArtifactLocation(t *testing.T) {
 		t.Fatal("copied identical deployment received a different content identity")
 	}
 }
+
 func TestOmniRejectsIncompleteAndWrongArtifacts(t *testing.T) {
 	for name, change := range map[string]func(map[string]any){
 		"format":           func(m map[string]any) { m["format_version"] = 2 },
@@ -212,7 +220,7 @@ func TestOmniRejectsIncompleteAndWrongArtifacts(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = os.WriteFile(path, raw, 0600); err != nil {
+		if err = os.WriteFile(path, raw, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		hash := sha256.Sum256(raw)
@@ -232,7 +240,7 @@ func TestOmniRejectsIncompleteAndWrongArtifacts(t *testing.T) {
 			t.Fatal(err)
 		}
 		raw = bytes.ReplaceAll(raw, []byte("embedding"), []byte("wrongname"))
-		if err = os.WriteFile(path, raw, 0600); err != nil {
+		if err = os.WriteFile(path, raw, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		hash := sha256.Sum256(raw)
@@ -270,7 +278,7 @@ func TestOmniExplicitFixedExecutionResolvesSessionShape(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer model.Close()
-	if _, err := model.EncodeText("hello", 0); err != nil {
+	if _, err = model.EncodeText("hello", 0); err != nil {
 		t.Fatal(err)
 	}
 	info, err := model.Info()
