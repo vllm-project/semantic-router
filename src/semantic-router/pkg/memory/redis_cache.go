@@ -3,10 +3,12 @@ package memory
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 const (
 	defaultMemoryCacheKeyPrefix = "memory_cache:"
 	defaultMemoryCacheTTL       = 300 // 5 minutes
+	memoryCacheKeyVersion       = "v2:"
 )
 
 // RedisCacheConfig configures the Redis hot cache for memory retrieval.
@@ -30,7 +33,7 @@ type RedisCacheConfig struct {
 }
 
 // RedisCache is a Redis-backed cache for memory retrieval results.
-// Value keys: {keyPrefix}v:{userID}:{queryHash}. Each value key is also recorded
+// Value keys: {keyPrefix}v2:{userID}:{queryHash}. Each value key is also recorded
 // in a per-user index set ({keyPrefix}u:{userID}); the cache is invalidated per
 // user on store/update/forget by deleting that set's members, so invalidation
 // costs O(user's cached queries) instead of an O(keyspace) SCAN.
@@ -75,29 +78,41 @@ func NewRedisCache(ctx context.Context, cfg *RedisCacheConfig) (*RedisCache, err
 	}, nil
 }
 
-// cacheKey builds a value key from userID and a hash of the retrieval options
-// (query, projectID, limit, threshold, types). Value keys live under the "v:"
-// namespace so they can never collide with a per-user index key (see
-// userIndexKey), regardless of userID content.
+// cacheKey hashes a versioned, length-delimited encoding of retrieval options.
+// v2 cannot reuse legacy values that omitted retrieval policy. The user index
+// deliberately stays unchanged so invalidation also removes tracked old keys.
+// Only the cache identity is normalized; the backing store receives the
+// caller's original options and retains its existing retrieval behavior.
 func cacheKey(prefix, userID string, opts RetrieveOptions) string {
-	h := sha256.New()
-	h.Write([]byte(opts.Query))
-	h.Write([]byte("\x00"))
-	h.Write([]byte(opts.ProjectID))
-	h.Write([]byte("\x00"))
-	_, _ = fmt.Fprintf(h, "%d", opts.Limit)
-	h.Write([]byte("\x00"))
-	_, _ = fmt.Fprintf(h, "%.6f", opts.Threshold)
-	for _, t := range opts.Types {
-		h.Write([]byte("\x00"))
-		h.Write([]byte(t))
+	mode := opts.HybridMode
+	if !opts.HybridSearch {
+		mode = "" // Both stores ignore the fusion mode for vector-only retrieval.
+	} else if mode == "" {
+		mode = "weighted" // vectorstore.HybridSearchConfig.applyDefaults
 	}
-	hash := hex.EncodeToString(h.Sum(nil))[:16]
-	return prefix + "v:" + userID + ":" + hash
+	encoded := []byte(memoryCacheKeyVersion)
+	appendField := func(value string) {
+		encoded = binary.AppendUvarint(encoded, uint64(len(value)))
+		encoded = append(encoded, value...)
+	}
+	for _, field := range []string{
+		opts.Query, opts.ProjectID, strconv.Itoa(opts.Limit),
+		strconv.FormatFloat(float64(opts.Threshold), 'g', -1, 32),
+		strconv.FormatBool(opts.HybridSearch), mode, strconv.FormatBool(opts.AdaptiveThreshold),
+		strconv.Itoa(len(opts.Types)),
+	} {
+		appendField(field)
+	}
+	for _, t := range opts.Types {
+		appendField(string(t))
+	}
+	digest := sha256.Sum256(encoded)
+	hash := hex.EncodeToString(digest[:])[:16]
+	return prefix + memoryCacheKeyVersion + userID + ":" + hash
 }
 
 // userIndexKey returns the Redis set key that tracks every cached value key for a
-// user. The "u:" namespace is disjoint from the "v:" value-key namespace, so an
+// user. The "u:" namespace is disjoint from the versioned value-key namespace, so an
 // index key can never collide with a cached value, regardless of userID content.
 func (c *RedisCache) userIndexKey(userID string) string {
 	return c.prefix + "u:" + userID

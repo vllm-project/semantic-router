@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import requests
+from cli.sr_bench import datasets
 from cli.sr_bench.contracts import digest, plan
 from cli.sr_bench.datasets import DatasetReader
 from cli.sr_bench.service import PREFIX, Server
@@ -200,6 +201,56 @@ def test_registered_dataset_path_and_digest_are_rechecked_after_cache(tmp_path):
         reader.page("../outside")
     with pytest.raises(KeyError):
         reader.page("f" * 64)
+
+
+@pytest.mark.parametrize("operation", ["page", "selection"])
+def test_cache_verifies_content_on_coarse_timestamp_filesystems(
+    tmp_path, monkeypatch, operation
+):
+    manifest = _dataset(tmp_path, [_case("case")])
+    identify = datasets._identity
+    monkeypatch.setattr(datasets, "_identity", lambda path: identify(path)[:3])
+    reader = DatasetReader(tmp_path)
+
+    def read():
+        return (
+            reader.page(manifest["id"])
+            if operation == "page"
+            else reader.selection("smoke")
+        )
+
+    read()
+    read()
+    path = Path(manifest["path"])
+    original = path.read_bytes()
+    path.write_bytes(original.replace(b"Question", b"Modified"))
+    with pytest.raises(ValueError, match="digest"):
+        read()
+    path.write_bytes(original)
+    read()
+
+
+@pytest.mark.parametrize("operation", ["page", "selection"])
+def test_cache_refreshes_manifest_on_coarse_timestamp_filesystems(
+    tmp_path, monkeypatch, operation
+):
+    manifest = _dataset(tmp_path, [_case("case")])
+    identify = datasets._identity
+    monkeypatch.setattr(datasets, "_identity", lambda path: identify(path)[:3])
+    reader = DatasetReader(tmp_path)
+    if operation == "page":
+        reader.page(manifest["id"])
+    else:
+        reader.selection("smoke")
+    path = Path(manifest["path"]).with_name("manifest.json")
+    original = path.read_bytes()
+    updated = original.replace(b'"seed": 7', b'"seed": 8')
+    assert updated != original and len(updated) == len(original)
+    path.write_bytes(updated)
+    if operation == "page":
+        assert reader.detail(manifest["id"])["provenance"]["seed"] == 8
+    else:
+        assert reader.selection("smoke")["seed"] == 8
 
 
 def test_copied_metadata_never_follows_an_external_data_path(tmp_path):

@@ -266,7 +266,7 @@ def _validate_frozen_case(case, manifest, ids):
 
 
 class DatasetReader:
-    """A stat-validated, size-bounded cache; no network, model, or task execution."""
+    """A content-validated, size-bounded cache; no network or task execution."""
 
     def __init__(self, root):
         self.root = Path(root).resolve()
@@ -345,6 +345,30 @@ class DatasetReader:
             raise ValueError("Prepared dataset case count does not match")
         return manifest, rows, len(data)
 
+    def _cached_content_matches(self, identity, manifest, maximum):
+        # File timestamps can have coarser precision than consecutive writes.
+        # A matching stat tuple alone is not proof of unchanged frozen inputs.
+        if self._read_manifest(identity) != manifest:
+            return False
+        _, path = self._paths(identity)
+        before = _identity(path)
+        if before[2] > maximum:
+            raise DatasetSizeLimitError(path, before[2], maximum)
+        checksum, size = hashlib.sha256(), 0
+        with path.open("rb") as source:
+            while chunk := source.read(min(1024 * 1024, maximum - size + 1)):
+                size += len(chunk)
+                if size > maximum:
+                    raise DatasetSizeLimitError(path, size, maximum)
+                checksum.update(chunk)
+        if _identity(path) != before:
+            raise ValueError("Dataset input changed while being read")
+        if checksum.hexdigest() != manifest.get("sha256"):
+            raise ValueError(
+                "Prepared dataset identity or content digest does not match"
+            )
+        return True
+
     def _fingerprint(self, identity, remaining):
         """Verify full content with bounded line/index memory, caching only proofs."""
         manifest_path, data_path = self._paths(identity)
@@ -356,7 +380,11 @@ class DatasetReader:
             )
         with self.lock:
             cached = self.fingerprint_cache.get(identity)
-            if cached and cached[0] == key:
+            if (
+                cached
+                and cached[0] == key
+                and self._cached_content_matches(identity, cached[1], remaining)
+            ):
                 self.fingerprint_cache.move_to_end(identity)
                 return cached[1], cached[2], size
             manifest = self._read_manifest(identity)
@@ -427,7 +455,11 @@ class DatasetReader:
         key = (_identity(manifest_path), _identity(data_path))
         with self.lock:
             cached = self.cache.get(identity)
-            if cached and cached[0] == key:
+            if (
+                cached
+                and cached[0] == key
+                and self._cached_content_matches(identity, cached[1], MAX_DATA_BYTES)
+            ):
                 self.cache.move_to_end(identity)
                 return cached[1], cached[2]
             manifest, rows, _ = self._read_frozen(identity)

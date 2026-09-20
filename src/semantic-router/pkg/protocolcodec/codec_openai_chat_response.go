@@ -82,6 +82,7 @@ const chatUsageOmissionReason = "provider accounting detail has no separate prot
 // inventory and report the same omissions under their own field prefix.
 func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool {
 	return map[string]bool{
+		prefix + "service_tier":                                         wire.ServiceTier != nil,
 		prefix + "compute_units":                                        len(wire.ComputeUnits) > 0,
 		prefix + "prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
 		prefix + "prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,

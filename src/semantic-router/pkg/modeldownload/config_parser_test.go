@@ -69,7 +69,7 @@ func TestExtractModelPaths(t *testing.T) {
 					},
 				},
 			},
-			expected: []string{"models/lora_intent_classifier_bert-base-uncased_model"},
+			expected: []string{"models/mom-domain-classifier"},
 		},
 		{
 			name: "Extract multiple model paths",
