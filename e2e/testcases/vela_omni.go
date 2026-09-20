@@ -72,6 +72,9 @@ func RunVelaOmniContract(ctx context.Context, apiURL, gatewayURL string, budgets
 		return err
 	}
 	probe := omniProbe{client: &http.Client{Timeout: 120 * time.Second}, apiURL: apiURL, gatewayURL: gatewayURL, image: "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(image), audio: omniToneWAV()}
+	if err := probe.checkEmbeddingOwners(ctx); err != nil {
+		return err
+	}
 	// Revisit Nano after Mini: a process-global last-loaded encoder would return
 	// the wrong dimensionality or representation in at least one pass.
 	for _, model := range []struct {
