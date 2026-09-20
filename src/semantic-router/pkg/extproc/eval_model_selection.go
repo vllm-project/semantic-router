@@ -16,7 +16,18 @@ import (
 // list ordering that Eval can honestly present as final.
 func (r *OpenAIRouter) SelectModelForEval(
 	input services.EvalModelSelectionInput,
-) services.EvalModelSelection {
+) (result services.EvalModelSelection) {
+	if input.Context == nil {
+		input.Context = context.Background()
+	}
+	defer func() {
+		if err := input.Context.Err(); err != nil {
+			result = evalSelectionUnavailable(err.Error())
+		}
+	}()
+	if err := input.Context.Err(); err != nil {
+		return evalSelectionUnavailable(err.Error())
+	}
 	decision := input.Decision
 	if r == nil || r.Config == nil || decision == nil {
 		return evalSelectionUnavailable("router selection runtime is unavailable")
@@ -28,8 +39,14 @@ func (r *OpenAIRouter) SelectModelForEval(
 			Reason: "the router returns an immediate response without selecting or invoking a generation backend",
 		}
 	}
-	if params := decision.GetRequestParamsConfig(); params != nil && params.DefaultMaxTokens.IsAuto() && (input.Demand.MaxOutputTokens == nil || input.Demand.AutomaticOutput) {
-		return services.EvalModelSelection{Status: services.EvalSelectionExecutionRequired, Method: evalAlgorithmType(decision), Reason: "automatic output budgets require the complete provider-rendered request"}
+	if params := decision.GetRequestParamsConfig(); input.SemanticRequest == nil && params != nil && params.DefaultMaxTokens.IsAuto() {
+		return evalSelectionUnavailable("automatic output preview requires the prompt-bearing request")
+	}
+	if decisionUsesAutomaticOutput(input.SemanticRequest, decision) {
+		return r.selectAutomaticEvalCandidate(input)
+	}
+	if input.Demand.AutomaticOutput {
+		return evalSelectionUnavailable("automatic output preview requires the prompt-bearing request")
 	}
 	requestContext := &RequestContext{}
 	if recipe, ok := r.Config.RecipeByName(input.Recipe); ok {
@@ -91,7 +108,7 @@ func (r *OpenAIRouter) SelectModelForEval(
 			Reason: "selector depends on request-time state that Eval does not mutate",
 		}
 	}
-	return r.selectEvalCandidate(input, decision, method)
+	return r.selectEvalCandidate(input, decision, method, nil)
 }
 
 func evalAlgorithmType(decision *config.Decision) string {
@@ -127,14 +144,18 @@ func (r *OpenAIRouter) selectEvalCandidate(
 	input services.EvalModelSelectionInput,
 	decision *config.Decision,
 	method selection.SelectionMethod,
+	requestContext *RequestContext,
 ) services.EvalModelSelection {
 	defaultCandidate := firstConfiguredEvalCandidate(decision.ModelRefs)
 	if defaultCandidate == nil {
 		return evalSelectionUnavailable("decision has no selectable model")
 	}
-	requestContext, prepareErr := r.prepareEvalRequest(input, decision)
-	if prepareErr != nil {
-		return evalSelectionUnavailable(prepareErr.Error())
+	if requestContext == nil {
+		var prepareErr error
+		requestContext, prepareErr = r.prepareEvalRequest(input, decision)
+		if prepareErr != nil {
+			return evalSelectionUnavailable(prepareErr.Error())
+		}
 	}
 	costWeight, qualityWeight := r.getSelectionWeights(decision.Algorithm)
 	tpot, ttft := r.getLatencyAwarePercentiles(decision.Algorithm)
@@ -150,6 +171,7 @@ func (r *OpenAIRouter) selectEvalCandidate(
 		QualityWeight:              qualityWeight,
 		LatencyAwareTPOTPercentile: tpot,
 		LatencyAwareTTFTPercentile: ttft,
+		CandidateDemands:           requestContext.AutomaticCandidateDemands,
 	}
 	if requestContext.learningPreview != nil {
 		selectionContext.SessionID = requestContext.SessionID
@@ -164,7 +186,7 @@ func (r *OpenAIRouter) selectEvalCandidate(
 		base := (&selection.SelectionResult{Reasoning: "single declared candidate"}).WithCandidate(*defaultCandidate)
 		return r.finishEvalLearning(requestContext, selectionContext, base, defaultCandidate, "single")
 	}
-	if selection.CandidateRequirementsEnabled(r.candidateRequirements(requestContext)) {
+	if len(selectionContext.CandidateDemands) == 0 && selection.CandidateRequirementsEnabled(r.candidateRequirements(requestContext)) {
 		selectionContext.InputTokens = input.Demand.InputTokens
 		if input.Demand.MaxOutputTokens != nil {
 			selectionContext.ExpectedOutputTokens = int(*input.Demand.MaxOutputTokens)
@@ -174,7 +196,10 @@ func (r *OpenAIRouter) selectEvalCandidate(
 	if selector == nil {
 		return unavailableLearningFallback(requestContext, defaultCandidate, method, "selector is unavailable")
 	}
-	result, err := selector.Select(context.Background(), selectionContext)
+	result, err := selector.Select(input.Context, selectionContext)
+	if contextErr := input.Context.Err(); contextErr != nil {
+		return evalSelectionUnavailable(contextErr.Error())
+	}
 	if err != nil {
 		if errors.Is(err, selection.ErrNoEligibleCandidates) {
 			return evalSelectionUnavailable(err.Error())
@@ -274,7 +299,7 @@ func evalSelectionUnavailable(reason string) services.EvalModelSelection {
 }
 
 func unavailableLearningFallback(ctx *RequestContext, candidate *config.ModelRef, method selection.SelectionMethod, reason string) services.EvalModelSelection {
-	if ctx.learningPreview != nil {
+	if ctx.learningPreview != nil || len(ctx.AutomaticCandidateDemands) > 0 {
 		return evalSelectionUnavailable(reason)
 	}
 	return fallbackEvalModel(candidate, method, reason)

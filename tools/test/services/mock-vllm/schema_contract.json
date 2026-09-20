@@ -134,6 +134,7 @@
         "num_sources_used",
         "prompt_time",
         "queue_time",
+        "service_tier",
         "total_time"
       ]
     },
