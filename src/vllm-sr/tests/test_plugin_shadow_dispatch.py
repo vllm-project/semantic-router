@@ -118,19 +118,25 @@ class TestShadowDispatchPluginConfig:
     def test_budget_caps_reject_silent_combinations(self):
         # Mirrors the Router: caps that cannot bind before dispatch are refused
         # here instead of failing silently at run time.
-        with pytest.raises(PydanticValidationError, match="requires reserve_tokens_per_arm"):
+        with pytest.raises(
+            PydanticValidationError, match="requires reserve_tokens_per_arm"
+        ):
             ShadowDispatchPluginConfig(
                 enabled=True,
                 model="m",
                 budget=ShadowDispatchBudgetConfig(max_tokens_per_request=100),
             )
-        with pytest.raises(PydanticValidationError, match="requires price_per_million_tokens"):
+        with pytest.raises(
+            PydanticValidationError, match="requires price_per_million_tokens"
+        ):
             ShadowDispatchPluginConfig(
                 enabled=True,
                 model="m",
                 budget=ShadowDispatchBudgetConfig(max_cost_per_request=1.0),
             )
-        with pytest.raises(PydanticValidationError, match="requires reserve_tokens_per_arm"):
+        with pytest.raises(
+            PydanticValidationError, match="requires reserve_tokens_per_arm"
+        ):
             ShadowDispatchPluginConfig(
                 enabled=True,
                 model="m",

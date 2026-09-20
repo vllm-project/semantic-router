@@ -1295,7 +1295,8 @@ class ShadowDispatchPluginConfig(BaseModel):
                     "reserve_tokens_per_arm to bind before dispatch"
                 )
             if budget.max_cost_per_request > 0 and (
-                budget.price_per_million_tokens == 0 or budget.reserve_tokens_per_arm == 0
+                budget.price_per_million_tokens == 0
+                or budget.reserve_tokens_per_arm == 0
             ):
                 raise ValueError(
                     "shadow_dispatch max_cost_per_request requires "
