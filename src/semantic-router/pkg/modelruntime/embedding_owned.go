@@ -179,9 +179,9 @@ func embeddingCatalogSpec(cfg *config.RouterConfig, recipe config.RecipeName, mo
 	return config.ResolvedModelBinding{Recipe: recipe, Name: "embedding", Binding: config.ModelBinding{Deployment: "embedding:" + model, Contract: "embedding.v1", Adapter: adapter}, Deployment: config.ModelDeployment{Artifact: path, Provider: provider, Device: device, Precision: "native", Input: config.ModelInputBudget{Overflow: overflow}}, Admission: cfg.ModelAdmission["embedding:"+model]}
 }
 
-// EmbeddingState describes the already warmed generation without another call.
+// EmbeddingState describes one prepared set without inferring consumer readiness.
 func EmbeddingState(cfg *config.RouterConfig, set *embedding.Set) EmbeddingRuntimeState {
-	state := EmbeddingRuntimeState{Embeddings: set, AnyReady: set.Ready(), ToolsReady: set.Has("")}
+	state := EmbeddingRuntimeState{Embeddings: set, AnyReady: set.Ready()}
 	if provider, err := set.Default(); err == nil && provider.Backend() == config.EmbeddingBackendOpenAICompatible {
 		state.EmbeddingProvider = remoteEmbeddingProviderProbeStatus(cfg, provider, provider.Dimension(), nil)
 		if state.EmbeddingProvider.Model == "" {

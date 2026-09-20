@@ -29,6 +29,20 @@ func (c *Classifier) PreloadKnowledgeBases() error {
 	return nil
 }
 
+// HasPreparedKnowledgeBases reports whether KB consumers have their own prepared
+// embedding providers. Other recipe or global providers cannot satisfy this.
+func (c *Classifier) HasPreparedKnowledgeBases() bool {
+	if c == nil || len(c.kbClassifiers) == 0 {
+		return false
+	}
+	for _, kb := range c.kbClassifiers {
+		if kb == nil || kb.provider == nil {
+			return false
+		}
+	}
+	return true
+}
+
 // Classifier handles text classification, model selection, and jailbreak detection functionality
 type Classifier struct {
 	closeOnce         sync.Once
