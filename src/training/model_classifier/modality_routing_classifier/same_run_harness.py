@@ -181,36 +181,86 @@ def load_hf_adapter(model_id: str, max_length: int):
 
 
 def load_candle_adapter(model_id: str, max_length: int):
-    """Production path: ClassifyMmBert32KModality. Requires candle-binding."""
-    del max_length
-    try:
-        import candle_binding  # type: ignore
-    except ImportError as exc:
+    """Production path: persistent Go helper wrapping ClassifyMmBert32KModality.
+
+    The helper reads one JSON line per request from stdin and writes one JSON
+    line per response to stdout:
+      request:  {"text": "...", "max_length": 256}
+      response: {"label": "AR", "seq_len": 128, "tokenize_ns": 0, "forward_ns": 5000000}
+
+    Build the helper:
+      cd candle-binding && go build -o candle-classify ./cmd/classify-helper/
+    Then either:
+      export CANDLE_CLASSIFY_HELPER=/path/to/candle-classify
+      # or put candle-classify on PATH
+    """
+    import json as _json
+    import shutil
+    import subprocess
+
+    helper = os.environ.get("CANDLE_CLASSIFY_HELPER") or shutil.which("candle-classify")
+    if not helper:
         raise SystemExit(
-            "binding=candle requires the candle FFI on PYTHONPATH "
-            f"(ClassifyMmBert32KModality). model={model_id!r}. {exc}"
+            "--binding candle requires a compiled Go helper binary.\n"
+            "Build:  cd candle-binding && go build -o candle-classify ./cmd/classify-helper/\n"
+            "Export: CANDLE_CLASSIFY_HELPER=/path/to/candle-classify"
+        )
+
+    import atexit
+
+    try:
+        proc = subprocess.Popen(
+            [helper, "--model", model_id, "--max-length", str(max_length)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+        )
+    except FileNotFoundError as exc:
+        raise SystemExit(
+            f"candle helper binary not found or not executable: {helper!r}"
         ) from exc
 
-    if hasattr(candle_binding, "init_mmbert_32k_modality_classifier"):
-        candle_binding.init_mmbert_32k_modality_classifier(model_id, True)
+    if proc.poll() is not None:
+        err = proc.stderr.read()
+        raise SystemExit(
+            f"candle helper exited on startup (model={model_id!r}): {err.strip()}"
+        )
+
+    def _terminate_helper() -> None:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+    atexit.register(_terminate_helper)
 
     def classify(text: str) -> ClassifyResult:
+        request = _json.dumps({"text": text, "max_length": max_length}) + "\n"
         t_submit = time.perf_counter_ns()
-        result = candle_binding.classify_mmbert_32k_modality(text)
+        try:
+            proc.stdin.write(request)
+            proc.stdin.flush()
+            line = proc.stdout.readline()
+        except BrokenPipeError as exc:
+            err = proc.stderr.read()
+            raise RuntimeError(f"candle helper pipe broken: {err.strip()}") from exc
         t_return = time.perf_counter_ns()
-        if isinstance(result, dict):
-            output = result.get("modality") or result.get("output")
-            seq_len = int(result.get("seq_len") or 0)
-        else:
-            output = str(result)
-            seq_len = 0
         elapsed = t_return - t_submit
+        if not line:
+            err = proc.stderr.read()
+            raise RuntimeError(f"candle helper closed stdout: {err.strip()}")
+        data = _json.loads(line)
+        if "error" in data:
+            raise RuntimeError(f"candle helper returned error: {data['error']}")
         return {
-            "output": str(output),
-            "tokenize_ns": 0,
-            "forward_ns": elapsed,
+            "output": str(data["label"]),
+            "tokenize_ns": int(data.get("tokenize_ns", 0)),
+            "forward_ns": int(data.get("forward_ns", elapsed)),
             "e2e_ns": elapsed,
-            "seq_len": seq_len,
+            "seq_len": int(data.get("seq_len", 0)),
         }
 
     return classify
@@ -246,20 +296,39 @@ def run_single_stream(
     qsl: list[dict],
     warmup_n: int,
     min_duration_s: float,
-) -> tuple[list[dict], dict]:
+) -> tuple[list[dict], list[dict], dict]:
+    """Run single-stream scoring and return (quality_records, latency_samples, meta).
+
+    quality_records — one entry per QSL row from the first pass only.
+      Used for label/output pairing in same_run_pair.py.
+    latency_samples — one entry per scored request across *all* passes.
+      Used for latency statistics (p50/p99/…) so that --min-duration-s
+      produces representative tail-latency numbers rather than first-pass only.
+    """
     warmup_n = min(warmup_n, len(qsl))
     for row in qsl[:warmup_n]:
         classify(row["text"])
 
     cpu_before = time.process_time()
     wall_before = time.perf_counter()
-    records = []
+    quality_records: list[dict] = []
+    latency_samples: list[dict] = []
     scored = 0
     while True:
         for row in qsl:
             result = classify(row["text"])
+            e2e_ms = round(ns_to_ms(result["e2e_ns"]), 3)
+            fwd_ms = round(ns_to_ms(result["forward_ns"]), 3)
+            tok_ms = round(ns_to_ms(result["tokenize_ns"]), 3)
+            latency_samples.append(
+                {
+                    "e2e_ms": e2e_ms,
+                    "forward_ms": fwd_ms,
+                    "tokenize_ms": tok_ms,
+                }
+            )
             if scored < len(qsl):
-                records.append(
+                quality_records.append(
                     {
                         "row_id": row["row_id"],
                         "qsl_index": row["qsl_index"],
@@ -267,9 +336,9 @@ def run_single_stream(
                         "label": row["label"],
                         "output": result["output"],
                         "seq_len": result["seq_len"],
-                        "tokenize_ms": round(ns_to_ms(result["tokenize_ns"]), 3),
-                        "forward_ms": round(ns_to_ms(result["forward_ns"]), 3),
-                        "e2e_ms": round(ns_to_ms(result["e2e_ns"]), 3),
+                        "tokenize_ms": tok_ms,
+                        "forward_ms": fwd_ms,
+                        "e2e_ms": e2e_ms,
                     }
                 )
             scored += 1
@@ -282,13 +351,14 @@ def run_single_stream(
     meta = {
         "warmup_n": warmup_n,
         "scored_queries": scored,
-        "n_records": len(records),
+        "n_records": len(quality_records),
+        "n_latency_samples": len(latency_samples),
         "cpu_s": round(cpu_s, 3),
         "wall_s": round(wall_s, 3),
         "peak_rss_mb": round(peak_rss_mb(), 1),
         "min_duration_s": min_duration_s,
     }
-    return records, meta
+    return quality_records, latency_samples, meta
 
 
 def main() -> None:
@@ -309,7 +379,7 @@ def main() -> None:
         "--binding",
         default="hf",
         choices=["hf", "candle"],
-        help="hf = HuggingFace transformers; candle = ClassifyMmBert32KModality",
+        help="hf = HuggingFace transformers; candle = Go helper wrapping ClassifyMmBert32KModality",
     )
     parser.add_argument("--role", default="baseline", choices=["baseline", "candidate"])
     parser.add_argument("--warmup", type=int, default=20)
@@ -327,11 +397,13 @@ def main() -> None:
         raise SystemExit(f"empty QSL: {args.qsl}")
 
     classify = load_adapter(args.binding, args.model, args.max_length)
-    records, meta = run_single_stream(classify, qsl, args.warmup, args.min_duration_s)
+    quality_records, latency_samples, meta = run_single_stream(
+        classify, qsl, args.warmup, args.min_duration_s
+    )
 
-    e2e = [r["e2e_ms"] for r in records]
-    forward = [r["forward_ms"] for r in records]
-    tokenize = [r["tokenize_ms"] for r in records]
+    e2e = [s["e2e_ms"] for s in latency_samples]
+    forward = [s["forward_ms"] for s in latency_samples]
+    tokenize = [s["tokenize_ms"] for s in latency_samples]
     report = {
         "issue": "#3856",
         "scenario": "single-stream",
@@ -359,7 +431,7 @@ def main() -> None:
             "forward": summarize(forward),
             "tokenize": summarize(tokenize),
         },
-        "records": records,
+        "records": quality_records,
     }
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     summary = {
