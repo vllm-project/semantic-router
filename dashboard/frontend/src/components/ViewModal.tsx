@@ -31,7 +31,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
   const handleEdit = onEdit ? () => transitionFromViewToEdit(onClose, onEdit) : undefined
 
   return (
-    <div className={styles.overlay} onClick={onClose}>
+    <div className={styles.overlay} onClick={onClose} role="presentation">
       <div
         ref={dialogRef}
         className={styles.drawerShell}
@@ -40,6 +40,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
         aria-label={title}
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
       >
         <ViewPanel
           title={title}
