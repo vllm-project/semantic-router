@@ -114,6 +114,22 @@ Deduplication runs before compression in the shared context pipeline. Enabling a
 
 Response caching is unaffected: the cache key is computed from the request as received and from the decision's plugin configuration, and deduplication is a deterministic function of both that preserves behavior.
 
+## Measured Effect
+
+The package evaluation (`go test -run TestEvaluation -v ./pkg/contextdedup/`) applies the default policy to representative conversations, counts estimated input tokens before and after with the router's heuristic counter, and asserts that the provider-bound sequence is exactly the expected one. Every negative workload is byte-identical before and after.
+
+| Workload | Tokens before | Tokens after | Saved |
+| --- | --- | --- | --- |
+| Clean eight-turn conversation | 1854 | 1854 | 0% |
+| One turn sent twice in a four-turn history | 1090 | 899 | 18% |
+| Six-turn history sent twice | 2618 | 1472 | 44% |
+| Six-turn history sent three times | 3764 | 1472 | 61% |
+| Responses history with item IDs re-sent without IDs | 1864 | 1100 | 41% |
+| Repeated tool execution, distinct or identical call IDs | 1082 | 1082 | 0% |
+| Confirmation, correction, refusal retry, temporal repetition | unchanged | unchanged | 0% |
+
+The scan itself is cheap: at the default bounds, deduplicating a 63-turn history sent twice takes about 0.2 ms on one core (`go test -bench BenchmarkPlan ./pkg/contextdedup/`).
+
 ## Observability
 
 Every configured evaluation records a content-minimized receipt: the outcome, the terminal reason, the normalization mode, examined message and turn counts, candidate and protected counts, retained and removed counts, removed text bytes, the number of duplicate segments, per-reason retention counts, and a bounded list of removed segments identified by pre-transform message positions. Receipts never contain message text. Recovery is reported as `not_required`, because every removed message has an identical retained twin.
