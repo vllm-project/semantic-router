@@ -134,7 +134,11 @@ func TestAbortedStreamIsNotCheckedForHallucination(t *testing.T) {
 	if calls.Load() != 0 {
 		t.Fatalf("an aborted stream has no terminal answer, yet the detector was asked %d time(s)", calls.Load())
 	}
-	if outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID); len(outcomes) != 0 {
-		t.Fatalf("outcomes = %+v, want none for a stream that never answered", outcomes)
+	// Lifecycle receipts (such as disabled memory persistence) can still be
+	// recorded; only a hallucination verdict requires a completed answer.
+	for _, outcome := range replayOutcomes(t, recorder, ctx.RouterReplayID) {
+		if outcome.TargetRef == hallucinationSignalKey {
+			t.Fatalf("hallucination outcome = %+v for a stream that never answered", outcome)
+		}
 	}
 }

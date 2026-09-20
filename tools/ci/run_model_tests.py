@@ -34,6 +34,7 @@ CLASSIFIER_TESTS = (
     "TestLocalClassifierMaintainedCPU",
     "TestUnifiedClassifierPublishedModels",
 )
+CANDLE_CACHE_TESTS = ("TestNegationFalseHitRegressionInMemory",)
 MULTIMODAL_BINDING_TESTS = (
     "TestMultiModalEmbeddingInit",
     "TestMultiModalEncodeText",
@@ -151,6 +152,8 @@ def main() -> int:
         env[model["env"]] = model["path"]
         if model["name"] == "Domain":
             env["CANDLE_GENERIC_CLASSIFIER_MODEL"] = model["path"]
+        if model["name"] == "Embedding" and provider == "candle":
+            env["VLLM_SR_MMBERT_TEST_MODEL"] = model["path"]
     args.output.mkdir(parents=True, exist_ok=True)
     suites = []
     selections = (
@@ -184,6 +187,16 @@ def main() -> int:
                 MULTIMODAL_CLASSIFIER_TESTS,
                 set(MULTIMODAL_CLASSIFIER_TESTS),
                 "classification.jsonl",
+            ),
+        )
+    elif provider == "candle":
+        selections += (
+            (
+                ROOT / "src/semantic-router",
+                "./pkg/cache",
+                CANDLE_CACHE_TESTS,
+                set(CANDLE_CACHE_TESTS),
+                "cache.jsonl",
             ),
         )
     elif provider == "ort":

@@ -111,11 +111,13 @@ Confidence ranks a comparable pool only. A pool is one tier under tiered
 ranking and the whole candidate set otherwise, and it falls back to priority
 as soon as one member that is not a catch-all reported no score. Keyword
 rules, `NOT` guards, and predicate leaves report the structural constant 1.0
-instead of a measurement, so a decision that matched through one of them drops
-its pool to priority ordering. A matched `conversation` rule instead reports
-1.0 as a score, so a boolean condition ranks as maximal evidence and keeps its
-pool comparable. Name ascending is the final tie-break, so ranking never
-depends on map or file order.
+instead of a measurement, so a decision whose match rests on one of them drops
+its pool to priority ordering. Inside an `OR`, a branch that reported a score
+outranks one that did not, so an extra matching gate adds support without
+removing evidence the decision already reported. A matched `conversation` rule
+instead reports 1.0 as a score, so a boolean condition ranks as maximal
+evidence and keeps its pool comparable. Name ascending is the final tie-break,
+so ranking never depends on map or file order.
 
 Two consequences are easy to miss:
 
