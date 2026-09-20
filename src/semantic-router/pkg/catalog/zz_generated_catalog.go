@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:f5891be854d1874a7b75b436af2769f5609ea127a9edfcf00b7289b75b18f9c3"
+const builtInCatalogDigest = "sha256:bf927273d18c0c3e7a504e29328358255d6ddfd5116eaeb8d2edee895cec8ded"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -96654,7 +96654,8 @@ const builtInCatalogJSON = `{
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "fixture_verified",
+        "verified_at": "2026-09-20"
       },
       "default_headers": {
         "anthropic-version": "2023-06-01"
