@@ -74,7 +74,8 @@ func TestShadowDispatchBudgetCapsRejectSilentCombinations(t *testing.T) {
 		wantErr string
 	}{
 		{name: "token cap without admission reserve", cfg: ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100}, wantErr: "requires reserve_tokens_per_arm"},
-		{name: "cost cap without price", cfg: ShadowDispatchBudgetConfig{MaxCostPerRequest: 1.0}, wantErr: "requires price_per_million_tokens"},
+		{name: "cost cap without price", cfg: ShadowDispatchBudgetConfig{MaxCostPerRequest: 1.0}, wantErr: "requires reserve_tokens_per_arm and price_per_million_tokens"},
+		{name: "cost cap without admission reserve", cfg: ShadowDispatchBudgetConfig{MaxCostPerRequest: 1.0, PricePerMillionTokens: 2.0}, wantErr: "requires reserve_tokens_per_arm and price_per_million_tokens"},
 		{name: "bounded pair accepted", cfg: ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100, ReserveTokensPerArm: 50, MaxCostPerRequest: 1.0, PricePerMillionTokens: 2.0}},
 	}
 	for _, tc := range cases {

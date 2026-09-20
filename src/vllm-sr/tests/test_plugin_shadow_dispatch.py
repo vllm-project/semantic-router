@@ -130,6 +130,14 @@ class TestShadowDispatchPluginConfig:
                 model="m",
                 budget=ShadowDispatchBudgetConfig(max_cost_per_request=1.0),
             )
+        with pytest.raises(PydanticValidationError, match="requires reserve_tokens_per_arm"):
+            ShadowDispatchPluginConfig(
+                enabled=True,
+                model="m",
+                budget=ShadowDispatchBudgetConfig(
+                    max_cost_per_request=1.0, price_per_million_tokens=2.0
+                ),
+            )
 
     def test_budget_rejects_negative(self):
         with pytest.raises(PydanticValidationError):

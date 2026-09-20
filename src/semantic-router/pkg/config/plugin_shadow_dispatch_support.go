@@ -144,19 +144,29 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 	if c.MaxRetries > maxShadowDispatchRetries {
 		return fmt.Errorf("max_retries cannot exceed %d", maxShadowDispatchRetries)
 	}
-	if c.Budget.MaxCallsPerRequest < 0 || c.Budget.MaxTokensPerRequest < 0 ||
-		c.Budget.MaxCostPerRequest < 0 || c.Budget.PricePerMillionTokens < 0 ||
-		c.Budget.ReserveTokensPerArm < 0 || c.Budget.MaxConcurrencyPerRequest < 0 {
-		return fmt.Errorf("budget values cannot be negative")
+	for _, bound := range []struct {
+		name  string
+		value float64
+	}{
+		{"max_calls_per_request", float64(c.Budget.MaxCallsPerRequest)},
+		{"max_tokens_per_request", float64(c.Budget.MaxTokensPerRequest)},
+		{"max_cost_per_request", c.Budget.MaxCostPerRequest},
+		{"price_per_million_tokens", c.Budget.PricePerMillionTokens},
+		{"reserve_tokens_per_arm", float64(c.Budget.ReserveTokensPerArm)},
+		{"max_concurrency_per_request", float64(c.Budget.MaxConcurrencyPerRequest)},
+	} {
+		if bound.value < 0 {
+			return fmt.Errorf("budget.%s cannot be negative", bound.name)
+		}
 	}
-	// Reject cap/core combinations that would bind silently at run time: a
-	// token cap needs an admission reservation to hold before dispatch, and a
-	// cost cap needs a price to convert accounted tokens.
+	// Reject cap/core combinations that would bind silently at run time: a cap
+	// needs an admission reservation to hold before dispatch, and a cost cap
+	// additionally needs a price to convert accounted tokens.
 	if c.Budget.MaxTokensPerRequest > 0 && c.Budget.ReserveTokensPerArm == 0 {
 		return fmt.Errorf("budget.max_tokens_per_request requires reserve_tokens_per_arm to bind before dispatch")
 	}
-	if c.Budget.MaxCostPerRequest > 0 && c.Budget.PricePerMillionTokens == 0 {
-		return fmt.Errorf("budget.max_cost_per_request requires price_per_million_tokens")
+	if c.Budget.MaxCostPerRequest > 0 && (c.Budget.ReserveTokensPerArm == 0 || c.Budget.PricePerMillionTokens == 0) {
+		return fmt.Errorf("budget.max_cost_per_request requires reserve_tokens_per_arm and price_per_million_tokens")
 	}
 	return validateShadowForwardHeaders(c.ForwardHeaders)
 }
