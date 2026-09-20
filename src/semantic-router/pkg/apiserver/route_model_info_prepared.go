@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
@@ -31,7 +32,8 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 			ModelPath: entry.Artifact,
 			Metadata: map[string]string{
 				"binding": id.Name, "deployment": id.Deployment,
-				"contract": id.Contract, "model_type": id.Adapter,
+				"resource_id": entry.ResourceID,
+				"contract":    id.Contract, "model_type": id.Adapter,
 				"provider": capability.Provider, "device": capability.Device,
 				"precision":           capability.Precision,
 				"max_sequence_length": fmt.Sprint(capability.Limits.EffectiveTokens()),
@@ -41,16 +43,51 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 		if capability.Device == "external" {
 			model.Metadata["lifecycle"] = "external"
 		}
+		addPreparedInputLimits(model.Metadata, capability)
 		if capability.Embedding != nil {
 			embedding := capability.Embedding
 			model.Metadata["default_dimension"] = fmt.Sprint(embedding.Dimension)
+			model.Metadata["default_layer"] = fmt.Sprint(embedding.Layer)
 			model.Metadata["pooling"] = embedding.Pooling
 			model.Metadata["normalization"] = embedding.Normalization
 			model.Metadata["modalities"] = strings.Join(embedding.Modalities, ",")
 		}
-		models = append(models, enrichModelInfo(model, nil))
+		model = enrichModelInfo(model, nil)
+		// Native resource revisions retain the operator's source revision before
+		// the actual artifact fingerprint. Use that declaration, never a guessed
+		// name from a derived CK/export/cache directory.
+		if sourceRevision, fingerprint, ok := strings.Cut(entry.Revision, ":"); ok && fingerprint != "" && capability.Device != "external" {
+			if sourceRevision != "" {
+				model.Metadata["source_revision"] = sourceRevision
+			}
+			if model.Registry == nil {
+				model.Registry = config.GetModelRegistryInfoByRevision(sourceRevision)
+				if model.Registry != nil {
+					model.Metadata["registry_match"] = "source_revision"
+				}
+			}
+		}
+		models = append(models, model)
 	}
 	return models, true
+}
+
+// Keep the historical max_sequence_length field compatible, while exposing
+// physical forward capacity separately from whole-document admission budgets.
+func addPreparedInputLimits(metadata map[string]string, capability binding.Capability) {
+	if limit := capability.Limits.ForwardTokens(); limit > 0 {
+		metadata["forward_max_tokens"] = fmt.Sprint(limit)
+	}
+	if limit := capability.Limits.EffectiveTokens(); limit > 0 {
+		metadata["input_max_tokens"] = fmt.Sprint(limit)
+		if capability.Limits.Overflow == "window" {
+			metadata["document_max_tokens"] = fmt.Sprint(limit)
+		}
+	}
+	if capability.Window != nil {
+		metadata["window_size"] = fmt.Sprint(capability.Window.Size)
+		metadata["window_overlap"] = fmt.Sprint(capability.Window.Overlap)
+	}
 }
 
 // Keep the established API names for existing consumers; new typed tasks are

@@ -6,7 +6,17 @@ import type {
 } from './insightsPageRoutingTypes'
 import type { SignalType } from '../generated/routerConfigContract'
 
-export type Signal = Partial<Record<SignalType, string[]>>
+export type Signal = Partial<Record<SignalType, string[]>> & Record<string, string[] | undefined>
+
+export interface InsightsOutcome {
+  timestamp?: string
+  source: string
+  target: string
+  verdict: string
+  reason?: string
+  score?: number
+  metadata?: Record<string, string>
+}
 
 export interface ToolTraceStep {
   type: string
@@ -119,6 +129,7 @@ export interface InsightsRecord {
     }
   }
   signals: Signal
+  outcomes?: InsightsOutcome[]
   projections?: string[]
   projection_scores?: Record<string, number>
   projection_trace?: ProjectionTrace
@@ -162,6 +173,8 @@ export interface InsightsRecord {
   context_token_count?: number
   hallucination_enabled?: boolean
   hallucination_detected?: boolean
+  hallucination_score_available?: boolean
+  hallucination_score_kind?: string
   hallucination_confidence?: number
   hallucination_spans?: string[]
   prompt_tokens?: number
@@ -218,6 +231,14 @@ export interface InsightsListResponse {
 
 export type InsightsFilterType = 'all' | 'cached' | 'streamed'
 
+export interface InsightsCurrencyCostSummary {
+  totalSaved: number
+  baselineSpend: number
+  actualSpend: number
+  currency: string
+  costRecordCount: number
+}
+
 export interface InsightsCostSummary {
   totalSaved: number
   baselineSpend: number
@@ -225,11 +246,20 @@ export interface InsightsCostSummary {
   currency?: string
   costRecordCount: number
   excludedRecordCount: number
+  byCurrency?: InsightsCurrencyCostSummary[]
 }
 
 export interface InsightsAggregateValue {
   name: string
   value: number
+}
+
+export interface InsightsAggregateCurrencySummary {
+  total_saved: number
+  baseline_spend: number
+  actual_spend: number
+  currency: string
+  cost_record_count: number
 }
 
 export interface InsightsAggregateSummary {
@@ -239,6 +269,7 @@ export interface InsightsAggregateSummary {
   currency?: string
   cost_record_count: number
   excluded_record_count: number
+  by_currency?: InsightsAggregateCurrencySummary[]
 }
 
 export interface InsightsAggregateTokenVolume {

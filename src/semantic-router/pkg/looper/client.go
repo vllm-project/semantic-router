@@ -181,6 +181,7 @@ func (c *Client) callModel(
 	target ModelTarget,
 	options CallOptions,
 ) (*ModelResponse, error) {
+	req = applyModelSampling(ctx, req, target.Name)
 	body, err := prepareModelCallBody(req, target, options)
 	if err != nil {
 		return nil, err
@@ -278,21 +279,14 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		return nil, fmt.Errorf("model %s did not return a chat completion response", modelName)
 	}
 
+	usage, presence := parseResponseUsageWithPresence(body)
 	result := &ModelResponse{
-		Raw:         body,
-		Parsed:      &completion,
-		Model:       modelName, // Use the requested model name, not the backend's response
-		IsStreaming: false,
-		Usage: TokenUsage{
-			PromptTokens:     completion.Usage.PromptTokens,
-			CompletionTokens: completion.Usage.CompletionTokens,
-			TotalTokens:      completion.Usage.TotalTokens,
-		},
-		UsagePresent: UsagePresence{
-			PromptTokens:     completion.Usage.JSON.PromptTokens.Valid(),
-			CompletionTokens: completion.Usage.JSON.CompletionTokens.Valid(),
-			TotalTokens:      completion.Usage.JSON.TotalTokens.Valid(),
-		},
+		Raw:          body,
+		Parsed:       &completion,
+		Model:        modelName, // Use the requested model name, not the backend's response
+		IsStreaming:  false,
+		Usage:        usage,
+		UsagePresent: presence,
 	}
 
 	// Extract content, tool_calls, and logprobs

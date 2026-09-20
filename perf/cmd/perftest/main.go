@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -16,6 +17,8 @@ import (
 func main() {
 	// Command-line flags
 	compareBaseline := flag.String("compare-baseline", "", "Path to baseline directory")
+	modelBaseline := flag.String("model-baseline", "", "Measured base-revision results using the same model artifacts and benchmark harness")
+	inventory := flag.String("inventory", "", "Expected benchmark inventory (required with --fail-on-regression)")
 	currentResults := flag.String("current", "", "Path to current benchmark results (JSON)")
 	thresholdFile := flag.String("threshold-file", "", "Path to thresholds configuration file")
 	outputPath := flag.String("output", "", "Output path for reports")
@@ -47,7 +50,7 @@ func main() {
 	}
 
 	if *compareBaseline != "" {
-		if err := compareWithBaseline(*compareBaseline, *currentResults, *thresholdFile, *outputPath, *failOnRegression); err != nil {
+		if err := compareWithBaseline(*compareBaseline, *currentResults, *thresholdFile, *outputPath, *failOnRegression, *modelBaseline, *inventory); err != nil {
 			fmt.Fprintf(os.Stderr, "Error comparing with baseline: %v\n", err)
 			os.Exit(1)
 		}
@@ -64,7 +67,7 @@ func main() {
 	flag.PrintDefaults()
 }
 
-func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputPath string, failOnRegression bool) error {
+func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputPath string, failOnRegression bool, modelBaselineFile, inventoryFile string) error {
 	fmt.Println("Comparing performance with baseline...")
 	fmt.Printf("Baseline directory: %s\n", baselineDir)
 	fmt.Printf("Current results: %s\n", currentResultsFile)
@@ -94,6 +97,24 @@ func compareWithBaseline(baselineDir, currentResultsFile, thresholdFile, outputP
 		return err
 	}
 	fmt.Printf("Loaded current results with %d benchmarks\n", len(current.Benchmarks))
+	if modelBaselineFile != "" {
+		modelBaseline, loadErr := benchmark.LoadBaseline(modelBaselineFile)
+		if loadErr != nil {
+			return loadErr
+		}
+		if err = benchmark.OverlayModelBaseline(baseline, current, modelBaseline); err != nil {
+			return err
+		}
+		fmt.Printf("Model baseline source: %s\n", modelBaseline.GitCommit)
+	}
+	if failOnRegression && inventoryFile == "" {
+		return fmt.Errorf("--fail-on-regression requires an explicit --inventory")
+	}
+	if inventoryFile != "" {
+		if err = benchmark.ValidateInventory(inventoryFile, current, baseline); err != nil {
+			return err
+		}
+	}
 
 	// Surface benchmarks with no baseline so a pass is not mistaken for full
 	// coverage (e.g. classification/cache before their baselines are populated).
@@ -214,6 +235,10 @@ func parseBenchToBaseline(inputPath, outputPath string) error {
 
 	baseline.Version = "current"
 	baseline.GitCommit = getGitCommit()
+	for name, metric := range baseline.Benchmarks {
+		metric.SourceCommit = baseline.GitCommit
+		baseline.Benchmarks[name] = metric
+	}
 	baseline.Timestamp = time.Now()
 
 	if err := benchmark.SaveBaseline(baseline, outputPath); err != nil {
@@ -267,8 +292,11 @@ func saveReport(report *benchmark.Report, outputPath string) error {
 }
 
 func getGitCommit() string {
-	// This would use exec.Command to run: git rev-parse HEAD
-	return "unknown"
+	data, err := exec.Command("git", "rev-parse", "HEAD").Output()
+	if err != nil {
+		return "unknown"
+	}
+	return strings.TrimSpace(string(data))
 }
 
 func getGitBranch() string {

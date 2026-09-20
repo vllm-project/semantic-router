@@ -5,18 +5,82 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
-from .executor import DeterministicProvider, LooperTTSExecutor, ProviderResponse
+from .executor import (
+    DeterministicProvider,
+    LooperTTSExecutor,
+    ProviderResponse,
+    execute_manifest,
+)
 from .plan import build_plan
 from .records import validate_records
-from .validation import load_json
+from .validation import ContractError, load_json, write_json
 
 
 EXAMPLE = Path(__file__).parent / "testdata" / "synthetic.json"
 
 
 class ExecutorTests(unittest.TestCase):
+    def test_fake_rejects_benchmark_before_dispatch_or_output(self):
+        config = load_json(EXAMPLE)
+        config["dataset"]["evidence_kind"] = "benchmark"
+        plan = build_plan(config, "review-regression", ["execute"])
+        with tempfile.TemporaryDirectory() as directory:
+            manifest = Path(directory) / "manifest.json"
+            output = Path(directory) / "run"
+            write_json(manifest, plan)
+            with patch.object(DeterministicProvider, "chat") as chat:
+                with self.assertRaisesRegex(ContractError, "synthetic"):
+                    execute_manifest(manifest, output, fake=True)
+                with self.assertRaisesRegex(ContractError, "synthetic"):
+                    LooperTTSExecutor(plan, DeterministicProvider(), output)
+                chat.assert_not_called()
+            self.assertFalse(output.exists())
+
+    def test_blank_answers_preserve_paid_calls_and_terminal_records(self):
+        class BlankProvider(DeterministicProvider):
+            def chat(self, **kwargs):
+                response = super().chat(**kwargs)
+                response.content = " \t\n"
+                response.reasoning = "\n  "
+                return response
+
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory)
+            records = LooperTTSExecutor(self.plan, BlankProvider(), output).run()
+            validate_records(records, self.plan)
+            self.assertEqual({r["status"] for r in records["results"]}, {"error"})
+            self.assertTrue(all(r["final_answer"] is None for r in records["results"]))
+            self.assertTrue(all(r["call_ids"] for r in records["results"]))
+            self.assertEqual(load_json(output / "records.json"), records)
+            receipt = load_json(output / "runtime_receipt.json")
+            self.assertEqual(receipt["totals"]["calls"], len(records["calls"]))
+            self.assertGreater(receipt["totals"]["tokens"], 0)
+            for call in records["calls"]:
+                self.assertTrue((output / call["raw_output_path"]).is_file())
+
+    def test_blank_content_can_fall_back_to_nonblank_reasoning(self):
+        class ReasoningProvider(DeterministicProvider):
+            def chat(self, **kwargs):
+                response = super().chat(**kwargs)
+                response.content = "  "
+                response.reasoning = "usable reasoning answer"
+                return response
+
+        with tempfile.TemporaryDirectory() as directory:
+            records = LooperTTSExecutor(
+                self.plan, ReasoningProvider(), Path(directory)
+            ).run()
+            direct_cells = {
+                c["id"] for c in self.plan["matrix"] if c["algorithm"] == "direct"
+            }
+            for result in records["results"]:
+                if result["cell_id"] in direct_cells:
+                    self.assertEqual(result["status"], "success")
+                    self.assertEqual(result["final_answer"], "usable reasoning answer")
+
     def setUp(self):
         self.config = load_json(EXAMPLE)
         self.plan = build_plan(self.config, "executor-fixture", ["execute"])

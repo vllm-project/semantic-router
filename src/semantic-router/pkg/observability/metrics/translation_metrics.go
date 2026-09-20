@@ -6,7 +6,7 @@ import (
 )
 
 // TranslationLossyTotal counts translation warnings observed at the
-// response-header phase, partitioned by inbound/outbound protocol pair,
+// response-header and streaming-body phases, partitioned by inbound/outbound protocol pair,
 // severity, and reason. Used by post-deployment dashboards to detect
 // protocol-pair regressions and to size lossiness across the fleet.
 var TranslationLossyTotal = promauto.NewCounterVec(
@@ -18,7 +18,7 @@ var TranslationLossyTotal = promauto.NewCounterVec(
 )
 
 // RecordTranslationWarning increments the translation-warning counter
-// for one warning observed at the response-header phase. Empty
+// for one warning observed during response translation. Empty
 // from/to/reason fall back to "unknown" so dashboard queries never see
 // the empty-string label.
 func RecordTranslationWarning(from, to, severity, reason string) {

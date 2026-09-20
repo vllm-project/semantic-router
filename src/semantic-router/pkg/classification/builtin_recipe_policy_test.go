@@ -199,11 +199,41 @@ func TestBuiltinVaultUnknownTriageFailsClosed(t *testing.T) {
 	}
 }
 
-func TestBuiltinVaultPrivacyIsIndependentOfVerdict(t *testing.T) {
-	cfg := builtinPolicyClassifier(t, "vault").Config
-	if cfg.DataPolicy.ReplayAllowed() {
-		t.Fatal("Vault must deny replay before any decision is selected")
+func TestBuiltinRecipesReplayDefaultsRespectOperatorOptOut(t *testing.T) {
+	for _, name := range []string{"balance", "speed", "cost", "accuracy", "vault"} {
+		t.Run(name, func(t *testing.T) {
+			cfg := builtinPolicyClassifier(t, name).Config
+			if !cfg.RouterReplay.Enabled || cfg.RouterReplay.StoreBackend != "postgres" || cfg.RouterReplay.TTLSeconds != 604800 {
+				t.Fatal("built-in recipes must default to seven-day PostgreSQL Replay")
+			}
+			for _, route := range cfg.Decisions {
+				if cfg.EffectiveRouterReplayConfig(&route) == nil {
+					t.Fatalf("decision %q must inherit Replay capture", route.Name)
+				}
+			}
+			cfg.RouterReplay.Enabled = false
+			for _, route := range cfg.Decisions {
+				if cfg.EffectiveRouterReplayConfig(&route) != nil {
+					t.Fatalf("global opt-out must prevent default capture for decision %q", route.Name)
+				}
+			}
+			cfg.RouterReplay.Enabled = true
+			denyReplay := false
+			cfg.DataPolicy = &config.RoutingDataPolicy{Replay: &denyReplay}
+			if cfg.EffectiveRouterReplayConfig(nil) != nil {
+				t.Fatal("operator opt-out must also prevent capture before decision selection")
+			}
+			for _, route := range cfg.Decisions {
+				if cfg.EffectiveRouterReplayConfig(&route) != nil {
+					t.Fatalf("operator opt-out must prevent capture for decision %q", route.Name)
+				}
+			}
+		})
 	}
+}
+
+func TestBuiltinVaultDataControlsAreIndependentOfVerdict(t *testing.T) {
+	cfg := builtinPolicyClassifier(t, "vault").Config
 	for _, route := range cfg.Decisions {
 		t.Run(route.Name, func(t *testing.T) {
 			tools := route.GetToolsConfig()
@@ -341,6 +371,64 @@ func TestBuiltinCareAndSupportRequireGrounding(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			assertBuiltinPolicy(t, builtinPolicyClassifier(t, tt.recipe), &tt.in, tt.want)
+		})
+	}
+}
+
+func TestBuiltinConsequentialDomainsWithOptionalFactCheck(t *testing.T) {
+	for _, recipe := range []string{"balance", "accuracy"} {
+		c := builtinPolicyClassifier(t, recipe)
+		for _, domain := range []string{"health", "law", "business", "economics"} {
+			for _, evidence := range []string{"domain", "domain_and_fact_check"} {
+				t.Run(recipe+"/"+domain+"/"+evidence, func(t *testing.T) {
+					in := SignalResults{
+						MatchedComplexityRules: []string{"difficulty:easy"},
+						MatchedDomainRules:     []string{domain},
+						SignalValues: map[string]float64{
+							"embedding:consequential": .6,
+							"embedding:informational": .4,
+						},
+					}
+					if evidence == "domain_and_fact_check" {
+						in.MatchedFactCheckRules = []string{"needs_fact_check"}
+					}
+					informational := in
+					informational.SignalValues = map[string]float64{
+						"embedding:consequential": .4,
+						"embedding:informational": .6,
+					}
+					assertBuiltinPolicy(t, c, &in, "reasoning")
+					assertBuiltinPolicy(t, c, &informational, "simple")
+				})
+			}
+		}
+	}
+}
+
+func TestBuiltinSpeedReasoningWinsMatchedToolBranch(t *testing.T) {
+	c := builtinPolicyClassifier(t, "speed")
+	for _, cue := range []string{"difficulty:hard", "deliberate"} {
+		t.Run(cue, func(t *testing.T) {
+			in := SignalResults{
+				MatchedKeywordRules:      []string{"tool_intent"},
+				MatchedConversationRules: []string{"has_tools"},
+			}
+			if cue == "difficulty:hard" {
+				in.MatchedComplexityRules = []string{cue}
+			} else {
+				in.MatchedKeywordRules = append(in.MatchedKeywordRules, cue)
+			}
+			result, traces, err := c.EvaluateDecisionWithEngineAndTrace(c.applyProjections(&in))
+			if err != nil || result == nil || result.Decision == nil || result.Decision.Name != "reasoning" {
+				t.Fatalf("reasoning must win the tool collision: result=%+v err=%v", result, err)
+			}
+			for _, branch := range []string{"tools", "reasoning"} {
+				if !slices.ContainsFunc(traces, func(trace decision.DecisionTrace) bool {
+					return trace.DecisionName == branch && trace.Matched
+				}) {
+					t.Errorf("expected matching %s branch in %+v", branch, traces)
+				}
+			}
 		})
 	}
 }

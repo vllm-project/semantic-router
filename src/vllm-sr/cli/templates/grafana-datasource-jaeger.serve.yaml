@@ -5,6 +5,7 @@ apiVersion: 1
 
 datasources:
   - name: Jaeger
+    uid: jaeger
     type: jaeger
     access: proxy
     url: http://vllm-sr-jaeger:16686

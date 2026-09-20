@@ -7,7 +7,7 @@ import re
 import warnings
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
 from .models_safety import SafetyRule
 
@@ -561,6 +561,7 @@ class ClassifierSignal(BaseModel):
     model_path: Optional[str] = None
     labels: List[str]
     instructions: Optional[str] = None
+    disable_rationale: StrictBool = False
     use_cpu: bool = False
 
     @model_validator(mode="after")
@@ -584,11 +585,13 @@ class ClassifierSignal(BaseModel):
             self._validate_sequence()
         return self
 
-    def _validate_local(self):
+    def _validate_local(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError("local classifiers require at least two labels")
-        if self.model or self.instructions:
-            raise ValueError("local classifiers do not accept model or instructions")
+        if self.model or self.instructions or self.disable_rationale:
+            raise ValueError(
+                "local classifiers do not accept model, instructions or disable_rationale"
+            )
 
     def _validate_llm(self):
         if not self.instructions:
@@ -596,14 +599,19 @@ class ClassifierSignal(BaseModel):
         if self.model_path or self.use_cpu:
             raise ValueError("llm classifiers do not accept model_path or use_cpu")
 
-    def _validate_sequence(self):
+    def _validate_sequence(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError(
                 "sequence_classifier classifiers require at least two labels"
             )
-        if self.model_path or self.use_cpu or self.instructions:
+        if (
+            self.model_path
+            or self.use_cpu
+            or self.instructions
+            or self.disable_rationale
+        ):
             raise ValueError(
-                "sequence_classifier classifiers do not accept model_path, use_cpu or instructions"
+                "sequence_classifier classifiers do not accept model_path, use_cpu, instructions or disable_rationale"
             )
 
 
@@ -865,7 +873,14 @@ class ContextCompressionTargetConfig(BaseModel):
         return self
 
 
+class ContextCompressionCurrentUserConfig(BaseModel):
+    mode: Literal["preserve", "truncate"] = "preserve"
+
+
 class ContextCompressionTargetsConfig(BaseModel):
+    current_user: ContextCompressionCurrentUserConfig = Field(
+        default_factory=ContextCompressionCurrentUserConfig
+    )
     tool_outputs: ContextCompressionTargetConfig = Field(
         default_factory=lambda: ContextCompressionTargetConfig(
             mode="extractive", min_tokens=2000, target_tokens=1000
@@ -940,7 +955,9 @@ class RequestParamsPluginConfig(BaseModel):
     """Configuration for request_params plugin."""
 
     blocked_params: Optional[List[str]] = None
-    default_max_tokens: Optional[int] = Field(default=None, ge=1, strict=True)
+    default_max_tokens: Optional[
+        Annotated[int, Field(ge=1, strict=True)] | Literal["auto"]
+    ] = None
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
     strip_unknown: Optional[bool] = None
@@ -2256,7 +2273,7 @@ class OperatingPointReference(BaseModel):
 
 
 class ModelBinding(BaseModel):
-    """A recipe-owned use of a router model deployment."""
+    """A shared task default or recipe-owned use of a model deployment."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -2313,10 +2330,6 @@ class Routing(BaseModel):
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
 
-    @model_validator(mode="after")
-    def validate_classifier_selectors(self):
-        return _validate_unbound_classifier_selectors(self)
-
 
 class Entrypoint(BaseModel):
     """Request-facing virtual model names mapped to one routing recipe."""
@@ -2359,10 +2372,6 @@ class RecipeRouting(BaseModel):
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
     strategy: Optional[RoutingStrategy] = None
-
-    @model_validator(mode="after")
-    def validate_classifier_selectors(self):
-        return _validate_unbound_classifier_selectors(self)
 
 
 class Recipe(BaseModel):
@@ -2431,6 +2440,16 @@ class UserConfig(BaseModel):
     recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_classifier_selectors(self):
+        # Global serving defaults are available only at document scope. Do not
+        # reject a valid inherited selector while parsing a child profile.
+        from cli.model_runtime_defaults import iter_effective_routing_profiles
+
+        for _, profile in iter_effective_routing_profiles(self):
+            _validate_unbound_classifier_selectors(profile)
+        return self
 
     @property
     def signals(self) -> Signals:

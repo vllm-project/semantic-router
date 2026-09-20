@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"math"
 	"net/url"
 	"sort"
 
@@ -41,9 +42,10 @@ func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 		return r.createErrorResponse(400, err.Error())
 	}
 
-	allRecords := r.collectRouterReplayRecords()
-	filteredRecords := filterRouterReplayRecords(allRecords, filters)
-	payload := buildRouterReplayAggregatePayload(allRecords, filteredRecords)
+	payload, err := r.queryRouterReplayAggregate(filters)
+	if err != nil {
+		return r.createErrorResponse(500, "router replay storage query failed")
+	}
 	return r.createRouterReplayJSONResponse(200, payload)
 }
 
@@ -92,24 +94,47 @@ func buildRouterReplayAggregateCostSummary(
 	records []routerreplay.RoutingRecord,
 ) routerReplayAggregateCostSummary {
 	summary := routerReplayAggregateCostSummary{}
+	byCurrency := make(map[string]*routerreplay.CurrencyCostSummary)
 	for _, record := range records {
-		if record.LifecycleState != routerreplay.LifecycleCompleted {
+		if record.LifecycleState != routerreplay.LifecycleCompleted ||
+			record.TotalTokens == nil || record.BaselineModel == nil || *record.BaselineModel == "" ||
+			record.Currency == nil || normalizeReplayCurrency(*record.Currency) == "" {
 			continue
 		}
-		if record.ActualCost == nil || record.BaselineCost == nil || record.CostSavings == nil {
+		if !finiteReplayCost(record.ActualCost) || !finiteReplayCost(record.BaselineCost) || !finiteReplayCost(record.CostSavings) {
 			continue
 		}
-
-		summary.TotalSaved += *record.CostSavings
-		summary.BaselineSpend += *record.BaselineCost
-		summary.ActualSpend += *record.ActualCost
-		if summary.Currency == "" && record.Currency != nil {
-			summary.Currency = *record.Currency
+		currency := normalizeReplayCurrency(*record.Currency)
+		group := byCurrency[currency]
+		if group == nil {
+			group = &routerreplay.CurrencyCostSummary{Currency: currency}
+			byCurrency[currency] = group
 		}
+		group.TotalSaved += *record.CostSavings
+		group.BaselineSpend += *record.BaselineCost
+		group.ActualSpend += *record.ActualCost
+		group.CostRecordCount++
 		summary.CostRecordCount++
+	}
+	for _, group := range byCurrency {
+		summary.ByCurrency = append(summary.ByCurrency, *group)
+	}
+	sort.Slice(summary.ByCurrency, func(i, j int) bool {
+		return summary.ByCurrency[i].Currency < summary.ByCurrency[j].Currency
+	})
+	if len(summary.ByCurrency) == 1 {
+		group := summary.ByCurrency[0]
+		summary.Currency = group.Currency
+		summary.TotalSaved = group.TotalSaved
+		summary.BaselineSpend = group.BaselineSpend
+		summary.ActualSpend = group.ActualSpend
 	}
 	summary.ExcludedRecordCount = len(records) - summary.CostRecordCount
 	return summary
+}
+
+func finiteReplayCost(value *float64) bool {
+	return value != nil && !math.IsNaN(*value) && !math.IsInf(*value, 0)
 }
 
 func buildRouterReplayModelSelection(

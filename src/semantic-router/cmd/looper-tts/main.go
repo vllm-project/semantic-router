@@ -383,6 +383,19 @@ func executeAlgorithm(
 	seed int,
 	modelByID map[string]manifestModel,
 ) (*looper.Response, error) {
+	sampling := make(map[string]looper.ModelSampling, len(arm.ModelIDs))
+	for _, id := range arm.ModelIDs {
+		model, ok := modelByID[id]
+		if !ok {
+			return nil, fmt.Errorf("arm %q references unknown model %q", arm.ID, id)
+		}
+		declared := looper.ModelSampling{Temperature: model.Sampling.Temperature, TopP: model.Sampling.TopP}
+		if previous, exists := sampling[model.Model]; exists && previous != declared {
+			return nil, fmt.Errorf("native runner cannot distinguish different sampling settings for provider model %q", model.Model)
+		}
+		sampling[model.Model] = declared
+	}
+	ctx = looper.WithModelSampling(ctx, sampling)
 	maxTokens := budget.MaxTotalTokens / budget.MaxCalls
 	if maxTokens < 1 {
 		maxTokens = 1
@@ -606,9 +619,6 @@ func (o *evidenceObserver) localModelID(info looper.CallInfo) string {
 			}
 		case looper.CallStageGenerate:
 			candidates = stringParameters(o.arm.Parameters["panel_model_ids"])
-			if info.Iteration > 0 && info.Iteration <= len(candidates) {
-				candidates = candidates[info.Iteration-1 : info.Iteration]
-			}
 		}
 	}
 	for _, id := range candidates {

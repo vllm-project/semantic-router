@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import CodeBlock from '@theme/CodeBlock'
 
 import openAPIDocument from '../../../static/openapi/apiserver/apiserver.openapi.json'
 import SchemaView, { exampleValue, OpenAPISchema } from './SchemaView'
@@ -227,18 +228,18 @@ export default function OpenAPIReference() {
                       )
                     : null}
 
-                  <div className={styles.accessContract}>
+                  <dl className={styles.accessContract} aria-label="Operation access policy">
                     <div>
-                      <span>Authentication</span>
-                      <code>{selected.operation.security?.length ? 'runtime-configured bearer' : 'public'}</code>
+                      <dt>Authentication</dt>
+                      <dd>{selected.operation.security?.length ? 'Runtime-configured bearer' : 'Public'}</dd>
                     </div>
                     <div>
-                      <span>Permission</span>
-                      <code>{selected.operation['x-vllm-sr-permission'] ?? 'unspecified'}</code>
+                      <dt>Permission</dt>
+                      <dd><code>{selected.operation['x-vllm-sr-permission'] ?? 'unspecified'}</code></dd>
                     </div>
                     <div>
-                      <span>Sensitivity</span>
-                      <code>{selected.operation['x-vllm-sr-sensitivity'] ?? 'unspecified'}</code>
+                      <dt>Sensitivity</dt>
+                      <dd><code>{selected.operation['x-vllm-sr-sensitivity'] ?? 'unspecified'}</code></dd>
                     </div>
                     {[
                       ['Capability', selected.operation.tags?.join(', ')],
@@ -248,19 +249,19 @@ export default function OpenAPIReference() {
                       ['Visibility', selected.operation['x-vllm-sr-visibility']],
                     ].filter(([, value]) => value).map(([label, value]) => (
                       <div key={label}>
-                        <span>{label}</span>
-                        <code>{value}</code>
+                        <dt>{label}</dt>
+                        <dd><code>{value}</code></dd>
                       </div>
                     ))}
                     {selected.operation['x-vllm-sr-audit-action']
                       ? (
                           <div>
-                            <span>Audit action</span>
-                            <code>{selected.operation['x-vllm-sr-audit-action']}</code>
+                            <dt>Audit action</dt>
+                            <dd><code>{selected.operation['x-vllm-sr-audit-action']}</code></dd>
                           </div>
                         )
                       : null}
-                  </div>
+                  </dl>
 
                   {selected.operation['x-vllm-sr-plugin-operations']?.length
                     ? (
@@ -313,7 +314,7 @@ export default function OpenAPIReference() {
                           </>
                         )
                       : null}
-                    <pre><code>{curlExample(selected)}</code></pre>
+                    <CodeBlock language="bash" title="Example request">{curlExample(selected)}</CodeBlock>
                   </section>
 
                   <section className={styles.block}>
@@ -322,7 +323,7 @@ export default function OpenAPIReference() {
                       {Object.entries(selected.operation.responses ?? {}).map(([status, response]) => (
                         <details key={status} open={status.startsWith('2')}>
                           <summary>
-                            <strong>{status}</strong>
+                            <strong data-status={status[0]}>{status}</strong>
                             <span>{response.description}</span>
                           </summary>
                           <div className={styles.responseDetails}>

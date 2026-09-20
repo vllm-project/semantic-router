@@ -102,6 +102,10 @@ For a card without `reasoning_family`, labels such as `enabled`, `disabled`,
 `default`, and `unspecified` describe the published run condition only; they do
 not create a user-configurable selector.
 
+Runtime selectors consume the same exact-effort boundary. They never copy
+index evidence between efforts or multiply an index score by coverage; coverage
+may only break a tie between otherwise equal available scores.
+
 A physical Model Card represents one canonical upstream model identity. Date
 snapshots, cloud aliases, quantizations, and serving-engine packaging do not
 become duplicate cards: provider-specific names belong in that provider's
@@ -115,7 +119,7 @@ without duplicating its intrinsic identity. Virtual recipes are materialized
 from packaged assets and keep their own evaluation directory.
 
 The built-in physical inventory is curated at the creator-company level. The
-current baseline contains 84 physical cards from 22 mainstream creators and
+current baseline contains 87 physical cards from 23 mainstream creators and
 five separately stored virtual cards. For each creator, prefer roughly the
 latest three generations or representative product lines over accumulating a
 shallow long tail of lesser-known creators. This policy is about Model Cards,

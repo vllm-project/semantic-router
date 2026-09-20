@@ -330,7 +330,7 @@ func usageTokensForBudget(response *ModelResponse) (int64, bool) {
 	// Responses assembled by existing unit tests predate UsagePresent. A
 	// non-zero usage value is still treated as known for compatibility; an all
 	// zero value remains unknown because zero is also the omitted-usage value.
-	if response.Usage != (TokenUsage{}) {
+	if !response.Usage.Unreported && (response.Usage.PromptTokens != 0 || response.Usage.CompletionTokens != 0 || response.Usage.TotalTokens != 0) {
 		return response.Usage.TotalTokens, true
 	}
 	return 0, false

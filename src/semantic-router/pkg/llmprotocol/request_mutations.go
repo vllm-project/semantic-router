@@ -12,8 +12,21 @@ func DefaultOutputTokens(request *Request, value *int) bool {
 	return true
 }
 
+// DefaultAutomaticOutput preserves caller limits and defers a missing bound
+// until the provider has rendered the complete model-specific input.
+func DefaultAutomaticOutput(request *Request) bool {
+	if request == nil || request.Sampling.MaxOutputTokens != nil || request.Sampling.AutomaticOutput {
+		return false
+	}
+	request.Sampling.AutomaticOutput = true
+	return true
+}
+
 // CapOutputTokens clamps an explicit request value; it never invents a limit.
 func CapOutputTokens(request *Request, limit *int) bool {
+	if request != nil && request.Sampling.AutomaticOutput && limit != nil {
+		request.Sampling.AutomaticOutputCap = Int64(int64(*limit))
+	}
 	if limit == nil || request.Sampling.MaxOutputTokens == nil || *request.Sampling.MaxOutputTokens <= int64(*limit) {
 		return false
 	}
@@ -73,6 +86,18 @@ func BlockRequestField(request *Request, field string) (bool, error) {
 	case "top_p":
 		changed := request.Sampling.TopP != nil
 		request.Sampling.TopP = nil
+		return changed, nil
+	case "min_p":
+		changed := request.Sampling.MinP != nil
+		request.Sampling.MinP = nil
+		return changed, nil
+	case "repetition_penalty":
+		changed := request.Sampling.RepetitionPenalty != nil
+		request.Sampling.RepetitionPenalty = nil
+		return changed, nil
+	case "cache_salt":
+		changed := request.CacheSalt != nil
+		request.CacheSalt = nil
 		return changed, nil
 	case "top_k":
 		changed := request.Sampling.TopK != nil

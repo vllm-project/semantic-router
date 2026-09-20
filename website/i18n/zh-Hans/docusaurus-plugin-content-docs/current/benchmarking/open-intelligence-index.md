@@ -10,7 +10,7 @@ translation:
 
 # 开放智能指数 {#open-intelligence-index}
 
-Open Intelligence Index 是 Model Hub、Model Arena 和 Router 共享的一份机器可读评测图。它在同一版本化契约下比较独立模型和虚拟模型，同时保留不完整的基准证据，且不会编造缺失值。
+开放智能指数是 Model Hub、Model Arena 和路由共用的目录证据图，保留版本化的已报告测量和缺失覆盖。它不是 [sr-bench 1.0](sr-bench) 的实时评测分数。新的单模型/MoM 能力、成本和延迟应由 sr-bench 实测；目录记录不能证明当前部署的新结果。
 
 ## Intelligence 1.0 {#intelligence-10}
 
@@ -98,26 +98,8 @@ algorithm:
 
 `quality.min_coverage` 可以要求比指数自身缺失数据策略更多的证据，`quality.min_score` 是硬质量下限。这让部署可以在有意部分的运维指数上路由，而不削弱完整情形的 1.0 Overall 契约。YAML 契约见[自定义评测](custom-evaluations)，Balanced、Accuracy-first 和 Cost-first 目标见 [Multi Factor](../tutorials/algorithm/selection/multi-factor)。
 
-## 虚拟模型 {#virtual-models}
+## 新测量
 
-虚拟模型通过冻结端点在完整套件上评测。
-其分数不是由成员分数或 oracle 路由拼装而成。运行回执记录配方修订、每任务路由、失败、token、延迟和成本，用于质量与节省分析。
+通过 [sr-bench](sr-bench) 的真实路由入口评测 MoM。模型池分数或逐题 oracle 不能证明路由策略质量。发布运维评测记录前保留数据、模型、配置和价格身份。
 
-## 演进 {#evolution}
-
-```text
-1.5: General 20% · Reasoning 40% · Coding 20% · Agentic 20%
-     Agentic = Terminal-Bench 4.0 50% + SWE-bench Live frozen snapshot 50%
-
-2.0: General 15% · Reasoning 30% · Coding 15% · Agentic 15%
-     Multimodal 15% = MMMU-Pro 50% + MathVista 25% + OCRBench v1 25%
-     Safety 10% = HarmBench 50% + XSTest safe helpfulness 50%, plus a gate
-     Agentic = Terminal-Bench 4.0 40% + SWE-bench Live 40% + CyberGym L1 20%
-```
-
-Terminal-Bench 4.0 在 1.5 中替换 2.1；两个版本绝不会混合。
-未来基准仅作为不可变、可独立运行的身份激活。
-旧记录和指数在新版本构建完整的独立与虚拟队列时仍可见，以便审计。
-
-当前定义为
-[`config/catalog/resources/indices.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/catalog/resources/indices.yaml)。
+目录图由 `config/catalog/resources/indices.yaml` 定义。改变权重或基准契约需要新的版本身份。

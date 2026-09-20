@@ -1,0 +1,158 @@
+name: Storage Integration
+
+on:
+  workflow_call:
+    inputs:
+      native-artifact:
+        type: string
+        default: ""
+      verification:
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  storage:
+    name: Storage Integration
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: router
+          POSTGRES_PASSWORD: router-test
+          POSTGRES_DB: router_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U router -d router_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      CI: "true"
+      MILVUS_URI: localhost:19530
+      VALKEY_HOST: localhost
+      VALKEY_PORT: "6380"
+      ROUTER_REPLAY_TEST_POSTGRES_CONFIG: '{"host":"localhost","port":5432,"database":"router_test","user":"router","password":"router-test","ssl_mode":"disable"}'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Load shared native libraries
+        if: inputs.native-artifact != ''
+        uses: ./.github/actions/load-native-artifact
+        with:
+          artifact: ${{ inputs.native-artifact }}
+      - name: Start Milvus service
+        run: |
+          echo "Starting Milvus vector database..."
+
+          # Pre-pull with retries to handle Docker Hub rate limits
+          MILVUS_IMAGE="milvusdb/milvus:v2.3.3"
+          for attempt in 1 2 3 4 5; do
+            if docker pull "${MILVUS_IMAGE}"; then
+              echo "Successfully pulled ${MILVUS_IMAGE}"
+              break
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "ERROR: Failed to pull ${MILVUS_IMAGE} after 5 attempts"
+              exit 1
+            fi
+            echo "Pull attempt ${attempt} failed, retrying in $((attempt * 15))s..."
+            sleep $((attempt * 15))
+          done
+
+          docker run -d \
+            --name milvus-semantic-cache \
+            --security-opt seccomp:unconfined \
+            -e ETCD_USE_EMBED=true \
+            -e ETCD_DATA_DIR=/var/lib/milvus/etcd \
+            -e ETCD_CONFIG_PATH=/milvus/configs/advanced/etcd.yaml \
+            -e COMMON_STORAGETYPE=local \
+            -e CLUSTER_ENABLED=false \
+            -p 19530:19530 \
+            -p 9091:9091 \
+            "${MILVUS_IMAGE}" \
+            milvus run standalone
+
+          echo "Waiting for Milvus to be ready..."
+          sleep 20
+
+          # Verify Milvus is responsive
+          timeout 90 bash -c 'until curl --fail --silent http://localhost:9091/healthz; do sleep 2; done'
+
+          echo "Milvus is ready at localhost:19530"
+          docker ps --filter "name=milvus-semantic-cache"
+
+      - name: Start Qdrant service
+        run: |
+          echo "Starting Qdrant..."
+          make start-qdrant
+
+      - name: Start Redis service
+        run: |
+          echo "Starting Redis Stack..."
+          make start-redis
+
+      - name: Start Valkey service
+        run: |
+          echo "Starting Valkey bundle..."
+          make start-valkey
+
+      - name: Configure isolated PostgreSQL registry tests
+        run: |
+          mkdir -p .agent-harness/core/storage
+          printf '%s\n' "$ROUTER_REPLAY_TEST_POSTGRES_CONFIG" > .agent-harness/core/storage/postgres.json
+          echo "VSR_TEST_POSTGRES_CONFIG=$GITHUB_WORKSPACE/.agent-harness/core/storage/postgres.json" >> "$GITHUB_ENV"
+      - name: Run selected storage inventory and reject skips
+        run: |
+          python3 -m pip install PyYAML==6.0.3
+          make test-core-storage
+      - name: Record storage evidence
+        env:
+          VERIFICATION: ${{ inputs.verification }}
+        run: |
+          python3 tools/ci/ci_results.py record --verification "$VERIFICATION" \
+            --evidence .agent-harness/core/storage/evidence.json --output .agent-harness/core/storage/result.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-result-storage
+          path: .agent-harness/core/storage/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Clean Redis service
+        if: always()
+        run: |
+          echo "Stopping Redis container and cleaning data..."
+          make clean-redis
+
+      - name: Clean Valkey service
+        if: always()
+        run: |
+          echo "Stopping Valkey container and cleaning data..."
+          make clean-valkey
+
+      - name: Stop Qdrant service
+        if: always()
+        run: make stop-qdrant
+
+      - name: Stop Milvus service
+        if: always()
+        run: |
+          echo "Stopping Milvus container..."
+          docker stop milvus-semantic-cache || true
+          docker rm milvus-semantic-cache || true
+          echo "Milvus container cleaned up"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: storage-framework-evidence
+          path: .agent-harness/core/storage/
+          include-hidden-files: true
+          if-no-files-found: error

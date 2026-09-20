@@ -58,15 +58,13 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
 	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
 	embeddingConfig.ModelDeployments = cfg.ModelDeployments
+	embeddingConfig.GlobalModelBindings = cfg.GlobalModelBindings
 	// Ingestion owns only the shared embedding consumer. Recipe classifier and
 	// safety bindings require their signal declarations and do not belong to
 	// this service's preparation scope.
-	if selected, ok := cfg.ModelBindings["embedding"]; ok {
-		embeddingConfig.ModelBindings = map[string]config.ModelBinding{"embedding": selected}
-	}
 	embeddingConfig.ExternalModels = cfg.ExternalModels
 	embeddingConfig.ModelAdmission = cfg.ModelAdmission
-	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), embeddingConfig, native.New(pool))
+	prepared, err := modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), embeddingConfig, native.New(pool))
 	if err != nil {
 		return nil, fmt.Errorf("prepare vector store embedding: %w", err)
 	}

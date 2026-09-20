@@ -101,7 +101,7 @@ func registerValidateConfigStructureCoreSpecs() {
 }
 
 func registerValidateConfigStructureCoreDispatchSpecs() {
-	It("skips everything in k8s mode", func() {
+	It("defers routing contracts until CRDs are available in k8s mode", func() {
 		cfg := &RouterConfig{
 			ConfigSource: ConfigSourceKubernetes,
 			IntelligentRouting: IntelligentRouting{
@@ -133,6 +133,7 @@ func registerValidateConfigStructureCoreDispatchSpecs() {
 	It("keeps the shared dispatch table wired for file and k8s validation", func() {
 		for _, validators := range [][]configContractValidator{
 			globalConfigContractValidators,
+			routingConfigContractValidators,
 			routingProfileContractValidators,
 		} {
 			Expect(validators).NotTo(BeEmpty())

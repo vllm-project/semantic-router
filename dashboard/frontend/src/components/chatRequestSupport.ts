@@ -29,6 +29,7 @@ export const assertPlaygroundRequestSize = (request: Record<string, unknown>): v
 export const buildPlaygroundRequestHeaders = (conversationId: string): Record<string, string> => ({
   'Content-Type': 'application/json',
   'x-session-id': conversationId,
+  'x-conversation-id': conversationId,
   'x-vsr-debug': 'true',
 })
 
@@ -37,6 +38,8 @@ const RESPONSE_HEADER_KEYS = [
   'x-vsr-schema-version',
   'x-vsr-response-path',
   'x-vsr-selected-model',
+  'x-vsr-effective-input-tokens',
+  'x-vsr-effective-max-output-tokens',
   'x-vsr-selected-algorithm',
   'x-vsr-selected-decision',
   'x-vsr-selected-modality',

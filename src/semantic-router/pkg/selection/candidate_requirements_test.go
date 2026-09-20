@@ -123,3 +123,57 @@ func TestDisabledReasoningDoesNotRequireModelReasoning(t *testing.T) {
 		})
 	}
 }
+
+// TestCandidateCapabilityEligibilityMatrix locks the multimodal eligibility
+// guarantee behind #3116. Under the "declared" policy, a model that has declared
+// its capabilities but lacks a required task modality (image input) is excluded,
+// a model that declares the modality is admitted, and a model with no declared
+// metadata is excluded. The permissive default (no capability requirement) admits
+// every model, so the gate stays opt-in and migration-safe. The existing table in
+// TestCandidateRequirementsBudgetAndMetadata only covers undeclared metadata
+// (nil capabilities); this isolates the declared-but-unsupported case, which is
+// the distinction that makes capability matching a hard gate rather than a hint.
+func TestCandidateCapabilityEligibilityMatrix(t *testing.T) {
+	declared := &config.CandidateRequirements{Capabilities: config.CandidateCapabilitiesDeclared}
+	imageRequest := &llmprotocol.Request{Messages: []llmprotocol.Message{{
+		Role: llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "describe"},
+			{Kind: llmprotocol.ContentImage, URL: "https://example.invalid/image.png"},
+		},
+	}}}
+	demand := DemandForRequest(imageRequest)
+	if !demand.Known {
+		t.Fatal("request facts should be known")
+	}
+	if !demand.ModelCapabilities.Supports(llmprotocol.CapabilityImageInput) {
+		t.Fatalf("image request must require image_input, got %v", demand.ModelCapabilities.Names())
+	}
+	for _, test := range []struct {
+		name    string
+		caps    []string
+		wantErr bool
+	}{
+		{"declares image modality is admitted", []string{"chat", "image_input"}, false},
+		{"declared but lacks image modality is excluded", []string{"chat"}, true},
+		{"undeclared metadata is excluded", nil, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := ValidateCandidateRequirements(declared, "m", config.ModelParams{Capabilities: test.caps}, demand)
+			if test.wantErr {
+				if !errors.Is(err, ErrNoEligibleCandidates) {
+					t.Fatalf("want ErrNoEligibleCandidates, got %v", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("want admission, got %v", err)
+			}
+		})
+	}
+	// Permissive default: with no capability requirement, even a text-only model
+	// serves the image request, so the gate stays opt-in.
+	if err := ValidateCandidateRequirements(&config.CandidateRequirements{}, "m", config.ModelParams{Capabilities: []string{"chat"}}, demand); err != nil {
+		t.Fatalf("permissive default must admit every model, got %v", err)
+	}
+}

@@ -298,6 +298,11 @@ class LooperTTSExecutor:
         max_workers: int = 8,
     ):
         validate_plan(dict(plan))
+        if (
+            isinstance(provider, DeterministicProvider)
+            and plan["config"]["dataset"]["evidence_kind"] != "synthetic"
+        ):
+            raise ContractError("deterministic provider requires a synthetic manifest")
         if type(retries) is not int or retries < 0:
             raise ValueError("retries must be non-negative")
         if max_output_tokens is not None and (
@@ -399,9 +404,12 @@ class LooperTTSExecutor:
         snapshot = state.ledger.snapshot()
         if state.budget_exhausted or snapshot.exhausted:
             state.budget_exhausted = True
-        answer = final.response.content if final.response is not None else None
-        if not answer and final.response is not None:
-            answer = final.response.reasoning or None
+        answer = None
+        if final.response is not None:
+            for text in (final.response.content, final.response.reasoning):
+                if text and text.strip():
+                    answer = text
+                    break
         if state.budget_exhausted:
             status = "budget_exhausted"
             error = state.budget_error or final.error or "budget exhausted"
@@ -1091,6 +1099,8 @@ def execute_manifest(
     plan = load_json(manifest_path)
     validate_plan(plan)
     if fake:
+        if plan["config"]["dataset"]["evidence_kind"] != "synthetic":
+            raise ContractError("--fake requires a synthetic manifest")
         provider: Provider = DeterministicProvider()
     else:
         if not endpoint:

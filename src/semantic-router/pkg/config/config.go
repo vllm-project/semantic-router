@@ -109,6 +109,12 @@ type RouterConfig struct {
 	// validation requests, which must never trigger filesystem reads.
 	SkipExternalAssetValidation bool `yaml:"-" json:"-"`
 
+	// RoutingFragmentOnly marks a config parsed from a routing-only document,
+	// which carries no provider or global state. Validation that depends on
+	// providers is skipped for these so DSL fragments stay decompilable, while
+	// complete configs still get the full contract.
+	RoutingFragmentOnly bool `yaml:"-" json:"-"`
+
 	// Static global configuration.
 	InlineModels     `yaml:",inline"`
 	ExternalModels   []ExternalModelConfig `yaml:"external_models,omitempty"`
@@ -222,6 +228,8 @@ type Listener struct {
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
 	Timeout string `yaml:"timeout,omitempty"`
+	// APIKeys are client bearer credentials enforced by the CLI-managed Envoy listener.
+	APIKeys []string `yaml:"api_keys,omitempty"`
 }
 
 type APIServer struct {
@@ -266,6 +274,7 @@ type InlineModels struct {
 	FeedbackDetector        FeedbackDetectorConfig        `yaml:"feedback_detector"`
 	ModalityDetector        ModalityDetectorConfig        `yaml:"modality_detector"`
 	ModelAdmission          map[string]AdmissionConfig    `yaml:"model_admission,omitempty"`
+	GlobalModelBindings     map[string]ModelBinding       `yaml:"global_model_bindings,omitempty"`
 	ModelDeployments        map[string]ModelDeployment    `yaml:"model_deployments,omitempty"`
 }
 

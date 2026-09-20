@@ -10,27 +10,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
-
-// extractAutoStore checks if auto_store is enabled from per-decision plugin config.
-// Response API request overrides are resolved separately so request-level
-// false values can still disable router-level fallback.
-// Supported for both Response API and Chat Completions.
-func extractAutoStore(ctx *RequestContext) bool {
-	if ctx.VSRSelectedDecision != nil {
-		memoryPluginConfig := ctx.VSRSelectedDecision.GetMemoryConfig()
-		if memoryPluginConfig != nil && memoryPluginConfig.AutoStore != nil {
-			logging.Infof("extractAutoStore: Using per-decision plugin config, AutoStore=%v (decision: %s)",
-				*memoryPluginConfig.AutoStore, ctx.VSRSelectedDecisionName)
-			return *memoryPluginConfig.AutoStore
-		}
-	}
-
-	// Default: auto_store disabled unless explicitly enabled via plugin config
-	return false
-}
 
 // extractRequestAutoStore is defined in dev/prod build-tagged files.
 
@@ -55,11 +36,7 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 
 	// Require userID - without it, memory would be orphaned (unretrievable)
 	if userID == "" {
-		if state := ctx.ResponseObjectState; state != nil && !state.ProviderContextApplied && state.ConversationHistory != nil {
-			history = convertStoredResponsesToMessages(state.ConversationHistory)
-		}
-		history = append(history, cloneSemanticMessages(ctx.SemanticRequest.Messages)...)
-		return "", "", history, fmt.Errorf(
+		return "", "", nil, fmt.Errorf(
 			"userID is required for memory extraction but the authenticated tenant has no user identity",
 		)
 	}
@@ -146,20 +123,14 @@ func deriveSessionIDFromRequestID(ctx *RequestContext) string {
 	return "rid-" + hex.EncodeToString(hash[:])[:16]
 }
 
-func cloneSemanticMessages(messages []llmprotocol.Message) []llmprotocol.Message {
-	result := make([]llmprotocol.Message, len(messages))
-	for index := range messages {
-		result[index] = messages[index]
-		result[index].Content = append([]llmprotocol.Content(nil), messages[index].Content...)
-	}
-	return result
-}
-
 // convertStoredResponsesToMessages converts retained response objects into the
 // same neutral conversation contract used by live requests.
 func convertStoredResponsesToMessages(storedResponses []*responseapi.StoredResponse) []llmprotocol.Message {
 	var messages []llmprotocol.Message
 	for _, stored := range storedResponses {
+		if stored == nil {
+			continue
+		}
 		messages = appendInputMessages(messages, stored.Input)
 		messages = appendOutputMessages(messages, stored.OutputText, stored.Output)
 	}

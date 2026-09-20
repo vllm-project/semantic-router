@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
@@ -49,8 +50,11 @@ func TestResponseMemoryWritesHonorPolicyBeforeClientPreference(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			store := &countingPolicyMemoryStore{}
+			runner := memory.NewPersistenceRunner(time.Second, 1, 1)
+			t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
 			router := &OpenAIRouter{
 				Config: &config.RouterConfig{Memory: tc.global}, MemoryExtractor: memory.NewMemoryChunkStore(store),
+				memoryPersistence: runner,
 			}
 			ctx := memoryPolicyContext(tc.request)
 			if tc.decision != nil {
@@ -67,7 +71,9 @@ func TestResponseMemoryWritesHonorPolicyBeforeClientPreference(t *testing.T) {
 				ctx.Headers[headers.DisableRouterMemory] = "true"
 			}
 			router.scheduleResponseMemoryStoreText(ctx, "The conference itinerary includes a morning meeting and an afternoon workshop.")
-			router.backgroundTasks.Wait()
+			if err := runner.RetireAndWait(time.Second); err != nil {
+				t.Fatal(err)
+			}
 			if store.writes != tc.wantWrites {
 				t.Fatalf("memory writes = %d, want %d", store.writes, tc.wantWrites)
 			}
@@ -79,9 +85,12 @@ func TestResponseMemoryClientOptOutSurvivesProviderMaterialization(t *testing.T)
 	autoStore := false
 	ctx := memoryPolicyContext(&autoStore)
 	store := &countingPolicyMemoryStore{}
+	runner := memory.NewPersistenceRunner(time.Second, 1, 1)
+	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
 	router := &OpenAIRouter{
-		Config:          &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
-		MemoryExtractor: memory.NewMemoryChunkStore(store),
+		Config:            &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, AutoStore: true}},
+		MemoryExtractor:   memory.NewMemoryChunkStore(store),
+		memoryPersistence: runner,
 	}
 	state, err := (*ResponseAPIFilter)(nil).PrepareObjectState(t.Context(), *ctx.SemanticRequest, nil)
 	if err != nil {
@@ -97,7 +106,9 @@ func TestResponseMemoryClientOptOutSurvivesProviderMaterialization(t *testing.T)
 		t.Fatal("Router storage control leaked to the provider request")
 	}
 	router.scheduleResponseMemoryStoreText(ctx, "The conference itinerary includes a morning meeting and an afternoon workshop.")
-	router.backgroundTasks.Wait()
+	if err := runner.RetireAndWait(time.Second); err != nil {
+		t.Fatal(err)
+	}
 	if store.writes != 0 {
 		t.Fatalf("client opt-out was lost after materialization: %d writes", store.writes)
 	}
@@ -106,7 +117,9 @@ func TestResponseMemoryClientOptOutSurvivesProviderMaterialization(t *testing.T)
 func memoryPolicyContext(autoStore *bool) *RequestContext {
 	return &RequestContext{
 		RequestModel: "model",
-		Headers:      map[string]string{headers.AuthzUserID: "memory-user", ":path": "/v1/responses"},
+		// Match the ingress snapshot taken by prepareProtocolRequest.
+		RequestAutoStore: cloneBoolPtr(autoStore),
+		Headers:          map[string]string{headers.AuthzUserID: "memory-user", ":path": "/v1/responses"},
 		SemanticRequest: &llmprotocol.Request{
 			Generation: 1, Model: "model", AutoStore: autoStore,
 			Messages: []llmprotocol.Message{neutralTextMessage(llmprotocol.RoleUser, "Please remember the detailed conference itinerary with a morning meeting and an afternoon workshop.")},

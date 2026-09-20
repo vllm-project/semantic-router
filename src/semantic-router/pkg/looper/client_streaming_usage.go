@@ -38,45 +38,67 @@ func sseDataPayload(line []byte) ([]byte, bool) {
 // parseStreamingUsage extracts token usage from an SSE stream. OpenAI-compatible
 // backends report usage in a trailing chunk (only when the request set
 // stream_options.include_usage), so the last non-null usage block wins. Returns
-// zero usage when none is present.
+// unreported usage when none is present.
 func parseStreamingUsage(body []byte) TokenUsage {
 	usage, _ := parseStreamingUsageWithPresence(body)
 	return usage
 }
 
 func parseStreamingUsageWithPresence(body []byte) (TokenUsage, UsagePresence) {
-	var usage TokenUsage
+	usage := TokenUsage{Unreported: true}
 	var presence UsagePresence
 	for _, line := range bytes.Split(body, []byte("\n")) {
 		data, ok := sseDataPayload(line)
 		if !ok {
 			continue
 		}
-		data = bytes.TrimSpace(data)
-		if bytes.Equal(data, []byte("[DONE]")) {
+		var chunk struct {
+			Usage json.RawMessage `json:"usage"`
+		}
+		if json.Unmarshal(data, &chunk) != nil || len(chunk.Usage) == 0 || bytes.Equal(bytes.TrimSpace(chunk.Usage), []byte("null")) {
 			continue
 		}
+		usage, presence = parseResponseUsageWithPresence(data)
+	}
+	return usage, presence
+}
 
-		var chunk map[string]json.RawMessage
-		if err := json.Unmarshal(data, &chunk); err != nil {
-			continue
+// A present null, negative, fractional, or nonnumeric field is not token evidence.
+// Numeric zero is explicitly reported usage.
+func parseResponseUsagePresence(body []byte) UsagePresence {
+	var response struct {
+		Usage map[string]json.RawMessage `json:"usage"`
+	}
+	if json.Unmarshal(body, &response) != nil {
+		return UsagePresence{}
+	}
+	valid := func(key string) bool {
+		var value *int64
+		return json.Unmarshal(response.Usage[key], &value) == nil && value != nil && *value >= 0
+	}
+	return UsagePresence{PromptTokens: valid("prompt_tokens"), CompletionTokens: valid("completion_tokens"), TotalTokens: valid("total_tokens")}
+}
+
+// Retain upstream cache accounting while preserving individually reported counts.
+func parseResponseUsageWithPresence(body []byte) (TokenUsage, UsagePresence) {
+	usage := parseResponseUsage(body)
+	presence := parseResponseUsagePresence(body)
+	var fields struct {
+		Usage map[string]json.RawMessage `json:"usage"`
+	}
+	if json.Unmarshal(body, &fields) == nil {
+		if presence.PromptTokens {
+			_ = json.Unmarshal(fields.Usage["prompt_tokens"], &usage.PromptTokens)
 		}
-		rawUsage, ok := chunk["usage"]
-		if !ok || bytes.Equal(bytes.TrimSpace(rawUsage), []byte("null")) {
-			continue
+		if presence.CompletionTokens {
+			_ = json.Unmarshal(fields.Usage["completion_tokens"], &usage.CompletionTokens)
 		}
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(rawUsage, &fields); err != nil {
-			continue
+		if presence.TotalTokens {
+			_ = json.Unmarshal(fields.Usage["total_tokens"], &usage.TotalTokens)
 		}
-		var decoded TokenUsage
-		if err := json.Unmarshal(rawUsage, &decoded); err != nil {
-			continue
-		}
-		usage = decoded
-		_, presence.PromptTokens = fields["prompt_tokens"]
-		_, presence.CompletionTokens = fields["completion_tokens"]
-		_, presence.TotalTokens = fields["total_tokens"]
+	}
+	if !presence.PromptTokens || !presence.CompletionTokens || !presence.TotalTokens {
+		usage.Unreported = true
 	}
 	return usage, presence
 }

@@ -38,7 +38,8 @@ request deadlines.
 
 ## Inspect the executed path
 
-Route Preview runs your configured signals without calling a generation backend:
+Route Preview runs your configured signals without generating an answer. Native
+output selection may call the backend's render endpoint to check capacity:
 
 ```bash
 curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \

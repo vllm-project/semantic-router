@@ -7,6 +7,10 @@ writes normalized per-call evidence. Candidate replay, repeated sampling,
 native scoring, and reports remain later phases. Its deterministic provider is
 synthetic smoke evidence, never a benchmark claim.
 
+Fake execution rejects manifests whose dataset evidence kind is not
+`synthetic`, before dispatch or artifact creation. Blank content and reasoning
+produce terminal error results while retaining paid call records and receipts.
+
 ## Run from the repository root
 
 Python 3.8+ and the benchmark package dependencies are required:
@@ -28,6 +32,11 @@ through the production Go algorithms. The native endpoint is the complete
 `/chat/completions` URL; the command reads the key from an environment
 variable and writes normalized `records.json` plus a runtime receipt with budget
 events:
+
+Every native dispatch applies the target model's declared temperature and
+top-p, including verification and synthesis calls. Native arms that assign
+conflicting sampling settings to the same provider model slug are rejected,
+because the production client cannot distinguish those aliases at dispatch.
 
 ```bash
 cd src/semantic-router && go build -o ../../bin/looper-tts ./cmd/looper-tts
