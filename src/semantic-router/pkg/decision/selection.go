@@ -22,28 +22,32 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func (e *DecisionEngine) selectBestDecision(results []DecisionResult) *DecisionResult {
+func (e *DecisionEngine) selectBestDecision(results []DecisionResult) (*DecisionResult, *RankingTrace) {
 	if len(results) == 0 {
-		return nil
+		return nil, nil
 	}
-	if len(results) == 1 {
-		return &results[0]
-	}
-
 	useTieredSelection := e.useTieredSelection(results)
-	comparable := comparableConfidencePools(results, useTieredSelection)
-	sort.Slice(results, func(i, j int) bool {
-		return e.decisionResultLess(results[i], results[j], useTieredSelection, comparable)
-	})
-	return &results[0]
+	comparable, fallbacks := comparableConfidencePools(results, useTieredSelection)
+	var runnerUp *DecisionResult
+	if len(results) > 1 {
+		sort.Slice(results, func(i, j int) bool {
+			return e.decisionResultLess(results[i], results[j], useTieredSelection, comparable)
+		})
+		runnerUp = &results[1]
+	}
+	return &results[0], e.rankingTrace(results[0], runnerUp, useTieredSelection, comparable, fallbacks, len(results))
 }
 
 // comparableConfidencePools reports the pools whose confidences rank against
 // each other. A pool qualifies when every member that is not a catch-all
 // reported a score and every one of those scores is the same kind, since a
 // classifier probability and a vector similarity are different quantities.
-func comparableConfidencePools(results []DecisionResult, useTieredSelection bool) map[int]bool {
+// It also reports, for every pool it disqualified, the decision that made it
+// incomparable and the reason, which the ranking trace repeats to whoever asks
+// why priority decided.
+func comparableConfidencePools(results []DecisionResult, useTieredSelection bool) (map[int]bool, map[int]string) {
 	pools := make(map[int]bool)
+	fallbacks := make(map[int]string)
 	kinds := make(map[int]config.ScoreKind)
 	for _, result := range results {
 		key := 0
@@ -54,18 +58,21 @@ func comparableConfidencePools(results []DecisionResult, useTieredSelection bool
 		if !seen {
 			comparable = true
 		}
-		if !result.CatchAll {
-			if !result.ConfidenceScored {
+		if !result.CatchAll && comparable {
+			switch kind, ranked := kinds[key]; {
+			case !result.ConfidenceScored:
 				comparable = false
-			} else if kind, ranked := kinds[key]; !ranked {
+				fallbacks[key] = result.Decision.Name + " reported no comparable score"
+			case !ranked:
 				kinds[key] = result.ScoreKind
-			} else if kind != result.ScoreKind {
+			case kind != result.ScoreKind:
 				comparable = false
+				fallbacks[key] = result.Decision.Name + " reported a " + string(result.ScoreKind) + " against a " + string(kind)
 			}
 		}
 		pools[key] = comparable
 	}
-	return pools
+	return pools, fallbacks
 }
 
 func (e *DecisionEngine) useTieredSelection(results []DecisionResult) bool {
