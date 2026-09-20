@@ -56,11 +56,6 @@ func (s *ClassificationAPIServer) acquireEmbeddingRuntime() (*config.RouterConfi
 	return s.currentConfig(), prepared, release, err
 }
 
-func (s *ClassificationAPIServer) acquireEmbeddings() (*embedding.Set, func(), error) {
-	_, prepared, release, err := s.acquireEmbeddingRuntime()
-	return prepared, release, err
-}
-
 func ownedEmbeddingOutput(ctx context.Context, set *embedding.Set, request EmbeddingRequest, text string) (EmbeddingResult, error) {
 	model := request.Model
 	if model == "auto" || model == "" {
