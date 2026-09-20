@@ -949,9 +949,6 @@
         "variant": {
           "type": "string"
         },
-        "protocol": {
-          "type": "string"
-        },
         "on_error": {
           "type": "string"
         },

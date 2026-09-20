@@ -418,7 +418,9 @@ export default function RunDetails({
             {section === 'results' &&
               report &&
               run.status === 'completed' &&
-              run.manifest.mode === 'live' && <QualityCostChart points={chartPoints} />}
+              run.manifest.mode === 'live' && (
+                <QualityCostChart points={chartPoints} costBasis="subject" />
+              )}
             <h3 id="run-targets">Target comparison</h3>
             <p className={styles.muted}>
               Costs apply frozen per-token prices to recorded usage; they are not invoice or
