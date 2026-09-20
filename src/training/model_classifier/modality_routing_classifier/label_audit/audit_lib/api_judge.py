@@ -215,7 +215,7 @@ def judge_via_api(
             processed += len(got)
             missing = [i for i in missing if i not in got]
             if errors:
-                err(f"  {len(errors)} unparseable/unexpected lines, e.g. {errors[0]}")
+                err(f"  {len(errors)} unparsable/unexpected lines, e.g. {errors[0]}")
             if not missing:
                 break
         if missing:
