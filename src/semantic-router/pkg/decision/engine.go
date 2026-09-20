@@ -720,9 +720,15 @@ func (e *DecisionEngine) evalOR(
 	return evaluation, trace
 }
 
+// preferredMatch ranks the matching branches of an OR. A reported score wins
+// over the structural 1.0 that keyword rules, NOT guards and predicates carry,
+// so an extra matching gate cannot strip a decision of evidence it did report.
 func preferredMatch(candidate, current nodeEvaluation) bool {
 	if candidate.onError != current.onError {
 		return current.onError
+	}
+	if candidate.scored != current.scored {
+		return candidate.scored
 	}
 	return candidate.confidence > current.confidence
 }
