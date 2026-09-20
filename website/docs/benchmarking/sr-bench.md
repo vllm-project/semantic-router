@@ -407,10 +407,14 @@ its subset label and is not the full score.
 Paired comparison selects the strongest observed single model by the same
 aggregate over identical cases and records that selection.
 Exact weighted-quality ties prefer the single with the lowest complete known
-subject cost, then a stable target ID. The report lists every tied-best single.
-If any tied-best single has incomplete cost, savings remain unknown. Savings are
-`100 × (1 − candidate subject cost / baseline subject cost)` with complete,
-compatible accounting. A small dev sample shows direction; a quality
+total cost, then a stable target ID. The report lists every tied-best single.
+If any tied-best single has incomplete total cost, savings remain unknown.
+Comparisons report **total cost savings** across subject and judge/simulator
+calls, with **subject cost savings** shown separately. Both use
+`100 × (1 − candidate cost / baseline cost)` with the same scope and complete,
+compatible accounting. The API names these `total_cost_saving_percent` and
+`subject_cost_saving_percent`; cache-neutral comparisons remain subject-only.
+A small dev sample shows direction; a quality
 non-inferiority claim needs a prespecified margin and a holdout confidence
 interval. Token-equivalent self-hosted prices do not establish GPU invoice savings.
 
@@ -420,6 +424,11 @@ including all-wrong samples. The stratified bootstrap interval is retained as a
 diagnostic; a degenerate `[0, 0]` bootstrap from a small tied sample does not prove
 equivalence. Neither interval includes selection of the strongest observed
 baseline, tuning selection or dataset contamination uncertainty.
+
+Before reserving a Standard holdout, exclude previously generated, inspected or
+tuned-on cases by stable ID and input fingerprint. A different seed or a
+`holdout` split label does not establish independence. Retests remain useful,
+but report their exposure separately from unseen validation.
 
 Dashboard opens on **Runs**, with filters for name/model, status and mode. Each
 row shows the completed denominator, failures, persisted update time and target
