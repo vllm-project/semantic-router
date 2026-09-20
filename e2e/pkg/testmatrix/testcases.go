@@ -40,6 +40,11 @@ var BaselineRouterContract = []string{
 	"rule-condition-logic",
 	"decision-fallback-behavior",
 	"plugin-config-variations",
+	// An enabled context_dedup removes only the later copy of an adjacent
+	// repeated turn, and a disabled one forwards the complete conversation
+	// (issue #3346)
+	"context-dedup-adjacent-turns",
+	"context-dedup-disabled",
 	"chat-completions-progressive-stress",
 	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
