@@ -127,6 +127,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	response.SelectionMethod = selection.Method
 	response.SelectionReason = selection.Reason
 	response.SelectionProvenance = selection.Provenance
+	response.SelectionTrace = selection.MultiFactor
 }
 
 func evalDecisionCategory(matchedRules []string) string {

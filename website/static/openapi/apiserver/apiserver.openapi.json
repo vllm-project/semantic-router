@@ -20306,6 +20306,156 @@
                               "selection_reasoning": {
                                 "type": "string"
                               },
+                              "selection_trace": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "final_survivors": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "LoRAName": {
+                                          "type": "string"
+                                        },
+                                        "Model": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningDescription": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningEffort": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningMode": {
+                                          "type": "string"
+                                        },
+                                        "UseReasoning": {
+                                          "nullable": true,
+                                          "type": "boolean"
+                                        },
+                                        "Weight": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "Model",
+                                        "LoRAName",
+                                        "Weight",
+                                        "UseReasoning",
+                                        "ReasoningDescription",
+                                        "ReasoningMode",
+                                        "ReasoningEffort"
+                                      ]
+                                    }
+                                  },
+                                  "stages": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "action": {
+                                          "type": "string"
+                                        },
+                                        "available": {
+                                          "type": "integer"
+                                        },
+                                        "candidates": {
+                                          "nullable": true,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "candidate": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "LoRAName": {
+                                                    "type": "string"
+                                                  },
+                                                  "Model": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningDescription": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningEffort": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningMode": {
+                                                    "type": "string"
+                                                  },
+                                                  "UseReasoning": {
+                                                    "nullable": true,
+                                                    "type": "boolean"
+                                                  },
+                                                  "Weight": {
+                                                    "type": "number"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "Model",
+                                                  "LoRAName",
+                                                  "Weight",
+                                                  "UseReasoning",
+                                                  "ReasoningDescription",
+                                                  "ReasoningMode",
+                                                  "ReasoningEffort"
+                                                ]
+                                              },
+                                              "elimination_reason": {
+                                                "type": "string"
+                                              },
+                                              "metric": {
+                                                "type": "string"
+                                              },
+                                              "value": {
+                                                "nullable": true,
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "candidate"
+                                            ]
+                                          }
+                                        },
+                                        "factor": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "percentile": {
+                                          "type": "integer"
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        },
+                                        "tolerance": {
+                                          "type": "number"
+                                        },
+                                        "total": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "factor",
+                                        "action",
+                                        "reason",
+                                        "tolerance",
+                                        "available",
+                                        "total",
+                                        "candidates"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "stages",
+                                  "final_survivors"
+                                ]
+                              },
                               "session_action": {
                                 "type": "string"
                               },
@@ -23698,6 +23848,156 @@
                         },
                         "selection_reasoning": {
                           "type": "string"
+                        },
+                        "selection_trace": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "final_survivors": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "LoRAName": {
+                                    "type": "string"
+                                  },
+                                  "Model": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningDescription": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningEffort": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningMode": {
+                                    "type": "string"
+                                  },
+                                  "UseReasoning": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "Weight": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "Model",
+                                  "LoRAName",
+                                  "Weight",
+                                  "UseReasoning",
+                                  "ReasoningDescription",
+                                  "ReasoningMode",
+                                  "ReasoningEffort"
+                                ]
+                              }
+                            },
+                            "stages": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "type": "string"
+                                  },
+                                  "available": {
+                                    "type": "integer"
+                                  },
+                                  "candidates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "candidate": {
+                                          "type": "object",
+                                          "properties": {
+                                            "LoRAName": {
+                                              "type": "string"
+                                            },
+                                            "Model": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningDescription": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningEffort": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningMode": {
+                                              "type": "string"
+                                            },
+                                            "UseReasoning": {
+                                              "nullable": true,
+                                              "type": "boolean"
+                                            },
+                                            "Weight": {
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "Model",
+                                            "LoRAName",
+                                            "Weight",
+                                            "UseReasoning",
+                                            "ReasoningDescription",
+                                            "ReasoningMode",
+                                            "ReasoningEffort"
+                                          ]
+                                        },
+                                        "elimination_reason": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "candidate"
+                                      ]
+                                    }
+                                  },
+                                  "factor": {
+                                    "type": "string"
+                                  },
+                                  "metric": {
+                                    "type": "string"
+                                  },
+                                  "percentile": {
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "factor",
+                                  "action",
+                                  "reason",
+                                  "tolerance",
+                                  "available",
+                                  "total",
+                                  "candidates"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "stages",
+                            "final_survivors"
+                          ]
                         },
                         "session_action": {
                           "type": "string"
@@ -33458,6 +33758,156 @@
                     "selection_status": {
                       "type": "string"
                     },
+                    "selection_trace": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "final_survivors": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "LoRAName": {
+                                "type": "string"
+                              },
+                              "Model": {
+                                "type": "string"
+                              },
+                              "ReasoningDescription": {
+                                "type": "string"
+                              },
+                              "ReasoningEffort": {
+                                "type": "string"
+                              },
+                              "ReasoningMode": {
+                                "type": "string"
+                              },
+                              "UseReasoning": {
+                                "nullable": true,
+                                "type": "boolean"
+                              },
+                              "Weight": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "Model",
+                              "LoRAName",
+                              "Weight",
+                              "UseReasoning",
+                              "ReasoningDescription",
+                              "ReasoningMode",
+                              "ReasoningEffort"
+                            ]
+                          }
+                        },
+                        "stages": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "type": "string"
+                              },
+                              "available": {
+                                "type": "integer"
+                              },
+                              "candidates": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "candidate": {
+                                      "type": "object",
+                                      "properties": {
+                                        "LoRAName": {
+                                          "type": "string"
+                                        },
+                                        "Model": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningDescription": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningEffort": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningMode": {
+                                          "type": "string"
+                                        },
+                                        "UseReasoning": {
+                                          "nullable": true,
+                                          "type": "boolean"
+                                        },
+                                        "Weight": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "Model",
+                                        "LoRAName",
+                                        "Weight",
+                                        "UseReasoning",
+                                        "ReasoningDescription",
+                                        "ReasoningMode",
+                                        "ReasoningEffort"
+                                      ]
+                                    },
+                                    "elimination_reason": {
+                                      "type": "string"
+                                    },
+                                    "metric": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "nullable": true,
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "candidate"
+                                  ]
+                                }
+                              },
+                              "factor": {
+                                "type": "string"
+                              },
+                              "metric": {
+                                "type": "string"
+                              },
+                              "percentile": {
+                                "type": "integer"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "tolerance": {
+                                "type": "number"
+                              },
+                              "total": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "factor",
+                              "action",
+                              "reason",
+                              "tolerance",
+                              "available",
+                              "total",
+                              "candidates"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "stages",
+                        "final_survivors"
+                      ]
+                    },
                     "signal_confidences": {
                       "nullable": true,
                       "type": "object",
@@ -36587,6 +37037,156 @@
                         },
                         "selection_status": {
                           "type": "string"
+                        },
+                        "selection_trace": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "final_survivors": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "LoRAName": {
+                                    "type": "string"
+                                  },
+                                  "Model": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningDescription": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningEffort": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningMode": {
+                                    "type": "string"
+                                  },
+                                  "UseReasoning": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "Weight": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "Model",
+                                  "LoRAName",
+                                  "Weight",
+                                  "UseReasoning",
+                                  "ReasoningDescription",
+                                  "ReasoningMode",
+                                  "ReasoningEffort"
+                                ]
+                              }
+                            },
+                            "stages": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "type": "string"
+                                  },
+                                  "available": {
+                                    "type": "integer"
+                                  },
+                                  "candidates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "candidate": {
+                                          "type": "object",
+                                          "properties": {
+                                            "LoRAName": {
+                                              "type": "string"
+                                            },
+                                            "Model": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningDescription": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningEffort": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningMode": {
+                                              "type": "string"
+                                            },
+                                            "UseReasoning": {
+                                              "nullable": true,
+                                              "type": "boolean"
+                                            },
+                                            "Weight": {
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "Model",
+                                            "LoRAName",
+                                            "Weight",
+                                            "UseReasoning",
+                                            "ReasoningDescription",
+                                            "ReasoningMode",
+                                            "ReasoningEffort"
+                                          ]
+                                        },
+                                        "elimination_reason": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "candidate"
+                                      ]
+                                    }
+                                  },
+                                  "factor": {
+                                    "type": "string"
+                                  },
+                                  "metric": {
+                                    "type": "string"
+                                  },
+                                  "percentile": {
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "factor",
+                                  "action",
+                                  "reason",
+                                  "tolerance",
+                                  "available",
+                                  "total",
+                                  "candidates"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "stages",
+                            "final_survivors"
+                          ]
                         },
                         "signal_confidences": {
                           "nullable": true,

@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 const (
@@ -128,6 +129,7 @@ type EvalResponse struct {
 	SelectionMethod        string                                  `json:"selection_method,omitempty"`
 	SelectionReason        string                                  `json:"selection_reason,omitempty"`
 	SelectionProvenance    *SelectionProvenance                    `json:"selection_provenance,omitempty"`
+	SelectionTrace         *selectiontrace.MultiFactorObjective    `json:"selection_trace,omitempty"`
 	RoutingDecision        string                                  `json:"routing_decision,omitempty"`
 	Metrics                *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
 	SignalConfidences      map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
@@ -159,6 +161,7 @@ type EvalModelSelection struct {
 	Method        string
 	Reason        string
 	Provenance    *SelectionProvenance
+	MultiFactor   *selectiontrace.MultiFactorObjective
 }
 
 // EvalModelSelector performs a non-generating selection preview with the same

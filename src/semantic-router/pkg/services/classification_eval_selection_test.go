@@ -10,10 +10,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 type evalModelSelectorStub struct {
 	input EvalModelSelectionInput
+	trace *selectiontrace.MultiFactorObjective
 }
 
 func (s *evalModelSelectorStub) SelectModelForEval(
@@ -25,11 +27,18 @@ func (s *evalModelSelectorStub) SelectModelForEval(
 		Status:        EvalSelectionSelected,
 		Method:        "multi_factor",
 		Reason:        "highest live score",
+		MultiFactor:   s.trace,
 	}
 }
 
 func TestPopulateEvalModelSelectionReturnsConcreteRuntimeChoice(t *testing.T) {
-	selector := &evalModelSelectorStub{}
+	selector := &evalModelSelectorStub{trace: &selectiontrace.MultiFactorObjective{
+		FinalSurvivors: []config.ModelRef{{Model: "model-b"}},
+		Stages: []selectiontrace.ObjectiveStage{{
+			Factor: "latency", Action: selectiontrace.StageSkipped,
+			Reason: selectiontrace.IncompleteLatencyCoverage, Available: 1, Total: 2,
+		}},
+	}}
 	service := &ClassificationService{}
 	service.SetEvalModelSelector(selector)
 	response := &EvalResponse{Recipe: "balanced"}
@@ -55,6 +64,11 @@ func TestPopulateEvalModelSelectionReturnsConcreteRuntimeChoice(t *testing.T) {
 
 	if response.SelectedModel != "model-b" || response.SelectionStatus != EvalSelectionSelected {
 		t.Fatalf("selection response = %+v", response)
+	}
+	encoded, err := json.Marshal(response)
+	if err != nil || !strings.Contains(string(encoded), `"selection_trace"`) ||
+		!strings.Contains(string(encoded), `"incomplete_latency_coverage"`) {
+		t.Fatalf("selection stage evidence missing from API response: %s (%v)", encoded, err)
 	}
 	if selector.input.Decision != matchedDecision || selector.input.Recipe != "balanced" {
 		t.Fatalf("selector scope = %+v", selector.input)
