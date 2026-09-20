@@ -169,7 +169,7 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 
 					config := CacheConfig{
-						EmbeddingProvider:   storagetest.Vectors{Size: 384},
+						EmbeddingProvider:   storagetest.Vectors{Size: 512},
 						BackendType:         MilvusCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.85,
@@ -255,7 +255,7 @@ development:
 
 				It("should create Milvus cache backend successfully with valid config", func() {
 					config := CacheConfig{
-						EmbeddingProvider:   storagetest.Vectors{Size: 384},
+						EmbeddingProvider:   storagetest.Vectors{Size: 512},
 						BackendType:         MilvusCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.85,
