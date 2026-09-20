@@ -6,7 +6,7 @@ inputs:
     description: Newline-separated go.sum paths used for the setup-go cache key.
     required: false
     default: |
-      go.sum
+      src/semantic-router/go.sum
       deploy/operator/go.sum
       dashboard/backend/go.sum
 
