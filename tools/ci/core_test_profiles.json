@@ -3,6 +3,13 @@
   "excluded": [
     {
       "package": "./pkg/cache",
+      "test": "TestNegationFalseHitRegressionInMemory",
+      "source": "src/semantic-router/pkg/cache/negation_regression_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned Candle published-model runtime inventory; model-free polarity lookup contracts remain mandatory in core."
+    },
+    {
+      "package": "./pkg/cache",
       "test": "TestPolarityNLIRegression",
       "source": "src/semantic-router/pkg/cache/polarity_nli_regression_test.go",
       "profile": "legacy-hallucination-checkpoints",
