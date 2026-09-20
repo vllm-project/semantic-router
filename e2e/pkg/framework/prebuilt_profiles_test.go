@@ -19,6 +19,10 @@ var fixtureEnvironments = map[string]string{
 	"anthropic-shim": "E2E_PREBUILT_ANTHROPIC_SHIM_IMAGE",
 }
 
+func sameLocalImageFixture(a, b framework.LocalImageBuild) bool {
+	return a.Dockerfile == b.Dockerfile && a.Tag == b.Tag && a.BuildContext == b.BuildContext
+}
+
 func registeredFixtureImages(t *testing.T) map[string]framework.LocalImageBuild {
 	t.Helper()
 	images := map[string]framework.LocalImageBuild{}
@@ -32,7 +36,7 @@ func registeredFixtureImages(t *testing.T) map[string]framework.LocalImageBuild 
 			if _, known := fixtureEnvironments[id]; !known {
 				t.Fatalf("profile %s requires unqualified fixture %s", name, id)
 			}
-			if previous, exists := images[id]; exists && previous != image {
+			if previous, exists := images[id]; exists && !sameLocalImageFixture(previous, image) {
 				t.Fatalf("profiles disagree on fixture %s: %+v and %+v", id, previous, image)
 			}
 			images[id] = image

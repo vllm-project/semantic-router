@@ -519,11 +519,11 @@ Validate, inspect, apply, version, and roll back Router configuration and Recipe
 
 ### routing
 
-Preview routing behavior without invoking a generation backend.
+Preview routing behavior without generating an answer.
 
 | Method | Path | Description |
 | --- | --- | --- |
-| `POST` | `/api/v1/routing/preview` | Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound. |
+| `POST` | `/api/v1/routing/preview` | Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound. |
 
 ### inventory
 

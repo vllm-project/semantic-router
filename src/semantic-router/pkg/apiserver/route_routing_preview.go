@@ -10,6 +10,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -101,6 +102,9 @@ func (s *ClassificationAPIServer) writeRoutingPreviewContextError(w http.Respons
 }
 
 func (s *ClassificationAPIServer) writeRoutingPreviewResult(w http.ResponseWriter, result routingPreviewResult) {
+	if result.response != nil && headers.ValidConfigHash(result.response.ConfigHash) {
+		w.Header().Set(headers.VSRConfigHash, result.response.ConfigHash)
+	}
 	if errors.Is(result.err, context.DeadlineExceeded) {
 		s.writeRoutingPreviewContextError(w, result.err)
 		return

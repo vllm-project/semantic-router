@@ -67,7 +67,7 @@ type capabilityDefinition struct {
 var capabilityRegistry = []capabilityDefinition{
 	{Name: "system", Description: "Health, readiness, and API contract discovery."},
 	{Name: "config", Description: "Validate, inspect, apply, version, and roll back Router configuration and Recipes."},
-	{Name: "routing", Description: "Preview routing behavior without invoking a generation backend."},
+	{Name: "routing", Description: "Preview routing behavior without generating an answer."},
 	{Name: "inventory", Description: "Inspect configured and loaded model and classifier resources."},
 	{Name: "observability", Description: "Inspect routing replays, metrics, and management audit; submit outcome evidence."},
 	{Name: "storage", Description: "Manage Router-owned knowledge bases, memories, files, vector stores, cache partitions, and context recovery."},

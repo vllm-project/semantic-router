@@ -105,101 +105,40 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 	return requestIDs, embeddings, nil
 }
 
-// GetByID retrieves a document from Milvus by request ID inside an exact model
-// partition.
-// This is much more efficient than FindSimilar when you already know the ID
-// Used by hybrid cache to fetch documents after local HNSW search
-//
-//nolint:funlen,cyclop,nestif
+// GetByID retrieves a completed response from an exact model partition.
+// Semantic callers use getEntryByID to also validate the stored query.
 func (c *MilvusCache) GetByID(ctx context.Context, requestID, model string) ([]byte, error) {
+	entry, err := c.getEntryByID(ctx, requestID, model)
+	return entry.ResponseBody, err
+}
+
+func (c *MilvusCache) getEntryByID(ctx context.Context, requestID, model string) (CacheEntry, error) {
 	start := time.Now()
-
 	if !c.enabled {
-		return nil, fmt.Errorf("milvus cache is not enabled")
+		return CacheEntry{}, fmt.Errorf("milvus cache is not enabled")
 	}
-	logging.Debugf("MilvusCache.GetByID: fetching requestID='%s'", requestID)
-
-	// Query Milvus by request_id (primary key)
-	// Filter for non-empty responses to avoid race condition with pending entries
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	var queryResult client.ResultSet
 	var err error
 	if c.queryByIDFn != nil {
 		queryResult, err = c.queryByIDFn(ctx, requestID, model)
 	} else {
-		queryResult, err = c.client.Query(
-			ctx,
-			c.collectionName,
-			[]string{}, // Empty partitions means search all
-			fmt.Sprintf(
-				"request_id == %s && model == %s && response_body != \"\"",
-				milvusStringLiteral(requestID),
-				milvusStringLiteral(model),
-			),
-			[]string{"response_body"}, // Only fetch document, not embedding!
-			c.searchQueryOptions()...,
-		)
+		queryResult, err = c.client.Query(ctx, c.collectionName, []string{},
+			fmt.Sprintf("request_id == %s && model == %s && response_body != \"\" && (expires_at == 0 || expires_at > %d)", milvusStringLiteral(requestID), milvusStringLiteral(model), time.Now().Unix()),
+			[]string{"query", "response_body", "timestamp", "expires_at"}, c.searchQueryOptions()...)
 	}
 	if err != nil {
-		logging.Debugf("MilvusCache.GetByID: query failed: %v", err)
 		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
-		return nil, fmt.Errorf("milvus query failed: %w", err)
+		return CacheEntry{}, fmt.Errorf("milvus query failed: %w", err)
 	}
-
-	if len(queryResult) == 0 {
-		logging.Debugf("MilvusCache.GetByID: document not found: %s", requestID)
+	entry := milvusEntryAt(queryResult, 0)
+	if len(entry.ResponseBody) == 0 || (!entry.ExpiresAt.IsZero() && !entry.ExpiresAt.After(time.Now())) {
 		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
-		return nil, fmt.Errorf("%w: %s", errMilvusCacheEntryNotFound, requestID)
+		return CacheEntry{}, fmt.Errorf("%w: %s", errMilvusCacheEntryNotFound, requestID)
 	}
-
-	// Milvus automatically includes the primary key but the column order is non-deterministic
-	// We need to find which column is the response_body by checking which is NOT the primary key (32-char hash)
-	responseBodyColIndex := 0
-	if len(queryResult) > 1 {
-		// Check if column[0] looks like an MD5 hash (32 hex chars)
-		if testCol, ok := queryResult[0].(*entity.ColumnVarChar); ok && testCol.Len() > 0 {
-			testVal, _ := testCol.ValueByIdx(0)
-			// If it's exactly 32 chars and all hex, it's likely the ID hash
-			if len(testVal) == 32 && isHexString(testVal) {
-				responseBodyColIndex = 1 // response_body is in column 1
-			} else {
-				responseBodyColIndex = 0 // response_body is in column 0
-			}
-		}
-	}
-
-	// Extract response body
-	responseBodyColumn, ok := queryResult[responseBodyColIndex].(*entity.ColumnVarChar)
-	if !ok {
-		logging.Debugf("MilvusCache.GetByID: unexpected response_body column type: %T", queryResult[responseBodyColIndex])
-		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
-		return nil, fmt.Errorf("invalid response_body column type: %T", queryResult[responseBodyColIndex])
-	}
-
-	if responseBodyColumn.Len() == 0 {
-		logging.Debugf("MilvusCache.GetByID: response_body column is empty")
-		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
-		return nil, fmt.Errorf("response_body is empty for: %s", requestID)
-	}
-
-	// Get the response body value
-	responseBodyStr, err := responseBodyColumn.ValueByIdx(0)
-	if err != nil {
-		logging.Debugf("MilvusCache.GetByID: failed to get response_body value: %v", err)
-		metrics.RecordCacheOperation("milvus", "get_by_id", "error", time.Since(start).Seconds())
-		return nil, fmt.Errorf("failed to get response_body value: %w", err)
-	}
-
-	responseBody := []byte(responseBodyStr)
-
-	if len(responseBody) == 0 {
-		logging.Debugf("MilvusCache.GetByID: response_body is empty")
-		metrics.RecordCacheOperation("milvus", "get_by_id", "miss", time.Since(start).Seconds())
-		return nil, fmt.Errorf("response_body is empty for: %s", requestID)
-	}
-
-	logging.Debugf("MilvusCache.GetByID: SUCCESS - fetched %d bytes in %dms",
-		len(responseBody), time.Since(start).Milliseconds())
+	entry.RequestID, entry.Model = requestID, model
 	metrics.RecordCacheOperation("milvus", "get_by_id", "success", time.Since(start).Seconds())
-
-	return responseBody, nil
+	return entry, nil
 }

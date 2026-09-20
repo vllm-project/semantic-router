@@ -1,619 +1,607 @@
-"""Reproducible benchmark harness commands."""
+"""The sr-bench 1.0 CLI shares one durable service with the Dashboard."""
 
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+import os
+import time
 from functools import wraps
 from pathlib import Path
-from typing import Any
+from urllib.parse import urlencode
 
 import click
 
-from cli.evaluation.benchmark_normalization import normalize_benchmark_suite
-from cli.evaluation.benchmark_normalization_registry import (
-    get_benchmark_normalizers,
-)
-from cli.evaluation.benchmark_registry import get_benchmark_registry
-from cli.evaluation.benchmark_sources import verify_benchmark_source
-from cli.evaluation.builtin_executors import DEFAULT_EXECUTOR_REGISTRY
-from cli.evaluation.canonical import json_value
-from cli.evaluation.catalog import get_catalog
-from cli.evaluation.compare import compare_runs
-from cli.evaluation.constants import SCHEMA_VERSION
-from cli.evaluation.executor_contracts import BUILTIN_NORMALIZED_SUITE_EXECUTORS
-from cli.evaluation.intelligence_benchmarks import (
-    TERMINAL_BENCH_ATTEMPTS,
-    IntelligenceRunOptions,
-    build_intelligence_run_plan,
-    intelligence_benchmark_catalog,
-    run_intelligence_benchmarks,
-    select_intelligence_benchmarks,
-)
-from cli.evaluation.orchestrator import load_manifest, run_evaluation, validate_manifest
-from cli.evaluation.store import LocalArtifactStore
-from cli.evaluation.suite_catalog import NormalizedSuiteCatalog
-from cli.evaluation.suite_install_contract import BenchmarkSuiteInstallRequest
-from cli.evaluation.suite_store import NormalizedSuiteStore
-from cli.evaluation.worker_report import WorkerReportDraft
-
-DEFAULT_STORE = Path(".vllm-sr/evaluation-store")
-DEFAULT_SUITE_STORE = Path(".vllm-sr/evaluation-suites")
+from cli.commands.benchmark_experiments import experiment
+from cli.runtime_stack import resolve_runtime_stack
+from cli.sr_bench import setup, sources
+from cli.sr_bench.client import Client
+from cli.sr_bench.contracts import catalog, load_document, plan, planned_cells
+from cli.sr_bench.service import DEFAULT_STORE, DEFAULT_URL, serve
+from cli.sr_bench.store import TERMINAL
 
 
-def _suite_catalog(store: NormalizedSuiteStore) -> NormalizedSuiteCatalog:
-    return NormalizedSuiteCatalog(
-        store,
-        DEFAULT_EXECUTOR_REGISTRY,
-        BUILTIN_NORMALIZED_SUITE_EXECUTORS,
-    )
-
-
-def _dump(value: object) -> str:
-    return json.dumps(
-        json_value(value, exclude_none=False),
-        ensure_ascii=False,
-        indent=2,
-        sort_keys=True,
-    )
-
-
-def _user_errors(function: Callable[..., Any]) -> Callable[..., Any]:
-    @wraps(function)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+def guarded(fn):
+    @wraps(fn)
+    def wrapped(*args, **kwargs):
         try:
-            return function(*args, **kwargs)
-        except click.ClickException:
-            raise
-        except (OSError, ValueError) as exc:
+            return fn(*args, **kwargs)
+        except (OSError, ValueError, KeyError) as exc:
             raise click.ClickException(str(exc)) from exc
 
-    return wrapper
+    return wrapped
 
 
-def _load_suite_install_request(path: Path) -> BenchmarkSuiteInstallRequest:
-    with path.open("rb") as handle:
-        payload = json.load(handle)
-    return BenchmarkSuiteInstallRequest.model_validate(payload)
-
-
-@click.command("catalog")
-@click.option(
-    "--suite-store",
-    "suite_store_path",
-    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=DEFAULT_SUITE_STORE,
-    show_default=True,
-)
-@_user_errors
-def catalog_command(suite_store_path: Path) -> None:
-    """Print the versioned evaluation suites, tracks, and targets."""
-
-    installed = _suite_catalog(NormalizedSuiteStore(suite_store_path)).list()
-    click.echo(_dump(get_catalog(installed_suites=installed)))
-
-
-@click.command("benchmarks")
-def benchmarks_command() -> None:
-    """Print all exact-pinned external benchmark adapter descriptors."""
-
-    click.echo(_dump(get_benchmark_registry()))
-
-
-@click.command("normalizers")
-@click.option("--runnable-only", is_flag=True, default=False)
-def normalizers_command(runnable_only: bool) -> None:
-    """Print the closed native-export contracts and explicit blockers."""
-
-    descriptors = get_benchmark_normalizers()
-    if runnable_only:
-        descriptors = tuple(item for item in descriptors if item.executable)
-    click.echo(
-        _dump(
-            {
-                "schema_version": "benchmark-normalizer.v1",
-                "normalizers": descriptors,
-            }
-        )
-    )
-
-
-@click.command("verify-source")
-@click.option("--adapter", "adapter_id", required=True)
-@click.option(
-    "--source-root",
-    required=True,
-    type=click.Path(path_type=Path, file_okay=False),
-)
-@_user_errors
-def verify_source_command(adapter_id: str, source_root: Path) -> None:
-    """Verify an ignored external source checkout against its exact pin."""
-
-    receipt = verify_benchmark_source(adapter_id, source_root)
-    click.echo(_dump(receipt))
-    if not receipt.verified:
-        raise click.exceptions.Exit(2)
-
-
-@click.command("suite-normalize")
-@click.option("--adapter", "adapter_id", required=True)
-@click.option("--suite-id", required=True)
-@click.option("--suite-name")
-@click.option(
-    "--source-root",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False, readable=True),
-    help="Ignored directory containing the exact-pinned benchmark checkout(s).",
-)
-@click.option(
-    "--export-root",
-    required=True,
-    type=click.Path(path_type=Path, exists=True, file_okay=False, readable=True),
-    help=(
-        "Directory containing the adapter's frozen native export shape. Its origin "
-        "is not attested by this command."
-    ),
-)
-@click.option(
-    "--output",
-    "output_root",
-    required=True,
-    type=click.Path(path_type=Path, file_okay=False),
-    help="New immutable directory for request.json and the normalized bundle.",
-)
-@_user_errors
-def suite_normalize_command(
-    adapter_id: str,
-    suite_id: str,
-    suite_name: str | None,
-    source_root: Path,
-    export_root: Path,
-    output_root: Path,
-) -> None:
-    """Parse one native export into exploratory E0 replay evidence."""
-
-    result = normalize_benchmark_suite(
-        adapter_id=adapter_id,
-        source_root=source_root,
-        export_root=export_root,
-        output_root=output_root,
-        suite_id=suite_id,
-        suite_name=suite_name,
-    )
-    click.echo(
-        _dump(
-            {
-                "schema_version": result.request.schema_version,
-                "adapter_id": result.request.adapter_id,
-                "suite_id": result.request.id,
-                "case_count": result.request.case_count,
-                "track_ids": result.request.track_ids,
-                "request": str(result.request_path),
-                "bundle": str(result.bundle_path),
-            }
-        )
-    )
-
-
-@click.command("suite-install")
-@click.option(
-    "--request",
-    "request_path",
-    required=True,
-    type=click.Path(
-        path_type=Path,
-        exists=True,
-        file_okay=True,
-        dir_okay=False,
-        readable=True,
-    ),
-)
-@click.option(
-    "--bundle",
-    "bundle_path",
-    required=True,
-    type=click.Path(
-        path_type=Path,
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-    ),
-)
-@click.option(
-    "--source-root",
-    required=True,
-    type=click.Path(
-        path_type=Path,
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-    ),
-    help="Ignored directory containing the exact-pinned benchmark checkout(s).",
-)
-@click.option(
-    "--export-root",
-    "native_export_root",
-    type=click.Path(
-        path_type=Path,
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-    ),
-    help=(
-        "Frozen export re-parsed to verify deterministic normalization; this does "
-        "not attest upstream benchmark execution."
-    ),
-)
-@click.option(
-    "--suite-store",
-    "suite_store_path",
-    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=DEFAULT_SUITE_STORE,
-    show_default=True,
-)
-@_user_errors
-def suite_install_command(
-    request_path: Path,
-    bundle_path: Path,
-    source_root: Path,
-    native_export_root: Path | None,
-    suite_store_path: Path,
-) -> None:
-    """Install a normalized suite as exploratory E0 evidence."""
-
-    request = _load_suite_install_request(request_path)
-    manifest = NormalizedSuiteStore(suite_store_path).install(
-        request,
-        bundle_path,
-        source_root=source_root,
-        native_export_root=native_export_root,
-    )
-    click.echo(_dump(manifest))
-
-
-@click.command("benchmark-install")
-@click.option(
-    "--pack",
-    "pack_root",
-    required=True,
-    type=click.Path(
-        path_type=Path,
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        readable=True,
-    ),
-    help="Clean exact-revision checkout containing benchmark.yaml and bundle/.",
-)
-@click.option(
-    "--suite-store",
-    "suite_store_path",
-    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=DEFAULT_SUITE_STORE,
-    show_default=True,
-)
-@_user_errors
-def benchmark_install_command(pack_root: Path, suite_store_path: Path) -> None:
-    """Install a data-only Benchmark Pack for replay or supported live tracks."""
-
-    manifest = NormalizedSuiteStore(suite_store_path).install_pack(pack_root)
-    click.echo(_dump(manifest))
-
-
-@click.command("suite-list")
-@click.option(
-    "--suite-store",
-    "suite_store_path",
-    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=DEFAULT_SUITE_STORE,
-    show_default=True,
-)
-@_user_errors
-def suite_list_command(suite_store_path: Path) -> None:
-    """List browser-safe suite metadata without private artifact references."""
-
-    suites = _suite_catalog(NormalizedSuiteStore(suite_store_path)).list()
-    click.echo(_dump({"schema_version": SCHEMA_VERSION, "suites": suites}))
-
-
-@click.command("suite-show")
-@click.argument("suite_id")
-@click.option(
-    "--suite-store",
-    "suite_store_path",
-    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=DEFAULT_SUITE_STORE,
-    show_default=True,
-)
-@_user_errors
-def suite_show_command(suite_id: str, suite_store_path: Path) -> None:
-    """Print the immutable operator manifest for one installed suite."""
-
-    manifest = NormalizedSuiteStore(suite_store_path).get_suite_manifest(suite_id)
-    click.echo(_dump(manifest))
-
-
-@click.command("validate")
-@click.option(
-    "--manifest", "manifest_path", required=True, type=click.Path(path_type=Path)
-)
-@click.option(
-    "--suite-store",
-    "suite_store_path",
-    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=DEFAULT_SUITE_STORE,
-    show_default=True,
-)
-@_user_errors
-def validate_command(manifest_path: Path, suite_store_path: Path) -> None:
-    """Validate a fixed evaluation manifest without executing it."""
-
-    manifest = load_manifest(manifest_path)
-    validate_manifest(manifest, NormalizedSuiteStore(suite_store_path))
-    click.echo(
-        _dump(
-            {
-                "schema_version": SCHEMA_VERSION,
-                "valid": True,
-                "run_id": manifest.run_id,
-                "track_ids": manifest.track_ids,
-            }
-        )
-    )
-
-
-@click.command("run")
-@click.option(
-    "--manifest", "manifest_path", required=True, type=click.Path(path_type=Path)
-)
-@click.option(
-    "--store",
-    "store_path",
-    type=click.Path(path_type=Path),
-    default=DEFAULT_STORE,
-    show_default=True,
-)
-@click.option(
-    "--suite-store",
-    "suite_store_path",
-    type=click.Path(path_type=Path, file_okay=False, dir_okay=True),
-    default=DEFAULT_SUITE_STORE,
-    show_default=True,
-)
-@_user_errors
-def run_command(manifest_path: Path, store_path: Path, suite_store_path: Path) -> None:
-    """Execute a manifest and print its finalized worker report draft."""
-
-    manifest = load_manifest(manifest_path)
-    report = run_evaluation(
-        manifest,
-        LocalArtifactStore(store_path),
-        suite_store=NormalizedSuiteStore(suite_store_path),
-    )
-    click.echo(_dump(report))
-
-
-@click.command("report")
-@click.argument("run_id")
-@click.option(
-    "--store",
-    "store_path",
-    type=click.Path(path_type=Path),
-    default=DEFAULT_STORE,
-    show_default=True,
-)
-@_user_errors
-def report_command(run_id: str, store_path: Path) -> None:
-    """Read the local worker report draft."""
-
-    store = LocalArtifactStore(store_path)
-    click.echo(
-        _dump(
-            WorkerReportDraft.model_validate(store.read_run_json(run_id, "report.json"))
-        )
-    )
-
-
-@click.command("compare")
-@click.option("--baseline", "baseline_run_id", required=True)
-@click.option("--candidate", "candidate_run_id", required=True)
-@click.option(
-    "--store",
-    "store_path",
-    type=click.Path(path_type=Path),
-    default=DEFAULT_STORE,
-    show_default=True,
-)
-@_user_errors
-def compare_command(
-    baseline_run_id: str, candidate_run_id: str, store_path: Path
-) -> None:
-    """Compare two local immutable drafts without rerunning either workload."""
-
-    store = LocalArtifactStore(store_path)
-    comparison = compare_runs(store, baseline_run_id, candidate_run_id)
-    click.echo(_dump(comparison))
-
-
-@click.command("gate")
-@click.argument("run_id")
-@click.option(
-    "--store",
-    "store_path",
-    type=click.Path(path_type=Path),
-    default=DEFAULT_STORE,
-    show_default=True,
-)
-@click.option("--allow-unavailable", is_flag=True, default=False)
-@_user_errors
-def gate_command(run_id: str, store_path: Path, allow_unavailable: bool) -> None:
-    """Emit standalone gate evidence and fail CI on blocking draft verdicts."""
-
-    store = LocalArtifactStore(store_path)
-    report = WorkerReportDraft.model_validate(
-        store.read_run_json(run_id, "report.json")
-    )
-    click.echo(
-        _dump(
-            {
-                "schema_version": SCHEMA_VERSION,
-                "run_id": run_id,
-                "verdict": report.summary.verdict,
-                "gates": report.gates,
-            }
-        )
-    )
-    if report.summary.verdict == "fail" or (
-        report.summary.verdict == "unavailable" and not allow_unavailable
-    ):
-        raise click.exceptions.Exit(2)
-
-
-BENCHMARK_COMMANDS = (
-    catalog_command,
-    benchmarks_command,
-    normalizers_command,
-    verify_source_command,
-    suite_normalize_command,
-    suite_install_command,
-    benchmark_install_command,
-    suite_list_command,
-    suite_show_command,
-    validate_command,
-    run_command,
-    report_command,
-    compare_command,
-    gate_command,
-)
-
-
-@click.group("intelligence")
-def intelligence() -> None:
-    """Plan and run the six fixed Intelligence 1.0 benchmarks."""
-
-
-@intelligence.command("list")
-def intelligence_list() -> None:
-    """Print the exact Intelligence 1.0 benchmark and source contracts."""
-
-    click.echo(_dump(intelligence_benchmark_catalog()))
-
-
-def _intelligence_options(command: Callable[..., Any]) -> Callable[..., Any]:
-    command = click.option(
-        "--terminal-attempts",
-        type=int,
-        default=TERMINAL_BENCH_ATTEMPTS,
-        show_default=True,
-    )(command)
-    command = click.option("--sample-limit", type=int)(command)
-    command = click.option("--reasoning-effort")(command)
-    command = click.option("--concurrency", type=int, default=8, show_default=True)(
-        command
-    )
-    command = click.option(
-        "--api-key-env", default="OPENAI_API_KEY", show_default=True
-    )(command)
-    command = click.option("--tokenizer", default="builtin", show_default=True)(command)
-    command = click.option(
-        "--output",
-        "output_root",
-        required=True,
-        type=click.Path(path_type=Path),
-    )(command)
-    command = click.option(
-        "--source-root",
-        required=True,
-        type=click.Path(path_type=Path, file_okay=False),
-        help="Directory containing exact-pinned aiperf, inspect-evals, and harbor checkouts.",
-    )(command)
-    command = click.option("--base-url", required=True)(command)
-    command = click.option("--model", required=True)(command)
-    return click.option(
-        "--benchmark",
-        "benchmark_ids",
-        multiple=True,
-        default=("all",),
-        show_default=True,
-        help="Exact catalog benchmark ID; repeat it or use all.",
-    )(command)
-
-
-def _intelligence_run_options(
-    *,
-    model: str,
-    base_url: str,
-    source_root: Path,
-    output_root: Path,
-    tokenizer: str,
-    api_key_env: str,
-    concurrency: int,
-    reasoning_effort: str | None,
-    sample_limit: int | None,
-    terminal_attempts: int,
-) -> IntelligenceRunOptions:
-    return IntelligenceRunOptions(
-        model=model,
-        base_url=base_url,
-        source_root=source_root,
-        output_root=output_root,
-        tokenizer=tokenizer,
-        api_key_env=api_key_env,
-        concurrency=concurrency,
-        reasoning_effort=reasoning_effort,
-        sample_limit=sample_limit,
-        terminal_attempts=terminal_attempts,
-    )
-
-
-@intelligence.command("plan")
-@_intelligence_options
-@_user_errors
-def intelligence_plan(benchmark_ids: tuple[str, ...], **kwargs: Any) -> None:
-    """Emit secret-free commands and provenance without executing a benchmark."""
-
-    options = _intelligence_run_options(**kwargs)
-    selected = select_intelligence_benchmarks(benchmark_ids)
-    click.echo(
-        _dump(
-            {
-                "schema_version": "vllm-sr.intelligence-plan.v1",
-                "runs": [
-                    build_intelligence_run_plan(benchmark, options)
-                    for benchmark in selected
-                ],
-            }
-        )
-    )
-
-
-@intelligence.command("run")
-@_intelligence_options
-@_user_errors
-def intelligence_run(benchmark_ids: tuple[str, ...], **kwargs: Any) -> None:
-    """Execute fixed benchmark adapters and write private evidence receipts."""
-
-    options = _intelligence_run_options(**kwargs)
-    selected = select_intelligence_benchmarks(benchmark_ids)
-    click.echo(
-        "Running " + ", ".join(benchmark.name for benchmark in selected),
-        err=True,
-    )
-    result = run_intelligence_benchmarks(selected, options)
-    click.echo(_dump(result))
-    if not result["completed"]:
-        raise click.exceptions.Exit(2)
+def output(value):
+    click.echo(json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False))
 
 
 @click.group()
-def benchmark() -> None:
-    """Install, run, compare, and gate reproducible benchmark workloads."""
+@click.option(
+    "--url",
+    envvar="SR_BENCH_URL",
+    help="Shared sr-bench service URL; discovers the current local stack by default.",
+)
+@click.option(
+    "--store",
+    type=click.Path(path_type=Path),
+    envvar="SR_BENCH_STORE",
+    help="Durable service store; discovers the current local stack by default.",
+)
+@click.option(
+    "--no-autostart", is_flag=True, help="Require an already running service."
+)
+@click.pass_context
+@guarded
+def benchmark(ctx, url, store, no_autostart):
+    """Prepare, run, inspect, and compare sr-bench 1.0 evaluations."""
+    explicit_url, explicit_store = url is not None, store is not None
+    if not explicit_url:
+        stack = resolve_runtime_stack()
+        root = (
+            Path(os.environ.get("VLLM_SR_STATE_ROOT_DIR", str(Path.cwd())))
+            .expanduser()
+            .resolve()
+            / ".sr-bench"
+            / stack.stack_name
+        )
+        managed = root / "store"
+        if store is None and managed.is_dir():
+            store = managed
+    store = Path(store or DEFAULT_STORE).expanduser().resolve()
+    token_file = store.parent / "service-token"
+    managed_service = not explicit_url and token_file.is_file()
+    if url is None:
+        url = (
+            f"http://127.0.0.1:{stack.sr_bench_port}"
+            if managed_service
+            else DEFAULT_URL
+        )
+    client = Client(
+        url,
+        store,
+        not no_autostart and not managed_service and not explicit_url,
+        verify_store=explicit_store or not explicit_url,
+    )
+    if managed_service and "Authorization" not in client.headers:
+        if token_file.is_symlink() or token_file.stat().st_mode & 0o077:
+            raise click.ClickException(
+                "Managed service token must be a private regular file"
+            )
+        client.headers["Authorization"] = "Bearer " + token_file.read_text().strip()
+    ctx.obj = client
 
 
-for benchmark_command in BENCHMARK_COMMANDS:
-    benchmark.add_command(benchmark_command)
+@benchmark.command("catalog")
+def catalog_command():
+    """Show the nine benchmark adapters and evaluation profiles."""
+    output(catalog())
 
-benchmark.add_command(intelligence)
+
+@benchmark.command("setup")
+@click.option("--benchmark", "benchmark_id", default="all")
+@click.option(
+    "--install",
+    is_flag=True,
+    help="Install pinned optional harnesses and task sources; makes no model requests.",
+)
+@click.option(
+    "--build-sandbox",
+    is_flag=True,
+    help="Build a local offline grading image and record its content digest.",
+)
+@guarded
+def setup_command(benchmark_id, install, build_sandbox):
+    """Inspect prerequisites or explicitly install optional benchmark harnesses."""
+    output(setup.setup(benchmark_id, install, build_sandbox))
+
+
+@benchmark.command("serve")
+@click.option("--host", default="127.0.0.1")
+@click.option("--port", default=8090, type=int)
+@click.option(
+    "--store-identity",
+    help="Canonical host store path SHA256 for an isolated runtime container.",
+)
+@click.pass_obj
+@guarded
+def serve_command(client, host, port, store_identity):
+    """Own the durable journal and workers independently of a browser."""
+    serve(client.store, host, port, store_identity)
+
+
+@benchmark.group("dataset")
+def dataset():
+    """Prepare reproducible fixed benchmark case sets."""
+
+
+@dataset.command("prepare")
+@click.option("--benchmark", "benchmark_id", required=True)
+@click.option(
+    "--profile", type=click.Choice(["smoke", "quick", "standard"]), default="quick"
+)
+@click.option("--source-path", type=click.Path(path_type=Path))
+@click.option("--revision")
+@click.option("--seed", default=20260918, type=int)
+@click.option(
+    "--limit",
+    type=int,
+    help="Custom case cap; cannot be represented as an upstream full benchmark.",
+)
+@click.pass_obj
+@guarded
+def dataset_prepare(client, benchmark_id, profile, source_path, revision, seed, limit):
+    """Download or read a pinned source and freeze a reusable dataset."""
+    kwargs = {
+        "benchmark": benchmark_id,
+        "profile": profile,
+        "store": client.store,
+        "source_path": str(source_path) if source_path else None,
+        "revision": revision,
+        "seed": seed,
+    }
+    if limit is not None:
+        kwargs["limit"] = limit
+    output(sources.prepare_dataset(**kwargs))
+
+
+@dataset.command("combine")
+@click.argument(
+    "manifests", nargs=-1, type=click.Path(exists=True, path_type=Path), required=True
+)
+@click.pass_obj
+@guarded
+def dataset_combine(client, manifests):
+    """Create a reusable multi-benchmark dataset from prepared manifests."""
+    output(
+        sources.combine_datasets(
+            [load_document(path) for path in manifests], client.store
+        )
+    )
+
+
+@dataset.command("show")
+@click.argument("path", type=click.Path(exists=True, path_type=Path), required=False)
+@click.pass_obj
+@guarded
+def dataset_show(client, path):
+    """Inspect a frozen dataset or list datasets in the shared store."""
+    output(load_document(path) if path else client.request("GET", "/datasets"))
+
+
+@benchmark.command("plan")
+@click.option("--manifest", type=click.Path(exists=True, path_type=Path), required=True)
+@click.option("--output", "destination", type=click.Path(path_type=Path))
+@guarded
+def plan_command(manifest, destination):
+    """Validate and freeze all cases, targets, profiles, and limits without inference."""
+    frozen = plan(load_document(manifest))
+    if destination:
+        with destination.open("x") as file:
+            file.write(json.dumps(frozen, indent=2, ensure_ascii=False) + "\n")
+    output(
+        {
+            "manifest": frozen,
+            "plan_sha256": frozen["plan_sha256"],
+            "total": len(planned_cells(frozen)),
+        }
+    )
+
+
+def _run(client, manifest, detach, idempotency_key, preview=False):
+    document = load_document(manifest)
+    if preview:
+        document["mode"] = "preview"
+    run = client.request(
+        "POST", "/runs", {"manifest": document, "idempotency_key": idempotency_key}
+    )
+    if detach:
+        output(run)
+        return
+    click.echo(
+        f"Run {run['id']} submitted; Ctrl-C leaves the service running. Use benchmark cancel to stop.",
+        err=True,
+    )
+    while run["status"] not in TERMINAL:
+        time.sleep(0.5)
+        run = client.request("GET", "/runs/" + run["id"])
+    output(client.request("GET", "/runs/" + run["id"] + "/report"))
+    if run["status"] != "completed":
+        raise click.exceptions.Exit(2)
+
+
+def run_options(fn):
+    fn = click.option(
+        "--manifest", type=click.Path(exists=True, path_type=Path), required=True
+    )(fn)
+    fn = click.option(
+        "--detach", is_flag=True, help="Return immediately with a durable run ID."
+    )(fn)
+    fn = click.option(
+        "--idempotency-key",
+        help="Bind repeated submissions to the same frozen plan, without reissuing calls.",
+    )(fn)
+    return fn
+
+
+@benchmark.command("run")
+@run_options
+@click.pass_obj
+@guarded
+def run_command(client, manifest, detach, idempotency_key):
+    """Execute one frozen live evaluation through the shared service."""
+    _run(client, manifest, detach, idempotency_key)
+
+
+@benchmark.command("preview")
+@run_options
+@click.pass_obj
+@guarded
+def preview_command(client, manifest, detach, idempotency_key):
+    """Inspect routing decisions without producing quality scores."""
+    _run(client, manifest, detach, idempotency_key, True)
+
+
+@benchmark.command("runs")
+@click.pass_obj
+@guarded
+def runs_command(client):
+    output(client.request("GET", "/runs"))
+
+
+@benchmark.command("show")
+@click.argument("run_id")
+@click.option("--results", is_flag=True)
+@click.option("--calls", is_flag=True)
+@click.option(
+    "--active", is_flag=True, help="Read only in-progress calls; requires --calls."
+)
+@click.option("--events", is_flag=True)
+@click.option(
+    "--after",
+    type=click.IntRange(min=0),
+    default=0,
+    help="Evidence cursor from the previous page.",
+)
+@click.option(
+    "--limit",
+    type=click.IntRange(min=1, max=500),
+    default=100,
+    help="Calls/results per page.",
+)
+@click.option(
+    "--call-id", help="Read one full saved call including prompt and final response."
+)
+@click.pass_obj
+@guarded
+def show_command(client, run_id, results, calls, active, events, after, limit, call_id):
+    """Read a run, bounded evidence page, or one complete saved call."""
+    if sum((results, calls, events, bool(call_id))) > 1:
+        raise ValueError("Choose one evidence view")
+    if active and not calls:
+        raise ValueError("--active requires --calls")
+    path = "/runs/" + run_id
+    if call_id:
+        path += "/calls/" + call_id
+    elif results or calls:
+        path += ("/results" if results else "/calls") + f"?after={after}&limit={limit}"
+        if active:
+            path += "&active=true"
+    elif events:
+        path += f"/events?after={after}"
+    output(client.request("GET", path))
+
+
+@benchmark.command("cancel")
+@click.argument("run_id")
+@click.pass_obj
+@guarded
+def cancel_command(client, run_id):
+    """Cancel remaining work while retaining all existing evidence."""
+    output(client.request("POST", "/runs/" + run_id + "/cancel", {}))
+
+
+@benchmark.command("report")
+@click.argument("run_id")
+@click.option("--output", "destination", type=click.Path(path_type=Path))
+@click.pass_obj
+@guarded
+def report_command(client, run_id, destination):
+    """Show quality, four-bucket usage, cost, latency, time, and limitations."""
+    report = client.request("GET", "/runs/" + run_id + "/report")
+    if destination:
+        with destination.open("x") as file:
+            file.write(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
+    output(report)
+
+
+@benchmark.command("compare")
+@click.argument("baseline_run_id")
+@click.argument("candidate_run_id")
+@click.pass_obj
+@guarded
+def compare_command(client, baseline_run_id, candidate_run_id):
+    """Compare matched cases against the best observed single model."""
+    output(
+        client.request(
+            "POST",
+            "/comparisons",
+            {"baseline_run_id": baseline_run_id, "candidate_run_id": candidate_run_id},
+        )
+    )
+
+
+@benchmark.group("target")
+def target_group():
+    """Manage the operator-owned target registry used by the Dashboard."""
+
+
+@target_group.command("list")
+@click.pass_obj
+@guarded
+def target_list(client):
+    output(client.request("GET", "/targets"))
+
+
+@target_group.command("register")
+@click.option(
+    "--file", "source", type=click.Path(exists=True, path_type=Path), required=True
+)
+@click.pass_obj
+@guarded
+def target_register(client, source):
+    """Replace the local registry from a JSON list of credential references."""
+    document = load_document(source)
+    targets = document.get("targets") if isinstance(document, dict) else document
+    validated = plan(
+        {
+            "version": "sr-bench-1.0",
+            "cost_policy": "capability_only",
+            "targets": targets,
+            "cases": [
+                {
+                    "id": "registry-validation",
+                    "benchmark": "mmlu-pro",
+                    "messages": [
+                        {"role": "user", "content": "Registry validation only"}
+                    ],
+                    "answer": "A",
+                }
+            ],
+        }
+    )
+    client.store.mkdir(parents=True, exist_ok=True, mode=0o700)
+    destination = client.store / "targets.json"
+    temporary = client.store / ("targets-" + str(os.getpid()) + ".tmp")
+    with temporary.open("x") as file:
+        file.write(json.dumps(validated["targets"], indent=2) + "\n")
+        file.flush()
+        os.fsync(file.fileno())
+    os.chmod(temporary, 0o600)
+    temporary.replace(destination)
+    output({"targets": validated["targets"], "registered": len(validated["targets"])})
+
+
+@benchmark.command("replay-options")
+@click.argument("baseline", required=False)
+@click.option("--after", help="Opaque cursor from the previous eligible options page.")
+@click.option("--limit", type=click.IntRange(1, 25), default=10, show_default=True)
+@click.pass_obj
+@guarded
+def replay_options_command(client, baseline, after, limit):
+    """List eligible baselines, or compatible previews for BASELINE; no model calls."""
+    _saved_run_options(client, "replay", baseline, after, limit)
+
+
+@benchmark.command("comparison-options")
+@click.argument("baseline", required=False)
+@click.option("--after", help="Opaque cursor from the previous eligible options page.")
+@click.option("--limit", type=click.IntRange(1, 25), default=10, show_default=True)
+@click.pass_obj
+@guarded
+def comparison_options_command(client, baseline, after, limit):
+    """List eligible baselines, or comparable live runs for BASELINE; no model calls."""
+    _saved_run_options(client, "comparison", baseline, after, limit)
+
+
+def _saved_run_options(client, kind, baseline, after, limit):
+    query = {"limit": limit}
+    if baseline is not None:
+        query["baseline_run_id"] = baseline
+    if after is not None:
+        query["after"] = after
+    output(client.request("GET", f"/{kind}-options?" + urlencode(query)))
+
+
+@benchmark.command("replay")
+@click.option(
+    "--baseline", required=True, help="Completed single-model answer matrix run ID."
+)
+@click.option(
+    "--preview", required=True, help="Completed deterministic routing preview run ID."
+)
+@click.option("--idempotency-key")
+@click.pass_obj
+@guarded
+def replay_command(client, baseline, preview, idempotency_key):
+    """Estimate eligible static routes from saved answers without inference."""
+    output(
+        client.request(
+            "POST",
+            "/replays",
+            {
+                "baseline_run_id": baseline,
+                "preview_run_id": preview,
+                "idempotency_key": idempotency_key,
+            },
+        )
+    )
+
+
+@benchmark.command("regrade")
+@click.argument("run_id")
+@click.option("--output", "destination", type=click.Path(path_type=Path), required=True)
+@click.pass_obj
+@guarded
+def regrade_command(client, run_id, destination):
+    """Regrade saved MCQ/grid final outputs without mutating original evidence."""
+    artifact = client.request("POST", "/runs/" + run_id + "/regrade", {})
+    with destination.open("x") as file:
+        file.write(json.dumps(artifact, indent=2, ensure_ascii=False) + "\n")
+    output(
+        {
+            "path": str(destination),
+            "changed_count": artifact["changed_count"],
+            "model_requests": 0,
+        }
+    )
+
+
+@benchmark.command("reconcile-usage")
+@click.argument("run_id")
+@click.pass_obj
+@guarded
+def reconcile_usage_command(client, run_id):
+    """Append an offline accounting correction from saved streams; no inference."""
+    output(client.request("POST", "/runs/" + run_id + "/reconcile-usage", {}))
+
+
+@benchmark.command("export")
+@click.argument("run_id")
+@click.option("--output", "destination", type=click.Path(path_type=Path), required=True)
+@click.pass_obj
+@guarded
+def export_command(client, run_id, destination):
+    """Export a dev response matrix for training; holdout export is rejected."""
+    artifact = client.request("POST", "/runs/" + run_id + "/export", {})
+    with destination.open("x") as file:
+        file.write(json.dumps(artifact, indent=2, ensure_ascii=False) + "\n")
+    output(
+        {
+            "path": str(destination),
+            "case_count": len(artifact["cases"]),
+            "split": artifact["split"],
+        }
+    )
+
+
+@benchmark.command("recover-plan")
+@click.argument("run_id")
+@click.option(
+    "--mode", type=click.Choice(["undispatched", "failed"]), default="undispatched"
+)
+@click.option("--output", "destination", type=click.Path(path_type=Path))
+@click.pass_obj
+@guarded
+def recover_plan_command(client, run_id, mode, destination):
+    """Inspect eligible continuation cells without making model requests."""
+    proposed = client.request(
+        "POST", "/runs/" + run_id + "/recover-plan", {"mode": mode}
+    )
+    if destination:
+        with destination.open("x") as handle:
+            handle.write(json.dumps(proposed, indent=2) + "\n")
+    output(proposed)
+
+
+@benchmark.command("recover")
+@click.argument("run_id")
+@click.option(
+    "--plan", "plan_path", required=True, type=click.Path(exists=True, path_type=Path)
+)
+@click.option("--idempotency-key", required=True)
+@click.option(
+    "--acknowledge-new-attempt",
+    is_flag=True,
+    help="Authorize new paid attempts for the exact reviewed failed cells.",
+)
+@click.pass_obj
+@guarded
+def recover_command(
+    client, run_id, plan_path, idempotency_key, acknowledge_new_attempt
+):
+    """Create a separate attempt from a reviewed recovery plan; never auto-retry."""
+    proposed = load_document(plan_path)
+    if proposed.get("parent_run_id") != run_id:
+        raise click.ClickException("Recovery plan belongs to another parent run")
+    output(
+        client.request(
+            "POST",
+            "/runs/" + run_id + "/recover",
+            {
+                "mode": proposed["mode"],
+                "plan_sha256": proposed["plan_sha256"],
+                "cells": proposed.get("selected_cells", proposed["eligible_cells"]),
+                "idempotency_key": idempotency_key,
+                "acknowledge_new_attempt": acknowledge_new_attempt,
+            },
+        )
+    )
+
+
+@benchmark.command("candidate-plan")
+@click.argument("baseline_run_id")
+@click.option(
+    "--target",
+    "target_ids",
+    multiple=True,
+    required=True,
+    help="Registered MoM target; may be repeated.",
+)
+@click.option(
+    "--mode", type=click.Choice(["live", "preview"]), default="live", show_default=True
+)
+@click.option("--name")
+@click.option("--experiment", "experiment_id")
+@click.option("--hypothesis", default="")
+@click.pass_obj
+@guarded
+def candidate_plan_command(
+    client, baseline_run_id, target_ids, mode, name, experiment_id, hypothesis
+):
+    """Reuse a terminal baseline's frozen protocol without repeating its requests.
+
+    Failed, cancelled and interrupted full-plan baselines may supply the same
+    questions and settings. This does not qualify their measurements for Compare.
+    """
+    body = {"target_ids": list(target_ids), "mode": mode}
+    if name:
+        body["name"] = name
+    if experiment_id:
+        baseline = client.request("GET", "/runs/" + baseline_run_id)
+        body["experiment"] = {
+            "id": experiment_id,
+            "role": (
+                "preview"
+                if mode == "preview"
+                else (
+                    "validation"
+                    if baseline["manifest"]["profile"] == "standard"
+                    else "candidate"
+                )
+            ),
+            "hypothesis": hypothesis,
+        }
+    output(client.request("POST", "/runs/" + baseline_run_id + "/candidate-plan", body))
+
+
+benchmark.add_command(experiment)
