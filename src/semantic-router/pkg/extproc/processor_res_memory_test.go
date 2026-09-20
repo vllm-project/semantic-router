@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"slices"
 	"testing"
 	"time"
 
@@ -378,19 +379,24 @@ func TestResponseMemoryAutoStoreSurvivesProviderPreparation(t *testing.T) {
 			require.True(t, found)
 			stored, err := backend.List(t.Context(), memory.ListOptions{UserID: "original-user", Limit: 10})
 			require.NoError(t, err)
+			// The record also carries the digest of what the selected model
+			// answered, which is not a memory receipt.
+			receipts := slices.DeleteFunc(slices.Clone(record.Outcomes), func(outcome routerreplay.Outcome) bool {
+				return outcome.Source == primaryResponseOutcomeSource
+			})
 			if tc.wantStored {
 				require.Len(t, stored.Memories, 1)
-				require.Len(t, record.Outcomes, 2)
-				assert.Equal(t, "scheduled", record.Outcomes[0].Verdict)
-				assert.Equal(t, "completed", record.Outcomes[1].Verdict)
-				assert.Equal(t, "persisted", record.Outcomes[1].Reason)
+				require.Len(t, receipts, 2)
+				assert.Equal(t, "scheduled", receipts[0].Verdict)
+				assert.Equal(t, "completed", receipts[1].Verdict)
+				assert.Equal(t, "persisted", receipts[1].Reason)
 			} else {
 				assert.Empty(t, stored.Memories, "disabled requests must not persist memory")
-				require.Len(t, record.Outcomes, 1)
-				assert.Equal(t, "disabled", record.Outcomes[0].Verdict)
-				assert.Equal(t, "auto_store_off", record.Outcomes[0].Reason)
+				require.Len(t, receipts, 1)
+				assert.Equal(t, "disabled", receipts[0].Verdict)
+				assert.Equal(t, "auto_store_off", receipts[0].Reason)
 			}
-			terminal := record.Outcomes[len(record.Outcomes)-1]
+			terminal := receipts[len(receipts)-1]
 			assert.Equal(t, "terminal", terminal.Metadata["phase"])
 			assert.Equal(t, "false", terminal.Metadata["fail_open"])
 		})

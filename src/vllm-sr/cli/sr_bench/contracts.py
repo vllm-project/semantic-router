@@ -15,7 +15,15 @@ from cli.routing_preview import case_request_fields
 
 from . import VERSION
 from .adapters import get_adapter, list_adapters
+from .dataset_io import (
+    MAX_ROWS,
+    MAX_SCAN_BYTES,
+    bounded_lines,
+    read_small,
+    verified_lines,
+)
 from .experiments import validate_membership, validate_role
+from .native_output import configure as configure_output_policy
 
 MAX_PARAMETER_BYTES = 65536
 MAX_INFERENCE_CALLS = 256
@@ -85,18 +93,33 @@ DEFAULT_LIMITS = {
 }
 
 
+_CANONICAL_ENCODER = json.JSONEncoder(
+    sort_keys=True,
+    separators=(",", ":"),
+    ensure_ascii=False,
+    allow_nan=False,
+)
+
+
 def canonical(value):
-    return json.dumps(
-        value,
-        sort_keys=True,
-        separators=(",", ":"),
-        ensure_ascii=False,
-        allow_nan=False,
-    )
+    return _CANONICAL_ENCODER.encode(value)
 
 
 def digest(value):
-    return hashlib.sha256(canonical(value).encode()).hexdigest()
+    checksum = hashlib.sha256()
+    for chunk in _CANONICAL_ENCODER.iterencode(value):
+        checksum.update(chunk.encode())
+    return checksum.hexdigest()
+
+
+def _protocol_numbers(item):
+    if isinstance(item, float) and item.is_integer():
+        return int(item)
+    if isinstance(item, dict):
+        return {key: _protocol_numbers(child) for key, child in item.items()}
+    if isinstance(item, list):
+        return [_protocol_numbers(child) for child in item]
+    return item
 
 
 def protocol_canonical(value):
@@ -107,23 +130,13 @@ def protocol_canonical(value):
     canonical()'s rejection of non-finite numbers. Raw case/dataset digests
     deliberately keep their separate, exact-content contract.
     """
-
-    def numbers(item):
-        if isinstance(item, float) and item.is_integer():
-            return int(item)
-        if isinstance(item, dict):
-            return {key: numbers(child) for key, child in item.items()}
-        if isinstance(item, list):
-            return [numbers(child) for child in item]
-        return item
-
-    return canonical(numbers(value))
+    return canonical(_protocol_numbers(value))
 
 
 def plan_digest(manifest):
     """Hash a reviewed plan's numeric semantics, excluding its own receipt."""
     content = {key: value for key, value in manifest.items() if key != "plan_sha256"}
-    return hashlib.sha256(protocol_canonical(content).encode()).hexdigest()
+    return digest(_protocol_numbers(content))
 
 
 def planned_cells(manifest):
@@ -147,12 +160,38 @@ def catalog():
     }
 
 
+_NO_INLINE_CASES = object()
+
+
+def _jsonl_document(lines, existing=_NO_INLINE_CASES):
+    if existing is not _NO_INLINE_CASES and not isinstance(existing, list):
+        raise ValueError("inline cases do not match dataset")
+    loaded = []
+    count = 0
+    for line in lines:
+        if not line.strip():
+            continue
+        if count >= MAX_ROWS:
+            raise ValueError("Dataset exceeds the supported case limit")
+        row = json.loads(line)
+        if existing is not _NO_INLINE_CASES:
+            if count >= len(existing) or existing[count] != row:
+                raise ValueError("inline cases do not match dataset")
+            # Python equality conflates booleans, integers and integral floats.
+            # Reuse assets only when the file's exact case digest is preserved.
+            if digest(existing[count]) == digest(row):
+                row = existing[count]
+        loaded.append(row)
+        count += 1
+    if existing is not _NO_INLINE_CASES and count != len(existing):
+        raise ValueError("inline cases do not match dataset")
+    return loaded
+
+
 def load_document(path):
     path = Path(path).expanduser().resolve()
     if path.suffix == ".jsonl":
-        return [
-            json.loads(line) for line in path.read_text().split("\n") if line.strip()
-        ]
+        return _jsonl_document(bounded_lines(path))
     if path.suffix in {".yaml", ".yml"}:
         return yaml.safe_load(path.read_text())
     return json.loads(path.read_text())
@@ -271,19 +310,31 @@ def resolve_dataset(manifest):
         ds = m["dataset"]
         if not isinstance(ds, dict) or not ds.get("path") or not ds.get("sha256"):
             raise ValueError("dataset requires path and sha256")
-        path = Path(ds["path"]).expanduser().resolve()
-        actual = hashlib.sha256(path.read_bytes()).hexdigest()
-        if actual != ds["sha256"]:
-            raise ValueError("dataset SHA256 mismatch")
-        document = load_document(path)
-        loaded = document if isinstance(document, list) else document.get("cases")
-        if "cases" in m and m["cases"] != loaded:
-            raise ValueError("inline cases do not match dataset")
+        path = Path(ds["path"]).expanduser().absolute()
+        if path.suffix == ".jsonl":
+            loaded = _jsonl_document(
+                verified_lines(path, ds["sha256"]),
+                m.get("cases", _NO_INLINE_CASES),
+            )
+        else:
+            # Non-JSONL imports retain their document contract. Prepared sources
+            # use JSONL so their raw text and parsed records never coexist in full.
+            content = read_small(path, MAX_SCAN_BYTES)
+            if hashlib.sha256(content).hexdigest() != ds["sha256"]:
+                raise ValueError("dataset SHA256 mismatch")
+            document = (
+                yaml.safe_load(content)
+                if path.suffix in {".yaml", ".yml"}
+                else json.loads(content)
+            )
+            loaded = document if isinstance(document, list) else document.get("cases")
+            if "cases" in m and m["cases"] != loaded:
+                raise ValueError("inline cases do not match dataset")
         m["cases"] = loaded
         metadata_path = path.parent / "manifest.json"
         if metadata_path.is_file() and metadata_path != path:
-            metadata = load_document(metadata_path)
-            if metadata.get("sha256") == actual:
+            metadata = json.loads(read_small(metadata_path, 2 * 1024 * 1024))
+            if metadata.get("sha256") == ds["sha256"]:
                 if metadata.get("profile") != m.get("profile", "quick"):
                     raise ValueError(
                         "Prepared dataset profile differs from requested run profile"
@@ -297,7 +348,8 @@ def resolve_dataset(manifest):
     return m
 
 
-def plan(manifest):
+def plan(manifest, *, policy=None):
+    """Verify datasets once, apply trusted service policy, then freeze the plan."""
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be an object")
     if "runner_provenance" in manifest:
@@ -341,6 +393,8 @@ def plan(manifest):
             raise ValueError("preview sampling_seed must be a signed 64-bit integer")
         m["preview_context"] = context
     m = resolve_dataset(m)
+    if policy is not None:
+        m = policy(m)
 
     cases = m.get("cases")
     if not isinstance(cases, list) or not cases:
@@ -465,6 +519,7 @@ def plan(manifest):
                     "prices must be finite nonnegative USD per million tokens"
                 )
     limits = {**DEFAULT_LIMITS, **m.get("limits", {})}
+    configure_output_policy(m, targets + list(auxiliary.values()), limits)
     unknown = set(limits) - set(DEFAULT_LIMITS)
     if unknown:
         raise ValueError(f"unknown limits: {sorted(unknown)}")
@@ -492,7 +547,11 @@ def plan(manifest):
         raise ValueError("sampling must be an object")
     sampling = {
         "temperature": 0,
-        "max_tokens": limits["max_output_tokens"],
+        **(
+            {"max_tokens": limits["max_output_tokens"]}
+            if m["output_policy"] == "bounded"
+            else {}
+        ),
         **m.get("sampling", {}),
     }
     validate_request_params(sampling, limits, "sampling")

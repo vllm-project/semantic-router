@@ -551,16 +551,22 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_evaluation_cli.py \
 		src/vllm-sr/tests/test_sr_bench.py \
 		src/vllm-sr/tests/test_sr_bench_accounting.py \
+		src/vllm-sr/tests/test_sr_bench_activity.py \
 		src/vllm-sr/tests/test_sr_bench_client.py \
 		src/vllm-sr/tests/test_sr_bench_collection.py \
 		src/vllm-sr/tests/test_sr_bench_datasets.py \
 		src/vllm-sr/tests/test_sr_bench_dataset_validation.py \
 		src/vllm-sr/tests/test_sr_bench_dataset_fingerprints.py \
+		src/vllm-sr/tests/test_sr_bench_large_datasets.py \
+		src/vllm-sr/tests/test_sr_bench_large_plans.py \
 		src/vllm-sr/tests/test_sr_bench_experiments.py \
 		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
 		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
 		src/vllm-sr/tests/test_routing_preview.py \
+		src/vllm-sr/tests/test_sr_bench_grading.py \
 		src/vllm-sr/tests/test_sr_bench_harness.py \
+		src/vllm-sr/tests/test_sr_bench_bridge.py \
+		src/vllm-sr/tests/test_sr_bench_native_output.py \
 		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
 		src/vllm-sr/tests/test_sr_bench_recovery.py \
 		src/vllm-sr/tests/test_sr_bench_replay.py \

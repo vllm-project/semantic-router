@@ -16,7 +16,7 @@ func validateClassifierContextLimits(cfg *RouterConfig) error {
 	}{
 		{"classifier.domain", cfg.CategoryModel.MaxSequenceLength, cfg.CategoryModel.Backend == nil && variant == CategoryVariantMmBERT32K},
 		{"classifier.pii", cfg.PIIModel.MaxSequenceLength, cfg.PIIModel.Backend == nil && cfg.PIIModel.UseMmBERT32K},
-		{"prompt_guard", cfg.PromptGuard.MaxSequenceLength, cfg.PromptGuard.Protocol == "" && cfg.PromptGuard.Variant == PromptGuardVariantMmBERT32K},
+		{"prompt_guard", cfg.PromptGuard.MaxSequenceLength, cfg.PromptGuard.Backend == nil && cfg.PromptGuard.Variant == PromptGuardVariantMmBERT32K},
 		{"feedback_detector", cfg.FeedbackDetector.MaxSequenceLength, cfg.FeedbackDetector.UseMmBERT32K},
 		{"hallucination_mitigation.fact_check", cfg.HallucinationMitigation.FactCheckModel.MaxSequenceLength, cfg.HallucinationMitigation.FactCheckModel.UseMmBERT32K},
 	}

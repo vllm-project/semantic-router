@@ -11,6 +11,7 @@ import BenchSelect from './BenchSelect'
 import RunSettings, { type SamplingSettings } from './RunSettings'
 import TargetRequestProfile from './TargetRequestProfile'
 import { targetLabel } from './targetPresentation'
+import { nativeOutputIssue } from './nativeOutput'
 import { experimentRoleLabels } from './experimentEvidencePresentation'
 import controls from './BenchControls.module.css'
 import RunDatasetScope, { type ResolvedDatasetScope } from './RunDatasetScope'
@@ -99,6 +100,7 @@ export default function RunComposer({
   const [costPolicy, setCostPolicy] = useState<'require_priced' | 'capability_only'>(
     'require_priced',
   )
+  const [outputPolicy, setOutputPolicy] = useState<'bounded' | 'native'>('bounded')
   const [profile, setProfile] = useState(
     datasets.find((item) => item.id === initialDataset)?.profile ?? 'quick',
   )
@@ -163,6 +165,10 @@ export default function RunComposer({
     manifest.seed = scope.seed ?? 20260918
     manifest.sampling.seed = manifest.seed
     const defaults = { ...manifest.sampling, ...sampling }
+    if (outputPolicy === 'native') {
+      delete defaults.max_tokens
+      delete manifest.limits.max_output_tokens
+    }
     for (const key of ['temperature', 'top_p', 'seed'] as const) {
       // An operator-fixed field has no editable default; discard stale form input
       // so a disabled field cannot leave the reviewed manifest invalid.
@@ -188,6 +194,7 @@ export default function RunComposer({
       ...manifest,
       ...(experimentContext ? { experiment: experimentContext } : {}),
       cost_policy: costPolicy,
+      output_policy: outputPolicy,
       sampling: defaults,
       ...(mode === 'preview' && Object.keys(context).length ? { preview_context: context } : {}),
     }
@@ -199,12 +206,20 @@ export default function RunComposer({
     targets,
     limits,
     costPolicy,
+    outputPolicy,
     sampling,
     previewContext,
     baseline,
     baselineID,
     experimentContext,
   ])
+  const nativeOutput = formManifest.output_policy === 'native'
+  const nativeIssues = nativeOutput
+    ? targets.flatMap((target) => {
+        const issue = nativeOutputIssue(target)
+        return issue ? [`${targetLabel(target)}: ${issue}`] : []
+      })
+    : []
   const fingerprint = JSON.stringify({ manifest: formManifest, benchmarks, scope })
   const planCurrent = plan?.fingerprint === fingerprint
 
@@ -428,6 +443,7 @@ export default function RunComposer({
             placeholder="Choose target"
             options={availableTargets
               .filter((item) => !targets.some((target) => target.id === item.id))
+              .filter((item) => !nativeOutput || !nativeOutputIssue(item))
               .map((target) => ({
                 value: target.id,
                 label: targetLabel(target),
@@ -471,7 +487,11 @@ export default function RunComposer({
                 )}
               </dl>
             </details>
-            <TargetRequestProfile target={target} sampling={formManifest.sampling} />
+            <TargetRequestProfile
+              target={target}
+              sampling={formManifest.sampling}
+              outputPolicy={formManifest.output_policy}
+            />
             <div className={styles.targetFooter}>
               <span>
                 Credentials stay on the server.
@@ -495,6 +515,12 @@ export default function RunComposer({
           </fieldset>
         ))}
       </div>
+      {nativeIssues.length > 0 && (
+        <p className={styles.notice} role="status">
+          Native capacity is unavailable for the selected targets. {nativeIssues.join(' ')} Remove
+          unsupported targets or choose bounded output.
+        </p>
+      )}
       {!baselineID && (
         <>
           <h3>3. Set budget and limits</h3>
@@ -506,6 +532,9 @@ export default function RunComposer({
             seed={formManifest.seed}
             targets={targets}
             costPolicy={costPolicy}
+            outputPolicy={outputPolicy}
+            onOutputPolicyChange={setOutputPolicy}
+            nativeAvailable={availableTargets.some((target) => !nativeOutputIssue(target))}
             onCostPolicyChange={(value) => {
               setCostPolicy(value)
               if (value === 'capability_only')
@@ -551,6 +580,7 @@ export default function RunComposer({
           disabled={
             pending ||
             !canRun ||
+            nativeIssues.length > 0 ||
             (baselineID ? baseline?.id !== baselineID : !scope.ready || scope.profile !== profile)
           }
           onClick={() => void reviewPlan()}
@@ -560,7 +590,7 @@ export default function RunComposer({
         <button
           type="button"
           className={styles.primary}
-          disabled={pending || !canRun || !planCurrent}
+          disabled={pending || !canRun || !planCurrent || nativeIssues.length > 0}
           onClick={() => void startRun()}
         >
           {mode === 'preview' ? 'Start route preview' : 'Start evaluation'}

@@ -86,7 +86,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr request`](#vllm-sr-request) | Send requests through an Envoy listener. |
 | [`vllm-sr request chat`](#vllm-sr-request-chat) | Send a one-shot chat completion through the Envoy-routed HTTP API. |
 | [`vllm-sr route`](#vllm-sr-route) | Preview routing decisions or probe the routed inference path. |
-| [`vllm-sr route preview`](#vllm-sr-route-preview) | Preview signals and the selected route without calling a model backend. |
+| [`vllm-sr route preview`](#vllm-sr-route-preview) | Preview signals and model selection without generating an answer. |
 | [`vllm-sr route probe`](#vllm-sr-route-probe) | Probe a real route and assert complete assistant delivery for expected 2xx. |
 | [`vllm-sr serve`](#vllm-sr-serve) | Start vLLM Semantic Router. |
 | [`vllm-sr status`](#vllm-sr-status) | Show status of vLLM Semantic Router services. |
@@ -551,6 +551,7 @@ Read a run, bounded evidence page, or one complete saved call.
 | `RUN_ID` | Required argument. Type: text. |
 | `--results` | Default: false. |
 | `--calls` | Default: false. |
+| `--active` | Read only in-progress calls; requires --calls. Default: false. |
 | `--events` | Default: false. |
 | `--after INTEGER RANGE` | Evidence cursor from the previous page.  [x&gt;=0] Default: 0. |
 | `--limit INTEGER RANGE` | Calls/results per page.  [1&lt;=x&lt;=500] Default: 100. |
@@ -1219,7 +1220,7 @@ Preview routing decisions or probe the routed inference path.
 Usage: vllm-sr route preview [OPTIONS]
 ```
 
-Preview signals and the selected route without calling a model backend.
+Preview signals and model selection without generating an answer.
 
 | Parameter | Description |
 | --- | --- |
