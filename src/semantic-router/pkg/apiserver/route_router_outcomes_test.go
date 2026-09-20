@@ -49,6 +49,19 @@ func TestNormalizeRouterOutcomeRequestIncludesTargetRef(t *testing.T) {
 	}
 }
 
+func TestNormalizeRouterOutcomePreservesOptionalScore(t *testing.T) {
+	for _, provided := range []bool{false, true} {
+		req := RouterOutcomeRequest{ReplayID: "replay-1", Target: "model", Verdict: "good_fit"}
+		if provided {
+			req.Score = routerOutcomeFloatPtr(0)
+		}
+		outcome, err := normalizeRouterOutcomeRequest(req)
+		if err != nil || outcome.Score != 0 || outcome.ScoreProvided != provided {
+			t.Fatalf("score presence lost: provided=%t outcome=%+v err=%v", provided, outcome, err)
+		}
+	}
+}
+
 func TestNormalizeRouterOutcomeRequestAcceptsProviderAndRouterTargets(t *testing.T) {
 	for _, target := range []string{"provider", "router"} {
 		outcome, validationErr := normalizeRouterOutcomeRequest(RouterOutcomeRequest{

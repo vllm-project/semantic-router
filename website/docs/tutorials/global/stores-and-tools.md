@@ -50,26 +50,33 @@ global:
 Bi-encoder similarity cannot tell *"turn on dark mode"* from *"turn off dark
 mode"*: opposite-meaning queries often score above `similarity_threshold`
 while genuine paraphrases score below it, so raising the threshold does not
-fix the false hit. `polarity_guard` verifies the winning candidate before the
-in-memory backend serves it:
+reliably prevent false hits. All cache backends apply the lexical tier before
+serving a semantic candidate. The `polarity_guard` configuration additionally
+selects an optional verifier for the in-memory backend:
 
 - `lexical` (default): the model-free tier that catches negation cues and
-  known antonym swaps. It is always on and needs no model.
+  known antonym swaps in near-identical English token sets. It is always on
+  for in-memory, Redis, Valkey, Milvus, Qdrant, and hybrid caches and needs no
+  model. It does not cover cue-less, word-order-only, or non-English changes.
 - `nli` / `lexical+nli`: additionally runs the router's NLI model once per
   lookup on the single best candidate and rejects the hit when the
   contradiction probability exceeds `nli.contradiction_threshold`. The tier
   reuses the hallucination explainer
   (`global.model_catalog.modules.hallucination_mitigation.explainer`, by default
-  `tasksource/ModernBERT-base-nli`); the native binding holds one NLI model, so
-  the guard cannot bind a different one. Config loading fails when an NLI mode
+  `tasksource/ModernBERT-base-nli`); the cache owns its verifier independently
+  of recipe classifiers. Config loading fails when an NLI mode
   is selected without that model. Expect roughly 70 ms per verified hit on CPU;
-  a cache hit still saves a full generation. If the model errors at lookup
-  time the guard fails open: the hit is served and a
-  `cache_polarity_nli_skipped` warning is logged.
+  a cache hit still saves a full generation. If the model is unavailable or
+  errors at lookup time, the unverified candidate becomes a cache miss so the
+  request continues to the model backend; a `cache_polarity_nli_skipped`
+  warning records the degraded lookup. This intentionally prioritizes response
+  correctness over cache-hit latency while the verifier is unavailable.
 
 Rejections are logged as `cache_negation_reject` with `tier: nli`, count as
 misses, and still surface the rejected score on `x-vsr-cache-similarity`. Remote
-and hybrid cache backends do not run the guard.
+and hybrid backends run the lexical tier only. They reject candidates without
+an original query and continue checking the bounded fetched candidate set.
+The same lexical check also applies to hybrid's Milvus fallback.
 
 ### Memory
 
@@ -132,6 +139,62 @@ For full deployment instructions, see:
 When an external model with `model_role: memory_rewrite` is configured, its
 `max_response_bytes` limits each query-rewrite response. An omitted or
 non-positive value uses the 1 MiB default.
+
+#### Write path bounds
+
+Automatic persistence first respects Memory enablement, retention policy, and
+an explicit `auto_store: false` on the selected decision's memory plugin. A
+Responses request may opt out, but cannot override these server restrictions.
+When policy permits persistence, the Responses request's `auto_store` takes
+precedence over the decision's value, followed by `global.stores.memory`.
+Only an omitted value falls back to the next level.
+
+Response handling does not wait for Memory persistence to complete. Identity
+checks and capacity reservation precede the bounded history snapshot, which is
+taken while the response path still owns the conversation state; protocol
+encoding and writes run in the background. Other response-path Replay
+operations remain synchronous.
+
+Configure `global.stores.memory.persistence`:
+
+| Field | Meaning | Default |
+| --- | --- | --- |
+| `timeout_seconds` | Seconds from reservation to timeout, including preparation, queue wait, and writing; 0–9,223,372,036 | 30 |
+| `concurrency` | Worker slots, including preparation and writes; 0–64 | 8 |
+| `queue` | Reserved attempts waiting for a worker; 0–1024 | 64 |
+| `shutdown_grace_seconds` | Seconds to drain writes on reload or shutdown before cancellation; 0–9,223,372,036 | 5 |
+
+Omit a field or set it to `0` to take the default. Negative values and values
+above the listed limits are rejected during configuration
+validation, before workers or queue storage are allocated at startup or reload.
+This also applies to the initial `config_source: kubernetes` document, before
+the controller loads routing CRDs; global resource bounds are not deferred.
+
+Each persistence attempt has a shared 1 MiB payload budget for request history,
+retained Responses history, and the current assistant response. Assistant text
+is counted before think-tag stripping. History is also limited to 256
+messages/items and 32 nested content levels; history and the current response
+share a 4096-node structural limit. Bounded length checks run before reserving
+persistence capacity; text assembly and history copying run only after admission.
+Exceeding a limit skips persistence with `skipped` / `history_too_large` and
+`fail_open=true`, without occupying persistence capacity or truncating the model
+response or history. Missing user identity skips preparation with `skipped` /
+`memory_info_unavailable` and `fail_open=true`. A response the jailbreak or
+hallucination policy blocks reports `policy_blocked` instead of persisting.
+Background contexts retain only span context and tracestate.
+
+For requests with a Router Replay record, accepted attempts reserve capacity for
+`scheduled` and one terminal receipt, protecting both from queue saturation.
+Storage errors, shutdown drain expiry, or process crashes can still lose receipts.
+Exhausted persistence or receipt capacity rejects new writes with `queue_full` or
+`receipt_queue_full`; retired pools use `shutting_down`. These remain fail-open
+and are logged by request ID. Monitor
+`llm_plugin_execution_total{plugin_type="memory_persistence", status="rejected"}`.
+
+Timeout and cancellation report one terminal outcome even while queued; cancelled
+jobs do not start. Native embedding calls cannot be interrupted, so active work
+retains its worker slot and resources until exit. Cancellation does not undo
+writes already accepted by a backend.
 
 ### Vector Store
 

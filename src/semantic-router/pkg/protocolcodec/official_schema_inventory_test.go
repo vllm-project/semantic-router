@@ -199,7 +199,7 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			),
 			// xAI and Groq accounting fields on their OpenAI-compatible endpoints.
 			extensions: fields(
-				"completion_time", "cost_in_usd_ticks", "num_sources_used", "prompt_time", "queue_time", "total_time",
+				"completion_time", "cost_in_usd_ticks", "num_sources_used", "prompt_time", "queue_time", "service_tier", "total_time",
 			),
 		},
 		{
