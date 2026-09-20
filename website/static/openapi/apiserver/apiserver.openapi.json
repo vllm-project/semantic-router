@@ -19987,6 +19987,94 @@
                               "context_compression_trigger": {
                                 "type": "string"
                               },
+                              "context_dedup": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "candidate_turns": {
+                                    "type": "integer"
+                                  },
+                                  "duplicate_segments": {
+                                    "type": "integer"
+                                  },
+                                  "examined_messages": {
+                                    "type": "integer"
+                                  },
+                                  "examined_turns": {
+                                    "type": "integer"
+                                  },
+                                  "normalization": {
+                                    "type": "string"
+                                  },
+                                  "outcome": {
+                                    "type": "string"
+                                  },
+                                  "protected_messages": {
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "recovery": {
+                                    "type": "string"
+                                  },
+                                  "recovery_status": {
+                                    "type": "string"
+                                  },
+                                  "removed_messages": {
+                                    "type": "integer"
+                                  },
+                                  "removed_text_bytes": {
+                                    "type": "integer"
+                                  },
+                                  "removed_turns": {
+                                    "type": "integer"
+                                  },
+                                  "retained": {
+                                    "nullable": true,
+                                    "type": "object",
+                                    "additionalProperties": {
+                                      "type": "integer"
+                                    }
+                                  },
+                                  "retained_messages": {
+                                    "type": "integer"
+                                  },
+                                  "scope": {
+                                    "type": "string"
+                                  },
+                                  "segments": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "messages": {
+                                          "type": "integer"
+                                        },
+                                        "removed_first_message_id": {
+                                          "type": "integer"
+                                        },
+                                        "retained_first_message_id": {
+                                          "type": "integer"
+                                        },
+                                        "turns": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "retained_first_message_id",
+                                        "removed_first_message_id",
+                                        "turns",
+                                        "messages"
+                                      ]
+                                    }
+                                  },
+                                  "segments_truncated": {
+                                    "type": "boolean"
+                                  }
+                                }
+                              },
                               "decision": {
                                 "type": "string"
                               },
@@ -23529,6 +23617,94 @@
                         },
                         "context_compression_trigger": {
                           "type": "string"
+                        },
+                        "context_dedup": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "candidate_turns": {
+                              "type": "integer"
+                            },
+                            "duplicate_segments": {
+                              "type": "integer"
+                            },
+                            "examined_messages": {
+                              "type": "integer"
+                            },
+                            "examined_turns": {
+                              "type": "integer"
+                            },
+                            "normalization": {
+                              "type": "string"
+                            },
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "protected_messages": {
+                              "type": "integer"
+                            },
+                            "reason": {
+                              "type": "string"
+                            },
+                            "recovery": {
+                              "type": "string"
+                            },
+                            "recovery_status": {
+                              "type": "string"
+                            },
+                            "removed_messages": {
+                              "type": "integer"
+                            },
+                            "removed_text_bytes": {
+                              "type": "integer"
+                            },
+                            "removed_turns": {
+                              "type": "integer"
+                            },
+                            "retained": {
+                              "nullable": true,
+                              "type": "object",
+                              "additionalProperties": {
+                                "type": "integer"
+                              }
+                            },
+                            "retained_messages": {
+                              "type": "integer"
+                            },
+                            "scope": {
+                              "type": "string"
+                            },
+                            "segments": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "messages": {
+                                    "type": "integer"
+                                  },
+                                  "removed_first_message_id": {
+                                    "type": "integer"
+                                  },
+                                  "retained_first_message_id": {
+                                    "type": "integer"
+                                  },
+                                  "turns": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "retained_first_message_id",
+                                  "removed_first_message_id",
+                                  "turns",
+                                  "messages"
+                                ]
+                              }
+                            },
+                            "segments_truncated": {
+                              "type": "boolean"
+                            }
+                          }
                         },
                         "decision": {
                           "type": "string"
