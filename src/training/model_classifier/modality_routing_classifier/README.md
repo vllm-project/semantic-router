@@ -113,8 +113,40 @@ python same_run_pair.py \
 The pair script exits non-zero and writes no output file if the two runs came
 from different machines (`cpu_model`, `core_count`, or `ram_gb` differ).
 
-Use `--binding candle` to run through `ClassifyMmBert32KModality` (production
-path). `--binding hf` uses HuggingFace transformers.
+**Run production baseline (`--binding candle`, `ClassifyMmBert32KModality`):**
+
+Unlike `--binding hf`, candle does not auto-download — build the native
+library and helper once, then point `--model` at a local model directory:
+
+```bash
+# 1. Build the native library (from repository root)
+cd candle-binding
+cargo build --release --no-default-features   # CPU; see candle-binding/README.md for CUDA/Metal
+go build -o candle-classify ./cmd/classify-helper/
+export LD_LIBRARY_PATH="$PWD/target/release${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"  # DYLD_LIBRARY_PATH on macOS
+export CANDLE_CLASSIFY_HELPER="$PWD/candle-classify"
+cd ..
+
+# 2. Download a local copy of the model (candle needs a directory, not a Hub ID)
+huggingface-cli download llm-semantic-router/mmbert32k-modality-router-merged \
+  --local-dir /tmp/mmbert32k-modality
+
+# 3. Run
+cd src/training/model_classifier/modality_routing_classifier
+python same_run_harness.py \
+  --qsl exported_modality_routing_dataset/test.jsonl \
+  --model /tmp/mmbert32k-modality \
+  --binding candle \
+  --role baseline \
+  --warmup 20 --max-length 256 --min-duration-s 60 \
+  --output same_run_candle_singlestream.json
+```
+
+Passing a Hub ID instead of a local directory for `--binding candle` fails
+fast with a message telling you which `huggingface-cli download` command to
+run. `cpu_s` and `peak_rss_mb` for this binding include the helper
+subprocess's own resource usage (`run.includes_helper_resources: true`),
+since inference happens in that child process, not in the Python harness.
 
 Quality metrics (per-class precision, recall, threshold selection) are defined
 by [#3194](https://github.com/vllm-project/semantic-router/issues/3194). The

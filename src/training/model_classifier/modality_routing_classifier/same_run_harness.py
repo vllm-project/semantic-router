@@ -186,7 +186,16 @@ def load_candle_adapter(model_id: str, max_length: int):
     The helper reads one JSON line per request from stdin and writes one JSON
     line per response to stdout:
       request:  {"text": "...", "max_length": 256}
-      response: {"label": "AR", "seq_len": 128, "tokenize_ns": 0, "forward_ns": 5000000}
+      response: {"label": "AR", "seq_len": 128, "tokenize_ns": 0,
+                 "forward_ns": 5000000, "helper_cpu_s": 0.482,
+                 "helper_rss_mb": 412.3}
+
+    helper_cpu_s and helper_rss_mb are the helper's OWN cumulative
+    getrusage(RUSAGE_SELF) readings (CPU seconds and lifetime-peak RSS),
+    reported on every response. Inference for this binding runs in that
+    child process, not in this Python process, so run_single_stream folds
+    these into cpu_s/peak_rss_mb — otherwise those fields would only reflect
+    pipe I/O overhead in the parent and silently miss the actual model cost.
 
     Build the helper:
       cd candle-binding && go build -o candle-classify ./cmd/classify-helper/
@@ -261,6 +270,8 @@ def load_candle_adapter(model_id: str, max_length: int):
         data = _json.loads(line)
         if "error" in data:
             raise RuntimeError(f"candle helper returned error: {data['error']}")
+        classify.helper_stats["cpu_s"] = float(data.get("helper_cpu_s", 0.0))
+        classify.helper_stats["peak_rss_mb"] = float(data.get("helper_rss_mb", 0.0))
         return {
             "output": str(data["label"]),
             "tokenize_ns": int(data.get("tokenize_ns", 0)),
@@ -270,6 +281,10 @@ def load_candle_adapter(model_id: str, max_length: int):
         }
 
     classify.close = _terminate_helper  # type: ignore[attr-defined]
+    # Cumulative getrusage(RUSAGE_SELF) readings from the helper process,
+    # updated after every response. run_single_stream reads this to fold
+    # the helper's real CPU/RSS cost into the reported run metrics.
+    classify.helper_stats = {"cpu_s": 0.0, "peak_rss_mb": 0.0}  # type: ignore[attr-defined]
     return classify
 
 
@@ -316,6 +331,12 @@ def run_single_stream(
     for row in qsl[:warmup_n]:
         classify(row["text"])
 
+    # If classify() delegates inference to a child process (e.g. the candle
+    # helper), snapshot its cumulative CPU seconds now so the measured window
+    # below excludes model-load and warmup cost, matching cpu_before below.
+    helper_stats = getattr(classify, "helper_stats", None)
+    helper_cpu_before = helper_stats["cpu_s"] if helper_stats is not None else 0.0
+
     cpu_before = time.process_time()
     wall_before = time.perf_counter()
     quality_records: list[dict] = []
@@ -355,6 +376,19 @@ def run_single_stream(
 
     cpu_s = time.process_time() - cpu_before
     wall_s = time.perf_counter() - wall_before
+    combined_peak_rss_mb = peak_rss_mb()
+    includes_helper_resources = False
+
+    if helper_stats is not None:
+        # Fold in the helper's measured-window CPU delta (mirrors cpu_before
+        # above) and its lifetime-peak RSS (mirrors peak_rss_mb() above,
+        # which is itself a lifetime high-water mark for this process — the
+        # two are directly comparable and additive since both processes are
+        # concurrently resident for the run's duration).
+        cpu_s += helper_stats["cpu_s"] - helper_cpu_before
+        combined_peak_rss_mb += helper_stats["peak_rss_mb"]
+        includes_helper_resources = True
+
     meta = {
         "warmup_n": warmup_n,
         "scored_queries": scored,
@@ -362,7 +396,8 @@ def run_single_stream(
         "n_latency_samples": len(latency_samples),
         "cpu_s": round(cpu_s, 3),
         "wall_s": round(wall_s, 3),
-        "peak_rss_mb": round(peak_rss_mb(), 1),
+        "peak_rss_mb": round(combined_peak_rss_mb, 1),
+        "includes_helper_resources": includes_helper_resources,
         "min_duration_s": min_duration_s,
     }
     return quality_records, latency_samples, meta

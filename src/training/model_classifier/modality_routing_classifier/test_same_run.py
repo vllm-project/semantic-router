@@ -209,6 +209,8 @@ class CandleAdapterTests(unittest.TestCase):
                     "seq_len": len(req["text"].split()),
                     "tokenize_ns": 1_000_000,
                     "forward_ns": 5_000_000,
+                    "helper_cpu_s": 0.25,
+                    "helper_rss_mb": 210.5,
                 }}
                 print(json.dumps(resp), flush=True)
             """
@@ -227,6 +229,64 @@ class CandleAdapterTests(unittest.TestCase):
                 self.assertEqual(result["seq_len"], 3)
                 self.assertEqual(result["tokenize_ns"], 1_000_000)
                 self.assertGreater(result["e2e_ns"], 0)
+                self.assertEqual(classify.helper_stats["cpu_s"], 0.25)
+                self.assertEqual(classify.helper_stats["peak_rss_mb"], 210.5)
+            finally:
+                classify.close()
+        finally:
+            self._clear_helper_env()
+            os.unlink(helper_path)
+
+    def test_run_single_stream_attributes_helper_resources(self) -> None:
+        """Regression: helper CPU/RSS must be folded into cpu_s/peak_rss_mb.
+
+        Before this fix, run_single_stream measured only the parent process
+        via time.process_time()/getrusage(RUSAGE_SELF). Since --binding
+        candle runs inference in a child process, a helper that burns real
+        CPU and allocates real memory was invisible: the parent only pays
+        for pipe I/O, fractions of a millisecond. This reproduces Xunzhuo's
+        review probe — a protocol-compatible helper that deliberately burns
+        CPU and reports real RSS — and asserts the harness attributes it.
+        """
+        helper_src = textwrap.dedent(
+            f"""\
+            #!{sys.executable}
+            import sys, json, time
+            for line in sys.stdin:
+                req = json.loads(line)
+                # Deliberately burn measurable CPU on every request.
+                deadline = time.process_time() + 0.05
+                while time.process_time() < deadline:
+                    pass
+                resp = {{
+                    "label": "AR",
+                    "seq_len": 0,
+                    "tokenize_ns": 0,
+                    "forward_ns": 1_000_000,
+                    "helper_cpu_s": time.process_time(),
+                    "helper_rss_mb": 137.0,
+                }}
+                print(json.dumps(resp), flush=True)
+            """
+        )
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as fh:
+            fh.write(helper_src)
+            helper_path = fh.name
+
+        os.chmod(helper_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+        try:
+            os.environ["CANDLE_CLASSIFY_HELPER"] = helper_path
+            classify = load_candle_adapter("stub-model", 256)
+            try:
+                qsl = _make_qsl(2)
+                _, _, meta = run_single_stream(
+                    classify, qsl, warmup_n=0, min_duration_s=0.0
+                )
+                self.assertTrue(meta["includes_helper_resources"])
+                # 2 requests x ~0.05s deliberate CPU burn each. Before the
+                # fix this was ~0.0 (parent pipe I/O only).
+                self.assertGreater(meta["cpu_s"], 0.08)
+                self.assertGreaterEqual(meta["peak_rss_mb"], 137.0)
             finally:
                 classify.close()
         finally:
