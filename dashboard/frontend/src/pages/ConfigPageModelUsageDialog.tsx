@@ -108,7 +108,7 @@ export default function ConfigPageModelUsageDialog({
 
   return (
     <div
-      className={styles.backdrop}
+      className={styles.backdrop} role="presentation"
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <div
