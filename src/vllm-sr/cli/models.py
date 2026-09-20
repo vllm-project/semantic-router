@@ -1284,6 +1284,20 @@ class ShadowDispatchPluginConfig(BaseModel):
         has_model = (self.model or "").strip() != "" or bool(self.arms)
         if self.enabled and not has_model:
             raise ValueError("shadow_dispatch model or arms are required when enabled")
+        # Mirrors the Router's cap combinations too: a token cap needs an
+        # admission reservation to bind before dispatch, and a cost cap needs a
+        # price to convert accounted tokens.
+        budget = self.budget
+        if budget is not None:
+            if budget.max_tokens_per_request > 0 and budget.reserve_tokens_per_arm == 0:
+                raise ValueError(
+                    "shadow_dispatch max_tokens_per_request requires "
+                    "reserve_tokens_per_arm to bind before dispatch"
+                )
+            if budget.max_cost_per_request > 0 and budget.price_per_million_tokens == 0:
+                raise ValueError(
+                    "shadow_dispatch max_cost_per_request requires price_per_million_tokens"
+                )
         return self
 
 

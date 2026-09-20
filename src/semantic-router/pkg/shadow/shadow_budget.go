@@ -32,16 +32,13 @@ func NewShadowBudget(limit config.ShadowDispatchBudgetConfig) *ShadowBudget {
 // TryEnter admits one arm when every enforced dimension allows it. On
 // rejection it returns a deterministic reason for the drop; the caller must
 // not reconcile a rejected arm.
-func (b *ShadowBudget) TryEnter(model string) (string, bool) {
+func (b *ShadowBudget) TryEnter() (string, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.limit.MaxCallsPerRequest > 0 && b.calls >= b.limit.MaxCallsPerRequest {
 		return fmt.Sprintf("budget_call_limit (%d)", b.limit.MaxCallsPerRequest), false
 	}
-	reserveCost := 0.0
-	if b.limit.PricePerMillionTokens > 0 {
-		reserveCost = float64(b.limit.ReserveTokensPerArm) / 1e6 * b.limit.PricePerMillionTokens
-	}
+	reserveCost := b.costOf(b.limit.ReserveTokensPerArm)
 	if b.limit.MaxTokensPerRequest > 0 && b.token+b.limit.ReserveTokensPerArm > b.limit.MaxTokensPerRequest {
 		return fmt.Sprintf("budget_token_limit (%d)", b.limit.MaxTokensPerRequest), false
 	}
@@ -52,6 +49,26 @@ func (b *ShadowBudget) TryEnter(model string) (string, bool) {
 	b.token += b.limit.ReserveTokensPerArm
 	b.cost += reserveCost
 	return "", true
+}
+
+// Refund returns one admission reservation for an arm that was admitted but
+// never dispatched because the in-flight bound refused it.
+func (b *ShadowBudget) Refund() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.calls > 0 {
+		b.calls--
+	}
+	b.token -= b.limit.ReserveTokensPerArm
+	b.cost -= b.costOf(b.limit.ReserveTokensPerArm)
+}
+
+// costOf converts tokens to cost at the configured price; 0 when unpriced.
+func (b *ShadowBudget) costOf(tokens int64) float64 {
+	if b.limit.PricePerMillionTokens <= 0 {
+		return 0
+	}
+	return float64(tokens) / 1e6 * b.limit.PricePerMillionTokens
 }
 
 // EnterInflight acquires one of the per-request in-flight slots. The caller
@@ -94,9 +111,7 @@ func (b *ShadowBudget) Reconcile(completed bool, inputTokens, outputTokens, resp
 	}
 	used := inputTokens + outputTokens
 	b.token += used - b.limit.ReserveTokensPerArm
-	if b.limit.PricePerMillionTokens > 0 {
-		b.cost += float64(used-b.limit.ReserveTokensPerArm) / 1e6 * b.limit.PricePerMillionTokens
-	}
+	b.cost += b.costOf(used - b.limit.ReserveTokensPerArm)
 }
 
 // Total reports the accounted totals (test/observability helper).

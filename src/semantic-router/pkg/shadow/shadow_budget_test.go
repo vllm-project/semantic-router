@@ -9,10 +9,10 @@ import (
 
 func TestShadowBudgetCallLimit(t *testing.T) {
 	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxCallsPerRequest: 1})
-	if _, ok := b.TryEnter("a"); !ok { // "a" is the model name, opaque to the budget
+	if _, ok := b.TryEnter(); !ok { // "a" is the model name, opaque to the budget
 		t.Fatal("first arm must be admitted")
 	}
-	if reason, ok := b.TryEnter("b"); ok {
+	if reason, ok := b.TryEnter(); ok {
 		t.Fatalf("second arm must be rejected, got admitted")
 	} else if reason != "budget_call_limit (1)" {
 		t.Fatalf("reason = %q, want budget_call_limit (1)", reason)
@@ -21,10 +21,10 @@ func TestShadowBudgetCallLimit(t *testing.T) {
 
 func TestShadowBudgetReservesTokensAtAdmission(t *testing.T) {
 	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100, ReserveTokensPerArm: 60})
-	if _, ok := b.TryEnter("a"); !ok {
+	if _, ok := b.TryEnter(); !ok {
 		t.Fatal("first arm with reserve 60 must be admitted")
 	}
-	if reason, ok := b.TryEnter("b"); ok {
+	if reason, ok := b.TryEnter(); ok {
 		t.Fatalf("second arm with reserve 60 must be rejected under MaxTokens=100")
 	} else if !strings.HasPrefix(reason, "budget_token_limit") {
 		t.Fatalf("reason = %q, want budget_token_limit", reason)
@@ -33,8 +33,8 @@ func TestShadowBudgetReservesTokensAtAdmission(t *testing.T) {
 
 func TestShadowBudgetReconcileSwapsReservation(t *testing.T) {
 	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 200, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 60})
-	b.TryEnter("a")
-	b.TryEnter("b")
+	b.TryEnter()
+	b.TryEnter()
 	b.Reconcile(true, 20, 10, 512) // a: 60 - 60 + 30 = 30
 	b.Reconcile(false, 0, 0, 128)  // b: failed keeps reservation, total 30 + 60 = 90
 	calls, tokens, cost := b.Total()
@@ -58,7 +58,7 @@ func TestShadowBudgetReconcileSwapsReservation(t *testing.T) {
 
 func TestShadowBudgetCostLimit(t *testing.T) {
 	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxCostPerRequest: 0.0001, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 100})
-	if _, ok := b.TryEnter("a"); ok {
+	if _, ok := b.TryEnter(); ok {
 		t.Fatal("first arm reserve 100 = 0.0002 > 0.0001 should be rejected immediately")
 	}
 }
@@ -69,16 +69,28 @@ func TestShadowBudgetNoReserveAccountsOnCompletion(t *testing.T) {
 	// need the cap to bind at admission are rejected at load time by
 	// ShadowDispatchPluginConfig.Validate.
 	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100})
-	if _, ok := b.TryEnter("a"); !ok {
+	if _, ok := b.TryEnter(); !ok {
 		t.Fatal("first arm must be admitted")
 	}
-	if _, ok := b.TryEnter("b"); !ok {
+	if _, ok := b.TryEnter(); !ok {
 		t.Fatal("second arm must be admitted when no reserve is set")
 	}
 	b.Reconcile(true, 60, 60, 0) // a: 120 tokens
 	_, tokens, _ := b.Total()
 	if tokens != 120 {
 		t.Fatalf("tokens = %d, want 120", tokens)
+	}
+}
+
+func TestShadowBudgetRefundReturnsAdmission(t *testing.T) {
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 200, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 60})
+	if _, ok := b.TryEnter(); !ok {
+		t.Fatal("arm must be admitted")
+	}
+	b.Refund()
+	calls, tokens, cost := b.Total()
+	if calls != 0 || tokens != 0 || cost != 0 {
+		t.Fatalf("after Refund calls=%d tokens=%d cost=%v, want 0/0/0", calls, tokens, cost)
 	}
 }
 

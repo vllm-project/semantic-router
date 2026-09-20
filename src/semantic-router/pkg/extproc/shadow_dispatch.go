@@ -411,7 +411,8 @@ func (d *shadowDispatcher) submit(
 		targets = append(targets, model)
 	}
 	if len(targets) == 0 {
-		dropEarly(shadowReasonSameAsPrimary)
+		// Each skipped arm already recorded the same-as-primary drop above;
+		// recording the empty outcome again would double-count one decision.
 		return
 	}
 
@@ -420,7 +421,7 @@ func (d *shadowDispatcher) submit(
 	budget := shadow.NewShadowBudget(cfg.Budget)
 	now := d.now()
 	for _, model := range targets {
-		if reason, ok := budget.TryEnter(model); !ok {
+		if reason, ok := budget.TryEnter(); !ok {
 			d.budgetDrop(decision, model, reason)
 			continue
 		}
@@ -557,6 +558,7 @@ func (d *shadowDispatcher) execute(job *shadowJob) {
 	if job.budget != nil {
 		if !job.budget.EnterInflight() {
 			d.budgetDrop(job.decision, job.model, shadowReasonBudgetConcurrency)
+			job.budget.Refund()
 			return
 		}
 		defer job.budget.LeaveInflight()
