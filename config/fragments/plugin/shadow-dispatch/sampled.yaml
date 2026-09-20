@@ -16,6 +16,7 @@ plugin:
       max_cost_per_request: 0.0
       price_per_million_tokens: 0.0
       reserve_tokens_per_arm: 0
+      max_concurrency_per_request: 0
     # Fraction of eligible requests to shadow. Omit for 1.0; 0 disables.
     sample_rate: 0.05
     # Resource bounds. Calls beyond max_concurrency wait up to max_queue_depth

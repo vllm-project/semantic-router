@@ -116,7 +116,7 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 		return nil
 	}
 	if c.Enabled && strings.TrimSpace(c.Model) == "" && len(c.Arms) == 0 {
-		return fmt.Errorf("model is required when enabled")
+		return fmt.Errorf("model or arms is required when enabled")
 	}
 	for _, arm := range c.Arms {
 		if strings.TrimSpace(arm) == "" {
@@ -146,8 +146,17 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 	}
 	if c.Budget.MaxCallsPerRequest < 0 || c.Budget.MaxTokensPerRequest < 0 ||
 		c.Budget.MaxCostPerRequest < 0 || c.Budget.PricePerMillionTokens < 0 ||
-		c.Budget.ReserveTokensPerArm < 0 {
+		c.Budget.ReserveTokensPerArm < 0 || c.Budget.MaxConcurrencyPerRequest < 0 {
 		return fmt.Errorf("budget values cannot be negative")
+	}
+	// Reject cap/core combinations that would bind silently at run time: a
+	// token cap needs an admission reservation to hold before dispatch, and a
+	// cost cap needs a price to convert accounted tokens.
+	if c.Budget.MaxTokensPerRequest > 0 && c.Budget.ReserveTokensPerArm == 0 {
+		return fmt.Errorf("budget.max_tokens_per_request requires reserve_tokens_per_arm to bind before dispatch")
+	}
+	if c.Budget.MaxCostPerRequest > 0 && c.Budget.PricePerMillionTokens == 0 {
+		return fmt.Errorf("budget.max_cost_per_request requires price_per_million_tokens")
 	}
 	return validateShadowForwardHeaders(c.ForwardHeaders)
 }

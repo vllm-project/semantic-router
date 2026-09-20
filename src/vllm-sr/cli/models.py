@@ -1208,6 +1208,7 @@ class ShadowDispatchBudgetConfig(BaseModel):
     max_cost_per_request: float = Field(default=0.0, ge=0.0)
     price_per_million_tokens: float = Field(default=0.0, ge=0.0)
     reserve_tokens_per_arm: int = Field(default=0, ge=0)
+    max_concurrency_per_request: int = Field(default=0, ge=0)
 
 
 class ShadowDispatchPluginConfig(BaseModel):

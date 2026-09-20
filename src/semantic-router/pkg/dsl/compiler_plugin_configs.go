@@ -252,6 +252,9 @@ func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) co
 			if iv, ok := getIntField(ov.Fields, "reserve_tokens_per_arm"); ok {
 				cfg.Budget.ReserveTokensPerArm = int64(iv)
 			}
+			if iv, ok := getIntField(ov.Fields, "max_concurrency_per_request"); ok {
+				cfg.Budget.MaxConcurrencyPerRequest = int64(iv)
+			}
 		}
 	}
 	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])

@@ -39,6 +39,14 @@ plugins:
     configuration:
       enabled: true
       model: candidate-model
+      arms: []
+      budget:
+        max_calls_per_request: 0
+        max_tokens_per_request: 0
+        max_cost_per_request: 0.0
+        price_per_million_tokens: 0.0
+        reserve_tokens_per_arm: 0
+        max_concurrency_per_request: 0
       sample_rate: 0.05
       max_concurrency: 2
       max_queue_depth: 8
@@ -54,7 +62,14 @@ plugins:
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | required | Turns the shadow on for this decision. |
-| `model` | required when enabled | Configured logical model that receives the shadow copy. Must have a backend in `providers.models`. |
+| `model` | one of `model`/`arms` required when enabled | Configured logical model that receives the shadow copy. Must have a backend in `providers.models`. |
+| `arms` | `[]` | Extra shadow candidate models beyond `model`; deduplicated, and every arm must resolve to a backend. All arms of one decision share one per-request `budget`. |
+| `budget.max_calls_per_request` | `0` | Arm admissions allowed per request across all arms. `0` = unlimited; this is the only dimension that binds without further settings. |
+| `budget.max_tokens_per_request` | `0` | Aggregate token cap. It binds before dispatch only when `reserve_tokens_per_arm` is set; otherwise it is accounted on completion. `0` = unlimited. |
+| `budget.max_cost_per_request` | `0` | Aggregate cost cap; requires `price_per_million_tokens`. `0` = unlimited. |
+| `budget.price_per_million_tokens` | `0` | Token-to-cost conversion used by the cost cap. |
+| `budget.reserve_tokens_per_arm` | `0` | Tokens reserved per arm at admission so concurrently admitted arms cannot overshoot `max_tokens_per_request`/`max_cost_per_request`. |
+| `budget.max_concurrency_per_request` | `0` | Arms of one request allowed in flight at once; excess arms are dropped with reason `budget_concurrency_limit`. `0` = unlimited. |
 | `sample_rate` | `1.0` | Fraction of eligible requests to shadow, in `[0, 1]`. `0` keeps the plugin declared but never dispatches. |
 | `max_concurrency` | `2` | In-flight shadow calls for this decision. |
 | `max_queue_depth` | `8` | Calls waiting for a slot. Anything beyond is dropped with reason `queue_full`. |

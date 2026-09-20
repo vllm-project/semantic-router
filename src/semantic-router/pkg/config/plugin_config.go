@@ -346,6 +346,10 @@ type ShadowDispatchBudgetConfig struct {
 	// admission so concurrent arms cannot collectively overshoot
 	// MaxTokensPerRequest/MaxCostPerRequest. 0 disables admission reservation.
 	ReserveTokensPerArm int64 `json:"reserve_tokens_per_arm,omitempty" yaml:"reserve_tokens_per_arm,omitempty"`
+	// MaxConcurrencyPerRequest caps how many arms of one request may be in
+	// flight at once (the plugin-level MaxConcurrency bounds the decision
+	// across requests instead). 0 disables the per-request bound.
+	MaxConcurrencyPerRequest int64 `json:"max_concurrency_per_request,omitempty" yaml:"max_concurrency_per_request,omitempty"`
 }
 
 // GetPlugin returns the plugin entry for a specific plugin type.

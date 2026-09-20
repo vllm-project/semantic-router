@@ -6218,6 +6218,9 @@
         },
         "reserve_tokens_per_arm": {
           "type": "integer"
+        },
+        "max_concurrency_per_request": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,

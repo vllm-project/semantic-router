@@ -57,6 +57,7 @@ const (
 	shadowReasonRedirectRejected     = "redirect_rejected"
 	shadowReasonResponseTooLarge     = "response_too_large"
 	shadowReasonMalformedResponse    = "malformed_response"
+	shadowReasonBudgetConcurrency    = "budget_concurrency_limit"
 
 	// shadowDispatchDrainTimeout is how long Close lets in-flight shadows
 	// finish before cancelling them. Their primary requests already completed
@@ -385,17 +386,6 @@ func (d *shadowDispatcher) submit(
 			"reason":     reason,
 		})
 	}
-	targets := make([]string, 0, 1+len(cfg.Arms))
-	for _, model := range cfg.ShadowModels() {
-		if model == dispatch.logicalModel {
-			metrics.RecordShadowDispatch(decision, metrics.ShadowDispatchResultDropped, shadowReasonSameAsPrimary)
-			continue
-		}
-		targets = append(targets, model)
-	}
-	if len(targets) == 0 {
-		return
-	}
 	switch {
 	case ctx.LooperRequest:
 		dropEarly(shadowReasonInternalRequest)
@@ -409,10 +399,25 @@ func (d *shadowDispatcher) submit(
 		metrics.RecordShadowDispatch(decision, metrics.ShadowDispatchResultSampledOut, shadowReasonSampledOut)
 		return
 	}
+	// Resolve the arm set only after the request is known to be eligible, so
+	// the same-as-primary drop keeps meaning "every arm is the primary model"
+	// instead of also covering looper and sampled-out requests.
+	targets := make([]string, 0, 1+len(cfg.Arms))
+	for _, model := range cfg.ShadowModels() {
+		if model == dispatch.logicalModel {
+			metrics.RecordShadowDispatch(decision, metrics.ShadowDispatchResultDropped, shadowReasonSameAsPrimary)
+			continue
+		}
+		targets = append(targets, model)
+	}
+	if len(targets) == 0 {
+		dropEarly(shadowReasonSameAsPrimary)
+		return
+	}
 
 	// The per-request aggregate budget gates each arm at admission; arms it
 	// rejects are dropped with a deterministic reason, never run.
-	budget := shadow.NewShadowBudget(cfg)
+	budget := shadow.NewShadowBudget(cfg.Budget)
 	now := d.now()
 	for _, model := range targets {
 		if reason, ok := budget.TryEnter(model); !ok {
@@ -549,11 +554,18 @@ func (d *shadowDispatcher) execute(job *shadowJob) {
 	metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Inc()
 	defer metrics.ShadowDispatchInflight.WithLabelValues(job.decision).Dec()
 
+	if job.budget != nil {
+		if !job.budget.EnterInflight() {
+			d.budgetDrop(job.decision, job.model, shadowReasonBudgetConcurrency)
+			return
+		}
+		defer job.budget.LeaveInflight()
+	}
 	callCtx, cancel := context.WithDeadline(d.ctx, job.deadline)
 	defer cancel()
 	result := d.call(callCtx, job)
 	if job.budget != nil {
-		job.budget.Reconcile(result.verdict == shadowVerdictCompleted, result.inputTokens, result.outputTokens)
+		job.budget.Reconcile(result.verdict == shadowVerdictCompleted, result.inputTokens, result.outputTokens, int64(result.responseBytes))
 	}
 	d.record(job, result)
 }

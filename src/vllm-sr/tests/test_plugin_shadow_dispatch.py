@@ -106,12 +106,14 @@ class TestShadowDispatchPluginConfig:
                 max_calls_per_request=2,
                 max_tokens_per_request=512,
                 reserve_tokens_per_arm=256,
+                max_concurrency_per_request=2,
             ),
         )
         assert cfg.budget is not None
         assert cfg.budget.max_calls_per_request == 2
         assert cfg.budget.max_tokens_per_request == 512
         assert cfg.budget.reserve_tokens_per_arm == 256
+        assert cfg.budget.max_concurrency_per_request == 2
 
     def test_budget_rejects_negative(self):
         with pytest.raises(PydanticValidationError):

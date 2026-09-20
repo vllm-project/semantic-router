@@ -37,6 +37,7 @@ const CAPABILITY_PLUGIN_FIELD_SCHEMAS: Record<string, FieldSchema[]> = {
           type: 'number',
         },
         { key: 'reserve_tokens_per_arm', label: 'Reserve Tokens / Arm', type: 'number' },
+        { key: 'max_concurrency_per_request', label: 'Max Concurrency / Request', type: 'number' },
       ],
     },
     { key: 'sample_rate', label: 'Sample Rate', type: 'number', placeholder: '0.05' },

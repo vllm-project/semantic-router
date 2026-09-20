@@ -815,6 +815,7 @@ routing:
               max_cost_per_request: 0
               price_per_million_tokens: 0
               reserve_tokens_per_arm: 0
+              max_concurrency_per_request: 0
             sample_rate: 0.05
             max_concurrency: 2
             max_queue_depth: 8

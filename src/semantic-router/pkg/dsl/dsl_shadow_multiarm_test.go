@@ -17,7 +17,7 @@ ROUTE test {
   PLUGIN shadow_dispatch {
     enabled: true
     arms: ["arm-a", "arm-b"]
-    budget: { max_calls_per_request: 2 max_tokens_per_request: 512 reserve_tokens_per_arm: 256 }
+    budget: { max_calls_per_request: 2 max_tokens_per_request: 512 reserve_tokens_per_arm: 256 max_concurrency_per_request: 2 }
   }
 }`
 	cfg, errs := Compile(input)
@@ -35,15 +35,15 @@ ROUTE test {
 	if len(sd.Arms) != 2 || sd.Arms[0] != "arm-a" || sd.Arms[1] != "arm-b" {
 		t.Errorf("arms = %v, want [arm-a arm-b]", sd.Arms)
 	}
-	if sd.Budget.MaxCallsPerRequest != 2 || sd.Budget.MaxTokensPerRequest != 512 || sd.Budget.ReserveTokensPerArm != 256 {
-		t.Errorf("budget = %+v, want calls=2 tokens=512 reserve=256", sd.Budget)
+	if sd.Budget.MaxCallsPerRequest != 2 || sd.Budget.MaxTokensPerRequest != 512 || sd.Budget.ReserveTokensPerArm != 256 || sd.Budget.MaxConcurrencyPerRequest != 2 {
+		t.Errorf("budget = %+v, want calls=2 tokens=512 reserve=256 concurrency=2", sd.Budget)
 	}
 
 	dsl, err := DecompileRouting(cfg)
 	if err != nil {
 		t.Fatalf("decompile error: %v", err)
 	}
-	for _, want := range []string{`"arm-a"`, `"arm-b"`, "max_calls_per_request: 2", "max_tokens_per_request: 512", "reserve_tokens_per_arm: 256"} {
+	for _, want := range []string{`"arm-a"`, `"arm-b"`, "max_calls_per_request: 2", "max_tokens_per_request: 512", "reserve_tokens_per_arm: 256", "max_concurrency_per_request: 2"} {
 		if !strings.Contains(dsl, want) {
 			t.Errorf("decompiled DSL missing %q in:\n%s", want, dsl)
 		}
