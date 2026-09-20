@@ -312,6 +312,47 @@ export interface CallRecord {
   status: string
   started_at?: string
   activity?: CallActivity
+  request?: { effective_body?: RecordedRequest }
+  native_output?: {
+    policy: 'native'
+    source: string
+    model: string
+    input_tokens: number
+    context_window: number
+    max_output_tokens: number
+    configured_max_output_tokens: number
+  }
+  usage?: {
+    input_tokens?: number | null
+    cached_input_tokens?: number | null
+    cache_write_tokens?: number | null
+    output_tokens?: number | null
+  } | null
+  final?: string | null
+  tool_calls?: RecordedToolCall[]
+  finish_reason?: string | null
+  cost_usd?: number | null
+  latency_s?: number | null
+  ttft_s?: number | null
+  [key: string]: unknown
+}
+
+export interface RecordedToolCall {
+  id?: string
+  type?: string
+  function?: { name?: string; arguments?: string }
+}
+
+export interface RecordedMessage {
+  role: string
+  content?: string | Array<{ type: string; text?: string }> | null
+  name?: string
+  tool_call_id?: string
+  tool_calls?: RecordedToolCall[]
+}
+
+export interface RecordedRequest {
+  messages?: RecordedMessage[]
   [key: string]: unknown
 }
 
