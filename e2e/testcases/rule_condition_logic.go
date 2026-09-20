@@ -58,9 +58,9 @@ func testRuleConditionLogic(ctx context.Context, client *kubernetes.Clientset, o
 	testCases := []RuleConditionCase{
 		// OR operator tests - any condition matches
 		{
-			Query:              "Think carefully about this complex business problem",
+			Query:              "Think carefully about this urgent business problem",
 			ExpectedMatch:      true,
-			ExpectedDecision:   "thinking_decision", // Has keywords: "think", "careful"
+			ExpectedDecision:   "thinking_decision", // Has keywords: "think", "urgent"
 			RuleOperator:       "OR",
 			RequiredConditions: []string{"keyword:thinking", "domain:thinking"},
 			Description:        "Query with thinking keywords should match thinking decision (OR operator)",

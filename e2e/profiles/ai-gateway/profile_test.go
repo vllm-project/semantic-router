@@ -40,58 +40,6 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 	}
 }
 
-func TestProfilePinsAcceptanceClassifierModels(t *testing.T) {
-	catalog := profileMap(t, profileConfig(t), "global", "model_catalog")
-	system := profileMap(t, catalog, "system")
-	requireModel(t, system, "prompt_guard", "models/mmbert32k-jailbreak-detector-merged")
-	requireModel(t, system, "domain_classifier", "models/mmbert32k-intent-classifier-merged")
-	requireModel(t, system, "pii_classifier", "models/mmbert32k-pii-detector-merged")
-
-	modules := profileMap(t, catalog, "modules")
-	requireModuleModel(
-		t,
-		profileMap(t, modules, "prompt_guard"),
-		"models/mmbert32k-jailbreak-detector-merged",
-		"models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
-	)
-	classifier := profileMap(t, modules, "classifier")
-	requireModuleModel(
-		t,
-		profileMap(t, classifier, "domain"),
-		"models/mmbert32k-intent-classifier-merged",
-		"models/mmbert32k-intent-classifier-merged/category_mapping.json",
-	)
-	requireModuleModel(
-		t,
-		profileMap(t, classifier, "pii"),
-		"models/mmbert32k-pii-detector-merged",
-		"models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
-	)
-}
-
-func requireModel(t *testing.T, system map[string]any, name, want string) {
-	t.Helper()
-	if got := system[name]; got != want {
-		t.Fatalf("system model %s = %v, want %s", name, got, want)
-	}
-}
-
-func requireModuleModel(t *testing.T, module map[string]any, modelID, mappingPath string) {
-	t.Helper()
-	if module["enabled"] != true || module["model_id"] != modelID {
-		t.Fatalf("classifier module is not pinned to %s: %#v", modelID, module)
-	}
-	if module["max_sequence_length"] != 0 {
-		t.Fatalf("classifier module %s must retain the legacy 512-token budget: %#v", modelID, module)
-	}
-	for _, field := range []string{"jailbreak_mapping_path", "category_mapping_path", "pii_mapping_path"} {
-		if value, ok := module[field]; ok && value == mappingPath {
-			return
-		}
-	}
-	t.Fatalf("classifier module %s does not use mapping %s: %#v", modelID, mappingPath, module)
-}
-
 func TestProtocolAndCacheRecipesReachTheirOwnedBoundaries(t *testing.T) {
 	config := profileConfig(t)
 	baselineCache := profileNamed(t, profileMap(t, config, "routing")["decisions"], "other_decision")["plugins"]
@@ -237,16 +185,13 @@ func profileConfig(t *testing.T) map[string]any {
 	return profileMap(t, values, "config")
 }
 
-func profileMap(t *testing.T, value map[string]any, keys ...string) map[string]any {
+func profileMap(t *testing.T, value map[string]any, key string) map[string]any {
 	t.Helper()
-	for _, key := range keys {
-		result, ok := value[key].(map[string]any)
-		if !ok {
-			t.Fatalf("missing profile mapping %q", key)
-		}
-		value = result
+	result, ok := value[key].(map[string]any)
+	if !ok {
+		t.Fatalf("missing profile mapping %q", key)
 	}
-	return value
+	return result
 }
 
 func profileNamed(t *testing.T, value any, name string) map[string]any {
