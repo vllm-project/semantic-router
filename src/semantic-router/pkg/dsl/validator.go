@@ -463,7 +463,7 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 				nil,
 			)
 		}
-		if _, ok := s.Fields["candidates"]; !ok {
+		if _, ok := s.Fields["candidates"]; !ok && s.Fields["image_candidates"] == nil {
 			v.addDiag(DiagConstraint, s.Pos,
 				fmt.Sprintf("%s: 'candidates' field is recommended", context),
 				nil,

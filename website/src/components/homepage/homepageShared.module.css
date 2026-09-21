@@ -1,4 +1,4 @@
-/* Homepage sections inherit band tokens from index.module.css (.bandBlack / .bandGraphite). */
+/* Homepage sections share the same color-mode tokens as docs. */
 
 .bandSection,
 .lightSection,
@@ -123,7 +123,7 @@
 }
 
 .featureCard:hover h3 {
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
 }
 
 .featureCard h3 {
@@ -153,7 +153,7 @@
 }
 
 .featureLink:hover {
-  color: var(--site-brand-blue);
+  color: var(--site-hover-text);
   text-decoration: none;
 }
 

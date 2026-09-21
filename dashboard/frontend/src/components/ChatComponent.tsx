@@ -32,7 +32,7 @@ import { ensureOpenClawServerConnected } from '../tools/mcp/api'
 import { useConversationStorage, usePlaygroundQueue } from '../hooks'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canManageMCP } from '../utils/accessControl'
+import { canManageMCP, canSubmitFeedback } from '../utils/accessControl'
 import { usePlaygroundAttachments } from './usePlaygroundAttachments'
 import { useChatConversationState } from './useChatConversationState'
 import { usePlaygroundConversationMessages } from './usePlaygroundConversationMessages'
@@ -46,6 +46,7 @@ import { sanitizeMessagesForPersistence } from './chatPersistenceSupport'
 
 const ChatComponent = ({
   endpoint = '/api/router/v1/chat/completions',
+  feedbackInsightsBasePath,
   invocation = null,
   isFullscreenMode = false,
   onInvocationConsumed,
@@ -728,9 +729,11 @@ const ChatComponent = ({
                   visibleError={visibleError}
                 />
                 <ChatComponentConversationViewport
+                  canSubmitFeedback={canSubmitFeedback(user)}
                   conversationId={conversationId}
                   expandedToolCards={expandedToolCards}
                   messages={messages}
+                  feedbackInsightsBasePath={feedbackInsightsBasePath}
                   onToggleToolCard={handleToggleToolCard}
                   thinking={shouldShowThinking}
                   thinkingProcess={liveThinkingProcess}

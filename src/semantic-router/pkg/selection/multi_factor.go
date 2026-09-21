@@ -34,16 +34,17 @@ import (
 // quality / latency / cost / load signals with either a weighted or ordered
 // objective. Optional hard ceilings prune candidates before optimization.
 type MultiFactorConfig struct {
-	Objective          MultiFactorObjective
-	Weights            MultiFactorWeights
-	SLO                MultiFactorSLO
-	QualityIndex       string
-	QualityOnMissing   string
-	QualityMinCoverage float64
-	QualityMinScore    *float64
-	LatencyPercentile  int
-	LatencyMetric      string
-	OnNoCandidates     string
+	ExpectedOutputTokens *int
+	Objective            MultiFactorObjective
+	Weights              MultiFactorWeights
+	SLO                  MultiFactorSLO
+	QualityIndex         string
+	QualityOnMissing     string
+	QualityMinCoverage   float64
+	QualityMinScore      *float64
+	LatencyPercentile    int
+	LatencyMetric        string
+	OnNoCandidates       string
 }
 
 // MultiFactorObjective selects weighted or ordered lexicographic comparison.
@@ -164,6 +165,9 @@ func (s *MultiFactorSelector) UpdateFeedback(_ context.Context, _ *Feedback) err
 
 // Select applies hard eligibility filters, then the configured objective.
 func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext) (*SelectionResult, error) {
+	if len(selCtx.CandidateDemands) > 0 && s.config.ExpectedOutputTokens == nil {
+		return nil, fmt.Errorf("automatic output requires multi_factor.expected_output_tokens as a cost forecast")
+	}
 	if len(selCtx.CandidateModels) == 0 {
 		return nil, fmt.Errorf("no candidate models provided")
 	}
@@ -186,7 +190,7 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		return s.applyNoCandidatePolicy(selCtx, "quality_evidence", qualityExcluded)
 	}
 	mins, maxs := signalExtrema(signals)
-	bestIdx, allScores, bestScore, secondBest, survivors := s.chooseCandidate(signals, mins, maxs)
+	bestIdx, allScores, bestScore, secondBest, survivors, trace := s.chooseCandidate(signals, mins, maxs)
 
 	chosen := kept[bestIdx]
 	confidence := 0.5
@@ -229,6 +233,7 @@ func (s *MultiFactorSelector) Select(_ context.Context, selCtx *SelectionContext
 		Reasoning:         reasoning,
 		AllScores:         allScores.Diagnostics(),
 		CandidateScores:   allScores,
+		MultiFactor:       trace,
 	}, nil
 }
 
@@ -251,16 +256,17 @@ func (s *MultiFactorSelector) eligibleModels(kept []config.ModelRef, survivors [
 }
 
 type signalSet struct {
-	candidate config.ModelRef
-	model     string
-	quality   float64
-	hasQ      bool
-	evidence  *modelcatalog.IndexResult
-	latency   float64
-	hasLat    bool
-	cost      float64
-	hasCost   bool
-	load      float64
+	candidate     config.ModelRef
+	model         string
+	quality       float64
+	hasQ          bool
+	evidence      *modelcatalog.IndexResult
+	latency       float64
+	hasLat        bool
+	latencyMetric string
+	cost          float64
+	hasCost       bool
+	load          float64
 }
 
 func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef, selCtx *SelectionContext) []signalSet {
@@ -274,14 +280,15 @@ func (s *MultiFactorSelector) gatherSignals(candidates []config.ModelRef, selCtx
 				sig.hasQ = true
 				sig.evidence = &result
 			}
-			if cost, available := estimatedRequestCost(params.Pricing, selCtx); available {
+			if cost, available := estimatedRequestCost(params.Pricing, s.costContext(c.Model, selCtx)); available {
 				sig.cost = cost
 				sig.hasCost = true
 			}
 		}
-		if v, ok := s.latencySignal(c.Model); ok {
+		if v, ok, metric := s.latencyMeasurement(c.Model); ok {
 			sig.latency = v
 			sig.hasLat = true
+			sig.latencyMetric = metric
 		}
 		sig.load = float64(s.getInflight(c.Model))
 		out = append(out, sig)
@@ -356,23 +363,46 @@ func (s *MultiFactorSelector) qualityRelevant() bool {
 	return false
 }
 
-// latencySignal keeps explicitly selected metrics comparable across candidates.
+// latencyMeasurement keeps explicitly selected metrics comparable across candidates.
 // Missing measurements stay unavailable; another metric cannot fill the gap.
 // Omission retains the legacy TPOT-prioritized behavior.
-func (s *MultiFactorSelector) latencySignal(model string) (float64, bool) {
+func (s *MultiFactorSelector) latencyMeasurement(model string) (float64, bool, string) {
 	switch s.config.LatencyMetric {
 	case "ttft":
-		return s.getTTFT(model, s.config.LatencyPercentile)
+		value, available := s.getTTFT(model, s.config.LatencyPercentile)
+		return value, available, "ttft"
 	case "tpot":
-		return s.getTPOT(model, s.config.LatencyPercentile)
+		value, available := s.getTPOT(model, s.config.LatencyPercentile)
+		return value, available, "tpot"
 	}
 	if v, ok := s.getTPOT(model, s.config.LatencyPercentile); ok {
-		return v, true
+		return v, true, "tpot"
 	}
 	if v, ok := s.getTTFT(model, s.config.LatencyPercentile); ok {
-		return v, true
+		return v, true, "ttft"
 	}
-	return 0, false
+	return 0, false, ""
+}
+
+// CandidateEligible rechecks hard filters without invoking on_no_candidates
+// fallbacks, for one exact candidate: a model may expose several reasoning
+// efforts with different evidence.
+func (s *MultiFactorSelector) CandidateEligible(selCtx *SelectionContext, candidate config.ModelRef) bool {
+	if selCtx == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	kept, _ := s.applySLOFilter(selCtx.CandidateModels, selCtx)
+	signals := s.gatherSignals(kept, selCtx)
+	kept, signals, _ = s.applyQualityFloor(kept, signals)
+	kept, _, _, _ = s.applyQualityEvidencePolicy(kept, signals)
+	for _, ref := range kept {
+		if CandidateIdentity(ref) == CandidateIdentity(candidate) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *MultiFactorSelector) applySLOFilter(candidates []config.ModelRef, selCtx *SelectionContext) (kept, dropped []config.ModelRef) {
@@ -402,7 +432,7 @@ func (s *MultiFactorSelector) exceedsSLO(model string, selCtx *SelectionContext)
 	}
 	if slo.MaxCostPer1M > 0 {
 		if params, ok := s.modelParams[model]; ok {
-			if rate, available := effectiveCostPer1M(params.Pricing, selCtx); available && rate > slo.MaxCostPer1M {
+			if rate, available := effectiveCostPer1M(params.Pricing, s.costContext(model, selCtx)); available && rate > slo.MaxCostPer1M {
 				return fmt.Sprintf("cost=$%.2f>$%.2f per 1M", rate, slo.MaxCostPer1M), true
 			}
 		}
@@ -439,7 +469,7 @@ func (s *MultiFactorSelector) cheapestCandidate(candidates []config.ModelRef, se
 	for _, c := range candidates {
 		cost := math.Inf(1)
 		if params, ok := s.modelParams[c.Model]; ok {
-			if estimate, available := estimatedRequestCost(params.Pricing, selCtx); available {
+			if estimate, available := estimatedRequestCost(params.Pricing, s.costContext(c.Model, selCtx)); available {
 				cost = estimate
 			}
 		}
@@ -449,6 +479,26 @@ func (s *MultiFactorSelector) cheapestCandidate(candidates []config.ModelRef, se
 		}
 	}
 	return best
+}
+
+// costContext uses the configured output forecast, bounded by executable
+// capacity. It never makes the model's maximum output its expected output.
+func (s *MultiFactorSelector) costContext(model string, ctx *SelectionContext) *SelectionContext {
+	if ctx == nil || s.config.ExpectedOutputTokens == nil {
+		return ctx
+	}
+	view := *ctx
+	view.ExpectedOutputTokens = *s.config.ExpectedOutputTokens
+	if ctx.ExpectedOutputTokens > 0 {
+		view.ExpectedOutputTokens = min(view.ExpectedOutputTokens, ctx.ExpectedOutputTokens)
+	}
+	if demand, ok := ctx.CandidateDemands[model]; ok {
+		view.InputTokens = demand.InputTokens
+		if demand.MaxOutputTokens != nil {
+			view.ExpectedOutputTokens = min(view.ExpectedOutputTokens, int(*demand.MaxOutputTokens))
+		}
+	}
+	return &view
 }
 
 func estimatedRequestCost(pricing config.ModelPricing, selCtx *SelectionContext) (float64, bool) {

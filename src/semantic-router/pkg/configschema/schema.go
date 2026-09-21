@@ -131,6 +131,9 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	// Offline consumers resolve the same named defaults as the Router without
 	// copying artifact identities or materializing them in authoring documents.
 	deployments.Default = routerconfig.DefaultCanonicalGlobal().ModelCatalog.Deployments
+	if err := setMemoryPersistenceBounds(schema); err != nil {
+		return nil, err
+	}
 
 	pluginRefs, err := addPluginDefinitions(reflector, schema)
 	if err != nil {
@@ -201,6 +204,15 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 			Description: "A non-negative token count or the literal auto.",
 			OneOf: []*jsonschema.Schema{
 				{Type: "integer", Minimum: json.Number("0")},
+				{Type: "string", Const: "auto"},
+			},
+		}
+	}
+	if value == reflect.TypeOf(routerconfig.OutputTokenDefault{}) {
+		return &jsonschema.Schema{
+			Description: "A positive output default, or auto to use the selected model's available output capacity.",
+			OneOf: []*jsonschema.Schema{
+				{Type: "integer", Minimum: json.Number("1")},
 				{Type: "string", Const: "auto"},
 			},
 		}

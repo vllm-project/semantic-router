@@ -26,6 +26,9 @@ const (
 // selectModelFromCandidates uses the configured selection algorithm to choose
 // a model. Invalid or unavailable selection falls back to the first configured
 // candidate while recording an explicit diagnostic.
+//
+// A Router Learning rejection is fail-closed and is checked once here, so the
+// selector, single-candidate and fallback paths all honour it.
 func (r *OpenAIRouter) selectModelFromCandidates(
 	selCtx *selection.SelectionContext,
 	algorithm *config.AlgorithmConfig,
@@ -33,6 +36,7 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 ) (chosen *config.ModelRef, chosenMethod string, selectionErr error) {
 	if ctx != nil {
 		ctx.VSRSelectedCandidate = nil
+		ctx.VSRSelectionTrace = nil
 		ctx.pendingSessionDecision = nil
 	}
 	defer func() {
@@ -40,6 +44,21 @@ func (r *OpenAIRouter) selectModelFromCandidates(
 			ctx.VSRSelectedCandidate = (&selection.SelectionResult{}).WithCandidate(*chosen).SelectedCandidate
 		}
 	}()
+	selected, method, err := r.selectModelFromCandidatesInner(selCtx, algorithm, ctx)
+	if err != nil {
+		return nil, method, err
+	}
+	if ctx != nil && ctx.VSRProgressGateError != nil {
+		return nil, method, ctx.VSRProgressGateError
+	}
+	return selected, method, nil
+}
+
+func (r *OpenAIRouter) selectModelFromCandidatesInner(
+	selCtx *selection.SelectionContext,
+	algorithm *config.AlgorithmConfig,
+	ctx *RequestContext,
+) (*config.ModelRef, string, error) {
 	method := r.getSelectionMethod(algorithm)
 	if err := selectionRequestContext(ctx).Err(); err != nil {
 		return nil, string(method), err
@@ -171,6 +190,7 @@ func (r *OpenAIRouter) selectWithSelector(
 	if err := r.validateProtectedCandidateOwnership(selCtx, ctx); err != nil {
 		return nil, string(method), err
 	}
+	ctx.VSRSelectionTrace = result.MultiFactor.Clone()
 	recordCtx, result, selectedModel, learningApplied, learningErr := r.applyRouterLearning(
 		selCtx,
 		result.WithCandidate(*selectedModel),

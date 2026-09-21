@@ -33,7 +33,8 @@ func (c *Classifier) IsHallucinationDetectionEnabled() bool {
 	}
 	if c.models != nil {
 		cfg := c.Config.HallucinationMitigation.HallucinationModel
-		return c.models.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU).Deployment.Provider == "candle"
+		spec := c.models.localSpec("hallucination_detector", cfg.ModelID, "modernbert", config.RemoteClassifierContractTokenSpans, cfg.UseCPU)
+		return spec.Deployment.Provider == "candle" || (spec.Deployment.Provider == "ort" && spec.Binding.Adapter == "vela_halu")
 	}
 	return CurrentNativeBackendCapabilities().LocalHallucinationDetection
 }

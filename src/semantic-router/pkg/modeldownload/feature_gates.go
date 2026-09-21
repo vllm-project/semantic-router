@@ -108,13 +108,13 @@ func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) 
 	enabled := make(map[string]bool)
 	for _, rule := range cfg.ClassifierRules {
 		if rule.ModelPath != "" {
-			enabled[rule.ModelPath] = true
+			enabled[config.ResolveModelPath(rule.ModelPath)] = true
 		}
 	}
 	for _, gate := range optionalModelFeatureGates {
 		if gate.enabled(cfg) {
 			for _, path := range gate.paths(cfg) {
-				enabled[path] = true
+				enabled[config.ResolveModelPath(path)] = true
 			}
 		}
 	}
@@ -123,6 +123,7 @@ func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) 
 			continue
 		}
 		for _, path := range gate.paths(cfg) {
+			path = config.ResolveModelPath(path)
 			if path != "" && !enabled[path] {
 				disabled[path] = struct{}{}
 			}

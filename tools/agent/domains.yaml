@@ -18,6 +18,7 @@ domains:
       - .pre-commit-config.yaml
       - .prowlabels.yaml
       - Makefile
+      - netlify.toml
       - tools/agent/**
       - tools/ci/**
       - tools/docker/Dockerfile.precommit
@@ -169,6 +170,16 @@ domains:
         - src/semantic-router/pkg/config/canonical_global.go
         - src/semantic-router/pkg/modeldownload/**
 
+  vela-model-artifacts:
+    owner: native-bindings
+    paths:
+      - tools/models/vela_omni/**
+      - tools/models/vela_halu/**
+    checks:
+      - python3 -m unittest discover -s tools/models/vela_omni -p test_contract.py
+      - python3 -m unittest discover -s tools/models/vela_omni -p test_bundle.py
+    verifications: [core, native.ort-cpu, e2e.vela-omni, e2e.vela-halu]
+
   model-compatibility:
     owner: router-core
     paths:
@@ -183,12 +194,21 @@ domains:
     documentation_check: true
     paths:
       - config/fragments/signal/embedding/image-routing.yaml
+      - config/assets/image-routing/**
       - tools/calibration/image-routing/**
+      - tools/models/vela_omni/**
+      - onnx-binding/**
+      - src/semantic-router/pkg/embedding/**
+      - src/semantic-router/pkg/modelruntime/embedding*.go
+      - src/semantic-router/pkg/modelruntime/native/embedding*.go
+      - src/semantic-router/pkg/modelruntime/native/ort_execution*.go
       - tools/ci/image_calibration.py
       - tools/ci/tests/test_image_calibration.py
       - src/semantic-router/tools/model-test-assets/**
-      - src/semantic-router/pkg/config/registry.go
+      - src/semantic-router/pkg/config/registry*.go
       - src/semantic-router/pkg/modeldownload/**
+      - src/semantic-router/pkg/cache/**
+      - src/semantic-router/pkg/memory/**
       - e2e/testcases/testdata/image-fixtures/**
       # The whole profile: the CRD mirror, the chart values, and the package
       # test that asserts the mirror, which runs only inside this gate.
@@ -384,9 +404,7 @@ domains:
       - src/semantic-router/pkg/modelinventory/**
       - src/semantic-router/pkg/nlgen/**
       - src/semantic-router/pkg/startupstatus/**
-      - src/vllm-sr/cli/evaluation/golden/metric_analysis_catalog.v1.json
-      - src/vllm-sr/cli/evaluation/golden/research_benchmark_inventory.v1.json
-      - tools/ci/sync_evaluation_catalogs.py
+      - src/vllm-sr/cli/sr_bench/**
       - tools/make/dashboard.mk
     checks: [make dashboard-check]
     verify: [make dashboard-test-e2e-evaluation]
@@ -786,6 +804,15 @@ profiles:
       - src/semantic-router/pkg/config/complexity_boundaries.go
       - src/semantic-router/pkg/classification/complexity_remote_backend.go
       - src/semantic-router/pkg/classification/complexity_remote_eval.go
+  pii-remote-backend:
+    display_name: Remote PII Classifier
+    owner: e2e
+    coverage_role: pii-remote-classifier-backend
+    selection: pr
+    paths:
+      - e2e/profiles/pii-remote-backend/**
+      - deploy/kubernetes/pii-remote-backend/**
+      - e2e/testcases/pii_backend_routing.go
   local-classifier-backend:
     display_name: Local Classifier Backend
     owner: e2e
@@ -830,6 +857,19 @@ profiles:
     coverage_role: dynamic-crd-routing-contracts
     selection: pr
     paths: [e2e/profiles/dynamic-config/**]
+  vela-omni:
+    display_name: Vela Omni Nano and Mini
+    owner: e2e
+    coverage_role: real-omni-text-image-audio-and-recipe-isolation
+    selection: pr
+    paths:
+      - e2e/profiles/vela-omni/**
+      - e2e/testcases/vela_omni.go
+      - onnx-binding/src/model_architectures/embedding/omni/**
+      - tools/models/vela_omni/**
+      - src/semantic-router/pkg/embedding/audio*.go
+      - src/semantic-router/pkg/modelruntime/native/embedding_*.go
+
   multimodal-routing:
     display_name: Multimodal Routing
     owner: e2e
@@ -841,6 +881,14 @@ profiles:
       - e2e/testcases/testdata/embedding_signal_image_cases.json
       - e2e/testcases/testdata/image-fixtures/**
       - config/fragments/signal/embedding/image-routing.yaml
+      - config/assets/image-routing/**
+      - tools/calibration/image-routing/**
+      - tools/models/vela_omni/**
+      - onnx-binding/**
+      - src/semantic-router/pkg/embedding/**
+      - src/semantic-router/pkg/modelruntime/embedding*.go
+      - src/semantic-router/pkg/modelruntime/native/embedding*.go
+      - src/semantic-router/pkg/modelruntime/native/ort_execution*.go
   remote-embedding:
     display_name: Remote Embeddings
     owner: e2e
@@ -986,6 +1034,24 @@ profiles:
     paths:
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/redis-cluster.yaml
+  progress-gate:
+    display_name: Progress Gate
+    owner: e2e
+    coverage_role: session-evidence-to-switch
+    selection: pr
+    paths:
+      - e2e/profiles/progress-gate/**
+      - e2e/testcases/router_progress_gate*.go
+      - src/semantic-router/pkg/extproc/router_learning_progress_gate*.go
+      - src/semantic-router/pkg/extproc/router_learning_gate_constraints.go
+      - src/semantic-router/pkg/extproc/router_learning_protection*.go
+      - src/semantic-router/pkg/extproc/router_learning_outcome_ingest.go
+      - src/semantic-router/pkg/extproc/router_learning_helpers.go
+      - src/semantic-router/pkg/extproc/session_evidence*.go
+      - src/semantic-router/pkg/selection/session_switch_gate*.go
+      - src/semantic-router/pkg/selection/session_progress_evidence*.go
+      - src/semantic-router/pkg/sessiontelemetry/session_evidence*.go
+      - src/semantic-router/pkg/sessiontelemetry/router_memory*.go
   router-replay:
     display_name: Router Replay
     owner: e2e
@@ -1023,6 +1089,19 @@ profiles:
     coverage_role: rag-hybrid-search
     selection: manual
     paths: [e2e/profiles/rag-hybrid-search/**]
+  vela-halu:
+    display_name: Vela Halu Grounding
+    owner: e2e
+    coverage_role: published-halu-pair-grounding-and-input-budget
+    selection: pr
+    paths:
+      - e2e/profiles/vela-halu/**
+      - e2e/testcases/vela_halu.go
+      - src/semantic-router/pkg/classification/hallucination_detector.go
+      - src/semantic-router/pkg/modelruntime/native/grounding*.go
+      - candle-binding/src/ffi/instances/grounding.rs
+      - onnx-binding/src/instances/grounding.rs
+      - tools/models/vela_halu/**
   hallucination:
     display_name: Hallucination Detection
     owner: e2e

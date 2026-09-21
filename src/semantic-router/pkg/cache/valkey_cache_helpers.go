@@ -4,9 +4,13 @@ package cache
 
 import (
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
 )
 
 // pendingEntry holds the parsed fields from a pending cache entry search result.
@@ -99,6 +103,7 @@ func parsePendingSearchResult(results interface{}, requestID string, prefix stri
 // searchMatch holds the parsed fields from a vector search result.
 type searchMatch struct {
 	distance     float64
+	query        string
 	responseBody interface{}
 	timestamp    int64
 	ttlSeconds   int64
@@ -110,8 +115,8 @@ func extractSearchMatch(fieldsMap map[string]interface{}) (*searchMatch, bool) {
 		return nil, false
 	}
 
-	var distance float64
-	if _, err := fmt.Sscanf(fmt.Sprint(distanceVal), "%f", &distance); err != nil {
+	distance, err := strconv.ParseFloat(fmt.Sprint(distanceVal), 64)
+	if err != nil || math.IsNaN(distance) || math.IsInf(distance, 0) {
 		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: failed to parse distance value: %v", err)
 		return nil, false
 	}
@@ -131,8 +136,10 @@ func extractSearchMatch(fieldsMap map[string]interface{}) (*searchMatch, bool) {
 		}
 	}
 
+	query, _ := fieldsMap["query"].(string)
 	return &searchMatch{
 		distance:     distance,
+		query:        query,
 		responseBody: fieldsMap["response_body"],
 		timestamp:    timestamp,
 		ttlSeconds:   ttlSeconds,
@@ -142,6 +149,16 @@ func extractSearchMatch(fieldsMap map[string]interface{}) (*searchMatch, bool) {
 // parseBestMatch extracts the best-match distance and response body from a Valkey FT.SEARCH vector result.
 // Returns nil when no valid match is found.
 func parseBestMatch(searchResult interface{}) *searchMatch {
+	var best *searchMatch
+	for _, candidate := range parseSearchMatches(searchResult) {
+		if best == nil || candidate.distance < best.distance {
+			best = candidate
+		}
+	}
+	return best
+}
+
+func parseSearchMatches(searchResult interface{}) []*searchMatch {
 	resultsArray, ok := searchResult.([]interface{})
 	if !ok || len(resultsArray) < 2 {
 		return nil
@@ -161,7 +178,7 @@ func parseBestMatch(searchResult interface{}) *searchMatch {
 	// FT.SEARCH returns results ordered by distance, but Go map iteration
 	// in the valkey-glide response loses that ordering. Iterate all docs and
 	// pick the best one.
-	var best *searchMatch
+	matches := make([]*searchMatch, 0, len(docMap))
 	for _, docValue := range docMap {
 		fieldsMap, mapOk := docValue.(map[string]interface{})
 		if !mapOk {
@@ -170,21 +187,52 @@ func parseBestMatch(searchResult interface{}) *searchMatch {
 		}
 
 		candidate, matchOk := extractSearchMatch(fieldsMap)
-		if matchOk && (best == nil || candidate.distance < best.distance) {
-			best = candidate
+		if matchOk {
+			matches = append(matches, candidate)
 		}
 	}
 
-	return best
+	return matches
+}
+
+// GLIDE represents results as a map; choose the best eligible candidate rather
+// than assuming iteration order or letting a polarity rejection end the search.
+func selectValkeyPolarityMatch(searchResult interface{}, queryTokens []string, threshold float32, metric string) (*searchMatch, float32) {
+	var best *searchMatch
+	var bestSimilarity, rejectedSimilarity float32
+	hasScore := false
+	for _, candidate := range parseSearchMatches(searchResult) {
+		similarity := float32(valkeyutil.DistanceToSimilarity(metric, candidate.distance))
+		if !hasScore || similarity > rejectedSimilarity {
+			rejectedSimilarity = similarity
+			hasScore = true
+		}
+		body, bodyOK := candidate.responseBody.(string)
+		if similarity < threshold || !bodyOK || body == "" ||
+			!semanticCandidateMatchesPolarity(queryTokens, candidate.query) {
+			continue
+		}
+		_, expiresAt := valkeyTiming(candidate)
+		if !expiresAt.IsZero() && !time.Now().Before(expiresAt) {
+			continue
+		}
+		if best == nil || similarity > bestSimilarity {
+			best, bestSimilarity = candidate, similarity
+		}
+	}
+	if best == nil {
+		return nil, rejectedSimilarity
+	}
+	return best, bestSimilarity
 }
 
 // extractResponseBody returns the response bytes from a search match, or nil if missing/empty.
 func extractResponseBody(match *searchMatch) []byte {
-	if match.responseBody == nil {
+	if match == nil {
 		return nil
 	}
-	s := fmt.Sprint(match.responseBody)
-	if s == "" {
+	s, ok := match.responseBody.(string)
+	if !ok || s == "" {
 		return nil
 	}
 	return []byte(s)

@@ -50,6 +50,9 @@ def _find_container_run_cmd(commands, container_name):
 
 
 def _stub_valid_container_cli(monkeypatch, tmp_path):
+    socket_path = tmp_path / "docker.sock"
+    socket_path.touch()
+    monkeypatch.setenv("VLLM_SR_CONTAINER_SOCKET", str(socket_path))
     docker_bin = tmp_path / "docker"
     docker_bin.write_text("")
     monkeypatch.setattr(
@@ -65,7 +68,7 @@ def test_container_start_vllm_sr_rejects_legacy_topology_override(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "legacy")
@@ -87,7 +90,7 @@ def test_container_start_vllm_sr_sets_openclaw_shared_network_env(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     socket_path = tmp_path / "docker.sock"
@@ -131,7 +134,7 @@ def test_container_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     socket_path = tmp_path / "docker.sock"
@@ -182,7 +185,7 @@ def test_container_start_vllm_sr_mounts_host_docker_cli_by_default(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
@@ -219,7 +222,7 @@ def test_container_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
@@ -256,7 +259,7 @@ def test_container_start_vllm_sr_mounts_host_docker_cli_when_requested(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
@@ -291,7 +294,7 @@ def test_container_start_vllm_sr_mounts_host_docker_cli_when_requested(
 def test_container_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -442,7 +445,7 @@ def test_render_observability_template_uses_stack_specific_container_hosts():
     assert "audit-a-vllm-sr-jaeger" in rendered
 
 
-def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
+def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch, tmp_path):
     calls = []
 
     def record(name, ret=(0, "", "")):
@@ -456,6 +459,7 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
     monkeypatch.setenv("VLLM_SR_PORT_OFFSET", "200")
     monkeypatch.setattr(core, "print_vllm_logo", lambda: None)
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "container_status_strict", lambda _name: "not found")
     monkeypatch.setattr(
         core,
         "load_config",
@@ -470,6 +474,11 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
         runtime_lifecycle,
         "container_status",
         lambda _name: "running",
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "container_status_strict",
+        lambda _name, **kwargs: "running",
     )
     monkeypatch.setattr(
         runtime_lifecycle,
@@ -497,7 +506,9 @@ def test_start_vllm_sr_uses_isolated_network_and_container_names(monkeypatch):
         runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
     )
 
-    core.start_vllm_sr("/tmp/config.yaml", env_vars={}, enable_observability=False)
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text("version: v0.3\n")
+    core.start_vllm_sr(str(config_path), env_vars={}, enable_observability=False)
 
     create_calls = [c for c in calls if c[0] == "container_create_network"]
     start_calls = [c for c in calls if c[0] == "container_start_vllm_sr"]

@@ -38,7 +38,7 @@ func (r *OpenAIRouter) selectionCapabilityRequest(ctx *RequestContext) (*llmprot
 	request.Stream = ctx.ExpectStreamingResponse
 	if tools := resolveDecisionToolsConfig(ctx); tools != nil && tools.Enabled && tools.EffectiveMode() == config.ToolsPluginModeNone {
 		if tools.StripToolHistory {
-			request.Messages = cloneSemanticMessages(request.Messages)
+			request.Messages = cloneMessagesForToolStrip(request.Messages)
 		}
 		stripSemanticToolPolicy(&request, tools.StripToolHistory)
 	}
@@ -47,7 +47,7 @@ func (r *OpenAIRouter) selectionCapabilityRequest(ctx *RequestContext) (*llmprot
 
 // candidateCapabilityMismatch uses the same capability contract as final
 // dispatch. Unannotated models retain the existing wire-only qualification.
-func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request *llmprotocol.Request, decision *config.Decision, requirements *config.CandidateRequirements) error {
+func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request *llmprotocol.Request, decision *config.Decision, requirements *config.CandidateRequirements, automaticDemands map[string]selection.CandidateDemand) error {
 	if request == nil {
 		return nil // Eval/selector-only callers have no full inference envelope.
 	}
@@ -73,6 +73,17 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 	if err != nil {
 		return err
 	}
+	if demand.AutomaticOutput {
+		// Selection already rendered this candidate without mutating ingress.
+		// Keep freshly projected capabilities, but qualify the exact rendered
+		// budget instead of rejecting the intentionally absent caller limit.
+		rendered, ok := automaticDemands[ref.Model]
+		if !ok || !rendered.Known || !rendered.AutomaticOutput || rendered.InputTokens < 0 || rendered.MaxOutputTokens == nil || *rendered.MaxOutputTokens <= 0 {
+			return automaticOutputUnsupported("a resolved candidate budget before capability selection")
+		}
+		demand.InputTokens = rendered.InputTokens
+		demand.MaxOutputTokens = rendered.MaxOutputTokens
+	}
 	if err := r.validateModelDemand(requirements, ref.Model, demand); err != nil {
 		return err
 	}
@@ -94,10 +105,10 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 	requirements := r.candidateRequirements(ctx)
 	eligible := make([]config.ModelRef, 0, len(input.CandidateModels))
 	for _, ref := range input.CandidateModels {
-		if (!selection.CandidateRequirementsEnabled(requirements) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
+		if (!decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(requirements) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
 			(ctx.VSREligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSREligibleModelRefs)) ||
 			(ctx.VSRPolicyEligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSRPolicyEligibleModelRefs)) ||
-			r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements) != nil {
+			r.candidateCapabilityMismatch(ref, request, ctx.VSRSelectedDecision, requirements, ctx.AutomaticCandidateDemands) != nil {
 			continue
 		}
 		eligible = append(eligible, ref)

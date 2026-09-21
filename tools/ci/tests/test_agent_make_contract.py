@@ -231,15 +231,11 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertEqual(combined.count("npm ci"), 2)
         self.assertNotIn("npm install", combined)
 
-    def test_dashboard_workers_use_the_installed_cli_environment_by_default(
-        self,
-    ) -> None:
+    def test_dashboard_backend_tests_use_the_installed_cli_environment(self) -> None:
         backend = target_block("dashboard-test-backend", DASHBOARD_MAKE)
         self.assertIn("dashboard-test-backend: vllm-sr-install-cli", backend)
-        self.assertIn(
-            'VLLM_SR_EVALUATION_TEST_PYTHON="$${VLLM_SR_EVALUATION_TEST_PYTHON:-$(AGENT_PYTHON)}"',
-            backend,
-        )
+        self.assertIn("go test -json -count=1 ./...", backend)
+        self.assertNotIn("VLLM_SR_EVALUATION_TEST_PYTHON", backend)
 
     def test_native_environment_survives_subdirectory_and_vendor_overrides(
         self,

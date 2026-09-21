@@ -23,7 +23,10 @@ func LocalEmbeddingSettings(backend CacheBackend) (embedding.ConsumerSettings, b
 	var layer, dimension int
 	switch value := backend.(type) {
 	case *InMemoryCache:
-		model, layer, dimension = value.embeddingModel, mmbertMemoryCacheLayer, mmbertMemoryCacheDimension
+		model = value.embeddingModel
+		options := inMemoryEmbeddingOptions(model)
+		layer = options.Layer
+		dimension = semanticCacheEmbeddingDimension(options.Dimension, value.embeddingProvider)
 	case *RedisCache:
 		model, dimension = value.embeddingModel, value.embeddingDimension()
 	case *ValkeyCache:
@@ -40,7 +43,7 @@ func LocalEmbeddingSettings(backend CacheBackend) (embedding.ConsumerSettings, b
 	default:
 		return embedding.ConsumerSettings{}, false
 	}
-	if model != "mmbert" {
+	if model != "mmbert" && model != "multimodal" {
 		return embedding.ConsumerSettings{}, false
 	}
 	return embedding.ConsumerSettings{ModelType: model, Layer: layer, Dimension: dimension, InputPolicy: semanticCacheInputPolicy}, true
@@ -50,7 +53,8 @@ func LocalEmbeddingSettings(backend CacheBackend) (embedding.ConsumerSettings, b
 // returned copy is bound to the loaded representation; the user's logical
 // configuration and all prior namespaces remain untouched.
 func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerSettings) (embedding.ContentIdentity, error)) (CacheConfig, string, error) {
-	if !cfg.Enabled || normalizeEmbeddingModel(cfg.EmbeddingModel) != "mmbert" {
+	model := normalizeEmbeddingModel(cfg.EmbeddingModel)
+	if !cfg.Enabled || (model != "mmbert" && model != "multimodal") {
 		return cfg, "", nil
 	}
 	if err := ValidateCacheConfig(cfg); err != nil {
@@ -63,18 +67,18 @@ func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerS
 	var logical []string
 	switch backend {
 	case InMemoryCacheType:
-		view = &InMemoryCache{embeddingModel: "mmbert"}
+		view = &InMemoryCache{embeddingModel: model, embeddingProvider: cfg.EmbeddingProvider}
 	case RedisCacheType:
-		view = &RedisCache{embeddingModel: "mmbert", config: cfg.Redis}
+		view = &RedisCache{embeddingModel: model, embeddingProvider: cfg.EmbeddingProvider, config: cfg.Redis}
 		logical = []string{cfg.Redis.Index.Name, cfg.Redis.Index.Prefix}
 	case ValkeyCacheType:
-		view = &ValkeyCache{embeddingModel: "mmbert", config: cfg.Valkey}
+		view = &ValkeyCache{embeddingModel: model, embeddingProvider: cfg.EmbeddingProvider, config: cfg.Valkey}
 		logical = []string{cfg.Valkey.Index.Name, cfg.Valkey.Index.Prefix}
 	case MilvusCacheType, HybridCacheType:
-		view = &MilvusCache{embeddingModel: "mmbert", config: cfg.Milvus}
+		view = &MilvusCache{embeddingModel: model, embeddingProvider: cfg.EmbeddingProvider, config: cfg.Milvus}
 		logical = []string{cfg.Milvus.Collection.Name}
 	case QdrantCacheType:
-		view = &QdrantCache{embeddingModel: "mmbert"}
+		view = &QdrantCache{embeddingModel: model, embeddingProvider: cfg.EmbeddingProvider}
 		name := cfg.Qdrant.CollectionName
 		if name == "" {
 			name = "semantic_cache"
@@ -89,8 +93,11 @@ func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerS
 	if err != nil {
 		return cfg, "", err
 	}
-	if identity.Fingerprint == "" {
-		return cfg, "", fmt.Errorf("embedding content identity is empty")
+	if identity.Fingerprint == "" || identity.Descriptor.Dimension <= 0 {
+		return cfg, "", fmt.Errorf("embedding content identity lacks fingerprint or output dimension")
+	}
+	if settings.Dimension > 0 && settings.Dimension != identity.Descriptor.Dimension {
+		return cfg, "", fmt.Errorf("cache dimension %d differs from prepared representation %d", settings.Dimension, identity.Descriptor.Dimension)
 	}
 	logical = append([]string{string(backend), identity.Fingerprint}, logical...)
 	encoded, err := json.Marshal(logical)
@@ -105,14 +112,17 @@ func PrepareEmbeddingNamespace(cfg CacheConfig, resolve func(embedding.ConsumerS
 		copy := *cfg.Redis
 		cfg.Redis = &copy
 		copy.Index.Name, copy.Index.Prefix = name, prefix
+		copy.Index.VectorField.Dimension = identity.Descriptor.Dimension
 	case ValkeyCacheType:
 		copy := *cfg.Valkey
 		cfg.Valkey = &copy
 		copy.Index.Name, copy.Index.Prefix = name, prefix
+		copy.Index.VectorField.Dimension = identity.Descriptor.Dimension
 	case MilvusCacheType, HybridCacheType:
 		copy := *cfg.Milvus
 		cfg.Milvus = &copy
 		copy.Collection.Name = name
+		copy.Collection.VectorField.Dimension = identity.Descriptor.Dimension
 	case QdrantCacheType:
 		copy := *cfg.Qdrant
 		cfg.Qdrant = &copy

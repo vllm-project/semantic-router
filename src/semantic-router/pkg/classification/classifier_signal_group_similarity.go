@@ -174,7 +174,7 @@ func (c *EmbeddingClassifier) ensureCandidateEmbeddings(ctx context.Context) err
 	if c.preloadComplete {
 		return nil
 	}
-	if len(c.candidateEmbeddings) > 0 {
+	if len(c.candidateEmbeddings)+len(c.imageCandidateEmbeddings) > 0 {
 		if len(c.rulePrototypeBanks) == 0 {
 			c.rebuildRulePrototypeBanks()
 		}
@@ -183,6 +183,8 @@ func (c *EmbeddingClassifier) ensureCandidateEmbeddings(ctx context.Context) err
 	}
 	if err := c.preloadCandidateEmbeddings(ctx); err != nil {
 		c.candidateEmbeddings = make(map[string][]float32)
+		c.imageCandidateEmbeddings = make(map[string][]float32)
+		c.negativeRulePrototypeBanks = make(map[string]*prototypeBank)
 		c.rulePrototypeBanks = make(map[string]*prototypeBank)
 		c.preloadComplete = false
 		return err

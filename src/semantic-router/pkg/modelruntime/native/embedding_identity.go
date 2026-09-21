@@ -35,15 +35,12 @@ func (p *EmbeddingProvider) RepresentationIdentity(options embedding.Options, in
 	raw, ok := p.descriptors[options]
 	if !ok {
 		err := p.resource.Use(context.Background(), func(value io.Closer) error {
-			engine := value.(*embeddingEngine)
-			var err error
-			if engine.candle != nil {
-				raw, err = engine.candle.RuntimeDescriptor(options.Layer, options.Dimension)
-			} else if engine.ort != nil {
-				raw, err = engine.ort.RuntimeDescriptor(options.Layer, options.Dimension)
-			} else {
+			engine, ok := value.(descriptorEmbeddingEngine)
+			if !ok {
 				return embedding.ErrIdentityUnsupported
 			}
+			var err error
+			raw, err = engine.RuntimeDescriptor(options.Layer, options.Dimension)
 			return err
 		})
 		if err != nil {
