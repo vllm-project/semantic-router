@@ -100,19 +100,6 @@ func (d *shadowDispatcher) prepareShadowCall(job *shadowJob) (*preparedShadowCal
 	if err != nil {
 		return nil, shadowReasonBackendUnresolved, err
 	}
-	if job.hasDynamoExt {
-		if !strings.EqualFold(strings.TrimSpace(target.backendType), "dynamo") {
-			return nil, shadowReasonDynamoBackend, unsupportedDynamoBackendError(target.logicalModel)
-		}
-		if job.sourceFormat != target.format {
-			return nil, shadowReasonDynamoFormat, llmprotocol.NewError(
-				llmprotocol.ErrorUnsupportedFeature,
-				shadowReasonDynamoFormat,
-				"Dynamo nvext requests cannot be translated across wire formats",
-				nil,
-			)
-		}
-	}
 	client, reason, err := d.connectorFor(job, target)
 	if err != nil {
 		return nil, reason, err
@@ -184,19 +171,11 @@ func shadowCallHeaders(job *shadowJob, target *shadowTarget) map[string]string {
 			result[key] = value
 		}
 	}
-	// prepareShadowCall permits these effective routing inputs only after
-	// resolving a same-format Dynamo target. Apply them after static headers so
-	// Dynamo's documented header-over-body routing semantics remain intact.
-	// Remove every routing input inherited from the independently configured
-	// shadow profile or decision. Re-add only the primary request's validated
-	// effective state so decision deletes remain deletes on the shadow path.
+	// Dynamo routing inputs are never propagated to shadow requests.
 	for existing := range result {
 		if _, ok := canonicalDynamoRoutingHeaderName(existing); ok {
 			delete(result, existing)
 		}
-	}
-	for key, value := range job.dynamoHeaders {
-		result[key] = value
 	}
 	result[headers.RequestID] = job.shadowRequestID
 	return result

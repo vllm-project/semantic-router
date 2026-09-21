@@ -50,8 +50,7 @@ const (
 	shadowReasonQueueTimeout         = "queue_timeout"
 	shadowReasonRouterClosing        = "router_closing"
 	shadowReasonBackendUnresolved    = "backend_unresolved"
-	shadowReasonDynamoBackend        = "unsupported_dynamo_nvext_backend"
-	shadowReasonDynamoFormat         = "unsupported_dynamo_nvext_translation"
+	shadowReasonDynamoState          = "dynamo_request_state"
 	shadowReasonCredentialUnresolved = "credential_unresolved" //nolint:gosec // outcome reason code, not a secret
 	shadowReasonEncodeFailed         = "encode_failed"
 	shadowReasonTimeout              = "timeout"
@@ -105,9 +104,6 @@ type shadowJob struct {
 	engine          *protocolcodec.Engine
 	encode          shadowRequestEncoder
 	request         llmprotocol.Request
-	hasDynamoExt    bool
-	sourceFormat    llmprotocol.WireFormat
-	dynamoHeaders   map[string]string
 	extraHeaders    map[string]string
 	decision        string
 	recipe          string
@@ -412,6 +408,10 @@ func (d *shadowDispatcher) submit(
 		})
 	}
 	switch {
+	case hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope) || len(deps.dynamoHeaders) > 0:
+		// Never transplant target-bound state or silently change its semantics.
+		dropEarly(shadowReasonDynamoState)
+		return
 	case ctx.LooperRequest:
 		dropEarly(shadowReasonInternalRequest)
 		return
@@ -435,9 +435,6 @@ func (d *shadowDispatcher) submit(
 		engine:          deps.engine,
 		encode:          deps.encode,
 		request:         *ctx.SemanticRequest,
-		hasDynamoExt:    hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope) || len(deps.dynamoHeaders) > 0,
-		sourceFormat:    ctx.ProtocolEnvelope.Format,
-		dynamoHeaders:   deps.dynamoHeaders,
 		extraHeaders:    deps.extraHeaders,
 		decision:        decision,
 		recipe:          recipe,
