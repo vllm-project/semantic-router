@@ -141,6 +141,22 @@ export default function RunComposer({
     availableTargets.filter((target) => target.model === initialModel),
   )
   const [limits, setLimits] = useState({ ...DEFAULT_LIMITS })
+  function changeCostPolicy(value: 'require_priced' | 'capability_only') {
+    setCostPolicy(value)
+    if (value === 'capability_only')
+      setLimits((previous) =>
+        !Number.isFinite(previous.max_cost_usd) || previous.max_cost_usd <= 0
+          ? { ...previous, max_cost_usd: DEFAULT_LIMITS.max_cost_usd }
+          : previous,
+      )
+  }
+  const missingPrices = targets.some(
+    (target) =>
+      !target.prices ||
+      Object.keys(target.prices).length === 0 ||
+      (target.kind === 'single' &&
+        !Object.prototype.hasOwnProperty.call(target.prices, target.model)),
+  )
   const [sampling, setSampling] = useState<SamplingSettings>({ temperature: 0, top_p: 1 })
   const [previewContext, setPreviewContext] = useState<NonNullable<Manifest['preview_context']>>({})
   const [plan, setPlan] = useState<{
@@ -538,6 +554,21 @@ export default function RunComposer({
             </fieldset>
           ))}
         </div>
+        {!baselineID && mode === 'live' && costPolicy === 'require_priced' && missingPrices && (
+          <div className={styles.targetFooter} role="note" aria-label="Missing target prices">
+            <span>
+              Prices are missing for selected targets. Quality only removes the USD budget; time,
+              token and call limits remain.
+            </span>
+            <button
+              type="button"
+              className={controls.compactButton}
+              onClick={() => changeCostPolicy('capability_only')}
+            >
+              Use Quality only
+            </button>
+          </div>
+        )}
         {nativeIssues.length > 0 && (
           <p className={styles.notice} role="status">
             Native capacity is unavailable for the selected targets. {nativeIssues.join(' ')} Remove
@@ -558,15 +589,7 @@ export default function RunComposer({
               outputPolicy={outputPolicy}
               onOutputPolicyChange={setOutputPolicy}
               nativeAvailable={availableTargets.some((target) => !nativeOutputIssue(target))}
-              onCostPolicyChange={(value) => {
-                setCostPolicy(value)
-                if (value === 'capability_only')
-                  setLimits((previous) =>
-                    !Number.isFinite(previous.max_cost_usd) || previous.max_cost_usd <= 0
-                      ? { ...previous, max_cost_usd: DEFAULT_LIMITS.max_cost_usd }
-                      : previous,
-                  )
-              }}
+              onCostPolicyChange={changeCostPolicy}
               mode={mode}
               previewContext={previewContext}
               onPreviewContextChange={setPreviewContext}
