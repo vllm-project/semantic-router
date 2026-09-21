@@ -576,6 +576,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_sr_bench_snapshots.py \
 		src/vllm-sr/tests/test_sr_bench_sources.py \
 		src/vllm-sr/tests/test_sr_bench_runtime.py \
+		src/vllm-sr/tests/test_sr_bench_shutdown.py \
 		src/vllm-sr/tests/test_install_package_resolution.py \
 		src/vllm-sr/tests/test_install_runtime_behavior.py \
 		src/vllm-sr/tests/test_install_script_surface.py \
