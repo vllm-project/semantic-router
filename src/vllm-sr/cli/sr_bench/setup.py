@@ -157,8 +157,20 @@ def build_grading_image():
         subprocess.check_output(["docker", "image", "inspect", base], text=True)
     )
     base_digest = next(ref for ref in images[0]["RepoDigests"] if "@sha256:" in ref)
-    requirements = "numpy==1.26.4 scipy==1.13.1 sympy==1.12.1 h5py==3.11.0 datasets==3.6.0 tqdm==4.67.1"
-    dockerfile = f"FROM {base_digest}\nRUN pip install --no-cache-dir {requirements}\n"
+    requirements = (
+        "numpy==1.26.4 scipy==1.13.1 sympy==1.12.1 h5py==3.11.0 "
+        "datasets==3.6.0 tqdm==4.67.1 matplotlib==3.9.4"
+    )
+    # Exercise compiled scientific modules and SciCode's plotting namespace
+    # before accepting the image, without importing any benchmark case content.
+    import_check = (
+        "import numpy, scipy.linalg, sympy, h5py, datasets, tqdm; "
+        "from mpl_toolkits.mplot3d import Axes3D"
+    )
+    dockerfile = (
+        f"FROM {base_digest}\nRUN pip install --no-cache-dir {requirements}\n"
+        f"RUN {json.dumps(['python', '-c', import_check])}\n"
+    )
     (directory / "Dockerfile").write_text(dockerfile)
     _run(["docker", "build", "--iidfile", directory / "image-id", directory])
     image = (directory / "image-id").read_text().strip()
@@ -166,6 +178,7 @@ def build_grading_image():
         "sandbox_image": image,
         "base_image": base_digest,
         "requirements": requirements,
+        "import_check": import_check,
         "dockerfile_sha256": hashlib.sha256(dockerfile.encode()).hexdigest(),
     }
     (directory / "manifest.json").write_text(json.dumps(receipt, indent=2) + "\n")

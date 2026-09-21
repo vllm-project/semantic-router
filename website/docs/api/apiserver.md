@@ -90,6 +90,11 @@ Use `/health` for liveness and `/ready` for readiness. During model download or
 runtime preparation, a process can be healthy while `/ready` still returns
 `503`.
 
+For a Router with a runtime registry, `/ready` and `/startup-status` report that
+replica's observed startup state. Another replica's shared file or Redis record
+cannot change these responses. Until the local replica reports startup progress,
+both endpoints return `503`.
+
 ### Replica-local status
 
 `GET /api/v1/status` requires `ready.read`. It returns `schema_version: "v1"`,

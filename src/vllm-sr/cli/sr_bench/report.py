@@ -399,6 +399,22 @@ def make_report(store, run_id):
         limitations.append(
             "GPQA labels were previously seen in this project; this is a retest, not an unseen holdout claim."
         )
+    preparation = (manifest.get("dataset") or {}).get("preparation", {})
+    if any(entry["history_snapshot"] is not None for entry in preparation.values()):
+        limitations.append(
+            "History exclusions cover only the named frozen dataset/run memberships. They do not certify complete prior generation, browsing, human exposure or upstream contamination history."
+        )
+    retests = sorted(
+        family
+        for family, entry in preparation.items()
+        if entry["evaluation_role"] == "retest"
+    )
+    if retests:
+        limitations.append(
+            "Explicit retest families included in this report: "
+            + ", ".join(retests)
+            + ". Aggregate scores including them are not an unseen holdout aggregate."
+        )
     if manifest["cost_policy"] == "require_priced":
         limitations.append(
             "Dispatch reservations use frozen request estimates. Provider or router prompt/output transformations can exceed those estimates; max_cost_usd stops future dispatch from measured spend but is not a universal hard billing cap."

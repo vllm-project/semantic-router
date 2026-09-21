@@ -25,6 +25,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark comparison-options`](#vllm-sr-benchmark-comparison-options) | List eligible baselines, or comparable live runs for BASELINE; no model calls. |
 | [`vllm-sr benchmark dataset`](#vllm-sr-benchmark-dataset) | Prepare reproducible fixed benchmark case sets. |
 | [`vllm-sr benchmark dataset combine`](#vllm-sr-benchmark-dataset-combine) | Create a reusable multi-benchmark dataset from prepared manifests. |
+| [`vllm-sr benchmark dataset exclusions`](#vllm-sr-benchmark-dataset-exclusions) | Freeze finite named history without inspecting outcomes or running models. |
 | [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download or read a pinned source and freeze a reusable dataset. |
 | [`vllm-sr benchmark dataset show`](#vllm-sr-benchmark-dataset-show) | Inspect a frozen dataset or list datasets in the shared store. |
 | [`vllm-sr benchmark experiment`](#vllm-sr-benchmark-experiment) | Group durable baseline, routing checks, candidates and validation runs. |
@@ -223,6 +224,21 @@ Create a reusable multi-benchmark dataset from prepared manifests.
 | `MANIFESTS...` | Required argument. Type: path. Accepts multiple values. |
 | `--help` | Show this message and exit. Default: false. |
 
+### `vllm-sr benchmark dataset exclusions` {#vllm-sr-benchmark-dataset-exclusions}
+
+```text
+Usage: vllm-sr benchmark dataset exclusions [OPTIONS]
+```
+
+Freeze finite named history without inspecting outcomes or running models.
+
+| Parameter | Description |
+| --- | --- |
+| `--dataset TEXT` | Named prepared dataset whose entire membership is reserved. May be repeated. |
+| `--run TEXT` | Named frozen run whose entire planned membership is reserved. May be repeated. |
+| `--output PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
 ### `vllm-sr benchmark dataset prepare` {#vllm-sr-benchmark-dataset-prepare}
 
 ```text
@@ -238,6 +254,9 @@ Download or read a pinned source and freeze a reusable dataset.
 | `--source-path PATH` | — |
 | `--revision TEXT` | — |
 | `--seed INTEGER` | Default: 20260918. |
+| `--source-partition TEXT` | Frozen upstream partition for native task identity; never an evaluation split. |
+| `--exclusion-snapshot PATH` | — |
+| `--evaluation-role CHOICE` | Explicit family role; retest is never selected automatically. Choices: holdout, retest. |
 | `--limit INTEGER` | Custom case cap; cannot be represented as an upstream full benchmark. |
 | `--help` | Show this message and exit. Default: false. |
 
