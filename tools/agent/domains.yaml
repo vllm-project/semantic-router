@@ -227,6 +227,7 @@ domains:
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
       - bench/grounded_fusion/fusioneval/**
+      - bench/jev/**
       - tools/make/go-tools.mk
     checks: [make go-tools-test]
     verifications: [core]

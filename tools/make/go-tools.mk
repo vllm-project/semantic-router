@@ -4,13 +4,15 @@
 # These native commands have no build-tag variants. The Dashboard WASM adapter
 # selects its js/wasm sources separately in dashboard/wasm/Makefile.
 
-ROUTER_GO_TOOLS := sr-dsl classifier-operating-point fusioneval image-routing-calibration modelcompat
+ROUTER_GO_TOOLS := sr-dsl classifier-operating-point fusioneval image-routing-calibration modelcompat jev-eval
 
 sr-dsl_DIR := tools/dev/dsl
 classifier-operating-point_DIR := tools/models/classifier-operating-point
 fusioneval_DIR := bench/grounded_fusion/fusioneval
 image-routing-calibration_DIR := tools/calibration/image-routing
 modelcompat_DIR := tools/modelcompat
+jev-eval_DIR := bench/jev
+jev-eval_TEST_FLAGS := -race
 # The external checkpoint round-trip belongs to test-modelcompat-native. Its
 # subprocess helper must not appear as an empty successful offline test.
 modelcompat_TEST_EXCLUDE := tools/modelcompat/main_integration_test.go
