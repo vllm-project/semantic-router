@@ -48,6 +48,7 @@ func TestResolveOperationIncludesQueryPolicy(t *testing.T) {
 			if err != nil || got != test.want {
 				t.Fatalf("operation = %+v, err = %v, want %+v", got, err, test.want)
 			}
+			t.Logf("path=%s use_api_version_query=%t", got.Path, got.UseAPIVersionQuery)
 		})
 	}
 }
