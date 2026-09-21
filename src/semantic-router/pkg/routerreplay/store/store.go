@@ -233,6 +233,21 @@ type RouteDiagnostics struct {
 	Annotations                    map[string]interface{}               `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies         map[string]string                    `json:"applied_unknown_policies,omitempty"`
+	DecisionRanking                *DecisionRanking                     `json:"decision_ranking,omitempty"`
+}
+
+// DecisionRanking records how selection ordered the matched decisions,
+// mirroring decision.RankingTrace for replay persistence.
+type DecisionRanking struct {
+	Strategy   string `json:"strategy"`
+	Tiered     bool   `json:"tiered"`
+	Tier       int    `json:"tier"`
+	Comparable bool   `json:"comparable"`
+	Fallback   string `json:"fallback_reason,omitempty"`
+	ScoreKind  string `json:"score_kind,omitempty"`
+	DecidedBy  string `json:"decided_by"`
+	Winner     string `json:"winner"`
+	Candidates int    `json:"candidates"`
 }
 
 // HallucinationSpan is a single unsupported span with its NLI explanation,
@@ -628,6 +643,10 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
+	if value.DecisionRanking != nil {
+		ranking := *value.DecisionRanking
+		cloned.DecisionRanking = &ranking
+	}
 	return &cloned
 }
 
