@@ -15,8 +15,11 @@ import (
 )
 
 const (
-	SRBenchAPIPath          = "/api/sr-bench/v1"
-	maxSRBenchRequestBytes  = 8 << 20
+	SRBenchAPIPath         = "/api/sr-bench/v1"
+	maxSRBenchRequestBytes = 8 << 20
+	// SRBenchMaxRequestBytes is the request size the proxy forwards; the route
+	// contract bounds the body at the same limit.
+	SRBenchMaxRequestBytes  = maxSRBenchRequestBytes
 	maxSRBenchResponseBytes = 64 << 20
 )
 

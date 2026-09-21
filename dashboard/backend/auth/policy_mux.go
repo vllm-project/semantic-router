@@ -110,11 +110,15 @@ func (m *PolicyMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // LookupRoutePolicy resolves the request the same way ServeHTTP will dispatch
-// it and returns the policy for its method. OPTIONS on a registered route is
-// public so handlers can answer CORS preflight.
+// it and returns the policy for its method. Callers pass the escaped path
+// (http.Request.URL.EscapedPath) because ServeMux matches wildcard segments
+// against the escaped form, so an encoded slash inside a segment stays one
+// segment. OPTIONS on a registered route without its own policy requires a
+// live session, like every other method did before contracts existed, so an
+// anonymous preflight cannot reach a protected handler.
 func (m *PolicyMux) LookupRoutePolicy(method, path string) (RoutePolicy, RouteLookup) {
 	method = strings.ToUpper(strings.TrimSpace(method))
-	request := &http.Request{Method: method, URL: &url.URL{Path: normalizePolicyPath(path)}}
+	request := &http.Request{Method: method, URL: parsePolicyPath(path)}
 	_, pattern := m.mux.Handler(request)
 
 	m.mu.RLock()
@@ -129,9 +133,19 @@ func (m *PolicyMux) LookupRoutePolicy(method, path string) (RoutePolicy, RouteLo
 		}
 	}
 	if method == http.MethodOptions {
-		return optionsPolicy(), RouteFound
+		return optionsPolicy(contract.Policies[0].ResourceOwner), RouteFound
 	}
 	return RoutePolicy{}, RouteMethodNotAllowed
+}
+
+func parsePolicyPath(path string) *url.URL {
+	path = normalizePolicyPath(path)
+	parsed, err := url.ParseRequestURI(path)
+	if err != nil || parsed.Path == "" {
+		return &url.URL{Path: path}
+	}
+	parsed.RawQuery, parsed.Fragment = "", ""
+	return parsed
 }
 
 // Contracts returns a sorted copy of every registered contract.

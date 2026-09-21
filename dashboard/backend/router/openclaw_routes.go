@@ -68,7 +68,11 @@ func registerEnabledOpenClawRoutes(routes *auth.PolicyMux, openClawHandler *hand
 	routes.HandleFunc(openClawMutationRoute("/api/openclaw/start", "openclaw.start"), openClawHandler.StartHandler())
 	routes.HandleFunc(openClawMutationRoute("/api/openclaw/stop", "openclaw.stop"), openClawHandler.StopHandler())
 	routes.HandleFunc(openClawReadRoute("/api/openclaw/token"), openClawHandler.TokenHandler())
-	routes.HandleFunc(openClawReadRoute("/api/openclaw/next-port"), openClawHandler.NextPortHandler())
+	// Host-port allocation is provisioning state, so it stays behind manage.
+	routes.HandleFunc(
+		auth.ProtectedRoute("/api/openclaw/next-port", auth.PermOpenClaw, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw, http.MethodGet),
+		openClawHandler.NextPortHandler(),
+	)
 	routes.HandleFunc(
 		auth.ProtectedMutationRoute("/api/openclaw/containers/{name}", auth.PermOpenClaw, "openclaw.container.delete", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, auth.NoBodyLimit, http.MethodDelete),
 		openClawHandler.DeleteHandler(),

@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,7 +18,7 @@ func revokedRequest(t *testing.T, method, path string, body []byte) *http.Reques
 	request := httptest.NewRequest(method, path, bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	return request.WithContext(auth.WithPermissionRevalidator(request.Context(), func(context.Context) error {
-		return errors.New("permission revoked")
+		return fmt.Errorf("%w: permission revoked", auth.ErrPermissionDenied)
 	}))
 }
 

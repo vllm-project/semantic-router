@@ -116,6 +116,7 @@ var publicDashboardRoutes = []string{
 	"/api/auth/logout/{$}",
 	"/api/setup/state",
 	"/api/status",
+	"/api/status/{$}",
 	"/embedded/wizmap/assets/",
 }
 
@@ -143,6 +144,11 @@ func TestDashboardRoutePoliciesKeepSecurityDomainsIndependent(t *testing.T) {
 		{http.MethodGet, "/api/admin/users", []string{auth.PermUsersView}},
 		{http.MethodPost, "/api/ml-pipeline/train", []string{auth.PermMlPipeline}},
 		{http.MethodPost, "/api/openclaw/provision", []string{auth.PermOpenClaw}},
+		{http.MethodGet, "/api/openclaw/next-port", []string{auth.PermOpenClaw}},
+		{http.MethodPost, "/api/recipe/probes/lane/variant/validate/", []string{auth.PermTopologyRead}},
+		{http.MethodGet, "/api/status/", nil},
+		{http.MethodGet, "/api/ml-pipeline/jobs/job-1/", []string{auth.PermMlPipeline}},
+		{http.MethodPut, "/api/mcp/servers/tenant%2Fserver", []string{auth.PermMcpManage}},
 		{http.MethodPost, "/api/openclaw/rooms/room-1/messages", []string{auth.PermOpenClawRead}},
 		{http.MethodGet, "/api/logs", []string{auth.PermLogsRead}},
 		{http.MethodPost, "/api/ds/query", []string{auth.PermLogsRead}},
@@ -172,6 +178,22 @@ func TestDashboardRoutePoliciesKeepSecurityDomainsIndependent(t *testing.T) {
 		}
 		if !slices.Equal(policy.Permissions, test.permissions) {
 			t.Fatalf("%s %s permissions = %v, want %v", test.method, test.path, policy.Permissions, test.permissions)
+		}
+	}
+
+	for _, test := range []struct {
+		path   string
+		limit  int64
+		stream bool
+	}{
+		{"/api/ml-pipeline/train", 64 << 20, true},
+		{"/api/ml-pipeline/benchmark", 32 << 20, true},
+		{"/api/ml-pipeline/config", 2 << 20, false},
+		{"/api/sr-bench/v1/plans", 8 << 20, false},
+	} {
+		policy, result := server.routes.LookupRoutePolicy(http.MethodPost, test.path)
+		if result != auth.RouteFound || policy.MaxBodyBytes != test.limit || policy.StreamBody != test.stream || !policy.Revalidate {
+			t.Fatalf("%s policy = %+v (%v)", test.path, policy, result)
 		}
 	}
 
@@ -223,6 +245,9 @@ func TestDashboardServerDeniesUnregisteredProtectedRoutes(t *testing.T) {
 		{name: "admin undeclared method", method: http.MethodDelete, path: "/api/router/config/all", token: true, want: http.StatusMethodNotAllowed},
 		{name: "anonymous registered route", method: http.MethodGet, path: "/api/router/config/all", want: http.StatusUnauthorized},
 		{name: "public setup state", method: http.MethodGet, path: "/api/setup/state", want: http.StatusOK},
+		{name: "public bootstrap alias", method: http.MethodGet, path: "/api/auth/bootstrap/can-register/", want: http.StatusOK},
+		{name: "public status alias", method: http.MethodGet, path: "/api/status/", want: http.StatusOK},
+		{name: "anonymous preflight on protected route", method: http.MethodOptions, path: "/api/router/config/all", want: http.StatusUnauthorized},
 		{name: "static frontend", method: http.MethodGet, path: "/", want: http.StatusOK},
 	} {
 		t.Run(test.name, func(t *testing.T) {

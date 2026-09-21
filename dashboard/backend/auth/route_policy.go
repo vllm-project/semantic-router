@@ -70,6 +70,10 @@ type RoutePolicy struct {
 	// again immediately before its side effect.
 	Revalidate   bool
 	MaxBodyBytes int64
+	// StreamBody keeps a revalidated mutation's body streaming through a
+	// bounded reader instead of buffering it, for uploads too large to hold.
+	// The handler must call RejectRevokedMutation before its side effect.
+	StreamBody bool
 }
 
 // RouteContract binds one ServeMux pattern to the policies of every method it
@@ -173,6 +177,20 @@ func MutationPolicy(
 	}
 }
 
+// StreamingMutationPolicy is a MutationPolicy for large uploads: the body is
+// bounded but streamed, so the commit-time revalidation in the handler is the
+// barrier rather than a post-body recheck in the middleware.
+func StreamingMutationPolicy(
+	method, permission, auditAction string,
+	sensitivity Sensitivity,
+	owner ResourceOwner,
+	maxBodyBytes int64,
+) RoutePolicy {
+	policy := MutationPolicy(method, permission, auditAction, sensitivity, owner, maxBodyBytes)
+	policy.StreamBody = true
+	return policy
+}
+
 // DelegatedMutationPolicy is a MutationPolicy whose handler writes its own
 // audit row with request-specific detail.
 func DelegatedMutationPolicy(
@@ -223,6 +241,22 @@ func ProtectedMutationRoute(
 		policies = append(policies, MutationPolicy(method, permission, auditAction, sensitivity, owner, maxBodyBytes))
 	}
 	return RouteContract{Pattern: pattern, Policies: policies}
+}
+
+// ProtectedStreamingMutationRoute is ProtectedMutationRoute for bounded
+// uploads that must not be buffered by the authorization layer.
+func ProtectedStreamingMutationRoute(
+	pattern, permission, auditAction string,
+	sensitivity Sensitivity,
+	owner ResourceOwner,
+	maxBodyBytes int64,
+	methods ...string,
+) RouteContract {
+	contract := ProtectedMutationRoute(pattern, permission, auditAction, sensitivity, owner, maxBodyBytes, methods...)
+	for index := range contract.Policies {
+		contract.Policies[index].StreamBody = true
+	}
+	return contract
 }
 
 // ProtectedDelegatedMutationRoute is ProtectedMutationRoute for handlers that
@@ -308,6 +342,9 @@ func validateRoutePolicy(pattern, method string, policy RoutePolicy) error {
 	if policy.MaxBodyBytes < 0 {
 		return fmt.Errorf("route %q %s has a negative body limit", pattern, method)
 	}
+	if policy.StreamBody && (!policy.Revalidate || policy.MaxBodyBytes == 0) {
+		return fmt.Errorf("route %q %s streams a body without a revalidated bound", pattern, method)
+	}
 	for _, permission := range policy.Permissions {
 		if strings.TrimSpace(permission) == "" {
 			return fmt.Errorf("route %q %s has an empty permission", pattern, method)
@@ -378,7 +415,14 @@ func isProtectedNamespace(path string) bool {
 		path == "/embedded" || strings.HasPrefix(path, "/embedded/")
 }
 
-// optionsPolicy lets CORS preflight reach handlers that answer it themselves.
-func optionsPolicy() RoutePolicy {
-	return PublicPolicy(http.MethodOptions)
+// optionsPolicy lets an authenticated preflight reach handlers that answer it
+// themselves without granting anything to an anonymous caller.
+func optionsPolicy(owner ResourceOwner) RoutePolicy {
+	return RoutePolicy{
+		Method:        http.MethodOptions,
+		AuditMode:     AuditNone,
+		Sensitivity:   SensitivityOperational,
+		ResourceOwner: owner,
+		SessionOnly:   true,
+	}
 }

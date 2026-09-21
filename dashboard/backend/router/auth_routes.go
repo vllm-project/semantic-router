@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strings"
 
 	auth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
@@ -82,8 +83,20 @@ func registerAuthProxyRoutes(routes *auth.PolicyMux, authSvc *auth.Service) {
 }
 
 // registerAuthRoute installs the exact path and its trailing-slash alias under
-// one contract. The public auth mux behind it keeps its own method checks.
+// one contract. The alias is forwarded to the inner auth mux under its
+// canonical path; that mux keeps its own method checks.
 func registerAuthRoute(routes *auth.PolicyMux, spec authRouteSpec, handler http.HandlerFunc) {
+	canonical := func(w http.ResponseWriter, r *http.Request) {
+		if len(r.URL.Path) > 1 && strings.HasSuffix(r.URL.Path, "/") {
+			cloneReq := *r
+			cloneURL := *r.URL
+			cloneURL.Path = strings.TrimSuffix(cloneURL.Path, "/")
+			cloneURL.RawPath = strings.TrimSuffix(cloneURL.RawPath, "/")
+			cloneReq.URL = &cloneURL
+			r = &cloneReq
+		}
+		handler(w, r)
+	}
 	contracts := make([]auth.RouteContract, 0, 2)
 	for _, pattern := range []string{spec.path, spec.path + "/{$}"} {
 		if spec.session {
@@ -92,7 +105,7 @@ func registerAuthRoute(routes *auth.PolicyMux, spec authRouteSpec, handler http.
 		}
 		contracts = append(contracts, auth.PublicRoute(pattern, spec.methods...))
 	}
-	routes.HandleGroup(contracts, handler)
+	routes.HandleGroup(contracts, http.HandlerFunc(canonical))
 }
 
 func wrapWithAuth(routes *auth.PolicyMux, authSvc *auth.Service) http.Handler {

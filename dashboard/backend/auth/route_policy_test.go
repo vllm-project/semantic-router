@@ -73,6 +73,14 @@ func TestValidateRouteContractRejectsIncompletePolicies(t *testing.T) {
 			want: "without a permission",
 		},
 		{
+			name: "streaming without a bound",
+			contract: Route("/api/test", RoutePolicy{
+				Method: http.MethodPost, Permissions: []string{PermMlPipeline}, AuditMode: AuditRequired, AuditAction: "ml.train",
+				Sensitivity: SensitivitySensitive, ResourceOwner: ResourceOwnerML, Revalidate: true, StreamBody: true,
+			}),
+			want: "streams a body without a revalidated bound",
+		},
+		{
 			name:     "negative body limit",
 			contract: ProtectedBoundedRoute("/api/test", PermConfigRead, SensitivitySensitive, ResourceOwnerConfig, -1, http.MethodPost),
 			want:     "negative body limit",
@@ -125,8 +133,13 @@ func TestPolicyMuxBindsHandlerAndContractsAsOneGroup(t *testing.T) {
 	if _, lookup := routes.LookupRoutePolicy(http.MethodDelete, "/api/items/one"); lookup != RouteMethodNotAllowed {
 		t.Fatalf("undeclared method lookup = %v, want %v", lookup, RouteMethodNotAllowed)
 	}
-	if policy, lookup := routes.LookupRoutePolicy(http.MethodOptions, "/api/items/one"); lookup != RouteFound || !policy.Public {
-		t.Fatalf("OPTIONS lookup = (%+v, %v), want public preflight", policy, lookup)
+	if policy, lookup := routes.LookupRoutePolicy(http.MethodOptions, "/api/items/one"); lookup != RouteFound || policy.Public || !policy.SessionOnly {
+		t.Fatalf("OPTIONS lookup = (%+v, %v), want session-only preflight", policy, lookup)
+	}
+	// ServeMux matches wildcards against the escaped path, so an encoded slash
+	// inside a segment stays one segment and resolves to the same contract.
+	if policy, lookup := routes.LookupRoutePolicy(http.MethodPost, "/api/items/tenant%2Fone"); lookup != RouteFound || policy.Permissions[0] != PermConfigWrite {
+		t.Fatalf("escaped segment lookup = (%+v, %v)", policy, lookup)
 	}
 	if _, lookup := routes.LookupRoutePolicy(http.MethodGet, "/api/items/one/extra"); lookup != RouteNotFound {
 		t.Fatalf("deeper path lookup = %v, want %v", lookup, RouteNotFound)

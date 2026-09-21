@@ -81,11 +81,17 @@ func registerRecipeRoutes(routes *auth.PolicyMux, cfg *config.Config, stores ...
 	}))
 	routes.HandleFunc(configRead("/api/recipe", auth.SensitivityOperational), handler.Descriptor)
 	routes.HandleFunc(configRead("/api/recipe/probes", auth.SensitivityOperational), handler.Probes)
-	routes.HandleGroup([]auth.RouteContract{
-		configRead("/api/recipe/probes/{decision}/{variant}", auth.SensitivityOperational),
-		auth.ProtectedBoundedRoute("/api/recipe/probes/{decision}/{variant}/run-plan", auth.PermConfigRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxProbeBodyBytes, http.MethodPost),
-		auth.ProtectedBoundedRoute("/api/recipe/probes/{decision}/{variant}/validate", auth.PermTopologyRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxProbeBodyBytes, http.MethodPost),
-	}, http.HandlerFunc(handler.ProbeAction))
+	// The probe handler trims a trailing slash itself, so each probe path is
+	// registered with its slash alias.
+	probeContracts := make([]auth.RouteContract, 0, 6)
+	for _, alias := range []string{"", "/{$}"} {
+		probeContracts = append(probeContracts,
+			configRead("/api/recipe/probes/{decision}/{variant}"+alias, auth.SensitivityOperational),
+			auth.ProtectedBoundedRoute("/api/recipe/probes/{decision}/{variant}/run-plan"+alias, auth.PermConfigRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxProbeBodyBytes, http.MethodPost),
+			auth.ProtectedBoundedRoute("/api/recipe/probes/{decision}/{variant}/validate"+alias, auth.PermTopologyRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxProbeBodyBytes, http.MethodPost),
+		)
+	}
+	routes.HandleGroup(probeContracts, http.HandlerFunc(handler.ProbeAction))
 	routes.HandleGroup([]auth.RouteContract{
 		configRead("/api/recipe/packages", auth.SensitivityOperational),
 		configRead("/api/recipe/packages/", auth.SensitivityOperational),
@@ -263,7 +269,10 @@ func registerStatusRoutes(routes *auth.PolicyMux, cfg *config.Config, statusHand
 	}
 	// The status summary is the unauthenticated liveness surface the frontend
 	// polls before login.
-	routes.HandleFunc(auth.PublicRoute("/api/status", http.MethodGet), statusHandler)
+	routes.HandleGroup([]auth.RouteContract{
+		auth.PublicRoute("/api/status", http.MethodGet),
+		auth.PublicRoute("/api/status/{$}", http.MethodGet),
+	}, statusHandler)
 	log.Printf("Status API endpoint registered: /api/status")
 
 	routes.HandleFunc(
@@ -307,22 +316,33 @@ func registerMLPipelineRoutes(routes *auth.PolicyMux, cfg *config.Config, wf *wo
 	mlRead := func(pattern string) auth.RouteContract {
 		return auth.ProtectedRoute(pattern, auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet)
 	}
-	mlMutation := func(pattern, action string) auth.RouteContract {
-		return auth.ProtectedMutationRoute(pattern, auth.PermMlPipeline, action, auth.SensitivitySensitive, auth.ResourceOwnerML, maxMLBodyBytes, http.MethodPost)
+	// Dataset uploads are multipart bodies far larger than a JSON mutation;
+	// they stream through the bound and the handlers revalidate before the
+	// job starts. The limits match the handlers' ParseMultipartForm sizes.
+	mlUpload := func(pattern, action string, maxBodyBytes int64) auth.RouteContract {
+		return auth.ProtectedStreamingMutationRoute(pattern, auth.PermMlPipeline, action, auth.SensitivitySensitive, auth.ResourceOwnerML, maxBodyBytes, http.MethodPost)
 	}
 	routes.HandleFunc(mlRead("/api/ml-pipeline/jobs"), mlHandler.ListJobsHandler())
 	routes.HandleGroup([]auth.RouteContract{
 		mlRead("/api/ml-pipeline/jobs/{id}"),
+		mlRead("/api/ml-pipeline/jobs/{id}/{$}"),
 		mlRead("/api/ml-pipeline/jobs/{id}/events"),
 	}, mlHandler.GetJobHandler())
-	routes.HandleFunc(mlMutation("/api/ml-pipeline/benchmark", "ml.benchmark"), mlHandler.RunBenchmarkHandler())
-	routes.HandleFunc(mlMutation("/api/ml-pipeline/train", "ml.train"), mlHandler.RunTrainHandler())
-	routes.HandleFunc(mlMutation("/api/ml-pipeline/config", "ml.config.generate"), mlHandler.GenerateConfigHandler())
+	routes.HandleFunc(mlUpload("/api/ml-pipeline/benchmark", "ml.benchmark", handlers.MLBenchmarkUploadMaxBytes), mlHandler.RunBenchmarkHandler())
+	routes.HandleFunc(mlUpload("/api/ml-pipeline/train", "ml.train", handlers.MLTrainUploadMaxBytes), mlHandler.RunTrainHandler())
+	routes.HandleFunc(
+		auth.ProtectedMutationRoute("/api/ml-pipeline/config", auth.PermMlPipeline, "ml.config.generate", auth.SensitivitySensitive, auth.ResourceOwnerML, maxMLBodyBytes, http.MethodPost),
+		mlHandler.GenerateConfigHandler(),
+	)
 	routes.HandleGroup([]auth.RouteContract{
 		mlRead("/api/ml-pipeline/download/{id}"),
+		mlRead("/api/ml-pipeline/download/{id}/{$}"),
 		mlRead("/api/ml-pipeline/download/{id}/{index}"),
 	}, mlHandler.DownloadOutputHandler())
-	routes.HandleFunc(mlRead("/api/ml-pipeline/stream/{id}"), mlHandler.StreamProgressHandler())
+	routes.HandleGroup([]auth.RouteContract{
+		mlRead("/api/ml-pipeline/stream/{id}"),
+		mlRead("/api/ml-pipeline/stream/{id}/{$}"),
+	}, mlHandler.StreamProgressHandler())
 	log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
 
 	if trainingDir != "" {

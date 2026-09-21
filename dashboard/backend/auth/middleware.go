@@ -35,7 +35,10 @@ type AuthContext struct {
 
 type permissionRevalidator func(context.Context) error
 
-var errPermissionDenied = errors.New("permission denied")
+// ErrPermissionDenied marks an authorization failure, as opposed to a session
+// that cannot be resolved; RejectRevokedMutation answers 403 for the former
+// and 401 for the latter.
+var ErrPermissionDenied = errors.New("permission denied")
 
 // AuthenticateRequest authorizes every request against the route registry.
 // A request in a protected namespace with no registered contract is denied;
@@ -45,7 +48,7 @@ var errPermissionDenied = errors.New("permission denied")
 func AuthenticateRequest(service *Service, resolver RoutePolicyResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.Path)
+			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.EscapedPath())
 			switch lookup {
 			case RouteMethodNotAllowed:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -76,7 +79,7 @@ func AuthenticateRequest(service *Service, resolver RoutePolicyResolver) func(ht
 				if !boundRequestBody(w, r, policy) {
 					return
 				}
-				if policy.Revalidate {
+				if policy.Revalidate && !policy.StreamBody {
 					// The body may have arrived slowly. Re-resolve the actor
 					// before the handler sees the complete request.
 					if user, perms, err = authorizeClaims(r.Context(), service, claims, policy); err != nil {
@@ -166,14 +169,14 @@ func authorizeClaims(
 	}
 	for _, permission := range policy.Permissions {
 		if !perms[permission] {
-			return nil, nil, fmt.Errorf("%w: permission %q is required", errPermissionDenied, permission)
+			return nil, nil, fmt.Errorf("%w: permission %q is required", ErrPermissionDenied, permission)
 		}
 	}
 	return user, perms, nil
 }
 
 func writeAuthorizationError(w http.ResponseWriter, userID string, err error) {
-	if errors.Is(err, errPermissionDenied) {
+	if errors.Is(err, ErrPermissionDenied) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
@@ -183,10 +186,11 @@ func writeAuthorizationError(w http.ResponseWriter, userID string, err error) {
 
 // boundRequestBody enforces the contract's body limit. Revalidated mutations
 // read the whole body here so the actor can be re-resolved once it has
-// arrived; other bounded routes keep streaming through a limited reader.
+// arrived; bounded reads and streaming uploads keep flowing through a
+// limited reader.
 func boundRequestBody(w http.ResponseWriter, r *http.Request, policy RoutePolicy) bool {
 	limited := http.MaxBytesReader(w, r.Body, policy.MaxBodyBytes)
-	if !policy.Revalidate {
+	if !policy.Revalidate || policy.StreamBody {
 		r.Body = limited
 		return true
 	}
@@ -239,7 +243,7 @@ func serveWithRouteAudit(
 func ServiceUnavailableGuard(resolver RoutePolicyResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.Path)
+			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.EscapedPath())
 			switch {
 			case lookup == RouteMethodNotAllowed:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -283,9 +287,12 @@ func WithPermissionRevalidator(ctx context.Context, check func(context.Context) 
 	return context.WithValue(ctx, revalidatorKey, permissionRevalidator(check))
 }
 
-// RejectRevokedMutation writes 403 and reports true when the live session no
-// longer authorizes the request. Requests admitted without a revalidator, such
-// as direct handler tests, are not rejected.
+// RejectRevokedMutation reports true, after writing the response, when the
+// live session no longer authorizes the request: 403 for a revoked
+// permission, 401 with a server-side log line when the session cannot be
+// resolved, the same classification the admission path applies. Requests
+// admitted without a revalidator, such as direct handler tests, are not
+// rejected.
 func RejectRevokedMutation(w http.ResponseWriter, r *http.Request) bool {
 	if r == nil {
 		return false
@@ -293,11 +300,13 @@ func RejectRevokedMutation(w http.ResponseWriter, r *http.Request) bool {
 	if _, ok := r.Context().Value(revalidatorKey).(permissionRevalidator); !ok {
 		return false
 	}
-	if err := RevalidateRequest(r); err != nil {
-		http.Error(w, "Forbidden", http.StatusForbidden)
-		return true
+	err := RevalidateRequest(r)
+	if err == nil {
+		return false
 	}
-	return false
+	ac, _ := AuthFromContext(r)
+	writeAuthorizationError(w, ac.UserID, err)
+	return true
 }
 
 func AuthFromContext(r *http.Request) (AuthContext, bool) {

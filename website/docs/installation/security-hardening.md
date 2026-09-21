@@ -63,6 +63,10 @@ permissions after the body has arrived, and check them again immediately
 before committing, so a session revoked or demoted while a request is in
 flight cannot complete a write.
 
+Role grants can be overridden per user: a user-level permission row with
+`allowed = 0` revokes that permission for that user even though the role
+grants it, and a row with `allowed = 1` grants it without changing the role.
+
 Relevant Dashboard permissions include:
 
 | Permission | Purpose | Default roles |

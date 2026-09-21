@@ -11,7 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 )
 
-const maxSRBenchBodyBytes = 4 << 20
+const maxSRBenchBodyBytes = handlers.SRBenchMaxRequestBytes
 
 func registerSRBenchRoutes(routes *auth.PolicyMux, cfg *config.Config) {
 	// Retired /api/evaluation paths are no longer registered; the registry

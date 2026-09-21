@@ -13,9 +13,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
+)
+
+// Upload limits shared with the route contracts so the authorization bound
+// and the multipart parser agree.
+const (
+	MLBenchmarkUploadMaxBytes = 32 << 20
+	MLTrainUploadMaxBytes     = 64 << 20
 )
 
 // MLPipelineHandler holds dependencies for ML pipeline endpoints.
@@ -140,7 +148,7 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 		}
 
 		// Parse multipart form (models YAML + queries JSONL + config)
-		if err := r.ParseMultipartForm(32 << 20); err != nil {
+		if err := r.ParseMultipartForm(MLBenchmarkUploadMaxBytes); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
 			return
 		}
@@ -174,6 +182,9 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 		}
 
 		ctx := context.Background()
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		jobID, err := h.runner.RunBenchmark(ctx, modelsPath, queriesPath, req)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start benchmark: %v", err), http.StatusInternalServerError)
@@ -210,7 +221,7 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 
 		if strings.HasPrefix(contentType, "multipart/form-data") {
 			// ── Multipart upload mode: user uploads a training data file directly ──
-			if err := r.ParseMultipartForm(64 << 20); err != nil {
+			if err := r.ParseMultipartForm(MLTrainUploadMaxBytes); err != nil {
 				http.Error(w, fmt.Sprintf("Failed to parse form: %v", err), http.StatusBadRequest)
 				return
 			}
@@ -269,6 +280,9 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 		}
 
 		ctx := context.Background()
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		jobID, err := h.runner.RunTrain(ctx, benchmarkDataPath, trainConfig)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to start training: %v", err), http.StatusInternalServerError)

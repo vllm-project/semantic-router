@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,6 +21,8 @@ func newPolicyTestRoutes(t *testing.T, handler http.Handler) *PolicyMux {
 		ProtectedRoute("/api/router/config/all", PermConfigRead, SensitivitySecret, ResourceOwnerConfig, http.MethodGet),
 		ProtectedRoute("/api/logs", PermLogsRead, SensitivitySensitive, ResourceOwnerObservability, http.MethodGet),
 		ProtectedBoundedRoute("/api/router/v1/chat/completions", PermInferenceRun, SensitivitySecret, ResourceOwnerInference, 64, http.MethodPost),
+		ProtectedStreamingMutationRoute("/api/ml-pipeline/train", PermMlPipeline, "ml.train", SensitivitySensitive, ResourceOwnerML, 64, http.MethodPost),
+		ProtectedMutationRoute("/api/mcp/servers/{id}", PermMcpManage, "mcp.server.update", SensitivitySecret, ResourceOwnerTools, 64, http.MethodPut),
 		ProtectedMutationRoute("/api/router/config/update", PermConfigWrite, "config.update", SensitivitySecret, ResourceOwnerConfig, 64, http.MethodPost),
 		ProtectedMutationRoute("/api/router/config/deploy", PermConfigDeploy, "config.deploy", SensitivitySecret, ResourceOwnerConfig, 64, http.MethodPost),
 		ProtectedRoute("/api/router/api/v1/observability/replays", PermReplayRead, SensitivitySecret, ResourceOwnerReplay, http.MethodGet),
@@ -75,6 +78,85 @@ func TestAuthenticateRequestDeniesUnknownProtectedRoutes(t *testing.T) {
 	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/unregistered", nil))
 	if recorder.Code != http.StatusForbidden || called {
 		t.Fatalf("anonymous unknown route: status = %d called = %v", recorder.Code, called)
+	}
+
+	// Preflight on a registered route needs a session, not a permission.
+	called = false
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodOptions, "/api/router/config/all", nil))
+	if recorder.Code != http.StatusUnauthorized || called {
+		t.Fatalf("anonymous OPTIONS: status = %d called = %v", recorder.Code, called)
+	}
+	reader := newTestUser(t, svc, "options-reader@example.com", RoleRead, "active")
+	if _, err := svc.store.db.Exec(`DELETE FROM role_permissions WHERE role = ?`, RoleRead); err != nil {
+		t.Fatal(err)
+	}
+	called = false
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, reader, http.MethodOptions, "/api/router/config/all", ""))
+	if recorder.Code != http.StatusNoContent || !called {
+		t.Fatalf("authenticated OPTIONS: status = %d called = %v", recorder.Code, called)
+	}
+
+	// An encoded slash inside a wildcard segment resolves to the wildcard
+	// contract instead of being read as an extra segment and denied.
+	called = false
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, admin, http.MethodPut, "/api/mcp/servers/tenant%2Fserver", `{}`))
+	if recorder.Code != http.StatusNoContent || !called {
+		t.Fatalf("escaped id: status = %d called = %v", recorder.Code, called)
+	}
+}
+
+func TestStreamingMutationKeepsBodyBoundedWithoutBuffering(t *testing.T) {
+	t.Parallel()
+
+	svc := newTestAuthService(t)
+	admin := newTestUser(t, svc, "upload@example.com", RoleAdmin, "active")
+	var seen int
+	routes := newPolicyTestRoutes(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		seen = len(body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusRequestEntityTooLarge)
+			return
+		}
+		if RejectRevokedMutation(w, r) {
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	handler := AuthenticateRequest(svc, routes)(routes)
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, admin, http.MethodPost, "/api/ml-pipeline/train", strings.Repeat("x", 32)))
+	if recorder.Code != http.StatusNoContent || seen != 32 {
+		t.Fatalf("streamed upload: status = %d seen = %d", recorder.Code, seen)
+	}
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, admin, http.MethodPost, "/api/ml-pipeline/train", strings.Repeat("x", 65)))
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversized streamed upload: status = %d", recorder.Code)
+	}
+}
+
+func TestRejectRevokedMutationClassifiesResolutionFailures(t *testing.T) {
+	t.Parallel()
+
+	request := httptest.NewRequest(http.MethodPost, "/api/router/config/update", nil)
+	denied := request.WithContext(WithPermissionRevalidator(request.Context(), func(context.Context) error {
+		return fmt.Errorf("%w: permission %q is required", ErrPermissionDenied, PermConfigWrite)
+	}))
+	recorder := httptest.NewRecorder()
+	if !RejectRevokedMutation(recorder, denied) || recorder.Code != http.StatusForbidden {
+		t.Fatalf("revoked permission: rejected=%v status=%d", recorder.Code == http.StatusForbidden, recorder.Code)
+	}
+	failed := request.WithContext(WithPermissionRevalidator(request.Context(), func(context.Context) error {
+		return errors.New("database is locked")
+	}))
+	recorder = httptest.NewRecorder()
+	if !RejectRevokedMutation(recorder, failed) || recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("store failure: status=%d, want %d", recorder.Code, http.StatusUnauthorized)
 	}
 }
 
@@ -303,8 +385,10 @@ func TestRevalidateRequestRejectsSessionRevokedBeforeCommit(t *testing.T) {
 	request.Header.Set("Authorization", "Bearer "+token)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
-	if recorder.Code != http.StatusForbidden || committed {
-		t.Fatalf("status = %d committed = %v, want %d and no commit", recorder.Code, committed, http.StatusForbidden)
+	// A revoked session is an authentication failure, so it answers 401 the
+	// same way admission does; a demoted actor answers 403.
+	if recorder.Code != http.StatusUnauthorized || committed {
+		t.Fatalf("status = %d committed = %v, want %d and no commit", recorder.Code, committed, http.StatusUnauthorized)
 	}
 
 	// Read routes do not carry a revalidator, and direct handler invocations
