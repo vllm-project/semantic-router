@@ -31,14 +31,15 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 	for _, required := range []string{
 		"FROM ${IMAGE_REGISTRY}library/python:3.11-slim-bookworm",
 		"ENV PYTHONPATH=/app",
+		"COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/",
 		"COPY src/vllm-sr/requirements.txt /app/requirements.txt",
-		"COPY src/vllm-sr/pyproject.toml /app/pyproject.toml",
+		"COPY --chmod=0444 src/vllm-sr/pyproject.toml /app/pyproject.toml",
 		"COPY src/vllm-sr/cli/ /app/cli/",
 		`"${VIRTUAL_ENV}/bin/pip" install --no-cache-dir -r /app/requirements.txt`,
 		"install -d -o nonroot -g root -m 0770 /app/data",
 		"find /app/cli -type d -exec chmod 0555 {} +",
 		"find /app/cli -type f -exec chmod 0444 {} +",
-		"chmod 0555 /app/cli/evaluation/sandbox_worker.py",
+		"RUN cd /tmp && gosu nonroot python3 -m cli.model_catalog_export >/dev/null",
 	} {
 		if !strings.Contains(canonicalDockerfile, required) {
 			t.Fatalf("canonical Dashboard Dockerfile omitted runtime contract %q", required)

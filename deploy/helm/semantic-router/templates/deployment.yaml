@@ -93,14 +93,16 @@ spec:
         - containerPort: {{ .Values.service.api.targetPort }}
           name: classify-api
           protocol: TCP
-        {{- if or .Values.env .Values.extraEnv }}
         env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
         {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
         {{- with .Values.extraEnv }}
           {{- toYaml . | nindent 10 }}
-        {{- end }}
         {{- end }}
         {{- with .Values.envFromSecrets }}
         envFrom:
@@ -131,9 +133,9 @@ spec:
         - name: models-volume
           mountPath: /app/models
         {{- if .Values.startupProbe.enabled }}
-        # Startup probe for slow-starting containers (model loading takes ~60s with Gemma)
+        # Startup and readiness require an activated serving generation.
         startupProbe:
-          tcpSocket:
+          grpc:
             port: {{ .Values.service.grpc.targetPort }}
           periodSeconds: {{ .Values.startupProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
@@ -150,7 +152,7 @@ spec:
         {{- end }}
         {{- if .Values.readinessProbe.enabled }}
         readinessProbe:
-          tcpSocket:
+          grpc:
             port: {{ .Values.service.grpc.targetPort }}
           initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.readinessProbe.periodSeconds }}

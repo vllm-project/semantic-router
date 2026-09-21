@@ -1,41 +1,9 @@
 .page {
-  --site-bg: #050505;
-  --site-bg-alt: #09090a;
-  --site-surface: #101012;
-  --site-surface-alt: #151518;
-  --site-surface-raised: #1b1b1f;
-  --site-surface-soft: rgba(255, 255, 255, 0.035);
-  --site-surface-glass: rgba(16, 16, 18, 0.82);
-  --site-text: #f5f5f7;
-  --site-text-strong: #ffffff;
-  --site-muted: #777780;
-  --site-muted-bright: #b6b6bd;
-  --site-border: rgba(255, 255, 255, 0.085);
-  --site-border-strong: rgba(255, 255, 255, 0.17);
-  --site-accent: #30a2ff;
-  --site-accent-strong: #75c5ff;
-  --site-accent-soft: rgba(48, 162, 255, 0.14);
-  /* The landing page is dark in both colour modes, so it takes the dark half
-   * of the hover ladder and CTA tier too — otherwise a light-mode visitor gets
-   * the deep-blue #0876c9 fill against a near-black band. */
-  --site-hover-chrome-bg: rgba(48, 162, 255, 0.1);
-  --site-hover-subtle-bg: rgba(48, 162, 255, 0.06);
-  --site-hover-text: #75c5ff;
-  --site-cta-bg: #30a2ff;
-  --site-cta-bg-hover: #75c5ff;
-  --site-cta-text: #04121f;
-  --site-cta-border: #30a2ff;
-  --site-cta-border-hover: #75c5ff;
-  --site-cta-shadow: 0 14px 32px rgba(48, 162, 255, 0.24);
-  --site-shadow-soft: 0 18px 42px rgba(0, 0, 0, 0.22);
-  --site-shadow: 0 24px 64px rgba(0, 0, 0, 0.3);
-  --site-shadow-raised: 0 28px 70px rgba(0, 0, 0, 0.36);
   display: grid;
   gap: 0;
   overflow-x: clip;
-  background: #030303;
+  background: var(--site-bg);
   color: var(--site-text);
-  color-scheme: dark;
 }
 
 .bandBlack,
@@ -45,24 +13,12 @@
   background: var(--site-bg);
 }
 
-.bandBlack {
-  --site-bg: #050505;
-  --site-surface: #101012;
-  --site-surface-alt: #151518;
-}
-
 .bandGraphite {
-  --site-bg: #09090a;
-  --site-surface: #111113;
-  --site-surface-alt: #18181b;
-  --site-surface-raised: #202024;
+  --site-bg: var(--site-bg-alt);
 }
 
 .bandRaised {
-  --site-bg: #0d0d0f;
-  --site-surface: #131316;
-  --site-surface-alt: #1a1a1e;
-  --site-surface-raised: #222227;
+  --site-bg: var(--site-surface);
 }
 
 .capabilitySection,
@@ -121,7 +77,7 @@
   overflow: hidden;
   border-top: 1px solid var(--site-border-strong);
   border-bottom: 1px solid var(--site-border-strong);
-  background: #0d0d0f;
+  background: var(--site-surface);
 }
 
 .matrixHeader,
@@ -134,7 +90,7 @@
   min-height: 2.35rem;
   align-items: center;
   border-bottom: 1px solid var(--site-border-strong);
-  background: rgba(255, 255, 255, 0.025);
+  background: var(--site-surface-soft);
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.6rem;
@@ -229,7 +185,7 @@
   height: 1px;
   margin-left: 0.45rem;
   vertical-align: middle;
-  background: rgba(48, 162, 255, 0.52);
+  background: var(--site-accent);
 }
 
 .matrixDimension strong {
@@ -252,7 +208,7 @@
 
 .matrixUnified {
   position: relative;
-  background: linear-gradient(90deg, rgba(48, 162, 255, 0.1), rgba(48, 162, 255, 0.025));
+  background: var(--site-hover-row-bg);
 }
 
 .matrixUnified::before {
@@ -304,14 +260,13 @@
   position: relative;
   z-index: 1;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--site-border);
   border-radius: clamp(1rem, 1.8vw, 1.45rem);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 42%),
+    linear-gradient(180deg, var(--site-surface-soft), transparent 42%),
     var(--site-surface-alt);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 24px 72px rgba(0, 0, 0, 0.34);
+    inset 0 1px 0 var(--site-border), var(--site-shadow);
 }
 
 .momProofArchitecture {
@@ -352,7 +307,7 @@
 .momProofArchitectureImageWrap {
   min-width: 0;
   padding: clamp(0.8rem, 1.8vw, 1.35rem);
-  background: rgba(255, 255, 255, 0.015);
+  background: var(--site-surface-soft);
 }
 
 .momProofArchitectureImage,
@@ -380,12 +335,11 @@
 .momScorecard {
   overflow: hidden;
   min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid var(--site-border);
   border-radius: 1rem;
-  background: #050608;
+  background: var(--site-surface);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 18px 48px rgba(0, 0, 0, 0.26);
+    inset 0 1px 0 var(--site-border), var(--site-shadow-soft);
 }
 
 .momScorecardHeader {
@@ -459,10 +413,10 @@
   align-content: start;
   min-width: 0;
   padding: 0.85rem 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid var(--site-border);
   border-radius: 0.6rem;
-  background: rgba(4, 8, 15, 0.75);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background: var(--site-surface-glass);
+  box-shadow: inset 0 1px 0 var(--site-border);
   animation: constraintStageIn 0.6s ease-out var(--stage-delay) both;
 }
 
@@ -472,7 +426,7 @@
   top: 50%;
   right: -0.46rem;
   z-index: 1;
-  color: rgba(117, 197, 255, 0.5);
+  color: var(--site-accent-strong);
   font-size: 0.7rem;
   line-height: 1;
   transform: translateY(-50%);
@@ -480,10 +434,10 @@
 
 /* The gate is the whole point of the diagram, so it is the lit one. */
 .constraintStageGate {
-  border-color: rgba(48, 162, 255, 0.42);
+  border-color: var(--site-accent);
   background:
-    linear-gradient(180deg, rgba(48, 162, 255, 0.14), rgba(48, 162, 255, 0.04)),
-    rgba(4, 8, 15, 0.75);
+    var(--site-hover-surface-bg-soft),
+    var(--site-surface-glass);
   animation: constraintGate 5.6s ease-in-out infinite;
 }
 
@@ -492,26 +446,25 @@
   10%,
   40%,
   100% {
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 1px 0 var(--site-border);
   }
 
   20% {
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.04),
-      0 0 0 1px rgba(48, 162, 255, 0.4),
-      0 0 26px rgba(48, 162, 255, 0.22);
+      inset 0 1px 0 var(--site-border),
+      var(--site-hover-glow);
   }
 }
 
 .constraintStageIndex {
-  color: rgba(117, 197, 255, 0.55);
+  color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.58rem;
   letter-spacing: 0.08em;
 }
 
 .constraintStage strong {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--site-text-strong);
   font-size: clamp(0.82rem, 1vw, 0.95rem);
   font-weight: var(--site-font-weight-semibold);
   line-height: 1.25;
@@ -540,7 +493,7 @@
   width: 100%;
   height: 2px;
   border-radius: inherit;
-  background: linear-gradient(90deg, #75c5ff, #30a2ff);
+  background: linear-gradient(90deg, var(--site-accent-strong), var(--site-accent));
   transform: scaleX(0);
   transform-origin: left;
   animation: constraintScan 5.6s ease-in-out var(--stage-delay) infinite;
@@ -665,15 +618,14 @@
   margin-inline: auto;
   padding: clamp(1.75rem, 3vw, 2.5rem) clamp(1.5rem, 3vw, 2.5rem);
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--site-border);
   border-radius: 1.15rem;
   background:
-    radial-gradient(120% 160% at 50% 0%, rgba(48, 162, 255, 0.15), transparent 60%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 44%),
-    #08080a;
+    radial-gradient(120% 160% at 50% 0%, var(--site-accent-soft), transparent 60%),
+    linear-gradient(180deg, var(--site-surface-soft), transparent 44%),
+    var(--site-surface);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 24px 60px rgba(0, 0, 0, 0.45);
+    inset 0 1px 0 var(--site-border), var(--site-shadow);
 }
 
 .finalCtaFrame::before {
@@ -684,8 +636,8 @@
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(48, 162, 255, 0.65) 22%,
-    rgba(48, 162, 255, 0.65) 46%,
+    var(--site-accent) 22%,
+    var(--site-accent) 46%,
     transparent 78%
   );
 }
@@ -724,16 +676,16 @@
 
 /* The page's last action, so it is solid rather than another outline pill. */
 .finalCtaActions .finalCtaPrimary:global(.pill) {
-  border-color: var(--site-accent) !important;
-  background: var(--site-accent) !important;
-  color: #030303 !important;
-  box-shadow: 0 16px 36px rgba(48, 162, 255, 0.24) !important;
+  border-color: var(--site-cta-border) !important;
+  background: var(--site-cta-bg) !important;
+  color: var(--site-cta-text) !important;
+  box-shadow: var(--site-cta-shadow) !important;
 }
 
 .finalCtaActions .finalCtaPrimary:global(.pill):hover {
-  border-color: var(--site-accent-strong) !important;
-  background: var(--site-accent-strong) !important;
-  color: #030303 !important;
+  border-color: var(--site-cta-border-hover) !important;
+  background: var(--site-cta-bg-hover) !important;
+  color: var(--site-cta-text) !important;
   transform: translateY(-1px);
 }
 
@@ -786,7 +738,7 @@
       grid-template-columns: 1fr;
       min-height: 0;
       border: 1px solid var(--site-border);
-      background: #0d0d0f;
+      background: var(--site-surface);
   }
 
   .matrixDimension,

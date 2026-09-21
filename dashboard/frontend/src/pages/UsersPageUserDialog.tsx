@@ -113,121 +113,147 @@ export default function UsersPageUserDialog({
         </div>
 
         <form className={styles.form} onSubmit={handleSubmit} autoComplete="on">
-          {error ? <div className={styles.error}>{error}</div> : null}
+          <div className={styles.body}>
+            {error ? <div className={styles.error}>{error}</div> : null}
 
-          <div className={styles.grid}>
-            <label className={styles.field} htmlFor={`${fieldIdPrefix}-email`}>
-              <span className={styles.label}>Email</span>
-              <input
-                id={`${fieldIdPrefix}-email`}
-                type="email"
-                name="email"
-                autoComplete="username"
-                className={styles.input}
-                value={values.email}
-                onChange={(event) => setValues((prev) => ({ ...prev, email: event.target.value }))}
-                placeholder="you@example.com"
-                disabled={isEditMode || isSubmitting}
-                data-dialog-initial-focus={!isEditMode ? true : undefined}
-                required
-              />
-              {isEditMode ? <span className={styles.hint}>Existing users keep their email address.</span> : null}
-            </label>
+            <div className={styles.grid}>
+              <label className={styles.field} htmlFor={`${fieldIdPrefix}-email`}>
+                <span className={styles.label}>Email</span>
+                <input
+                  id={`${fieldIdPrefix}-email`}
+                  type="email"
+                  name="email"
+                  autoComplete="username"
+                  className={styles.input}
+                  value={values.email}
+                  onChange={(event) =>
+                    setValues((prev) => ({ ...prev, email: event.target.value }))
+                  }
+                  placeholder="you@example.com"
+                  disabled={isEditMode || isSubmitting}
+                  data-dialog-initial-focus={!isEditMode ? true : undefined}
+                  required
+                />
+                {isEditMode ? (
+                  <span className={styles.hint}>Existing users keep their email address.</span>
+                ) : null}
+              </label>
 
-            <label className={styles.field} htmlFor={`${fieldIdPrefix}-name`}>
-              <span className={styles.label}>Name</span>
-              <input
-                id={`${fieldIdPrefix}-name`}
-                type="text"
-                name="name"
-                autoComplete="name"
-                className={styles.input}
-                value={values.name}
-                onChange={(event) => setValues((prev) => ({ ...prev, name: event.target.value }))}
-                placeholder="Jane Doe"
-                disabled={isEditMode || isSubmitting}
-              />
-              {isEditMode ? <span className={styles.hint}>Display name changes are not exposed in the current API.</span> : null}
-            </label>
+              <label className={styles.field} htmlFor={`${fieldIdPrefix}-name`}>
+                <span className={styles.label}>Name</span>
+                <input
+                  id={`${fieldIdPrefix}-name`}
+                  type="text"
+                  name="name"
+                  autoComplete="name"
+                  className={styles.input}
+                  value={values.name}
+                  onChange={(event) => setValues((prev) => ({ ...prev, name: event.target.value }))}
+                  placeholder="Jane Doe"
+                  disabled={isEditMode || isSubmitting}
+                />
+                {isEditMode ? (
+                  <span className={styles.hint}>
+                    Display name changes are not exposed in the current API.
+                  </span>
+                ) : null}
+              </label>
 
-            <label className={styles.field} htmlFor={`${fieldIdPrefix}-role`}>
-              <span className={styles.label}>Role</span>
-              <select
-                id={`${fieldIdPrefix}-role`}
-                className={styles.select}
-                value={values.role}
-                onChange={(event) => setValues((prev) => ({ ...prev, role: event.target.value }))}
-                disabled={isSubmitting}
-                data-dialog-initial-focus={isEditMode ? true : undefined}
-              >
-                {roleOptions.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            {isEditMode ? (
-              <label className={styles.field} htmlFor={`${fieldIdPrefix}-status`}>
-                <span className={styles.label}>Status</span>
+              <label className={styles.field} htmlFor={`${fieldIdPrefix}-role`}>
+                <span className={styles.label}>Role</span>
                 <select
-                  id={`${fieldIdPrefix}-status`}
+                  id={`${fieldIdPrefix}-role`}
                   className={styles.select}
-                  value={values.status}
-                  onChange={(event) => setValues((prev) => ({ ...prev, status: event.target.value }))}
+                  value={values.role}
+                  onChange={(event) => setValues((prev) => ({ ...prev, role: event.target.value }))}
                   disabled={isSubmitting}
+                  data-dialog-initial-focus={isEditMode ? true : undefined}
                 >
-                  {statusOptions.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
+                  {roleOptions.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
                     </option>
                   ))}
                 </select>
               </label>
-            ) : null}
 
-            <section className={`${styles.permissionsSection} ${styles.fieldWide}`} aria-live="polite">
-              <div className={styles.permissionsHeader}>
-                <span className={styles.label}>Permissions</span>
-                <span className={styles.permissionCount}>{selectedRolePermissions.length}</span>
-              </div>
-              <span className={styles.hint}>Effective permissions granted by the selected role.</span>
-              {isLoadingRolePermissions ? (
-                <ProductLoadingState compact label="Loading permissions" />
-              ) : selectedRolePermissions.length > 0 ? (
-                <ul className={styles.permissionList}>
-                  {selectedRolePermissions.map((permission) => (
-                    <li key={permission} className={styles.permissionPill}>
-                      {permission}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className={styles.emptyState}>No permissions configured for this role.</p>
-              )}
-            </section>
+              {isEditMode ? (
+                <label className={styles.field} htmlFor={`${fieldIdPrefix}-status`}>
+                  <span className={styles.label}>Status</span>
+                  <select
+                    id={`${fieldIdPrefix}-status`}
+                    className={styles.select}
+                    value={values.status}
+                    onChange={(event) =>
+                      setValues((prev) => ({ ...prev, status: event.target.value }))
+                    }
+                    disabled={isSubmitting}
+                  >
+                    {statusOptions.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
 
-            <label className={`${styles.field} ${styles.fieldWide}`} htmlFor={`${fieldIdPrefix}-password`}>
-              <span className={styles.label}>{isEditMode ? 'New password' : 'Password'}</span>
-              <input
-                id={`${fieldIdPrefix}-password`}
-                type="password"
-                name="new-password"
-                autoComplete="new-password"
-                className={styles.input}
-                value={values.password}
-                onChange={(event) => setValues((prev) => ({ ...prev, password: event.target.value }))}
-                placeholder={isEditMode ? 'Leave blank to keep the current password' : 'Choose a strong password'}
-                disabled={isSubmitting}
-                required={!isEditMode}
-              />
-              <span className={styles.hint}>
-                {isEditMode
-                  ? 'If set, the password reset endpoint runs after the role and status update.'
-                  : 'A password is required for the user to sign in to the dashboard.'}
-              </span>
-            </label>
+              <section
+                className={`${styles.permissionsSection} ${styles.fieldWide}`}
+                aria-live="polite"
+              >
+                <div className={styles.permissionsHeader}>
+                  <span className={styles.label}>Permissions</span>
+                  <span className={styles.permissionCount}>{selectedRolePermissions.length}</span>
+                </div>
+                <span className={styles.hint}>
+                  Effective permissions granted by the selected role.
+                </span>
+                {isLoadingRolePermissions ? (
+                  <ProductLoadingState compact label="Loading permissions" />
+                ) : selectedRolePermissions.length > 0 ? (
+                  <ul className={styles.permissionList}>
+                    {selectedRolePermissions.map((permission) => (
+                      <li key={permission} className={styles.permissionPill}>
+                        {permission}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className={styles.emptyState}>No permissions configured for this role.</p>
+                )}
+              </section>
+
+              <label
+                className={`${styles.field} ${styles.fieldWide}`}
+                htmlFor={`${fieldIdPrefix}-password`}
+              >
+                <span className={styles.label}>{isEditMode ? 'New password' : 'Password'}</span>
+                <input
+                  id={`${fieldIdPrefix}-password`}
+                  type="password"
+                  name="new-password"
+                  autoComplete="new-password"
+                  className={styles.input}
+                  value={values.password}
+                  onChange={(event) =>
+                    setValues((prev) => ({ ...prev, password: event.target.value }))
+                  }
+                  placeholder={
+                    isEditMode
+                      ? 'Leave blank to keep the current password'
+                      : 'Choose a strong password'
+                  }
+                  disabled={isSubmitting}
+                  required={!isEditMode}
+                />
+                <span className={styles.hint}>
+                  {isEditMode
+                    ? 'If set, the password reset endpoint runs after the role and status update.'
+                    : 'A password is required for the user to sign in to the dashboard.'}
+                </span>
+              </label>
+            </div>
           </div>
 
           <div className={styles.footer}>

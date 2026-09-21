@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -14,18 +13,17 @@ func prefBoolPtr(value bool) *bool {
 }
 
 func TestPreferenceClassifier_ContrastiveFewShot(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		lower := strings.ToLower(text)
 		switch {
 		case strings.Contains(lower, "bug") || strings.Contains(lower, "fix"):
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.2, 0.9}}, nil
+			return []float32{0.2, 0.9}, nil
 		case strings.Contains(lower, "code"):
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.9, 0.1}}, nil
+			return []float32{0.9, 0.1}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.5, 0.5}}, nil
+			return []float32{0.5, 0.5}, nil
 		}
 	})
-	defer reset()
 
 	rules := []config.PreferenceRule{
 		{Name: "code_generation", Description: "Writes code", Examples: []string{"write python code"}},
@@ -37,7 +35,7 @@ func TestPreferenceClassifier_ContrastiveFewShot(t *testing.T) {
 		EmbeddingModel: "qwen3",
 	}
 
-	classifier, err := NewPreferenceClassifier(nil, rules, localCfg)
+	classifier, err := NewPreferenceClassifierWithProvider(nil, rules, localCfg, provider)
 	if err != nil {
 		t.Fatalf("failed to create contrastive preference classifier: %v", err)
 	}
@@ -58,19 +56,18 @@ func TestPreferenceClassifier_ContrastiveFewShot(t *testing.T) {
 }
 
 func TestContrastivePreferenceClassifier_UsesDescriptionsWhenNoExamples(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		switch text {
 		case "Writes code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return []float32{1, 0}, nil
 		case "Fixes bugs":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0, 1}}, nil
+			return []float32{0, 1}, nil
 		case "please write code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return []float32{1, 0}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+			return []float32{0.1, 0.1}, nil
 		}
 	})
-	defer reset()
 
 	rules := []config.PreferenceRule{
 		{Name: "code_generation", Description: "Writes code"},
@@ -81,7 +78,7 @@ func TestContrastivePreferenceClassifier_UsesDescriptionsWhenNoExamples(t *testi
 		UseContrastive: prefBoolPtr(true),
 	}
 
-	classifier, err := NewPreferenceClassifier(nil, rules, localCfg)
+	classifier, err := NewPreferenceClassifierWithProvider(nil, rules, localCfg, provider)
 	if err != nil {
 		t.Fatalf("failed to create contrastive classifier: %v", err)
 	}
@@ -107,15 +104,14 @@ func TestContrastivePreferenceClassifier_NoExamplesError(t *testing.T) {
 }
 
 func TestContrastivePreferenceClassifier_EmptyText(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
-		return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.2}}, nil
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
+		return []float32{0.1, 0.2}, nil
 	})
-	defer reset()
 
 	rules := []config.PreferenceRule{{Name: "code_generation", Description: "Writes code"}}
 	localCfg := &config.PreferenceModelConfig{UseContrastive: prefBoolPtr(true)}
 
-	classifier, err := NewPreferenceClassifier(nil, rules, localCfg)
+	classifier, err := NewPreferenceClassifierWithProvider(nil, rules, localCfg, provider)
 	if err != nil {
 		t.Fatalf("failed to create contrastive classifier: %v", err)
 	}
@@ -126,21 +122,20 @@ func TestContrastivePreferenceClassifier_EmptyText(t *testing.T) {
 }
 
 func TestPreferenceClassifier_DefaultsToContrastiveWhenConfigOmitted(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		switch text {
 		case "Writes code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return []float32{1, 0}, nil
 		case "please write code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return []float32{1, 0}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+			return []float32{0.1, 0.1}, nil
 		}
 	})
-	defer reset()
 
 	rules := []config.PreferenceRule{{Name: "code_generation", Description: "Writes code"}}
 
-	classifier, err := NewPreferenceClassifier(nil, rules, nil)
+	classifier, err := NewPreferenceClassifierWithProvider(nil, rules, nil, provider)
 	if err != nil {
 		t.Fatalf("failed to create default contrastive preference classifier: %v", err)
 	}
@@ -212,17 +207,16 @@ func TestPreferenceClassifier_ParsePreferenceOutput(t *testing.T) {
 }
 
 func TestContrastivePreferenceClassifier_BelowThresholdReturnsNoMatchError(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		switch text {
 		case "Writes code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return []float32{1, 0}, nil
 		case "please help with this task":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.6, 0.8}}, nil
+			return []float32{0.6, 0.8}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+			return []float32{0.1, 0.1}, nil
 		}
 	})
-	defer reset()
 
 	rules := []config.PreferenceRule{{
 		Name:        "code_generation",
@@ -234,7 +228,7 @@ func TestContrastivePreferenceClassifier_BelowThresholdReturnsNoMatchError(t *te
 		UseContrastive: prefBoolPtr(true),
 	}
 
-	classifier, err := NewPreferenceClassifier(nil, rules, localCfg)
+	classifier, err := NewPreferenceClassifierWithProvider(nil, rules, localCfg, provider)
 	if err != nil {
 		t.Fatalf("failed to create contrastive classifier: %v", err)
 	}
@@ -252,19 +246,18 @@ func TestContrastivePreferenceClassifier_BelowThresholdReturnsNoMatchError(t *te
 }
 
 func TestContrastivePreferenceClassifier_MarginThresholdRejectsAmbiguousWinner(t *testing.T) {
-	reset := SetEmbeddingFuncForTests(func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	provider := newTestTextProvider(func(text string) ([]float32, error) {
 		switch text {
 		case "Writes code":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{1, 0}}, nil
+			return []float32{1, 0}, nil
 		case "Fixes bugs":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.98, 0.2}}, nil
+			return []float32{0.98, 0.2}, nil
 		case "please help with implementation":
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.99, 0.05}}, nil
+			return []float32{0.99, 0.05}, nil
 		default:
-			return &candle_binding.EmbeddingOutput{Embedding: []float32{0.1, 0.1}}, nil
+			return []float32{0.1, 0.1}, nil
 		}
 	})
-	defer reset()
 
 	classifier, err := NewContrastivePreferenceClassifierWithConfig(
 		[]config.PreferenceRule{
@@ -273,6 +266,7 @@ func TestContrastivePreferenceClassifier_MarginThresholdRejectsAmbiguousWinner(t
 		},
 		"qwen3",
 		config.PrototypeScoringConfig{MarginThreshold: 0.01},
+		provider,
 	)
 	if err != nil {
 		t.Fatalf("failed to create contrastive classifier: %v", err)

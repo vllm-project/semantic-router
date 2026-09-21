@@ -7,9 +7,8 @@ which provides direct classification capabilities without LLM routing.
 The API is separate from the ExtProc router and runs on port 8080.
 """
 
-import json
-import sys
 import unittest
+from http import HTTPStatus
 
 import requests
 
@@ -18,7 +17,7 @@ from test_base import SemanticRouterTestBase
 
 # Constants
 CLASSIFICATION_API_URL = "http://localhost:8080"
-INTENT_ENDPOINT = "/api/v1/classify/intent"
+INTENT_ENDPOINT = "/api/v1/diagnostics/classify/intent"
 
 # Test cases with expected categories based on config.e2e.yaml
 INTENT_TEST_CASES = [
@@ -91,7 +90,7 @@ class ClassificationAPITest(SemanticRouterTestBase):
                 f"{CLASSIFICATION_API_URL}/health", timeout=5
             )
 
-            if health_response.status_code != 200:
+            if health_response.status_code != HTTPStatus.OK:
                 self.skipTest(
                     f"Classification API health check failed: {health_response.status_code}"
                 )
@@ -147,7 +146,7 @@ class ClassificationAPITest(SemanticRouterTestBase):
             # Check if classification is correct
             category_correct = actual_category == test_case["expected_category"]
             is_placeholder = actual_category == "general"
-            passed = response.status_code == 200 and category_correct
+            passed = response.status_code == HTTPStatus.OK and category_correct
 
             self.print_response_info(
                 response,
@@ -210,7 +209,7 @@ class ClassificationAPITest(SemanticRouterTestBase):
         )
 
         response = requests.post(
-            f"{CLASSIFICATION_API_URL}/api/v1/classify/batch",
+            f"{CLASSIFICATION_API_URL}/api/v1/diagnostics/classify/batch",
             headers={"Content-Type": "application/json"},
             json=payload,
             timeout=30,
@@ -257,14 +256,16 @@ class ClassificationAPITest(SemanticRouterTestBase):
         # Print detailed classification results
         print("\n📊 Detailed Classification Results:")
         for i, (text, expected, actual) in enumerate(
-            zip(texts, expected_categories, actual_categories)
+            zip(texts, expected_categories, actual_categories, strict=False)
         ):
             status = "✅" if expected == actual else "❌"
             print(f"  {i+1}. {status} Expected: {expected:<15} | Actual: {actual:<15}")
             print(f"     Text: {text[:60]}...")
 
         # Check basic requirements first
-        basic_checks_passed = response.status_code == 200 and len(results) == len(texts)
+        basic_checks_passed = response.status_code == HTTPStatus.OK and len(
+            results
+        ) == len(texts)
 
         # Check classification accuracy (should be high for a working system)
         # Note: 80% threshold accounts for genuinely ambiguous categories (business/other, history/other)

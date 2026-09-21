@@ -124,11 +124,12 @@ listeners:
     port: 8888
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: test-model
@@ -1633,30 +1634,11 @@ semantic_cache:
         ef: 64
       topk: 10
       consistency_level: "Session"
-    performance:
-      connection_pool:
-        max_connections: 10
-        max_idle_connections: 5
-        acquire_timeout: 5
-      batch:
-        insert_batch_size: 1000
-        timeout: 30
-    data_management:
-      ttl:
-        enabled: true
-        timestamp_field: "timestamp"
-        cleanup_interval: 3600
-      compaction:
-        enabled: true
-        interval: 86400
     logging:
       level: "info"
-      enable_query_log: false
-      enable_metrics: true
     development:
       drop_collection_on_startup: true
       auto_create_collection: true
-      verbose_errors: true
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -1706,37 +1688,11 @@ semantic_cache:
 				Expect(cfg.SemanticCache.Milvus.Search.ConsistencyLevel).To(Equal("Session"))
 			})
 
-			It("should parse inline milvus backend performance configuration correctly", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(cfg.SemanticCache.Milvus.Performance).ToNot(BeNil())
-				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.MaxConnections).To(Equal(10))
-				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.MaxIdleConnections).To(Equal(5))
-				Expect(cfg.SemanticCache.Milvus.Performance.ConnectionPool.AcquireTimeout).To(Equal(5))
-				Expect(cfg.SemanticCache.Milvus.Performance.Batch.InsertBatchSize).To(Equal(1000))
-				Expect(cfg.SemanticCache.Milvus.Performance.Batch.Timeout).To(Equal(30))
-			})
-
-			It("should parse inline milvus backend data management configuration correctly", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				Expect(cfg.SemanticCache.Milvus.DataManagement).ToNot(BeNil())
-				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.Enabled).To(BeTrue())
-				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.TimestampField).To(Equal("timestamp"))
-				Expect(cfg.SemanticCache.Milvus.DataManagement.TTL.CleanupInterval).To(Equal(3600))
-				Expect(cfg.SemanticCache.Milvus.DataManagement.Compaction.Enabled).To(BeTrue())
-				Expect(cfg.SemanticCache.Milvus.DataManagement.Compaction.Interval).To(Equal(86400))
-			})
-
 			It("should parse inline milvus backend logging configuration correctly", func() {
 				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Milvus.Logging.Level).To(Equal("info"))
-				Expect(cfg.SemanticCache.Milvus.Logging.EnableQueryLog).To(BeFalse())
-				Expect(cfg.SemanticCache.Milvus.Logging.EnableMetrics).To(BeTrue())
 			})
 
 			It("should parse inline milvus backend development configuration correctly", func() {
@@ -1745,7 +1701,6 @@ semantic_cache:
 
 				Expect(cfg.SemanticCache.Milvus.Development.DropCollectionOnStartup).To(BeTrue())
 				Expect(cfg.SemanticCache.Milvus.Development.AutoCreateCollection).To(BeTrue())
-				Expect(cfg.SemanticCache.Milvus.Development.VerboseErrors).To(BeTrue())
 			})
 		})
 
@@ -1784,12 +1739,9 @@ semantic_cache:
       topk: 1
     logging:
       level: "info"
-      enable_query_log: false
-      enable_metrics: true
     development:
       drop_index_on_startup: true
       auto_create_index: true
-      verbose_errors: true
 `
 				err := os.WriteFile(configFile, []byte(configContent), 0o644)
 				Expect(err).NotTo(HaveOccurred())
@@ -1840,8 +1792,6 @@ semantic_cache:
 				Expect(err).NotTo(HaveOccurred())
 
 				Expect(cfg.SemanticCache.Redis.Logging.Level).To(Equal("info"))
-				Expect(cfg.SemanticCache.Redis.Logging.EnableQueryLog).To(BeFalse())
-				Expect(cfg.SemanticCache.Redis.Logging.EnableMetrics).To(BeTrue())
 			})
 
 			It("should parse inline redis backend development configuration correctly", func() {
@@ -1850,7 +1800,6 @@ semantic_cache:
 
 				Expect(cfg.SemanticCache.Redis.Development.DropIndexOnStartup).To(BeTrue())
 				Expect(cfg.SemanticCache.Redis.Development.AutoCreateIndex).To(BeTrue())
-				Expect(cfg.SemanticCache.Redis.Development.VerboseErrors).To(BeTrue())
 			})
 		})
 
@@ -2153,8 +2102,6 @@ semantic_cache:
 api:
   batch_classification:
     max_batch_size: 64
-    concurrency_threshold: 5
-    max_concurrency: 8
     metrics:
       enabled: true
       detailed_goroutine_tracking: false
@@ -2171,8 +2118,6 @@ api:
 			// Verify batch classification configuration (zero-config auto-discovery)
 			batchConfig := cfg.API.BatchClassification
 			Expect(batchConfig.MaxBatchSize).To(Equal(64))
-			Expect(batchConfig.ConcurrencyThreshold).To(Equal(5))
-			Expect(batchConfig.MaxConcurrency).To(Equal(8))
 
 			// Verify metrics configuration
 			metricsConfig := batchConfig.Metrics
@@ -2200,8 +2145,6 @@ api:
 			// Verify that missing metrics configuration doesn't cause errors (zero-config)
 			batchConfig := cfg.API.BatchClassification
 			Expect(batchConfig.MaxBatchSize).To(Equal(32))
-			Expect(batchConfig.ConcurrencyThreshold).To(Equal(0))
-			Expect(batchConfig.MaxConcurrency).To(Equal(0))
 
 			// Metrics should have zero values (will be handled by defaults in application)
 			metricsConfig := batchConfig.Metrics
@@ -2213,7 +2156,6 @@ api:
 			yamlContent := `
 api:
   batch_classification:
-    concurrency_threshold: 3
     metrics:
       enabled: true
       sample_rate: 0.5
@@ -2223,7 +2165,6 @@ api:
 			err := yaml.Unmarshal([]byte(yamlContent), &cfg)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(cfg.API.BatchClassification.ConcurrencyThreshold).To(Equal(3))
 			metricsConfig := cfg.API.BatchClassification.Metrics
 			Expect(metricsConfig.Enabled).To(BeTrue())
 			Expect(metricsConfig.SampleRate).To(Equal(0.5))
@@ -2539,11 +2480,12 @@ version: v0.3
 listeners: []
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       backend_refs:
         - endpoint: 127.0.0.1:8000
+          provider: vllm
 routing:
   modelCards:
     - name: test-model
@@ -3525,8 +3467,10 @@ model_config:
 		})
 
 		Context("ProviderType", func() {
-			It("should return correct provider type", func() {
-				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai", "minimax"} {
+			It("should accept every catalog provider ID", func() {
+				providerTypes := ValidProviderTypes()
+				Expect(providerTypes).NotTo(BeEmpty())
+				for _, t := range providerTypes {
 					pt, err := (&ProviderProfile{Type: t}).ProviderType()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(pt).To(Equal(t))
@@ -3536,7 +3480,7 @@ model_config:
 			It("should error on unknown type", func() {
 				_, err := (&ProviderProfile{Type: "unknown"}).ProviderType()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider profile type"))
+				Expect(err.Error()).To(ContainSubstring("unknown provider ID"))
 			})
 
 			It("should error on empty type", func() {
@@ -3554,6 +3498,13 @@ model_config:
 		})
 
 		Context("ResolveAuthHeader", func() {
+			It("should resolve auth metadata for every catalog provider ID", func() {
+				for _, providerType := range ValidProviderTypes() {
+					_, _, err := (&ProviderProfile{Type: providerType}).ResolveAuthHeader()
+					Expect(err).NotTo(HaveOccurred(), providerType)
+				}
+			})
+
 			It("should return type-specific defaults", func() {
 				h, p, err := (&ProviderProfile{Type: "openai"}).ResolveAuthHeader()
 				Expect(err).NotTo(HaveOccurred())
@@ -3596,23 +3547,73 @@ model_config:
 			It("should error on unknown type", func() {
 				_, _, err := (&ProviderProfile{Type: "bogus"}).ResolveAuthHeader()
 				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
+				Expect(err.Error()).To(ContainSubstring("unknown provider ID"))
 			})
 		})
 
-		Context("ResolveChatPath", func() {
+		Context("ResolveReasoningTransport", func() {
+			It("should honor a validated provider-model override", func() {
+				transport, err := (&ProviderProfile{
+					Type: "dashscope", ReasoningTransport: "top_level_boolean",
+				}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("top_level_boolean"))
+
+				_, err = (&ProviderProfile{
+					Type: "dashscope", ReasoningTransport: "invented",
+				}).ResolveReasoningTransport()
+				Expect(err).To(HaveOccurred())
+			})
+
+			It("should return catalog semantics without inspecting endpoint hosts", func() {
+				transport, err := (&ProviderProfile{Type: "openai", BaseURL: "https://proxy.example/v1"}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("top_level_effort"))
+
+				transport, err = (&ProviderProfile{Type: "deepseek", BaseURL: "https://private.example/v1"}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("deepseek_thinking"))
+
+				transport, err = (&ProviderProfile{Type: "zai", BaseURL: "https://private.example/v1"}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("thinking_object"))
+
+				transport, err = (&ProviderProfile{Type: "openai-compatible", BaseURL: "https://api.openai.com/v1"}).ResolveReasoningTransport()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(string(transport)).To(Equal("chat_template_kwargs"))
+			})
+
+			It("should reject an unknown provider", func() {
+				_, err := (&ProviderProfile{Type: "bogus"}).ResolveReasoningTransport()
+				Expect(err).To(HaveOccurred())
+			})
+		})
+
+		Context("ResolveCreatePath", func() {
 			It("should return type-specific default paths", func() {
-				path, err := (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveChatPath()
+				path, err := (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/chat/completions"))
 
-				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveChatPath()
+				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/messages"))
 
-				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
+				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/chat/completions"))
+
+				path, err = (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveCreatePath("openai/responses@1")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/responses"))
+
+				path, err = (&ProviderProfile{Type: "deepseek", BaseURL: "https://api.deepseek.com/v1"}).ResolveCreatePath("openai/responses@1")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/responses"))
+
+				path, err = (&ProviderProfile{Type: "celeris", BaseURL: "https://inference.celeris.ai/celeris-1/v1"}).ResolveCreatePath("openai/responses@1")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/celeris-1/v1/responses"))
 			})
 
 			It("should not double the version segment for a versioned base_url", func() {
@@ -3627,10 +3628,11 @@ model_config:
 					{"minimax", "https://api.minimax.io", "/v1/chat/completions"},
 					{"openai", "https://api.openai.com/v1", "/v1/chat/completions"},
 					{"anthropic", "https://gateway.example.com/openai/v1", "/openai/v1/messages"},
-					{"anthropic", "https://gateway.example.com/v1beta", "/v1beta/v1/messages"},
+					{"anthropic", "https://gateway.example.com/v1beta", "/v1beta/messages"},
+					{"openai", "https://gateway.example.com/v1beta/openai", "/v1beta/openai/chat/completions"},
 					{"anthropic", "https://api.anthropic.com/v1/", "/v1/messages"},
 				} {
-					path, err := (&ProviderProfile{Type: tc.providerType, BaseURL: tc.baseURL}).ResolveChatPath()
+					path, err := (&ProviderProfile{Type: tc.providerType, BaseURL: tc.baseURL}).ResolveCreatePath("")
 					Expect(err).NotTo(HaveOccurred(), "%s %s", tc.providerType, tc.baseURL)
 					Expect(path).To(Equal(tc.expected), "%s %s", tc.providerType, tc.baseURL)
 				}
@@ -3642,27 +3644,27 @@ model_config:
 					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/gpt-4o",
 					APIVersion: "2024-10-21",
 				}
-				path, err := profile.ResolveChatPath()
+				path, err := profile.ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"))
 			})
 
-			It("should error for unrecognised type", func() {
-				_, err := (&ProviderProfile{Type: "vllm"}).ResolveChatPath()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
+			It("should resolve catalog-backed private runtimes", func() {
+				path, err := (&ProviderProfile{Type: "vllm"}).ResolveCreatePath("")
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/chat/completions"))
 			})
 
 			It("should use explicit ChatPath override", func() {
 				profile := &ProviderProfile{Type: "openai", ChatPath: "/custom/path"}
-				path, err := profile.ResolveChatPath()
+				path, err := profile.ResolveCreatePath("")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/custom/path"))
 			})
 
 			It("should error for nil profile", func() {
 				var nilProfile *ProviderProfile
-				_, err := nilProfile.ResolveChatPath()
+				_, err := nilProfile.ResolveCreatePath("")
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(ContainSubstring("nil"))
 			})

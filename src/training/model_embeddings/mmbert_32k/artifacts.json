@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "owner": "src/training/model_embeddings/mmbert_32k",
+  "artifacts": [
+    {
+      "family": "foundation",
+      "repo_id": "llm-semantic-router/mmbert-32k-yarn",
+      "entrypoint": "foundation.py",
+      "config": "configs/foundation.json"
+    },
+    {
+      "family": "embedder",
+      "repo_id": "llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+      "entrypoint": "embedder.py",
+      "config": "configs/embedder.json"
+    },
+    {
+      "family": "reranker",
+      "repo_id": "llm-semantic-router/mmbert-rerank-32k-2d-matryoshka",
+      "entrypoint": "reranker.py",
+      "config": "configs/reranker.json"
+    }
+  ]
+}

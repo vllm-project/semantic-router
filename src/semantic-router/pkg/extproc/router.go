@@ -16,7 +16,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -32,6 +34,10 @@ import (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
+	rerankers            map[config.RecipeName]modelruntime.PairScorer
+	Embeddings           *embedding.Set
+	serviceEmbeddings    *embedding.Set
+	cacheEmbeddings      *embedding.Set
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
@@ -46,6 +52,7 @@ type OpenAIRouter struct {
 	CompressionRecovery   contextcompression.RecoveryStore
 	CompressionEmbedding  embedding.Provider
 	CompressionScorer     contextcompression.RelevanceScorer
+	compressionScorers    map[string]contextcompression.RelevanceScorer
 	contextCompressionMu  sync.Mutex
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
@@ -60,6 +67,9 @@ type OpenAIRouter struct {
 	ResponseAPIFilter *ResponseAPIFilter
 	ReplayRecorder    *routerreplay.Recorder
 	ReplayStoreShared bool
+	// ShadowDispatcher runs bounded, fail-open shadow model calls after the
+	// primary dispatch is finalized. nil disables the shadow_dispatch plugin.
+	ShadowDispatcher *shadowDispatcher
 	// ModelSelector is the registry of advanced model selection algorithms
 	// initialized from config.IntelligentRouting.ModelSelection.
 	ModelSelector *selection.Registry
@@ -71,6 +81,9 @@ type OpenAIRouter struct {
 	MemoryStore          memory.Store
 	MemoryExtractor      *memory.MemoryExtractor
 	ProtocolCodecs       *protocolcodec.Registry
+	looperClient         *looper.Client
+
+	memoryPersistence *memory.PersistenceRunner
 
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).
@@ -86,8 +99,14 @@ type OpenAIRouter struct {
 
 	routerLearningMu        sync.Mutex
 	routerLearningRuntime   *routerLearningRuntime
+	generation              *routerGeneration
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
+
+	// WorkflowStateService owns the shared workflow tool-state store so that
+	// pause/resume works across independent HTTP requests without leaking
+	// backend connections. Closed with the rest of the generation resources.
+	WorkflowStateService *looper.WorkflowStateService
 
 	resources *resourceScope
 }
@@ -136,7 +155,7 @@ func closeReplayRecorders(
 // Ensure OpenAIRouter implements the ext_proc calls.
 var _ ext_proc.ExternalProcessorServer = (*OpenAIRouter)(nil)
 
-const routerReplayAPIBasePath = "/v1/router_replay"
+const routerReplayAPIBasePath = "/api/v1/observability/replays"
 
 // createJSONResponseWithBody creates a direct response with pre-marshaled JSON
 // body. When responsePath is non-empty, the v0.4 keystone headers

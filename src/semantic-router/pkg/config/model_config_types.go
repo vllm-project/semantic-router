@@ -1,6 +1,10 @@
 package config
 
-import "fmt"
+import (
+	"fmt"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+)
 
 // Classifier represents the configuration for text classification.
 type Classifier struct {
@@ -17,6 +21,10 @@ type BertModel struct {
 }
 
 type CategoryModel struct {
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
 	// Enabled turns category classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
 	Enabled       *bool   `yaml:"enabled,omitempty"`
@@ -37,6 +45,11 @@ type CategoryModel struct {
 }
 
 type PIIModel struct {
+	Window *SequenceHeadWindowConfig `yaml:"window,omitempty"`
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength int `yaml:"max_sequence_length,omitempty"`
 	// Enabled turns PII classification on or off explicitly. Nil keeps the
 	// historical behaviour of running whenever a model is configured.
 	Enabled        *bool   `yaml:"enabled,omitempty"`
@@ -45,6 +58,15 @@ type PIIModel struct {
 	UseCPU         bool    `yaml:"use_cpu"`
 	UseMmBERT32K   bool    `yaml:"use_mmbert_32k"`
 	PIIMappingPath string  `yaml:"pii_mapping_path"`
+	// Backend attaches a named remote token classifier speaking token_spans.v1.
+	// Its absence preserves local PII inference exactly as before.
+	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
+
+	// ClassifierOnErrorConfig contributes OnError (allow|block). With block, a
+	// PII rule whose content could not be fully classified (backend error, or a
+	// provider that declared truncated_at) matches as classification_error
+	// instead of reading as clean.
+	ClassifierOnErrorConfig `yaml:",inline"`
 }
 
 type EmbeddingModels struct {
@@ -64,15 +86,23 @@ func (e EmbeddingModels) MinSimilarityThreshold() float32 {
 
 // HNSWConfig contains settings for optimizing embedding-backed classification.
 type HNSWConfig struct {
-	Backend            string                 `yaml:"backend,omitempty"`
-	ModelType          string                 `yaml:"model_type,omitempty"`
-	PreloadEmbeddings  bool                   `yaml:"preload_embeddings"`
-	TargetDimension    int                    `yaml:"target_dimension,omitempty"`
-	TargetLayer        int                    `yaml:"target_layer,omitempty"`
-	EnableSoftMatching *bool                  `yaml:"enable_soft_matching,omitempty"`
-	TopK               *int                   `yaml:"top_k,omitempty"`
-	MinScoreThreshold  float32                `yaml:"min_score_threshold,omitempty"`
-	PrototypeScoring   PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// FullContext sends complete routing text to mmBERT up to its model capacity.
+	// False retains bounded representative sampling for routing latency.
+	FullContext       bool   `yaml:"full_context,omitempty"`
+	Backend           string `yaml:"backend,omitempty"`
+	ModelType         string `yaml:"model_type,omitempty"`
+	PreloadEmbeddings bool   `yaml:"preload_embeddings"`
+	TargetDimension   int    `yaml:"target_dimension,omitempty"`
+	TargetLayer       int    `yaml:"target_layer,omitempty"`
+	// EnableSoftMatching allows below-threshold matches when no rule meets its
+	// threshold. This ranked fallback is opt-in; routing predicates default to
+	// the threshold declared by each rule.
+	EnableSoftMatching *bool `yaml:"enable_soft_matching,omitempty"`
+	// TopK limits emitted embedding matches only when positive. The default 0
+	// preserves all accepted predicates for projections and decision priority.
+	TopK              *int                   `yaml:"top_k,omitempty"`
+	MinScoreThreshold float32                `yaml:"min_score_threshold,omitempty"`
+	PrototypeScoring  PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
 }
 
 func (c HNSWConfig) WithDefaults() HNSWConfig {
@@ -87,18 +117,14 @@ func (c HNSWConfig) WithDefaults() HNSWConfig {
 			result.ModelType = EmbeddingModelTypeQwen3
 		}
 	}
-	if result.TargetDimension <= 0 {
-		result.TargetDimension = 768
-	}
+	// Zero selects the prepared model's native dimension. The provider validates
+	// explicit dimensions; a shared default must not resize another model.
 	if result.EnableSoftMatching == nil {
-		defaultEnabled := true
+		defaultEnabled := false
 		result.EnableSoftMatching = &defaultEnabled
 	}
-	if result.TopK == nil {
-		defaultTopK := 1
-		result.TopK = &defaultTopK
-	} else if *result.TopK < 0 {
-		defaultTopK := 1
+	if result.TopK == nil || *result.TopK < 0 {
+		defaultTopK := 0
 		result.TopK = &defaultTopK
 	}
 	if result.MinScoreThreshold <= 0 {
@@ -150,21 +176,23 @@ func (pc PromptCompressionConfig) SkipSignalsSet() map[string]bool {
 }
 
 type PromptGuardConfig struct {
-	Enabled              bool     `yaml:"enabled"`
-	ModelID              string   `yaml:"model_id"`
-	Threshold            float32  `yaml:"threshold"`
-	UseCPU               bool     `yaml:"use_cpu"`
-	JailbreakMappingPath string   `yaml:"jailbreak_mapping_path"`
-	PositiveLabels       []string `yaml:"positive_labels,omitempty"`
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength    int                       `yaml:"max_sequence_length,omitempty"`
+	Backend              *RemoteClassifierBackend  `yaml:"backend,omitempty"`
+	Window               *SequenceHeadWindowConfig `yaml:"window,omitempty"`
+	Enabled              bool                      `yaml:"enabled"`
+	ModelID              string                    `yaml:"model_id"`
+	Threshold            float32                   `yaml:"threshold"`
+	UseCPU               bool                      `yaml:"use_cpu"`
+	JailbreakMappingPath string                    `yaml:"jailbreak_mapping_path"`
+	PositiveLabels       []string                  `yaml:"positive_labels,omitempty"`
 
 	// Variant selects a local Candle-backed model variant. Mutually
-	// exclusive with Protocol. Defaults to PromptGuardVariantMmBERT32K when
-	// both are unset.
+	// exclusive with Backend. Defaults to PromptGuardVariantMmBERT32K when
+	// unset.
 	Variant string `yaml:"variant,omitempty"`
-	// Protocol selects a remote HTTP backend's wire contract. Mutually
-	// exclusive with Variant. Requires an external model configured with
-	// model_role="guardrail".
-	Protocol string `yaml:"protocol,omitempty"`
 
 	// ClassifierOnErrorConfig contributes OnError (allow|block), shared with
 	// every other pluggable classifier backend instead of being redeclared
@@ -173,6 +201,10 @@ type PromptGuardConfig struct {
 }
 
 type FeedbackDetectorConfig struct {
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength   int     `yaml:"max_sequence_length,omitempty"`
 	Enabled             bool    `yaml:"enabled"`
 	ModelID             string  `yaml:"model_id"`
 	Threshold           float32 `yaml:"threshold"`
@@ -204,6 +236,12 @@ func (c PreferenceModelConfig) ContrastiveEnabled() bool {
 
 type ComplexityModelConfig struct {
 	PrototypeScoring PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// Backend attaches a named remote scorer. Its absence preserves local
+	// prototype scoring exactly as before. It sits here, beside
+	// prototype_scoring, rather than on a rule: routing.signals is replaced
+	// wholesale per recipe, so a backend declared there would disappear under
+	// any recipe that did not repeat it.
+	Backend *RemoteClassifierBackend `yaml:"backend,omitempty"`
 }
 
 func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
@@ -213,19 +251,30 @@ func (c ComplexityModelConfig) WithDefaults() ComplexityModelConfig {
 }
 
 type ExternalModelConfig struct {
-	Name             string                 `yaml:"name,omitempty"`
-	Provider         string                 `yaml:"llm_provider"`
-	ModelRole        string                 `yaml:"model_role"`
-	ModelEndpoint    ClassifierVLLMEndpoint `yaml:"llm_endpoint,omitempty"`
-	ModelName        string                 `yaml:"llm_model_name,omitempty"`
-	TimeoutSeconds   int                    `yaml:"llm_timeout_seconds,omitempty"`
-	ParserType       string                 `yaml:"parser_type,omitempty"`
-	Threshold        float32                `yaml:"threshold,omitempty"`
-	AccessKey        string                 `yaml:"access_key,omitempty" json:"-"`
-	MaxTokens        int                    `yaml:"max_tokens,omitempty"`
-	Temperature      float64                `yaml:"temperature,omitempty"`
-	MaxRequestBytes  int64                  `yaml:"max_request_bytes,omitempty"`
-	MaxResponseBytes int64                  `yaml:"max_response_bytes,omitempty"`
+	Name             string                        `yaml:"name,omitempty"`
+	Provider         string                        `yaml:"llm_provider"`
+	ModelRole        string                        `yaml:"model_role"`
+	ModelEndpoint    ClassifierVLLMEndpoint        `yaml:"llm_endpoint,omitempty"`
+	ModelName        string                        `yaml:"llm_model_name,omitempty"`
+	TimeoutSeconds   int                           `yaml:"llm_timeout_seconds,omitempty"`
+	ParserType       string                        `yaml:"parser_type,omitempty"`
+	Threshold        float32                       `yaml:"threshold,omitempty"`
+	AccessKey        string                        `yaml:"access_key,omitempty" json:"-"`
+	MaxTokens        int                           `yaml:"max_tokens,omitempty"`
+	Temperature      float64                       `yaml:"temperature,omitempty"`
+	Reasoning        *ExternalModelReasoningConfig `yaml:"reasoning,omitempty"`
+	MaxRequestBytes  int64                         `yaml:"max_request_bytes,omitempty"`
+	MaxResponseBytes int64                         `yaml:"max_response_bytes,omitempty"`
+}
+
+// ExternalModelReasoningConfig controls reasoning for requests made to a
+// vLLM-backed external classifier. Family references the shared reasoning-family
+// catalog; the external model contract intentionally does not support inline
+// family definitions.
+type ExternalModelReasoningConfig struct {
+	Family          string `yaml:"family" jsonschema:"required"`
+	UseReasoning    *bool  `yaml:"use_reasoning" jsonschema:"required"`
+	ReasoningEffort string `yaml:"reasoning_effort,omitempty"`
 }
 
 // AdmissionConfig bounds concurrent inference for one Router Model
@@ -287,10 +336,14 @@ type HallucinationMitigationConfig struct {
 }
 
 type FactCheckModelConfig struct {
-	ModelID      string  `yaml:"model_id"`
-	Threshold    float32 `yaml:"threshold"`
-	UseCPU       bool    `yaml:"use_cpu"`
-	UseMmBERT32K bool    `yaml:"use_mmbert_32k"`
+	// MaxSequenceLength bounds a complete text with Window, otherwise one
+	// inference. Implicit local Vela zero/nil resolves to a 32K document scan
+	// with 512-token forwards during owned preparation.
+	MaxSequenceLength int     `yaml:"max_sequence_length,omitempty"`
+	ModelID           string  `yaml:"model_id"`
+	Threshold         float32 `yaml:"threshold"`
+	UseCPU            bool    `yaml:"use_cpu"`
+	UseMmBERT32K      bool    `yaml:"use_mmbert_32k"`
 }
 
 type HallucinationModelConfig struct {
@@ -303,7 +356,7 @@ type HallucinationModelConfig struct {
 	MinSpanLength          int     `yaml:"min_span_length,omitempty"`
 	MinSpanConfidence      float32 `yaml:"min_span_confidence,omitempty"`
 	ContextWindowSize      int     `yaml:"context_window_size,omitempty"`
-	EnableNLIFiltering     bool    `yaml:"enable_nli_filtering,omitempty"`
+	EnableNLIFiltering     bool    `yaml:"enable_nli_filtering"`
 	NLIEntailmentThreshold float32 `yaml:"nli_entailment_threshold,omitempty"`
 }
 
@@ -335,13 +388,22 @@ type VLLMEndpoint struct {
 }
 
 type ProviderProfile struct {
-	Type         string            `yaml:"type"`
-	BaseURL      string            `yaml:"base_url,omitempty"`
-	AuthHeader   string            `yaml:"auth_header,omitempty"`
-	AuthPrefix   string            `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
-	APIVersion   string            `yaml:"api_version,omitempty"`
-	ChatPath     string            `yaml:"chat_path,omitempty"`
+	Type               string                          `yaml:"type"`
+	Protocol           string                          `yaml:"protocol,omitempty"`
+	ReasoningTransport modelcatalog.ReasoningTransport `yaml:"reasoning_transport,omitempty"`
+	// ReasoningModes and ReasoningEfforts are catalog-materialized provider API
+	// constraints. They are intentionally absent from the public config surface.
+	ReasoningModes   []string `yaml:"-"`
+	ReasoningEfforts []string `yaml:"-"`
+	BaseURL          string   `yaml:"base_url,omitempty"`
+	AuthHeader       string   `yaml:"auth_header,omitempty"`
+	AuthPrefix       string   `yaml:"auth_prefix,omitempty"`
+	// AuthPrefixSet distinguishes an omitted override from an explicit empty
+	// prefix after canonical config has been materialized.
+	AuthPrefixSet bool              `yaml:"-"`
+	ExtraHeaders  map[string]string `yaml:"extra_headers,omitempty"`
+	APIVersion    string            `yaml:"api_version,omitempty"`
+	ChatPath      string            `yaml:"chat_path,omitempty"`
 }
 
 type ModelPricing struct {
@@ -357,17 +419,80 @@ type ModelParams struct {
 	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
 	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
 	ReasoningFamily    string              `yaml:"reasoning_family,omitempty"`
-	LoRAs              []LoRAAdapter       `yaml:"loras,omitempty"`
-	AccessKey          string              `yaml:"access_key,omitempty" json:"-"`
-	ParamSize          string              `yaml:"param_size,omitempty"`
-	ContextWindowSize  int                 `yaml:"context_window_size,omitempty"`
-	APIFormat          string              `yaml:"api_format,omitempty"`
-	Description        string              `yaml:"description,omitempty"`
-	Capabilities       []string            `yaml:"capabilities,omitempty"`
-	Tags               []string            `yaml:"tags,omitempty"`
-	QualityScore       float64             `yaml:"quality_score,omitempty"`
-	ExternalModelIDs   map[string]string   `yaml:"external_model_ids,omitempty"`
-	Modality           string              `yaml:"modality,omitempty"`
+	// AuthoredModel preserves the typed user declaration across materialization.
+	// Effective catalog defaults must not leak into exported user YAML, and an
+	// api_key_env reference must not be replaced by its expanded secret value.
+	AuthoredModel        *CanonicalProviderModel                        `yaml:"-" json:"-"`
+	LoRAs                []LoRAAdapter                                  `yaml:"loras,omitempty"`
+	AccessKey            string                                         `yaml:"access_key,omitempty" json:"-"`
+	AccessKeys           map[string]string                              `yaml:"-" json:"-"`
+	Catalog              string                                         `yaml:"catalog,omitempty"`
+	ParamSize            string                                         `yaml:"param_size,omitempty"`
+	ContextWindowSize    int                                            `yaml:"context_window_size,omitempty"`
+	MaxOutputTokens      int                                            `yaml:"max_output_tokens,omitempty"`
+	APIFormat            string                                         `yaml:"api_format,omitempty"`
+	Description          string                                         `yaml:"description,omitempty"`
+	Capabilities         []string                                       `yaml:"capabilities,omitempty"`
+	Tags                 []string                                       `yaml:"tags,omitempty"`
+	IndexResults         map[string]modelcatalog.IndexResult            `yaml:"-" json:"-"`
+	IndexResultsByEffort map[string]map[string]modelcatalog.IndexResult `yaml:"-" json:"-"`
+	QualityIndex         string                                         `yaml:"-" json:"-"`
+	ExternalModelIDs     map[string]string                              `yaml:"external_model_ids,omitempty"`
+	Modality             string                                         `yaml:"modality,omitempty"`
+}
+
+// EvidenceScore resolves a versioned static model index. Missing, failed, and
+// not-applicable results return ok=false and are never coerced to zero.
+func (params ModelParams) EvidenceScore(index string) (float64, bool) {
+	result, ok := params.EvidenceResult(index)
+	if !ok {
+		return 0, false
+	}
+	return *result.Score, true
+}
+
+// EvidenceResult resolves one available preferred-effort index result and
+// returns a defensive copy so callers can inspect coverage safely.
+func (params ModelParams) EvidenceResult(index string) (modelcatalog.IndexResult, bool) {
+	if index == "" {
+		index = params.QualityIndex
+	}
+	result, ok := params.IndexResults[index]
+	if !ok || result.Status != "available" || result.Score == nil {
+		return modelcatalog.IndexResult{}, false
+	}
+	return cloneCatalogIndexResult(result), true
+}
+
+// EvidenceScoreAt resolves evidence for the exact configured reasoning effort
+// when one is present on the candidate. An empty effort uses the model's
+// catalog-preferred result. Scores are never borrowed across efforts.
+func (params ModelParams) EvidenceScoreAt(index, reasoningEffort string) (float64, bool) {
+	result, ok := params.EvidenceResultAt(index, reasoningEffort)
+	if !ok {
+		return 0, false
+	}
+	return *result.Score, true
+}
+
+// EvidenceResultAt resolves an available index result for the exact configured
+// reasoning effort. Results are never borrowed from another effort.
+func (params ModelParams) EvidenceResultAt(index, reasoningEffort string) (modelcatalog.IndexResult, bool) {
+	if reasoningEffort == "" {
+		return params.EvidenceResult(index)
+	}
+	if index == "" {
+		index = params.QualityIndex
+	}
+	results, ok := params.IndexResultsByEffort[reasoningEffort]
+	if !ok {
+		return modelcatalog.IndexResult{}, false
+	}
+	result, ok := results[index]
+	if !ok || result.Status != "available" || result.Score == nil {
+		return modelcatalog.IndexResult{}, false
+	}
+	return cloneCatalogIndexResult(result), true
 }
 
 type LoRAAdapter struct {
@@ -376,8 +501,15 @@ type LoRAAdapter struct {
 }
 
 type ReasoningFamilyConfig struct {
-	Type      string `yaml:"type"`
-	Parameter string `yaml:"parameter"`
+	Type                string            `yaml:"type"`
+	Parameter           string            `yaml:"parameter"`
+	ActivationParameter string            `yaml:"activation_parameter,omitempty"`
+	EffortFlags         map[string]string `yaml:"effort_flags,omitempty"`
+	Levels              []string          `yaml:"levels,omitempty"`
+	Default             string            `yaml:"default,omitempty"`
+	Modes               []string          `yaml:"modes,omitempty"`
+	DefaultMode         string            `yaml:"default_mode,omitempty"`
+	Disabled            string            `yaml:"disabled,omitempty"`
 }
 
 type PIIPolicy struct {

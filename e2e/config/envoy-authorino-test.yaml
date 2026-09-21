@@ -1,6 +1,10 @@
 # Test Envoy config for Authorino integration
 # Authorino gRPC is port-forwarded from kind cluster to localhost:50055
 # Semantic Router ext_proc is on localhost:50051
+# Authorino integration-test fixture. Its provider-specific routes are
+# intentional test vectors for credential injection, not a maintained provider
+# or model inventory. Provider-aware runtime configs are generated from the
+# user config and model catalog.
 static_resources:
   listeners:
   - name: listener_0
@@ -194,6 +198,11 @@ static_resources:
       typed_config:
         "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
         sni: api.openai.com
+        auto_sni_san_validation: true
+        common_tls_context:
+          validation_context:
+            trusted_ca:
+              filename: /etc/ssl/certs/ca-certificates.crt
 
   # Anthropic API cluster
   - name: anthropic_api_cluster
@@ -216,6 +225,11 @@ static_resources:
       typed_config:
         "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
         sni: api.anthropic.com
+        auto_sni_san_validation: true
+        common_tls_context:
+          validation_context:
+            trusted_ca:
+              filename: /etc/ssl/certs/ca-certificates.crt
 
 admin:
   address:

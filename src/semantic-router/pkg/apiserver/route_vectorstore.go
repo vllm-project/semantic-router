@@ -90,9 +90,9 @@ func (s *ClassificationAPIServer) handleListVectorStores(w http.ResponseWriter, 
 
 	stores := manager.ListStores(params)
 
-	response := map[string]interface{}{
-		"object": "list",
-		"data":   stores,
+	response := objectListResponse[*vectorstore.VectorStore]{
+		Object: "list",
+		Data:   stores,
 	}
 	s.writeJSONResponse(w, http.StatusOK, response)
 }
@@ -104,7 +104,7 @@ func (s *ClassificationAPIServer) handleGetVectorStore(w http.ResponseWriter, r 
 		return
 	}
 
-	id := extractPathParam(r.URL.Path, "/v1/vector_stores/")
+	id := extractPathParam(r.URL.Path, apiStorageVectorStoresPath+"/")
 	if id == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
 		return
@@ -126,7 +126,7 @@ func (s *ClassificationAPIServer) handleUpdateVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	id := extractPathParam(r.URL.Path, "/v1/vector_stores/")
+	id := extractPathParam(r.URL.Path, apiStorageVectorStoresPath+"/")
 	if id == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
 		return
@@ -154,7 +154,7 @@ func (s *ClassificationAPIServer) handleDeleteVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	id := extractPathParam(r.URL.Path, "/v1/vector_stores/")
+	id := extractPathParam(r.URL.Path, apiStorageVectorStoresPath+"/")
 	if id == "" {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", "vector store ID is required")
 		return
@@ -165,10 +165,10 @@ func (s *ClassificationAPIServer) handleDeleteVectorStore(w http.ResponseWriter,
 		return
 	}
 
-	s.writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-		"id":      id,
-		"object":  "vector_store.deleted",
-		"deleted": true,
+	s.writeJSONResponse(w, http.StatusOK, objectDeletedResponse{
+		ID:      id,
+		Object:  "vector_store.deleted",
+		Deleted: true,
 	})
 }
 

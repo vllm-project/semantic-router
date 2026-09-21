@@ -23,6 +23,8 @@ type Signals struct {
 	ModalityRules      []ModalityRule         `yaml:"modality_rules,omitempty"`
 	RoleBindings       []RoleBinding          `yaml:"role_bindings,omitempty"`
 	JailbreakRules     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	SafetyRules        []SafetyRule           `yaml:"safety,omitempty"`
+	HallucinationRules []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PIIRules           []PIIRule              `yaml:"pii,omitempty"`
 	KBRules            []KBSignalRule         `yaml:"kb,omitempty"`
 	ConversationRules  []ConversationRule     `yaml:"conversation,omitempty"`
@@ -30,6 +32,22 @@ type Signals struct {
 	MetadataRules      []MetadataRule         `yaml:"metadata,omitempty"`
 	ClassifierRules    []ClassifierSignalRule `yaml:"classifiers,omitempty"`
 	InputModalityRules []InputModalityRule    `yaml:"input_modality,omitempty"`
+}
+
+// HallucinationRule declares the response-stage hallucination observation:
+// the model's answer is checked against the grounding context the request
+// carried (tool results or retrieved context). It has no request direction; it
+// only exists once the model has answered, and the hallucination plugin of the
+// decision selected for the request consumes it. The detector's own threshold
+// and span filters stay on hallucination_model; a rule names the observation
+// and chooses how it is explained.
+type HallucinationRule struct {
+	Name        string `yaml:"name"`
+	Description string `yaml:"description,omitempty"`
+	// UseNLI asks the detector for span-level NLI explanations. It decides how
+	// the observation is produced, so it lives on the rule; the plugin's
+	// use_nli is ignored once a rule is declared.
+	UseNLI bool `yaml:"use_nli,omitempty"`
 }
 
 // EventRule matches structured event metadata extracted from request text.
@@ -84,14 +102,32 @@ const (
 )
 
 type EmbeddingRule struct {
-	Name                      string            `yaml:"name"`
-	SimilarityThreshold       float32           `yaml:"threshold"`
-	Candidates                []string          `yaml:"candidates"`
+	Name                string  `yaml:"name"`
+	SimilarityThreshold float32 `yaml:"threshold"`
+	// Candidates and ImageCandidates form the positive bank. Negative candidates
+	// optionally define a contrastive bank; the score is positive minus negative.
+	Candidates                []string          `yaml:"candidates,omitempty"`
+	ImageCandidates           []string          `yaml:"image_candidates,omitempty"`
+	NegativeCandidates        []string          `yaml:"negative_candidates,omitempty"`
+	NegativeImageCandidates   []string          `yaml:"negative_image_candidates,omitempty"`
 	AggregationMethodConfiged AggregationMethod `yaml:"aggregation_method"`
 	// QueryModality controls which modality of the incoming request payload
 	// the query embedding is computed from. Defaults to "text" when omitted,
 	// preserving existing behavior.
 	QueryModality QueryModality `yaml:"query_modality,omitempty"`
+	// PrototypeScoring overrides construction and scoring for this rule.
+	// Text-only rules inherit the family config. Media queries or image
+	// candidates retain all anchors and use raw max by default; a present object explicitly opts
+	// into its complete policy (with built-in defaults).
+	PrototypeScoring *PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+}
+
+func (r EmbeddingRule) HasImageCandidates() bool {
+	return len(r.ImageCandidates) > 0 || len(r.NegativeImageCandidates) > 0
+}
+
+func (r EmbeddingRule) HasNegativeCandidates() bool {
+	return len(r.NegativeCandidates) > 0 || len(r.NegativeImageCandidates) > 0
 }
 
 // EffectiveQueryModality returns the rule's declared query modality, or
@@ -103,6 +139,26 @@ func (r EmbeddingRule) EffectiveQueryModality() QueryModality {
 		return QueryModalityText
 	}
 	return m
+}
+
+// EffectivePrototypeScoring preserves cross-modal anchors unless the rule
+// explicitly opts into compression. Nearby text embeddings need not be
+// interchangeable for an image or audio query.
+func (r EmbeddingRule) EffectivePrototypeScoring(family PrototypeScoringConfig) PrototypeScoringConfig {
+	if r.PrototypeScoring != nil {
+		return r.PrototypeScoring.WithDefaults()
+	}
+	if r.HasImageCandidates() {
+		disabled := false
+		return PrototypeScoringConfig{Enabled: &disabled, BestWeight: 1, TopM: 1}.WithDefaults()
+	}
+	switch r.EffectiveQueryModality() {
+	case QueryModalityImage, QueryModalityAudio:
+		disabled := false
+		return PrototypeScoringConfig{Enabled: &disabled, BestWeight: 1, TopM: 1}.WithDefaults()
+	default:
+		return family.WithDefaults()
+	}
 }
 
 type FactCheckRule struct {
@@ -146,6 +202,10 @@ type JailbreakRule struct {
 	Description       string   `yaml:"description,omitempty"`
 	JailbreakPatterns []string `yaml:"jailbreak_patterns,omitempty"`
 	BenignPatterns    []string `yaml:"benign_patterns,omitempty"`
+	// Direction is the stage the rule observes: "request" (the default) scores
+	// the prompt before a model is selected, "response" scores the model's
+	// output once it has answered. See JailbreakRule.Stage.
+	Direction string `yaml:"direction,omitempty"`
 }
 
 type PIIRule struct {
@@ -429,12 +489,27 @@ func HasImageCandidatesInRules(rules []ComplexityRule) bool {
 }
 
 type ComplexityRule struct {
-	Name        string               `yaml:"name"`
-	Threshold   float32              `yaml:"threshold"`
-	Hard        ComplexityCandidates `yaml:"hard"`
-	Easy        ComplexityCandidates `yaml:"easy"`
-	Description string               `yaml:"description,omitempty"`
-	Composer    *RuleCombination     `yaml:"composer,omitempty"`
+	Name string `yaml:"name"`
+	// PrototypeScoring applies to all local text/image hard/easy banks. Nil
+	// inherits the family config; a present object is a complete override.
+	PrototypeScoring *PrototypeScoringConfig `yaml:"prototype_scoring,omitempty"`
+	// Threshold is the symmetric shorthand, kept because the local margin is
+	// signed and centred on zero: hard above +threshold, easy below
+	// -threshold. Mutually exclusive with the explicit pair below.
+	Threshold float32              `yaml:"threshold"`
+	Hard      ComplexityCandidates `yaml:"hard"`
+	Easy      ComplexityCandidates `yaml:"easy"`
+	// The explicit boundary pair, for a score whose scale is the model's own
+	// rather than a signed margin. The pair used states which way difficulty
+	// runs, so no separate direction field is needed: hard_above with
+	// easy_below where a higher score is harder, hard_below with easy_above
+	// where a lower one is. Resolved by EffectiveBoundaries.
+	HardAbove   *float64         `yaml:"hard_above,omitempty"`
+	EasyBelow   *float64         `yaml:"easy_below,omitempty"`
+	HardBelow   *float64         `yaml:"hard_below,omitempty"`
+	EasyAbove   *float64         `yaml:"easy_above,omitempty"`
+	Description string           `yaml:"description,omitempty"`
+	Composer    *RuleCombination `yaml:"composer,omitempty"`
 }
 
 type Category struct {

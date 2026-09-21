@@ -36,15 +36,15 @@ The management API validates and normalizes a candidate config without writing
 it:
 
 ```http
-POST /config/router/validate
+POST /api/v1/config/validate
 Content-Type: application/json
 
 {"yaml":"version: v0.3\n..."}
 ```
 
 Successful responses include `valid: true` and the normalized canonical YAML.
-Validation uses the same parser and semantic checks as `PATCH /config/router`
-and `PUT /config/router`, but preserves `${ENV_VAR}` references verbatim rather
+Validation uses the same parser and semantic checks as `PATCH /api/v1/config`
+and `PUT /api/v1/config`, but preserves `${ENV_VAR}` references verbatim rather
 than reading process secrets. The endpoint requires `config.read`; plaintext
 secret viewing is not implied.
 
@@ -54,11 +54,36 @@ secret viewing is not implied.
 global:
   services:
     api:
+      routing_preview:
+        request_timeout_seconds: 120
+        max_concurrency: 16
       batch_classification:
         max_batch_size: 100
-        concurrency_threshold: 5
-        max_concurrency: 8
 ```
+
+`max_batch_size` bounds `texts` per `/api/v1/diagnostics/classify/batch` request. Larger
+batches return `400 INVALID_INPUT`.
+
+`routing_preview` applies to `POST /api/v1/routing/preview`. Its inference
+deadline starts after the request body is decoded and defaults to 120 seconds.
+Set `request_timeout_seconds` between 1 and 3600 using measured inference times
+for the intended input lengths and deployment hardware. This setting can be
+updated through config hot reload;
+other HTTP routes keep their existing timeouts.
+
+A deadline returns `504 REQUEST_TIMEOUT` and cancels queued or cancellable
+inference. Native inference already running may finish later. Its model resources
+and admission slot remain held until it finishes, including during shutdown.
+`max_concurrency` is a positive worker limit, defaults to 16, and has no wait
+queue: when all slots are occupied, new previews return `429 OVERLOADED`.
+Changing this limit requires a deployment restart; hot reload rejects the change.
+
+The response writer has five additional seconds to send the result or timeout
+response. Dashboard Topology uses the configured Preview budget plus this
+allowance and propagates client cancellation. Recipe probes retain their own
+`evaluation.request_timeout_seconds` caller budget in `probes.yaml`; configure
+it for the intended run, and allow at least five extra seconds in external HTTP
+clients or proxies when they need to receive the Router's timeout response.
 
 ### Response API
 
@@ -107,16 +132,90 @@ Common Prometheus metric families:
 
 | Family | Example metrics |
 |--------|-----------------|
-| Requests | `llm_model_requests_total`, `llm_request_errors_total` |
-| Errors | `llm_request_errors_total{reason="timeout"}` |
-| Latency | `llm_model_completion_latency_seconds`, `llm_model_ttft_seconds`, `llm_model_tpot_seconds`, `llm_model_routing_latency_seconds` |
+| Terminal requests | `llm_request_outcomes_total`, `llm_request_duration_seconds` (by bounded `traffic_kind` and `outcome`) |
+| Backend dispatch and error events | `llm_model_requests_total`, `llm_request_errors_total` (not a completed-client-request denominator) |
+| Latency | `llm_model_completion_latency_seconds`, `llm_model_first_response_observation_seconds`, `llm_model_response_duration_per_output_token_seconds`, `llm_model_routing_latency_seconds` |
 | Tokens and cost | `llm_model_tokens_total`, `llm_model_prompt_tokens_total`, `llm_model_completion_tokens_total`, `llm_model_cost_total` |
 | Routing | `llm_model_routing_modifications_total`, `llm_routing_reason_codes_total` |
 | Selection | `llm_model_selection_total`, `llm_model_selection_duration_seconds`, `llm_model_inflight_requests` |
+| Looper | `llm_looper_attempts_total`, `llm_looper_attempt_duration_seconds`, `llm_looper_attempt_first_byte_seconds`, `llm_looper_attempt_tokens_total`, `llm_looper_attempt_cost_total`, `llm_looper_execution_duration_seconds` |
 | Cache | `llm_cache_plugin_hits_total`, `llm_cache_plugin_misses_total`, `llm_cache_warmth_estimate` |
 | RAG | `rag_retrieval_attempts_total`, `rag_retrieval_latency_seconds`, `rag_cache_hits_total`, `rag_cache_misses_total` |
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
-| Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
+| Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total` |
+| Signals | `llm_signal_extraction_total`, `llm_signal_match_total`, `llm_signal_extraction_latency_seconds` |
+| Complexity verdicts | `llm_complexity_verdict_total` (by `rule`, `verdict`, `source`), `llm_complexity_evaluation_failures_total` |
+| Remote classifier backends | `llm_remote_connector_requests_total` (by `operation`, `outcome`), `llm_remote_connector_request_duration_seconds`, `llm_remote_connector_retries_total` |
+| Recipe routing | `llm_entrypoint_requests_total`, `llm_recipe_selections_total`, `llm_routing_stage_duration_seconds` |
+| Projections | `llm_projection_score` (by configured recipe and projection name) |
+| Trace export | `llm_trace_export_spans_total` (by exporter batch result) |
+
+`llm_request_outcomes_total{traffic_kind="inference"}` counts public inference
+requests once at their terminal boundary. Authenticated internal looper requests
+use `inference_internal`; catalog, response-object and health operations have
+separate traffic kinds. Outcomes distinguish success, client/server errors,
+cancellation, timeout, incomplete responses and other failures. A backend
+selection or an error event is not another completed public request.
+
+The model latency names describe their actual observations:
+`llm_model_first_response_observation_seconds` measures the first stream chunk
+or non-streaming response headers, while
+`llm_model_response_duration_per_output_token_seconds` divides complete response
+time by reported output tokens. These are not first-token latency or decode-only
+inter-token latency. The optional windowed metrics summarize at most 10,000
+observed completed responses per model; they do not estimate utilization, queue
+depth or provider error rates.
+
+The `semantic_router.request` span covers the complete ExtProc request, including
+streamed responses and cancellation. Its bounded `traffic.kind` and route
+separate inference from catalog or health polling without storing URL queries or
+resource IDs. Signal evaluation, decision evaluation, algorithm selection,
+plugins, and the actual upstream request are child stages. Resolved
+`routing.entrypoint`, `routing.recipe`, `decision.name`, and `routing.algorithm`
+identify the routing boundary where available. A `routing.backend.resolved`
+event records selection evidence; the upstream span measures provider duration.
+If a local response guard blocks an upstream HTTP 200, the upstream span retains
+200 while the root records the final client response status.
+
+Signal evidence events contain finite reported values and confidence separately,
+including real zero values; missing evidence remains absent. Projection events
+contain evaluated scores and configured names. Aggregate signal evaluation does
+not invent a confidence score. Traces exclude raw prompts, signal errors and
+retrieval exception text. Earlier traces cannot be enriched retroactively.
+
+The local `vllm-sr serve` stack provisions the **vLLM Semantic Router**
+in Grafana. Its main groups cover public inference outcomes, recipe workflow,
+backend usage, plugins and response cache, and telemetry health. Additional
+accounting and MoM panels distinguish reported model usage from supported looper
+attempt evidence. Recipe stage duration is an observed mean; projection counts
+show evaluations, with individual scores available in Insights. Model timing
+panels use observed means rather than clipped long-call histogram quantiles.
+Prometheus scrapes both the Router and Jaeger's internal admin metrics. An absent
+series means no measurement, not zero traffic or a healthy collector. Export
+success counts completed SDK exporter batches; it does not prove every request
+was sampled or retained.
+
+Local Jaeger uses the pinned all-in-one image with non-root Badger storage and a
+stack-specific `<jaeger-container-name>-data` named volume mounted at `/tmp`.
+Trace retention is seven days. Grafana keeps its database and preferences in
+`<grafana-container-name>-data` at `/var/lib/grafana`, retaining the image's
+non-root user. Prometheus retains its local TSDB for 15 days. Container replacement
+preserves these stores; deleting a telemetry store starts a new history. Keep
+telemetry reset operations separate from benchmark, authentication, learning and
+configuration stores.
+
+Changing an older in-memory Jaeger instance to Badger does not migrate its
+memory. Sampling remains controlled by Router configuration, and a search limit
+is not a count of all retained traces. For multi-node trace storage, configure an
+external collector/storage deployment instead of sharing this single-node
+Badger volume. See the [Jaeger 1.76 storage documentation](https://www.jaegertracing.io/docs/1.76/deployment/#badger---local-storage).
+
+Looper metric labels are restricted to bounded algorithm, stage, status,
+reason, token-type, and currency values. Request IDs, trace IDs, ordinals,
+decision names, model names, scores, and thresholds are available through
+traces or detailed Router Replay rather than Prometheus labels. Detailed
+attempt metrics currently cover the Confidence algorithm; absent attempt
+evidence must not be interpreted as zero calls or complete cost accounting.
 
 ### Profiling
 

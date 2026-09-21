@@ -1,6 +1,9 @@
 package extproc
 
-import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+import (
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+)
 
 // adaptProviderRequest applies backend-dialect extensions after the standard
 // wire codec has rendered the request. Official protocol semantics stay in
@@ -11,14 +14,36 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) ([]byte, error) {
-	if dispatch == nil || ctx == nil || dispatch.decisionName == "" || dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
-		return body, nil
+	body, mutation, err := r.projectProviderRequest(body, dispatch, ctx)
+	if err == nil && mutation != nil {
+		r.observeReasoningMutation(mutation, dispatch.useReasoning)
 	}
-	return r.setReasoningModeToRequestBodyForModelAndProvider(
+	return body, err
+}
+
+// projectProviderRequest shares the exact provider dialect with dispatch while
+// leaving live reasoning observations to the actual dispatch adapter.
+func (r *OpenAIRouter) projectProviderRequest(
+	body []byte,
+	dispatch *providerDispatch,
+	ctx *RequestContext,
+) ([]byte, *reasoningRequestMutation, error) {
+	if dispatch == nil || ctx == nil || dispatch.decisionName == "" {
+		return body, nil, nil
+	}
+	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
+		family := r.getModelReasoningFamily(dispatch.logicalModel)
+		transport := resolveProviderReasoningTransport(dispatch.profile)
+		if dispatch.targetFormat != llmprotocol.OpenAIResponsesV1 || family == nil ||
+			transport != modelcatalog.ReasoningTransportChatTemplate {
+			return body, nil, nil
+		}
+	}
+	return r.projectReasoningRequest(
 		body,
 		dispatch.logicalModel,
 		dispatch.useReasoning,
-		ctx.VSRSelectedDecision,
+		ctx.decisionForCandidate(dispatch.logicalModel),
 		dispatch.profile,
 	)
 }

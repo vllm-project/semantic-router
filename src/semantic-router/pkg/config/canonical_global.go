@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -67,12 +66,14 @@ type CanonicalIntegrationGlobal struct {
 // CanonicalModelCatalog groups router-owned model assets and the module
 // configs that resolve through those assets.
 type CanonicalModelCatalog struct {
-	Embeddings CanonicalEmbeddingModels   `yaml:"embeddings"`
-	System     CanonicalSystemModels      `yaml:"system"`
-	External   []ExternalModelConfig      `yaml:"external,omitempty"`
-	KBs        []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
-	Modules    CanonicalModelModules      `yaml:"modules"`
-	Admission  map[string]AdmissionConfig `yaml:"admission,omitempty"`
+	Bindings    map[string]ModelBinding    `yaml:"bindings,omitempty"`
+	Deployments map[string]ModelDeployment `yaml:"deployments,omitempty"`
+	Embeddings  CanonicalEmbeddingModels   `yaml:"embeddings"`
+	System      CanonicalSystemModels      `yaml:"system"`
+	External    []ExternalModelConfig      `yaml:"external,omitempty"`
+	KBs         []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
+	Modules     CanonicalModelModules      `yaml:"modules"`
+	Admission   map[string]AdmissionConfig `yaml:"admission,omitempty"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -83,6 +84,7 @@ type CanonicalEmbeddingModels struct {
 // CanonicalModelModules groups configurable capability modules built on top of
 // router-owned model assets.
 type CanonicalModelModules struct {
+	Safety                  SafetyModelsConfig              `yaml:"safety"`
 	PromptCompression       PromptCompressionConfig         `yaml:"prompt_compression"`
 	PromptGuard             CanonicalPromptGuardModule      `yaml:"prompt_guard"`
 	Classifier              CanonicalClassifierModule       `yaml:"classifier"`
@@ -94,6 +96,8 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
+	Safety                 string `yaml:"safety,omitempty"`
+	Hazard                 string `yaml:"hazard,omitempty"`
 	PromptGuard            string `yaml:"prompt_guard,omitempty"`
 	DomainClassifier       string `yaml:"domain_classifier,omitempty"`
 	PIIClassifier          string `yaml:"pii_classifier,omitempty"`
@@ -184,6 +188,46 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return defaults, nil
 	}
 
+	resolved, err := mergeCanonicalGlobalOverride(defaults, override, rawOverride)
+	if err != nil {
+		return CanonicalGlobal{}, err
+	}
+	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
+	if err := normalizeSparseCanonicalCategoryOverride(&resolved, rawOverride); err != nil {
+		return CanonicalGlobal{}, err
+	}
+	if err := resolveModuleModelRefs(&resolved); err != nil {
+		return CanonicalGlobal{}, err
+	}
+	return resolved, nil
+}
+
+// Representation defaults belong to the default mmBERT model. Selecting a
+// different family must not silently request mmBERT's layer 22 from that owner.
+func normalizeSparseCanonicalEmbeddingOverride(resolved *CanonicalGlobal, raw *StructuredPayload) {
+	if raw == nil {
+		return
+	}
+	global, err := raw.AsStringMap()
+	if err != nil {
+		return
+	}
+	catalog := nestedStringMap(global["model_catalog"])
+	embeddings := nestedStringMap(catalog["embeddings"])
+	semantic := nestedStringMap(embeddings["semantic"])
+	settings := nestedStringMap(semantic["embedding_config"])
+	if model, ok := settings["model_type"].(string); ok && strings.TrimSpace(model) != "" && strings.ToLower(strings.TrimSpace(model)) != "mmbert" {
+		if !hasRawKey(settings, "target_layer") {
+			resolved.ModelCatalog.Embeddings.Semantic.EmbeddingConfig.TargetLayer = 0
+		}
+	}
+}
+
+func mergeCanonicalGlobalOverride(
+	defaults CanonicalGlobal,
+	override *CanonicalGlobal,
+	rawOverride *StructuredPayload,
+) (CanonicalGlobal, error) {
 	resolved := defaults
 	overrideSource := interface{}(override)
 	if rawOverride != nil {
@@ -196,6 +240,16 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	}
 	if err := yaml.Unmarshal(overrideBytes, &resolved); err != nil {
 		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
+	}
+	return resolved, nil
+}
+
+func normalizeSparseCanonicalCategoryOverride(
+	resolved *CanonicalGlobal,
+	rawOverride *StructuredPayload,
+) error {
+	if err := normalizeCanonicalPromptGuardBackend(&resolved.ModelCatalog.Modules.PromptGuard.PromptGuardConfig, rawOverride); err != nil {
+		return err
 	}
 	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
 	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
@@ -218,13 +272,23 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 			categoryModel.Variant = ""
 		}
 	}
-	if err := normalizeCanonicalCategoryVariant(categoryModel); err != nil {
-		return CanonicalGlobal{}, err
+	normalizeCanonicalPIIBackend(&resolved.ModelCatalog.Modules.Classifier.PII.PIIModel, rawOverride)
+	return normalizeCanonicalCategoryVariant(categoryModel)
+}
+
+// normalizeCanonicalPIIBackend applies the domain rule to PII: the canonical
+// default selects the local mmBERT PII model, and a sparse override that
+// attaches a remote backend must replace that inherited selector rather than be
+// rejected for mixing local and remote. Only a backend key the operator wrote
+// counts; an unrelated sparse pii override keeps the default. model_ref still
+// resolves, so the mapping file the token_spans adapter needs is provisioned
+// with the local model.
+func normalizeCanonicalPIIBackend(model *PIIModel, rawOverride *StructuredPayload) {
+	rawPII := rawCanonicalClassifierModuleOverride(rawOverride, "pii")
+	if rawPII == nil || !hasRawKey(rawPII, "backend") || rawBoolValue(rawPII, "use_mmbert_32k") {
+		return
 	}
-	if err := resolveModuleModelRefs(&resolved); err != nil {
-		return CanonicalGlobal{}, err
-	}
-	return resolved, nil
+	model.UseMmBERT32K = false
 }
 
 // normalizeCanonicalCategoryVariant resolves legacy selectors after a sparse
@@ -251,6 +315,13 @@ func normalizeCanonicalCategoryVariant(model *CategoryModel) error {
 }
 
 func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]interface{} {
+	return rawCanonicalClassifierModuleOverride(rawOverride, "domain")
+}
+
+// rawCanonicalClassifierModuleOverride returns the raw (pre-merge) mapping the
+// override supplied for one classifier module, so normalization can tell an
+// inherited default from a key the operator actually wrote.
+func rawCanonicalClassifierModuleOverride(rawOverride *StructuredPayload, module string) map[string]interface{} {
 	if rawOverride == nil || rawOverride.IsEmpty() {
 		return nil
 	}
@@ -261,7 +332,7 @@ func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]int
 	modelCatalog := nestedStringMap(global["model_catalog"])
 	modules := nestedStringMap(modelCatalog["modules"])
 	classifier := nestedStringMap(modules["classifier"])
-	return nestedStringMap(classifier["domain"])
+	return nestedStringMap(classifier[module])
 }
 
 func hasRawKey(raw map[string]interface{}, key string) bool {
@@ -285,53 +356,69 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	if global == nil {
 		return nil
 	}
-
-	cfg.ConfigSource = global.Router.ConfigSource
-	cfg.Strategy = global.Router.Strategy
-	cfg.AutoModelName = global.Router.AutoModelName
-	cfg.AutoModelNames = nil
-	if global.Router.AutoModelNames != nil {
-		cfg.AutoModelNames = append([]string{}, (*global.Router.AutoModelNames)...)
-	}
-	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList
-	cfg.ClearRouteCache = global.Router.ClearRouteCache
-	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
-	cfg.MaxStreamedBodyBytes = global.Router.StreamedBody.MaxBytes
-	cfg.StreamedBodyTimeoutSec = global.Router.StreamedBody.TimeoutSec
-	cfg.SkipProcessing = global.Router.SkipProcessing
-	cfg.ModelSelection = global.Router.ModelSelection
-	cfg.RouterLearning = global.Router.Learning
-
-	cfg.API = global.Services.API
-	cfg.ResponseAPI = global.Services.ResponseAPI
-	cfg.Observability = global.Services.Observability
-	cfg.Authz = global.Services.Authz
-	cfg.RateLimit = global.Services.RateLimit
-	cfg.ManagementAPI = global.Services.ManagementAPI
-	cfg.RouterReplay = global.Services.RouterReplay
-	cfg.StartupStatus = global.Services.StartupStatus
-
-	cfg.SemanticCache = global.Stores.ResponseCache
-	cfg.Memory = global.Stores.Memory
-	cfg.VectorStore = global.Stores.VectorStore
-
-	cfg.Tools = global.Integrations.Tools
-	cfg.Looper = global.Integrations.Looper
-
-	cfg.ExternalModels = append([]ExternalModelConfig(nil), global.ModelCatalog.External...)
-	cfg.EmbeddingModels = global.ModelCatalog.Embeddings.Semantic
-	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), global.ModelCatalog.KBs...)
-
-	cfg.PromptCompression = global.ModelCatalog.Modules.PromptCompression
-	cfg.PromptGuard = global.ModelCatalog.Modules.PromptGuard.PromptGuardConfig
-	cfg.Classifier = global.ModelCatalog.Modules.Classifier.runtimeConfig()
-	cfg.ComplexityModel = global.ModelCatalog.Modules.Complexity.WithDefaults()
-	cfg.HallucinationMitigation = global.ModelCatalog.Modules.HallucinationMitigation.runtimeConfig()
-	cfg.FeedbackDetector = global.ModelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
-	cfg.ModalityDetector = global.ModelCatalog.Modules.ModalityDetector
-	cfg.ModelAdmission = cloneAdmissionMap(global.ModelCatalog.Admission)
-
+	applyCanonicalRouterGlobal(cfg, global.Router)
+	applyCanonicalServiceGlobal(cfg, global.Services)
+	applyCanonicalStoreGlobal(cfg, global.Stores)
+	applyCanonicalIntegrationGlobal(cfg, global.Integrations)
+	applyCanonicalModelCatalogGlobal(cfg, global.ModelCatalog)
 	return nil
+}
+
+func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal) {
+	cfg.ConfigSource = router.ConfigSource
+	cfg.Strategy = router.Strategy
+	cfg.AutoModelName = router.AutoModelName
+	cfg.AutoModelNames = nil
+	if router.AutoModelNames != nil {
+		cfg.AutoModelNames = append([]string{}, (*router.AutoModelNames)...)
+	}
+	cfg.IncludeConfigModelsInList = router.IncludeConfigModelsInList
+	cfg.ClearRouteCache = router.ClearRouteCache
+	cfg.StreamedBodyMode = router.StreamedBody.Enabled
+	cfg.MaxStreamedBodyBytes = router.StreamedBody.MaxBytes
+	cfg.StreamedBodyTimeoutSec = router.StreamedBody.TimeoutSec
+	cfg.SkipProcessing = router.SkipProcessing
+	cfg.ModelSelection = router.ModelSelection
+	cfg.RouterLearning = router.Learning
+}
+
+func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
+	cfg.API = services.API
+	cfg.ResponseAPI = services.ResponseAPI
+	cfg.Observability = services.Observability
+	cfg.Authz = services.Authz
+	cfg.RateLimit = services.RateLimit
+	cfg.ManagementAPI = services.ManagementAPI
+	cfg.RouterReplay = services.RouterReplay
+	cfg.StartupStatus = services.StartupStatus
+}
+
+func applyCanonicalStoreGlobal(cfg *RouterConfig, stores CanonicalStoreGlobal) {
+	cfg.SemanticCache = stores.ResponseCache
+	cfg.Memory = stores.Memory
+	cfg.VectorStore = stores.VectorStore
+}
+
+func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIntegrationGlobal) {
+	cfg.Tools = integrations.Tools
+	cfg.Looper = integrations.Looper
+}
+
+func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
+	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
+	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
+	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
+	cfg.EmbeddingModels = modelCatalog.Embeddings.Semantic
+	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), modelCatalog.KBs...)
+	cfg.PromptCompression = modelCatalog.Modules.PromptCompression
+	cfg.PromptGuard = modelCatalog.Modules.PromptGuard.PromptGuardConfig
+	cfg.Classifier = modelCatalog.Modules.Classifier.runtimeConfig()
+	cfg.ComplexityModel = modelCatalog.Modules.Complexity.WithDefaults()
+	cfg.HallucinationMitigation = modelCatalog.Modules.HallucinationMitigation.runtimeConfig()
+	cfg.FeedbackDetector = modelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
+	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
+	cfg.SafetyModels = modelCatalog.Modules.Safety
+	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 }
 
 func cloneAdmissionMap(admission map[string]AdmissionConfig) map[string]AdmissionConfig {
@@ -351,6 +438,14 @@ func resolveModuleModelRefs(global *CanonicalGlobal) error {
 	}
 
 	var err error
+	for name, head := range map[string]*SequenceHeadModelConfig{
+		"safety": &global.ModelCatalog.Modules.Safety.Safety,
+		"hazard": &global.ModelCatalog.Modules.Safety.Hazard,
+	} {
+		if head.ModelID, err = resolveSystemModelRef(head.ModelRef, head.ModelID, global.ModelCatalog.System); err != nil {
+			return fmt.Errorf("global.model_catalog.modules.safety.%s: %w", name, err)
+		}
+	}
 	if global.ModelCatalog.Modules.PromptGuard.ModelID, err = resolveSystemModelRef(
 		global.ModelCatalog.Modules.PromptGuard.ModelRef,
 		global.ModelCatalog.Modules.PromptGuard.ModelID,
@@ -413,6 +508,10 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 
 	var modelID string
 	switch ref {
+	case "safety":
+		modelID = catalog.Safety
+	case "hazard":
+		modelID = catalog.Hazard
 	case "prompt_guard":
 		modelID = catalog.PromptGuard
 	case "domain_classifier":
@@ -436,12 +535,24 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 	return modelID, nil
 }
 
-func resolveBackendAPIKey(ref CanonicalBackendRef) string {
-	if ref.APIKey != "" {
-		return ref.APIKey
+// Explicit backend overrides clear only inherited defaults; a legacy protocol
+// in canonical input must be converted by the migration command.
+func normalizeCanonicalPromptGuardBackend(model *PromptGuardConfig, rawOverride *StructuredPayload) error {
+	if rawOverride == nil || rawOverride.IsEmpty() {
+		return nil
 	}
-	if ref.APIKeyEnv != "" {
-		return os.Getenv(ref.APIKeyEnv)
+	var global map[string]interface{}
+	if err := rawOverride.DecodeInto(&global); err != nil {
+		return err
 	}
-	return ""
+	catalog := nestedStringMap(global["model_catalog"])
+	modules := nestedStringMap(catalog["modules"])
+	raw := nestedStringMap(modules["prompt_guard"])
+	if protocol, ok := raw["protocol"].(string); ok && strings.TrimSpace(protocol) != "" {
+		return fmt.Errorf("global.model_catalog.modules.prompt_guard.protocol is legacy; run vllm-sr config migrate to declare a named backend")
+	}
+	if hasRawKey(raw, "backend") && !hasRawKey(raw, "variant") {
+		model.Variant = ""
+	}
+	return nil
 }

@@ -7,8 +7,8 @@
   min-height: calc(100vh - var(--site-header-height));
   min-height: calc(100svh - var(--site-header-height));
   overflow: hidden;
-  background: #030303;
-  color: #fafafa;
+  background: var(--site-bg);
+  color: var(--site-text);
 }
 
 .terrain {
@@ -16,8 +16,8 @@
   z-index: 0;
   inset: 0;
   overflow: hidden;
-  background: #030303;
-  color: #a1a1aa;
+  background: var(--site-bg);
+  color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   pointer-events: none;
   user-select: none;
@@ -52,7 +52,7 @@
   left: 1.5rem;
   display: grid;
   gap: 0.45rem;
-  color: #71717a;
+  color: var(--site-muted);
   font-size: 0.625rem;
   letter-spacing: 0.1em;
 }
@@ -64,7 +64,7 @@
 }
 
 .terrainHud span {
-  color: #fafafa;
+  color: var(--site-text);
 }
 
 .terrainLegend {
@@ -78,7 +78,7 @@
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  color: #71717a;
+  color: var(--site-muted);
   font-size: 0.56rem;
   letter-spacing: 0.05em;
 }
@@ -89,6 +89,7 @@
 }
 
 .terrainLegendItem strong {
+  color: var(--site-muted-bright);
   font-weight: 500;
 }
 
@@ -99,14 +100,13 @@
   width: 2.5rem;
   height: 2.5rem;
   transform: translate(-50%, -50%);
-  mix-blend-mode: difference;
 }
 
 .terrainCrosshair::before,
 .terrainCrosshair::after {
   content: '';
   position: absolute;
-  background: rgba(255, 255, 255, 0.42);
+  background: var(--site-muted);
 }
 
 .terrainCrosshair::before {
@@ -138,8 +138,8 @@
   z-index: -1;
   inset: 0;
   background:
-    radial-gradient(circle at 50% 52%, rgba(3, 3, 3, 0.95) 0, rgba(3, 3, 3, 0.76) 28%, transparent 61%),
-    linear-gradient(90deg, rgba(3, 3, 3, 0.4), rgba(3, 3, 3, 0.18) 50%, rgba(3, 3, 3, 0.4));
+    radial-gradient(circle at 50% 52%, color-mix(in srgb, var(--site-bg) 95%, transparent) 0, color-mix(in srgb, var(--site-bg) 76%, transparent) 28%, transparent 61%),
+    linear-gradient(90deg, color-mix(in srgb, var(--site-bg) 40%, transparent), color-mix(in srgb, var(--site-bg) 18%, transparent) 50%, color-mix(in srgb, var(--site-bg) 40%, transparent));
   pointer-events: none;
 }
 
@@ -160,7 +160,6 @@
 }
 
 .brand img {
-  display: block;
   width: 100%;
   height: auto;
   object-fit: contain;
@@ -172,7 +171,7 @@
   max-width: 12ch;
   margin: 0;
   justify-items: center;
-  color: #fafafa;
+  color: var(--site-text);
   font-size: clamp(3.4rem, 7.25vw, 7.25rem);
   font-weight: 420;
   letter-spacing: -0.062em;
@@ -185,14 +184,14 @@
 }
 
 .stage .copy h1 .accent {
-  color: #30a2ff;
+  color: var(--site-accent-strong);
   font-weight: 720;
 }
 
 .stage .description {
   max-width: 36rem;
   margin: 0.65rem 0 0;
-  color: #b2b2b8;
+  color: var(--site-muted-bright);
   font-size: clamp(1rem, 1.3vw, 1.18rem);
   font-weight: 480;
   line-height: 1.6;
@@ -218,35 +217,33 @@
   letter-spacing: 0.1em;
 }
 
-/* The hero is committed to dark regardless of colour mode, so it states the
- * blues literally rather than through the theme-switching tokens. The values
- * are the dark half of the --site-cta-* / hover ladder. */
+/* Match the shared CTA and hover palette in both color modes. */
 .actions .primaryCta {
-  border-color: #30a2ff;
-  background: #30a2ff;
-  color: #04121f;
-  box-shadow: 0 16px 36px rgba(48, 162, 255, 0.22);
+  border-color: var(--site-cta-border);
+  background: var(--site-cta-bg);
+  color: var(--site-cta-text);
+  box-shadow: var(--site-cta-shadow);
 }
 
 .actions .primaryCta:hover,
 .actions .primaryCta:focus-visible {
-  border-color: #75c5ff;
-  background: #75c5ff;
-  color: #04121f;
+  border-color: var(--site-cta-border-hover);
+  background: var(--site-cta-bg-hover);
+  color: var(--site-cta-text);
 }
 
 .actions .secondaryCta {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(3, 3, 3, 0.64);
-  color: #fafafa;
+  border-color: var(--site-border-strong);
+  background: var(--site-surface-glass);
+  color: var(--site-text);
   box-shadow: none;
 }
 
 .actions .secondaryCta:hover,
 .actions .secondaryCta:focus-visible {
-  border-color: rgba(48, 162, 255, 0.52);
-  background: rgba(48, 162, 255, 0.14);
-  color: #ffffff;
+  border-color: var(--site-hover-border-strong);
+  background: var(--site-hover-surface-bg);
+  color: var(--site-hover-text);
 }
 
 .modelBand {
@@ -255,12 +252,12 @@
   display: grid;
   gap: 0.75rem;
   padding: 0.9rem 0 1.15rem;
-  background: linear-gradient(180deg, rgba(3, 3, 3, 0.16), rgba(3, 3, 3, 0.94) 38%);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--site-bg) 16%, transparent), color-mix(in srgb, var(--site-bg) 94%, transparent) 38%);
 }
 
 .modelBandLabel {
   justify-self: center;
-  color: #71717a;
+  color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.58rem;
   font-weight: 650;
@@ -299,7 +296,7 @@
   flex: 0 0 auto;
   align-items: center;
   gap: 0.75rem;
-  color: #a1a1aa;
+  color: var(--site-muted);
   white-space: nowrap;
 }
 
@@ -310,7 +307,7 @@
 }
 
 .model strong {
-  color: #b8b8be;
+  color: var(--site-muted-bright);
   font-size: 1rem;
   font-weight: 570;
   letter-spacing: -0.01em;
@@ -378,8 +375,8 @@
 
   .heroScrim {
     background:
-      linear-gradient(180deg, transparent, rgba(3, 3, 3, 0.64) 28%, rgba(3, 3, 3, 0.96) 68%),
-      radial-gradient(circle at 40% 60%, rgba(3, 3, 3, 0.84), transparent 72%);
+      linear-gradient(180deg, transparent, color-mix(in srgb, var(--site-bg) 64%, transparent) 28%, color-mix(in srgb, var(--site-bg) 96%, transparent) 68%),
+      radial-gradient(circle at 40% 60%, color-mix(in srgb, var(--site-bg) 84%, transparent), transparent 72%);
   }
 
   .copy {

@@ -18,7 +18,7 @@ def _asset_document(model_id: str, recipe: str, provider: str) -> dict:
         "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
         "global": {"router": {"strategy": "priority"}},
         "providers": {
-            "defaults": {"default_model": "local/fallback"},
+            "defaults": {"model": "local/fallback"},
             "models": [
                 {"name": "local/fallback"},
                 {"name": provider},
@@ -77,18 +77,19 @@ def test_role_validation_accepts_connection_free_recipe_templates() -> None:
     )
 
 
-def test_sync_script_discovers_every_declared_catalog_asset(
+def test_package_stager_discovers_every_declared_catalog_asset(
     tmp_path: Path, monkeypatch
 ) -> None:
     script_path = (
-        Path(__file__).resolve().parents[3] / "tools/release/sync_model_catalog.py"
+        Path(__file__).resolve().parents[3]
+        / "tools/release/stage_model_catalog_package.py"
     )
     spec = importlib.util.spec_from_file_location(
-        "sync_model_catalog_test", script_path
+        "stage_model_catalog_package_test", script_path
     )
     assert spec is not None and spec.loader is not None
-    sync = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(sync)
+    stager = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(stager)
 
     source = tmp_path / "source"
     destination = tmp_path / "destination"
@@ -125,13 +126,13 @@ def test_sync_script_discovers_every_declared_catalog_asset(
         f"    sha256: {digests['mom-v2']}\n",
         encoding="utf-8",
     )
-    monkeypatch.setattr(sync, "SOURCE", source)
-    monkeypatch.setattr(sync, "DESTINATION", destination)
+    monkeypatch.setattr(stager, "SOURCE", source)
+    monkeypatch.setattr(stager, "DESTINATION", destination)
 
-    assert sync.sync() == 0
+    assert stager.stage() == 0
     assert (destination / "latest/mom-v1/config.yaml").is_file()
     assert (destination / "latest/mom-v2/metadata.yaml").is_file()
 
     (version / "undeclared.yaml").write_text("version: v0.3\n", encoding="utf-8")
     with pytest.raises(ValueError, match="contents differ from the declared assets"):
-        sync.check()
+        stager.check()

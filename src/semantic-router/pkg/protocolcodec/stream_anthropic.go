@@ -154,7 +154,13 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 			return nil, nil, err
 		}
 	}
-	return decoder.decodeEvent(wire, frame)
+	events, diagnostics, err := decoder.decodeEvent(wire, frame)
+	if err != nil {
+		return events, diagnostics, err
+	}
+	presenceDiagnostics, err := anthropicStreamStopSequenceDiagnostics(data, wire.Type, decoder.policy)
+	diagnostics = appendDiagnostics(diagnostics, presenceDiagnostics, decoder.policy.Limits.Diagnostics)
+	return events, diagnostics, err
 }
 
 func isSupportedAnthropicEvent(eventType string) bool {
@@ -709,7 +715,9 @@ func (encoder *anthropicStreamEncoder) encodeAnthropicCompletion(
 	encoder.terminal = true
 	stopEvent := anthropicEventWire{Type: "message_stop"}
 	second, err := encodeSSE(stopEvent.Type, stopEvent)
-	return [][]byte{first, second}, nil, err
+	var diagnostics llmprotocol.Diagnostics
+	appendAnthropicPartialCacheOmission(&diagnostics, encoder.policy, encoder.context.Source, *event.Usage)
+	return [][]byte{first, second}, diagnostics, err
 }
 
 func (encoder *anthropicStreamEncoder) encodeAnthropicFailure(event llmprotocol.Event) (anthropicEventWire, error) {

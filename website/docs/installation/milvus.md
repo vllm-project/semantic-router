@@ -102,7 +102,6 @@ global:
         development:
           drop_collection_on_startup: false
           auto_create_collection: true
-          verbose_errors: false
 ```
 
 Set `dimension` to the output dimension of `embedding_model`. A mismatch causes
@@ -132,7 +131,7 @@ routing:
 Run configuration validation before rollout:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 ## Network and transport security

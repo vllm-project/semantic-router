@@ -6,7 +6,7 @@ import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import {
   buildEffectiveRouterConfig,
   buildRouterSectionCards,
-  ROUTER_LAYER_META,
+  routerLayerMeta,
   type RouterSectionBadge,
 } from './configPageRouterDefaultsSupport'
 import type { OpenEditModal } from './configPageRouterSectionSupport'
@@ -134,7 +134,7 @@ export default function ConfigPageRouterConfigSection({
     }
     return Array.from(groups.entries()).map(([layer, cards]) => ({
       layer,
-      meta: ROUTER_LAYER_META[layer as keyof typeof ROUTER_LAYER_META],
+      meta: routerLayerMeta(layer),
       cards,
     }))
   }, [sectionCards])

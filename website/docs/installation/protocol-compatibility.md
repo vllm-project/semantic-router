@@ -52,8 +52,19 @@ These fields are easy to confuse:
 - backend-ref `provider` supplies provider-specific authentication and path
   defaults. It does not prove that the endpoint implements an API format.
 
-For Responses and Messages backends, a path in `base_url` is retained and the
-protocol path is appended. `chat_path` applies only to Chat Completions.
+For every backend format, `base_url` names the complete upstream API root. Its
+path is retained and the protocol operation suffix is appended exactly once;
+the protocol's default `/v1` base path is used only when the URL has no path.
+`chat_path` applies only to Chat Completions.
+
+For an HTTPS backend, the generated Envoy cluster verifies both the server
+certificate chain and its DNS hostname. An HTTPS replica pool must keep one
+hostname because the supported Envoy runtime shares its TLS context within a
+cluster; use separate model aliases for different HTTPS hosts. IP-literal HTTPS
+targets are rejected instead of silently weakening hostname verification. A
+custom Envoy image used with `vllm-sr serve` must provide the system CA bundle at
+`/etc/ssl/certs/ca-certificates.crt`; startup validation fails rather than
+silently disabling verification when that trust store is unavailable.
 
 ## Client-to-backend matrix
 
@@ -91,7 +102,8 @@ instead of being silently dropped.
 | Prompt-cache directives | Supported | Not supported | Supported |
 | Reasoning token budget | Supported extension | Not supported | Supported |
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
-| `top_k` sampling | Not supported | Not supported | Supported |
+| `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
+| `min_p`, repetition penalty, and cache salt | Supported extensions | Not supported | Not supported |
 | Stop sequences | Supported | Not supported | Supported |
 | Native response or conversation state fields | Not supported | Supported | Not supported |
 
@@ -126,6 +138,14 @@ providers:
           weight: 100
 ```
 
+`api_format` chooses only the backend codec. It does not imply Anthropic,
+OpenAI, or any other runtime Provider. Router-owned listeners require a
+physical model to declare `backend_refs[].provider`; metadata-only
+`listeners: []` configurations leave transport and credentials to the external
+gateway. The local `vllm-sr serve` workflow manages Envoy transport, so it does
+not accept a backendless physical model; use the external-gateway deployment
+profile for that topology.
+
 Test the backend directly with its native path and a minimal request first.
 Then send the same semantic request through the Router using the client API that
 your application needs. A successful health check does not validate request
@@ -140,9 +160,18 @@ schema, streaming, tools, or error translation.
 - The response keeps the client protocol's JSON or SSE shape. Provider
   transport errors and incomplete streams are translated separately from
   successful model responses.
+- For Anthropic-compatible providers, an absent nullable `stop_sequence` is
+  interpreted as null with a bounded compatibility diagnostic. This applies to
+  buffered Messages, `message_start.message`, and `message_delta.delta`.
+  Explicit null needs no diagnostic; a `stop_sequence` stop reason still
+  requires a non-empty matched sequence, and terminal deltas still require
+  `stop_reason`.
 - `x-vsr-client-protocol`, `x-vsr-upstream-protocol`, and
   `x-vsr-protocol-warnings` expose translation details when applicable. See
   [VSR routing headers](../troubleshooting/vsr-headers).
+  Diagnostics discovered after streaming headers have been sent are recorded
+  in translation-warning metrics and structured debug logs; they cannot be
+  added to the already-sent response header.
 
 The repository verifies all three protocols pairwise in codec tests, at the
 Envoy ExtProc boundary, and in an 18-cell deployment matrix: three client

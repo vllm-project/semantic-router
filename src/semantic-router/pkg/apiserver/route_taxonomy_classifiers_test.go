@@ -134,7 +134,7 @@ func testKnowledgeBasePayload() knowledgeBaseUpsertRequest {
 func createKnowledgeBaseDocument(t *testing.T, apiServer *ClassificationAPIServer, payload knowledgeBaseUpsertRequest) knowledgeBaseDocument {
 	t.Helper()
 	createBody := mustMarshalKnowledgeBasePayload(t, payload)
-	createReq := httptest.NewRequest(http.MethodPost, "/config/kbs", bytes.NewReader(createBody))
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/storage/knowledge-bases", bytes.NewReader(createBody))
 	createRR := httptest.NewRecorder()
 	apiServer.handleCreateKnowledgeBase(createRR, createReq)
 	if createRR.Code != http.StatusCreated {
@@ -167,7 +167,7 @@ func assertKnowledgeBaseManifestExists(t *testing.T, customDir string) {
 func updateKnowledgeBaseDocument(t *testing.T, apiServer *ClassificationAPIServer, name string, payload knowledgeBaseUpsertRequest) knowledgeBaseDocument {
 	t.Helper()
 	updateBody := mustMarshalKnowledgeBasePayload(t, payload)
-	updateReq := httptest.NewRequest(http.MethodPut, "/config/kbs/"+name, bytes.NewReader(updateBody))
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/v1/storage/knowledge-bases/"+name, bytes.NewReader(updateBody))
 	updateReq.SetPathValue("name", name)
 	updateRR := httptest.NewRecorder()
 	apiServer.handleUpdateKnowledgeBase(updateRR, updateReq)
@@ -189,7 +189,7 @@ func assertUpdatedKnowledgeBase(t *testing.T, updated knowledgeBaseDocument) {
 
 func assertKnowledgeBaseListContainsBuiltInAndCustom(t *testing.T, apiServer *ClassificationAPIServer) {
 	t.Helper()
-	listReq := httptest.NewRequest(http.MethodGet, "/config/kbs", nil)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/storage/knowledge-bases", nil)
 	listRR := httptest.NewRecorder()
 	apiServer.handleListKnowledgeBases(listRR, listReq)
 	if listRR.Code != http.StatusOK {
@@ -202,7 +202,7 @@ func assertKnowledgeBaseListContainsBuiltInAndCustom(t *testing.T, apiServer *Cl
 
 func deleteKnowledgeBase(t *testing.T, apiServer *ClassificationAPIServer, name string) {
 	t.Helper()
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/config/kbs/"+name, nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/knowledge-bases/"+name, nil)
 	deleteReq.SetPathValue("name", name)
 	deleteRR := httptest.NewRecorder()
 	apiServer.handleDeleteKnowledgeBase(deleteRR, deleteReq)
@@ -242,7 +242,7 @@ func TestHandleKnowledgeBaseAllowsBuiltinMutationAndDeletion(t *testing.T) {
 	}
 	body := mustMarshalKnowledgeBasePayload(t, updatePayload)
 
-	req := httptest.NewRequest(http.MethodPut, "/config/kbs/privacy_kb", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPut, "/api/v1/storage/knowledge-bases/privacy_kb", bytes.NewReader(body))
 	req.SetPathValue("name", "privacy_kb")
 	rr := httptest.NewRecorder()
 	apiServer.handleUpdateKnowledgeBase(rr, req)
@@ -267,7 +267,7 @@ func TestHandleKnowledgeBaseAllowsBuiltinMutationAndDeletion(t *testing.T) {
 		t.Fatalf("expected managed KB assets for built-in update: %v", manifestErr)
 	}
 
-	deleteReq := httptest.NewRequest(http.MethodDelete, "/config/kbs/privacy_kb", nil)
+	deleteReq := httptest.NewRequest(http.MethodDelete, "/api/v1/storage/knowledge-bases/privacy_kb", nil)
 	deleteReq.SetPathValue("name", "privacy_kb")
 	deleteRR := httptest.NewRecorder()
 	apiServer.handleDeleteKnowledgeBase(deleteRR, deleteReq)
@@ -324,7 +324,7 @@ func TestHandleKnowledgeBaseRejectsInvalidInputBeforePersisting(t *testing.T) {
 			tc.mutate(&payload)
 			body := mustMarshalKnowledgeBasePayload(t, payload)
 
-			req := httptest.NewRequest(http.MethodPost, "/config/kbs", bytes.NewReader(body))
+			req := httptest.NewRequest(http.MethodPost, "/api/v1/storage/knowledge-bases", bytes.NewReader(body))
 			rr := httptest.NewRecorder()
 			apiServer.handleCreateKnowledgeBase(rr, req)
 

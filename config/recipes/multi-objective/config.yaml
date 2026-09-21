@@ -6,12 +6,8 @@ listeners:
   timeout: 1200s
 providers:
   defaults:
-    default_model: local/qwen3.5-9b-economy
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: low
+    model: local/qwen3.5-9b-economy
+    reasoning_effort: low
   models:
   - name: local/omni
     provider_model_id: local/omni
@@ -20,17 +16,18 @@ providers:
     - name: local-omni
       endpoint: vllm-omni:8000
       protocol: http
-      type: vllm
+      provider: vllm
       weight: 1
   - name: local/qwen3.5-122b-frontier
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: qwen/qwen3.5-rocm
     backend_refs:
     - name: qwen3.5-122b_vllm_primary
       endpoint: vllm:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.35
@@ -39,14 +36,15 @@ providers:
     external_model_ids:
       vllm: qwen/qwen3.5-rocm
   - name: local/qwen3.5-9b-economy
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.5-9b-economy
     backend_refs:
     - name: qwen3.5-9b-economy_vllm_primary
       endpoint: vllm-qwen35-economy:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.02
@@ -55,14 +53,15 @@ providers:
     external_model_ids:
       vllm: local/qwen3.5-9b-economy
   - name: local/qwen3.5-9b-economy-replica
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.5-9b-economy
     backend_refs:
     - name: qwen3.5-9b-economy_vllm_replica
       endpoint: vllm-qwen35-economy-replica:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.02
@@ -71,14 +70,15 @@ providers:
     external_model_ids:
       vllm: local/qwen3.5-9b-economy
   - name: local/qwen3.5-9b-private
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.5-9b-private
     backend_refs:
     - name: qwen3.5-9b-private_vllm_primary
       endpoint: vllm-qwen35-economy:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.025
@@ -87,14 +87,15 @@ providers:
     external_model_ids:
       vllm: local/qwen3.5-9b-private
   - name: local/qwen3.6-27b-coder
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.6-27b-coder
     backend_refs:
     - name: qwen3.6-27b-coder_vllm_primary
       endpoint: vllm-qwen36-coder:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.14
@@ -103,14 +104,15 @@ providers:
     external_model_ids:
       vllm: local/qwen3.6-27b-coder
   - name: local/qwen3.6-35b-flash
-    reasoning_family: qwen3
+    reasoning:
+      family: qwen3
     provider_model_id: local/qwen3.6-35b-flash
     backend_refs:
     - name: qwen3.6-35b-flash_vllm_primary
       endpoint: vllm-qwen36-flash:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.08
@@ -125,7 +127,7 @@ providers:
       endpoint: vllm-gemma4-balanced:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.12
@@ -140,7 +142,7 @@ providers:
       endpoint: vllm-deepseek-v4:8000
       protocol: http
       weight: 1
-      type: vllm
+      provider: vllm
     pricing:
       currency: USD
       prompt_per_1m: 0.22
@@ -148,6 +150,40 @@ providers:
       cached_input_per_1m: 0.055
     external_model_ids:
       vllm: deepseek-ai/DeepSeek-V4-Flash-0731
+evaluation:
+  records:
+  - model: local/qwen3.5-122b-frontier
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.94
+  - model: local/qwen3.5-9b-economy
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.68
+  - model: local/qwen3.5-9b-economy-replica
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.68
+  - model: local/qwen3.5-9b-private
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.68
+  - model: local/qwen3.6-27b-coder
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.9
+  - model: local/qwen3.6-35b-flash
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.84
+  - model: local/gemma4-26b-balanced
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.89
+  - model: local/deepseek-v4-flash-analyst
+    benchmark: vllm-sr/operator-rating@1.0.0
+    metrics:
+      score: 0.88
 routing:
   modelCards:
   - name: local/omni
@@ -160,7 +196,6 @@ routing:
     - legal_analysis
     - high_risk_review
     - deep_synthesis
-    quality_score: 0.94
     modality: text
     tags:
     - tier:premium
@@ -174,7 +209,6 @@ routing:
     - fast_qa
     - explanation
     - general_chat
-    quality_score: 0.68
     modality: text
     tags:
     - tier:economy
@@ -189,7 +223,6 @@ routing:
     - fast_qa
     - explanation
     - general_chat
-    quality_score: 0.68
     modality: text
     tags:
     - tier:economy_replica
@@ -204,7 +237,6 @@ routing:
     - privacy_locality
     - sensitive_data
     - general_chat
-    quality_score: 0.68
     modality: text
     tags:
     - tier:private
@@ -219,7 +251,6 @@ routing:
     - coding
     - structured_output
     - tool_use
-    quality_score: 0.9
     modality: text
     tags:
     - tier:coder
@@ -233,7 +264,6 @@ routing:
     - fast_qa
     - coding
     - reasoning
-    quality_score: 0.84
     modality: text
     tags:
     - tier:flash
@@ -249,7 +279,6 @@ routing:
     - multilingual
     - structured_output
     - long_context
-    quality_score: 0.89
     modality: text
     tags:
     - tier:balanced
@@ -265,7 +294,6 @@ routing:
     - long_context
     - tool_use
     - reasoning_diversity
-    quality_score: 0.88
     modality: text
     tags:
     - tier:experimental_frontier
@@ -340,6 +368,11 @@ recipes:
       - name: unified_balance_reasoning_markers
         operator: OR
         keywords:
+        - "\\bprove\\b"
+        - "\\bproof\\b"
+        - formal derivation
+        - 严格证明
+        - 数学证明
         - analyze the tradeoffs
         - analyze the trade-offs
         - from first principles
@@ -370,6 +403,9 @@ recipes:
       - name: unified_balance_verification_markers
         operator: OR
         keywords:
+        - "\\bverify\\b"
+        - "\\bcite\\b"
+        - "\\bcitations?\\b"
         - verify the answer
         - cite sources
         - fact-check
@@ -509,7 +545,7 @@ recipes:
           value_source: confidence
         - type: fact_check
           name: needs_fact_check
-          weight: 0.45
+          weight: 0.1
         - type: user_feedback
           name: wrong_answer
           weight: 0.35
@@ -916,10 +952,10 @@ recipes:
       modelRefs:
       - model: local/qwen3.5-9b-economy
         use_reasoning: true
-        reasoning_effort: medium
+        reasoning_mode: enabled
       - model: local/qwen3.5-9b-economy-replica
         use_reasoning: true
-        reasoning_effort: medium
+        reasoning_mode: enabled
       algorithm:
         type: multi_factor
         multi_factor:
@@ -1368,7 +1404,7 @@ recipes:
       modelRefs:
       - model: local/qwen3.5-122b-frontier
         use_reasoning: true
-        reasoning_effort: medium
+        reasoning_mode: enabled
       algorithm:
         type: static
       plugins:
@@ -1451,12 +1487,12 @@ recipes:
       modelRefs:
       - model: local/qwen3.6-27b-coder
         use_reasoning: true
-        reasoning_effort: high
+        reasoning_mode: enabled
       - model: local/deepseek-v4-flash-analyst
         use_reasoning: false
       - model: local/qwen3.5-122b-frontier
         use_reasoning: true
-        reasoning_effort: high
+        reasoning_mode: enabled
       algorithm:
         type: remom
         remom:
@@ -1576,6 +1612,7 @@ recipes:
       pii:
       - name: unified_privacy_pii_strict
         threshold: 0.7
+        pii_types_allowed: [GPE]
         description: Detect personally identifiable information that must remain local.
       kb:
       - name: unified_privacy_policy
@@ -1779,9 +1816,15 @@ global:
           store_backend: file
           ttl_seconds: 1800
   model_catalog:
+    admission:
+      prompt_guard:
+        max_concurrency: 8
+        max_queue: 16
+        queue_timeout_ms: 5000
+        on_overflow: wait
     embeddings:
       semantic:
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         use_cpu: true
         embedding_config:
           model_type: mmbert
@@ -1792,28 +1835,33 @@ global:
           top_k: 1
           min_score_threshold: 0.5
     system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
-      hallucination_detector: models/mom-halugate-detector
+      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
+      pii_classifier: models/Vela-1.0-Encoder-307M-PII
+      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
       hallucination_explainer: models/mom-halugate-explainer
-      feedback_detector: models/mmbert32k-feedback-detector-merged
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     modules:
       prompt_guard:
         enabled: true
-        model_id: models/mmbert32k-jailbreak-detector-merged
+        model_id: models/Vela-1.0-Encoder-307M-Guard
         threshold: 0.7
         use_cpu: true
         variant: mmbert32k
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        max_sequence_length: 32768
+        window:
+          size: 512
+          overlap: 255
+        positive_labels: [jailbreak]
+        jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
         model_ref: prompt_guard
       classifier:
         pii:
-          model_id: models/mmbert32k-pii-detector-merged
+          model_id: models/Vela-1.0-Encoder-307M-PII
           threshold: 0.9
           use_cpu: true
           use_mmbert_32k: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
           model_ref: pii_classifier
       complexity:
         prototype_scoring:
@@ -1824,19 +1872,19 @@ global:
           top_m: 2
       hallucination_mitigation:
         fact_check:
-          model_id: models/mmbert32k-factcheck-classifier-merged
-          threshold: 0.5
+          model_id: models/Vela-1.0-Encoder-307M-FactCheck
+          threshold: 0.85
           use_cpu: true
           use_mmbert_32k: true
           model_ref: fact_check_classifier
         detector:
-          model_id: models/mom-halugate-detector
-          threshold: 0.8
+          model_id: models/Vela-1.0-Encoder-307M-Halu
+          threshold: 0.5
           use_cpu: true
-          min_span_length: 2
-          min_span_confidence: 0.6
+          min_span_length: 1
+          min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: true
+          enable_nli_filtering: false
           nli_entailment_threshold: 0.75
           model_ref: hallucination_detector
         explainer:
@@ -1846,7 +1894,7 @@ global:
           model_ref: hallucination_explainer
       feedback_detector:
         enabled: true
-        model_id: models/mmbert32k-feedback-detector-merged
+        model_id: models/Vela-1.0-Encoder-307M-Feedback
         threshold: 0.5
         use_cpu: true
         use_modernbert: false

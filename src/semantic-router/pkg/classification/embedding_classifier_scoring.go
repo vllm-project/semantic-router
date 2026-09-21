@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -68,7 +69,20 @@ func (c *EmbeddingClassifier) scoreRulesSlice(queryEmbedding []float32, rules []
 			continue
 		}
 
+		if len(queryEmbedding) != len(bank.prototypes[0].Embedding) {
+			return nil, fmt.Errorf("embedding rule %q: query dimension %d differs from candidate dimension %d", rule.Name, len(queryEmbedding), len(bank.prototypes[0].Embedding))
+		}
 		bankScore := bank.score(queryEmbedding, c.embeddingAggregationOptions(rule))
+		positiveScore := bankScore.Score
+		var negativeScore float64
+		if rule.HasNegativeCandidates() {
+			negativeBank := c.negativeRulePrototypeBanks[rule.Name]
+			if negativeBank == nil || len(negativeBank.prototypes) == 0 || len(negativeBank.prototypes[0].Embedding) != len(queryEmbedding) {
+				return nil, fmt.Errorf("embedding rule %q: negative candidates are missing or have incompatible dimensions", rule.Name)
+			}
+			negativeScore = negativeBank.score(queryEmbedding, c.embeddingAggregationOptions(rule)).Score
+			bankScore.Score -= negativeScore
+		}
 		logging.Infof("Rule %q: score=%.4f best=%.4f support=%.4f threshold=%.3f matched=%v (prototypes=%d)",
 			rule.Name, bankScore.Score, bankScore.Best, bankScore.Support, rule.SimilarityThreshold,
 			bankScore.Score >= float64(rule.SimilarityThreshold), bankScore.PrototypeCount)
@@ -78,6 +92,9 @@ func (c *EmbeddingClassifier) scoreRulesSlice(queryEmbedding []float32, rules []
 			Score:          bankScore.Score,
 			Best:           bankScore.Best,
 			Support:        bankScore.Support,
+			PositiveScore:  positiveScore,
+			NegativeScore:  negativeScore,
+			Contrastive:    rule.HasNegativeCandidates(),
 			Threshold:      float64(rule.SimilarityThreshold),
 			PrototypeCount: bankScore.PrototypeCount,
 		})
@@ -97,11 +114,11 @@ func (c *EmbeddingClassifier) sortMatches(matches []MatchedRule) []MatchedRule {
 
 func (c *EmbeddingClassifier) sortAndLimitMatches(matches []MatchedRule) []MatchedRule {
 	matches = c.sortMatches(matches)
-	topK := 1
+	topK := 0
 	if c.optimizationConfig.TopK != nil {
 		topK = *c.optimizationConfig.TopK
 	}
-	if topK == 0 || len(matches) <= topK {
+	if topK <= 0 || len(matches) <= topK {
 		return matches
 	}
 
@@ -114,24 +131,19 @@ func (c *EmbeddingClassifier) embeddingAggregationOptions(rule config.EmbeddingR
 	case config.AggregationMethodMean:
 		return prototypeScoreOptions{BestWeight: 0, TopM: 0}
 	default:
-		return defaultPrototypeScoreOptions(c.optimizationConfig.PrototypeScoring)
+		return defaultPrototypeScoreOptions(rule.EffectivePrototypeScoring(c.optimizationConfig.PrototypeScoring))
 	}
 }
 
 // cosineSimilarity computes cosine similarity between two vectors.
 // Assumes vectors are normalized (which they should be from BERT-style models).
 func cosineSimilarity(a, b []float32) float32 {
-	if len(a) == 0 || len(b) == 0 {
+	if len(a) == 0 || len(a) != len(b) {
 		return 0
 	}
 
-	minLen := len(a)
-	if len(b) < minLen {
-		minLen = len(b)
-	}
-
 	var dotProduct float32
-	for i := 0; i < minLen; i++ {
+	for i := 0; i < len(a); i++ {
 		dotProduct += a[i] * b[i]
 	}
 
@@ -142,27 +154,33 @@ func cosineSimilarity(a, b []float32) float32 {
 func (c *EmbeddingClassifier) GetPreloadStats() int {
 	c.preloadMu.Lock()
 	defer c.preloadMu.Unlock()
-	return len(c.candidateEmbeddings)
+	return len(c.candidateEmbeddings) + len(c.imageCandidateEmbeddings)
 }
 
 func (c *EmbeddingClassifier) rebuildRulePrototypeBanks() {
 	c.rulePrototypeBanks = make(map[string]*prototypeBank, len(c.rules))
-	prototypeCfg := c.optimizationConfig.PrototypeScoring.WithDefaults()
+	c.negativeRulePrototypeBanks = make(map[string]*prototypeBank, len(c.rules))
 	for _, rule := range c.rules {
-		examples := make([]prototypeExample, 0, len(rule.Candidates))
-		for _, candidate := range rule.Candidates {
-			embedding, ok := c.candidateEmbeddings[candidate]
-			if !ok || len(embedding) == 0 {
-				continue
-			}
-			examples = append(examples, prototypeExample{
-				Key:       candidate,
-				Text:      candidate,
-				Embedding: embedding,
-			})
-		}
-		bank := newPrototypeBank(examples, prototypeCfg)
+		policy := rule.EffectivePrototypeScoring(c.optimizationConfig.PrototypeScoring)
+		bank := newPrototypeBank(c.embeddingPrototypeExamples(rule.Candidates, rule.ImageCandidates), policy)
 		c.rulePrototypeBanks[rule.Name] = bank
 		logPrototypeBankSummary("Embedding Signal", rule.Name, bank)
+		if rule.HasNegativeCandidates() {
+			c.negativeRulePrototypeBanks[rule.Name] = newPrototypeBank(c.embeddingPrototypeExamples(rule.NegativeCandidates, rule.NegativeImageCandidates), policy)
+		}
 	}
+}
+
+func (c *EmbeddingClassifier) embeddingPrototypeExamples(texts, images []string) []prototypeExample {
+	examples := make([]prototypeExample, 0, len(texts)+len(images))
+	appendExamples := func(values []string, vectors map[string][]float32, modality string) {
+		for _, value := range values {
+			if vector := vectors[value]; len(vector) > 0 {
+				examples = append(examples, prototypeExample{Key: modality + "\x00" + value, Text: value, Embedding: vector})
+			}
+		}
+	}
+	appendExamples(texts, c.candidateEmbeddings, "text")
+	appendExamples(images, c.imageCandidateEmbeddings, "image")
+	return examples
 }

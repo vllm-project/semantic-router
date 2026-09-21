@@ -30,6 +30,10 @@ func TestAuthenticateRequestAcceptsSessionCookie(t *testing.T) {
 	if err != nil {
 		t.Fatalf("issueToken() error = %v", err)
 	}
+	claims, err := svc.ParseToken(token)
+	if err != nil {
+		t.Fatalf("ParseToken() error = %v", err)
+	}
 
 	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ac, ok := AuthFromContext(r)
@@ -39,10 +43,13 @@ func TestAuthenticateRequestAcceptsSessionCookie(t *testing.T) {
 		if ac.UserID != user.ID {
 			t.Fatalf("user id = %q, want %q", ac.UserID, user.ID)
 		}
+		if ac.SessionID != claims.ID {
+			t.Fatalf("session id = %q, want %q", ac.SessionID, claims.ID)
+		}
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/router/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)
 	req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)
@@ -156,7 +163,7 @@ func TestLogoutHandlerRevokesSessionToken(t *testing.T) {
 	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
-	req := httptest.NewRequest(http.MethodGet, "/api/router/config", nil)
+	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)
 	req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, req)

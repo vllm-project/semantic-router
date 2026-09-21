@@ -50,6 +50,16 @@ the response, measured latency, and its available quality score. Check the
 scoring method in `benchmark.py` against your task before treating
 `performance` as a training label.
 
+If the input has no domain categories, enrich the benchmark records with a
+running router before training:
+
+```bash
+python add_category_to_training_data.py \
+  --vsr-url http://localhost:8080 \
+  --input benchmark_output.jsonl \
+  --output benchmark_with_category.jsonl
+```
+
 ## Train Selectors
 
 ```bash
@@ -92,8 +102,22 @@ dataset licenses before publishing.
 python server.py --host 127.0.0.1 --port 8686
 ```
 
-Do not expose it to an untrusted network; a training request can consume
+The service binds to `127.0.0.1` by default. The shipped Kubernetes and OpenShift
+sidecars keep this address and use in-container health probes, so only the
+co-located Dashboard can reach the API through their shared network namespace.
+For Docker, join the Dashboard container network namespace with
+`--network container:dashboard`; publishing port 8686 does not make a loopback
+listener reachable.
+
+`--host` or `ML_SERVICE_HOST` can override the address for an operator-managed
+remote deployment. Such a deployment requires authenticated workload transport
+and a restrictive network policy. The service itself has no workload
+authentication; do not publish it directly. A training request can consume
 substantial compute and write artifacts.
+
+This loopback boundary does not replace server-owned job/artifact handles,
+private shared storage, or bounded job lifecycle controls. Those remain separate
+requirements before enabling this pipeline for untrusted users.
 
 ## Validate Before Deployment
 
@@ -107,6 +131,36 @@ go run validate.go \
   --data-file benchmark_output.jsonl \
   --models-dir models \
   --algorithm all
+```
+
+For a deterministic training/export/native parity check, install `pytest` and
+run from the repository root:
+
+```bash
+python -m pytest src/training/model_selection/ml_model_selection/tests/test_native_parity.py -q
+```
+
+This builds the current Rust binding and compares real sklearn predictions
+against the exported artifact through its C ABI. It covers linear/RBF SVM,
+binary/multiclass voting, Python reload, KNN latency weighting and neighbor ties.
+Only NumPy, scikit-learn, pytest, and Cargo are needed; Torch is optional for
+these selectors.
+
+SVM and KNN exports now declare `format_version: 2`. Deploy a runtime that
+supports this version alongside the training tools. SVM exports preserve the
+original SVC decision functions and input scale. KNN uses normalized feature
+distance and the same fixed 10-second latency scale in Python and Rust. Existing
+Python SVM files can recover their exact top-level parameters; existing KNN files
+adopt the corrected selection rules. See the [native artifact compatibility
+reference](../../../../ml-binding/README.md#artifact-compatibility-and-prediction-rules)
+for migration details and the treatment of native-only legacy SVM classifiers.
+
+The small checked-in Rust fixtures can be regenerated after an intentional
+training-contract change with:
+
+```bash
+python src/training/model_selection/ml_model_selection/tests/generate_native_fixtures.py
+cargo test --manifest-path ml-binding/Cargo.toml
 ```
 
 Use a held-out split and report the dataset, candidate models, scoring method,

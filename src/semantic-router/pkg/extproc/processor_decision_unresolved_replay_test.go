@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -10,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
@@ -26,6 +28,15 @@ func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
 		RouterReplayPluginConfig: &replayConfig,
 		VSRDecisionDiagnostics: decision.EvaluationDiagnostics{
 			AppliedUnknownPolicies: map[string]string{"guarded": "fail_request"},
+			Ranking: &decision.RankingTrace{
+				Strategy:   "priority",
+				Tiered:     true,
+				Tier:       1,
+				Fallback:   "guarded reported no comparable score",
+				DecidedBy:  "priority",
+				Winner:     "local_route",
+				Candidates: 2,
+			},
 		},
 	}
 
@@ -51,6 +62,14 @@ func TestRespondDecisionUnresolvedFinalizesReplayAsFailed(t *testing.T) {
 	if record.RouteDiagnostics == nil ||
 		record.RouteDiagnostics.AppliedUnknownPolicies["guarded"] != "fail_request" {
 		t.Fatalf("route diagnostics = %+v, want applied unknown policy guarded=fail_request", record.RouteDiagnostics)
+	}
+	ranking := record.RouteDiagnostics.DecisionRanking
+	if ranking == nil {
+		t.Fatal("the replay record must explain how the decisions were ranked")
+	}
+	if ranking.Winner != "local_route" || ranking.DecidedBy != "priority" ||
+		ranking.Fallback != "guarded reported no comparable score" {
+		t.Fatalf("decision ranking = %+v, want the winner, the key that decided and why confidence did not apply", ranking)
 	}
 
 	immediate := resp.GetImmediateResponse()
@@ -81,5 +100,19 @@ func TestRespondDecisionUnresolvedKeepsErrorResponseShape(t *testing.T) {
 	body := string(immediate.GetBody())
 	if body == "" || ctx.RouterReplayID != "" {
 		t.Fatalf("body = %q, replay id = %q; want body without a replay record", body, ctx.RouterReplayID)
+	}
+}
+
+func TestRespondSelectionRejectedReturnsServiceUnavailable(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{RequestID: "strict-selection"}
+
+	resp := router.respondSelectionRejected(ctx, "model", selection.ErrNoEligibleCandidates)
+	immediate := resp.GetImmediateResponse()
+	if immediate == nil || int(immediate.GetStatus().GetCode()) != 503 {
+		t.Fatalf("selection rejection response = %#v, want HTTP 503", immediate)
+	}
+	if body := string(immediate.GetBody()); !strings.Contains(body, selection.ErrNoEligibleCandidates.Error()) {
+		t.Fatalf("selection rejection body = %q", body)
 	}
 }

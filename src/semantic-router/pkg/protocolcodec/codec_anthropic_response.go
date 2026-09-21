@@ -69,7 +69,11 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 	if err := validateAnthropicResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	diagnostics := anthropicResponseMetadataDiagnostics(wire, policy)
+	diagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	diagnostics = appendDiagnostics(diagnostics, anthropicResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeAnthropicResponseResource(wire, policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
@@ -173,6 +177,7 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 			return nil, diagnostics, err
 		}
 	}
+	appendAnthropicPartialCacheOmission(&diagnostics, policy, envelope.Format, response.Usage)
 	if len(response.Alternatives) > 0 {
 		if err := appendLossy(&diagnostics, policy, envelope.Format, llmprotocol.AnthropicMessagesV1, "response.alternatives", "Messages has one output sequence"); err != nil {
 			return nil, diagnostics, err
@@ -207,7 +212,10 @@ func encodeAnthropicUsage(usage llmprotocol.Usage) *anthropicUsageWire {
 	}
 	inputTokens := tokenValue(usage.InputUncached)
 	if usage.InputUncached.Value == nil {
-		inputTokens = tokenValue(usage.InputTotal)
+		// Messages input_tokens excludes cache buckets, unlike OpenAI's
+		// inclusive input total. Do not count known cache usage twice when an
+		// optional bucket is unknown and the uncached portion is unavailable.
+		inputTokens = max(0, tokenValue(usage.InputTotal)-tokenValue(usage.InputCacheRead)-tokenValue(usage.InputCacheWrite))
 	}
 	cacheWrite := tokenValue(usage.InputCacheWrite)
 	*wire = anthropicUsageWire{
@@ -284,6 +292,11 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	// Snowflake declares the Anthropic Messages operation as well, and its
+	// transport failure envelope is the same flat vendor object on both paths.
+	if policy.ResponseVendor == llmprotocol.ResponseVendorSnowflake {
+		return decodeSnowflakeTransportError(body, policy, llmprotocol.AnthropicMessagesV1)
+	}
 	var wire anthropicTransportErrorWire
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
 		return llmprotocol.TransportError{}, nil, err

@@ -3,12 +3,12 @@ Signal Evaluation Script
 ========================
 
 Evaluates the accuracy of router's signal extraction (domain, fact_check, user_feedback).
-Uses the eval API to get signal outputs and compares them with ground truth labels.
+Uses the routing preview API to get signal outputs and compares them with ground truth labels.
 
 Usage:
     python src/training/model_eval/signal_eval.py \
         --dimension domain \
-        --endpoint http://localhost:8080/v1/eval \
+        --endpoint http://localhost:8080/api/v1/routing/preview \
         --max_samples 100 \
         --output results/signal_eval_domain.json
 """
@@ -20,17 +20,10 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import requests
 from datasets import load_dataset
 from tqdm import tqdm
-
-# Import constants from mom_collection_eval
-try:
-    from .constants import MODEL_REGISTRY
-except ImportError:
-    from constants import MODEL_REGISTRY
 
 # Configure logging
 logging.basicConfig(
@@ -452,8 +445,8 @@ def parse_args():
     parser.add_argument(
         "--endpoint",
         type=str,
-        default="http://localhost:8080/v1/eval",
-        help="Eval API endpoint URL",
+        default="http://localhost:8080/api/v1/routing/preview",
+        help="Routing preview API endpoint URL",
     )
     parser.add_argument(
         "--max_samples",
@@ -482,7 +475,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_dataset_by_id(dataset_id: str, max_samples: Optional[int] = None):
+def load_dataset_by_id(dataset_id: str, max_samples: int | None = None):
     """Load dataset by dataset ID from registry."""
     config = DATASET_REGISTRY[dataset_id]
     dimension = config["dimension"]
@@ -530,8 +523,8 @@ def load_dataset_by_id(dataset_id: str, max_samples: Optional[int] = None):
         raise
 
 
-def call_eval_api(query: str, endpoint: str, timeout: int) -> Optional[Dict]:
-    """Call the eval API and return the response."""
+def call_routing_preview(query: str, endpoint: str, timeout: int) -> dict | None:
+    """Call the routing preview API and return the response."""
     try:
         response = requests.post(
             endpoint,
@@ -545,7 +538,7 @@ def call_eval_api(query: str, endpoint: str, timeout: int) -> Optional[Dict]:
         return None
 
 
-def extract_signal_output(api_response: Dict, signal_field: str) -> Optional[str]:
+def extract_signal_output(api_response: dict, signal_field: str) -> str | None:
     """Extract signal output from API response."""
     try:
         matched_signals = api_response.get("decision_result", {}).get(
@@ -563,7 +556,7 @@ def extract_signal_output(api_response: Dict, signal_field: str) -> Optional[str
         return None
 
 
-def map_label(label, label_mapping: Optional[Dict]) -> str:
+def map_label(label, label_mapping: dict | None) -> str:
     """Map dataset label to signal name.
 
     Args:
@@ -582,18 +575,18 @@ def map_label(label, label_mapping: Optional[Dict]) -> str:
 
 
 def evaluate_single_sample(
-    sample: Dict,
-    config: Dict,
+    sample: dict,
+    config: dict,
     endpoint: str,
     timeout: int,
-) -> Dict:
+) -> dict:
     """Evaluate a single sample and return the result."""
     query = sample[config["text_col"]]
     expected_label = sample[config["label_col"]]
     expected_signal = map_label(expected_label, config["label_mapping"])
 
-    # Call eval API
-    api_response = call_eval_api(query, endpoint, timeout)
+    # Call the non-generating routing preview API.
+    api_response = call_routing_preview(query, endpoint, timeout)
 
     if api_response is None:
         # API call failed, skip this sample
@@ -633,10 +626,10 @@ def evaluate_single_sample(
 def evaluate_dataset(
     dataset_id: str,
     endpoint: str,
-    max_samples: Optional[int],
+    max_samples: int | None,
     timeout: int,
     concurrent: int = 1,
-) -> Dict:
+) -> dict:
     """Evaluate a single dataset."""
     dataset, config = load_dataset_by_id(dataset_id, max_samples)
     dimension = config["dimension"]

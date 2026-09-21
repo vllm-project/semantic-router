@@ -21,15 +21,15 @@ type fakeResolvedClassificationService struct {
 	updatedConfig *config.RouterConfig
 }
 
-func (s *fakeResolvedClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
+func (s *fakeResolvedClassificationService) ClassifyIntent(_ context.Context, req services.IntentRequest) (*services.IntentResponse, error) {
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
-func (s *fakeResolvedClassificationService) ClassifyIntentForEval(req services.IntentRequest) (*services.EvalResponse, error) {
+func (s *fakeResolvedClassificationService) ClassifyIntentForEval(_ context.Context, req services.IntentRequest) (*services.EvalResponse, error) {
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
-func (s *fakeResolvedClassificationService) DetectPII(req services.PIIRequest) (*services.PIIResponse, error) {
+func (s *fakeResolvedClassificationService) DetectPII(_ context.Context, req services.PIIRequest) (*services.PIIResponse, error) {
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
@@ -44,15 +44,15 @@ func (s *fakeResolvedClassificationService) ClassifyBatchUnifiedWithOptions(_ []
 	return nil, fmt.Errorf("resolved service invoked")
 }
 
-func (s *fakeResolvedClassificationService) ClassifyFactCheck(req services.FactCheckRequest) (*services.FactCheckResponse, error) {
+func (s *fakeResolvedClassificationService) ClassifyFactCheck(_ context.Context, req services.FactCheckRequest) (*services.FactCheckResponse, error) {
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
-func (s *fakeResolvedClassificationService) ClassifyUserFeedback(req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
+func (s *fakeResolvedClassificationService) ClassifyUserFeedback(_ context.Context, req services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
 	return nil, fmt.Errorf("not used in this test: %q", req.Text)
 }
 
-func (s *fakeResolvedClassificationService) ClassifyNLI(_ services.NLIRequest) (*services.NLIResponse, error) {
+func (s *fakeResolvedClassificationService) ClassifyNLI(_ context.Context, _ services.NLIRequest) (*services.NLIResponse, error) {
 	return nil, fmt.Errorf("NLI not available in fake resolved service")
 }
 
@@ -78,13 +78,14 @@ func TestHandleBatchClassificationUsesResolvedClassificationService(t *testing.T
 		classificationSvc: newLiveClassificationService(
 			services.NewPlaceholderClassificationService(),
 			func() classificationService { return resolvedSvc },
+			nil,
 		),
 		config: &config.RouterConfig{},
 	}
 
 	req := httptest.NewRequest(
 		http.MethodPost,
-		"/api/v1/classify/batch",
+		"/api/v1/diagnostics/classify/batch",
 		bytes.NewBufferString(`{"texts":["resolver should win"],"task_type":"intent"}`),
 	)
 	req.Header.Set("Content-Type", "application/json")
@@ -293,12 +294,10 @@ func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
 
 func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	memoryStore := newMockMemoryStore()
 	manager := &vectorstore.Manager{}
 	fileStore := &vectorstore.FileStore{}
 
 	registry := routerruntime.NewRegistry(cfg)
-	registry.SetMemoryStore(memoryStore)
 	registry.SetVectorStoreRuntime(&routerruntime.VectorStoreRuntime{
 		Manager:   manager,
 		FileStore: fileStore,
@@ -308,9 +307,6 @@ func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
 		runtimeRegistry: registry,
 	}
 
-	if got := apiServer.currentMemoryStore(); got != memoryStore {
-		t.Fatalf("currentMemoryStore() = %v, want %v", got, memoryStore)
-	}
 	if got := apiServer.currentVectorStoreManager(); got != manager {
 		t.Fatalf("currentVectorStoreManager() = %v, want %v", got, manager)
 	}

@@ -14,7 +14,7 @@ fixtures:
       media_type: image/png
       sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
       data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
-router_eval_endpoint: /api/v1/eval
+router_eval_endpoint: /api/v1/routing/preview
 evaluation:
   request_timeout_seconds: 300
   concurrency: 4
@@ -53,6 +53,18 @@ decisions:
         expected_signals:
           conversation: [privacy_has_images]
         tags: [language:en, privacy, multimodal, image, shape:messages]
+      - id: local_handling_with_image
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Summarize this internal runbook, keep all processing on-prem, and read the attached screenshot.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [privacy_has_images]
+        notes: The image decision and the local-handling route share tier 2, so the declared priority selects omni.
+        tags: [language:en, privacy, collision, image, shape:messages]
 
   - id: local_security_containment
     expected_decision: local_security_containment

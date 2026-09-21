@@ -80,6 +80,8 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 		MaxCompletionTokens: request.Sampling.MaxOutputTokens, Seed: request.Sampling.Seed,
 		FrequencyPenalty: request.Sampling.FrequencyPenalty, PresencePenalty: request.Sampling.PresencePenalty,
 		ReasoningEffort: request.ReasoningEffort, ReasoningBudget: request.ReasoningBudgetTokens,
+		ChatTemplateKwargs: request.ChatTemplateKwargs, CacheSalt: request.CacheSalt,
+		TopK: request.Sampling.TopK, MinP: request.Sampling.MinP, RepetitionPenalty: request.Sampling.RepetitionPenalty,
 	}
 	if request.Stream && (request.StreamOptions.IncludeUsage != nil || request.StreamOptions.IncludeObfuscation != nil) {
 		wire.StreamOptions = &chatStreamOptionsWire{
@@ -171,7 +173,7 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)
 	case llmprotocol.ContentAudio:
-		state.parts = append(state.parts, chatContentWire{Type: "input_audio", InputAudio: &chatInputAudioWire{Data: content.Data, Format: content.MediaType}, CacheControl: encodeAnthropicCacheControl(content.Cache)})
+		return state.appendAudio(content)
 	case llmprotocol.ContentFile:
 		return state.appendFile(content)
 	case llmprotocol.ContentToolCall:

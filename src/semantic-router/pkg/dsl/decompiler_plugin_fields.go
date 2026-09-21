@@ -13,6 +13,7 @@ var pluginFieldsDecoders = map[string]pluginFieldsDecoder{
 	"response_cache":      pluginFieldsResponseCache,
 	"context_compression": pluginFieldsStructuredConfiguration,
 	"router_replay":       pluginFieldsRouterReplay,
+	"shadow_dispatch":     pluginFieldsStructuredConfiguration,
 	"memory":              pluginFieldsMemory,
 	"hallucination":       pluginFieldsHallucination,
 	"fast_response":       pluginFieldsFastResponse,
@@ -161,6 +162,13 @@ func pluginFieldsRequestParams(p *config.DecisionPlugin) map[string]Value {
 		}
 		fields["blocked_params"] = ArrayValue{Items: items}
 	}
+	if cfg.DefaultMaxTokens != nil {
+		if cfg.DefaultMaxTokens.Auto {
+			fields["default_max_tokens"] = StringValue{V: "auto"}
+		} else {
+			fields["default_max_tokens"] = IntValue{V: cfg.DefaultMaxTokens.Value}
+		}
+	}
 	if cfg.MaxTokensLimit != nil {
 		fields["max_tokens_limit"] = IntValue{V: *cfg.MaxTokensLimit}
 	}
@@ -273,6 +281,13 @@ func addRAGCoreFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
 }
 
 func addRAGBackendAndFailureFields(fields map[string]Value, cfg *config.RAGPluginConfig) {
+	if cfg.Rerank != nil {
+		rerank := make(map[string]Value)
+		if cfg.Rerank.TopK != nil {
+			rerank["top_k"] = IntValue{V: *cfg.Rerank.TopK}
+		}
+		fields["rerank"] = ObjectValue{Fields: rerank}
+	}
 	if backendConfig, ok := structuredPayloadObjectValue(cfg.BackendConfig); ok {
 		fields["backend_config"] = backendConfig
 	}

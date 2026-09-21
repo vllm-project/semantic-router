@@ -12,6 +12,7 @@ from recipe_topology_test_support import (
     _POSTGRES_ANONYMOUS_MOUNT,
     _REDIS_NAMED_MOUNT,
     _STORAGE_CASES,
+    REQUIRES_LINUX_MEMFD,
     _remove_transition,
     _repair_transition,
     _storage_snapshot,
@@ -19,6 +20,7 @@ from recipe_topology_test_support import (
 
 
 @pytest.mark.parametrize("network_mode", ["", "default", "bridge"])
+@REQUIRES_LINUX_MEMFD
 def test_clone_does_not_reconnect_the_implicit_bridge_network(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, network_mode: str
 ):
@@ -74,6 +76,7 @@ def test_environment_transport_fails_closed_without_linux_memfd(
         topology._open_environment_memfd(["SECRET=must-not-hit-disk"])
 
 
+@REQUIRES_LINUX_MEMFD
 def test_run_raw_inherits_environment_memfd_into_runtime_child(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -98,6 +101,7 @@ def test_run_raw_inherits_environment_memfd_into_runtime_child(
     assert result.stdout == "MEMFD_SENTINEL=value\n"
 
 
+@REQUIRES_LINUX_MEMFD
 def test_clone_interruption_closes_anonymous_environment_without_recovery_artifact(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):

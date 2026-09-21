@@ -46,6 +46,110 @@ routing:
 
 When `pii_types_allowed` is empty, any detected PII can cause the signal to match.
 
+## Complete local scans
+
+The implicit local Vela PII default scans each text item up to 32,768 tokens,
+including special tokens. Each forward uses at most 512 tokens, with 255 content
+tokens of overlap. The model tokenizer defines the windows; character estimates
+and text re-tokenization at window boundaries do not determine coverage.
+
+Native Candle and ORT preserve original UTF-8 offsets, choose one observation per
+token by its surrounding context, then decode BIO entities once. Overlap does not
+double-count input usage or entity confidence. This guarantees coverage of admitted
+tokens, not detection accuracy or the quality of a single 32K forward.
+
+An explicit module budget, backend, window, or recipe binding keeps its own
+policy. For example, a deployment with `input: {max_tokens: 8192, overflow: reject}`
+still rejects an oversized input. For a checkpoint and graph qualified for 32K
+forwards, a 64K document budget can use:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      classifier:
+        pii:
+          use_mmbert_32k: true
+          max_sequence_length: 65536  # Complete text budget, including special tokens.
+          window: {size: 32768, overlap: 256}
+```
+
+With a named binding, declare `input.overflow: window` and a positive
+`input.max_tokens` on its deployment; that limit replaces the module budget.
+The same `window` block supplies the geometry. The document budget can exceed
+the loaded model's single-forward capacity; each window must fit that capacity
+and the document budget. Unsupported adapters, missing window geometry, and
+oversized windows are errors. Window size includes the classifier tokenizer's
+special tokens; overlap counts content only. These token counts need not match
+the downstream generative model's tokenizer.
+
+A text beyond the document limit or a failed window produces a classifier error,
+not a successful partial scan. Existing `on_error` and decision `rules.on_unknown`
+policies determine its routing effect. Remote backends and explicitly selected
+truncation retain the partial-result behavior described below.
+
+## Remote backend (token_spans.v1)
+
+With no `backend`, PII detection keeps its local model. A remote PII classifier
+uses the shared backend block: `model` names an entry in
+`global.model_catalog.external[]` with `model_role: classification`, the
+protocol is `http_classify`, and the contract is `token_spans.v1`. The service
+receives `{"inputs": "<request text>"}` and answers with entity spans whose
+`start`/`end` are Unicode code-point offsets into that exact string, a `label`
+from the configured PII mapping, a `score` in `[0, 1]`, and the span `text`,
+which must equal the slice it points at. The HuggingFace token-classification
+spellings `entity_group` and `word` are accepted as aliases. A bare JSON list of
+spans or an envelope `{"spans": [...], "truncated_at": n, "model": "..."}` are
+both valid; the envelope's `model`, when present, must equal the catalog
+entry's `llm_model_name`.
+
+The router rejects the whole response, rather than part of it, when a span is
+outside the text, overlaps itself, carries an unknown or outside label, has a
+score out of range, has conflicting alias values, or when the body is not a span
+list. A declared `truncated_at` keeps the spans before the cut and marks the
+rest of the content as unscored. What a rejected or partial response does to a
+PII rule is `on_error`: `allow` (default) treats the unread content as not
+matching, `block` matches it as `classification_error`, so unverified text
+cannot pass as clean.
+
+The PII mapping cannot declare `classification_error` as an entity label.
+Aliases with `B-`, `I-`, or `E-` prefixes, including stacked prefixes, are also
+reserved and rejected at mapping load time in either mapping direction.
+
+Spans returned before a declared cut are real detections under both policies. A
+rule that matched on one of them stays a genuine match even when the rest of
+its content was never read, so a decision using `rules.on_unknown: no_match`
+still sees it; only a match that exists solely because the scan failed is
+unknown to the decision engine. The detection API says the same thing with
+`scan_incomplete: true` beside its entities, so `has_pii: false` after a
+truncation reads as "nothing in the part that was read" rather than as a clean
+scan.
+
+```yaml
+global:
+  model_catalog:
+    external:
+      - name: pii-service
+        model_role: classification
+        llm_endpoint:
+          address: pii-spans.default.svc
+          port: 8080
+        llm_model_name: pii-spans-v1
+    modules:
+      classifier:
+        pii:
+          backend:
+            protocol: http_classify
+            contract: token_spans.v1
+            model: pii-service
+            deadline_ms: 5000
+          on_error: block
+```
+
+`PIIDetected`, `PIIEntities`, `MatchedPIIRules` and the masked text are the
+same whether the spans came from the local model or from a remote backend;
+overlapping and nested spans are merged before masking.
+
 ## Dependencies and Limitations
 
 The PII classifier processes the prompt and optional history. It is a routing

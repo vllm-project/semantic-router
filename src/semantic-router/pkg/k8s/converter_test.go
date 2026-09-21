@@ -284,6 +284,46 @@ func TestConvertProviderMetadataPreservesCachePricing(t *testing.T) {
 	assert.InDelta(t, 6.0, pricing.CompletionPer1M, 1e-12)
 }
 
+func TestConvertProviderMetadataUsesCatalogAndNestedReasoning(t *testing.T) {
+	converted := convertProviderMetadata([]v1alpha1.ModelConfig{
+		{
+			Name:    "frontier",
+			Catalog: "vendor/reasoner-v1",
+		},
+		{
+			Name: "private-reasoner",
+			Reasoning: &v1alpha1.ModelReasoning{
+				Type:      config.ReasoningFamilyTypeChatTemplateKwargs,
+				Parameter: "think_mode",
+				Levels:    []string{"low", "high"},
+				Default:   "high",
+			},
+		},
+	})
+
+	require.Len(t, converted, 2)
+	assert.Equal(t, "vendor/reasoner-v1", converted[0].Catalog)
+	assert.Nil(t, converted[0].Reasoning)
+	require.NotNil(t, converted[1].Reasoning)
+	assert.Equal(t, config.ReasoningFamilyTypeChatTemplateKwargs, converted[1].Reasoning.Type)
+	assert.Equal(t, "think_mode", converted[1].Reasoning.Parameter)
+	assert.Equal(t, []string{"low", "high"}, converted[1].Reasoning.Levels)
+	assert.Equal(t, "high", converted[1].Reasoning.Default)
+}
+
+func TestConvertRoutingModelCardsUsesCatalogIdentity(t *testing.T) {
+	cards := convertRoutingModelCards([]v1alpha1.ModelConfig{
+		{Name: "frontier", Catalog: "vendor/reasoner-v1", LoRAs: []v1alpha1.LoRAConfig{{Name: "expert"}}},
+		{Name: "private-model"},
+	})
+
+	require.Len(t, cards, 2)
+	assert.Equal(t, "vendor/reasoner-v1", cards[0].Name)
+	require.Len(t, cards[0].LoRAs, 1)
+	assert.Equal(t, "expert", cards[0].LoRAs[0].Name)
+	assert.Equal(t, "private-model", cards[1].Name)
+}
+
 func TestCRDConverterConvertsEventSignals(t *testing.T) {
 	pool := testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"})
 	route := &v1alpha1.IntelligentRoute{
@@ -327,12 +367,26 @@ func TestCRDConverterConvertsEventSignals(t *testing.T) {
 
 // TestCRDValidationErrors tests that validation catches various error conditions
 func TestCRDValidationErrors(t *testing.T) {
-	testCases := []struct {
-		name      string
-		pool      *v1alpha1.IntelligentPool
-		route     *v1alpha1.IntelligentRoute
-		wantError string
-	}{
+	testCases := append(coreCRDValidationErrorCases(), reasoningCRDValidationErrorCases()...)
+	baseConfig := testValidationBaseConfig()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCRDs(tc.pool, tc.route, baseConfig)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tc.wantError)
+		})
+	}
+}
+
+type crdValidationErrorCase struct {
+	name      string
+	pool      *v1alpha1.IntelligentPool
+	route     *v1alpha1.IntelligentRoute
+	wantError string
+}
+
+func coreCRDValidationErrorCases() []crdValidationErrorCase {
+	return []crdValidationErrorCase{
 		{
 			name: "DuplicateKeywordSignal",
 			pool: testPoolWithModels(v1alpha1.ModelConfig{Name: "test-model"}),
@@ -402,14 +456,32 @@ func TestCRDValidationErrors(t *testing.T) {
 			wantError: "references unknown LoRA nonexistent-lora",
 		},
 	}
+}
 
-	baseConfig := testValidationBaseConfig()
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			err := validateCRDs(tc.pool, tc.route, baseConfig)
-			assert.Error(t, err)
-			assert.Contains(t, err.Error(), tc.wantError)
-		})
+func reasoningCRDValidationErrorCases() []crdValidationErrorCase {
+	return []crdValidationErrorCase{
+		{
+			name: "UnknownReasoningFamily",
+			pool: testPoolWithModels(v1alpha1.ModelConfig{
+				Name:      "test-model",
+				Reasoning: &v1alpha1.ModelReasoning{Family: "unknown"},
+			}),
+			route:     testRouteWithKeywords(nil),
+			wantError: "references unknown reasoning family: unknown",
+		},
+		{
+			name: "MixedReasoningFamilyAndInlineFields",
+			pool: testPoolWithModels(v1alpha1.ModelConfig{
+				Name: "test-model",
+				Reasoning: &v1alpha1.ModelReasoning{
+					Family:    "qwen3",
+					Type:      config.ReasoningFamilyTypeChatTemplateKwargs,
+					Parameter: "enable_thinking",
+				},
+			}),
+			route:     testRouteWithKeywords(nil),
+			wantError: "reasoning family is mutually exclusive with inline reasoning fields",
+		},
 	}
 }
 

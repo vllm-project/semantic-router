@@ -35,7 +35,7 @@ DEFAULT_METRICS_PORT = 9190
 DEFAULT_MILVUS_PORT = 19530
 
 # Health check
-HEALTH_CHECK_TIMEOUT = 1800  # 5 minutes (increased for model loading)
+HEALTH_CHECK_TIMEOUT = 1800  # Default local startup readiness budget: 30 minutes.
 HEALTH_CHECK_INTERVAL = 2
 
 # File descriptor limits
@@ -50,7 +50,3 @@ SUPPORTED_CONTAINER_RUNTIMES = (
     CONTAINER_RUNTIME_PODMAN,
 )
 CONTAINER_RUNTIME_ENV = "CONTAINER_RUNTIME"
-
-# External API model formats (routed through Envoy to external API endpoints)
-# These models don't require vLLM endpoints - they use external APIs like Anthropic
-EXTERNAL_API_MODEL_FORMATS = ["anthropic"]

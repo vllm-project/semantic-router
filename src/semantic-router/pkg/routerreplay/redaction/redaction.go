@@ -193,7 +193,7 @@ func redactOutcomes(raw any) bool {
 
 func redactOutcome(outcome map[string]any) bool {
 	changed := false
-	for _, field := range []string{"target_ref", "reason"} {
+	for _, field := range []string{"target_ref", "reason", "idempotency_key"} {
 		if clearStringField(outcome, field) {
 			changed = true
 		}
@@ -222,7 +222,7 @@ func redactRouteDiagnosticsMap(diagnostics map[string]any) bool {
 			changed = true
 		}
 	}
-	for _, field := range []string{"annotations", "signal_errors"} {
+	for _, field := range []string{"annotations", "signal_errors", "looper"} {
 		if clearObjectField(diagnostics, field) {
 			changed = true
 		}
