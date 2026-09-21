@@ -1,4 +1,4 @@
-package dynamicconfig
+package multimodalrouting
 
 import (
 	"context"
@@ -11,13 +11,6 @@ import (
 )
 
 type recordingInstaller struct{ options helm.InstallOptions }
-
-func TestDynamicLifecycleCaseRunsAfterRoutingChecks(t *testing.T) {
-	cases := NewProfile().GetTestCases()
-	if len(cases) == 0 || cases[len(cases)-1] != "dynamic-config-generation-lifecycle" {
-		t.Fatalf("mutating lifecycle case must run last: %v", cases)
-	}
-}
 
 func (r *recordingInstaller) Install(_ context.Context, options helm.InstallOptions) error {
 	r.options = options

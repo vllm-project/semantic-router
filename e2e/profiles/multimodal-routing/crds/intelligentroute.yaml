@@ -2,7 +2,7 @@ apiVersion: vllm.ai/v1alpha1
 kind: IntelligentRoute
 metadata:
   name: ai-gateway-route
-  namespace: default
+  namespace: vllm-semantic-router-system
 spec:
   signals:
     # Image-modality embedding rules mirroring the opt-in pack shipped in
