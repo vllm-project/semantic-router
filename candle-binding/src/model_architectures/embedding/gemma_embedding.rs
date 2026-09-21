@@ -674,7 +674,7 @@ mod dimension_tests {
         for (width, expected) in [(3, vec![3]), (256, vec![128, 256])] {
             let device = Device::Cpu;
             let config: GemmaEmbeddingConfig = serde_json::from_value(serde_json::json!({
-                "vocab_size": 2, "hidden_size": 4, "intermediate_size": 8,
+                "vocab_size": 2, "hidden_size": 768, "intermediate_size": 8,
                 "num_hidden_layers": 0, "num_attention_heads": 1,
                 "num_key_value_heads": 1, "head_dim": 4,
                 "max_position_embeddings": 8, "rms_norm_eps": 0.000001,
@@ -688,15 +688,15 @@ mod dimension_tests {
             let weights = HashMap::from([
                 (
                     "embed_tokens.weight".into(),
-                    Tensor::ones((2, 4), DType::F32, &device).unwrap(),
+                    Tensor::ones((2, 768), DType::F32, &device).unwrap(),
                 ),
                 (
                     "norm.weight".into(),
-                    Tensor::ones(4, DType::F32, &device).unwrap(),
+                    Tensor::ones(768, DType::F32, &device).unwrap(),
                 ),
                 (
                     "expand.linear.weight".into(),
-                    Tensor::ones((8, 4), DType::F32, &device).unwrap(),
+                    Tensor::ones((8, 768), DType::F32, &device).unwrap(),
                 ),
                 (
                     "compress.linear.weight".into(),
@@ -709,7 +709,7 @@ mod dimension_tests {
                 dense_bottleneck: BottleneckDenseNet {
                     dense1: DenseLayer::load(
                         vb.pp("expand"),
-                        4,
+                        768,
                         8,
                         DenseActivation::Identity,
                         false,
