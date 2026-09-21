@@ -92,7 +92,12 @@ job that owns those names.
 of the ROCm device flags, and all three classifiers (domain, jailbreak, PII)
 exercised per request through `config-bench-cuda.yaml`. It needs the router
 image built from [`src/vllm-sr/Dockerfile.cuda`](../../src/vllm-sr/Dockerfile.cuda)
-and the model directories without the `-onnx` suffix the ROCm path uses:
+and the model directories without the `-onnx` suffix the ROCm path uses.
+
+The three classifier modules resolve to the Candle provider, whose loader
+opens `model.safetensors`, so the classifiers need their safetensors weights;
+the embedding directory is used through the ONNX graphs. Downloading only
+`onnx/*` leaves the router unable to initialize either phase:
 
 ```bash
 python3 - <<'PY'
@@ -102,14 +107,18 @@ for name in (
     "mmbert32k-intent-classifier-merged",
     "mmbert32k-jailbreak-detector-merged",
     "mmbert32k-pii-detector-merged",
-    "mmbert-embed-32k-2d-matryoshka",
 ):
     snapshot_download(
         repo_id=f"llm-semantic-router/{name}",
         local_dir=f"bench/cpu-vs-gpu/models/{name}",
-        allow_patterns=["onnx/*", "*.json"],
-        ignore_patterns=["*.safetensors", "*.bin", "*.pt"],
+        allow_patterns=["*.safetensors", "*.json"],
     )
+
+snapshot_download(
+    repo_id="llm-semantic-router/mmbert-embed-32k-2d-matryoshka",
+    local_dir="bench/cpu-vs-gpu/models/mmbert-embed-32k-2d-matryoshka",
+    allow_patterns=["onnx/*", "*.json"],
+)
 PY
 
 BENCH_IMAGE=vllm-sr-cuda:local \

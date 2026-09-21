@@ -141,7 +141,6 @@ start_router() {
     docker run -d --name "$SR_CONTAINER" \
         --network host \
         "${gpu_flags[@]}" \
-        -e AI_BINDING=onnx \
         -e CUDA_VISIBLE_DEVICES="$([ "$mode" = gpu ] && echo 0 || echo "")" \
         -v "$config_file:/app/config.yaml:ro" \
         -v "$MODELS_DIR/mmbert32k-intent-classifier-merged:/app/models/mmbert32k-intent-classifier-merged:ro" \
