@@ -46,7 +46,7 @@ func testDynamoNVExtChatContract(
 	if err := verifyStreamedDynamoNVExt(streamed); err != nil {
 		return err
 	}
-	if err := verifyDynamoTokenDataRejected(ctx, session); err != nil {
+	if err := verifyDynamoPublicFieldsRejected(ctx, session); err != nil {
 		return err
 	}
 
@@ -56,13 +56,25 @@ func testDynamoNVExtChatContract(
 	return nil
 }
 
-func verifyDynamoTokenDataRejected(ctx context.Context, session *fixtures.ServiceSession) error {
+func verifyDynamoPublicFieldsRejected(ctx context.Context, session *fixtures.ServiceSession) error {
 	for _, path := range []string{"/v1/chat/completions", "/v1/responses"} {
-		for _, tokens := range [][]uint32{{0}, {}} {
+		for _, rejected := range []struct {
+			field string
+			value any
+		}{
+			{"token_data", []uint32{0}},
+			{"token_data", []uint32{}},
+			{"metadata_upload", map[string]string{"url": "file:///tmp/client-metadata"}},
+			{"metadata_upload", map[string]string{"url": "s3://client-bucket/metadata"}},
+			{"metadata_upload", map[string]string{"url": "gs://client-bucket/metadata"}},
+			{"metadata_upload", map[string]string{"url": "az://client-container/metadata"}},
+			{"metadata_upload", map[string]string{}},
+			{"metadata_upload", nil},
+		} {
 			for _, stream := range []bool{false, true} {
 				request := map[string]any{
 					"model": "openai/gpt-oss-20b", "stream": stream,
-					"nvext": map[string]any{"token_data": tokens},
+					"nvext": map[string]any{rejected.field: rejected.value},
 				}
 				if path == "/v1/responses" {
 					request["input"] = "Tell me about the weather."
@@ -79,11 +91,11 @@ func verifyDynamoTokenDataRejected(ctx context.Context, session *fixtures.Servic
 					} `json:"error"`
 				}
 				if err := json.Unmarshal(result.Body, &response); err != nil {
-					return fmt.Errorf("decode token_data rejection: %w", err)
+					return fmt.Errorf("decode %s rejection: %w", rejected.field, err)
 				}
-				if result.StatusCode != http.StatusBadRequest || response.Error.Code != "unsupported_dynamo_token_data" {
-					return fmt.Errorf("%s token_data=%v stream=%t: want HTTP 400 unsupported_dynamo_token_data, got %d: %s",
-						path, tokens, stream, result.StatusCode, truncateString(string(result.Body), 500))
+				if result.StatusCode != http.StatusBadRequest || response.Error.Code != "unsupported_dynamo_"+rejected.field {
+					return fmt.Errorf("%s %s=%v stream=%t: want HTTP 400 unsupported_dynamo_%s, got %d: %s",
+						path, rejected.field, rejected.value, stream, rejected.field, result.StatusCode, truncateString(string(result.Body), 500))
 				}
 			}
 		}

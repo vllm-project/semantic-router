@@ -41,6 +41,14 @@ safety policies. Omit this field and send text through `messages` (Chat
 Completions) or `input` (Responses). This restriction does not affect requesting
 `prompt_token_ids` or `completion_token_ids` in response `nvext.extra_fields`.
 
+## Metadata uploads
+
+Semantic Router rejects requests containing `nvext.metadata_upload` with HTTP
+400 and error code `unsupported_dynamo_metadata_upload`, including an empty
+object or `null`. Upload destinations are not accepted from public requests:
+Dynamo workers can write to local or cloud storage using their own credentials.
+Omit this field when sending requests through Semantic Router.
+
 ## Prerequisites
 
 You need:

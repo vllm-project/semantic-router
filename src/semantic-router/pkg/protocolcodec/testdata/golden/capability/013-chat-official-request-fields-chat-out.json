@@ -318,9 +318,6 @@
             ],
             "greed_sampling": true,
             "max_thinking_tokens": 128,
-            "metadata_upload": {
-              "url": "https://metadata.example/upload"
-            },
             "prefill_dp_rank": 1,
             "prefill_worker_id": 2,
             "request_timestamp_ms": 123.5,

@@ -15,7 +15,7 @@ type dynamoRequestNVExtWire struct {
 	MaxThinkingTokens  *uint32                       `json:"max_thinking_tokens,omitempty"`
 	CacheSalt          string                        `json:"cache_salt,omitempty"`
 	ExtraFields        []string                      `json:"extra_fields,omitempty"`
-	MetadataUpload     *dynamoMetadataUploadWire     `json:"metadata_upload,omitempty"`
+	MetadataUpload     json.RawMessage               `json:"metadata_upload,omitempty"`
 	PrefillWorkerID    *uint64                       `json:"prefill_worker_id,omitempty"`
 	DecodeWorkerID     *uint64                       `json:"decode_worker_id,omitempty"`
 	DPRank             *uint32                       `json:"dp_rank,omitempty"`
@@ -24,10 +24,6 @@ type dynamoRequestNVExtWire struct {
 	RequestTimestampMS *float64                      `json:"request_timestamp_ms,omitempty"`
 	RoutingConstraints *dynamoRoutingConstraintsWire `json:"routing_constraints,omitempty"`
 	Router             *dynamoRouterParamsWire       `json:"router,omitempty"`
-}
-
-type dynamoMetadataUploadWire struct {
-	URL string `json:"url"`
 }
 
 type dynamoAgentHintsWire struct {
@@ -109,6 +105,14 @@ func decodeDynamoRequestNVExt(raw json.RawMessage, policy llmprotocol.Policy) (*
 			nil,
 		)
 	}
+	if len(wire.MetadataUpload) != 0 {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_dynamo_metadata_upload",
+			"nvext.metadata_upload is not supported: client-selected destinations can write using backend worker credentials; omit metadata_upload",
+			nil,
+		)
+	}
 	extension := decodeDynamoRequestNVExtWire(wire)
 	if err := llmprotocol.ValidateDynamoRequestNVExt(extension, policy.Limits); err != nil {
 		return nil, err
@@ -126,9 +130,6 @@ func decodeDynamoRequestNVExtWire(wire dynamoRequestNVExtWire) *llmprotocol.Dyna
 		PrefillWorkerID: wire.PrefillWorkerID, DecodeWorkerID: wire.DecodeWorkerID,
 		DPRank: wire.DPRank, PrefillDPRank: wire.PrefillDPRank,
 		RequestTimestampMS: wire.RequestTimestampMS,
-	}
-	if wire.MetadataUpload != nil {
-		extension.MetadataUpload = &llmprotocol.DynamoMetadataUpload{URL: wire.MetadataUpload.URL}
 	}
 	if wire.AgentHints != nil {
 		extension.AgentHints = &llmprotocol.DynamoAgentHints{
@@ -162,9 +163,6 @@ func encodeDynamoRequestNVExt(extension *llmprotocol.DynamoRequestNVExt, policy 
 		PrefillWorkerID: extension.PrefillWorkerID, DecodeWorkerID: extension.DecodeWorkerID,
 		DPRank: extension.DPRank, PrefillDPRank: extension.PrefillDPRank,
 		RequestTimestampMS: extension.RequestTimestampMS,
-	}
-	if extension.MetadataUpload != nil {
-		wire.MetadataUpload = &dynamoMetadataUploadWire{URL: extension.MetadataUpload.URL}
 	}
 	if extension.AgentHints != nil {
 		wire.AgentHints = &dynamoAgentHintsWire{

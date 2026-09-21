@@ -3,7 +3,6 @@ package llmprotocol
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // DynamoEnvelope carries structured NVIDIA Dynamo wire extensions across a
@@ -26,7 +25,6 @@ type DynamoRequestNVExt struct {
 	MaxThinkingTokens  *uint32
 	CacheSalt          string
 	ExtraFields        []string
-	MetadataUpload     *DynamoMetadataUpload
 	PrefillWorkerID    *uint64
 	DecodeWorkerID     *uint64
 	DPRank             *uint32
@@ -35,10 +33,6 @@ type DynamoRequestNVExt struct {
 	RequestTimestampMS *float64
 	RoutingConstraints *DynamoRoutingConstraints
 	Router             *DynamoRouterParams
-}
-
-type DynamoMetadataUpload struct {
-	URL string
 }
 
 type DynamoAgentHints struct {
@@ -130,11 +124,6 @@ func ValidateDynamoRequestNVExt(extension *DynamoRequestNVExt, limits Limits) er
 		return err
 	}
 	bytes += extraFieldBytes
-	metadataBytes, err := validateDynamoMetadataUpload(extension.MetadataUpload, limits)
-	if err != nil {
-		return err
-	}
-	bytes += metadataBytes
 	routingBytes, err := validateDynamoRoutingConstraints(extension.RoutingConstraints, limits)
 	if err != nil {
 		return err
@@ -189,19 +178,6 @@ func validateDynamoExtraFields(fields []string) (int, error) {
 		bytes += len(field)
 	}
 	return bytes, nil
-}
-
-func validateDynamoMetadataUpload(upload *DynamoMetadataUpload, limits Limits) (int, error) {
-	if upload == nil {
-		return 0, nil
-	}
-	if strings.TrimSpace(upload.URL) == "" {
-		return 0, NewError(ErrorInvalidRequest, "invalid_dynamo_nvext_metadata_upload", "Dynamo nvext metadata upload URL is required", nil)
-	}
-	if exceedsDynamoString(upload.URL, limits) {
-		return 0, NewError(ErrorInvalidRequest, "dynamo_nvext_string_limit", "Dynamo nvext metadata upload URL exceeds the configured limit", nil)
-	}
-	return len(upload.URL), nil
 }
 
 func validateDynamoRoutingConstraints(constraints *DynamoRoutingConstraints, limits Limits) (int, error) {

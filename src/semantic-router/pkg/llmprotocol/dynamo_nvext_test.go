@@ -10,7 +10,6 @@ func TestValidateDynamoRequestNVExtAcceptsDocumentedFields(t *testing.T) {
 		GreedSampling: Bool(true), UseRawPrompt: Bool(false),
 		Annotations: []string{"worker_id", "timing"},
 		CacheSalt:   "tenant-a", ExtraFields: []string{"worker_id", "timing", "engine_data", "prompt_token_ids"},
-		MetadataUpload:     &DynamoMetadataUpload{URL: "https://metadata.example/upload"},
 		AgentHints:         &DynamoAgentHints{Priority: int32Pointer(5), StrictPriority: uint32Pointer(1), OSL: uint32Pointer(1024), SpeculativePrefill: Bool(true), LatencySensitivity: float64Pointer(0.5)},
 		RequestTimestampMS: float64Pointer(100),
 		RoutingConstraints: &DynamoRoutingConstraints{RequiredTaints: []string{"gpu"}, PreferredTaints: map[string]float32{"zone-a": 0.75}},
