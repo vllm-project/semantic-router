@@ -22033,6 +22033,27 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "balance_by",
+            "in": "query",
+            "description": "Group a balance cap applies to. Requires balance_max.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "recipe",
+                "decision",
+                "primary_model"
+              ]
+            }
+          },
+          {
+            "name": "balance_max",
+            "in": "query",
+            "description": "Most examples one group may contribute. Requires balance_by.",
+            "schema": {
+              "type": "integer"
+            }
           }
         ],
         "security": [
@@ -22169,6 +22190,22 @@
                     "policy": {
                       "type": "object",
                       "properties": {
+                        "balance": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "by": {
+                              "type": "string"
+                            },
+                            "max": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "by",
+                            "max"
+                          ]
+                        },
                         "seed": {
                           "type": "string"
                         },

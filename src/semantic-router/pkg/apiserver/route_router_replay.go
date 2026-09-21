@@ -104,6 +104,8 @@ func routerReplayDatasetParameters() []OpenAPIParameter {
 	return append(parameters,
 		requiredQueryParameter("seed", "Seed that fixes split assignment; the same records under the same seed reproduce the same manifest.", "string"),
 		requiredQueryParameter("split", "Repeatable split written as name:weight, for example train:8.", "string"),
+		queryParameter("balance_by", "Group a balance cap applies to. Requires balance_max.", "string", "recipe", "decision", "primary_model"),
+		queryParameter("balance_max", "Most examples one group may contribute. Requires balance_by.", "integer"),
 	)
 }
 
