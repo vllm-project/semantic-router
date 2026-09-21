@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/redaction"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/shadowdataset"
 )
 
 func apiRouterReplayRoutes() []apiRoute {
@@ -62,6 +63,20 @@ func apiRouterReplayRoutes() []apiRoute {
 			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
 		),
 		managedRoute(
+			EndpointMetadata{
+				Path:        apiObservabilityReplaysPath + "/dataset",
+				Method:      "GET",
+				Description: "Export a shadow comparison dataset manifest built from the selected Router Replay records",
+				Parameters:  routerReplayDatasetParameters(),
+			},
+			policy,
+			(*ClassificationAPIServer).handleRouterReplay,
+			pluginOperationFor(config.DecisionPluginRouterReplay, "read"),
+			pluginOperationFor(config.DecisionPluginShadowDispatch, "read"),
+			jsonResponse[shadowdataset.Manifest](http.StatusOK, "Shadow comparison dataset manifest"),
+			errorResponses(http.StatusBadRequest, http.StatusNotFound, http.StatusInternalServerError),
+		),
+		managedRoute(
 			EndpointMetadata{Path: apiObservabilityReplaysPath + "/{id}", Method: "GET", Description: "Read one Router Replay record"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
@@ -82,6 +97,14 @@ func routerReplayFilterParameters() []OpenAPIParameter {
 		queryParameter("session_id", "Filter by logical session identifier.", "string"),
 		queryParameter("cache_status", "Filter by response-cache outcome.", "string", "all", "cached", "streamed"),
 	}
+}
+
+func routerReplayDatasetParameters() []OpenAPIParameter {
+	parameters := routerReplayFilterParameters()
+	return append(parameters,
+		requiredQueryParameter("seed", "Seed that fixes split assignment; the same records under the same seed reproduce the same manifest.", "string"),
+		requiredQueryParameter("split", "Repeatable split written as name:weight, for example train:8.", "string"),
+	)
 }
 
 func routerReplayListParameters() []OpenAPIParameter {
