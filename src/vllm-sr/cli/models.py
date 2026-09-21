@@ -1071,10 +1071,12 @@ class StickyToolSelectionConfig(BaseModel):
     @model_validator(mode="after")
     def validate_bounds(self):
         effective_max_tools = self.max_tools if self.max_tools is not None else 16
-        if (
-            self.max_new_tools_per_turn is not None
-            and self.max_new_tools_per_turn > effective_max_tools
-        ):
+        effective_max_new_tools_per_turn = (
+            self.max_new_tools_per_turn
+            if self.max_new_tools_per_turn is not None
+            else 2
+        )
+        if effective_max_new_tools_per_turn > effective_max_tools:
             raise ValueError(
                 "max_new_tools_per_turn must be less than or equal to max_tools"
             )

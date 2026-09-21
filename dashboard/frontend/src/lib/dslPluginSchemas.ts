@@ -1,4 +1,4 @@
-import { resolveCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
+import { getCapabilityPluginFieldSchema } from './dslCapabilityPluginSchemas'
 import type { FieldSchema } from './dslSchemaTypes'
 
 // Per-plugin field schemas for the decision-editor DSL. Extracted out of
@@ -8,7 +8,7 @@ import type { FieldSchema } from './dslSchemaTypes'
 // own small helper instead of one large switch, matching this directory's
 // narrow-module convention.
 export function getPluginFieldSchema(pluginType: string): FieldSchema[] {
-  const capabilityFields = resolveCapabilityPluginFieldSchema(pluginType)
+  const capabilityFields = getCapabilityPluginFieldSchema(pluginType)
   if (capabilityFields) return capabilityFields
   switch (pluginType) {
     case 'memory':
