@@ -54,14 +54,15 @@ type UsageCost struct {
 
 // Outcome captures typed post-route feedback linked to a replay record.
 type Outcome struct {
-	Timestamp time.Time         `json:"timestamp,omitempty"`
-	Source    string            `json:"source"`
-	Target    string            `json:"target"`
-	TargetRef string            `json:"target_ref,omitempty"`
-	Verdict   string            `json:"verdict"`
-	Reason    string            `json:"reason,omitempty"`
-	Score     float64           `json:"score,omitempty"`
-	Metadata  map[string]string `json:"metadata,omitempty"`
+	Timestamp      time.Time         `json:"timestamp,omitempty"`
+	Source         string            `json:"source"`
+	Target         string            `json:"target"`
+	TargetRef      string            `json:"target_ref,omitempty"`
+	Verdict        string            `json:"verdict"`
+	Reason         string            `json:"reason,omitempty"`
+	Score          float64           `json:"score,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+	IdempotencyKey string            `json:"idempotency_key,omitempty"`
 }
 
 const (

@@ -10,12 +10,18 @@ import type { PlaygroundErrorPresentation } from './playgroundErrorPresentation'
 
 export interface ChatComponentProps {
   endpoint?: string
+  feedbackInsightsBasePath?: string
   invocation?: PlaygroundInvocation | null
   isFullscreenMode?: boolean
   onInvocationConsumed?: () => void
 }
 
 export type ClawPlaygroundView = 'control' | 'room'
+
+export function buildFeedbackInsightsHref(basePath: string | undefined, replayId: string) {
+  const normalizedBasePath = basePath?.replace(/\/+$/, '')
+  return normalizedBasePath ? `${normalizedBasePath}/${encodeURIComponent(replayId)}` : undefined
+}
 
 export const readClawModePreference = (): boolean => {
   if (typeof window === 'undefined') return false
