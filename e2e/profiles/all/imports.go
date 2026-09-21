@@ -63,7 +63,7 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 }
 
 func init() {
-	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
+	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"envoy-ai-gateway",
@@ -118,7 +118,7 @@ func init() {
 	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
 	register("vela-omni", func() framework.Profile { return velaomni.NewProfile() }, framework.ProfileCapabilities{
-		LocalImages:     mockVLLMLocalImages,
+		LocalImages:     providerMockerLocalImages,
 		RouterBuildArgs: map[string]string{"VELA_OMNI_VARIANTS": "nano mini"},
 	})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
