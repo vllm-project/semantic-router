@@ -156,7 +156,7 @@ Docker socket nor GPU devices. Dashboard/config reloads reuse a matching running
 worker. A stopped or changed worker requires explicit reconciliation; `vllm-sr
 stop` stops it without deleting its evidence.
 
-An image upgrade waits for active runs and dataset preparations to finish. An
+Active runs and dataset preparations block an image upgrade. An
 unverifiable preparation journal also preserves the running worker for inspection.
 
 The core image does not include every upstream execution environment. For code

@@ -170,6 +170,7 @@ class Preparations:
             try:
                 self.thread.start()
             except RuntimeError as exc:
+                self.thread = None
                 self._update(
                     identifier,
                     status="failed",
