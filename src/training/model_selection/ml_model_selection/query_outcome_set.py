@@ -11,10 +11,13 @@ derived from it.
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Mapping, Sequence, Tuple
 
 SNAPSHOT_VERSION = 1
+
+# A query with one candidate teaches a selector nothing: there is no choice to learn.
+MIN_CANDIDATES_FOR_CHOICE = 2
 
 # Digests are truncated for readable ids; collisions are not a security boundary.
 _DIGEST_CHARS = 16
@@ -48,7 +51,7 @@ class QueryOutcomeSet:
     query: str
     source: str
     category: str
-    outcomes: Tuple[CandidateOutcome, ...]
+    outcomes: tuple[CandidateOutcome, ...]
     version: int = SNAPSHOT_VERSION
 
     @property
@@ -62,7 +65,7 @@ class QueryOutcomeSet:
         return _digest(*sorted(o.model_ref for o in self.outcomes))
 
     @property
-    def model_refs(self) -> Tuple[str, ...]:
+    def model_refs(self) -> tuple[str, ...]:
         return tuple(sorted(o.model_ref for o in self.outcomes))
 
 
@@ -70,12 +73,12 @@ class QueryOutcomeSet:
 class SplitAssignment:
     """Query-level train/validation/test partition of one snapshot."""
 
-    train: Tuple[QueryOutcomeSet, ...]
-    validation: Tuple[QueryOutcomeSet, ...]
-    test: Tuple[QueryOutcomeSet, ...]
+    train: tuple[QueryOutcomeSet, ...]
+    validation: tuple[QueryOutcomeSet, ...]
+    test: tuple[QueryOutcomeSet, ...]
     seed: int
 
-    def counts(self) -> Dict[str, int]:
+    def counts(self) -> dict[str, int]:
         return {
             "train": len(self.train),
             "validation": len(self.validation),
@@ -85,26 +88,26 @@ class SplitAssignment:
 
 def build_query_outcome_sets(
     records: Iterable, source: str, *, drop_single_candidate: bool = False
-) -> List[QueryOutcomeSet]:
+) -> list[QueryOutcomeSet]:
     """Group per-(query, model) records into one snapshot per query.
 
     `records` are RoutingRecord-shaped: query, category, model_name, quality,
     latency_ms. A repeated (query, model) keeps the first outcome, since a
     duplicate pair is a data defect rather than a second candidate.
     """
-    grouped: Dict[str, List] = {}
-    order: List[str] = []
+    grouped: dict[str, list] = {}
+    order: list[str] = []
     for record in records:
         if record.query not in grouped:
             grouped[record.query] = []
             order.append(record.query)
         grouped[record.query].append(record)
 
-    snapshots: List[QueryOutcomeSet] = []
+    snapshots: list[QueryOutcomeSet] = []
     for query in order:
         rows = grouped[query]
         seen: set = set()
-        outcomes: List[CandidateOutcome] = []
+        outcomes: list[CandidateOutcome] = []
         for row in rows:
             if row.model_name in seen:
                 continue
@@ -118,7 +121,7 @@ def build_query_outcome_sets(
                     cost=float(getattr(row, "cost", 0.0)),
                 )
             )
-        if drop_single_candidate and len(outcomes) < 2:
+        if drop_single_candidate and len(outcomes) < MIN_CANDIDATES_FOR_CHOICE:
             continue
         snapshots.append(
             QueryOutcomeSet(
@@ -159,7 +162,7 @@ def split_by_query(
     train_edge = train / total
     validation_edge = (train + validation) / total
 
-    buckets: Dict[str, List[QueryOutcomeSet]] = {
+    buckets: dict[str, list[QueryOutcomeSet]] = {
         "train": [],
         "validation": [],
         "test": [],
@@ -181,10 +184,10 @@ def split_by_query(
     )
 
 
-def leaked_pairs(assignment: SplitAssignment) -> List[Tuple[str, str]]:
+def leaked_pairs(assignment: SplitAssignment) -> list[tuple[str, str]]:
     """Any (query_id, model_ref) present in more than one split; empty when the split is sound."""
-    seen: Dict[Tuple[str, str], str] = {}
-    leaks: List[Tuple[str, str]] = []
+    seen: dict[tuple[str, str], str] = {}
+    leaks: list[tuple[str, str]] = []
     for name, group in (
         ("train", assignment.train),
         ("validation", assignment.validation),

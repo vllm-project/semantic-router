@@ -7,6 +7,12 @@ from pathlib import Path
 import pytest
 
 SERVICE_DIR = Path(__file__).resolve().parents[1]
+
+DEFAULT_MODELS = ("a", "b", "c")
+MODEL_COUNT = len(DEFAULT_MODELS)
+RATIO_SAMPLE = 2000
+TRAIN_LOW, TRAIN_HIGH = 0.75, 0.85
+VALIDATION_LOW, VALIDATION_HIGH = 0.05, 0.15
 sys.path.insert(0, str(SERVICE_DIR))
 
 from data_loader import RoutingRecord  # noqa: E402
@@ -18,7 +24,7 @@ from query_outcome_set import (  # noqa: E402
 )
 
 
-def _records(queries, models=("a", "b", "c")):
+def _records(queries, models=DEFAULT_MODELS):
     return [
         RoutingRecord(
             query=q,
@@ -35,7 +41,7 @@ def _records(queries, models=("a", "b", "c")):
 def test_records_collapse_into_one_snapshot_per_query():
     snapshots = build_query_outcome_sets(_records(["q1", "q2"]), source="bench")
     assert [s.query for s in snapshots] == ["q1", "q2"]
-    assert all(len(s.outcomes) == 3 for s in snapshots)
+    assert all(len(s.outcomes) == MODEL_COUNT for s in snapshots)
 
 
 def test_duplicate_query_model_pair_is_dropped():
@@ -90,15 +96,17 @@ def test_split_is_deterministic_and_order_independent():
 
 def test_split_is_stable_across_processes():
     """Assignment must not ride on PYTHONHASHSEED, or a rerun reshuffles the holdout."""
-    script = (
-        "import sys; sys.path.insert(0, %r);"
-        "from data_loader import RoutingRecord;"
-        "from query_outcome_set import build_query_outcome_sets, split_by_query;"
-        "rs=[RoutingRecord(query='q%%d'%%i, category='math', model_name='a',"
-        " quality=0.5, latency_ms=1.0) for i in range(50)];"
-        "s=build_query_outcome_sets(rs, source='bench');"
-        "print(','.join(sorted(x.query_id for x in split_by_query(s, seed=3).test)))"
-        % str(SERVICE_DIR)
+    script = "\n".join(
+        [
+            "import sys",
+            f"sys.path.insert(0, {str(SERVICE_DIR)!r})",
+            "from data_loader import RoutingRecord",
+            "from query_outcome_set import build_query_outcome_sets, split_by_query",
+            "rs = [RoutingRecord(query=f'q{i}', category='math', model_name='a',",
+            "                    quality=0.5, latency_ms=1.0) for i in range(50)]",
+            "s = build_query_outcome_sets(rs, source='bench')",
+            "print(','.join(sorted(x.query_id for x in split_by_query(s, seed=3).test)))",
+        ]
     )
     runs = {
         subprocess.run(
@@ -124,11 +132,11 @@ def test_different_seeds_give_different_holdouts():
 
 def test_ratios_are_respected_within_tolerance():
     snapshots = build_query_outcome_sets(
-        _records([f"q{i}" for i in range(2000)]), source="bench"
+        _records([f"q{i}" for i in range(RATIO_SAMPLE)]), source="bench"
     )
     counts = split_by_query(snapshots, train=0.8, validation=0.1, test=0.1).counts()
-    assert 0.75 < counts["train"] / 2000 < 0.85
-    assert 0.05 < counts["validation"] / 2000 < 0.15
+    assert TRAIN_LOW < counts["train"] / RATIO_SAMPLE < TRAIN_HIGH
+    assert VALIDATION_LOW < counts["validation"] / RATIO_SAMPLE < VALIDATION_HIGH
 
 
 def test_candidate_set_identity_tracks_the_model_roster():
