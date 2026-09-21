@@ -58,6 +58,19 @@ between scenarios and repetitions. A companion integration test sends the mainta
 
 The model-choice proposal is scripted;
 the protection decision is not simulated or reimplemented in the runner.
+Accepted corpus steps explicitly commit the staged session decision to model a
+successful dispatch. In the request pipeline, selection only stages ownership;
+provider preparation, credential resolution and final encoding must succeed
+before ownership is committed. Cancellation and immediate rejections do not
+replace the previous owner or increment its turn and switch counters.
+
+`selection_decision_paths_test.go` separately guards component-error composition:
+observe protection preserves an applied adaptation proposal even on policy
+rejection; preflight reads protection-scoped warm state; rescue respects score
+direction; cancellation covers selector shortcuts and successful returns; Eval
+preserves ambiguous-candidate rejection. In-process dispatch tests cover late
+rejection, successful ownership commitment and an older failure arriving after a
+newer dispatch. These checks do not invoke live model backends.
 
 Covered contracts include:
 
@@ -67,7 +80,8 @@ Covered contracts include:
 - Provider-bound response state and release with portable history.
 - Small score advantages being held and clear advantages allowing a switch.
 - Warm-cache sampling suppression.
-- Candidate-set changes preventing restoration of an ineligible previous model.
+- Candidate-set changes preventing restoration of an ineligible previous model;
+  a hard-bound continuation with an excluded owner is rejected, not rerouted.
 - Session-scope continuity and conversation-scope isolation.
 - Missing identity, observe mode and bypass mode retaining their current semantics.
 
@@ -79,7 +93,9 @@ cache-cost and history-penalty tuning; it is not a production tuning recommendat
 
 The report identifies its schema and the SHA-256 of the exact corpus bytes.
 It contains every proposed/final model, preflight reason, Replay action/reason,
-hard-lock result, scripted cache warmth and assertion failure.
+hard-lock result, scripted cache warmth and assertion failure. Rejected steps
+use `rejected: true`, an empty final model, and a terminal rejection outcome.
+They do not write a new session owner and are not counted as model switches.
 
 Metrics include contract pass rate, switches, blocked-switch violations, unsafe
 sampling violations, unnecessary switches, missed **scripted** opportunities and

@@ -14,12 +14,17 @@ weighted or lexicographic objective.
 | Load | Current in-flight requests in this Router process | Lower is better |
 
 Quality is resolved for the candidate's exact reasoning effort. A score from a
-different effort is never borrowed.
+different effort is never borrowed. Coverage is not part of the objective; when
+both the final objective value and intelligence score tie, higher coverage is
+the deterministic tie-breaker.
 
 Set `latency_metric: ttft` to favor a fast first token, or `tpot` to favor fast
 streaming after generation starts. With either setting, a missing measurement
-stays unknown; the other metric is never substituted. If no candidate has that
-measurement yet, lexicographic selection continues to the next priority.
+stays unknown; the other metric is never substituted. Lexicographic selection
+compares latency only when every candidate still in the objective has a
+measurement. With no measurements or partial coverage, it skips latency and
+continues to the next priority. A measured model therefore cannot exclude an
+unmeasured model simply because it received the first request after startup.
 Omitting the setting preserves the existing TPOT-then-TTFT behavior.
 
 ## What Problem Does It Solve?
@@ -71,10 +76,23 @@ selector recovers to equal weights.
 the declared relative tolerance of the best observed value, then passes that
 band to the next stage.
 
+Latency requires complete measurement coverage in the current band. This does
+not relax quality eligibility or cost restrictions; missing quality and cost
+evidence continue to follow their existing policies.
+
 Only candidates surviving every priority remain eligible for later adaptation,
 session protection, and dispatch. These steps cannot restore a model excluded
 by an earlier quality or cost band. Recorded scores may still include excluded
 models to explain the selection.
+
+Preview returns `selection_trace` for lexicographic selection. Insights saves
+the same structure under `route_diagnostics.selection_trace`: reached stages,
+measurement coverage, available values, skipped stages, elimination reasons,
+and the final objective survivors. Unknown values stay absent, while measured
+zero remains zero. These are the base selector's candidates before Router
+Learning; the actual selected model is reported separately. Live measurements
+can change after a Preview, so its trace explains that observation rather than
+guaranteeing a later route.
 
 ```yaml
 algorithm:
@@ -139,6 +157,8 @@ quality:
 - `exclude` removes a candidate without qualifying exact-effort evidence.
 - `disable_quality` keeps the pool, but one missing candidate disables quality
   for the entire comparison. It never changes weights for only one model.
+- Selection diagnostics report the chosen intelligence score and coverage, or
+  mark intelligence evidence unavailable; missing evidence is not shown as zero.
 
 See [Open Intelligence Index](../../../benchmarking/open-intelligence-index) for
 the built-in hierarchy and [Custom evaluations](../../../benchmarking/custom-evaluations)

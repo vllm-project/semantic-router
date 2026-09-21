@@ -1,0 +1,349 @@
+{
+  "version": 1,
+  "excluded": [
+    {
+      "package": "./pkg/cache",
+      "test": "TestNegationFalseHitRegressionInMemory",
+      "source": "src/semantic-router/pkg/cache/negation_regression_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned Candle published-model runtime inventory; model-free polarity lookup contracts remain mandatory in core."
+    },
+    {
+      "package": "./pkg/cache",
+      "test": "TestPolarityNLIRegression",
+      "source": "src/semantic-router/pkg/cache/polarity_nli_regression_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate NLI checkpoint corpus; model-free polarity tests remain mandatory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestAutoDiscoverModels_RealModels",
+      "source": "src/semantic-router/pkg/classification/model_discovery_test.go",
+      "profile": "legacy-discovery-fixtures",
+      "reason": "Explicit legacy checkpoint directory compatibility probe; artifact discovery unit contracts remain required."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestAutoInitializeUnifiedClassifier",
+      "source": "src/semantic-router/pkg/classification/model_discovery_test.go",
+      "profile": "legacy-discovery-fixtures",
+      "reason": "Explicit legacy checkpoint directory compatibility probe; artifact discovery unit contracts remain required."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestClassifyPIIWithDetails_RealModelFindsPIIPastTheWindow",
+      "source": "src/semantic-router/pkg/classification/classifier_pii_long_text_realmodel_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
+      "source": "src/semantic-router/pkg/classification/embedding_classifier_integration_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
+      "source": "src/semantic-router/pkg/classification/embedding_classifier_integration_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestFactCheckEmptyInputRealModel",
+      "source": "src/semantic-router/pkg/classification/fact_check_classifier_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestFactCheckPolicyRealModel",
+      "source": "src/semantic-router/pkg/classification/fact_check_classifier_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestFeedbackForcedAbstentionPreservesPredictionRealModel",
+      "source": "src/semantic-router/pkg/classification/feedback_detector_realmodel_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestFeedbackPredictionAndAbstentionRealModel",
+      "source": "src/semantic-router/pkg/classification/feedback_detector_realmodel_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_CombinedSignalsMoreReliable",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_ContextRequired",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_EmptyAnswerOK",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_EnhancedDetection",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_InitializationRequired",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_LongAnswerTailIsScanned",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_window_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_LongAnswerTailIsScannedWithNLI",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_window_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_LongContextReachesAnswer",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_window_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_NLIClassification",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_NLI_FiltersFalsePositives",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_NLI_ProvidesExplainability",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_OpenAIPipeline_GroundedResponse",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_OpenAIPipeline_HallucinatedResponse",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_OpenAIPipeline_MultipleToolResults",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestHallucinationDetector_SetNLIConfig",
+      "source": "src/semantic-router/pkg/classification/hallucination_detector_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional HaluGate checkpoint corpus; not the published Vela inference inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestIntentClassificationLoRAAutoDetection",
+      "source": "src/semantic-router/pkg/classification/lora_auto_detection_test.go",
+      "profile": "legacy-lora-checkpoints",
+      "reason": "Optional legacy LoRA artifact probe; no compatible LoRA checkpoint in the maintained Vela inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestJailbreakDistributionRealModel",
+      "source": "src/semantic-router/pkg/classification/classifier_jailbreak_risk_realmodel_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestJailbreakRiskRealModelContract",
+      "source": "src/semantic-router/pkg/classification/classifier_jailbreak_risk_realmodel_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestLocalClassifierMaintainedCPU",
+      "source": "src/semantic-router/pkg/classification/generic_classifier_local_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestPIIAlreadyHasAutoDetection",
+      "source": "src/semantic-router/pkg/classification/lora_auto_detection_test.go",
+      "profile": "legacy-lora-checkpoints",
+      "reason": "Optional legacy LoRA artifact probe; no compatible LoRA checkpoint in the maintained Vela inventory."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestUnifiedClassifierPublishedModels",
+      "source": "src/semantic-router/pkg/classification/unified_classifier_integration_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/extproc",
+      "test": "TestMemoryEmbeddingIdentityPersistent",
+      "source": "src/semantic-router/pkg/extproc/router_memory_identity_integration_test.go",
+      "profile": "local.memory",
+      "reason": "Live model and persistent-store identity chain is qualified by the local memory suite."
+    },
+    {
+      "package": "./pkg/looper",
+      "test": "TestFusionWeightPolicy_LiveOllama",
+      "source": "src/semantic-router/pkg/looper/grounding_live_test.go",
+      "profile": "external-ollama",
+      "reason": "Requires separately provisioned panel/judge LLM endpoints; production grounding orchestration has deterministic core tests."
+    },
+    {
+      "package": "./pkg/modelruntime",
+      "test": "TestGlobalEmbeddingViewDoesNotChangeOtherModelFamilies",
+      "source": "src/semantic-router/pkg/modelruntime/embedding_global_views_test.go",
+      "profile": "core-owned.ort-default",
+      "reason": "Requires the ORT build-default and real ONNX Runtime with checked-in tiny tensors; mandatory core-owned invocation provides both and rejects skips."
+    },
+    {
+      "package": "./pkg/modelruntime",
+      "test": "TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride",
+      "source": "src/semantic-router/pkg/modelruntime/embedding_default_execution_test.go",
+      "profile": "native.ort-cpu",
+      "reason": "ORT-default qualification runs in the ORT profile."
+    },
+    {
+      "package": "./pkg/modelruntime/native",
+      "test": "TestMaintainedCPUSameProcess",
+      "source": "src/semantic-router/pkg/modelruntime/native/maintained_cpu_test.go",
+      "profile": "native.candle-cpu",
+      "reason": "Current canonical native published-model suite supplies registered Vela artifacts and strict required inventory."
+    },
+    {
+      "package": "./pkg/modelruntime/native",
+      "test": "TestPublishedVelaModels",
+      "source": "src/semantic-router/pkg/modelruntime/native/published_vela_test.go",
+      "profile": "native",
+      "reason": "Executed once by the strict pinned published-model runtime inventory."
+    },
+    {
+      "package": "./pkg/modelselection",
+      "test": "TestPretrainedModels_LoadAndSelect",
+      "source": "src/semantic-router/pkg/modelselection/artifact_native_test.go",
+      "profile": "external-selector-checkpoints",
+      "reason": "Explicit external selector artifacts are optional; checked-in selector artifacts and Python/Rust parity run in core."
+    },
+    {
+      "package": "candle-binding",
+      "test": "TestOwnedNativeMaintainedHallucinationWithoutLabelMetadata",
+      "source": "candle-binding/instances_native_test.go",
+      "profile": "legacy-hallucination-checkpoints",
+      "reason": "Optional maintained ModernBERT/HaluGate checkpoint without label metadata requires CANDLE_INSTANCE_HALLUCINATION_MODEL; mandatory owned tiny-tensor lifecycle and label-mapping contracts remain in core."
+    },
+    {
+      "package": "onnx-binding/instance",
+      "test": "TestMIGraphXExecutesWithoutCPUFallback",
+      "source": "onnx-binding/instance/instance_test.go",
+      "profile": "hardware.migraphx-amd",
+      "reason": "Requires actual AMD GPU hardware and a MIGraphX-enabled ONNX Runtime; maintained-model smoke additionally requires an explicit revision-locked cache. CPU tiny-tensor ownership tests remain mandatory and do not qualify AMD hardware."
+    },
+    {
+      "package": "onnx-binding/instance",
+      "test": "TestMIGraphXOwnedClassifierUsesMaskedFixedExecutionBudget",
+      "source": "onnx-binding/instance/context_budget_test.go",
+      "profile": "hardware.migraphx-amd",
+      "reason": "Requires actual AMD GPU hardware and a MIGraphX-enabled ONNX Runtime; maintained-model smoke additionally requires an explicit revision-locked cache. CPU tiny-tensor ownership tests remain mandatory and do not qualify AMD hardware."
+    },
+    {
+      "package": "onnx-binding/instance",
+      "test": "TestMIGraphXOwnedEmbeddingUsesExplicitMaskedExecutionBudget",
+      "source": "onnx-binding/instance/embedding_layers_test.go",
+      "profile": "hardware.migraphx-amd",
+      "reason": "Requires actual AMD GPU hardware and a MIGraphX-enabled ONNX Runtime; maintained-model smoke additionally requires an explicit revision-locked cache. CPU tiny-tensor ownership tests remain mandatory and do not qualify AMD hardware."
+    },
+    {
+      "package": "onnx-binding/instance",
+      "test": "TestMaintainedMIGraphXModels",
+      "source": "onnx-binding/instance/maintained_test.go",
+      "profile": "hardware.migraphx-amd",
+      "reason": "Requires actual AMD GPU hardware and a MIGraphX-enabled ONNX Runtime; maintained-model smoke additionally requires an explicit revision-locked cache. CPU tiny-tensor ownership tests remain mandatory and do not qualify AMD hardware."
+    },
+    {
+      "package": "./pkg/modelruntime/native",
+      "test": "TestOpenVINOQualifiedFixtureMetadata",
+      "source": "src/semantic-router/pkg/modelruntime/native/openvino_artifact_test.go",
+      "profile": "native.openvino-cpu",
+      "reason": "Generated OpenVINO tokenizer/IR metadata is required by the dedicated CPU owned-runtime lane; pure metadata unit contracts remain in Core."
+    }
+  ],
+  "ginkgo_excluded_labels": {
+    "model-artifacts": "Optional checkpoint-specific compatibility probes; selected model integrations run in the explicit published-model/local-stack profiles."
+  },
+  "race": [
+    {
+      "package": "./pkg/classification",
+      "test": "TestNativeMappingCandidateKeepsPreviousModel",
+      "source": "src/semantic-router/pkg/classification/native_labels_integration_test.go",
+      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestTwoLocalRulesOwnNativeModelsInOneRecipe",
+      "source": "src/semantic-router/pkg/classification/native_labels_integration_test.go",
+      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
+    },
+    {
+      "package": "./pkg/classification",
+      "test": "TestLegacyStartupUsesProjectedNativeMapping",
+      "source": "src/semantic-router/pkg/classification/native_labels_integration_test.go",
+      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
+    },
+    {
+      "package": "./pkg/modelruntime/native",
+      "test": "TestORTEmbeddingPreparesEveryAdvertisedLayerBeforePublication",
+      "source": "src/semantic-router/pkg/modelruntime/native/embedding_preparation_test.go",
+      "reason": "Preserve the owned CPU tiny-tensor concurrency contract from test-owned-native; execute once with the race detector."
+    }
+  ]
+}

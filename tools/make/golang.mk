@@ -39,6 +39,17 @@ vet: $(if $(CI),rust-ci,rust) ## Run go vet for all Go modules (build Rust libra
 	@cd candle-binding && go vet ./...
 	@cd src/semantic-router && go vet ./...
 
+check-perf-go-mod-tidy: ## Check that the performance Go module is tidy
+	@$(LOG_TARGET)
+	@echo "Checking perf..."
+	@cd perf && go mod tidy && \
+		if ! git diff --exit-code go.mod go.sum; then \
+			echo "ERROR: go.mod or go.sum files are not tidy in perf. Please run 'go mod tidy' in perf directory and commit the changes."; \
+			git diff go.mod go.sum; \
+			exit 1; \
+		fi
+	@echo "perf go mod tidy check passed"
+
 check-go-mod-tidy: ## Check go mod tidy for all Go modules
 	@$(LOG_TARGET)
 	@echo "Checking go mod tidy for all Go modules..."
@@ -55,14 +66,7 @@ check-go-mod-tidy: ## Check go mod tidy for all Go modules
 			exit 1; \
 		fi
 	@echo "src/semantic-router go mod tidy check passed"
-	@echo "Checking perf..."
-	@cd perf && go mod tidy && \
-		if ! git diff --exit-code go.mod go.sum; then \
-			echo "ERROR: go.mod or go.sum files are not tidy in perf. Please run 'go mod tidy' in perf directory and commit the changes."; \
-			git diff go.mod go.sum; \
-			exit 1; \
-		fi
-	@echo "perf go mod tidy check passed"
+	@$(MAKE) check-perf-go-mod-tidy
 	@echo "Checking shared ONNX module compatibility links..."
 	@test "$$(readlink src/semantic-router/go.onnx.mod)" = go.mod
 	@test "$$(readlink src/semantic-router/go.onnx.sum)" = go.sum
@@ -115,4 +119,4 @@ generate-api-check: install-controller-gen ## Check generated Kubernetes API cod
 		exit 1; \
 	fi
 
-.PHONY: config-schema-generate config-schema-check
+.PHONY: config-schema-generate config-schema-check check-perf-go-mod-tidy check-go-mod-tidy

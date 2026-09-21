@@ -16,12 +16,25 @@ E2E_TESTS ?=
 E2E_SETUP_ONLY ?= false
 E2E_SKIP_SETUP ?= false
 E2E_USE_WORKSPACE_MODELS ?= false
+E2E_UNIT_REPORT_DIR ?= $(CURDIR)/.agent-harness/e2e-unit
+
+.PHONY: test-e2e-unit
+test-e2e-unit: $(HARNESS_VENV_DEPS) ## Test E2E framework helpers and profiles without starting a cluster
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/ci/run_e2e_unit.py --output "$(E2E_UNIT_REPORT_DIR)"
 
 # Build the E2E test binary
 build-e2e: ## Build the E2E test binary
 	@$(LOG_TARGET)
 	@echo "Building E2E test binary..."
 	@cd e2e && go build -o ../bin/e2e ./cmd/e2e
+	@$(MAKE) e2e-coverage-check
+
+.PHONY: e2e-coverage-check
+e2e-coverage-check: ## Run the runtime-derived E2E coverage drift gates (no cluster required)
+	@$(LOG_TARGET)
+	@echo "Running E2E coverage drift gates..."
+	@cd e2e && go test -count=1 ./pkg/verification/
 
 # Run E2E tests
 test-e2e-profile-multimodal: ## Unit-test the multimodal-routing E2E profile package (CRD mirrors the pack, chart defaults kept)

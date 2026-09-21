@@ -149,7 +149,13 @@ func (decoder *anthropicStreamDecoder) decodeAnthropicWireFrame(
 			return nil, nil, err
 		}
 	}
-	return decoder.decodeEvent(wire, frame)
+	events, diagnostics, err := decoder.decodeEvent(wire, frame)
+	if err != nil {
+		return events, diagnostics, err
+	}
+	presenceDiagnostics, err := anthropicStreamStopSequenceDiagnostics(data, wire.Type, decoder.policy)
+	diagnostics = appendDiagnostics(diagnostics, presenceDiagnostics, decoder.policy.Limits.Diagnostics)
+	return events, diagnostics, err
 }
 
 func isSupportedAnthropicEvent(eventType string) bool {

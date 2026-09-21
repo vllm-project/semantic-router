@@ -31,7 +31,7 @@ func TestOutputItemReasoningJSONRoundTrip(t *testing.T) {
 
 func TestOutputItemOtherTypesKeepTheirJSONShape(t *testing.T) {
 	for _, wire := range []string{
-		`{"type":"message","id":"answer","role":"assistant","content":[{"type":"output_text","text":"Done."}],"status":"completed"}`,
+		`{"type":"message","id":"answer","role":"assistant","content":[{"type":"output_text","text":"Done.","annotations":[]}],"status":"completed"}`,
 		`{"type":"function_call","id":"tool","name":"inspect","call_id":"call","arguments":"{}"}`,
 		`{"type":"function_call_output","call_id":"call","output":"done"}`,
 	} {

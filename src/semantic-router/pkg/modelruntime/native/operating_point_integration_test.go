@@ -30,6 +30,7 @@ func TestOwnedOperatingPointSharesResourcesNotRecipePolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	metadata["problem_type"] = "multi_label_classification"
+	metadata["max_position_embeddings"] = 4
 	raw, _ = json.Marshal(metadata)
 	if err = os.WriteFile(cfgFile, raw, 0o600); err != nil {
 		t.Fatal(err)

@@ -78,34 +78,64 @@ func validateClientJSONDocument(body []byte, policy llmprotocol.Policy, requireO
 }
 
 func decodeProviderWire(body []byte, target any, policy llmprotocol.Policy) error {
-	return decodeProviderJSON(body, target, policy, true)
+	_, err := decodeProviderJSON(body, target, policy, true)
+	return err
+}
+
+func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) ([]string, error) {
+	_, dropped, err := decodeProviderJSONCanonical(body, target, policy, requireObject)
+	return dropped, err
+}
+
+// decodeProviderWireVendorAware returns the canonical body alongside any
+// extensions removed during decode.
+//
+// The canonical body matters as much as the field list. Source preservation
+// replays preserved bytes verbatim on a same-format encode, so preserving the
+// decorated upstream bytes would re-emit decorations the decode just dropped
+// and hand a non-canonical body to anything that persists it. Callers that
+// build an envelope must build it from these bytes.
+func decodeProviderWireVendorAware(body []byte, target any, policy llmprotocol.Policy) ([]byte, []string, error) {
+	return decodeProviderJSONCanonical(body, target, policy, true)
 }
 
 // decodeProviderValue is the upstream counterpart to decodeWireValue. Provider
 // response envelopes remain object-only, while their typed nested arrays and
 // scalars use this path without weakening any other JSON validation.
 func decodeProviderValue(body []byte, target any, policy llmprotocol.Policy) error {
+	_, err := decodeProviderJSON(body, target, policy, false)
+	return err
+}
+
+func decodeProviderValueVendorAware(body []byte, target any, policy llmprotocol.Policy) ([]string, error) {
 	return decodeProviderJSON(body, target, policy, false)
 }
 
-func decodeProviderJSON(body []byte, target any, policy llmprotocol.Policy, requireObject bool) error {
+func decodeProviderJSONCanonical(body []byte, target any, policy llmprotocol.Policy, requireObject bool) ([]byte, []string, error) {
 	if err := validateProviderJSONDocument(body, policy, requireObject); err != nil {
-		return err
+		return nil, nil, err
 	}
+	canonical := body
 	decoder := json.NewDecoder(bytes.NewReader(body))
+	var dropped []string
 	if rejectUnknownFields(body, policy) {
-		if err := validateExactJSONFieldNames(body, reflect.TypeOf(target)); err != nil {
-			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
+		if providerVendorExtensionsAllowed(policy) {
+			canonical, dropped = stripProviderVendorExtensions(body, reflect.TypeOf(target))
 		}
+		if err := validateExactJSONFieldNames(canonical, reflect.TypeOf(target)); err != nil {
+			// Keep field details in the private cause, not the client message.
+			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON contains a non-canonical field", err)
+		}
+		decoder = json.NewDecoder(bytes.NewReader(canonical))
 		decoder.DisallowUnknownFields()
 	}
 	if err := decoder.Decode(target); err != nil {
-		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
+		return canonical, dropped, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
 	}
 	if err := requireEOF(decoder); err != nil {
-		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
+		return canonical, dropped, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
 	}
-	return nil
+	return canonical, dropped, nil
 }
 
 func validateProviderJSONDocument(body []byte, policy llmprotocol.Policy, requireObject bool) error {

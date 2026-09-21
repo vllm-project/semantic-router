@@ -2,10 +2,14 @@ package memory
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 func TestNewRedisCache_NilConfig_ReturnsNil(t *testing.T) {
@@ -65,14 +69,16 @@ func TestRedisCache_InvalidateByUser_NilReceiver_NoPanic(t *testing.T) {
 	c.InvalidateByUser(context.Background(), "u1")
 }
 
+// StorageIntegration: redis
 func TestRedisCache_InvalidateByUser_EmptyUser_NoPanic(t *testing.T) {
 	// When Redis is not available we can't create a cache; so test only the empty user path
 	// by calling on a nil cache (already tested) or we need a real Redis. For empty user,
 	// the implementation does nothing when userID == "".
-	cacheCfg := &RedisCacheConfig{Address: "localhost:6379"}
+	storagetest.Require(t, "redis")
+	cacheCfg := &RedisCacheConfig{Address: storageRedisAddress()}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
 	cache.InvalidateByUser(context.Background(), "")
@@ -86,11 +92,13 @@ func TestRedisCache_Close_NilReceiver_NoError(t *testing.T) {
 // TestRedisCache_InvalidateByUser_DeletesTrackedKeys verifies that Set registers
 // each value key in the user's index set and that InvalidateByUser deletes every
 // tracked value key plus the index set itself (no keyspace scan).
+// StorageIntegration: redis
 func TestRedisCache_InvalidateByUser_DeletesTrackedKeys(t *testing.T) {
-	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
+	storagetest.Require(t, "redis")
+	cacheCfg := &RedisCacheConfig{Address: storageRedisAddress(), TTLSeconds: 60}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
@@ -133,11 +141,13 @@ func TestRedisCache_InvalidateByUser_DeletesTrackedKeys(t *testing.T) {
 
 // TestRedisCache_InvalidateByUser_ScopedToUser verifies that invalidating one
 // user leaves another user's cached entries intact.
+// StorageIntegration: redis
 func TestRedisCache_InvalidateByUser_ScopedToUser(t *testing.T) {
-	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
+	storagetest.Require(t, "redis")
+	cacheCfg := &RedisCacheConfig{Address: storageRedisAddress(), TTLSeconds: 60}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
@@ -159,11 +169,13 @@ func TestRedisCache_InvalidateByUser_ScopedToUser(t *testing.T) {
 	cache.InvalidateByUser(ctx, optsB.UserID) // cleanup
 }
 
+// StorageIntegration: redis
 func TestRedisCache_SetThenGet_RoundTrip(t *testing.T) {
-	cacheCfg := &RedisCacheConfig{Address: "localhost:6379", TTLSeconds: 60}
+	storagetest.Require(t, "redis")
+	cacheCfg := &RedisCacheConfig{Address: storageRedisAddress(), TTLSeconds: 60}
 	cache, err := NewRedisCache(context.Background(), cacheCfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 	}
 	defer func() { _ = cache.Close() }()
 	ctx := context.Background()
@@ -178,4 +190,82 @@ func TestRedisCache_SetThenGet_RoundTrip(t *testing.T) {
 	assert.Equal(t, "1", got[0].Memory.ID)
 	assert.Equal(t, "a", got[0].Memory.Content)
 	assert.Equal(t, float32(0.9), got[0].Score)
+}
+
+func TestCacheKeySeparatesRetrievalPolicies(t *testing.T) {
+	baseline := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
+	for _, change := range []struct {
+		name  string
+		apply func(*RetrieveOptions)
+	}{
+		{"hybrid", func(o *RetrieveOptions) { o.HybridSearch = true }},
+		{"fusion mode", func(o *RetrieveOptions) { o.HybridMode = "rrf" }},
+		{"adaptive", func(o *RetrieveOptions) { o.AdaptiveThreshold = true }},
+	} {
+		t.Run(change.name, func(t *testing.T) {
+			base := baseline
+			if change.name == "fusion mode" {
+				base.HybridSearch = true
+				base.HybridMode = "weighted"
+			}
+			other := base
+			change.apply(&other)
+			assert.NotEqual(t, cacheKey("mem:", "u1", base), cacheKey("mem:", "u1", other))
+		})
+	}
+}
+
+func TestCacheKeyNormalizesEffectiveHybridMode(t *testing.T) {
+	base := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
+	for _, hybrid := range []bool{false, true} {
+		base.HybridSearch = hybrid
+		explicit := base
+		explicit.HybridMode = "weighted"
+		assert.Equal(t, cacheKey("mem:", "u1", base), cacheKey("mem:", "u1", explicit))
+		if !hybrid {
+			explicit.HybridMode = "rrf"
+			assert.Equal(t, cacheKey("mem:", "u1", base), cacheKey("mem:", "u1", explicit))
+		}
+	}
+}
+
+func TestCacheKeyVersionedEncodingPreservesThresholdPrecision(t *testing.T) {
+	base := RetrieveOptions{Query: "coffee", UserID: "u1", Limit: 5, Threshold: 0.5}
+	key := cacheKey("mem:", "u1", base)
+	assert.Contains(t, key, "mem:v2:u1:")
+	nearby := base
+	nearby.Threshold = math.Nextafter32(base.Threshold, 1)
+	assert.NotEqual(t, key, cacheKey("mem:", "u1", nearby), "distinct score floors must not round to the same key")
+	project := base
+	project.ProjectID = "another-project"
+	assert.NotEqual(t, key, cacheKey("mem:", "u1", project))
+	types := base
+	types.Types = []MemoryType{MemoryTypeSemantic}
+	assert.NotEqual(t, key, cacheKey("mem:", "u1", types))
+	assert.NotEqual(t, key, cacheKey("mem:", "other-user", base))
+}
+
+func TestCacheKeyHybridDefaultsAgreeWithActualRerankers(t *testing.T) {
+	for name, rerank := range map[string]func([]*RetrieveResult, RetrieveOptions) []*RetrieveResult{
+		"milvus": (&MilvusStore{}).hybridRerank,
+		"valkey": (&ValkeyStore{}).hybridRerank,
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidates := func() []*RetrieveResult {
+				return []*RetrieveResult{
+					{Memory: &Memory{ID: "coffee", Content: "coffee preference"}, Score: 0.8},
+					{Memory: &Memory{ID: "tea", Content: "tea preference"}, Score: 0.4},
+				}
+			}
+			implicit := RetrieveOptions{Query: "coffee", HybridSearch: true}
+			explicit := implicit
+			explicit.HybridMode = "weighted"
+			rrf := implicit
+			rrf.HybridMode = "rrf"
+			assert.Equal(t, rerank(candidates(), implicit), rerank(candidates(), explicit))
+			assert.NotEqual(t, rerank(candidates(), implicit), rerank(candidates(), rrf))
+			assert.Equal(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", explicit))
+			assert.NotEqual(t, cacheKey("m:", "u", implicit), cacheKey("m:", "u", rrf))
+		})
+	}
 }

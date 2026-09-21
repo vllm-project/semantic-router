@@ -103,6 +103,7 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 	usage responseUsageMetrics,
 ) {
 	recordProviderPromptCacheUsage(ctx.RequestModel, usage)
+	recordSessionTurnOutcome(ctx, usage, r.sessionTurnPricing(ctx.RequestModel))
 	if usage.invalid {
 		usage = responseUsageMetrics{}
 	}
@@ -131,7 +132,7 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 
 	if usage.completionTokens > 0 {
 		timePerToken := completionLatency.Seconds() / float64(usage.completionTokens)
-		metrics.RecordModelTPOT(ctx.RequestModel, timePerToken)
+		metrics.RecordModelResponseDurationPerOutputToken(ctx.RequestModel, timePerToken)
 		logging.Debugf("Updating TPOT cache for model: %q, TPOT: %.4f", ctx.RequestModel, timePerToken)
 		latency.UpdateTPOT(ctx.RequestModel, timePerToken)
 	}
@@ -141,8 +142,6 @@ func (r *OpenAIRouter) reportNonStreamingUsage(
 		completionLatency.Seconds(),
 		int64(usage.promptTokens),
 		int64(usage.completionTokens),
-		false,
-		false,
 	)
 	replayUsage := r.recordResponseCost(ctx, completionLatency, usage)
 	r.updateRouterReplayUsageCost(ctx, replayUsage)
