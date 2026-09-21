@@ -1,3 +1,5 @@
+//go:build !riscv64
+
 package cache
 
 import (
@@ -12,8 +14,8 @@ import (
 	glide "github.com/valkey-io/valkey-glide/go/v2"
 	"github.com/valkey-io/valkey-glide/go/v2/config"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	valkeyutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/valkey"
@@ -21,6 +23,7 @@ import (
 
 // ValkeyCache provides a scalable semantic cache implementation using Valkey with vector search
 type ValkeyCache struct {
+	embeddingProvider   embedding.Provider
 	client              *glide.Client
 	searchFn            func(context.Context, []string) (any, error)
 	config              *routerconfig.ValkeyConfig
@@ -37,6 +40,7 @@ type ValkeyCache struct {
 
 // ValkeyCacheOptions contains configuration parameters for Valkey cache initialization
 type ValkeyCacheOptions struct {
+	EmbeddingProvider   embedding.Provider
 	SimilarityThreshold float32
 	TTLSeconds          int
 	Enabled             bool
@@ -110,6 +114,7 @@ func NewValkeyCache(options ValkeyCacheOptions) (*ValkeyCache, error) {
 		ttlSeconds:          options.TTLSeconds,
 		enabled:             options.Enabled,
 		embeddingModel:      embeddingModel,
+		embeddingProvider:   embedding.WithOptions(options.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(valkeyConfig.Index.VectorField.Dimension, embeddingModel), 0)),
 	}
 
 	releaseClient := func() { valkeyClient.Close() }
@@ -196,44 +201,7 @@ func (c *ValkeyCache) initializeIndex() error {
 // getEmbedding generates an embedding based on the configured embedding model.
 // Cancellation is best-effort here; see ctxErr.
 func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32, error) {
-	if err := ctxErr(ctx); err != nil {
-		return nil, err
-	}
-	modelName := c.embeddingModel
-
-	switch modelName {
-	case "qwen3":
-		// Use GetEmbeddingBatched for Qwen3 with batching support
-		output, err := candle_binding.GetEmbeddingBatched(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "gemma":
-		// Use GetEmbeddingWithModelType for Gemma
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "mmbert":
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "multimodal":
-		output, err := candle_binding.GetEmbeddingWithModelType(text, modelName, c.embeddingDimension())
-		if err != nil {
-			return nil, err
-		}
-		return output.Embedding, nil
-	case "bert":
-		// Use traditional GetEmbedding for BERT (default)
-		return candle_binding.GetEmbedding(text, 0)
-	default:
-		return nil, fmt.Errorf("unsupported embedding model: %s (must be 'bert', 'qwen3', 'gemma', 'mmbert', or 'multimodal')", c.embeddingModel)
-	}
+	return computeCacheEmbedding(ctx, c.embeddingProvider, text)
 }
 
 func (c *ValkeyCache) embeddingDimension() int {
@@ -515,7 +483,7 @@ func (c *ValkeyCache) buildKNNSearchCmd(model string, embeddingBytes []byte) []s
 
 	cmd := []string{
 		"FT.SEARCH", c.indexName, knnQuery,
-		"RETURN", "4", "vector_distance", "response_body", "timestamp", "ttl_seconds",
+		"RETURN", "5", "vector_distance", "response_body", "query", "timestamp", "ttl_seconds",
 		"DIALECT", "2",
 		"PARAMS", "2", "vec",
 	}
@@ -569,16 +537,14 @@ func (c *ValkeyCache) LookupSimilarWithThreshold(ctx context.Context, model stri
 		return LookupResult{}, nil
 	}
 
-	match := parseBestMatch(searchResult)
-	if match == nil {
-		c.recordCacheMiss("miss", time.Since(start))
-		return LookupResult{}, nil
+	if err := ctxErr(ctx); err != nil {
+		return LookupResult{}, err
 	}
-
-	similarity := float32(valkeyutil.DistanceToSimilarity(c.config.Index.VectorField.MetricType, match.distance))
-
-	if similarity < threshold {
-		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: cache miss - similarity %.4f below threshold %.4f",
+	var queryBuffer [32]string
+	queryTokens := tokenizeForPolarity(query, queryBuffer[:0])
+	match, similarity := selectValkeyPolarityMatch(searchResult, queryTokens, threshold, c.config.Index.VectorField.MetricType)
+	if match == nil {
+		logging.Debugf("ValkeyCache.FindSimilarWithThreshold: no eligible candidate at similarity %.4f and threshold %.4f",
 			similarity, threshold)
 		logging.LogEvent("cache_miss", map[string]interface{}{
 			"backend":         "valkey",

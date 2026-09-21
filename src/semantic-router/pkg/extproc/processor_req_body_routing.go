@@ -3,7 +3,6 @@ package extproc
 import (
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
@@ -14,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -64,14 +64,28 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
-	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch.targetFormat, ctx); protocolErr != nil {
+	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.logicalModel); err != nil {
+		return nil, err
+	}
+	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
+		return nil, err
+	}
+	// Selection already compared capable candidates. Late mutations may still
+	// invalidate the result, but cannot restart routing or bypass its policies.
+	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
 		return nil, protocolErr
 	}
 	ctx.TargetFormat = dispatch.targetFormat
+	// Bind response policy where the backend is selected.
+	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticRequest = request
+	// Per-model accounting keys off the validated concrete dispatch model.
+	ctx.RequestModel = dispatch.logicalModel
+
+	ctx.VSRSelectedModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
-		"model":       logicalModel,
+		"model":       dispatch.logicalModel,
 		"backend":     dispatch.backendName,
 		"wire_format": dispatch.targetFormat,
 	})
@@ -85,29 +99,53 @@ func (r *OpenAIRouter) codecCapabilitiesForFormat(format llmprotocol.WireFormat)
 	return r.ProtocolCodecs.CapabilitiesFor(format)
 }
 
-// rejectDispatchCapabilityMismatch applies the same wire-fidelity gate the
-// codec engine enforces at encode, but at dispatch time so a request whose
-// required capabilities the chosen backend wire cannot express surfaces as a
-// protocol error instead of a generic 500 from encoding. This is the first
-// slice of capability-driven dispatch: it turns "crash with 500" into "clean
-// 400 unsupported_capability" and gives future capability-aware re-routing a
-// single check point.
+// rejectDispatchCapabilityMismatch applies both wire fidelity and declared
+// model task constraints to the primary dispatch, using the same qualification
+// as fallback candidates. A wire's ability to encode a task does not establish
+// that the selected model can execute it.
 func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	request *llmprotocol.Request,
-	format llmprotocol.WireFormat,
+	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
-	available, ok := r.codecCapabilitiesForFormat(format)
-	if !ok {
-		// Unknown wire formats are rejected earlier by wireFormatForModel.
-		return nil
+	if err := r.validateDispatchRequirements(request, dispatch, ctx); err != nil {
+		return err
 	}
-	if err := llmprotocol.RequireCapabilities(format, available, llmprotocol.RequiredCapabilities(*request)); err != nil {
+	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(*request)); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
 		}
 		return err
+	}
+	return nil
+}
+
+// declaredModelCapabilities projects recognized model facts without allowing
+// descriptive catalog labels to erase their constraints. A model with no
+// recognized declaration retains the unannotated compatibility behavior.
+func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
+	if r == nil || r.Config == nil {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	params, ok := r.Config.ModelConfig[model]
+	if !ok || len(params.Capabilities) == 0 {
+		return llmprotocol.CapabilitySet{}, false
+	}
+	return llmprotocol.ModelCapabilities(params.Capabilities)
+}
+
+func (r *OpenAIRouter) providerCapabilityMismatch(model string, format llmprotocol.WireFormat, required llmprotocol.CapabilitySet) error {
+	available, ok := r.codecCapabilitiesForFormat(format)
+	if !ok {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability", fmt.Sprintf("model %q has no codec for %q", model, format), nil)
+	}
+	if err := llmprotocol.RequireCapabilities(format, available, required); err != nil {
+		return err
+	}
+	if declared, annotated := r.declaredModelCapabilities(model); annotated && !declared.Contains(required.TaskCapabilities()) {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			fmt.Sprintf("model %q does not declare the required tasks: %s", model, strings.Join(required.TaskCapabilities().Names(), ", ")), nil)
 	}
 	return nil
 }
@@ -145,15 +183,10 @@ func (r *OpenAIRouter) prepareProviderRequest(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) (bool, error) {
-	changed, err := r.materializeResponseObjectContext(request, ctx)
+	changed, err := r.prepareModelInput(request, ctx)
 	if err != nil {
 		return false, err
 	}
-	inlined, err := r.resolveImageFileReferences(request)
-	if err != nil {
-		return false, err
-	}
-	changed = inlined || changed
 	changed = request.Model != dispatch.upstreamModel || request.Stream != ctx.ExpectStreamingResponse || changed
 	request.Model = dispatch.upstreamModel
 	request.Stream = ctx.ExpectStreamingResponse
@@ -177,7 +210,7 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	changed := false
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 		changed = r.applySemanticReasoningMode(
-			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
+			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.decisionForCandidate(dispatch.logicalModel),
 		)
 	}
 	injected, err := r.addSemanticSystemPromptIfConfigured(
@@ -206,6 +239,8 @@ func wireFormatForModel(apiFormat string) (llmprotocol.WireFormat, error) {
 		return llmprotocol.AnthropicMessagesV1, nil
 	case config.APIFormatResponses, "openai.responses", string(llmprotocol.OpenAIResponsesV1):
 		return llmprotocol.OpenAIResponsesV1, nil
+	case config.APIFormatImages, "openai.images", string(llmprotocol.OpenAIImagesV1):
+		return llmprotocol.OpenAIImagesV1, nil
 	default:
 		return "", fmt.Errorf("unsupported API format %q", apiFormat)
 	}
@@ -225,16 +260,21 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 		removeHeaders: []string{"content-length"},
 		profile:       dispatch.profile,
 	}
+	// Provider metadata is applied before credentials so an operator-supplied
+	// extra header can never replace the credential selected for this request.
+	appendProfileHeaders(&state.setHeaders, dispatch.profile)
 	if errorResponse := r.appendProviderCredential(
 		state, dispatch.logicalModel, dispatch.backendName, ctx,
 	); errorResponse != nil {
 		return errorResponse
 	}
-	appendProfileHeaders(&state.setHeaders, dispatch.profile)
 	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
-	return buildRequestBodyContinueResponse(state, nil, false)
+	// Body-stage model and path mutations can change the Envoy route selected
+	// during headers. Apply the same cache policy to every provider dispatch,
+	// including internal multi-model calls and unchanged logical model names.
+	return buildRequestBodyContinueResponse(state, nil, r.shouldClearRouteCache())
 }
 
 // finalizeProviderDispatchResponse serializes the request only after every
@@ -248,15 +288,35 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if dispatch == nil || response == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch is unavailable")
 	}
+	if err := selectionRequestContext(ctx).Err(); err != nil {
+		return nil, err
+	}
+	if response.GetImmediateResponse() != nil {
+		return response, nil
+	}
+	if ctx != nil && ctx.SemanticRequest != nil {
+		if err := r.prepareAutomaticDispatch(ctx, ctx.SemanticRequest, dispatch); err != nil {
+			return nil, err
+		}
+		if err := r.rejectDispatchCapabilityMismatch(ctx.SemanticRequest, dispatch, ctx); err != nil {
+			return nil, err
+		}
+	}
+	captureRequestDemand(
+		ctx,
+		requestDemandStageProviderBound,
+		ctx.SemanticRequest,
+		dispatch.logicalModel,
+	)
 	body, err := r.encodeDispatchRequest(ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
-		return nil, status.Errorf(codes.Internal, "encode provider request: %v", err)
+		return nil, dispatchWireError(err, ctx, "encode provider request")
 	}
 	body, err = r.adaptProviderRequest(body, dispatch, ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "provider_adapter_error")
-		return nil, status.Errorf(codes.Internal, "adapt provider request: %v", err)
+		return nil, dispatchWireError(err, ctx, "adapt provider request")
 	}
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
@@ -269,6 +329,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	common.BodyMutation = &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{Body: body},
 	}
+	if err := commitAgenticSessionDecision(ctx); err != nil {
+		return nil, err
+	}
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_encoded", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -276,6 +339,28 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		"body_bytes":  len(body),
 	})
 	return response, nil
+}
+
+// processBodyRoutingError answers every ProtocolError it recognizes with HTTP
+// 400, so only client-owned categories may reach it unwrapped. status.Errorf
+// formats with Sprintf, which flattens the error and hides it from errors.As,
+// keeping server-owned categories on the internal path where they belong.
+func dispatchWireError(err error, ctx *RequestContext, reason string) error {
+	var protocolError *llmprotocol.ProtocolError
+	if errors.As(err, &protocolError) && isClientProtocolError(protocolError.Category) {
+		if ctx != nil {
+			ctx.ImmediateProtocolError = protocolError
+		}
+		return err
+	}
+	return status.Errorf(codes.Internal, "%s: %v", reason, err)
+}
+
+// Categories a caller can fix by changing the request. Everything else,
+// including ErrorInternal and the upstream categories, is a server fault.
+func isClientProtocolError(category llmprotocol.ErrorCategory) bool {
+	return category == llmprotocol.ErrorInvalidRequest ||
+		category == llmprotocol.ErrorUnsupportedFeature
 }
 
 func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
@@ -286,7 +371,6 @@ func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
 	spanContext, upstreamSpan := tracing.StartSpan(
 		ctx.TraceContext, tracing.SpanUpstreamRequest, trace.WithSpanKind(trace.SpanKindClient),
 	)
-	ctx.TraceContext = spanContext
 	ctx.UpstreamSpan = upstreamSpan
 	tracing.SetSpanAttributes(upstreamSpan,
 		attribute.String(tracing.AttrModelName, model),
@@ -302,19 +386,21 @@ func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
 	return result
 }
 
-func resolveProviderAuth(profile *config.ProviderProfile) (authz.LLMProvider, string, string, error) {
+func resolveProviderAuth(profile *config.ProviderProfile) (authz.LLMProvider, modelcatalog.ProviderAuth, error) {
 	if profile == nil {
-		return authz.ProviderOpenAI, "Authorization", "Bearer", nil
+		return authz.ProviderOpenAI, modelcatalog.ProviderAuth{
+			Strategy: "bearer", Header: "Authorization", Prefix: "Bearer",
+		}, nil
 	}
 	providerType, err := profile.ProviderType()
 	if err != nil {
-		return "", "", "", fmt.Errorf("resolve provider auth: %w", err)
+		return "", modelcatalog.ProviderAuth{}, fmt.Errorf("resolve provider auth: %w", err)
 	}
-	header, prefix, err := profile.ResolveAuthHeader()
+	providerAuth, err := profile.ResolveAuth()
 	if err != nil {
-		return "", "", "", fmt.Errorf("resolve provider auth header: %w", err)
+		return "", modelcatalog.ProviderAuth{}, fmt.Errorf("resolve provider auth header: %w", err)
 	}
-	return authz.LLMProvider(providerType), header, prefix, nil
+	return authz.LLMProvider(providerType), providerAuth, nil
 }
 
 func (r *OpenAIRouter) appendProviderCredential(
@@ -323,13 +409,20 @@ func (r *OpenAIRouter) appendProviderCredential(
 	backendName string,
 	ctx *RequestContext,
 ) *ext_proc.ProcessingResponse {
-	provider, authHeader, authPrefix, err := resolveProviderAuth(state.profile)
+	provider, providerAuth, err := resolveProviderAuth(state.profile)
 	if err != nil {
 		return r.createErrorResponse(500, "Internal routing error. Contact your administrator.")
+	}
+	if providerAuth.Strategy == "none" {
+		if r.CredentialResolver != nil {
+			state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
+		}
+		return nil
 	}
 	if r.CredentialResolver == nil {
 		return r.createErrorResponse(500, "Provider credentials are unavailable.")
 	}
+	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	accessKey, err := r.CredentialResolver.KeyForProvider(provider, model, ctx.Headers)
 	if err != nil {
 		logging.ComponentErrorEvent("extproc", "credential_resolution_failed", map[string]interface{}{
@@ -337,17 +430,14 @@ func (r *OpenAIRouter) appendProviderCredential(
 		})
 		return r.createErrorResponse(401, "Authentication failed. Check your API key configuration.")
 	}
-	state.removeHeaders = append(state.removeHeaders, r.CredentialResolver.HeadersToStrip()...)
 	if accessKey == "" {
 		return nil
 	}
 	value := accessKey
-	if authPrefix != "" {
-		value = authPrefix + " " + accessKey
+	if providerAuth.Prefix != "" {
+		value = providerAuth.Prefix + " " + accessKey
 	}
-	state.setHeaders = append(state.setHeaders, &core.HeaderValueOption{Header: &core.HeaderValue{
-		Key: authHeader, RawValue: []byte(value),
-	}})
+	state.setHeaders = append(state.setHeaders, overwriteRequestHeader(providerAuth.Header, value))
 	return nil
 }
 
@@ -356,9 +446,14 @@ func appendProfileHeaders(headersOut *[]*core.HeaderValueOption, profile *config
 		return
 	}
 	for key, value := range profile.ExtraHeaders {
-		*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
-			Key: key, RawValue: []byte(value),
-		}})
+		*headersOut = append(*headersOut, overwriteRequestHeader(key, value))
+	}
+}
+
+func overwriteRequestHeader(key, value string) *core.HeaderValueOption {
+	return &core.HeaderValueOption{
+		Header:       &core.HeaderValue{Key: key, RawValue: []byte(value)},
+		AppendAction: core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD,
 	}
 }
 
@@ -368,35 +463,14 @@ func setProviderRequestPath(
 	format llmprotocol.WireFormat,
 ) {
 	requestPath := requestWirePath(format)
-	if profile != nil && format == llmprotocol.OpenAIChatV1 {
-		if configured, err := profile.ResolveChatPath(); err == nil && configured != "" {
+	if profile != nil {
+		if configured, err := profile.ResolveCreatePath(requestWireProtocol(format)); err == nil && configured != "" {
 			requestPath = configured
 		}
-	} else if profile != nil {
-		requestPath = providerProtocolPath(profile.BaseURL, requestPath)
 	}
 	*headersOut = append(*headersOut, &core.HeaderValueOption{Header: &core.HeaderValue{
 		Key: ":path", RawValue: []byte(requestPath),
 	}})
-}
-
-// providerProtocolPath preserves a provider's base path while allowing the
-// selected model protocol to own the endpoint suffix. ChatPath remains a
-// chat-completions override and must not redirect Responses or Messages
-// dispatches back to the chat endpoint.
-func providerProtocolPath(baseURL, protocolPath string) string {
-	parsed, err := url.Parse(baseURL)
-	if err != nil {
-		return protocolPath
-	}
-	basePath := strings.TrimRight(parsed.Path, "/")
-	if basePath == "" || basePath == "/" || strings.HasPrefix(protocolPath, basePath+"/") {
-		return protocolPath
-	}
-	if strings.HasSuffix(basePath, "/v1") && strings.HasPrefix(protocolPath, "/v1/") {
-		return basePath + strings.TrimPrefix(protocolPath, "/v1")
-	}
-	return basePath + protocolPath
 }
 
 func appendRoutingHeaders(headersOut *[]*core.HeaderValueOption, model string) {

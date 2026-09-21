@@ -16,15 +16,22 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 	decision *config.Decision,
 	modelName string,
 ) (bool, string) {
+	if decision == nil {
+		return false, ""
+	}
 	for _, ref := range decision.ModelRefs {
-		if ref.Model == modelName || ref.LoRAName == modelName {
+		matchesModel := ref.Model == modelName
+		if r.Config != nil {
+			matchesModel = r.Config.ModelNameMatches(ref.Model, modelName)
+		}
+		if matchesModel || ref.LoRAName == modelName {
 			if ref.UseReasoning == nil {
 				break
 			}
 
-			reasoningEffort := ref.ReasoningEffort
-			if reasoningEffort == "" {
-				reasoningEffort = "medium"
+			reasoningEffort := ""
+			if *ref.UseReasoning {
+				reasoningEffort = r.getReasoningEffort(decision, modelName)
 			}
 			logging.ComponentDebugEvent("extproc", "looper_reasoning_config_found", map[string]interface{}{
 				"model":             modelName,
@@ -45,10 +52,7 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 		return false, ""
 	}
 
-	reasoningEffort := "medium"
-	if r.Config.DefaultReasoningEffort != "" {
-		reasoningEffort = r.Config.DefaultReasoningEffort
-	}
+	reasoningEffort := r.getReasoningEffort(decision, modelName)
 	logging.ComponentDebugEvent("extproc", "looper_reasoning_config_found", map[string]interface{}{
 		"model":            modelName,
 		"source":           "model_params",
@@ -95,12 +99,18 @@ func (r *OpenAIRouter) modifyRequestBodyForLooper(
 // same provider boundary as ordinary requests.
 func (r *OpenAIRouter) buildLooperBackendDispatchResponse(
 	modelName string,
+	decisionName string,
+	useReasoning bool,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
 	dispatch, err := r.prepareProviderDispatch(ctx.SemanticRequest, modelName, "", false, ctx)
 	if err != nil {
 		return nil, err
 	}
+	// Semantic decision mutations already ran for this hop. Keep their stage
+	// controls for final provider adaptation without inserting the prompt again.
+	dispatch.decisionName = decisionName
+	dispatch.useReasoning = useReasoning
 	response := r.buildProviderDispatchResponse(dispatch, ctx)
 	common := response.GetRequestBody().GetResponse()
 	if common == nil {
@@ -134,7 +144,7 @@ func (r *OpenAIRouter) handleLooperInternalRequest(
 	ctx.SemanticRequest.Generation++
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
-	return r.buildLooperBackendDispatchResponse(modelName, ctx)
+	return r.buildLooperBackendDispatchResponse(modelName, "", false, ctx)
 }
 
 // handleLooperInternalRequestWithPlugins handles looper internal requests with plugin execution.
@@ -186,7 +196,7 @@ func (r *OpenAIRouter) handleLooperInternalRequestWithPlugins(
 	}
 
 	r.startLooperInternalReplay(ctx, modelName, decisionName)
-	return r.buildLooperBackendDispatchResponse(modelName, ctx)
+	return r.buildLooperBackendDispatchResponse(modelName, decisionName, useReasoning, ctx)
 }
 
 func (r *OpenAIRouter) resolveLooperDecision(
@@ -236,7 +246,7 @@ func (r *OpenAIRouter) prepareLooperInternalContext(
 	ctx.VSRSelectedModel = modelName
 	ctx.RequestModel = modelName
 
-	if replayCfg := r.Config.EffectiveRouterReplayConfig(decision); replayCfg != nil {
+	if replayCfg := r.effectiveReplayConfigForRequest(ctx, decision); replayCfg != nil {
 		cfgCopy := *replayCfg
 		ctx.RouterReplayPluginConfig = &cfgCopy
 		logging.ComponentDebugEvent("extproc", "looper_router_replay_enabled", map[string]interface{}{

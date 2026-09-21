@@ -553,7 +553,7 @@ export default function Home(): JSX.Element {
           }}
         />
       </Head>
-      <main className={styles.page} data-theme="dark">
+      <main className={styles.page}>
         <SemanticTerrainHero />
 
         <div className={styles.bandGraphite}>

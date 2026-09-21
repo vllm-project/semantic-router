@@ -7,6 +7,8 @@ import (
 )
 
 var admissionDeploymentKeys = map[string]bool{
+	"safety":                  true,
+	"hazard":                  true,
 	"prompt_guard":            true,
 	"domain_classifier":       true,
 	"pii_classifier":          true,
@@ -18,7 +20,8 @@ var admissionDeploymentKeys = map[string]bool{
 
 func validateModelAdmissionContracts(cfg *RouterConfig) error {
 	for key, admission := range cfg.ModelAdmission {
-		if !admissionDeploymentKeys[key] {
+		_, declared := cfg.ModelDeployments[key]
+		if !admissionDeploymentKeys[key] && !declared {
 			return fmt.Errorf(
 				"global.model_catalog.admission: unknown deployment %q; supported deployments: %s",
 				key,

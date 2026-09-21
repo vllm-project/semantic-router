@@ -1,0 +1,42 @@
+seed: 42
+output_dir: ${MM_EMBED_LARGE_OUTPUT_DIR}
+
+model:
+  text_encoder_name: llm-semantic-router/mmbert-embed-32k-2d-matryoshka
+  image_encoder_name: google/siglip2-so400m-patch14-384
+  audio_encoder_name: openai/whisper-medium
+  embedding_dim: 768
+  max_text_length: 32768
+
+training:
+  epochs: 10
+  batch_size: 12
+  grad_accum_steps: 8
+  num_workers: 4
+  prefetch_factor: 4
+  shard_prefetch: 2
+  shard_cache_limit: 4
+  sequential_shard_loading: true
+  shuffle: false
+  modality_homogeneous_batches: false
+  learning_rate: 1.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  max_grad_norm: 1.0
+  mixed_precision: bf16
+  log_every: 10
+  save_every: 2000
+  hard_negative_ratio: 0.5
+
+loss:
+  type: cached_mnrl
+  scale: 20.0
+
+data:
+  cache_dir: ${MM_EMBED_LARGE_TRAIN_CACHE}
+
+validation:
+  cache_dir: ${MM_EMBED_LARGE_VAL_CACHE}
+  num_workers: 2
+  shard_prefetch: 1
+  shard_cache_limit: 2

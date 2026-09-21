@@ -10,7 +10,8 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
 const (
@@ -22,7 +23,7 @@ const (
 type ModelDiscoveryRequest struct {
 	BaseURL  string `json:"baseUrl"`
 	APIKey   string `json:"apiKey"`
-	AuthMode string `json:"authMode"`
+	Provider string `json:"provider"`
 }
 
 type ModelDiscoveryResponse struct {
@@ -33,13 +34,7 @@ type ModelDiscoveryResponse struct {
 // read-only model inventory and returns identifiers that can be compiled into
 // providers.models. Neither credentials nor provider state are retained here.
 func ModelDiscoveryHandler(client *http.Client) http.HandlerFunc {
-	if client == nil {
-		client = &http.Client{Timeout: 12 * time.Second}
-	}
-	discoveryClient := *client
-	discoveryClient.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
+	discoveryClient := secureModelDiscoveryClient(client)
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		if r.URL.Path != modelDiscoveryPath {
@@ -59,19 +54,30 @@ func ModelDiscoveryHandler(client *http.Client) http.HandlerFunc {
 			writeModelDiscoveryError(w, http.StatusBadRequest, "Check the connection details.")
 			return
 		}
-		endpoint, err := modelInventoryURL(input.BaseURL)
+		registry, err := modelcatalog.BuiltIn()
+		if err != nil {
+			writeModelDiscoveryError(w, http.StatusInternalServerError, "The built-in provider catalog is unavailable.")
+			return
+		}
+		provider, ok := registry.Provider(strings.TrimSpace(input.Provider))
+		if !ok {
+			writeModelDiscoveryError(w, http.StatusBadRequest, "Choose a supported provider.")
+			return
+		}
+		target, err := modelInventoryTarget(input.BaseURL, registry, provider)
 		if err != nil {
 			writeModelDiscoveryError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		request, err := http.NewRequestWithContext(r.Context(), http.MethodGet, endpoint, nil)
+		requestContext := withModelDiscoveryNetworkPolicy(r.Context(), target.policy)
+		request, err := http.NewRequestWithContext(requestContext, http.MethodGet, target.url, nil)
 		if err != nil {
 			writeModelDiscoveryError(w, http.StatusBadRequest, "The provider URL is invalid.")
 			return
 		}
 		request.Header.Set("Accept", "application/json")
-		applyModelDiscoveryAuth(request, strings.TrimSpace(input.AuthMode), strings.TrimSpace(input.APIKey))
+		applyModelDiscoveryHeaders(request, provider, strings.TrimSpace(input.APIKey))
 
 		response, err := discoveryClient.Do(request)
 		if err != nil {
@@ -99,38 +105,49 @@ func ModelDiscoveryHandler(client *http.Client) http.HandlerFunc {
 	}
 }
 
-func modelInventoryURL(raw string) (string, error) {
+func modelInventoryTarget(raw string, registry *modelcatalog.Registry, provider modelcatalog.ProviderDefinition) (modelDiscoveryTarget, error) {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return "", errors.New("enter a complete HTTP or HTTPS base URL")
+		return modelDiscoveryTarget{}, errors.New("enter a complete HTTP or HTTPS base URL")
 	}
 	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return "", errors.New("the base URL cannot contain credentials, query parameters, or a fragment")
+		return modelDiscoveryTarget{}, errors.New("the base URL cannot contain credentials, query parameters, or a fragment")
 	}
-	cleanPath := strings.TrimSuffix(parsed.Path, "/")
-	if !strings.HasSuffix(cleanPath, "/models") {
-		parsed.Path = path.Join(cleanPath, "models")
+	operationPath, err := registry.ResolveOperationPath(provider.ID, provider.DefaultProtocol, "list_models", parsed.Path)
+	if err != nil {
+		return modelDiscoveryTarget{}, errors.New("this provider does not declare model discovery support")
 	}
-	return parsed.String(), nil
+	policy, err := modelDiscoveryNetworkPolicyForProvider(parsed, provider)
+	if err != nil {
+		return modelDiscoveryTarget{}, err
+	}
+	parsed.Path = path.Clean(operationPath)
+	parsed.RawPath = ""
+	return modelDiscoveryTarget{url: parsed.String(), policy: policy}, nil
 }
 
-func applyModelDiscoveryAuth(request *http.Request, mode, apiKey string) {
-	if apiKey == "" {
+func applyModelDiscoveryHeaders(request *http.Request, provider modelcatalog.ProviderDefinition, apiKey string) {
+	for header, value := range provider.DefaultHeaders {
+		request.Header.Set(header, value)
+	}
+	if apiKey == "" || provider.Auth.Strategy == "none" {
 		return
 	}
-	switch mode {
-	case "anthropic":
-		request.Header.Set("x-api-key", apiKey)
-		request.Header.Set("anthropic-version", "2023-06-01")
-	default:
-		request.Header.Set("Authorization", "Bearer "+apiKey)
+	value := apiKey
+	if prefix := strings.TrimSpace(provider.Auth.Prefix); prefix != "" {
+		value = prefix + " " + apiKey
 	}
+	request.Header.Set(provider.Auth.Header, value)
 }
 
 func decodeProviderModelIDs(body []byte) ([]string, error) {
+	type modelListItem struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
 	var payload struct {
-		Data   []map[string]any `json:"data"`
-		Models []map[string]any `json:"models"`
+		Data   []modelListItem `json:"data"`
+		Models []modelListItem `json:"models"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, errors.New("the provider returned an invalid model list")
@@ -141,13 +158,12 @@ func decodeProviderModelIDs(body []byte) ([]string, error) {
 	}
 	unique := make(map[string]struct{}, len(items))
 	for _, item := range items {
-		for _, field := range []string{"id", "name"} {
-			value, ok := item[field].(string)
-			value = strings.TrimSpace(value)
-			if ok && value != "" {
-				unique[strings.TrimPrefix(value, "models/")] = struct{}{}
-				break
-			}
+		value := strings.TrimSpace(item.ID)
+		if value == "" {
+			value = strings.TrimSpace(item.Name)
+		}
+		if value != "" {
+			unique[strings.TrimPrefix(value, "models/")] = struct{}{}
 		}
 	}
 	if len(unique) == 0 {

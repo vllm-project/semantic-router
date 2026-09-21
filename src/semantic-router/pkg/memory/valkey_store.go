@@ -1,3 +1,5 @@
+//go:build !riscv64
+
 package memory
 
 import (
@@ -199,6 +201,9 @@ func (v *ValkeyStore) hashKey(id string) string {
 // Store saves a new memory to Valkey.
 // Generates embedding for the content and inserts as a HASH key.
 func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	startTime := time.Now()
 	backend := "valkey"
 	operation := "store"
@@ -227,7 +232,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 		embedding = memory.Embedding
 	} else {
 		var err error
-		embedding, err = GenerateEmbedding(memory.Content, v.embeddingConfig)
+		embedding, err = embedForWrite(ctx, memory.Content, v.embeddingConfig)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)
@@ -380,7 +385,7 @@ func (v *ValkeyStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*Re
 	logging.Debugf("ValkeyStore.Retrieve: query=%s, user_id='%s', limit=%d, threshold=%.4f, hybrid=%v (mode=%s)",
 		logging.ContentDescriptor(opts.Query), opts.UserID, limit, threshold, opts.HybridSearch, opts.HybridMode)
 
-	embedding, err := GenerateEmbedding(opts.Query, v.embeddingConfig)
+	embedding, err := GenerateEmbeddingWithContext(ctx, opts.Query, v.embeddingConfig)
 	if err != nil {
 		status = "error"
 		return nil, fmt.Errorf("failed to generate embedding: %w", err)

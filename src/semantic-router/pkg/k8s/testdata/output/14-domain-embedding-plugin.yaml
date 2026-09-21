@@ -1,18 +1,8 @@
 version: v0.3
 providers:
   defaults:
-    default_model: gpt-4o-mini
-    reasoning_families:
-      deepseek:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: high
+    model: gpt-4o-mini
+    reasoning_effort: high
   models:
     - name: gpt-4o-mini
       pricing:
@@ -130,8 +120,6 @@ global:
       metrics:
         windowed_metrics:
           enabled: false
-          model_metrics: false
-          queue_depth_estimation: false
       profiling:
         enabled: false
     authz: {}
@@ -139,11 +127,13 @@ global:
     management_api: {}
     router_replay:
       enabled: false
+      ttl_seconds: 0
     startup_status:
       store_backend: ""
   stores:
     response_cache:
       enabled: false
+      ttl_seconds: 0
     memory: {}
   integrations:
     tools:
@@ -175,6 +165,11 @@ global:
       domain_classifier: models/mmbert32k-intent-classifier-merged
       pii_classifier: models/mmbert32k-pii-detector-merged
     modules:
+      safety:
+        safety:
+          use_cpu: false
+        hazard:
+          use_cpu: false
       prompt_compression:
         enabled: false
         max_tokens: 0
@@ -217,6 +212,7 @@ global:
           model_id: ""
           threshold: 0
           use_cpu: false
+          enable_nli_filtering: false
         explainer:
           model_id: ""
           threshold: 0

@@ -8,11 +8,13 @@
   border-bottom: 1px solid var(--site-border);
 }
 
+/* Uncapped, matching .site-section-intro. --measure is 72ch against this
+ * container's own 1rem font — ~658px, which wrapped ledes two thirds across
+ * the frame. */
 .text {
   display: grid;
   gap: var(--space-2);
   min-width: 0;
-  max-width: var(--measure);
 }
 
 .eyebrow {
@@ -34,17 +36,15 @@
   text-wrap: balance;
 }
 
-/*
- * Wraps rather than shrinks. The blog subtitle previously combined
- * `white-space: nowrap` with `clamp(0.7rem, …)`, so on a narrow laptop it
- * stayed on one line by dropping to 11px.
- */
+/* Wraps rather than shrinks: this once paired `white-space: nowrap` with a
+ * clamped size, so narrow laptops held one line by dropping to 11px.
+ * `balance` over `pretty` — pretty only rescues a single-word last line. */
 .description {
   margin: 0;
   color: var(--site-muted);
   font-size: var(--text-base);
   line-height: 1.6;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .actions {

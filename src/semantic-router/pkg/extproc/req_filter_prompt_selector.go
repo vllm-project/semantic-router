@@ -19,7 +19,7 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 	for model, params := range r.Config.ModelConfig {
 		descriptions[model] = params.Description
 	}
-	client := looper.NewClient(&r.Config.Looper)
+	client := r.looperModelClient()
 
 	invoke := func(
 		ctx context.Context,
@@ -69,14 +69,14 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 		if err != nil {
 			return selection.PromptInvocationResult{}, err
 		}
-		response, err := client.CallModel(
+		response, err := client.CallModelWithOptions(
 			callCtx,
-			openAIRequest,
-			model,
-			false,
-			1,
-			nil,
-			r.Config.GetModelAccessKey(model),
+			*openAIRequest,
+			looper.ModelTarget{
+				Name:      model,
+				AccessKey: r.Config.GetModelAccessKey(model),
+			},
+			looper.CallOptions{Iteration: 1},
 		)
 		if err != nil {
 			return selection.PromptInvocationResult{}, err

@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,12 +14,7 @@ import (
 	"time"
 )
 
-const (
-	modelCatalogTimeout        = 10 * time.Second
-	maxModelCatalogOutputBytes = 4 << 20
-)
-
-var errModelCatalogOutputTooLarge = errors.New("model catalog output exceeded the size limit")
+const modelCatalogTimeout = 30 * time.Second
 
 // ModelCatalogSource supplies the canonical JSON emitted from the packaged
 // model assets. Keeping this seam injectable lets the Dashboard consume the
@@ -63,29 +57,38 @@ func (source *packagedModelCatalogSource) Load(ctx context.Context) ([]byte, err
 	// contaminated by a process working directory containing config.yaml.
 	command.Dir = workingDirectory
 	command.Env = append(os.Environ(), "PYTHONUNBUFFERED=1")
-	stdout := &boundedCatalogBuffer{limit: maxModelCatalogOutputBytes}
-	stderr := &boundedCatalogBuffer{limit: maxModelCatalogOutputBytes}
-	command.Stdout = stdout
-	command.Stderr = stderr
-	if err := command.Run(); err != nil {
+
+	// Spool the generated snapshot directly to disk. Catalog size grows with
+	// every model, evaluation, and reasoning effort, so a fixed stdout buffer is
+	// not a valid contract boundary. The service validates and compacts this
+	// document before caching it in memory.
+	output, err := os.CreateTemp("", "vllm-sr-model-catalog-output-*.json")
+	if err != nil {
+		return nil, errors.New("model catalog output is unavailable")
+	}
+	defer func() {
+		_ = output.Close()
+		_ = os.Remove(output.Name())
+	}()
+	command.Stdout = output
+	// Exporter diagnostics are intentionally not exposed through the API. Do not
+	// retain an unbounded stderr payload containing installation details.
+	command.Stderr = io.Discard
+	if runErr := command.Run(); runErr != nil {
+		_ = output.Close()
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			return nil, errors.New("model catalog command timed out")
 		}
-		return nil, fmt.Errorf("model catalog command failed: %w", err)
+		return nil, fmt.Errorf("model catalog command failed: %w", runErr)
 	}
-	return stdout.Bytes(), nil
-}
-
-type boundedCatalogBuffer struct {
-	bytes.Buffer
-	limit int
-}
-
-func (buffer *boundedCatalogBuffer) Write(value []byte) (int, error) {
-	if len(value) > buffer.limit-buffer.Len() {
-		return 0, errModelCatalogOutputTooLarge
+	if closeErr := output.Close(); closeErr != nil {
+		return nil, errors.New("model catalog output could not be finalized")
 	}
-	return buffer.Buffer.Write(value)
+	payload, err := os.ReadFile(output.Name())
+	if err != nil {
+		return nil, errors.New("model catalog output could not be read")
+	}
+	return payload, nil
 }
 
 type modelCatalogService struct {
@@ -159,133 +162,6 @@ func ModelCatalogHandler(source ModelCatalogSource) http.HandlerFunc {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(payload)
 	}
-}
-
-var errInvalidModelCatalogContract = errors.New("invalid model catalog contract")
-
-type modelCatalogEnvelope struct {
-	Catalogs   []modelCatalogHeader      `json:"catalogs"`
-	Models     []modelCatalogModelHeader `json:"models"`
-	Configured json.RawMessage           `json:"configured,omitempty"`
-}
-
-type modelCatalogHeader struct {
-	CatalogVersion string   `json:"catalog_version"`
-	Channel        string   `json:"channel"`
-	DefaultModel   string   `json:"default_model"`
-	EnabledModels  []string `json:"enabled_models"`
-}
-
-type modelCatalogModelHeader struct {
-	ID                  string                 `json:"id"`
-	DisplayName         string                 `json:"display_name"`
-	Description         string                 `json:"description"`
-	Kind                string                 `json:"kind"`
-	Family              string                 `json:"family"`
-	Generation          int                    `json:"generation"`
-	PolicyVersion       string                 `json:"policy_version"`
-	Entrypoint          string                 `json:"entrypoint"`
-	Recipe              string                 `json:"recipe"`
-	CatalogVersion      string                 `json:"catalog_version"`
-	Channel             string                 `json:"channel"`
-	Compatible          *bool                  `json:"compatible"`
-	CompatibilityReason string                 `json:"compatibility_reason"`
-	EnabledByDefault    *bool                  `json:"enabled_by_default"`
-	Default             *bool                  `json:"default"`
-	Verification        modelVerificationHead  `json:"verification"`
-	Protocols           []string               `json:"protocols"`
-	Traits              []string               `json:"traits"`
-	Roles               []modelCatalogRoleHead `json:"roles"`
-}
-
-type modelVerificationHead struct {
-	Status      string `json:"status"`
-	Authority   string `json:"authority"`
-	AssetSHA256 string `json:"asset_sha256"`
-}
-
-type modelCatalogRoleHead struct {
-	Name              string   `json:"name"`
-	Required          *bool    `json:"required"`
-	MinimumCandidates int      `json:"minimum_candidates"`
-	Traits            []string `json:"traits"`
-	RecommendedPool   []string `json:"recommended_pool"`
-}
-
-func normalizeModelCatalogDocument(raw []byte) ([]byte, error) {
-	var envelope modelCatalogEnvelope
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&envelope); err != nil {
-		return nil, fmt.Errorf("%w: invalid JSON", errInvalidModelCatalogContract)
-	}
-	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return nil, fmt.Errorf("%w: trailing JSON", errInvalidModelCatalogContract)
-	}
-	if len(envelope.Catalogs) == 0 || len(envelope.Models) == 0 {
-		return nil, fmt.Errorf("%w: empty catalog inventory", errInvalidModelCatalogContract)
-	}
-	for _, catalog := range envelope.Catalogs {
-		if catalog.CatalogVersion == "" ||
-			(catalog.Channel != "latest" && catalog.Channel != "release") ||
-			catalog.DefaultModel == "" ||
-			len(catalog.EnabledModels) == 0 {
-			return nil, fmt.Errorf("%w: malformed catalog version", errInvalidModelCatalogContract)
-		}
-	}
-	for _, model := range envelope.Models {
-		if model.ID == "" ||
-			model.DisplayName == "" ||
-			model.Description == "" ||
-			model.Kind != "virtual" ||
-			model.Family == "" ||
-			model.Generation < 1 ||
-			model.PolicyVersion == "" ||
-			model.Entrypoint == "" ||
-			model.Recipe == "" ||
-			model.CatalogVersion == "" ||
-			(model.Channel != "latest" && model.Channel != "release") ||
-			model.Compatible == nil ||
-			model.CompatibilityReason == "" ||
-			model.EnabledByDefault == nil ||
-			model.Default == nil ||
-			model.Verification.Status != "verified" ||
-			model.Verification.Authority == "" ||
-			!validModelCatalogDigest(model.Verification.AssetSHA256) ||
-			len(model.Protocols) == 0 ||
-			len(model.Traits) == 0 ||
-			!validModelCatalogRoles(model.Roles) {
-			return nil, fmt.Errorf("%w: malformed model metadata", errInvalidModelCatalogContract)
-		}
-	}
-	// `configured` is interactive local-config state owned by the CLI. Never
-	// expose it through Dashboard; marshal only the validated catalog DTOs.
-	envelope.Configured = nil
-	return json.Marshal(envelope)
-}
-
-func validModelCatalogDigest(value string) bool {
-	if len(value) != len("sha256:")+64 || !strings.HasPrefix(value, "sha256:") {
-		return false
-	}
-	for _, character := range value[len("sha256:"):] {
-		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
-			return false
-		}
-	}
-	return true
-}
-
-func validModelCatalogRoles(roles []modelCatalogRoleHead) bool {
-	if len(roles) == 0 {
-		return false
-	}
-	for _, role := range roles {
-		if role.Name == "" || role.Required == nil || role.MinimumCandidates < 1 || len(role.Traits) == 0 || len(role.RecommendedPool) == 0 {
-			return false
-		}
-	}
-	return true
 }
 
 func writeModelCatalogError(w http.ResponseWriter, status int, code, message string) {

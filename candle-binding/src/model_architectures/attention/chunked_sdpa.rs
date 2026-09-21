@@ -24,6 +24,8 @@ use candle_core::{DType, Device, Tensor, D};
 /// memory/throughput trade-off; short inputs fit in a single block.
 pub const ATTN_QUERY_BLOCK: usize = 512;
 
+pub const ATTN_KEY_BLOCK: usize = 512;
+
 /// Configuration for [`chunked_sdpa`].
 pub struct ChunkedSdpaConfig {
     /// Query block size. `0` means "no chunking" (a single block over the whole
@@ -35,21 +37,28 @@ pub struct ChunkedSdpaConfig {
     pub window: Option<usize>,
     /// Decoder causal masking: when `true`, a query at absolute index `i` attends
     /// only to keys `j <= i`. Composes with `window` (intersection of the causal
-    /// triangle and the sliding-window band). Implemented for the same-length case
-    /// (`q_len == k_len`); the KV-cache/decode-offset path (`k_len > q_len`) lands
-    /// with the generative-model migration.
+    /// triangle and the sliding-window band) and with `q_offset`, so a decode step
+    /// whose queries trail a KV cache (`k_len > q_len`) masks against absolute
+    /// positions.
     pub causal: bool,
     /// Softmax scale applied to the queries, typically `head_dim^-0.5`.
     pub scale: f64,
+    /// Absolute position of the first query. Query `a` of the block starting at
+    /// `qs` sits at key index `q_offset + qs + a`; the window band and the causal
+    /// triangle are built against that index. `0` for every encoder and for a
+    /// prefill; a decode step passes the number of cached keys.
+    pub q_offset: usize,
 }
 
 /// Memory-bounded scaled-dot-product attention.
 ///
-/// `q`, `k`, `v`: `(b, heads, seq, head_dim)` — RoPE already applied, GQA already
-/// repeated. `pad_mask`: optional `(b, 1, 1, seq)` additive mask (`0` for real
-/// tokens, large negative for padding) that broadcasts over query positions.
+/// `q`: `(b, heads, q_len, head_dim)`; `k`, `v`: `(b, heads, k_len, head_dim)` —
+/// RoPE already applied, GQA already repeated. `k_len` may differ from `q_len`: a
+/// pooling probe attends with one query, a decode step with cached keys.
+/// `pad_mask`: optional `(b, 1, 1, k_len)` additive mask (`0` for real tokens,
+/// large negative for padding) that broadcasts over query positions.
 ///
-/// Returns `(b, heads, seq, head_dim)`. Numerically identical to dense SDPA; the
+/// Returns `(b, heads, q_len, head_dim)`. Numerically identical to dense SDPA; the
 /// caller is responsible for the final transpose/reshape and output projection.
 pub fn chunked_sdpa(
     q: &Tensor,
@@ -58,8 +67,57 @@ pub fn chunked_sdpa(
     pad_mask: Option<&Tensor>,
     cfg: &ChunkedSdpaConfig,
 ) -> candle_core::Result<Tensor> {
-    let (_b, _heads, seq_len, _head_dim) = q.dims4()?;
+    chunked_sdpa_with_key_block(q, k, v, pad_mask, cfg, ATTN_KEY_BLOCK)
+}
+
+/// Preserve the qualified fused row-wise CPU softmax path, which bounds memory
+/// by query blocks. Other devices additionally block keys with online softmax.
+/// The fused operation has no backward implementation; the regular entry point
+/// keeps its existing autograd behavior.
+pub fn chunked_sdpa_cpu_softmax(
+    q: &Tensor,
+    k: &Tensor,
+    v: &Tensor,
+    pad_mask: Option<&Tensor>,
+    cfg: &ChunkedSdpaConfig,
+) -> candle_core::Result<Tensor> {
+    let cpu_softmax = q.device().is_cpu();
+    let key_block = if cpu_softmax { 0 } else { ATTN_KEY_BLOCK };
+    chunked_sdpa_impl(q, k, v, pad_mask, cfg, key_block, cpu_softmax)
+}
+
+pub(crate) fn chunked_sdpa_with_key_block(
+    q: &Tensor,
+    k: &Tensor,
+    v: &Tensor,
+    pad_mask: Option<&Tensor>,
+    cfg: &ChunkedSdpaConfig,
+    key_block: usize,
+) -> candle_core::Result<Tensor> {
+    chunked_sdpa_impl(q, k, v, pad_mask, cfg, key_block, false)
+}
+
+fn chunked_sdpa_impl(
+    q: &Tensor,
+    k: &Tensor,
+    v: &Tensor,
+    pad_mask: Option<&Tensor>,
+    cfg: &ChunkedSdpaConfig,
+    key_block: usize,
+    cpu_softmax: bool,
+) -> candle_core::Result<Tensor> {
+    let (_b, _heads, q_len, _head_dim) = q.dims4()?;
+    let k_len = k.dim(2)?;
     let device = q.device();
+    let out_dtype = q.dtype();
+    let compute_dtype = match out_dtype {
+        DType::F16 | DType::BF16 => DType::F32,
+        dtype => dtype,
+    };
+    let max_floor = match compute_dtype {
+        DType::F64 => f64::MIN,
+        _ => f32::MIN as f64,
+    };
 
     // Fold the scale into the queries once (cheap, O(seq*d)) before chunking.
     let q = (q * cfg.scale)?.contiguous()?;
@@ -69,60 +127,110 @@ pub fn chunked_sdpa(
     // A non-positive block size means "no chunking" (single block over the whole
     // sequence); guard against a zero so the loop always makes progress.
     let block = if cfg.block_size == 0 {
-        seq_len.max(1)
+        q_len.max(1)
     } else {
         cfg.block_size
+    };
+    let key_block = if key_block == 0 {
+        k_len.max(1)
+    } else {
+        key_block
     };
 
     let mut out_blocks: Vec<Tensor> = Vec::new();
     let mut qs = 0usize;
-    while qs < seq_len {
-        let blk = block.min(seq_len - qs);
+    while qs < q_len {
+        let blk = block.min(q_len - qs);
         let qe = qs + blk;
+        // Absolute key-space positions of this query block.
+        let q_abs_start = cfg.q_offset + qs;
+        let q_abs_end = cfg.q_offset + qe;
 
         // Key/value range for this query block: a local layer only needs the
         // `±window` band around the block; a global layer needs every key. A causal
         // query at absolute index `i` never attends to keys `j > i`, so keys beyond
-        // the block end (`qe`) are always masked — cap the upper bound there (a
+        // the block's last position are always masked — cap the upper bound there (a
         // correctness-preserving memory win, since those keys would softmax to zero).
         let (ks, ke) = match (cfg.window, cfg.causal) {
-            (Some(w), false) => (qs.saturating_sub(w), (qe + w).min(seq_len)),
-            (Some(w), true) => (qs.saturating_sub(w), qe),
-            (None, false) => (0, seq_len),
-            (None, true) => (0, qe),
+            (Some(w), false) => (q_abs_start.saturating_sub(w), (q_abs_end + w).min(k_len)),
+            (Some(w), true) => (q_abs_start.saturating_sub(w), q_abs_end.min(k_len)),
+            (None, false) => (0, k_len),
+            (None, true) => (0, q_abs_end.min(k_len)),
         };
-        let kw = ke - ks;
-
-        let q_blk = q.narrow(2, qs, blk)?.contiguous()?; // (b, heads, blk, hd)
-        let k_win = k.narrow(2, ks, kw)?;
-        let v_win = v.narrow(2, ks, kw)?.contiguous()?; // (b, heads, kw, hd)
-        let k_t = k_win.transpose(D::Minus2, D::Minus1)?.contiguous()?; // (b, heads, hd, kw)
-
-        // (b, heads, blk, kw)
-        let mut scores = q_blk.matmul(&k_t)?;
-
-        // Padding mask slice over the key range: (b, 1, 1, kw), broadcasts.
-        if let Some(pad_mask) = pad_mask {
-            let pad_slice = pad_mask.narrow(D::Minus1, ks, kw)?;
-            scores = scores.broadcast_add(&pad_slice)?;
+        if ke <= ks {
+            candle_core::bail!(
+                "chunked_sdpa: query block at absolute [{q_abs_start}, {q_abs_end}) has no keys \
+                 in range (k_len={k_len}, window={:?}, causal={})",
+                cfg.window,
+                cfg.causal
+            );
         }
 
-        // Sliding-window band: keep only |i - j| <= window within the key superset.
-        if let Some(window) = cfg.window {
-            let band =
-                build_local_band_mask(qs, blk, ks, kw, window, device)?.to_dtype(scores.dtype())?;
-            scores = scores.broadcast_add(&band)?;
-        }
+        let q_blk = q
+            .narrow(2, qs, blk)?
+            .to_dtype(compute_dtype)?
+            .contiguous()?; // (b, heads, blk, hd)
+        let mut running: Option<(Tensor, Tensor, Tensor)> = None;
+        let mut kb = ks;
+        while kb < ke {
+            let kw = key_block.min(ke - kb);
+            let k_t = k
+                .narrow(2, kb, kw)?
+                .to_dtype(compute_dtype)?
+                .transpose(D::Minus2, D::Minus1)?
+                .contiguous()?;
+            let v_win = v.narrow(2, kb, kw)?.to_dtype(compute_dtype)?.contiguous()?;
 
-        // Causal triangle: keep only keys j <= i. Composes with the window band and
-        // the padding mask by addition (-inf + anything = -inf).
-        if cfg.causal {
-            let causal = build_causal_mask(qs, blk, ks, kw, device)?.to_dtype(scores.dtype())?;
-            scores = scores.broadcast_add(&causal)?;
-        }
+            let mut scores = q_blk.matmul(&k_t)?;
+            if let Some(pad_mask) = pad_mask {
+                let pad_slice = pad_mask
+                    .narrow(D::Minus1, kb, kw)?
+                    .to_dtype(compute_dtype)?;
+                scores = scores.broadcast_add(&pad_slice)?;
+            }
+            if let Some(window) = cfg.window {
+                let band = build_local_band_mask(q_abs_start, blk, kb, kw, window, device)?
+                    .to_dtype(scores.dtype())?;
+                scores = scores.broadcast_add(&band)?;
+            }
+            if cfg.causal {
+                let causal = build_causal_mask(q_abs_start, blk, kb, kw, device)?
+                    .to_dtype(scores.dtype())?;
+                scores = scores.broadcast_add(&causal)?;
+            }
 
-        let probs = candle_nn::ops::softmax(&scores, D::Minus1)?;
-        out_blocks.push(probs.matmul(&v_win)?); // (b, heads, blk, hd)
+            if cpu_softmax && ke - ks <= key_block {
+                // A single tile needs no online state. Retain the fused CPU
+                // path without materializing a score matrix beyond the tile.
+                let probs = candle_nn::ops::softmax_last_dim(&scores.contiguous()?)?;
+                out_blocks.push(probs.matmul(&v_win)?.to_dtype(out_dtype)?);
+                break;
+            }
+
+            let block_max = scores.max_keepdim(D::Minus1)?;
+            running = Some(match running {
+                None => {
+                    let safe_max = block_max.maximum(max_floor)?;
+                    let probs = scores.broadcast_sub(&safe_max)?.exp()?;
+                    let sum = probs.sum_keepdim(D::Minus1)?;
+                    (block_max, sum, probs.matmul(&v_win)?)
+                }
+                Some((prev_max, prev_sum, prev_acc)) => {
+                    let new_max = prev_max.maximum(&block_max)?;
+                    let safe_max = new_max.maximum(max_floor)?;
+                    let carry = prev_max.broadcast_sub(&safe_max)?.exp()?;
+                    let probs = scores.broadcast_sub(&safe_max)?.exp()?;
+                    let sum = (prev_sum.mul(&carry)? + probs.sum_keepdim(D::Minus1)?)?;
+                    let acc = (prev_acc.broadcast_mul(&carry)? + probs.matmul(&v_win)?)?;
+                    (new_max, sum, acc)
+                }
+            });
+            kb += kw;
+        }
+        // The fused single-tile path already appended its output.
+        if let Some((_, sum, acc)) = running {
+            out_blocks.push(acc.broadcast_div(&sum)?.to_dtype(out_dtype)?);
+        }
 
         qs = qe;
     }

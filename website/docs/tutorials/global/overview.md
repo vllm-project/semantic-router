@@ -48,12 +48,12 @@ Global configuration has five groups:
 | `global.services` | API, Response API, observability, authz, rate limits, management API, startup status, replay | [API and Observability](./api-and-observability) |
 | `global.stores` | response cache, memory, vector store | [Stores and Tools](./stores-and-tools) |
 | `global.integrations` | tool catalog and Looper endpoint/state | [Stores and Tools](./stores-and-tools) |
-| `global.model_catalog` | embeddings, system models, external helpers, knowledge bases, capability modules | [Safety, Models, and Policy](./safety-models-and-policy) |
+| `global.model_catalog` | embeddings, system models, external helpers, knowledge bases, capability modules | [Router Runtime](../../installation/native-backends) |
 
 Entrypoints and named recipes are top-level objects rather than global
 settings; see [Virtual Models](./entrypoints-and-recipes).
 Remote text embeddings are covered in
-[Remote Embedding Providers](./remote-embeddings).
+[Runtime embeddings](../../installation/runtime/embeddings).
 
 ## Operational Boundaries
 
@@ -63,8 +63,8 @@ Remote text embeddings are covered in
 - Persistent stores may contain prompts, responses, embeddings, memories, or
   replay records. Set backend authentication, transport security, retention,
   and tenant/user scope deliberately.
-- `providers.defaults.reasoning_families` and
-  `providers.models[].reasoning_family` are provider configuration, not
-  `global:` configuration.
+- Built-in reasoning behavior comes from `providers.models[].catalog`.
+  Self-hosted models can select a built-in family or define inline behavior in
+  `providers.models[].reasoning`; neither belongs under `global:`.
 - See the complete configuration reference in
   [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

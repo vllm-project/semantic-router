@@ -49,6 +49,19 @@ func TestNormalizeRouterOutcomeRequestIncludesTargetRef(t *testing.T) {
 	}
 }
 
+func TestNormalizeRouterOutcomePreservesOptionalScore(t *testing.T) {
+	for _, provided := range []bool{false, true} {
+		req := RouterOutcomeRequest{ReplayID: "replay-1", Target: "model", Verdict: "good_fit"}
+		if provided {
+			req.Score = routerOutcomeFloatPtr(0)
+		}
+		outcome, err := normalizeRouterOutcomeRequest(req)
+		if err != nil || outcome.Score != 0 || outcome.ScoreProvided != provided {
+			t.Fatalf("score presence lost: provided=%t outcome=%+v err=%v", provided, outcome, err)
+		}
+	}
+}
+
 func TestNormalizeRouterOutcomeRequestAcceptsProviderAndRouterTargets(t *testing.T) {
 	for _, target := range []string{"provider", "router"} {
 		outcome, validationErr := normalizeRouterOutcomeRequest(RouterOutcomeRequest{
@@ -80,7 +93,7 @@ func TestHandleRouterOutcomeUsesLearningRuntime(t *testing.T) {
 		Verdict:   "good_fit",
 		Score:     routerOutcomeFloatPtr(1),
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(learningOutcomeIdempotencyHeader, "outcome-key-1")
 	req = req.WithContext(withManagementPrincipal(req.Context(), managementPrincipal{
@@ -118,7 +131,7 @@ func TestHandleRouterOutcomeRequiresIdempotencyKey(t *testing.T) {
 		Target:   "model",
 		Verdict:  "good_fit",
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -137,7 +150,7 @@ func TestHandleRouterOutcomeRejectsInvalidScore(t *testing.T) {
 		Verdict:  "good_fit",
 		Score:    routerOutcomeFloatPtr(2),
 	})
-	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set(learningOutcomeIdempotencyHeader, "outcome-key-score")
 	w := httptest.NewRecorder()
@@ -156,7 +169,7 @@ func TestLearningOutcomeIngestPolicyRateLimit(t *testing.T) {
 		hits:   map[string][]time.Time{},
 	}
 	principal := managementPrincipal{Role: "operator", AuthEnabled: true}
-	req := httptest.NewRequest(http.MethodPost, "/v1/router/outcomes", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/observability/outcomes", nil)
 	req.Header.Set(learningOutcomeIdempotencyHeader, "k1")
 	if _, _, err := policy.enforce(req, principal); err != nil {
 		t.Fatalf("first request should pass: %#v", err)

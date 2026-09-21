@@ -14,7 +14,7 @@ import (
 
 type RouterOutcomeRequest struct {
 	ReplayID  string            `json:"replay_id"`
-	Source    string            `json:"source"`
+	Source    string            `json:"source,omitempty"`
 	Target    string            `json:"target"`
 	TargetRef string            `json:"target_ref,omitempty"`
 	Verdict   string            `json:"verdict"`
@@ -138,13 +138,14 @@ func normalizeRouterOutcomeRequest(req RouterOutcomeRequest) (*routerruntime.Rou
 		}
 	}
 	return &routerruntime.RouterOutcome{
-		ReplayID:  replayID,
-		Target:    target,
-		TargetRef: boundedOutcomeTargetRef(req.TargetRef),
-		Verdict:   verdict,
-		Reason:    strings.TrimSpace(req.Reason),
-		Score:     score,
-		Metadata:  boundedOutcomeMetadata(req.Metadata),
+		ReplayID:      replayID,
+		Target:        target,
+		TargetRef:     boundedOutcomeTargetRef(req.TargetRef),
+		Verdict:       verdict,
+		Reason:        strings.TrimSpace(req.Reason),
+		Score:         score,
+		ScoreProvided: req.Score != nil,
+		Metadata:      boundedOutcomeMetadata(req.Metadata),
 	}, nil
 }
 

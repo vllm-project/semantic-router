@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -15,48 +16,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-func loadClassifierMappings(cfg *config.RouterConfig) (*classifierMappings, error) {
-	mappings := &classifierMappings{}
-	var err error
-
-	if cfg.NeedsCategoryMappingForRouting() {
-		mappings.categoryMapping, err = classification.LoadCategoryMapping(cfg.CategoryMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load category mapping: %w", err)
-		}
-		logging.ComponentEvent("extproc", "category_mapping_loaded", map[string]interface{}{
-			"count": mappings.categoryMapping.GetCategoryCount(),
-		})
-	}
-
-	if cfg.NeedsPIIMappingForRouting() {
-		mappings.piiMapping, err = classification.LoadPIIMapping(cfg.PIIMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load PII mapping: %w", err)
-		}
-		logging.ComponentEvent("extproc", "pii_mapping_loaded", map[string]interface{}{
-			"count": mappings.piiMapping.GetPIITypeCount(),
-		})
-	}
-
-	if cfg.NeedsJailbreakMappingForRouting() {
-		mappings.jailbreakMapping, err = classification.LoadJailbreakMapping(cfg.PromptGuard.JailbreakMappingPath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load jailbreak mapping: %w", err)
-		}
-		logging.ComponentEvent("extproc", "jailbreak_mapping_loaded", map[string]interface{}{
-			"count": mappings.jailbreakMapping.GetJailbreakTypeCount(),
-		})
-	}
-
-	return mappings, nil
-}
-
-func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
+func createSemanticCache(cfg *config.RouterConfig, sets ...*embedding.Set) (cache.CacheBackend, string, error) {
 	semanticCacheCfg := cfg.SemanticCache
+	storeNeeded, semanticNeeded := cfg.ResponseCacheDemand()
 	cacheConfig := cache.CacheConfig{
 		BackendType:         cache.CacheBackendType(semanticCacheCfg.BackendType),
-		Enabled:             semanticCacheCfg.Enabled,
+		Enabled:             storeNeeded,
 		SimilarityThreshold: cfg.GetCacheSimilarityThreshold(),
 		MaxEntries:          semanticCacheCfg.MaxEntries,
 		TTLSeconds:          semanticCacheCfg.TTLSeconds,
@@ -76,9 +41,32 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 		cacheConfig.BackendType = cache.InMemoryCacheType
 	}
 
+	if semanticNeeded && len(sets) > 0 && sets[0] != nil {
+		provider, err := sets[0].Get(cacheConfig.EmbeddingModel, 0, 0)
+		if err != nil {
+			return nil, "", fmt.Errorf("semantic cache embedding: %w", err)
+		}
+		cacheConfig.EmbeddingProvider = provider
+	}
+	identity := ""
+	if semanticNeeded {
+		var err error
+		cacheConfig, identity, err = cache.PrepareEmbeddingNamespace(cacheConfig, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+			return embedding.ResolveProviderIdentity(cacheConfig.EmbeddingProvider, settings)
+		})
+		if err != nil {
+			return nil, "", fmt.Errorf("bind semantic cache embedding: %w", err)
+		}
+	}
 	semanticCache, err := cache.NewCacheBackend(cacheConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create semantic cache: %w", err)
+		return nil, "", fmt.Errorf("failed to create semantic cache: %w", err)
+	}
+	if semanticNeeded {
+		if err := cache.ValidateBackendEmbedding(context.Background(), semanticCache); err != nil {
+			_ = semanticCache.Close()
+			return nil, "", fmt.Errorf("failed to prepare semantic cache embedding: %w", err)
+		}
 	}
 
 	if semanticCache.IsEnabled() {
@@ -95,32 +83,11 @@ func createSemanticCache(cfg *config.RouterConfig) (cache.CacheBackend, error) {
 		})
 	}
 
-	return semanticCache, nil
+	return semanticCache, identity, nil
 }
 
 func detectSemanticCacheEmbeddingModel(cfg *config.RouterConfig) string {
-	semanticCacheCfg := cfg.SemanticCache
-	embeddingModels := cfg.EmbeddingModels
-	embeddingModel := semanticCacheCfg.EmbeddingModel
-	if embeddingModel != "" {
-		return embeddingModel
-	}
-
-	switch {
-	case embeddingModels.MmBertModelPath != "":
-		return "mmbert"
-	case embeddingModels.MultiModalModelPath != "":
-		return "multimodal"
-	case embeddingModels.Qwen3ModelPath != "":
-		return "qwen3"
-	case embeddingModels.GemmaModelPath != "":
-		return "gemma"
-	default:
-		logging.ComponentWarnEvent("extproc", "semantic_cache_embedding_fallback", map[string]interface{}{
-			"fallback_model": "bert",
-		})
-		return "bert"
-	}
+	return config.SemanticCacheEmbeddingModel(cfg)
 }
 
 func createToolsDatabase(cfg *config.RouterConfig, provider embedding.Provider) (*tools.ToolsDatabase, error) {
@@ -258,8 +225,15 @@ func sanitizeMalformedEmbeddingProviderURL(raw string) string {
 	return strings.TrimSpace(safe)
 }
 
-func toolsEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+func toolsEmbeddingProvider(cfg *config.RouterConfig, sets ...*embedding.Set) (embedding.Provider, error) {
+	if cfg == nil {
+		return nil, nil
+	}
+	if len(sets) > 0 && sets[0] != nil {
+		return sets[0].Get("", cfg.EmbeddingConfig.TargetDimension, 0)
+	}
+
+	if !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
 		return nil, nil
 	}
 	provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
@@ -271,24 +245,27 @@ func toolsEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error
 
 func createRouterClassifier(
 	cfg *config.RouterConfig,
-	mappings *classifierMappings,
+	runtimeOptions ...classification.RecipeRuntimeOptions,
 ) (*classification.RecipeClassifiers, *classification.Classifier, *services.ClassificationService, error) {
 	classifiers, err := classification.BuildRecipeClassifiers(
 		cfg,
-		mappings.categoryMapping,
-		mappings.piiMapping,
-		mappings.jailbreakMapping,
+		nil,
+		nil,
+		nil,
+		runtimeOptions...,
 	)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to build recipe classifiers: %w", err)
 	}
 
 	if err := classifiers.InitializeRuntime(); err != nil {
+		_ = classifiers.Close()
 		return nil, nil, nil, fmt.Errorf("failed to initialize recipe classifiers: %w", err)
 	}
 
 	defaultClassifier := classifiers.Default()
 	if defaultClassifier == nil {
+		_ = classifiers.Close()
 		return nil, nil, nil, fmt.Errorf("default routing recipe classifier is unavailable")
 	}
 	classificationService := services.NewRecipeClassificationService(classifiers, cfg)

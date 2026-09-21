@@ -1,341 +1,437 @@
 from __future__ import annotations
 
+import json
+import re
 import sys
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
+import yaml
 
-from classify_pr_changes import (  # noqa: E402
-    NIGHTLY_IMAGES,
-    PRODUCTION_RELEASE_IMAGES,
-    classify,
+ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT / "tools/ci"))
+from ci_plan import github_outputs, make_plan, previous_release  # noqa: E402
+from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
+from domain_registry import load_domain_registry, profile_records  # noqa: E402
+from run_model_tests import CLASSIFIER_TESTS, MULTIMODAL_CLASSIFIER_TESTS  # noqa: E402
+from verification_catalog import (  # noqa: E402
+    full_cpu_ids,
+    load_catalog,
+    profile_image_dependencies,
+    verification_records,
 )
 
-REPRESENTATIVE_FIXTURES = {
-    "website docs": (
-        ["website/docs/community/development.md"],
-        ("quality",),
-        (),
-        (),
-    ),
-    "harness docs": (
-        ["tools/agent/docs/testing-strategy.md"],
-        ("quality",),
-        (),
-        (),
-    ),
-    "harness executable": (
-        ["tools/make/agent.mk", "tools/ci/classify_pr_changes.py"],
-        ("quality", "security"),
-        (),
-        (),
-    ),
-    "precommit harness": (
-        [
-            ".pre-commit-config.yaml",
-            ".github/workflows/pre-commit.yml",
-            "tools/docker/Dockerfile.precommit",
-            "tools/make/pre-commit.mk",
-        ],
-        ("quality", "security"),
-        (),
-        (),
-    ),
-    "local dev flow": (
-        [
-            "deploy/local/envoy.yaml",
-            "tools/dev/local-up-router.sh",
-            "tools/smoke/test-local-up-router.sh",
-        ],
-        ("quality", "security", "core-tests"),
-        (),
-        (),
-    ),
-    "core router": (
-        ["src/semantic-router/pkg/extproc/processor.go"],
-        ("quality", "security", "core-tests", "e2e", "images"),
-        ("envoy-ai-gateway",),
-        ("vllm-sr",),
-    ),
-    "dashboard": (
-        ["dashboard/frontend/src/App.tsx"],
-        ("quality", "security", "dashboard", "images"),
-        (),
-        ("dashboard",),
-    ),
-    "operator": (
-        ["deploy/operator/controllers/semanticrouter_controller.go"],
-        ("quality", "security", "operator", "e2e"),
-        ("envoy-ai-gateway",),
-        (),
-    ),
-    "CLI": (
-        ["src/vllm-sr/cli/main.py"],
-        ("quality", "security", "core-tests", "cli"),
-        (),
-        (),
-    ),
-    "memory": (
-        ["src/semantic-router/pkg/memory/inmemory_store.go"],
-        ("quality", "security", "core-tests", "e2e", "memory"),
-        ("envoy-ai-gateway",),
-        (),
-    ),
-    "native binding": (
-        ["candle-binding/src/lib.rs"],
-        ("quality", "security", "core-tests", "e2e", "images"),
-        ("envoy-ai-gateway",),
-        ("vllm-sr",),
-    ),
-    "OpenVINO": (
-        ["openvino-binding/src/lib.rs"],
-        ("quality", "security", "openvino"),
-        (),
-        (),
-    ),
-    "workflow only": (
-        [".github/workflows/performance-test.yml"],
-        ("quality", "security", "e2e"),
-        ("envoy-ai-gateway",),
-        (),
-    ),
-    "Docker validator only": (
-        [".github/workflows/docker-validate.yml"],
-        ("quality", "security", "e2e", "images"),
-        ("envoy-ai-gateway",),
-        ("vllm-sr",),
-    ),
-    "Docker publisher only": (
-        [".github/workflows/docker-publish.yml"],
-        ("quality", "security", "e2e"),
-        ("envoy-ai-gateway",),
-        (),
-    ),
-    "Docker product path": (
-        ["tools/docker/Dockerfile.extproc-rocm"],
-        ("quality", "security", "images"),
-        (),
-        ("extproc-rocm",),
-    ),
-    "PR 2788 CI architecture": (
-        [
-            ".github/workflows/ci-changes.yml",
-            ".github/workflows/docker-publish.yml",
-            ".github/workflows/docker-validate.yml",
-            ".github/workflows/pr.yml",
-            "CONTRIBUTING.md",
-            "tools/agent/docs/plans/pl-0039-domain-ci-architecture.md",
-            "tools/ci/validate_workflows.py",
-            "tools/ci/workflow_policy_validation.py",
-        ],
-        ("quality", "security", "core-tests", "e2e", "images"),
-        ("envoy-ai-gateway",),
-        ("vllm-sr",),
-    ),
-}
+SHA = "a" * 40
+NATIVE = {"native.candle-cpu", "native.ort-cpu"}
+IMAGE_CALIBRATION = "native.image-calibration-cpu"
 
 
-class PRChangeClassifierTests(unittest.TestCase):
-    def test_representative_pr_shapes(self) -> None:
-        for name, (paths, jobs, profiles, images) in REPRESENTATIVE_FIXTURES.items():
-            with self.subTest(name=name):
-                result = classify(paths)
-                self.assertEqual(result.selected_jobs, jobs)
-                self.assertEqual(result.profiles, profiles)
-                self.assertEqual(result.pr_images, images)
-
-    def test_domain_documentation_does_not_enable_heavy_suites(self) -> None:
-        result = classify(
-            [
-                "tools/ci/workflow_policy_validation.py",
-                "perf/README.md",
-                "e2e/testing/llm-katan/README.md",
-                "deploy/operator/README.md",
-            ]
-        )
-
-        self.assertEqual(
-            result.selected_jobs,
-            ("quality", "security"),
-        )
-        self.assertEqual(result.profiles, ())
-        self.assertEqual(result.pr_images, ())
-
-    def test_ci_full_does_not_enable_performance(self) -> None:
-        result = classify(["README.md"], full=True)
-
-        self.assertNotIn("performance", result.selected_jobs)
-        self.assertIn("recipe-conformance", result.selected_jobs)
-        self.assertEqual(
-            result.profiles,
-            ("envoy-ai-gateway", "dashboard", "remote-embedding"),
-        )
-
-    def test_generated_api_docs_select_core_tests(self) -> None:
-        """Hand-edited API docs must still reach the api-docs-check drift gate.
-
-        Both artifacts are generated from the route catalog. They live under
-        `website/` and end in `.md`/`.json`, so without an explicit rule they
-        classify as docs-only and skip `core-tests`, letting a manual edit
-        drift away from the catalog undetected.
-        """
+class SelectionTests(unittest.TestCase):
+    def test_image_calibration_inputs_select_the_native_verification(self):
         for path in (
-            "website/docs/api/apiserver.md",
-            "website/static/openapi/apiserver/apiserver.openapi.json",
-            "tools/openapi-gen/main.go",
+            "config/fragments/signal/embedding/image-routing.yaml",
+            "tools/calibration/image-routing/main.go",
+            "e2e/profiles/multimodal-routing/profile_test.go",
+            "e2e/testcases/testdata/image-fixtures/office.jpg",
+            "website/static/img/example.png",
+            "dashboard/frontend/public/example.png",
+            "candle-binding/src/lib.rs",
+            "src/semantic-router/pkg/classification/embedding.go",
+            "src/semantic-router/pkg/config/registry.go",
+            "src/semantic-router/pkg/modeldownload/revision_receipt_test.go",
+            "src/semantic-router/tools/model-test-assets/multimodal.go",
+            "tools/make/models.mk",
+            "tools/make/common.mk",
+            "tools/ci/image_calibration.py",
+            "tools/ci/runtime_evidence.py",
+            "tools/ci/workflow_evidence.py",
+            ".github/workflows/build-native.yml",
+            ".github/workflows/test-native.yml",
         ):
             with self.subTest(path=path):
-                result = classify([path])
-
-                self.assertIn("core-tests", result.selected_jobs)
-
-    def test_unrelated_website_docs_do_not_select_core_tests(self) -> None:
-        """The api-docs rule must not drag ordinary docs edits into core-tests."""
-        result = classify(["website/docs/community/development.md"])
-
-        self.assertNotIn("core-tests", result.selected_jobs)
-
-    def test_recipe_changes_select_conformance_domain(self) -> None:
-        result = classify(["config/recipes/privacy/probes.yaml"])
-
-        self.assertTrue(result.signals["recipe_conformance"])
-        self.assertIn("recipe-conformance", result.selected_jobs)
-        self.assertIn("core-tests", result.selected_jobs)
-        self.assertEqual(result.pr_images, ())
-
-    def test_recipe_workflow_change_selects_conformance_domain(self) -> None:
-        result = classify([".github/workflows/recipe-conformance.yml"])
-
-        self.assertTrue(result.signals["recipe_conformance"])
-        self.assertIn("recipe-conformance", result.selected_jobs)
-
-    def test_workflow_edits_do_not_select_product_domains(self) -> None:
-        workflow_paths = (
-            ".github/workflows/integration-test-memory.yml",
-            ".github/workflows/openvino-binding-ci.yml",
-            ".github/workflows/operator-ci.yml",
-            ".github/workflows/integration-test-vllm-sr-cli.yml",
-            ".github/workflows/performance-test.yml",
-            ".github/workflows/router-learning-eval.yml",
+                self.assertIn(IMAGE_CALIBRATION, classify([path]).selected_jobs)
+        self.assertNotIn(
+            IMAGE_CALIBRATION,
+            classify(["src/semantic-router/pkg/extproc/processor.go"]).selected_jobs,
         )
 
-        for path in workflow_paths:
-            with self.subTest(path=path):
-                result = classify([path])
-                self.assertEqual(
-                    result.selected_jobs,
-                    ("quality", "security", "e2e"),
+    def test_every_authored_calibration_asset_selects_its_consumer(self):
+        path = ROOT / "tools/calibration/image-routing/testdata/calibration-set.json"
+        manifest = json.loads(path.read_text())
+        fixtures = {
+            row["image_file"] for row in manifest["positives"] + manifest["excluded"]
+        } | set(manifest["negatives"])
+        self.assertTrue(fixtures)
+        for fixture in sorted(fixtures):
+            self.assertIn(IMAGE_CALIBRATION, classify([fixture]).selected_jobs, fixture)
+
+    def test_manual_image_calibration_uses_the_same_plan_contract_and_build(self):
+        plan = make_plan([], source_sha=SHA, requested=(IMAGE_CALIBRATION,))
+        self.assertEqual(plan["expected_verification_ids"], [IMAGE_CALIBRATION])
+        self.assertEqual(plan["images"], [])
+        self.assertTrue(plan["native"])
+        self.assertFalse(plan["publish_images"])
+        record = plan["verifications"][0]
+        self.assertEqual(record["source_sha"], SHA)
+        self.assertEqual(record["platform_id"], "candle-cpu")
+        self.assertEqual(record["workflow"], ".github/workflows/test-native.yml")
+        self.assertEqual(record["reasons"], ["manual-selection"])
+        self.assertIn(IMAGE_CALIBRATION, full_cpu_ids())
+        self.assertNotIn("e2e.multimodal-routing", full_cpu_ids())
+        for requested in (("unknown",), (IMAGE_CALIBRATION, IMAGE_CALIBRATION)):
+            with self.assertRaises(ValueError):
+                make_plan([], source_sha=SHA, requested=requested)
+        for overrides in ({"full": True}, {"draft": True}, {"profile": "release"}):
+            with self.assertRaises(ValueError):
+                make_plan(
+                    [], source_sha=SHA, requested=(IMAGE_CALIBRATION,), **overrides
                 )
-                self.assertEqual(result.profiles, ("envoy-ai-gateway",))
-                self.assertEqual(result.pr_images, ())
+        with self.assertRaises(ValueError):
+            make_plan(["README.md"], source_sha=SHA, requested=(IMAGE_CALIBRATION,))
 
-    def test_composite_action_changes_select_ci_contracts(self) -> None:
-        result = classify([".github/actions/free-disk-space/action.yml"])
-
+    def test_manual_selection_is_generic_and_never_publishes(self):
+        for name in ("native.ort-cpu", "local.cli", "cli-package"):
+            with self.subTest(name=name):
+                plan = make_plan([], source_sha=SHA, requested=(name,))
+                self.assertEqual(plan["expected_verification_ids"], [name])
+                self.assertEqual(plan["profile"], "pr")
+                self.assertFalse(plan["publish_images"])
+                self.assertFalse(plan["publish_python"])
+                self.assertFalse(plan["publish_helm"])
+                record = plan["verifications"][0]
+                self.assertEqual(set(plan["images"]), set(record["images"]))
+                self.assertEqual(plan["native"], record["native"])
+        workflow = yaml.load(
+            (ROOT / ".github/workflows/ci.yml").read_text(), Loader=yaml.BaseLoader
+        )
         self.assertEqual(
-            result.selected_jobs,
-            ("quality", "security", "core-tests", "e2e"),
+            workflow["on"]["workflow_dispatch"]["inputs"]["verification"]["type"],
+            "string",
         )
-        self.assertEqual(result.profiles, ("envoy-ai-gateway",))
+        for job in ("images", "package"):
+            self.assertEqual(
+                workflow["jobs"][job]["with"]["mode"],
+                "${{ fromJSON(needs.plan.outputs.plan).profile }}",
+            )
+        self.assertIn("--results", workflow["jobs"]["gate"]["steps"][-1]["run"])
 
-    def test_agent_text_paths_remain_docs_light(self) -> None:
-        paths = (
-            "tools/agent/docs/testing-strategy.md",
-            "tools/agent/skills/harness-contract-change/SKILL.md",
-            "src/vllm-sr/cli/AGENTS.md",
-        )
+    def test_docs_and_paper_do_not_schedule_models_or_containers(self):
+        for path in ("README.md", "website/docs/overview.md", "paper/main.tex"):
+            selected = classify([path])
+            self.assertFalse(
+                any(
+                    name.startswith(("native.", "e2e.", "local."))
+                    for name in selected.selected_jobs
+                )
+            )
+            self.assertEqual(selected.pr_images, ())
+            self.assertNotIn("paper", selected.selected_jobs)
 
-        for path in paths:
+    def test_all_native_entrypoints_select_exact_runtime_consumers(self):
+        fixtures = {
+            "tools/make/openvino.mk": {"native.openvino-cpu"},
+            "openvino-binding/openvino_binding_test.go": {"native.openvino-cpu"},
+            "tools/make/models.mk": {*NATIVE, "native.openvino-cpu", "performance"},
+            "tools/ci/run_model_tests.py": NATIVE,
+            "tools/make/rust.mk": {*NATIVE, "core", "performance"},
+            "tools/make/common.mk": {*NATIVE, "core", "performance"},
+            "src/semantic-router/tools/model-test-assets/main.go": {
+                *NATIVE,
+                "native.openvino-cpu",
+                "performance",
+            },
+        }
+        for path, expected in fixtures.items():
             with self.subTest(path=path):
-                result = classify([path])
-                self.assertEqual(result.selected_jobs, ("quality",))
-                self.assertEqual(result.profiles, ())
-                self.assertEqual(result.pr_images, ())
+                self.assertTrue(expected <= set(classify([path]).selected_jobs))
 
-    def test_harness_executable_patterns_set_agent_exec(self) -> None:
+    def test_shared_pins_and_downloads_select_all_consumers_even_for_tests(self):
         for path in (
-            "tools/agent/requirements.txt",
-            "tools/make/linter.mk",
-            "tools/make/pre-commit.mk",
-            ".pre-commit-config.yaml",
+            "src/semantic-router/pkg/config/registry.go",
+            "src/semantic-router/pkg/config/canonical_defaults.go",
+            "src/semantic-router/pkg/config/canonical_global.go",
+            "src/semantic-router/pkg/modeldownload/revision_receipt_test.go",
+        ):
+            self.assertTrue(
+                {*NATIVE, "native.openvino-cpu", "performance"}
+                <= set(classify([path]).selected_jobs),
+                path,
+            )
+
+    def test_owned_openvino_selects_shared_runtime_and_exact_provider_inputs(self):
+        for path in (
+            "src/semantic-router/pkg/modelruntime/embedding_api.go",
+            "src/semantic-router/pkg/modelruntime/native/openvino_enabled.go",
+            "src/semantic-router/pkg/modelruntime/native/openvino_integration_test.go",
+            "src/semantic-router/pkg/classification/classifier_full_context_test.go",
         ):
             with self.subTest(path=path):
-                result = classify([path])
-                self.assertTrue(result.signals["agent_exec"])
-
-    def test_ownership_metadata_paths_remain_lightweight(self) -> None:
-        paths = (
-            "OWNER",
-            ".github/CODEOWNERS",
-            "ml-binding/OWNER",
-            "src/semantic-router/OWNER",
-            "dashboard/OWNER",
-            "website/OWNER",
+                self.assertTrue(
+                    {*NATIVE, "native.openvino-cpu"}
+                    <= set(classify([path]).selected_jobs)
+                )
+        for path in (
+            "src/semantic-router/pkg/config/default_execution_openvino.go",
+            "src/semantic-router/pkg/config/model_deployments.go",
+            "src/semantic-router/pkg/config/model_deployments_openvino_test.go",
+        ):
+            self.assertIn("native.openvino-cpu", classify([path]).selected_jobs, path)
+        selected = set(classify(["tools/ci/openvino_evidence.py"]).selected_jobs)
+        self.assertTrue({"harness-tools", "native.openvino-cpu"} <= selected)
+        self.assertFalse(selected & {*NATIVE, "recipe-conformance", IMAGE_CALIBRATION})
+        self.assertNotIn(
+            "native.openvino-cpu",
+            classify(["tools/ci/run_model_tests.py"]).selected_jobs,
         )
 
-        for path in paths:
+    def test_test_names_cannot_downgrade_integration_boundaries(self):
+        cases = {
+            "e2e/testing/vllm-sr-cli/test_integration.py": {"local.cli"},
+            "e2e/testing/memory_tests/test_retrieval.py": {"local.memory"},
+            "src/semantic-router/pkg/cache/redis_exact_cache_integration_test.go": {
+                "storage"
+            },
+            "src/semantic-router/pkg/classification/unified_classifier_integration_test.go": NATIVE,
+            "e2e/testcases/istio_routes_test.go": {"e2e.istio"},
+        }
+        for path, expected in cases.items():
+            self.assertTrue(classify([path]).test_only)
+            self.assertTrue(expected <= set(classify([path]).selected_jobs), path)
+
+    def test_openvino_shared_build_inputs_select_its_owned_runtime(self):
+        for path in (
+            "tools/ci/native_artifact.py",
+            ".github/workflows/build-native.yml",
+            ".github/actions/load-native-artifact/action.yml",
+            "tools/make/rust.mk",
+            "tools/make/common.mk",
+            "tools/make/build-run-test.mk",
+        ):
             with self.subTest(path=path):
-                result = classify([path])
-                self.assertEqual(result.selected_jobs, ("quality",))
-                self.assertEqual(result.profiles, ())
-                self.assertEqual(result.pr_images, ())
-                self.assertTrue(result.signals["docs_only"])
+                plan = make_plan([path], source_sha=SHA)
+                self.assertIn("native.openvino-cpu", plan["expected_verification_ids"])
+                self.assertTrue(plan["native"])
+                self.assertFalse(plan["full_cpu"])
+        for path in (
+            "tools/ci/run_model_tests.py",
+            "tools/make/dashboard.mk",
+            "tools/make/soak.mk",
+        ):
+            with self.subTest(unrelated_path=path):
+                self.assertNotIn("native.openvino-cpu", classify([path]).selected_jobs)
 
-    def test_ownership_metadata_does_not_enable_adjacent_product_domains(
-        self,
-    ) -> None:
-        result = classify(
-            [
-                ".github/CODEOWNERS",
-                "dashboard/OWNER",
-                "deploy/operator/OWNER",
-                "ml-binding/OWNER",
-            ]
-        )
-
-        self.assertFalse(result.signals["dashboard"])
-        self.assertFalse(result.signals["operator"])
-        self.assertFalse(result.signals["core"])
-        self.assertFalse(result.signals["e2e_ml_model_selection"])
-        self.assertEqual(result.selected_jobs, ("quality",))
-
-    def test_core_main_publish_excludes_platform_variants(self) -> None:
-        result = classify(["src/semantic-router/pkg/extproc/processor.go"])
-
-        self.assertEqual(result.publish_images, ("extproc", "vllm-sr"))
-        self.assertNotIn("extproc-rocm", result.publish_images)
-        self.assertNotIn("vllm-sr-cuda", result.publish_images)
-        self.assertNotIn("vllm-sr-rocm", result.publish_images)
-
-    def test_fixture_builds_follow_active_integration_receipts(self) -> None:
-        llm_katan = classify(["e2e/testing/llm-katan/llm_katan/server.py"])
-        anthropic = classify(["e2e/testing/anthropic-shim/anthropic_shim/app.py"])
-        responses = classify(["tools/mock-vllm/app.py"])
-
-        self.assertIn("memory", llm_katan.selected_jobs)
-        self.assertEqual(llm_katan.pr_images, ())
-        self.assertIn("anthropic-shim", anthropic.profiles)
-        self.assertIn("e2e", anthropic.selected_jobs)
-        self.assertEqual(anthropic.pr_images, ())
-        self.assertEqual(responses.profiles, ("response-api",))
-        self.assertEqual(responses.pr_images, ())
-        self.assertEqual(llm_katan.publish_images, ())
-        self.assertEqual(anthropic.publish_images, ())
-
-    def test_protocol_codec_changes_select_every_protocol_profile(self) -> None:
-        result = classify(["src/semantic-router/pkg/protocolcodec/stream_responses.go"])
-
-        self.assertEqual(
-            result.profiles,
+    def test_cli_lifecycle_and_envoy_sources_select_live_container_contracts(self):
+        paths = [
+            str(path.relative_to(ROOT))
+            for pattern in (
+                "src/vllm-sr/cli/container_*.py",
+                "src/vllm-sr/cli/runtime_*.py",
+                "src/vllm-sr/cli/commands/runtime*.py",
+                "src/vllm-sr/cli/templates/envoy*.yaml",
+            )
+            for path in ROOT.glob(pattern)
+        ]
+        paths.extend(
             (
-                "envoy-ai-gateway",
-                "streaming",
-                "anthropic-shim",
-                "response-api",
-            ),
+                "src/vllm-sr/cli/core.py",
+                "src/vllm-sr/cli/config_generator.py",
+                "src/vllm-sr/cli/config_translator.py",
+                "src/vllm-sr/cli/catalog_provider_projection.py",
+                "src/vllm-sr/cli/envoy_backend_pool.py",
+                "src/vllm-sr/cli/deployment_backend.py",
+                "src/vllm-sr/cli/container_future_component.py",
+                "src/vllm-sr/cli/runtime_future_component.py",
+                "src/vllm-sr/cli/commands/runtime_future_component.py",
+            )
         )
+        for path in paths:
+            for profile in ("pr", "main"):
+                with self.subTest(path=path, profile=profile):
+                    plan = make_plan([path], source_sha=SHA, profile=profile)
+                    self.assertIn("local.cli", plan["expected_verification_ids"])
+                    self.assertTrue({"vllm-sr", "dashboard"} <= set(plan["images"]))
+        for path in (
+            "src/vllm-sr/README.md",
+            "src/vllm-sr/tests/test_container_start.py",
+            "src/vllm-sr/cli/evaluation/runtime_factors.py",
+            "src/vllm-sr/cli/commands/chat.py",
+        ):
+            with self.subTest(unrelated_path=path):
+                plan = make_plan([path], source_sha=SHA)
+                self.assertNotIn("local.cli", plan["expected_verification_ids"])
+                self.assertEqual(plan["images"], [])
+
+    def test_operator_request_helper_selects_its_real_deployment(self):
+        path = "tools/ci/check_operator_request.py"
+        self.assertTrue((ROOT / path).is_file())
+        plan = make_plan([path], source_sha=SHA)
+        self.assertIn("operator", plan["expected_verification_ids"])
+        self.assertTrue(
+            {"operator", "operator-bundle", "extproc", "mock-vllm"}
+            <= set(plan["images"])
+        )
+        self.assertNotIn(
+            "operator",
+            classify(["tools/ci/tests/test_operator_request.py"]).selected_jobs,
+        )
+
+    def test_required_classifier_definitions_select_live_models(self):
+        definitions = {}
+        for path in (ROOT / "src/semantic-router/pkg/classification").glob("*_test.go"):
+            for name in re.findall(r"^func (Test\w+)\(", path.read_text(), re.M):
+                definitions.setdefault(name, []).append(
+                    path.relative_to(ROOT).as_posix()
+                )
+        for name in (*CLASSIFIER_TESTS, *MULTIMODAL_CLASSIFIER_TESTS):
+            self.assertEqual(len(definitions.get(name, [])), 1, name)
+            self.assertTrue(
+                set(classify(definitions[name]).selected_jobs) >= NATIVE, name
+            )
+
+    def test_owning_workflow_edits_select_executor_contracts(self):
+        cases = {
+            "test-native.yml": {*NATIVE, "native.openvino-cpu"},
+            "test-local.yml": {"local.cli", "local.memory"},
+            "performance-test.yml": {"performance"},
+            "operator-ci.yml": {"operator"},
+            "integration-test-k8s.yml": {"e2e.envoy-ai-gateway"},
+        }
+        for workflow, expected in cases.items():
+            selected = set(classify([f".github/workflows/{workflow}"]).selected_jobs)
+            self.assertTrue(expected <= selected)
+
+    def test_component_tools_have_execution_owners_after_quality_split(self):
+        cases = {
+            "src/vllm-sr/cli/core.py": "cli-unit",
+            "src/fleet-sim/tests/test_simulation.py": "fleet-sim",
+            "src/training/tests/test_export.py": "training",
+            "tools/ci/training-test-requirements.txt": "training",
+            "tools/test/services/mock-vllm/tests/test_fixture_latency.py": "mock-provider",
+            "bench/test_agentic_routing_experiment.py": "learning-tools",
+            "bench/test_openai_fault_proxy.py": "soak-tools",
+        }
+        for path, expected in cases.items():
+            self.assertIn(expected, classify([path]).selected_jobs)
+        self.assertNotIn(
+            "learning-tools",
+            classify(
+                [
+                    "src/semantic-router/pkg/extproc/router_learning_session_runner_test.go"
+                ]
+            ).selected_jobs,
+        )
+
+    def test_shared_mock_changes_select_declared_pr_consumers(self):
+        for path in (
+            "tools/test/services/mock-vllm/app.py",
+            "tools/test/services/mock-vllm/requirements.txt",
+            "tools/test/services/mock-vllm/tests/test_fixture_latency.py",
+        ):
+            plan = make_plan([path], source_sha=SHA)
+            expected = {
+                "e2e." + name
+                for name in profile_records(selection="pr")
+                if "mock-vllm" in profile_image_dependencies()[name]
+            }
+            self.assertTrue(expected <= set(plan["expected_verification_ids"]))
+            self.assertIn("operator", plan["expected_verification_ids"])
+            self.assertIn("mock-provider", plan["expected_verification_ids"])
+            self.assertIn("mock-vllm", plan["images"])
+            self.assertNotIn(
+                "e2e.response-api-redis", plan["expected_verification_ids"]
+            )
+
+    def test_full_cpu_profiles_share_explicit_inventory(self):
+        plans = [
+            make_plan(["README.md"], source_sha=SHA, profile=profile, full=True)
+            for profile in ("pr", "nightly", "release")
+        ]
+        self.assertEqual(
+            {tuple(plan["expected_verification_ids"]) for plan in plans},
+            {tuple(plans[0]["expected_verification_ids"])},
+        )
+        self.assertTrue(
+            set(full_cpu_ids()) <= set(plans[0]["expected_verification_ids"])
+        )
+        for profile in ("agentgateway", "aibrix", "istio", "llm-d", "streaming"):
+            self.assertIn(profile, full_e2e_profiles())
+        self.assertNotIn("e2e.dynamo", plans[0]["expected_verification_ids"])
+        self.assertNotIn("e2e.router-replay", plans[0]["expected_verification_ids"])
+
+    def test_full_cpu_never_removes_affected_pr_verifications(self):
+        for path in (
+            "e2e/profiles/route-action/profile.go",
+            "tools/test/services/mock-vllm/app.py",
+        ):
+            affected = make_plan([path], source_sha=SHA)
+            for profile in ("pr", "nightly", "release"):
+                with self.subTest(path=path, profile=profile):
+                    complete = make_plan(
+                        [path], source_sha=SHA, profile=profile, full=True
+                    )
+                    self.assertTrue(
+                        set(affected["expected_verification_ids"])
+                        <= set(complete["expected_verification_ids"])
+                    )
+                    self.assertTrue(set(affected["images"]) <= set(complete["images"]))
+                    self.assertNotIn(
+                        "e2e.response-api-redis", complete["expected_verification_ids"]
+                    )
+
+    def test_local_classifier_backend_is_a_required_cpu_product_contract(self):
+        identity = "e2e.local-classifier-backend"
+        self.assertIn(identity, full_cpu_ids())
+        for profile in ("pr", "nightly", "release"):
+            with self.subTest(profile=profile):
+                plan = make_plan([], source_sha=SHA, profile=profile, full=True)
+                record = next(
+                    row for row in plan["verifications"] if row["id"] == identity
+                )
+                self.assertEqual(record["executor"], "e2e")
+                self.assertEqual(record["boundary"], ["e2e"])
+                self.assertEqual(record["runtime"], "candle")
+                self.assertEqual(record["device"], "cpu")
+                self.assertEqual(record["platform"], "linux/amd64")
+                self.assertEqual(record["images"], ["extproc", "mock-vllm"])
+        for path in (
+            "e2e/profiles/local-classifier-backend/profile.go",
+            "e2e/testcases/local_classifier_routing.go",
+            "src/semantic-router/pkg/classification/generic_classifier_local.go",
+            "src/semantic-router/pkg/classification/native_labels.go",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(identity, classify([path]).selected_jobs)
+
+    def test_build_union_is_unique_and_separate_from_publication(self):
+        plan = make_plan(
+            [
+                "e2e/testing/run_memory_integration.sh",
+                "e2e/testing/run_recipe_conformance.sh",
+            ],
+            source_sha=SHA,
+        )
+        self.assertEqual(plan["images"], ["dashboard", "llm-katan", "vllm-sr"])
+        self.assertEqual(plan["publish_images"], [])
+        baseline = make_plan(["e2e/profiles/ai-gateway/profile.go"], source_sha=SHA)
+        self.assertIn("mock-vllm", baseline["images"])
+
+    def test_main_only_publishes_affected_inputs(self):
+        docs = make_plan(["README.md"], source_sha=SHA, profile="main")
+        self.assertFalse(docs["publish_python"])
+        self.assertFalse(docs["publish_images"])
+        cli = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA, profile="main")
+        self.assertTrue(cli["publish_python"])
+        self.assertIn("cli-package", cli["expected_verification_ids"])
+
+    def test_previous_release_is_explicit_compatible_and_not_head_parent(self):
+        self.assertEqual(
+            previous_release(
+                "0.4.0", ["v0.2.0", "v0.3.0", "v0.4.0", "v0.4.0-rc1", "v1.0.0"]
+            ),
+            "v0.3.0",
+        )
+        with self.assertRaises(ValueError):
+            previous_release("1.0.0", ["v0.3.0"])
 
     def test_sticky_provider_prefix_selects_anthropic_profile(self) -> None:
         result = classify(["e2e/testcases/sticky_tool_selection_provider_prefix.go"])
@@ -432,6 +528,84 @@ class PRChangeClassifierTests(unittest.TestCase):
             ("envoy-ai-gateway", "sticky-tool-selection-redis"),
         )
 
+    def test_shared_artifact_loaders_select_their_runtime_consumers(self):
+        for path in (
+            "tools/ci/native_artifact.py",
+            ".github/actions/load-native-artifact/action.yml",
+        ):
+            self.assertTrue(
+                {
+                    "core",
+                    "storage",
+                    "dashboard",
+                    "generated-contracts",
+                    *NATIVE,
+                    "performance",
+                }
+                <= set(classify([path]).selected_jobs)
+            )
+        for path in (
+            "tools/ci/image_artifacts.py",
+            ".github/actions/load-ci-images/action.yml",
+        ):
+            self.assertTrue(
+                {"local.cli", "operator", "e2e.envoy-ai-gateway"}
+                <= set(classify([path]).selected_jobs)
+            )
+
+    def test_build_native_output_is_distinct_from_native_matrix(self):
+        plan = make_plan(["candle-binding/src/lib.rs"], source_sha=SHA)
+        outputs = github_outputs(plan)
+        self.assertEqual(outputs["build_native"], "true")
+        self.assertIsInstance(json.loads(outputs["native"]), list)
+        self.assertGreater(len(json.loads(outputs["native"])), 0)
+
+    def test_riscv_is_an_emulated_native_contract_with_preserved_source_triggers(self):
+        identity = "native.candle-riscv64-qemu"
+        for path in (
+            "candle-binding/src/lib.rs",
+            "ml-binding/ml_binding.go",
+            "nlp-binding/nlp_binding.go",
+            "tools/make/rust.mk",
+            "tools/docker/check-native-abi.sh",
+            "tools/ci/riscv-qemu-router-smoke.sh",
+            "tools/ci/riscv_evidence.py",
+            "src/semantic-router/tools/model-test-assets/main.go",
+            "src/semantic-router/pkg/config/registry.go",
+            "src/semantic-router/pkg/modeldownload/revisions.go",
+            "tools/ci/runtime_evidence.py",
+            "tools/make/models.mk",
+            "e2e/config/config.riscv-qemu.yaml",
+            "src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go",
+            "src/semantic-router/pkg/cache/valkey_cache_unavailable.go",
+            "src/semantic-router/pkg/cache/exact_cache_valkey.go",
+            "src/semantic-router/pkg/memory/valkey_store_integration_test.go",
+            "src/semantic-router/pkg/vectorstore/valkey_backend.go",
+            "src/semantic-router/pkg/extproc/router_memory.go",
+            "src/semantic-router/pkg/extproc/router_memory_valkey.go",
+            "src/semantic-router/pkg/extproc/router_memory_valkey_unavailable.go",
+            ".github/workflows/test-native.yml",
+        ):
+            with self.subTest(path=path):
+                self.assertIn(identity, classify([path]).selected_jobs)
+        for profile in ("pr", "main"):
+            plan = make_plan(
+                ["candle-binding/src/lib.rs"], source_sha=SHA, profile=profile
+            )
+            self.assertIn(identity, plan["expected_verification_ids"])
+        plan = make_plan([], source_sha=SHA, requested=(identity,))
+        self.assertFalse(plan["native"])
+        self.assertEqual(plan["images"], [])
+        record = plan["verifications"][0]
+        self.assertEqual(record["executor"], "native")
+        self.assertEqual(record["workflow"], ".github/workflows/test-native.yml")
+        self.assertEqual(record["platform"], "linux/riscv64")
+        self.assertEqual(
+            record["execution"], {"mode": "qemu-user", "host_platform": "linux/amd64"}
+        )
+        self.assertIn(identity, full_cpu_ids())
+        self.assertFalse((ROOT / ".github/workflows/riscv-qemu.yml").exists())
+
     def test_release_and_nightly_image_lifecycles_are_distinct(self) -> None:
         self.assertEqual(
             PRODUCTION_RELEASE_IMAGES,
@@ -450,6 +624,17 @@ class PRChangeClassifierTests(unittest.TestCase):
             set(NIGHTLY_IMAGES) - set(PRODUCTION_RELEASE_IMAGES),
             {"anthropic-shim", "llm-katan", "vllm-sr-sim"},
         )
+
+    def test_runtime_combinations_are_qualified_rows_not_cartesian_product(self):
+        records = verification_records(load_domain_registry())
+        native = [
+            record for record in records.values() if record["executor"] == "native"
+        ]
+        self.assertEqual(
+            {(r["runtime"], r["device"]) for r in native},
+            {("candle", "cpu"), ("ort", "cpu"), ("openvino", "cpu")},
+        )
+        self.assertIn("cuda", load_catalog()["full_cpu"]["excluded"])
 
 
 if __name__ == "__main__":

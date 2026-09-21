@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "owner": "src/training/model_embeddings/multimodal/small",
+  "artifacts": [
+    {
+      "repo_id": "llm-semantic-router/multi-modal-embed-small",
+      "revision": "fdf8e01b7b0f3a69ac1ac8e2a64dcb1ede177ba4",
+      "config": "configs/production.yaml",
+      "train_entrypoint": "train.py",
+      "evaluate_entrypoint": "evaluate.py",
+      "release_entrypoint": "release.py"
+    }
+  ]
+}

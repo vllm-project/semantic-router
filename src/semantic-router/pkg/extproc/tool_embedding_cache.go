@@ -6,7 +6,6 @@ import (
 	"slices"
 	"strconv"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -155,15 +154,7 @@ func (e *cachedToolEmbedder) fill(ctx context.Context, texts []string) ([][]floa
 }
 
 func (e *cachedToolEmbedder) fillLocal(texts []string) ([][]float32, error) {
-	out := make([][]float32, 0, len(texts))
-	for i, text := range texts {
-		output, err := candle_binding.GetEmbeddingWithModelType(text, e.modelType, e.targetDim)
-		if err != nil {
-			return nil, fmt.Errorf("tool_selection filter: embedding text %d/%d: %w", i+1, len(texts), err)
-		}
-		out = append(out, output.Embedding)
-	}
-	return out, nil
+	return nil, fmt.Errorf("tool embedding provider was not prepared")
 }
 
 func (e *cachedToolEmbedder) fillRemote(ctx context.Context, texts []string) ([][]float32, error) {

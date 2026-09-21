@@ -149,7 +149,7 @@ deployment. The provider endpoint should use cluster DNS:
 ```
 
 Update every `modelRefs[].model` that refers to the sample model as well as
-`providers.defaults.default_model`. The names must match an entry returned by
+`providers.defaults.model`. The names must match an entry returned by
 the Dynamo frontend.
 
 For development, install the continuously published Semantic Router chart:

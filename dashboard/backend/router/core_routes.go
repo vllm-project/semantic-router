@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/evaluationplane"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
@@ -52,6 +51,7 @@ func registerRecipeRoutes(mux *http.ServeMux, cfg *config.Config, stores ...*rec
 	store := selectedRecipeStore(cfg, stores)
 	service := recipe.NewService(recipe.Options{
 		Directory:    recipeDir,
+		Store:        store,
 		RouterAPIURL: cfg.RouterAPIURL,
 	})
 	activator := handlers.NewRecipeActivator(handlers.RecipeActivatorOptions{
@@ -107,15 +107,20 @@ func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupR
 }
 
 func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions ...configRouteOptions) {
+	if err := handlers.RestrictExistingConfigSnapshots(cfg.ConfigDir); err != nil {
+		log.Printf("Warning: could not restrict existing config snapshots: %v", err)
+	}
 	options := configRouteOptions{}
 	if len(routeOptions) > 0 {
 		options = routeOptions[0]
 	}
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
+	store := selectedRecipeStore(cfg, []*recipe.Store{options.credentialStore})
 	mux.HandleFunc("/api/models/catalog", handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
 	mux.HandleFunc("/api/models/discover", handlers.ModelDiscoveryHandler(nil))
 	mux.HandleFunc("/api/models/verify", handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
+	mux.HandleFunc("/api/router/config/schema", handlers.ConfigSchemaHandler(cfg.RouterAPIURL, store))
 	mux.HandleFunc("/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/deploy/preview", handlers.DeployPreviewHandler(cfg.AbsConfigPath))
@@ -125,23 +130,23 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions .
 	mux.HandleFunc("/api/router/config/deployments", handlers.ConfigDeploymentsHandler())
 	mux.HandleFunc("/api/router/config/deployments/", handlers.ConfigDeploymentDetailHandler())
 	mux.HandleFunc("/api/router/config/active-projection", handlers.ActiveConfigProjectionHandler())
-	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/discover, /api/models/verify, /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
+	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/discover, /api/models/verify, /api/router/config/all, /api/router/config/schema, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
 
 	mux.HandleFunc("/api/router/config/global", handlers.RouterDefaultsHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/global/update", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
 	mux.HandleFunc("/api/router/config/global/raw", handlers.GlobalConfigYAMLHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/global/raw/update", handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	mux.HandleFunc("/api/router/config/defaults", handlers.RouterDefaultsHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/defaults/update", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	store := selectedRecipeStore(cfg, []*recipe.Store{options.credentialStore})
-	mux.HandleFunc("/api/router/config/kbs", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, store))
-	mux.HandleFunc("/api/router/config/kbs/", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, store))
-	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update (legacy aliases: /api/router/config/defaults, /api/router/config/defaults/update)")
+	mux.HandleFunc("/api/router/api/v1/storage/knowledge-bases", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, store))
+	mux.HandleFunc("/api/router/api/v1/storage/knowledge-bases/", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, store))
+	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update")
 }
 
 func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
-	toolsDBPath := resolveToolsDBPath(cfg)
-	mux.HandleFunc("/api/tools-db", handlers.ToolsDBHandler(toolsDBPath))
+	mux.HandleFunc("/api/tools-db", func(w http.ResponseWriter, r *http.Request) {
+		// Configuration saves can change the selected database without restarting
+		// Dashboard. Resolve the current canonical path for each refresh.
+		handlers.ToolsDBHandler(resolveToolsDBPath(cfg))(w, r)
+	})
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
 	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
@@ -157,17 +162,27 @@ func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
 	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
 }
 
+// defaultToolsDBPath mirrors the canonical Router default. Both configured and
+// fallback paths use the explicit asset root, independently of the directory
+// containing the runtime config or Dashboard's writable state.
+const defaultToolsDBPath = "config/tools_db.json"
+
 func resolveToolsDBPath(cfg *config.Config) string {
-	toolsDBPath := filepath.Join(cfg.ConfigDir, "config", "tools_db.json")
+	projectRoot := cfg.ConfigBaseDir
+	fallback := filepath.Join(projectRoot, defaultToolsDBPath)
+
 	toolSelection, err := routercontract.ReadToolSelection(cfg.AbsConfigPath)
 	if err != nil {
-		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", toolsDBPath, err)
-		return toolsDBPath
+		log.Printf("Warning: failed to parse config for tools_db_path, use the default path %s: %v", fallback, err)
+		return fallback
 	}
-	if toolSelection.ToolsDBPath != "" {
+	if toolSelection.ToolsDBPath == "" {
+		return fallback
+	}
+	if filepath.IsAbs(toolSelection.ToolsDBPath) {
 		return toolSelection.ToolsDBPath
 	}
-	return toolsDBPath
+	return filepath.Join(projectRoot, toolSelection.ToolsDBPath)
 }
 
 func registerStatusRoutes(mux *http.ServeMux, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {
@@ -186,68 +201,6 @@ func registerTopologyRoutes(mux *http.ServeMux, cfg *config.Config, credentialPr
 	store := selectedRecipeStore(cfg, credentialProvider)
 	mux.HandleFunc("/api/topology/test-query", handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
 	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
-}
-
-func registerEvaluationRoutes(mux *http.ServeMux, cfg *config.Config, credentialProviders ...*recipe.Store) *evaluationplane.Service {
-	registerEvaluationNamespaceBoundary(mux)
-	cfg.EvaluationAvailable = false
-	if !cfg.EvaluationEnabled {
-		cfg.EvaluationUnavailableReason = "Evaluation is disabled for this deployment."
-		log.Printf("Evaluation feature disabled")
-		return nil
-	}
-	service, err := evaluationplane.NewService(evaluationplane.Options{
-		DataDir:                    cfg.EvaluationDataDir,
-		PythonPath:                 cfg.PythonPath,
-		RouterAPIURL:               cfg.RouterAPIURL,
-		EnvoyURL:                   cfg.EnvoyURL,
-		ConfigPath:                 cfg.AbsConfigPath,
-		DeploymentsDir:             cfg.EvaluationDeploymentsDir,
-		CodeRevision:               os.Getenv("VLLM_SR_SOURCE_REVISION"),
-		RouterAPIKeyEnv:            cfg.EvaluationRouterAPIKeyEnv,
-		EnvoyAPIKeyEnv:             cfg.EvaluationEnvoyAPIKeyEnv,
-		AgentTaskLedger:            evaluationServiceEndpoint(cfg.EvaluationAgentTaskLedger),
-		FaultRecoveryLedger:        evaluationServiceEndpoint(cfg.EvaluationFaultRecoveryLedger),
-		HardPolicyLedger:           evaluationServiceEndpoint(cfg.EvaluationHardPolicyLedger),
-		ProductionExperimentLedger: evaluationServiceEndpoint(cfg.EvaluationProductionExperimentLedger),
-		CredentialProvider:         selectedRecipeStore(cfg, credentialProviders),
-		MaxConcurrent:              2,
-	})
-	if err != nil {
-		cfg.EvaluationUnavailableReason = "Evaluation could not be initialized. Check the Dashboard server logs."
-		log.Printf("Warning: failed to initialize Evaluation Plane: %v (evaluation endpoints disabled)", err)
-		return nil
-	}
-	cfg.EvaluationAvailable = true
-	cfg.EvaluationUnavailableReason = ""
-	handler := handlers.NewEvaluationPlaneHandler(service, cfg.ReadonlyMode)
-	mux.HandleFunc("/api/evaluation/v1/catalog", handler.Catalog)
-	mux.HandleFunc("/api/evaluation/v1/runs", handler.Runs)
-	mux.HandleFunc("/api/evaluation/v1/runs/", handler.RunRoute)
-	mux.HandleFunc("/api/evaluation/v1/compare", handler.Compare)
-	mux.HandleFunc("/api/evaluation/v1/controlled-pairs", handler.ControlledPairs)
-	mux.HandleFunc("/api/evaluation/v1/controlled-pairs/", handler.ControlledPairLifecycle)
-	mux.HandleFunc("/api/evaluation/v1/lifecycle/usage", handler.LifecycleUsage)
-	mux.HandleFunc("/api/evaluation/v1/lifecycle/collection", handler.LifecycleCollection)
-	mux.HandleFunc("/api/evaluation/v1/campaign-readiness", handler.CampaignReadiness)
-	mux.HandleFunc("/api/evaluation/v1/campaigns", handler.Campaigns)
-	mux.HandleFunc("/api/evaluation/v1/campaigns/", handler.CampaignRoute)
-	log.Printf("Evaluation Plane API endpoints registered: /api/evaluation/v1/*")
-	return service
-}
-
-// registerEvaluationNamespaceBoundary keeps unknown Evaluation endpoints inside
-// the Evaluation API namespace. Without this boundary, the dashboard's generic
-// /api/ router can forward a miss to an unrelated embedded service.
-func registerEvaluationNamespaceBoundary(mux *http.ServeMux) {
-	notFound := func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Cache-Control", "private, no-store")
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"error":{"message":"Evaluation endpoint not found."}}`))
-	}
-	mux.HandleFunc("/api/evaluation", notFound)
-	mux.HandleFunc("/api/evaluation/", notFound)
 }
 
 func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store) {

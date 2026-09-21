@@ -224,7 +224,7 @@ version: v0.3
 
 providers:
   defaults:
-    default_model: llama3.2:3b
+    model: llama3.2:3b
   models:
     - name: llama3.2:3b
       provider_model_id: llama3.2:3b
@@ -233,6 +233,7 @@ providers:
         - name: local-ollama
           endpoint: host.docker.internal:11434
           protocol: http
+          provider: ollama
           weight: 100
 
 routing:
@@ -253,7 +254,7 @@ routing:
 Validate and serve:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 

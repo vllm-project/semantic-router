@@ -3,22 +3,25 @@ package config
 import (
 	"fmt"
 	"sort"
+	"strings"
+
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
 // CanonicalConfigFromRouterConfig exports the canonical v0.3 config surface
 // from the internal runtime config.
 func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	if cfg == nil {
-		return CanonicalConfig{Version: "v0.3"}
+		return CanonicalConfig{Version: CanonicalConfigVersion}
 	}
 
 	return CanonicalConfig{
-		Version:   "v0.3",
-		Listeners: append([]Listener(nil), cfg.Listeners...),
+		Version:    CanonicalConfigVersion,
+		Listeners:  append([]Listener(nil), cfg.Listeners...),
+		Evaluation: cloneCanonicalEvaluation(cfg.Evaluation),
 		Providers: CanonicalProviders{
 			Defaults: CanonicalProviderDefaults{
 				DefaultModel:           cfg.DefaultModel,
-				ReasoningFamilies:      copyReasoningFamilies(cfg.ReasoningFamilies),
 				DefaultReasoningEffort: cfg.DefaultReasoningEffort,
 			},
 			Models: canonicalProviderModelsFromRouterConfig(cfg),
@@ -50,11 +53,14 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
-		Projections: canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
-		Decisions:   copyDecisions(cfg.Decisions),
-		Strategy:    cfg.Strategy,
+		ModelBindings:         cloneModelMap(cfg.ModelBindings),
+		CandidateRequirements: cfg.CandidateRequirements.Clone(),
+		DataPolicy:            cfg.DataPolicy.Clone(),
+		ModelCards:            routingModelsFromRouterConfig(cfg),
+		Signals:               canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
+		Projections:           canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
+		Decisions:             copyDecisions(cfg.Decisions),
+		Strategy:              cfg.Strategy,
 	}
 }
 
@@ -74,6 +80,8 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Modality:      append([]ModalityRule(nil), signals.ModalityRules...),
 		RoleBindings:  append([]RoleBinding(nil), signals.RoleBindings...),
 		Jailbreak:     append([]JailbreakRule(nil), signals.JailbreakRules...),
+		Safety:        append([]SafetyRule(nil), signals.SafetyRules...),
+		Hallucination: append([]HallucinationRule(nil), signals.HallucinationRules...),
 		PII:           append([]PIIRule(nil), signals.PIIRules...),
 		KB:            append([]KBSignalRule(nil), signals.KBRules...),
 		Conversation:  append([]ConversationRule(nil), signals.ConversationRules...),
@@ -93,6 +101,147 @@ func canonicalProjectionsFromProjections(projections Projections) CanonicalProje
 }
 
 func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
+	if cfg.EffectiveModelRegistry != nil {
+		return routingModelOverridesFromEffectiveRegistry(cfg)
+	}
+	return routingModelsFromRuntimeConfig(cfg)
+}
+
+func routingModelOverridesFromEffectiveRegistry(cfg *RouterConfig) []RoutingModel {
+	modelsByCard := make(map[string]RoutingModel)
+	for _, effective := range cfg.EffectiveModelRegistry.Models() {
+		if !hasOperatorModelCardData(effective.Card) {
+			continue
+		}
+		if _, exported := modelsByCard[effective.Catalog]; exported {
+			continue
+		}
+		modelsByCard[effective.Catalog] = routingModelFromEffectiveModel(effective)
+	}
+	models := make([]RoutingModel, 0, len(modelsByCard))
+	for _, model := range modelsByCard {
+		models = append(models, model)
+	}
+	sort.Slice(models, func(i, j int) bool { return models[i].Name < models[j].Name })
+	return models
+}
+
+func hasOperatorModelCardData(card modelcatalog.EffectiveModelCard) bool {
+	if len(card.LoRAs) > 0 {
+		return true
+	}
+	for _, source := range card.Provenance {
+		if source == "operator" {
+			return true
+		}
+	}
+	return false
+}
+
+func routingModelFromEffectiveModel(effective modelcatalog.EffectiveModel) RoutingModel {
+	card := effective.Card.Card
+	provenance := effective.Card.Provenance
+	model := RoutingModel{
+		Name:  effective.Catalog,
+		LoRAs: routingLoRAsFromEffectiveCard(effective.Card),
+	}
+	if provenance["display_name"] == "operator" {
+		model.DisplayName = card.DisplayName
+	}
+	if provenance["publisher"] == "operator" {
+		model.Publisher = card.Publisher
+	}
+	if provenance["presentation"] == "operator" {
+		presentation := card.Presentation
+		model.Presentation = &presentation
+	}
+	if provenance["distribution"] == "operator" {
+		distribution := card.Distribution
+		model.Distribution = &distribution
+	}
+	if provenance["family"] == "operator" {
+		model.Family = card.Family
+	}
+	if provenance["parameter_size"] == "operator" {
+		model.ParamSize = card.ParameterSize
+	}
+	if provenance["description"] == "operator" {
+		model.Description = card.Description
+	}
+	applyOperatorModelCardRelease(&model, card, provenance)
+	applyOperatorModelCardLimits(&model, card, provenance)
+	applyOperatorModelCardCollections(&model, card, provenance)
+	if provenance["runtime_modality"] == "operator" {
+		model.Modality = effective.Card.RuntimeModality
+	}
+	return model
+}
+
+func applyOperatorModelCardRelease(
+	model *RoutingModel,
+	card modelcatalog.ModelCard,
+	provenance modelcatalog.FieldProvenance,
+) {
+	if provenance["revision"] == "operator" {
+		model.Revision = card.Revision
+	}
+	if provenance["released_at"] == "operator" {
+		model.ReleasedAt = card.ReleasedAt
+	}
+	if provenance["knowledge_cutoff"] == "operator" {
+		model.KnowledgeCutoff = card.KnowledgeCutoff
+	}
+	if provenance["lifecycle"] == "operator" {
+		model.Lifecycle = card.Lifecycle
+	}
+}
+
+func applyOperatorModelCardLimits(
+	model *RoutingModel,
+	card modelcatalog.ModelCard,
+	provenance modelcatalog.FieldProvenance,
+) {
+	if provenance["limits.context_window_size"] == "operator" {
+		model.ContextWindowSize = card.Limits.ContextWindowSize
+	}
+	if provenance["limits.max_output_tokens"] == "operator" {
+		model.MaxOutputTokens = card.Limits.MaxOutputTokens
+	}
+}
+
+func applyOperatorModelCardCollections(
+	model *RoutingModel,
+	card modelcatalog.ModelCard,
+	provenance modelcatalog.FieldProvenance,
+) {
+	if provenance["capabilities"] == "operator" {
+		model.Capabilities = append([]string(nil), card.Capabilities...)
+	}
+	if provenance["modalities"] == "operator" {
+		modalities := card.Modalities
+		model.Modalities = &modalities
+	}
+	if provenance["tags"] == "operator" {
+		model.Tags = append([]string(nil), card.Tags...)
+	}
+}
+
+func routingLoRAsFromEffectiveCard(card modelcatalog.EffectiveModelCard) []LoRAAdapter {
+	return loraAdaptersFromEffectiveCard(card)
+}
+
+func loraAdaptersFromEffectiveCard(card modelcatalog.EffectiveModelCard) []LoRAAdapter {
+	if len(card.LoRAs) == 0 {
+		return nil
+	}
+	loras := make([]LoRAAdapter, 0, len(card.LoRAs))
+	for _, lora := range card.LoRAs {
+		loras = append(loras, LoRAAdapter{Name: lora.Name, Description: lora.Description})
+	}
+	return loras
+}
+
+func routingModelsFromRuntimeConfig(cfg *RouterConfig) []RoutingModel {
 	modelNames := make(map[string]bool)
 	for name := range cfg.ModelConfig {
 		modelNames[name] = true
@@ -118,15 +267,19 @@ func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
 	models := make([]RoutingModel, 0, len(names))
 	for _, name := range names {
 		params := cfg.ModelConfig[name]
+		cardName := params.Catalog
+		if cardName == "" {
+			cardName = name
+		}
 		models = append(models, RoutingModel{
-			Name:              name,
+			Name:              cardName,
 			ParamSize:         params.ParamSize,
 			ContextWindowSize: params.ContextWindowSize,
+			MaxOutputTokens:   params.MaxOutputTokens,
 			Description:       params.Description,
 			Capabilities:      append([]string(nil), params.Capabilities...),
 			LoRAs:             copyLoRAAdapters(params.LoRAs),
 			Tags:              append([]string(nil), params.Tags...),
-			QualityScore:      params.QualityScore,
 			Modality:          params.Modality,
 		})
 	}
@@ -201,10 +354,14 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 	}
 
 	return CanonicalModelCatalog{
+		Deployments: cloneModelMap(cfg.ModelDeployments),
+		Bindings:    cloneModelMap(cfg.GlobalModelBindings),
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
 		},
 		System: CanonicalSystemModels{
+			Safety:                 cfg.SafetyModels.Safety.ModelID,
+			Hazard:                 cfg.SafetyModels.Hazard.ModelID,
 			PromptGuard:            cfg.PromptGuard.ModelID,
 			DomainClassifier:       cfg.CategoryModel.ModelID,
 			PIIClassifier:          cfg.PIIModel.ModelID,
@@ -217,6 +374,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
 		Admission: cloneAdmissionMap(cfg.ModelAdmission),
 		Modules: CanonicalModelModules{
+			Safety:            cfg.SafetyModels,
 			PromptCompression: cfg.PromptCompression,
 			PromptGuard: CanonicalPromptGuardModule{
 				PromptGuardConfig: cfg.PromptGuard,
@@ -333,9 +491,13 @@ func canonicalProviderModelFromRuntime(
 	endpointsByModel map[string][]VLLMEndpoint,
 	profiles map[string]ProviderProfile,
 ) CanonicalProviderModel {
+	if authored := cloneCanonicalProviderModel(params.AuthoredModel); authored != nil {
+		authored.Name = name
+		return *authored
+	}
 	providerModel := CanonicalProviderModel{
 		Name:             name,
-		ReasoningFamily:  params.ReasoningFamily,
+		Catalog:          params.Catalog,
 		APIFormat:        params.APIFormat,
 		Pricing:          params.Pricing,
 		Reliability:      params.Reliability,
@@ -354,14 +516,48 @@ func canonicalProviderModelFromRuntime(
 	return providerModel
 }
 
-func canonicalProviderModelID(externalModelIDs map[string]string) string {
-	if len(externalModelIDs) != 1 {
-		return ""
+func cloneCanonicalReasoning(reasoning *CanonicalReasoning) *CanonicalReasoning {
+	if reasoning == nil {
+		return nil
 	}
-	for _, modelID := range externalModelIDs {
+	clone := *reasoning
+	clone.EffortFlags = copyStringMap(reasoning.EffortFlags)
+	clone.Levels = append([]string(nil), reasoning.Levels...)
+	clone.Modes = append([]string(nil), reasoning.Modes...)
+	return &clone
+}
+
+func cloneCanonicalProviderModel(model *CanonicalProviderModel) *CanonicalProviderModel {
+	if model == nil {
+		return nil
+	}
+	clone := *model
+	clone.Reasoning = cloneCanonicalReasoning(model.Reasoning)
+	clone.ExternalModelIDs = copyStringMap(model.ExternalModelIDs)
+	clone.BackendRefs = make([]CanonicalBackendRef, len(model.BackendRefs))
+	for index, backend := range model.BackendRefs {
+		clone.BackendRefs[index] = backend
+		clone.BackendRefs[index].ExtraHeaders = copyStringMap(backend.ExtraHeaders)
+	}
+	return &clone
+}
+
+func canonicalProviderModelID(externalModelIDs map[string]string) string {
+	if modelID := strings.TrimSpace(externalModelIDs["default"]); modelID != "" {
 		return modelID
 	}
-	return ""
+	var candidate string
+	for _, modelID := range externalModelIDs {
+		modelID = strings.TrimSpace(modelID)
+		if modelID == "" {
+			continue
+		}
+		if candidate != "" && candidate != modelID {
+			return ""
+		}
+		candidate = modelID
+	}
+	return candidate
 }
 
 func canonicalProviderBackendRefs(
@@ -379,7 +575,7 @@ func canonicalProviderBackendRefs(
 		}
 		refs := make([]CanonicalBackendRef, 0, len(modelEndpoints))
 		for _, endpoint := range modelEndpoints {
-			refs = append(refs, canonicalBackendRefFromRuntime(endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
+			refs = append(refs, canonicalBackendRefFromRuntime(modelName, endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
 		}
 		return refs
 	}
@@ -390,24 +586,30 @@ func canonicalProviderBackendRefs(
 		if !ok {
 			continue
 		}
-		refs = append(refs, canonicalBackendRefFromRuntime(endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
+		refs = append(refs, canonicalBackendRefFromRuntime(modelName, endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
 	}
 	return refs
 }
 
-func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
+func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
-		Name:       endpoint.Name,
+		// Import adds exactly one model namespace; remove only that generated prefix.
+		Name:       strings.TrimPrefix(endpoint.Name, modelName+"_"),
 		Protocol:   endpoint.Protocol,
 		Weight:     endpoint.Weight,
-		Type:       endpoint.Type,
 		Provider:   profile.Type,
 		BaseURL:    profile.BaseURL,
 		AuthHeader: profile.AuthHeader,
-		AuthPrefix: profile.AuthPrefix,
 		APIVersion: profile.APIVersion,
 		ChatPath:   profile.ChatPath,
 		APIKey:     endpoint.APIKey,
+	}
+	if profile.AuthPrefixSet || profile.AuthPrefix != "" {
+		prefix := profile.AuthPrefix
+		ref.AuthPrefix = &prefix
+	}
+	if ref.Provider == "" {
+		ref.Provider = endpoint.Type
 	}
 	if endpoint.Address != "" {
 		ref.Endpoint = endpoint.Address

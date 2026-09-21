@@ -2,12 +2,13 @@ apiVersion: vllm.ai/v1alpha1
 kind: IntelligentPool
 metadata:
   name: ai-gateway-pool
-  namespace: default
+  namespace: vllm-semantic-router-system
 spec:
   defaultModel: "general-expert"
   models:
     - name: "base-model"
-      reasoningFamily: "qwen3"
+      reasoning:
+        family: "qwen3"
       loras:
         - name: "science-expert"
           description: "Specialized for science domains: biology, chemistry, physics, health, engineering"

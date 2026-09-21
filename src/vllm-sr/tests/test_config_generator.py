@@ -9,6 +9,9 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
+from cli.catalog_provider_projection import (  # noqa: E402
+    CatalogProviderProjectionError,
+)
 from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
 from cli.parser import parse_user_config  # noqa: E402
 from cli.validator import validate_user_config  # noqa: E402
@@ -65,13 +68,14 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "test-model"
+    model: "test-model"
   models:
     - name: "test-model"
       backend_refs:
         - name: "primary"
           endpoint: "host.docker.internal:8000"
           protocol: "http"
+          provider: "vllm"
           weight: 100
 routing:
   modelCards:
@@ -129,6 +133,52 @@ def _default_route(rendered_config):
     raise AssertionError("default route not found")
 
 
+def test_listener_api_key_is_removed_before_no_auth_upstream(tmp_path, monkeypatch):
+    rendered = _render_envoy_config(
+        tmp_path,
+        monkeypatch,
+        """
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    api_keys:
+      - router-client-secret
+providers:
+  defaults:
+    model: local-model
+  models:
+    - name: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: 127.0.0.1:8000
+routing: {}
+""",
+        extproc_host="localhost",
+        router_api_host="localhost",
+    )
+
+    listener = rendered["static_resources"]["listeners"][0]
+    http_filters = listener["filter_chains"][0]["filters"][0]["typed_config"][
+        "http_filters"
+    ]
+    inline_code = next(
+        item["typed_config"]["inline_code"]
+        for item in http_filters
+        if "inline_code" in item.get("typed_config", {})
+    )
+    accepted = "if token and VALID_KEYS[token] then"
+    strip = 'request_handle:headers():remove("authorization")'
+    assert accepted in inline_code
+    assert strip in inline_code
+    assert (
+        inline_code.index(accepted)
+        < inline_code.index(strip)
+        < inline_code.index("return", inline_code.index(accepted))
+    )
+
+
 def test_weighted_backend_refs_preserve_weights_and_shared_path(tmp_path, monkeypatch):
     """Weighted refs should retain endpoint weights and one shared route path."""
     rendered = _render_envoy_config(
@@ -142,15 +192,17 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "test-model"
+    model: "test-model"
   models:
     - name: "test-model"
       backend_refs:
         - name: "primary"
           endpoint: "http://10.0.0.1:8000/v1"
+          provider: "vllm"
           weight: 75
         - name: "secondary"
           endpoint: "http://10.0.0.2:8001/v1"
+          provider: "vllm"
           weight: 25
 routing:
   modelCards:
@@ -171,7 +223,7 @@ routing:
     )
 
     # --- cluster assertions ---
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
     lb_endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
@@ -186,13 +238,25 @@ routing:
         {"address": "10.0.0.1", "port_value": 8000},
         {"address": "10.0.0.2", "port_value": 8001},
     ]
+    assert [endpoint["endpoint"]["hostname"] for endpoint in lb_endpoints] == [
+        "10.0.0.1:8000",
+        "10.0.0.2:8001",
+    ]
 
     # --- route assertions ---
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
-    assert route_action["host_rewrite_literal"] == "10.0.0.1:8000"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
-    assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+    assert route_action["auto_host_rewrite"] is True
+    assert "host_rewrite_literal" not in route_action
+    assert "regex_rewrite" not in route_action
+
+    default_route_action = _default_route(rendered)["route"]
+    assert default_route_action["auto_host_rewrite"] is True
+    assert "host_rewrite_literal" not in default_route_action
+    assert (
+        default_route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
+    )
+    assert default_route_action["regex_rewrite"]["substitution"] == "/v1\\1"
 
 
 def test_base_url_path_rewrite_is_idempotent(tmp_path, monkeypatch):
@@ -207,7 +271,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "gemini-model"
+    model: "gemini-model"
   models:
     - name: "gemini-model"
       provider_model_id: "gemini-model"
@@ -234,38 +298,44 @@ routing:
         router_api_host="localhost",
     )
 
-    for route in (_model_route(rendered, "gemini-model"), _default_route(rendered)):
-        rewrite = route["route"]["regex_rewrite"]
-        pattern = rewrite["pattern"]["regex"]
-        substitution = rewrite["substitution"]
+    # ext_proc owns the complete path after model selection. The fallback route
+    # still rewrites the original ingress path when semantic processing is skipped.
+    assert "regex_rewrite" not in _model_route(rendered, "gemini-model")["route"]
 
-        assert pattern == r"^/v1([/?].*)?$"
-        for request_path, upstream_path in (
-            ("/v1", "/v1beta/openai"),
-            (
-                "/v1/chat/completions",
-                "/v1beta/openai/chat/completions",
-            ),
-            (
-                "/v1?api-version=test",
-                "/v1beta/openai?api-version=test",
-            ),
-        ):
-            rewritten_path = re.sub(pattern, substitution, request_path)
-            assert rewritten_path == upstream_path
-            assert re.sub(pattern, substitution, rewritten_path) == upstream_path
+    rewrite = _default_route(rendered)["route"]["regex_rewrite"]
+    pattern = rewrite["pattern"]["regex"]
+    substitution = rewrite["substitution"]
+    assert pattern == r"^/v1([/?].*)?$"
+    for request_path, upstream_path in (
+        ("/v1", "/v1beta/openai"),
+        (
+            "/v1/chat/completions",
+            "/v1beta/openai/chat/completions",
+        ),
+        (
+            "/v1?api-version=test",
+            "/v1beta/openai?api-version=test",
+        ),
+    ):
+        rewritten_path = re.sub(pattern, substitution, request_path)
+        assert rewritten_path == upstream_path
+        assert re.sub(pattern, substitution, rewritten_path) == upstream_path
 
 
-@pytest.mark.skip(
-    reason=(
-        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
-        "paths that still begin with the /v1 segment after rewriting."
-    )
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "/v1/chat",
+        "/v1/provider",
+        "/v1/provider.v2",
+        "/v1/provider+api",
+        "/v1/provider/nested",
+    ],
 )
-def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(
-    tmp_path, monkeypatch
+def test_selected_model_route_does_not_rewrite_overlapping_provider_path(
+    tmp_path, monkeypatch, prefix
 ):
-    """Document the known gap: /v1/chat -> /v1/provider/chat rewrites twice today."""
+    """Do not confuse an overlapping provider prefix with an ingress path."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -277,13 +347,13 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "provider-model"
+    model: "provider-model"
   models:
     - name: "provider-model"
       provider_model_id: "provider-model"
       backend_refs:
         - name: "provider"
-          base_url: "https://api.example.com/v1/provider"
+          base_url: "https://api.example.com/v1/chat"
           provider: "openai"
           weight: 100
 routing:
@@ -299,20 +369,33 @@ routing:
       modelRefs:
         - model: "provider-model"
           use_reasoning: false
-""",
+""".replace(
+            "https://api.example.com/v1/chat", "https://api.example.com" + prefix
+        ),
         extproc_host="localhost",
         router_api_host="localhost",
     )
 
-    for route in (_model_route(rendered, "provider-model"), _default_route(rendered)):
-        rewrite = route["route"]["regex_rewrite"]
-        pattern = rewrite["pattern"]["regex"]
-        substitution = rewrite["substitution"]
-        upstream_path = "/v1/provider/chat/completions"
+    assert "regex_rewrite" not in _model_route(rendered, "provider-model")["route"]
 
-        rewritten_path = re.sub(pattern, substitution, "/v1/chat/completions")
-        assert rewritten_path == upstream_path
-        assert re.sub(pattern, substitution, rewritten_path) == upstream_path
+    rewrite = _default_route(rendered)["route"]["regex_rewrite"]
+    assert rewrite["pattern"]["regex"] == r"^/v1([/?].*)?$"
+    assert rewrite["substitution"] == prefix + "\\1"
+    for suffix in (
+        "",
+        "?key=value",
+        "/chat/completions",
+        "/responses?stream=true",
+        "/providers/chat",
+    ):
+        assert (
+            re.sub(
+                rewrite["pattern"]["regex"],
+                rewrite["substitution"],
+                "/v1" + suffix,
+            )
+            == prefix + suffix
+        )
 
 
 def test_provider_reliability_renders_retry_outlier_and_least_request(
@@ -329,7 +412,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: test-model
+    model: test-model
   models:
     - name: test-model
       reliability:
@@ -344,7 +427,9 @@ providers:
         health_check_timeout: 3s
       backend_refs:
         - endpoint: 10.0.0.1:8000
+          provider: vllm
         - endpoint: 10.0.0.2:8000
+          provider: vllm
 routing:
   modelCards:
     - name: test-model
@@ -367,7 +452,7 @@ routing:
         "retry_on": "connect-failure,refused-stream",
         "num_retries": 2,
     }
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["lb_policy"] == "LEAST_REQUEST"
     assert cluster["least_request_lb_config"]["choice_count"] == 2
     assert cluster["outlier_detection"]["consecutive_5xx"] == 5
@@ -384,7 +469,7 @@ def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(
 ):
     """Backend ref https://api.example.com/compatible-mode/v1 should produce
     address=api.example.com, port=443, host_authority=api.example.com (standard
-    port omitted), LOGICAL_DNS cluster, and regex_rewrite for path prefix."""
+    port omitted), LOGICAL_DNS cluster, and a fallback path-prefix rewrite."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -396,12 +481,13 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "test-model"
+    model: "test-model"
   models:
     - name: "test-model"
       backend_refs:
         - name: "primary"
           endpoint: "https://api.example.com/compatible-mode/v1/"
+          provider: "vllm"
           weight: 100
 routing:
   modelCards:
@@ -422,7 +508,7 @@ routing:
     )
 
     # --- cluster assertions ---
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["dns_lookup_family"] == "V4_ONLY"
     ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
@@ -435,8 +521,15 @@ routing:
     route_action = route["route"]
     # standard port 443 → host_authority should omit port
     assert route_action["host_rewrite_literal"] == "api.example.com"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
-    assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
+    assert "regex_rewrite" not in route_action
+    default_route_action = _default_route(rendered)["route"]
+    assert (
+        default_route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
+    )
+    assert (
+        default_route_action["regex_rewrite"]["substitution"]
+        == "/compatible-mode/v1\\1"
+    )
 
 
 def test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers(
@@ -454,7 +547,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "test-model"
+    model: "test-model"
   models:
     - name: "test-model"
       provider_model_id: "openai/gpt-4o-mini"
@@ -487,22 +580,113 @@ routing:
         router_api_host="localhost",
     )
 
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["transport_socket"]["name"] == "envoy.transport_sockets.tls"
+    tls_context = cluster["transport_socket"]["typed_config"]
+    assert tls_context["sni"] == "openrouter.ai"
+    assert tls_context["auto_sni_san_validation"] is True
+    assert (
+        tls_context["common_tls_context"]["validation_context"]["trusted_ca"][
+            "filename"
+        ]
+        == "/etc/ssl/certs/ca-certificates.crt"
+    )
+    assert "typed_extension_protocol_options" not in cluster
 
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
     assert route_action["host_rewrite_literal"] == "openrouter.ai"
-    assert route_action["regex_rewrite"]["substitution"] == "/api/v1\\1"
+    assert "regex_rewrite" not in route_action
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"]
+        == "/api/v1\\1"
+    )
 
     headers = {
         item["header"]["key"]: item["header"]["value"]
         for item in route["request_headers_to_add"]
     }
-    assert headers["Authorization"] == "Bearer sk-test-openrouter"
     assert headers["X-Test-Trace"] == "router-flow"
     assert headers["X-Test-Tenant"] == "eval"
+    assert "Authorization" not in headers
+    assert "sk-test-openrouter" not in yaml.safe_dump(rendered)
+
+
+def test_https_pool_rejects_distinct_tls_server_names(tmp_path, monkeypatch):
+    with pytest.raises(ValueError, match="TLS server name differ"):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.3
+listeners:
+  - name: "http-8899"
+    address: "0.0.0.0"
+    port: 8899
+providers:
+  defaults:
+    model: "test-model"
+  models:
+    - name: "test-model"
+      provider_model_id: "openai/gpt-4o-mini"
+      backend_refs:
+        - name: "primary"
+          base_url: "https://primary.example.com/v1"
+          provider: "openai"
+          api_key_env: "OPENAI_API_KEY"
+          weight: 1
+        - name: "secondary"
+          base_url: "https://secondary.example.com/v1"
+          provider: "openai"
+          api_key_env: "OPENAI_API_KEY"
+          weight: 1
+routing:
+  modelCards:
+    - name: "test-model"
+  decisions:
+    - name: "default-route"
+      description: "default route"
+      priority: 100
+      rules:
+        operator: "AND"
+        conditions: []
+      modelRefs:
+        - model: "test-model"
+          use_reasoning: false
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
+
+
+def test_https_backend_rejects_ip_literal_certificate_identity(tmp_path, monkeypatch):
+    with pytest.raises(
+        ValueError,
+        match="HTTPS endpoint must use a DNS hostname",
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
+version: v0.3
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+providers:
+  defaults:
+    model: test-model
+  models:
+    - name: test-model
+      backend_refs:
+        - provider: openai-compatible
+          base_url: https://192.0.2.1/v1
+routing: {}
+""",
+            extproc_host="localhost",
+            router_api_host="localhost",
+        )
 
 
 def test_generate_envoy_config_custom_anthropic_upstream_rewrites_host(
@@ -519,17 +703,14 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "claude-sonnet-4.6"
+    model: "claude-sonnet-4.6"
   models:
     - name: "claude-sonnet-4.6"
       api_format: "anthropic"
       backend_refs:
         - name: "anthropic-primary"
-          endpoint: "domain.com:443"
-          protocol: "https"
           weight: 100
           base_url: "https://domain.com/Anthropic"
-          type: "anthropic"
           provider: "anthropic"
 routing:
   modelCards:
@@ -550,20 +731,24 @@ routing:
     )
 
     route = _model_route(rendered, "claude-sonnet-4.6")
-    assert route["route"]["cluster"] == "claude_sonnet_4.6_cluster"
+    assert route["route"]["cluster"] == "model_claude_2dsonnet_2d4_2e6_cluster"
     assert route["route"]["host_rewrite_literal"] == "domain.com"
 
     with pytest.raises(AssertionError):
         _cluster_by_name(rendered, "anthropic_api_cluster")
 
 
-def test_generate_envoy_config_uses_logical_dns_for_api_only_router_fallback(
+def test_generate_envoy_config_rejects_backendless_physical_model(
     tmp_path, monkeypatch
 ):
-    rendered = _render_envoy_config(
-        tmp_path,
-        monkeypatch,
-        """
+    with pytest.raises(
+        CatalogProviderProjectionError,
+        match="must define backend_refs with an explicit Provider ID",
+    ):
+        _render_envoy_config(
+            tmp_path,
+            monkeypatch,
+            """
 version: v0.3
 listeners:
   - name: "http-8899"
@@ -571,7 +756,7 @@ listeners:
     port: 8899
 providers:
   defaults:
-    default_model: "claude-test"
+    model: "claude-test"
   models:
     - name: "claude-test"
       api_format: "anthropic"
@@ -589,16 +774,14 @@ routing:
         - model: "claude-test"
           use_reasoning: false
 """,
-        extproc_host="vllm-sr-router-container",
-        router_api_host="vllm-sr-router-container",
-    )
+            extproc_host="vllm-sr-router-container",
+            router_api_host="vllm-sr-router-container",
+        )
 
-    cluster = _cluster_by_name(rendered, "vllm_static_cluster")
 
-    assert cluster["type"] == "LOGICAL_DNS"
-    assert cluster["dns_lookup_family"] == "V4_ONLY"
-    endpoint = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
-    assert (
-        endpoint["address"]["socket_address"]["address"] == "vllm-sr-router-container"
-    )
-    assert endpoint["hostname"] == "vllm-sr-router-container"
+def test_envoy_template_has_no_provider_specific_anthropic_inventory():
+    template = (REPO_ROOT / "src/vllm-sr/cli/templates/envoy.template.yaml").read_text()
+
+    assert "anthropic_models" not in template
+    assert "anthropic_api_cluster" not in template
+    assert "api.anthropic.com" not in template

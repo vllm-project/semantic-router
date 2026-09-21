@@ -1,36 +1,48 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	modelselection "github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // ClassifyIntentForEval performs intent classification specifically for evaluation scenarios.
 // This method forces evaluation of all signals and returns comprehensive signal information.
-func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalResponse, error) {
+func (s *ClassificationService) ClassifyIntentForEval(ctx context.Context, req IntentRequest) (*EvalResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	input, err := req.resolveSignalInput()
 	if err != nil {
 		return nil, err
 	}
-	classifier, candidates, recipeName, err := s.evalRoutingScopeSnapshot(req.Model)
+	classifier, candidates, recipeName, configHash, err := s.evalRoutingScopeSnapshot(req.Model)
 	if err != nil {
 		return nil, err
 	}
+	if req.ExpectedConfigHash != "" {
+		if !headers.ValidConfigHash(configHash) {
+			return nil, ErrConfigHashUnavailable
+		}
+		if req.ExpectedConfigHash != configHash {
+			return nil, ErrConfigHashMismatch
+		}
+	}
 
 	if classifier == nil {
-		return &EvalResponse{
-			OriginalText:   input.evaluationText,
-			RequestedModel: strings.TrimSpace(req.Model),
-			Recipe:         recipeName,
-			Metrics:        &classification.SignalMetricsCollection{},
-		}, nil
+		return nil, ErrClassifierUnavailable
 	}
 
 	wantTrace := req.Options != nil && req.Options.Trace
+	input.requestFacts.Context = ctx
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
@@ -47,6 +59,9 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	)
 
 	var decisionResult *decision.DecisionResult
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	var traces []decision.DecisionTrace
 	var decisionErr error
 	if len(candidates) > 0 {
@@ -65,13 +80,14 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 		classifier,
 	)
 	resp.RequestedModel = strings.TrimSpace(req.Model)
+	resp.ConfigHash = configHash
 	resp.Recipe = recipeName
 	resp.EvalTrace = traces
 	if decisionErr != nil {
 		resp.DecisionError = decisionErr.Error()
 		return resp, decisionErr
 	}
-	s.populateEvalModelSelection(resp, input, decisionResult)
+	s.populateEvalModelSelection(resp, input, decisionResult, req.PreviewContext)
 	return resp, nil
 }
 
@@ -79,6 +95,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	response *EvalResponse,
 	input intentSignalInput,
 	decisionResult *decision.DecisionResult,
+	previewContext *PreviewContext,
 ) {
 	if response == nil || decisionResult == nil || decisionResult.Decision == nil {
 		return
@@ -89,7 +106,12 @@ func (s *ClassificationService) populateEvalModelSelection(
 		response.SelectionReason = "live model selector is unavailable"
 		return
 	}
+	demand, _ := modelselection.EffectiveCandidateDemand(input.semanticRequest, decisionResult.Decision)
 	selection := selector.SelectModelForEval(EvalModelSelectionInput{
+		PreviewContext:    previewContext,
+		ConversationFacts: input.conversationFacts,
+		SemanticRequest:   input.semanticRequest,
+		Demand:            demand,
 		Recipe:            response.Recipe,
 		Decision:          decisionResult.Decision,
 		Query:             input.currentUserText,
@@ -100,6 +122,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	response.SelectionStatus = selection.Status
 	response.SelectionMethod = selection.Method
 	response.SelectionReason = selection.Reason
+	response.SelectionProvenance = selection.Provenance
 }
 
 func evalDecisionCategory(matchedRules []string) string {
@@ -141,11 +164,17 @@ func (s *ClassificationService) evalRoutingScopeSnapshot(
 	*classification.Classifier,
 	[]config.Decision,
 	config.RecipeName,
+	string,
 	error,
 ) {
 	s.configMutex.RLock()
 	defer s.configMutex.RUnlock()
-	return s.evalRoutingScope(modelName)
+	classifier, decisions, recipe, err := s.evalRoutingScope(modelName)
+	hash := ""
+	if s.config != nil {
+		hash = s.config.DocumentHash
+	}
+	return classifier, decisions, recipe, hash, err
 }
 
 func (s *ClassificationService) evalRoutingScope(modelName string) (*classification.Classifier, []config.Decision, config.RecipeName, error) {
@@ -165,7 +194,7 @@ func (s *ClassificationService) evalRoutingScope(modelName string) (*classificat
 		var found bool
 		classifier, found = s.recipeClassifiers.ForRecipe(recipe.Name)
 		if !found {
-			return nil, nil, "", fmt.Errorf("classifier for routing recipe %q is unavailable", recipe.Name)
+			return nil, nil, "", fmt.Errorf("%w for routing recipe %q", ErrClassifierUnavailable, recipe.Name)
 		}
 	}
 	return classifier, recipe.Profile.Decisions, recipe.Name, nil

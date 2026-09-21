@@ -19,6 +19,8 @@ func statusCodeToImmediateResponseCode(statusCode int) typev3.StatusCode {
 		return typev3.StatusCode_Forbidden
 	case http.StatusMethodNotAllowed:
 		return typev3.StatusCode_MethodNotAllowed
+	case http.StatusPreconditionFailed:
+		return typev3.StatusCode_PreconditionFailed
 	case http.StatusRequestEntityTooLarge:
 		return typev3.StatusCode_PayloadTooLarge
 	case http.StatusUnprocessableEntity:

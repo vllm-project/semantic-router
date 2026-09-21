@@ -83,6 +83,7 @@ type SignalMatches struct {
 	ModalityRules      []string // Modality classification: "AR", "DIFFUSION", or "BOTH"
 	AuthzRules         []string // Authz rule names matched for user-level routing (e.g. "premium_tier")
 	JailbreakRules     []string // Jailbreak rule names matched (confidence >= threshold)
+	SafetyRules        []string // Safety rule names matched (confidence >= threshold)
 	PIIRules           []string // PII rule names matched (denied PII types detected)
 	KBRules            []string // KB signal names matched from global.model_catalog.kbs bindings
 	ConversationRules  []string // Conversation-shape signal names matched
@@ -230,6 +231,9 @@ func (e *DecisionEngine) evaluateDecisions(
 		resolved, err := e.evaluateConfiguredDecision(decision, signals, withTrace)
 		if resolved.policy != "" {
 			output.diagnostics.AppliedUnknownPolicies[decision.Name] = string(resolved.policy)
+			if !withTrace {
+				metrics.RecordDecisionUnknown(config.RoutingDecisionKey(e.routingScope, decision.Name), string(resolved.policy))
+			}
 		}
 		if withTrace {
 			output.traces = append(output.traces, newDecisionTrace(
@@ -260,7 +264,7 @@ func (e *DecisionEngine) evaluateDecisions(
 	}
 	if !withTrace {
 		for i := range results {
-			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, results[i].Decision.Name), results[i].Confidence)
+			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, results[i].Decision.Name), results[i].Confidence, results[i].ConfidenceScored && !results[i].CatchAll)
 		}
 	}
 	if len(results) == 0 {
@@ -312,7 +316,7 @@ func isCatchAllRules(rules config.RuleCombination) bool {
 	if rules.IsEmpty() {
 		return true
 	}
-	return !rules.IsLeaf() && strings.ToUpper(rules.Operator) == "AND" && len(rules.Conditions) == 0
+	return !rules.IsLeaf() && strings.ToUpper(rules.Operator) == config.RuleOperatorAnd && len(rules.Conditions) == 0
 }
 
 // evalNode recursively evaluates a RuleNode (boolean expression tree) against signal matches.
@@ -342,12 +346,15 @@ func (e *DecisionEngine) evalNode(
 		}
 	}
 
+	// config.NormalizeRuleOperator guarantees a validated tree only carries
+	// AND, OR, or NOT here; the default branch is unreachable for loaded
+	// config and only covers trees built programmatically.
 	switch strings.ToUpper(node.Operator) {
-	case "AND":
+	case config.RuleOperatorAnd:
 		return e.evalAND(node.Conditions, signals, policy, withTrace)
-	case "NOT":
+	case config.RuleOperatorNot:
 		return e.evalNOT(node.Conditions, signals, policy, withTrace)
-	default: // OR
+	default: // config.RuleOperatorOr
 		return e.evalOR(node.Conditions, signals, policy, withTrace)
 	}
 }
@@ -389,15 +396,26 @@ func (e *DecisionEngine) evalLeaf(
 	if node.Predicate != nil {
 		return evaluatePredicateLeaf(node, normalizedType, signals, policy)
 	}
+	if normalizedType == config.SignalTypeClassifier {
+		// Predicate-free classifier leaves are admitted only for a prepared
+		// operating point. Errors stay keyed by the rule, not its label.
+		matched = slices.Contains(signals.ClassifierRules, node.Name+":"+node.Label)
+	}
 	unresolved := signalFailed(signals, normalizedType, node.Name) &&
 		(!matched || signalErrorMatch(signals, normalizedType, node.Name))
 	if unresolved && policy != "" {
 		return nodeEvaluation{state: evaluationUnknown}
 	}
+	if unresolved && normalizedType == config.SignalTypeClassifier && strings.EqualFold(node.OnError, "match") {
+		return nodeEvaluation{state: evaluationTrue, confidence: 1, matchedRules: []string{formatMatchedRule(node)}, onError: true}
+	}
 	if !matched {
 		return nodeEvaluation{state: evaluationFalse, onError: unresolved}
 	}
 	confidence, scored := signalConfidence(signals.SignalConfidences, normalizedType, node.Name)
+	if normalizedType == config.SignalTypeClassifier {
+		confidence, scored = signalPredicateValue(signals, normalizedType, node.Name, node.Label)
+	}
 	return nodeEvaluation{
 		state:        evaluationTrue,
 		confidence:   confidence,
@@ -515,8 +533,8 @@ func (e *DecisionEngine) matchesSignalType(
 		return e.matchesDomainCondition(name, signals.DomainRules), true
 	}
 	if normalizedType == config.SignalTypeClassifier {
-		// Classifier conditions are predicate-only and configuration validation
-		// guarantees that the named classifier exists.
+		// The leaf evaluator handles raw-score predicates and prepared
+		// operating-point label matches separately.
 		return false, true
 	}
 
@@ -578,6 +596,8 @@ func resolvePolicySignalRules(
 		return signals.AuthzRules, true
 	case config.SignalTypeJailbreak:
 		return signals.JailbreakRules, true
+	case config.SignalTypeSafety:
+		return signals.SafetyRules, true
 	case config.SignalTypePII:
 		return signals.PIIRules, true
 	case config.SignalTypeKB:
@@ -700,9 +720,15 @@ func (e *DecisionEngine) evalOR(
 	return evaluation, trace
 }
 
+// preferredMatch ranks the matching branches of an OR. A reported score wins
+// over the structural 1.0 that keyword rules, NOT guards and predicates carry,
+// so an extra matching gate cannot strip a decision of evidence it did report.
 func preferredMatch(candidate, current nodeEvaluation) bool {
 	if candidate.onError != current.onError {
 		return current.onError
+	}
+	if candidate.scored != current.scored {
+		return candidate.scored
 	}
 	return candidate.confidence > current.confidence
 }

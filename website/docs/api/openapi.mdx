@@ -1,0 +1,52 @@
+---
+title: Router OpenAPI Reference
+sidebar_label: OpenAPI Reference
+description: Search the generated vLLM Semantic Router management API contract.
+hide_table_of_contents: true
+---
+
+import OpenAPIReference from '@site/src/components/OpenAPIReference'
+
+# Router OpenAPI Reference
+
+This explorer is generated from the same Router route catalog that serves
+`GET /openapi.json`. The catalog also owns each operation's permission,
+sensitivity, and mutation audit action, so runtime discovery and this page do
+not maintain parallel policy tables. An Agent should query the running Router
+directly:
+
+```bash
+# Compact endpoint discovery
+curl -sS http://localhost:8080/api/v1
+
+# One operation, without loading the complete document
+curl -sS 'http://localhost:8080/openapi.json?path=/api/v1/config&method=PATCH'
+
+# Complete OpenAPI document
+curl -sS http://localhost:8080/openapi.json
+```
+
+The Dashboard is only a human-facing proxy and is not required for Agent or
+Router operation.
+
+This specification describes the Router **management listener**. Routed model
+traffic goes through Envoy and follows the separate
+[inference API contract](./router). Storage routes therefore appear only as
+`/api/v1/storage/files` and `/api/v1/storage/vector-stores`; the Router does not
+publish `/v1/files` or `/v1/vector_stores` aliases.
+
+The generated contract declares the runtime-configurable Bearer scheme and the
+permission required by each operation. When management authentication is
+disabled, non-health operations also accept anonymous access; when it is set to
+`bearer`, send `Authorization: Bearer <token>`.
+
+JSON request fields are generated from the Go request type decoded by each
+handler. Configuration values inside the `yaml` field are defined by the
+[Configuration Schema](./configuration-schema), which is independently
+available from the Router at `GET /api/v1/config/schema`.
+
+Configuration mutation requests are YAML-only and require the current ETag in
+`If-Match`. Use `POST /api/v1/config/plan` to obtain the ETag and candidate
+identity before `PATCH` or `PUT`.
+
+<OpenAPIReference />
