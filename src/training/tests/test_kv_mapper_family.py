@@ -14,8 +14,10 @@ class KvMapperFamilyTest(unittest.TestCase):
         self.assertTrue((family / "README.md").is_file())
         self.assertTrue((family / "requirements.txt").is_file())
         self.assertTrue((family / "artifact.py").is_file())
+        self.assertTrue((family / "fit.py").is_file())
         self.assertTrue((family / "mapper_id.py").is_file())
         self.assertTrue((family / "tests" / "test_artifact.py").is_file())
+        self.assertTrue((family / "tests" / "test_fit.py").is_file())
 
 
 if __name__ == "__main__":
