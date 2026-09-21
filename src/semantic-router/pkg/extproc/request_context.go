@@ -272,6 +272,7 @@ type RequestContext struct {
 	HasToolsForFactCheck        bool     // Request has tools that provide context for fact-checking
 	ToolResultsContext          string   // Aggregated tool results for hallucination check
 	UserContent                 string   // Stored user content for hallucination detection
+	RequestAudio                string   // First inline user audio, never a remote URL or local path
 	RequestImageURL             string   // First image URL from user messages (for Tier 1 complexity classification)
 	HallucinationDetected       bool     // Result of hallucination detection
 	HallucinationSpans          []string // Unsupported spans found in answer (basic mode)

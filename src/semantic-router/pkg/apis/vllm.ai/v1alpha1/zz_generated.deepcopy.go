@@ -163,6 +163,21 @@ func (in *EmbeddingSignal) DeepCopyInto(out *EmbeddingSignal) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.ImageCandidates != nil {
+		in, out := &in.ImageCandidates, &out.ImageCandidates
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.NegativeCandidates != nil {
+		in, out := &in.NegativeCandidates, &out.NegativeCandidates
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
+	if in.NegativeImageCandidates != nil {
+		in, out := &in.NegativeImageCandidates, &out.NegativeImageCandidates
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.PrototypeScoring != nil {
 		in, out := &in.PrototypeScoring, &out.PrototypeScoring
 		*out = new(PrototypeScoringConfig)

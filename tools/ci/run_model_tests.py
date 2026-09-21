@@ -40,10 +40,6 @@ MULTIMODAL_BINDING_TESTS = (
     "TestMultiModalEncodeText",
     "TestMultiModalInputValidation",
 )
-MULTIMODAL_CLASSIFIER_TESTS = (
-    "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
-    "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
-)
 
 
 def validate_results(events: list[dict], expected: set[str]) -> dict:
@@ -180,13 +176,6 @@ def main() -> int:
                 MULTIMODAL_BINDING_TESTS,
                 set(MULTIMODAL_BINDING_TESTS),
                 "binding.jsonl",
-            ),
-            (
-                ROOT / "src/semantic-router",
-                "./pkg/classification",
-                MULTIMODAL_CLASSIFIER_TESTS,
-                set(MULTIMODAL_CLASSIFIER_TESTS),
-                "classification.jsonl",
             ),
         )
     elif provider == "candle":

@@ -1072,7 +1072,10 @@ export interface KeywordSignal {
 export interface EmbeddingSignal {
   name: string
   threshold: number
-  candidates: string[]
+  candidates?: string[]
+  image_candidates?: string[]
+  negative_candidates?: string[]
+  negative_image_candidates?: string[]
   aggregation_method?: string
   query_modality?: 'text' | 'image' | 'audio'
 }
