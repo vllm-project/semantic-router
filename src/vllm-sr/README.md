@@ -192,16 +192,31 @@ buckets, costs, latency and wall time. The old evaluation command/API is removed
 vllm-sr benchmark catalog
 vllm-sr benchmark setup --benchmark all
 vllm-sr benchmark dataset prepare --benchmark mmlu-pro --profile quick
+vllm-sr benchmark dataset preparations
 vllm-sr benchmark plan --manifest candidate.json --output frozen.json
 vllm-sr benchmark run --manifest frozen.json --detach
 vllm-sr benchmark report RUN_ID
 vllm-sr benchmark compare BASELINE_ID CANDIDATE_ID
 ```
 
+Dataset preparation uses the shared service by default, matching **Evaluation →
+Datasets → Prepare dataset** in Dashboard. The worker installs missing data
+preparation dependencies, downloads the pinned source and publishes a frozen
+dataset. It does not start a model, build a grading sandbox or run an evaluation.
+Gated sources need their access approval and credentials in the worker environment.
+The CLI waits and prints the manifest; `dataset prepare --no-wait` returns a job
+for `dataset preparations PREPARATION_ID`. Closing either client leaves the job
+running. `dataset options` lists sources, profiles and access requirements.
+
+With `--url`, preparation writes to the selected worker's store. Local source
+files and history options require explicit `dataset prepare --local`; this mode
+cannot be combined with `--url` or `SR_BENCH_URL` and does not upload files.
+
 The managed core worker survives Dashboard/config reloads. An image-only upgrade
 replaces an idle worker while preserving its journal; active runs must finish or
-be cancelled first. Set `VLLM_SR_BENCH_PORT` for both `serve` and `benchmark` when
-the default `8090 + stack port offset` host port is occupied. The override is an
+be cancelled, and dataset preparations must finish first. Set `VLLM_SR_BENCH_PORT`
+for both `serve` and `benchmark` when the default `8090 + stack port offset` host
+port is occupied. The override is an
 absolute loopback host port and does not change Dashboard's internal connection.
 For optional code and
 agent harnesses, prepare a dedicated worker and select it with `SR_BENCH_URL`;

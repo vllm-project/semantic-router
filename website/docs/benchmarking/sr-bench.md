@@ -57,8 +57,9 @@ stack port offset is not added to the override.
 When only the selected Dashboard image changes, `serve` upgrades its managed
 worker after verifying the same launch settings, store and credentials. The CLI
 briefly pauses the worker to check its durable journal before replacing it.
-Active runs block the upgrade and resume unchanged; finish or cancel them before
-retrying. Saved results remain in the same store. A stopped worker, changed
+Active runs and dataset preparations block the upgrade and resume unchanged.
+Finish or cancel runs and wait for preparations to finish before retrying.
+Saved results remain in the same store. A stopped worker, changed
 credentials or changed launch settings still require explicit reconciliation.
 The container runtime must support pausing for this image upgrade.
 
@@ -100,9 +101,16 @@ of manifests, command arguments and public artifacts.
 
 ## Prepare reusable tasks and targets
 
-Install `vllm-sr[bench]` on the preparation host for Parquet sources. Prepare data
-on the worker host or its shared store; a local client path is not uploaded to a
-remote worker.
+Open **Dashboard → Evaluation → Datasets → Prepare dataset**, select a benchmark
+and profile, and start preparation. The shared worker installs missing data
+preparation dependencies, downloads the pinned source, and freezes the selected
+tasks in its persistent store. The page shows the current phase and any access or
+installation error. Completed datasets become available to both Dashboard and CLI.
+
+The CLI uses the same service operation by default. It waits for completion and
+writes the frozen manifest to standard output, so it can still be redirected to
+a file. `--url` selects a remote worker; downloads and frozen dataset files remain
+on that worker, not on the CLI host.
 
 ```bash
 vllm-sr benchmark --store ./data/sr-bench dataset prepare \
@@ -113,11 +121,45 @@ vllm-sr benchmark --store ./data/sr-bench dataset combine \
   mmlu-quick.json gpqa-quick.json > quick-dataset.json
 ```
 
-Gated sources require the appropriate source access and environment credential.
+Use `--no-wait` to return the preparation job immediately. Closing the page or
+interrupting the CLI wait does not cancel the worker's preparation. Both clients
+can inspect the same jobs and prepared datasets:
+
+```bash
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset options
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset prepare \
+  --benchmark simpleqa-verified --profile smoke --no-wait
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset preparations
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset preparations PREPARATION_ID
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset show
+```
+
+Preparation requires Evaluation write permission in Dashboard; reading options,
+progress and datasets requires read permission. Read-only Dashboard mode disables
+preparation. It does not require model generation permission, start an evaluation,
+or make model requests. Automatic dependency installation is limited to the
+allowlisted data preparation packages. It does not install execution harnesses,
+build sandbox images, or provision model servers. Those remain explicit worker
+setup operations. Gated sources require access approval and the appropriate
+Hugging Face credential in the **worker environment**; browser or local CLI
+credentials are not uploaded. Installation and download failures remain visible
+on the preparation job and can be retried explicitly after the cause is fixed.
+
+Local file imports and advanced history options use the explicit `--local` mode.
+For this mode, install `vllm-sr[bench]` on the preparation host for Parquet sources.
+A local file is never implicitly uploaded to a remote worker, and `--local` cannot
+be combined with `--url` or `SR_BENCH_URL`:
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark mmlu-pro --profile smoke \
+  --source-path ./tasks.parquet --revision imported-v1
+```
+
 Local task imports require `--source-path` and `--revision`; their actual bytes
-are hashed. `--limit` creates a labeled custom subset. Never edit a prepared
-file in place. New questions, selection rules or source bytes create a new
-identity.
+are hashed. `--limit` creates a labeled custom subset in either mode. Never edit
+a prepared file in place. New questions, selection rules or source bytes create
+a new identity.
 
 ### Reserve named evaluation history
 
@@ -128,12 +170,12 @@ of sr-bench's evaluation split and seed. Use the same partition and exact source
 provenance throughout a history comparison.
 
 ```bash
-vllm-sr benchmark --store ./data/sr-bench dataset prepare \
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
   --benchmark mmlu-pro --profile quick --source-partition test > quick.json
 # Use the dataset ID returned above; --dataset and --run may be repeated.
 vllm-sr benchmark --store ./data/sr-bench dataset exclusions \
   --dataset DATASET_ID --run RUN_ID --output history.json
-vllm-sr benchmark --store ./data/sr-bench dataset prepare \
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
   --benchmark mmlu-pro --profile standard --source-partition test \
   --exclusion-snapshot history.json --evaluation-role holdout > standard.json
 ```
@@ -507,7 +549,10 @@ read-only. **Route preview** also accepts optional session and conversation
 context for inspecting session-dependent routing. Review the frozen plan before
 starting; plan review does not generate model answers.
 
-**Datasets** provides search, profile/benchmark filters and pagination. Open a
+**Datasets → Prepare dataset** downloads and freezes a built-in source through
+the same service used by `benchmark dataset prepare`. Preparation progress and
+errors survive page refreshes; completion refreshes the available datasets.
+**Datasets** also provides search, profile/benchmark filters and pagination. Open a
 dataset to browse its questions, benchmark coverage and subject groups. Questions
 load in pages of 25 with benchmark/category filters and text search; opening one
 shows the task instructions and choices, including complete code/agent task

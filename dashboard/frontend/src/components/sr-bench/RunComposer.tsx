@@ -34,6 +34,7 @@ interface Props {
   baselineID?: string
   experiment?: Manifest['experiment']
   onStarted: (run: Run) => void
+  onPrepareDataset?: () => void
 }
 
 export default function RunComposer({
@@ -48,6 +49,7 @@ export default function RunComposer({
   baselineID,
   experiment,
   onStarted,
+  onPrepareDataset,
 }: Props) {
   const targetKind =
     experiment?.role === 'baseline'
@@ -420,10 +422,17 @@ export default function RunComposer({
         </p>
       )}
       {!baselineID && datasets.length === 0 && (
-        <p className={styles.notice}>
-          No prepared datasets are registered. Prepare a frozen dataset with the sr-bench CLI
-          connected to this service, then refresh this page.
-        </p>
+        <div className={styles.notice}>
+          <p>
+            No prepared datasets are registered. Download and prepare a dataset to choose evaluation
+            questions.
+          </p>
+          {onPrepareDataset && (
+            <button type="button" onClick={onPrepareDataset}>
+              Prepare dataset
+            </button>
+          )}
+        </div>
       )}
       <div className={styles.sectionHeading}>
         <h3>
