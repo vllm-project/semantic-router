@@ -148,19 +148,22 @@ async def test_looper_failure_empty_slow_and_confidence(monkeypatch):
         "/v1beta/openai/chat/completions",
         "/v1/provider/chat/completions",
         "/v1/chat/chat/completions",
+        "/compatible-mode/v1/chat/completions?api-version=test",
+        "/compat%69ble-mode/v1/chat/completions?flag=&q=a%2Fb+z&q=%252F",
     ],
 )
 async def test_cli_auth_canary_and_prefixed_paths(path, capsys):
     async with client_for("cli", expected_authorization="canary") as client:
         request = body("hello")
         assert (await client.post(path, json=request)).status_code == 401
+        assert capsys.readouterr().out == ""
         response = await client.post(
             path, json=request, headers={"Authorization": "Bearer canary"}
         )
         assert response.status_code == 200
         assert response.json()["choices"][0]["message"]["content"] == "ok"
         output = capsys.readouterr().out
-        assert "authorization-canary-received" in output and path in output
+        assert output.splitlines() == ["authorization-canary-received", path]
         assert "Bearer canary" not in output
 
 
