@@ -87,7 +87,7 @@ Each evaluation records `llm_plugin_execution_total` with
 outcome appears inline as `x-vsr-prompt-cache-action`,
 `x-vsr-prompt-cache-reason`, `x-vsr-prompt-cache-inserted`, and
 `x-vsr-prompt-cache-preserved`; see
-[VSR routing headers](../../troubleshooting/vsr-headers.md#cache-and-plugin-headers).
+[VSR routing headers](../../troubleshooting/vsr-headers#cache-and-plugin-headers).
 No Router Replay persistence is part of this plugin.
 
 See a complete example:
