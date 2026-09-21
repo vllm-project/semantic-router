@@ -15,6 +15,12 @@ from cli.routing_preview import case_request_fields
 
 from . import VERSION
 from .adapters import get_adapter, list_adapters
+from .canonical import (
+    canonical,
+    digest,
+    plan_digest,
+    protocol_canonical,  # noqa: F401 - retained public import
+)
 from .dataset_io import (
     MAX_ROWS,
     MAX_SCAN_BYTES,
@@ -91,52 +97,6 @@ DEFAULT_LIMITS = {
     "max_calls_per_case": 32,
     "case_timeout_s": 600,
 }
-
-
-_CANONICAL_ENCODER = json.JSONEncoder(
-    sort_keys=True,
-    separators=(",", ":"),
-    ensure_ascii=False,
-    allow_nan=False,
-)
-
-
-def canonical(value):
-    return _CANONICAL_ENCODER.encode(value)
-
-
-def digest(value):
-    checksum = hashlib.sha256()
-    for chunk in _CANONICAL_ENCODER.iterencode(value):
-        checksum.update(chunk.encode())
-    return checksum.hexdigest()
-
-
-def _protocol_numbers(item):
-    if isinstance(item, float) and item.is_integer():
-        return int(item)
-    if isinstance(item, dict):
-        return {key: _protocol_numbers(child) for key, child in item.items()}
-    if isinstance(item, list):
-        return [_protocol_numbers(child) for child in item]
-    return item
-
-
-def protocol_canonical(value):
-    """Compare control values across JSON clients without rewriting evidence.
-
-    JSON has one numeric type: browsers serialize 1.0 as 1 and -0.0 as 0.
-    Preserve booleans, strings, array order and fractional values, and retain
-    canonical()'s rejection of non-finite numbers. Raw case/dataset digests
-    deliberately keep their separate, exact-content contract.
-    """
-    return canonical(_protocol_numbers(value))
-
-
-def plan_digest(manifest):
-    """Hash a reviewed plan's numeric semantics, excluding its own receipt."""
-    content = {key: value for key, value in manifest.items() if key != "plan_sha256"}
-    return digest(_protocol_numbers(content))
 
 
 def planned_cells(manifest):
@@ -331,10 +291,27 @@ def resolve_dataset(manifest):
             if "cases" in m and m["cases"] != loaded:
                 raise ValueError("inline cases do not match dataset")
         m["cases"] = loaded
+        prepared_provenance_found = False
         metadata_path = path.parent / "manifest.json"
         if metadata_path.is_file() and metadata_path != path:
             metadata = json.loads(read_small(metadata_path, 2 * 1024 * 1024))
             if metadata.get("sha256") == ds["sha256"]:
+                from .preparation import (  # noqa: PLC0415
+                    validate_cases,
+                    validate_manifest,
+                )
+
+                validate_manifest(metadata)
+                if "preparation" in metadata or "preparation" in ds:
+                    for key in ds.keys() - {"path", "sha256"}:
+                        if key not in metadata or canonical(ds[key]) != canonical(
+                            metadata[key]
+                        ):
+                            raise ValueError(
+                                "Prepared dataset provenance cannot be overridden"
+                            )
+                    validate_cases(metadata, loaded)
+                    prepared_provenance_found = True
                 if metadata.get("profile") != m.get("profile", "quick"):
                     raise ValueError(
                         "Prepared dataset profile differs from requested run profile"
@@ -344,6 +321,13 @@ def resolve_dataset(manifest):
                         "Prepared dataset seed differs from requested run seed"
                     )
                 m["dataset"] = {**metadata, **ds}
+        if (
+            "preparation" in ds
+            or ds.get("selection") == "stratified-hash-provenance-v1"
+        ) and not prepared_provenance_found:
+            raise ValueError(
+                "Preparation provenance requires its verified prepared manifest"
+            )
 
     return m
 
