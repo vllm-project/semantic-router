@@ -146,6 +146,35 @@ func TestContextDedupRemovesTheLaterCopyThroughTheSharedStage(t *testing.T) {
 	}
 }
 
+// A large eligible history must deduplicate well inside the default timeout
+// through the production registration path. A resolver that rebuilt its
+// index on every lookup made this quadratic and exhausted the deadline.
+func TestContextDedupLargeHistoryCompletesWithinDefaultTimeout(t *testing.T) {
+	request := &llmprotocol.Request{}
+	turn := func() {
+		request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "run the checks"}}})
+		for i := 0; i < 1500; i++ {
+			request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "ok"}}})
+		}
+	}
+	turn()
+	turn()
+	request.Messages = append(request.Messages, llmprotocol.Message{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "live"}}})
+	total := len(request.Messages)
+	ctx := enabledDedupContext(t, request, map[string]interface{}{"enabled": true, "failure_mode": "fail_closed"})
+	captureOriginalContextHistory(ctx)
+	(&OpenAIRouter{}).prepareContextDedupStep(ctx, request)
+	if err := (&OpenAIRouter{}).applyContextTransformationPlan(ctx, request); err != nil {
+		t.Fatalf("default limits must admit a large eligible history: %v (%+v)", err, ctx.ContextDedupDiagnostics)
+	}
+	if len(request.Messages) != total/2+1 {
+		t.Fatalf("expected the later copy removed, got %d of %d messages", len(request.Messages), total)
+	}
+	if ctx.ContextDedupDiagnostics.Outcome != contextdedup.OutcomeApplied || ctx.ContextDedupDiagnostics.RemovedMessages != 1501 {
+		t.Fatalf("unexpected diagnostics %+v", ctx.ContextDedupDiagnostics)
+	}
+}
+
 func TestContextDedupStepOrderHoldsWhateverRegistrationOrder(t *testing.T) {
 	request := &llmprotocol.Request{}
 	for _, text := range []string{"stale", "stale answer", "old", "old answer", "old", "old answer", "live"} {

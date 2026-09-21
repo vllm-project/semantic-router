@@ -44,8 +44,18 @@ func (r *OpenAIRouter) prepareContextDedupStep(ctx *RequestContext, request *llm
 		blocked = contextdedup.ReasonUnsupportedRepresentation
 	}
 	action := contextdedup.NewAction(contextDedupPolicy(ctx.ContextDedupPolicy), blocked)
+	// The IR does not exist yet, so the resolver is created on first use and
+	// then retained: its position index is request-local and must survive
+	// across lookups, or every comparison would rebuild it.
+	var resolver contextdedup.Resolver
 	action.WithResolver(func(id int) (llmprotocol.Message, bool) {
-		return contextdedup.RequestResolver(ctx.ContextRequestIR)(id)
+		if resolver == nil {
+			if ctx.ContextRequestIR == nil {
+				return llmprotocol.Message{}, false
+			}
+			resolver = contextdedup.RequestResolver(ctx.ContextRequestIR)
+		}
+		return resolver(id)
 	})
 	ctx.ContextDedupAction = action
 	ctx.ContextHistorySteps = appendContextHistoryStep(ctx.ContextHistorySteps, action.Step())
