@@ -31,17 +31,17 @@ url, duration, concurrency, payload_file = (
 with open(payload_file, "rb") as f:
     payload = f.read()
 
-lat = []
-http_err = 0
-conn_err = 0
-lock = threading.Lock()
 stop = time.monotonic() + duration
 
+# One result slot per worker, filled in place and merged after the join: no
+# shared mutation, so no lock and no globals.
+results = [([], 0, 0) for _ in range(concurrency)]
 
-def worker():
-    local = []
-    local_http_err = 0
-    local_conn_err = 0
+
+def worker(slot):
+    latencies = []
+    http_errors = 0
+    conn_errors = 0
     while time.monotonic() < stop:
         t0 = time.monotonic()
         req = urllib.request.Request(
@@ -49,25 +49,25 @@ def worker():
         )
         try:
             urllib.request.urlopen(req, timeout=300).read()
-            local.append((time.monotonic() - t0) * 1000.0)
+            latencies.append((time.monotonic() - t0) * 1000.0)
         except urllib.error.HTTPError:
-            local_http_err += 1
+            http_errors += 1
         except Exception:
-            local_conn_err += 1
-    global http_err, conn_err
-    with lock:
-        lat.extend(local)
-        http_err += local_http_err
-        conn_err += local_conn_err
+            conn_errors += 1
+    results[slot] = (latencies, http_errors, conn_errors)
 
 
 t_start = time.monotonic()
-threads = [threading.Thread(target=worker) for _ in range(concurrency)]
+threads = [threading.Thread(target=worker, args=(slot,)) for slot in range(concurrency)]
 for t in threads:
     t.start()
 for t in threads:
     t.join()
 elapsed = time.monotonic() - t_start
+
+lat = [value for latencies, _, _ in results for value in latencies]
+http_err = sum(errors for _, errors, _ in results)
+conn_err = sum(errors for _, _, errors in results)
 
 n = len(lat)
 if n == 0:

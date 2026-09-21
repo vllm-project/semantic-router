@@ -17,8 +17,9 @@ Prints "<signal> <delta>" per signal; exits 1 when any signal is short.
 import re
 import sys
 
-before_file, after_file, minimum = sys.argv[1], sys.argv[2], int(sys.argv[3])
-signals = (sys.argv[4] if len(sys.argv) > 4 else "domain,jailbreak,pii").split(",")
+before_file, after_file, floor, *rest = sys.argv[1:]
+minimum = int(floor)
+signals = (rest[0] if rest else "domain,jailbreak,pii").split(",")
 
 
 def counts(path):
