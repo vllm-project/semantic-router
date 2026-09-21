@@ -62,6 +62,15 @@ func (a *Action) propose(
 		ctx = bounded
 	}
 	edits, diagnostics := plan(ctx, a.policy, a.resolver, view)
+	if ctx.Err() != nil && !evaluationFailure(diagnostics.Reason) {
+		// The scan polls the deadline only between comparisons, so a few large
+		// turns can finish after it expired. The shared executor checks the
+		// parent context, not this derived one, so the expiry is enforced here:
+		// a proposal produced past the deadline is withdrawn, never applied.
+		diagnostics = withoutRemoval(diagnostics)
+		diagnostics.Reason = ReasonCancelled
+		edits = contextcompression.TransformationEdits{}
+	}
 	if evaluationFailure(diagnostics.Reason) {
 		diagnostics.Outcome = OutcomeFailed
 		a.record(diagnostics)

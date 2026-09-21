@@ -152,6 +152,55 @@ func TestActionFailureModes(t *testing.T) {
 	}
 }
 
+// A deadline that expires during a scan too short to reach the periodic
+// cancellation poll must still withdraw the proposal: the executor checks
+// only the parent context, so the action enforces its own timeout after the
+// plan returns.
+func TestActionDeadlineExpiringDuringShortScanRejectsEdits(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		failClosed bool
+	}{
+		{"fail_closed", true},
+		{"fail_open", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			request := duplicatedRequest()
+			before := encoded(t, request)
+			ir := contextcompression.ParseSemanticRequest(request, contextcompression.Provenance{})
+			base := RequestResolver(ir)
+			calls := 0
+			slow := func(id int) (llmprotocol.Message, bool) {
+				calls++
+				if calls == 1 {
+					time.Sleep(20 * time.Millisecond)
+				}
+				return base(id)
+			}
+			policy := testPolicy()
+			policy.Timeout, policy.FailClosed = 2*time.Millisecond, tc.failClosed
+			action := NewAction(policy, "").WithResolver(slow)
+			err := ir.ApplySteps(context.Background(), []contextcompression.TransformationStep{action.Step()})
+			if (err != nil) != tc.failClosed {
+				t.Fatalf("error mismatch: %v", err)
+			}
+			if encoded(t, request) != before {
+				t.Fatal("an expired deadline must not remove messages")
+			}
+			if calls >= cancellationCheckInterval {
+				t.Fatalf("scenario must stay below the periodic poll, made %d calls", calls)
+			}
+			result := action.Reconcile(ir.Transformations.Receipts())
+			if result.Outcome != OutcomeFailed || result.Reason != ReasonCancelled || result.RemovedMessages != 0 || len(result.Segments) != 0 {
+				t.Fatalf("unexpected diagnostics %+v", result)
+			}
+			if receipt := ir.Transformations.Receipts()[0]; receipt.Status != contextcompression.TransformationFailed || receipt.MessagesRemoved != 0 {
+				t.Fatalf("unexpected receipt %+v", receipt)
+			}
+		})
+	}
+}
+
 func TestActionCancelledBeforeProposalIsNotEvaluated(t *testing.T) {
 	// The shared executor refuses to run a policy on a cancelled context, so
 	// the action is never evaluated and the request is untouched.
