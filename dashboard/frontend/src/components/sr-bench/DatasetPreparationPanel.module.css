@@ -1,24 +1,85 @@
-.selection {
+.heading.heading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+.intro {
+  font-size: 12px;
+}
+.formFields.formFields {
+  margin: 1rem 0 0.75rem;
+}
+.selection,
+.accessNotice,
+.historyHeading,
+.jobRow,
+.jobIdentity,
+.jobMeta {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  margin: 1rem 0 0.5rem;
+  gap: 0.5rem 0.75rem;
+  min-width: 0;
+}
+.selection,
+.historyHeading,
+.jobRow {
+  justify-content: space-between;
 }
 .selection strong {
-  font-size: 1.25rem;
+  font-size: 14px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
-.selection span,
-.selection a,
-.profile {
+.supporting,
+.completed,
+.jobMeta,
+.jobIdentity > span,
+.accessNotice {
   color: var(--text-secondary);
   font-size: 12px;
 }
-.history {
-  margin-top: 1.5rem;
+.supporting {
+  margin-top: 0.8rem;
+}
+.supporting summary,
+.completed summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.supportingBody {
+  margin-top: 0.5rem;
+  overflow-wrap: anywhere;
+}
+.supportingBody p {
+  margin: 0.35rem 0;
+}
+.accessNotice {
+  justify-content: space-between;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
   border-top: 1px solid var(--border-color);
-  padding-top: 1rem;
+}
+.accessNotice > p {
+  flex: 1 1 250px;
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.accessNotice > button {
+  flex-shrink: 0;
+}
+.history {
+  margin-top: 1.25rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border-color);
+}
+.historyHeading {
+  margin-bottom: 0.5rem;
+}
+.historyHeading h3 {
+  font-size: 14px;
+  margin: 0;
 }
 .jobs {
   list-style: none;
@@ -26,10 +87,44 @@
   margin: 0;
 }
 .job {
-  padding: 1rem 0;
+  padding: 0.65rem 0;
   border-top: 1px solid var(--border-color);
   overflow-wrap: anywhere;
 }
-.profile {
-  margin-left: 0.75rem;
+.jobIdentity strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.jobMeta time {
+  font-variant-numeric: tabular-nums;
+}
+.status {
+  color: var(--text-primary);
+}
+.job[data-status='failed'] .status,
+.jobError {
+  color: #ffacb2;
+}
+.jobError {
+  font-size: 12px;
+  margin: 0.35rem 0 0;
+}
+.completed {
+  margin-top: 0.6rem;
+}
+.completed[open] > summary {
+  margin-bottom: 0.5rem;
+}
+@media (max-width: 520px) {
+  .jobRow,
+  .jobIdentity,
+  .jobMeta {
+    align-items: flex-start;
+  }
+  .jobMeta {
+    width: 100%;
+  }
+  .selection {
+    gap: 0.65rem;
+  }
 }

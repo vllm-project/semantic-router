@@ -276,7 +276,7 @@ Download and freeze a dataset through the shared service by default.
 
 | Parameter | Description |
 | --- | --- |
-| `--benchmark TEXT` | [required] |
+| `--benchmark TEXT` | Benchmark ID; repeat to prepare a shared collection.  [required] May be repeated. |
 | `--profile CHOICE` | Choices: smoke, quick, standard. Default: quick. |
 | `--source-path PATH` | — |
 | `--local` | Prepare on this host; required for source files and history options. Default: false. |

@@ -22,6 +22,17 @@ def prepare_remote_dataset(client, benchmark, profile, seed, limit, no_wait):
     request = {"benchmark": benchmark, "profile": profile, "seed": seed}
     if limit is not None:
         request["limit"] = limit
+    return _submit_preparation(client, request, no_wait)
+
+
+def prepare_remote_datasets(client, benchmarks, profile, seed, no_wait):
+    request = {"benchmarks": list(benchmarks), "profile": profile}
+    if seed is not None:
+        request["seed"] = seed
+    return _submit_preparation(client, request, no_wait)
+
+
+def _submit_preparation(client, request, no_wait):
     preparation = client.request("POST", "/dataset-preparations", request)[
         "preparation"
     ]

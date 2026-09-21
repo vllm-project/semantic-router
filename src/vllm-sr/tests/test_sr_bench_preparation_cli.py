@@ -46,6 +46,8 @@ def service(tmp_path, monkeypatch):
             )
             status = 200
             preparation = {"id": PREPARATION_ID, "status": "queued", "phase": "queued"}
+            if "items" in state:
+                preparation["items"] = state["items"]
             if self.path == "/health":
                 data = {"version": VERSION}
             elif self.command == "POST":
@@ -146,13 +148,107 @@ def test_detached_prepare_is_shared_and_does_not_poll(service):
     assert json.loads(options.stdout)["benchmarks"][0]["id"] == "mmlu-pro"
 
 
+@pytest.mark.parametrize("seed", [None, 42])
+def test_batch_prepare_waits_and_returns_worker_collection(service, seed):
+    service["manifest"] = {
+        "id": "c" * 64,
+        "benchmarks": ["mmlu-pro", "simpleqa-verified"],
+        "case_count": 10,
+        "path": "/worker/store/collection/cases.jsonl",
+    }
+    result = invoke(
+        service,
+        "prepare",
+        "--benchmark",
+        "mmlu-pro",
+        "--benchmark",
+        "simpleqa-verified",
+        "--profile",
+        "smoke",
+        *(["--seed", str(seed)] if seed is not None else []),
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout) == service["manifest"]
+    request = {
+        "benchmarks": ["mmlu-pro", "simpleqa-verified"],
+        "profile": "smoke",
+    }
+    if seed is not None:
+        request["seed"] = seed
+    assert [request for request in service["requests"] if request[0] == "POST"] == [
+        ("POST", "/api/sr-bench/v1/dataset-preparations", request)
+    ]
+    assert service["reads"] == 2
+
+
+def test_detached_batch_preserves_per_benchmark_progress(service):
+    service["items"] = [
+        {"benchmark": "mmlu-pro", "status": "queued", "phase": "queued"},
+        {"benchmark": "simpleqa-verified", "status": "queued", "phase": "queued"},
+    ]
+    result = invoke(
+        service,
+        "prepare",
+        "--benchmark",
+        "mmlu-pro",
+        "--benchmark",
+        "simpleqa-verified",
+        "--no-wait",
+    )
+    assert result.exit_code == 0, result.output
+    assert json.loads(result.stdout)["preparation"]["items"] == service["items"]
+    assert service["reads"] == 0
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--local"],
+        ["--limit", "3"],
+        ["--source-path", "fixture.json"],
+        ["--revision", "fixture-v1"],
+        ["--source-partition", "test"],
+        ["--evaluation-role", "retest"],
+        ["--exclusion-snapshot"],
+    ],
+)
+def test_batch_rejects_local_source_history_and_limit_options(
+    service, arguments, tmp_path
+):
+    if arguments == ["--exclusion-snapshot"]:
+        snapshot = tmp_path / "exclusions.json"
+        snapshot.write_text("{}")
+        arguments = [*arguments, str(snapshot)]
+    result = invoke(
+        service,
+        "prepare",
+        "--benchmark",
+        "mmlu-pro",
+        "--benchmark",
+        "simpleqa-verified",
+        *arguments,
+    )
+    assert result.exit_code == 1
+    assert "Multiple benchmarks require shared collection preparation" in result.output
+    assert not service["requests"]
+
+
+@pytest.mark.parametrize("batch", [False, True])
 @pytest.mark.parametrize("failed_post", [False, True])
-def test_failure_is_clear_without_resubmission_or_local_fallback(service, failed_post):
+def test_failure_is_clear_without_resubmission_or_local_fallback(
+    service, failed_post, batch
+):
     if failed_post:
         service["post_status"] = 503
     else:
         service["status"] = "failed"
-    result = invoke(service, "prepare", "--benchmark", "gpqa-diamond")
+    result = invoke(
+        service,
+        "prepare",
+        "--benchmark",
+        "gpqa-diamond",
+        *(["--benchmark", "mmlu-pro"] if batch else []),
+    )
     assert result.exit_code == 1
     assert (
         "Preparation service is unavailable" if failed_post else "Source access denied"
@@ -205,6 +301,8 @@ def test_explicit_local_import_keeps_existing_source_contract(tmp_path, monkeypa
     monkeypatch.delenv("SR_BENCH_TOKEN_ENV", raising=False)
     source = tmp_path / "source.json"
     source.write_text("[]")
+    snapshot = tmp_path / "exclusions.json"
+    snapshot.write_text("{}")
     prepare = Mock(return_value={"id": "local-fixture"})
     monkeypatch.setattr(command.sources, "prepare_dataset", prepare)
     result = CliRunner().invoke(
@@ -222,9 +320,23 @@ def test_explicit_local_import_keeps_existing_source_contract(tmp_path, monkeypa
             str(source),
             "--revision",
             "fixture-v1",
+            "--source-partition",
+            "test",
+            "--exclusion-snapshot",
+            str(snapshot),
+            "--evaluation-role",
+            "retest",
+            "--limit",
+            "3",
         ],
     )
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout) == {"id": "local-fixture"}
     assert prepare.call_args.kwargs["source_path"] == str(source)
     assert prepare.call_args.kwargs["revision"] == "fixture-v1"
+    assert prepare.call_args.kwargs["benchmark"] == "mmlu-pro"
+    assert prepare.call_args.kwargs["seed"] == 20260918
+    assert prepare.call_args.kwargs["source_partition"] == "test"
+    assert prepare.call_args.kwargs["exclusion_snapshot"] == snapshot
+    assert prepare.call_args.kwargs["evaluation_role"] == "retest"
+    assert prepare.call_args.kwargs["limit"] == 3

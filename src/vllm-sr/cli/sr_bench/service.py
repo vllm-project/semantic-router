@@ -24,7 +24,12 @@ from .datasets import DatasetReader
 from .engine import Engine, EngineClosedError, ReviewedPlanChangedError
 from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
 from .offline import export_training, regrade, replay
-from .preparations import PreparationBusyError, Preparations, preparation_options
+from .preparations import (
+    PreparationBusyError,
+    Preparations,
+    PreparationUnavailableError,
+    preparation_options,
+)
 from .recovery import RecoveryPlanError, recover, recovery_plan
 from .replay_validation import ReplayEligibilityError
 from .report import compare, make_report
@@ -615,6 +620,15 @@ class Handler(BaseHTTPRequestHandler):
             )
         except PreparationBusyError as exc:
             self._send(409, {"error": str(exc), "code": "preparation_busy"})
+        except PreparationUnavailableError as exc:
+            self._send(
+                503,
+                {
+                    "error": str(exc),
+                    "code": "preparation_unavailable",
+                    "model_requests": 0,
+                },
+            )
         except PermissionError as exc:
             self._send(403, {"error": str(exc)})
         except KeyError:

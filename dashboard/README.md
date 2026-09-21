@@ -179,10 +179,16 @@ Targets contain endpoint and model identities, four token prices, and credential
 environment references. The Dashboard selects registered targets; it cannot
 redirect their credentials to another endpoint.
 
-Use **Evaluation → Datasets → Prepare dataset** to download a built-in source and
-freeze a smoke, quick, or standard set. The page and `vllm-sr benchmark dataset
-prepare` submit to the same worker and share progress, errors and completed
-datasets. Required data preparation packages are installed automatically on the
+Start in **Evaluation → Create evaluation**: choose benchmarks, a smoke, quick,
+or standard size, targets and limits. **Review plan** reuses available datasets
+and automatically prepares missing data and its supported dependencies. Progress
+stays in the creation flow; the service completes accepted preparation jobs even
+if the page closes. Review the frozen plan before **Start evaluation**.
+
+**Datasets → Prepare dataset** remains a management entry point. It and
+`vllm-sr benchmark dataset prepare` use the same worker, progress and frozen
+datasets. Repeat `--benchmark` to prepare a collection in one background job.
+Required data preparation packages are installed automatically on the
 worker; execution harnesses, sandbox images and model servers are not. Gated
 sources require access approval and credentials in the worker environment.
 Preparation continues when the page closes and makes no model requests. It
@@ -198,8 +204,8 @@ The CLI waits for the manifest by default; use `dataset prepare --no-wait` and
 explicit `dataset prepare --local` on the worker host or shared store, not an
 implicit upload from a remote CLI.
 
-Select a frozen dataset, profile, targets and limits in Evaluation. Review the plan before
-starting. Live runs record capability and usage; preview runs record routing
+Existing frozen datasets can also be selected explicitly. Live runs record
+capability and usage; preview runs record routing
 diagnostics only. The page shows per-target and per-benchmark results, four
 token buckets, latency, wall time, failures, routing distributions and case
 evidence. Comparisons require completed live runs on the same frozen cases.
