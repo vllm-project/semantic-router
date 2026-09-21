@@ -13,6 +13,7 @@ from provider_contract import (
     protocol_request_field_inventory,
     provider_request_field_inventory,
 )
+from provider_boundary import RAG_FIXTURE_CONTEXT
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[5]
 CAPABILITY_FIXTURES = (
@@ -241,6 +242,31 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
         "x-vsr-e2e-added": "observable",
         "x-vsr-test-session-id": session_id,
     }
+
+
+@pytest.mark.asyncio
+async def test_rag_fixture_requires_the_owned_query_and_header() -> None:
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://simulator"
+    ) as client:
+        response = await client.post(
+            "/v1/rag/search",
+            json={
+                "query": "__RAG_PROVIDER_BOUNDARY__ What is Project Zephyr?",
+                "top_k": 2,
+            },
+            headers={"x-vsr-e2e-rag-fixture": "provider-boundary"},
+        )
+        missing_header = await client.post(
+            "/v1/rag/search",
+            json={
+                "query": "__RAG_PROVIDER_BOUNDARY__ What is Project Zephyr?",
+                "top_k": 2,
+            },
+        )
+    assert response.status_code == HTTPStatus.OK
+    assert response.json() == {"results": [{"content": RAG_FIXTURE_CONTEXT}]}
+    assert missing_header.status_code == HTTPStatus.BAD_REQUEST
 
 
 @pytest.mark.asyncio
