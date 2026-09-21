@@ -1,10 +1,19 @@
 package shadow
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+)
+
+// Drop reasons for the aggregate budget. They are a fixed set because they tag
+// sr_shadow_dispatch_total{reason}, so they carry no per-request values.
+const (
+	droppReasonCallLimit          = "budget_call_limit"
+	droppReasonTokenLimit         = "budget_token_limit"
+	droppReasonCostLimit          = "budget_cost_limit"
+	droppReasonConcurrencyLimit   = "budget_concurrency_limit"
+	droppReasonResponseBytesLimit = "budget_response_bytes_limit"
 )
 
 // ShadowBudget is the per-request aggregate budget shared by every arm of one
@@ -43,17 +52,17 @@ func (b *ShadowBudget) TryEnter() (string, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.limit.MaxCallsPerRequest > 0 && b.calls >= b.limit.MaxCallsPerRequest {
-		return fmt.Sprintf("budget_call_limit (%d)", b.limit.MaxCallsPerRequest), false
+		return droppReasonCallLimit, false
 	}
 	reserveCost := b.costOf(b.limit.ReserveTokensPerArm)
 	if b.limit.MaxTokensPerRequest > 0 && b.token+b.limit.ReserveTokensPerArm > b.limit.MaxTokensPerRequest {
-		return fmt.Sprintf("budget_token_limit (%d)", b.limit.MaxTokensPerRequest), false
+		return droppReasonTokenLimit, false
 	}
 	if b.limit.MaxCostPerRequest > 0 && b.cost+reserveCost > b.limit.MaxCostPerRequest {
-		return fmt.Sprintf("budget_cost_limit (%v)", b.limit.MaxCostPerRequest), false
+		return droppReasonCostLimit, false
 	}
 	if b.limit.MaxResponseBytesPerRequest > 0 && b.bytes+b.reserveResponseBytes > b.limit.MaxResponseBytesPerRequest {
-		return fmt.Sprintf("budget_response_bytes_limit (%d)", b.limit.MaxResponseBytesPerRequest), false
+		return droppReasonResponseBytesLimit, false
 	}
 	b.calls++
 	b.token += b.limit.ReserveTokensPerArm

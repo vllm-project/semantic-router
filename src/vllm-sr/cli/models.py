@@ -1292,7 +1292,9 @@ class ShadowDispatchPluginConfig(BaseModel):
     def require_model_when_enabled(self):
         # Mirrors the Router's ShadowDispatchPluginConfig.Validate: `model` or
         # at least one arm is required when enabled.
-        has_model = (self.model or "").strip() != "" or bool(self.arms)
+        has_model = (self.model or "").strip() != "" or bool(
+            [arm for arm in (self.arms or []) if arm.strip()]
+        )
         if self.enabled and not has_model:
             raise ValueError("shadow_dispatch model or arms are required when enabled")
         # Mirrors the Router's cap combinations too: a token cap needs an

@@ -14,8 +14,24 @@ func TestShadowBudgetCallLimit(t *testing.T) {
 	}
 	if reason, ok := b.TryEnter(); ok {
 		t.Fatalf("second arm must be rejected, got admitted")
-	} else if reason != "budget_call_limit (1)" {
-		t.Fatalf("reason = %q, want budget_call_limit (1)", reason)
+	} else if reason != "budget_call_limit" {
+		t.Fatalf("reason = %q, want budget_call_limit", reason)
+	}
+}
+
+func TestShadowBudgetDropReasonsStayValueFree(t *testing.T) {
+	for _, reason := range []string{
+		droppReasonCallLimit, droppReasonTokenLimit, droppReasonCostLimit,
+		droppReasonConcurrencyLimit, droppReasonResponseBytesLimit,
+	} {
+		if !strings.HasPrefix(reason, "budget_") || strings.Contains(reason, "(") {
+			t.Fatalf("drop reason %q must be a fixed label: it tags a metric reason", reason)
+		}
+	}
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxResponseBytesPerRequest: 700}, 400)
+	b.TryEnter()
+	if reason, ok := b.TryEnter(); ok || strings.Contains(reason, "(") {
+		t.Fatalf("drop reason %q must carry no per-request value", reason)
 	}
 }
 
@@ -26,7 +42,7 @@ func TestShadowBudgetReservesTokensAtAdmission(t *testing.T) {
 	}
 	if reason, ok := b.TryEnter(); ok {
 		t.Fatalf("second arm with reserve 60 must be rejected under MaxTokens=100")
-	} else if !strings.HasPrefix(reason, "budget_token_limit") {
+	} else if reason != "budget_token_limit" {
 		t.Fatalf("reason = %q, want budget_token_limit", reason)
 	}
 }
@@ -38,8 +54,8 @@ func TestShadowBudgetReservesResponseBytesAtAdmission(t *testing.T) {
 	}
 	if reason, ok := b.TryEnter(); ok {
 		t.Fatalf("second arm must be rejected: 400+400 > 700")
-	} else if reason != "budget_response_bytes_limit (700)" {
-		t.Fatalf("reason = %q, want budget_response_bytes_limit (700)", reason)
+	} else if reason != "budget_response_bytes_limit" {
+		t.Fatalf("reason = %q, want budget_response_bytes_limit", reason)
 	}
 }
 

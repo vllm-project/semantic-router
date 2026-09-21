@@ -539,8 +539,13 @@ func (d *shadowDispatcher) waitForSlot(lane *shadowLane, job *shadowJob) (bool, 
 
 // recordDrop reports a shadow call that never reached a worker. Drops are
 // bounded-resource signals, so they are observable through metrics and logs
-// rather than replay-store writes that could amplify an overload.
+// rather than replay-store writes that could amplify an overload. The arm
+// already holds its admission reservation, so dropping it releases that
+// reservation again.
 func (d *shadowDispatcher) recordDrop(job *shadowJob, reason string) {
+	if job.budget != nil {
+		job.budget.Refund()
+	}
 	metrics.RecordShadowDispatch(job.decision, metrics.ShadowDispatchResultDropped, reason)
 	logging.ComponentWarnEvent("extproc", "shadow_dispatch_dropped", map[string]interface{}{
 		"request_id":        job.primaryRequest,

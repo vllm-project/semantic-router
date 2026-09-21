@@ -100,7 +100,7 @@ plugins:
 | --- | --- |
 | `completed` | `completed` |
 | `failed` | `backend_unresolved`、`credential_unresolved`、`encode_failed`、`timeout`、`transport_error`、`upstream_status`、`redirect_rejected`、`response_too_large`、`malformed_response` |
-| `dropped` | `queue_full`、`queue_timeout`、`router_closing`、`same_as_primary`、`internal_request`、`request_unavailable` |
+| `dropped` | `queue_full`, `queue_timeout`, `router_closing`, `same_as_primary`, `internal_request`, `request_unavailable`, `budget_call_limit`, `budget_token_limit`, `budget_cost_limit`, `budget_concurrency_limit`, `budget_response_bytes_limit` |
 | `sampled_out` | `sampled_out` |
 
 结果和原因导出为 `sr_shadow_dispatch_total{decision,result,reason}`，以及 `sr_shadow_dispatch_latency_seconds`、`sr_shadow_dispatch_inflight` 和 `sr_shadow_dispatch_queued`。由资源边界导致的丢弃通过指标和结构化 `shadow_dispatch_dropped` 事件报告，而不是写入回放，因此过载的 shadow 通道不会放大回放存储负载。
