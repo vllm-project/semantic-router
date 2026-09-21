@@ -350,6 +350,8 @@ class Handler(BaseHTTPRequestHandler):
                 )
             if route == ["datasets", "compose"] and method == "POST":
                 body = self._body()
+                if set(body) - {"dataset_ids", "benchmarks"}:
+                    raise ValueError("Unsupported dataset compose fields")
                 return self._send(
                     200,
                     {
