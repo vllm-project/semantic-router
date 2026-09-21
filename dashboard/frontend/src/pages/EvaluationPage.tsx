@@ -11,6 +11,7 @@ import RunComparison from '../components/sr-bench/RunComparison'
 import ReplayComposer from '../components/sr-bench/ReplayComposer'
 import RunList, { type RunFilters } from '../components/sr-bench/RunList'
 import DatasetInventory from '../components/sr-bench/DatasetInventory'
+import DatasetPreparationPanel from '../components/sr-bench/DatasetPreparationPanel'
 import ExperimentWorkspace from '../components/sr-bench/ExperimentWorkspace'
 import type {
   Catalog,
@@ -275,6 +276,7 @@ export default function EvaluationPage() {
           }
           initialModel={search.get('model') ?? undefined}
           initialDataset={search.get('dataset') ?? undefined}
+          onPrepareDataset={() => setSearch({ view: 'datasets', prepare: '1', ...experimentRoute })}
           onStarted={(run) => {
             setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)])
             setSearch({ view: 'runs', run: run.id, ...experimentRoute })
@@ -349,12 +351,28 @@ export default function EvaluationPage() {
           )}
         </>
       )}
+      {view === 'datasets' && search.get('prepare') === '1' && (
+        <DatasetPreparationPanel
+          key={user?.id ?? ''}
+          canWrite={canWrite}
+          onCompleted={refresh}
+          onOpenDataset={(dataset) =>
+            setSearch({ view: 'datasets', dataset: dataset.id, ...experimentRoute })
+          }
+          onClose={() => setSearch({ view: 'datasets', ...experimentRoute })}
+        />
+      )}
       {view === 'datasets' && loaded.datasets && (
         <DatasetInventory
           datasets={datasets}
           runs={runs}
           runsLoaded={!!loaded.runs}
           canRun={canRun}
+          onPrepare={
+            search.get('prepare') === '1'
+              ? undefined
+              : () => setSearch({ view: 'datasets', prepare: '1', ...experimentRoute })
+          }
           selectedDatasetId={search.get('dataset') ?? ''}
           onSelectDataset={(id) => setSearch({ view: 'datasets', dataset: id, ...experimentRoute })}
           onBackToDatasets={() => setSearch({ view: 'datasets', ...experimentRoute })}

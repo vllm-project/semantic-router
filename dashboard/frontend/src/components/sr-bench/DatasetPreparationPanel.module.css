@@ -1,0 +1,35 @@
+.selection {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0.5rem;
+}
+.selection strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.selection span,
+.selection a,
+.profile {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.history {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
+}
+.jobs {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.job {
+  padding: 1rem 0;
+  border-top: 1px solid var(--border-color);
+  overflow-wrap: anywhere;
+}
+.profile {
+  margin-left: 0.75rem;
+}

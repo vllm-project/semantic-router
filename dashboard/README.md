@@ -156,6 +156,9 @@ Docker socket nor GPU devices. Dashboard/config reloads reuse a matching running
 worker. A stopped or changed worker requires explicit reconciliation; `vllm-sr
 stop` stops it without deleting its evidence.
 
+An image upgrade waits for active runs and dataset preparations to finish. An
+unverifiable preparation journal also preserves the running worker for inspection.
+
 The core image does not include every upstream execution environment. For code
 and interactive benchmarks, prepare a dedicated worker host with the required
 pinned harnesses and sandbox dependencies. `SR_BENCH_URL` selects that external
@@ -176,8 +179,23 @@ Targets contain endpoint and model identities, four token prices, and credential
 environment references. The Dashboard selects registered targets; it cannot
 redirect their credentials to another endpoint.
 
-Prepare versioned datasets with `vllm-sr benchmark dataset prepare` and select a
-frozen dataset, profile, targets and limits in Evaluation. Review the plan before
+Use **Evaluation → Datasets → Prepare dataset** to download a built-in source and
+freeze a smoke, quick, or standard set. The page and `vllm-sr benchmark dataset
+prepare` submit to the same worker and share progress, errors and completed
+datasets. Required data preparation packages are installed automatically on the
+worker; execution harnesses, sandbox images and model servers are not. Gated
+sources require access approval and credentials in the worker environment.
+Preparation continues when the page closes and makes no model requests. It
+requires Evaluation write permission and is disabled in read-only mode; viewing
+its progress only requires Evaluation read permission.
+
+The CLI waits for the manifest by default; use `dataset prepare --no-wait` and
+`dataset preparations [PREPARATION_ID]` to submit and inspect background work.
+`--url` prepares on the selected service. File imports and history selection use
+explicit `dataset prepare --local` on the worker host or shared store, not an
+implicit upload from a remote CLI.
+
+Select a frozen dataset, profile, targets and limits in Evaluation. Review the plan before
 starting. Live runs record capability and usage; preview runs record routing
 diagnostics only. The page shows per-target and per-benchmark results, four
 token buckets, latency, wall time, failures, routing distributions and case
