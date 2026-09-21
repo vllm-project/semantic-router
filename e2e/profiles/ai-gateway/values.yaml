@@ -159,6 +159,44 @@ config:
                   value: updated-by-router
               delete:
                 - x-vsr-e2e-deleted
+      - &context_compression_decision
+        name: context_compression_decision
+        description: Deterministic route for provider-boundary context compression coverage (issue #3180).
+        priority: 545
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: context_compression
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: context_compression
+            configuration:
+              enabled: true
+              targets:
+                current_user:
+                  mode: preserve
+                tool_outputs:
+                  mode: extractive
+                  min_tokens: 200
+                  target_tokens: 96
+                history:
+                  mode: preserve
+                rag:
+                  mode: preserve
+                memory:
+                  mode: preserve
+              scoring:
+                method: bm25
+              request_controls:
+                enabled: true
+                header: x-vsr-compression-control
+                allowed:
+                  - bypass
+              failure_mode: fail_closed
       - &tools_passthrough_decision
         name: tools_passthrough_decision
         description: "Deterministic route for tools passthrough provider-boundary coverage (issue #3180)."
@@ -815,6 +853,12 @@ config:
           keywords:
             - __PLUGIN_REQUEST_MUTATIONS__
           case_sensitive: true
+        - &context_compression
+          name: context_compression
+          operator: OR
+          keywords:
+            - __CONTEXT_COMPRESSION__
+          case_sensitive: true
         - &tools_passthrough
           name: tools_passthrough
           operator: OR
@@ -1017,12 +1061,13 @@ config:
                 lora_name: general-expert
                 use_reasoning: false
     - name: e2e-plugins
-      description: Provider-boundary mutation and tool selection using the baseline plugin definitions.
+      description: Provider-boundary mutation, compression, and tool selection using the baseline plugin definitions.
       routing:
         strategy: priority
         signals:
           keywords:
             - *plugin_request_mutations
+            - *context_compression
             - *tools_passthrough
             - *tools_filtered
             - *tools_none
@@ -1034,6 +1079,7 @@ config:
             - *tool_selection_with_system_prompt
         decisions:
           - *plugin_request_mutations_decision
+          - *context_compression_decision
           - *tools_passthrough_decision
           - *tools_filtered_decision
           - *tools_none_decision

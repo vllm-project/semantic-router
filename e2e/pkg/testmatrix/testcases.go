@@ -35,6 +35,8 @@ var BaselineRouterContract = []string{
 	"plugin-chain-execution",
 	// Provider-bound request effects for system_prompt, request_params, and header_mutation (issue #3180)
 	"plugin-request-mutations",
+	// Provider-bound tool-result compression and authorized bypass behavior (issue #3180)
+	"context-compression-provider-boundary",
 	// Provider-bound tool passthrough, filtering, removal, semantic add/filter, and PII precedence (issue #3180)
 	"tool-selection",
 	"rule-condition-logic",
