@@ -1,4 +1,4 @@
-package dynamicconfig
+package multimodalrouting
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 const (
 	routerNamespace         = "vllm-semantic-router-system"
-	activationStartupBudget = 60 * time.Minute
+	activationStartupBudget = 30 * time.Minute
 )
 
 func (p *Profile) waitForCRDReady(ctx context.Context, kubeconfig string) error {

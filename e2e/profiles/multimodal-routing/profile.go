@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
@@ -50,34 +49,34 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 
 	deployer := helm.NewDeployer(opts.KubeConfig, opts.Verbose)
 
-	// Step 1: Deploy Semantic Router with multimodal embedding model configured
-	p.log("Step 1/5: Deploying Semantic Router with multimodal embedding model")
+	// Install the Router before publishing CRs, without waiting for their activation.
+	p.log("Step 1/6: Deploying Semantic Router with multimodal embedding model")
 	if err := p.deploySemanticRouter(ctx, deployer, opts); err != nil {
 		return fmt.Errorf("failed to deploy semantic router: %w", err)
 	}
 
-	// Step 2: Deploy Envoy Gateway
-	p.log("Step 2/5: Deploying Envoy Gateway")
+	// Readiness requires the first activated CR generation.
+	p.log("Step 2/6: Publishing and activating Router CRs")
+	if err := p.deployCRDs(ctx, opts); err != nil {
+		return fmt.Errorf("failed to activate Router CRs: %w", err)
+	}
+
+	// Step 3: Deploy Envoy Gateway
+	p.log("Step 3/6: Deploying Envoy Gateway")
 	if err := p.deployEnvoyGateway(ctx, deployer, opts); err != nil {
 		return fmt.Errorf("failed to deploy envoy gateway: %w", err)
 	}
 
-	// Step 3: Deploy Envoy AI Gateway
-	p.log("Step 3/5: Deploying Envoy AI Gateway")
+	// Step 4: Deploy Envoy AI Gateway
+	p.log("Step 4/6: Deploying Envoy AI Gateway")
 	if err := p.deployEnvoyAIGateway(ctx, deployer, opts); err != nil {
 		return fmt.Errorf("failed to deploy envoy ai gateway: %w", err)
 	}
 
-	// Step 4: Deploy Demo LLM and Gateway API Resources
-	p.log("Step 4/5: Deploying Demo LLM and Gateway API Resources")
+	// Step 5: Deploy Demo LLM and Gateway API Resources
+	p.log("Step 5/6: Deploying Demo LLM and Gateway API Resources")
 	if err := p.deployGatewayResources(ctx, opts); err != nil {
 		return fmt.Errorf("failed to deploy gateway resources: %w", err)
-	}
-
-	// Step 5: Deploy CRDs (IntelligentPool and IntelligentRoute with image-modality rules)
-	p.log("Step 5/5: Deploying IntelligentPool and IntelligentRoute CRDs")
-	if err := p.deployCRDs(ctx, opts); err != nil {
-		return fmt.Errorf("failed to deploy CRDs: %w", err)
 	}
 
 	// Step 6: Verify all components are ready
@@ -125,7 +124,11 @@ func (p *Profile) GetServiceConfig() framework.ServiceConfig {
 	}
 }
 
-func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
+type routerInstaller interface {
+	Install(context.Context, helm.InstallOptions) error
+}
+
+func (p *Profile) deploySemanticRouter(ctx context.Context, deployer routerInstaller, opts *framework.SetupOptions) error {
 	chartPath := "deploy/helm/semantic-router"
 	valuesFile := "e2e/profiles/multimodal-routing/values.yaml"
 
@@ -135,14 +138,14 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 	installOpts := helm.InstallOptions{
 		ReleaseName: "semantic-router",
 		Chart:       chartPath,
-		Namespace:   "vllm-semantic-router-system",
+		Namespace:   routerNamespace,
 		ValuesFiles: []string{valuesFile},
 		Set: map[string]string{
 			"image.repository": imageRepo,
 			"image.tag":        imageTag,
 			"image.pullPolicy": "Never",
 		},
-		Wait:    true,
+		Wait:    false, // The initial CR generation must be published before readiness.
 		Timeout: "30m",
 	}
 
@@ -150,7 +153,7 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 		return err
 	}
 
-	return deployer.WaitForDeployment(ctx, "vllm-semantic-router-system", "semantic-router", 30*time.Minute)
+	return nil
 }
 
 func (p *Profile) deployEnvoyGateway(ctx context.Context, deployer *helm.Deployer, _ *framework.SetupOptions) error {
@@ -234,27 +237,6 @@ func (p *Profile) kubectlApply(ctx context.Context, kubeconfig, manifestPath str
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
-}
-
-func (p *Profile) waitForCRDReady(ctx context.Context, kubeconfig string) error {
-	p.log("Waiting for IntelligentRoute to be reconciled (Ready condition)...")
-
-	deadline := time.Now().Add(2 * time.Minute)
-	for time.Now().Before(deadline) {
-		cmd := exec.CommandContext(ctx, "kubectl", "get", "intelligentroute", "ai-gateway-route",
-			"-n", "default", "--kubeconfig", kubeconfig,
-			"-o", "jsonpath={.status.conditions[?(@.type==\"Ready\")].status}")
-		output, err := cmd.Output()
-		if err == nil && strings.TrimSpace(string(output)) == "True" {
-			p.log("IntelligentRoute is Ready")
-			return nil
-		}
-
-		p.log("IntelligentRoute not yet Ready, retrying in 5s...")
-		time.Sleep(5 * time.Second)
-	}
-
-	return fmt.Errorf("timed out waiting for IntelligentRoute Ready condition (2m)")
 }
 
 func (p *Profile) verifyEnvironment(ctx context.Context, opts *framework.SetupOptions) error {
