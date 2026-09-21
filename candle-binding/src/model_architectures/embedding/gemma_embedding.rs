@@ -678,6 +678,7 @@ mod dimension_tests {
                 "num_hidden_layers": 0, "num_attention_heads": 1,
                 "num_key_value_heads": 1, "head_dim": 4,
                 "max_position_embeddings": 8, "rms_norm_eps": 0.000001,
+                "attention_dropout": 0.0,
                 "rope_theta": 10000.0, "rope_local_base_freq": 10000.0,
                 "sliding_window": 8, "layer_types": [],
                 "use_bidirectional_attention": true, "query_pre_attn_scalar": 4,

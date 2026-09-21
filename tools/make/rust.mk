@@ -32,6 +32,7 @@ RUST_CI_LIB_TESTS ?= \
 	ffi::capabilities::tests::observed_dimension_buffer_roundtrip \
 	ffi::capability_dimensions::tests::preserves_declared_dimensions_and_native_width \
 	ffi::capability_dimensions::tests::rejects_invalid_model_metadata \
+	model_architectures::embedding::gemma_embedding::dimension_tests::loaded_dimensions_match_bottleneck_outputs \
 	model_architectures::embedding::multimodal_embedding::tests::test_loaded_dimensions_follow_model_configuration \
 	model_architectures::embedding::mmbert_embedding::tests::test_early_exit_preserves_residual_and_full_depth_applies_final_norm \
 	model_architectures::embedding::multimodal_embedding::tests::test_siglip_vision_encoder_loads_with_head_weights \
