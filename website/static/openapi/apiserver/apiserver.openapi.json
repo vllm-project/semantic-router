@@ -31009,6 +31009,48 @@
                     "decision_error": {
                       "type": "string"
                     },
+                    "decision_ranking": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "candidates": {
+                          "type": "integer"
+                        },
+                        "comparable": {
+                          "type": "boolean"
+                        },
+                        "decided_by": {
+                          "type": "string"
+                        },
+                        "fallback_reason": {
+                          "type": "string"
+                        },
+                        "score_kind": {
+                          "type": "string"
+                        },
+                        "strategy": {
+                          "type": "string"
+                        },
+                        "tier": {
+                          "type": "integer"
+                        },
+                        "tiered": {
+                          "type": "boolean"
+                        },
+                        "winner": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "strategy",
+                        "tiered",
+                        "tier",
+                        "comparable",
+                        "decided_by",
+                        "winner",
+                        "candidates"
+                      ]
+                    },
                     "decision_result": {
                       "nullable": true,
                       "type": "object",
@@ -34288,6 +34330,48 @@
                         },
                         "decision_error": {
                           "type": "string"
+                        },
+                        "decision_ranking": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "candidates": {
+                              "type": "integer"
+                            },
+                            "comparable": {
+                              "type": "boolean"
+                            },
+                            "decided_by": {
+                              "type": "string"
+                            },
+                            "fallback_reason": {
+                              "type": "string"
+                            },
+                            "score_kind": {
+                              "type": "string"
+                            },
+                            "strategy": {
+                              "type": "string"
+                            },
+                            "tier": {
+                              "type": "integer"
+                            },
+                            "tiered": {
+                              "type": "boolean"
+                            },
+                            "winner": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "strategy",
+                            "tiered",
+                            "tier",
+                            "comparable",
+                            "decided_by",
+                            "winner",
+                            "candidates"
+                          ]
                         },
                         "decision_result": {
                           "nullable": true,
