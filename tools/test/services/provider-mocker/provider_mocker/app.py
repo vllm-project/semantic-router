@@ -60,7 +60,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     )
                 print("authorization-canary-received", flush=True)
             if settings.scenario == "cli":
-                print(request.url.path, flush=True)
+                raw_path = request.scope.get(
+                    "raw_path", request.url.path.encode("utf-8")
+                )
+                target = raw_path.decode("latin-1")
+                query = request.scope.get("query_string", b"")
+                if query:
+                    target += "?" + query.decode("latin-1")
+                print(target, flush=True)
         return await call_next(request)
 
     return instance

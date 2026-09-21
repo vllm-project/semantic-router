@@ -8,6 +8,21 @@ logger = logging.getLogger(__name__)
 QUERY_CONTEXT_WORD_THRESHOLD = 6
 
 
+def _content_text(content: object) -> str:
+    """Read Chat text parts without interpreting media or changing the wire body."""
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    return "\n".join(
+        part["text"]
+        for part in content
+        if isinstance(part, dict)
+        and part.get("type") == "text"
+        and isinstance(part.get("text"), str)
+    )
+
+
 class MemoryScenario:
     EXTRACTION_KEYWORDS: ClassVar[dict[str, tuple[str, str]]] = {
         # Car-related facts
@@ -256,6 +271,12 @@ class MemoryScenario:
         return query
 
     def content(self, messages: list[dict]) -> str:
+        # The codec may emit structured content even for text-only requests.
+        # Scenario detection, extraction, rewriting and echo all share this view.
+        messages = [
+            {**message, "content": _content_text(message.get("content"))}
+            for message in messages
+        ]
         if self._is_extraction_prompt(messages):
             return json.dumps(self._extract_facts_from_messages(messages))
         if self._is_query_rewrite_prompt(messages):
