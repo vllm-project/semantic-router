@@ -1,0 +1,75 @@
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[4]
+sys.path.insert(0, str(REPO_ROOT))
+
+import numpy as np
+
+from src.training.kv_mapper.collect import (
+    ActivationRunMeta,
+    as_bshd_numpy,
+    parse_layer_subset,
+    read_run_metadata,
+    resolve_stride,
+    write_run_metadata,
+)
+
+
+class CollectContractTests(unittest.TestCase):
+    def test_stride_defaults_to_disjoint_windows(self) -> None:
+        self.assertEqual(resolve_stride(0, 1024), 1024)
+        self.assertEqual(resolve_stride(4096, 1024), 1024)
+        self.assertEqual(resolve_stride(4, 1024), 4)
+
+    def test_as_bshd_layouts(self) -> None:
+        rng = np.random.default_rng(0)
+        bshd = rng.standard_normal((1, 5, 8, 16))
+        bhmd = np.transpose(bshd, (0, 2, 1, 3))
+        self.assertEqual(as_bshd_numpy(bshd, 8, 16).shape, (1, 5, 8, 16))
+        self.assertEqual(as_bshd_numpy(bhmd, 8, 16).shape, (1, 5, 8, 16))
+        flat = rng.standard_normal((1, 5, 8 * 16))
+        self.assertEqual(as_bshd_numpy(flat, 8, 16).shape, (1, 5, 8, 16))
+
+    def test_parse_layer_subset(self) -> None:
+        self.assertEqual(parse_layer_subset(None, 4), [0, 1, 2, 3])
+        self.assertEqual(parse_layer_subset("all", 4), [0, 1, 2, 3])
+        self.assertEqual(parse_layer_subset("0:2", 8), [0, 1])
+        self.assertEqual(parse_layer_subset("1,3,5", 8), [1, 3, 5])
+
+    def test_run_metadata_roundtrip(self) -> None:
+        meta = ActivationRunMeta(
+            corpus="HuggingFaceFW/fineweb-edu",
+            dataset_config="sample-10BT",
+            source_model="Qwen/Qwen3-14B",
+            source_revision="abc123",
+            target_model="Qwen/Qwen3-32B",
+            target_revision="def456",
+            seed=42,
+            seq_len=1024,
+            stride=1024,
+            num_sequences=8,
+            source_layers=[0, 1],
+            target_layers=list(range(4)),
+            num_kv_heads=8,
+            head_dim=128,
+            precision="fp16",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            write_run_metadata(Path(directory), meta)
+            got = read_run_metadata(Path(directory))
+            raw = json.loads((Path(directory) / "run.json").read_text())
+        self.assertEqual(got.source_revision, "abc123")
+        self.assertEqual(got.source_layers, [0, 1])
+        self.assertTrue(got.rope_stripped_on_keys)
+        self.assertEqual(raw["seed"], 42)
+        self.assertEqual(raw["corpus"], "HuggingFaceFW/fineweb-edu")
+
+
+if __name__ == "__main__":
+    unittest.main()
