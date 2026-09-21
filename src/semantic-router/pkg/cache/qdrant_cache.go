@@ -17,7 +17,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-const pendingResponseMarker = "__pending__"
+const (
+	pendingResponseMarker    = "__pending__"
+	exactOnlyQdrantDimension = 384
+)
 
 // Fetch a bounded set so a rejected polarity candidate does not hide a valid
 // nearby response. This does not widen the caller's similarity threshold.
@@ -25,6 +28,7 @@ const qdrantSemanticCandidateLimit = uint64(5)
 
 type QdrantCache struct {
 	embeddingProvider   embedding.Provider
+	vectorDimension     int
 	client              *qdrant.Client
 	searchFn            func(context.Context, *qdrant.QueryPoints) ([]*qdrant.ScoredPoint, error)
 	cfg                 *config.QdrantConfig
@@ -64,6 +68,16 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 		collectionName = "semantic_cache"
 	}
 	embeddingModel := normalizeEmbeddingModel(opts.EmbeddingModel)
+	// Exact-only Qdrant stores retain their existing sentinel schema. Semantic
+	// stores always use their prepared provider's actual output width.
+	dimension := exactOnlyQdrantDimension
+	if opts.EmbeddingProvider != nil {
+		var err error
+		dimension, err = embedding.ResolveDimension(opts.EmbeddingProvider, 0)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	client, err := qdrant.NewClient(&qdrant.Config{
 		Host:   opts.Config.Host,
@@ -77,13 +91,14 @@ func NewQdrantCache(opts QdrantCacheOptions) (*QdrantCache, error) {
 
 	c := &QdrantCache{
 		client:              client,
+		vectorDimension:     dimension,
 		cfg:                 opts.Config,
 		collectionName:      collectionName,
 		similarityThreshold: opts.SimilarityThreshold,
 		ttlSeconds:          opts.TTLSeconds,
 		enabled:             true,
 		embeddingModel:      embeddingModel,
-		embeddingProvider:   embedding.WithOptions(opts.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, semanticCacheEmbeddingDimension(0, embeddingModel), 0)),
+		embeddingProvider:   embedding.WithOptions(opts.EmbeddingProvider, cacheEmbeddingOptions(embeddingModel, dimension, 0)),
 	}
 
 	if err := c.CheckConnection(context.Background()); err != nil {
@@ -118,7 +133,7 @@ func (c *QdrantCache) ensureCollection() error {
 		return nil
 	}
 
-	dim := semanticCacheEmbeddingDimension(0, c.embeddingModel)
+	dim := c.embeddingDimension()
 
 	if err := c.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: c.collectionName,
@@ -154,9 +169,9 @@ func (c *QdrantCache) getEmbedding(ctx context.Context, text string) ([]float32,
 
 func (c *QdrantCache) embeddingDimension() int {
 	if c == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return 0
 	}
-	return semanticCacheEmbeddingDimension(0, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.vectorDimension, c.embeddingProvider)
 }
 
 // Qdrant only allows UUIDs and +ve integers.

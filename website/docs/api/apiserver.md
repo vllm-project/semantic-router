@@ -90,6 +90,11 @@ Use `/health` for liveness and `/ready` for readiness. During model download or
 runtime preparation, a process can be healthy while `/ready` still returns
 `503`.
 
+For a Router with a runtime registry, `/ready` and `/startup-status` report that
+replica's observed startup state. Another replica's shared file or Redis record
+cannot change these responses. Until the local replica reports startup progress,
+both endpoints return `503`.
+
 ### Replica-local status
 
 `GET /api/v1/status` requires `ready.read`. It returns `schema_version: "v1"`,
@@ -627,7 +632,7 @@ Inspect and invoke recipe-scoped prepared models, classifiers, embeddings, NLI, 
 | `POST` | `/api/v1/diagnostics/classify/combined` | Perform combined classification (intent, PII, and security) |
 | `POST` | `/api/v1/diagnostics/classify/batch` | Batch classification with configurable task_type parameter |
 | `POST` | `/api/v1/diagnostics/nli` | Natural language inference classification for premise and hypothesis pairs |
-| `POST` | `/api/v1/diagnostics/embeddings` | Generate text and image embeddings |
+| `POST` | `/api/v1/diagnostics/embeddings` | Generate text, image, and audio embeddings |
 | `POST` | `/api/v1/diagnostics/similarity` | Calculate pairwise text similarity |
 | `POST` | `/api/v1/diagnostics/similarity/batch` | Calculate batch text-similarity matches |
 | `GET` | `/api/v1/diagnostics/models` | List prepared model bindings in an explicitly selected recipe |

@@ -116,6 +116,48 @@ func TestPrebuiltImagesConsumeRegisteredProfileFixturesWithoutBuild(t *testing.T
 	}
 }
 
+func TestPublishedModelProfilesPrepareRegisteredBackends(t *testing.T) {
+	for _, profile := range []string{"vela-omni", "vela-halu"} {
+		for _, available := range []bool{true, false} {
+			scenario := "available"
+			if !available {
+				scenario = "missing"
+			}
+			t.Run(profile+"/"+scenario, func(t *testing.T) {
+				registration, ok := framework.LookupProfileRegistration(profile)
+				if !ok {
+					t.Fatalf("profile %s is not registered", profile)
+				}
+				commands := prebuiltCommands(t)
+				if !available {
+					t.Setenv("E2E_PREBUILT_MOCK_VLLM_IMAGE", "")
+				}
+				err := framework.BuildPrebuiltFixturesForTest(context.Background(), registration.Capabilities.LocalImages)
+				want := []string{
+					"docker image inspect verified:extproc",
+					"docker tag verified:extproc ghcr.io/vllm-project/semantic-router/extproc:test",
+					"kind load docker-image ghcr.io/vllm-project/semantic-router/extproc:test --name fixture-test",
+				}
+				if available {
+					if err != nil {
+						t.Fatal(err)
+					}
+					want = append(want,
+						"docker image inspect verified:mock-vllm",
+						"docker tag verified:mock-vllm ghcr.io/vllm-project/semantic-router/mock-vllm:latest",
+						"kind load docker-image ghcr.io/vllm-project/semantic-router/mock-vllm:latest --name fixture-test",
+					)
+				} else if err == nil || !strings.Contains(err.Error(), "required prebuilt fixture missing") {
+					t.Fatalf("missing backend image was not rejected: %v", err)
+				}
+				if got := commands(); !slices.Equal(got, want) {
+					t.Fatalf("profile %s image preparation = %q, want %q", profile, got, want)
+				}
+			})
+		}
+	}
+}
+
 func TestPrebuiltImagesRefuseMissingInputsWithoutBuildFallback(t *testing.T) {
 	images := registeredFixtureImages(t)
 	for id, image := range images {

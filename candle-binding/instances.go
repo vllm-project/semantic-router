@@ -37,6 +37,7 @@ type InstanceAdapter struct {
 // inferred from a checkpoint's name. ResourceID identifies the actual owned
 // backbone. Explicit head bindings and clones retain the same ResourceID.
 type InstanceInfo struct {
+	AvailableDimensions    []int                `json:"available_dimensions"`
 	PairScorer             *PairScorerSelection `json:"pair_scorer,omitempty"`
 	ResourceID             uint64               `json:"resource_id"`
 	Task                   string               `json:"task"`

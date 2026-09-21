@@ -160,7 +160,7 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBodyFor[services.NLIRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text and image embeddings"},
+			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text, image, and audio embeddings"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEmbeddings,
 			jsonResponse[EmbeddingResponse](http.StatusOK, "Successful response"),
