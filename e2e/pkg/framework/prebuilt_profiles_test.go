@@ -121,7 +121,7 @@ func TestPublishedModelProfilesPrepareRegisteredBackends(t *testing.T) {
 				}
 				commands := prebuiltCommands(t)
 				if !available {
-					t.Setenv("E2E_PREBUILT_MOCK_VLLM_IMAGE", "")
+					t.Setenv("E2E_PREBUILT_PROVIDER_MOCKER_IMAGE", "")
 				}
 				err := framework.BuildPrebuiltFixturesForTest(context.Background(), registration.Capabilities.LocalImages)
 				want := []string{
@@ -134,9 +134,9 @@ func TestPublishedModelProfilesPrepareRegisteredBackends(t *testing.T) {
 						t.Fatal(err)
 					}
 					want = append(want,
-						"docker image inspect verified:mock-vllm",
-						"docker tag verified:mock-vllm ghcr.io/vllm-project/semantic-router/mock-vllm:latest",
-						"kind load docker-image ghcr.io/vllm-project/semantic-router/mock-vllm:latest --name fixture-test",
+						"docker image inspect verified:provider-mocker",
+						"docker tag verified:provider-mocker semantic-router-ci/provider-mocker:e2e-test",
+						"kind load docker-image semantic-router-ci/provider-mocker:e2e-test --name fixture-test",
 					)
 				} else if err == nil || !strings.Contains(err.Error(), "required prebuilt fixture missing") {
 					t.Fatalf("missing backend image was not rejected: %v", err)

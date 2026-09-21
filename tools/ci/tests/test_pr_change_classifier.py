@@ -384,9 +384,9 @@ class SelectionTests(unittest.TestCase):
                 plan = make_plan([], source_sha=SHA, requested=(identifier,))
                 self.assertEqual(plan["expected_verification_ids"], [identifier])
                 self.assertEqual(
-                    plan["verifications"][0]["images"], ["extproc", "mock-vllm"]
+                    plan["verifications"][0]["images"], ["extproc", "provider-mocker"]
                 )
-                self.assertEqual(set(plan["images"]), {"extproc", "mock-vllm"})
+                self.assertEqual(set(plan["images"]), {"extproc", "provider-mocker"})
 
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
