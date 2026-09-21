@@ -12,7 +12,8 @@ from pathlib import Path
 
 JAILBREAKBENCH_REPO = "JailbreakBench/JBB-Behaviors"
 JAILBREAKBENCH_SUBSET = "behaviors"
-GOAL_KEYS = ("goal", "prompt", "behavior", "text")
+# https://huggingface.co/datasets/JailbreakBench/JBB-Behaviors/blob/886acc352a31533ffbcf4ef22c744658688086fc/data/benign-behaviors.csv#L1
+GOAL_KEYS: tuple[str, ...] = ("Goal", "goal", "prompt", "behavior", "text")
 
 
 def _first_goal(record: dict[str, object]) -> str | None:
@@ -49,7 +50,12 @@ def load_jailbreakbench() -> list[str]:
 
     dataset = load_dataset(JAILBREAKBENCH_REPO, JAILBREAKBENCH_SUBSET, split="harmful")
     prompts = [_first_goal(dict(record)) for record in dataset]
-    return [prompt for prompt in prompts if prompt]
+    found = [prompt for prompt in prompts if prompt]
+    if not found:
+        raise ValueError(
+            f"no prompts found in {JAILBREAKBENCH_REPO}; expected one of {GOAL_KEYS}"
+        )
+    return found
 
 
 def load_prompts(source: str) -> list[str]:
