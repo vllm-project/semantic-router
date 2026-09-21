@@ -25,6 +25,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
+type artifactFingerprinter func(context.Context, string) (string, error)
+
+type artifactFlight struct {
+	done     chan struct{}
+	cancel   context.CancelFunc
+	waiters  int
+	revision string
+	err      error
+}
+
 // Runtime owns one generation's preparation metadata. Pool can be shared with
 // the preceding generation; each returned task owns an independent reference.
 type Runtime struct {
@@ -42,10 +52,17 @@ type Runtime struct {
 	grounded        *binding.Task[tasks.GroundedTextRequest, tasks.TokenClassificationResult]
 	pair            *binding.Task[tasks.TextPairRequest, tasks.LabelDistribution]
 	mu              sync.Mutex
+	artifactMu      sync.Mutex
 	artifacts       map[string]string
+	artifactFlights map[string]*artifactFlight
+	fingerprint     artifactFingerprinter
 }
 
 func New(pool *binding.Pool) *Runtime {
+	return newRuntimeWithFingerprinter(pool, fingerprintArtifact)
+}
+
+func newRuntimeWithFingerprinter(pool *binding.Pool, fingerprint artifactFingerprinter) *Runtime {
 	if pool == nil {
 		pool = binding.NewPool()
 	}
@@ -78,7 +95,24 @@ func New(pool *binding.Pool) *Runtime {
 	}, func(_ tasks.TextPairRequest, output tasks.LabelDistribution) error {
 		return validateDistribution("", output)
 	})
-	return &Runtime{Pool: pool, registry: registry, inventory: inventory, prepared: prepared, operatingPoints: make(map[*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedLabelScores]]*OperatingPointScorer), sequence: sequence, scores: scores, sequenceWindows: sequenceWindows, scoreWindows: scoreWindows, tokens: tokens, tokenWindows: tokenWindows, grounded: grounded, pair: pair, artifacts: make(map[string]string)}
+	return &Runtime{
+		Pool:            pool,
+		registry:        registry,
+		inventory:       inventory,
+		prepared:        prepared,
+		operatingPoints: make(map[*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedLabelScores]]*OperatingPointScorer),
+		sequence:        sequence,
+		scores:          scores,
+		sequenceWindows: sequenceWindows,
+		scoreWindows:    scoreWindows,
+		tokens:          tokens,
+		tokenWindows:    tokenWindows,
+		grounded:        grounded,
+		pair:            pair,
+		artifacts:       make(map[string]string),
+		artifactFlights: make(map[string]*artifactFlight),
+		fingerprint:     fingerprint,
+	}
 }
 
 // ObserveBinding also admits typed external connectors to this generation's
@@ -166,6 +200,17 @@ func resourceAdmission(spec config.ResolvedModelBinding) (string, admission.Admi
 // weights, configuration and tokenizer. An in-place replacement at the same
 // path cannot reuse the preceding generation's model accidentally.
 func (r *Runtime) artifactRevision(ctx context.Context, path string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	abs, err := resolveArtifactPath(path)
+	if err != nil {
+		return "", err
+	}
+	return r.artifactRevisionResolved(ctx, abs)
+}
+
+func resolveArtifactPath(path string) (string, error) {
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -174,17 +219,94 @@ func (r *Runtime) artifactRevision(ctx context.Context, path string) (string, er
 	if err != nil {
 		return "", fmt.Errorf("resolve model artifact: %w", err)
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if cached, ok := r.artifacts[abs]; ok {
-		return cached, nil
+	return abs, nil
+}
+
+// artifactRevisionResolved coalesces one calculation per resolved artifact
+// path. An abandoned calculation remains registered until its worker exits, so
+// a retry cannot overlap it or consume its canceled result.
+func (r *Runtime) artifactRevisionResolved(ctx context.Context, abs string) (string, error) {
+	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
+
+		r.artifactMu.Lock()
+		if cached, ok := r.artifacts[abs]; ok {
+			r.artifactMu.Unlock()
+			return cached, nil
+		}
+		if flight, ok := r.artifactFlights[abs]; ok {
+			if flight.waiters == 0 {
+				done := flight.done
+				r.artifactMu.Unlock()
+				select {
+				case <-ctx.Done():
+					return "", ctx.Err()
+				case <-done:
+					continue
+				}
+			}
+			flight.waiters++
+			r.artifactMu.Unlock()
+			return r.waitForArtifactRevision(ctx, abs, flight)
+		}
+
+		// The shared calculation has its own lifetime. A caller only cancels it
+		// after becoming the final waiter for this artifact.
+		workCtx, cancel := context.WithCancel(context.Background())
+		flight := &artifactFlight{
+			done:    make(chan struct{}),
+			cancel:  cancel,
+			waiters: 1,
+		}
+		r.artifactFlights[abs] = flight
+		r.artifactMu.Unlock()
+
+		go r.runArtifactFingerprint(workCtx, abs, flight)
+		return r.waitForArtifactRevision(ctx, abs, flight)
 	}
-	revision, err := fingerprintArtifact(ctx, abs)
-	if err != nil {
-		return "", err
+}
+
+func (r *Runtime) waitForArtifactRevision(ctx context.Context, abs string, flight *artifactFlight) (string, error) {
+	select {
+	case <-ctx.Done():
+		r.detachArtifactWaiter(abs, flight)
+		return "", ctx.Err()
+	case <-flight.done:
+		return flight.revision, flight.err
 	}
-	r.artifacts[abs] = revision
-	return revision, nil
+}
+
+func (r *Runtime) detachArtifactWaiter(abs string, flight *artifactFlight) {
+	r.artifactMu.Lock()
+	defer r.artifactMu.Unlock()
+	if current, ok := r.artifactFlights[abs]; !ok || current != flight || flight.waiters == 0 {
+		return
+	}
+	flight.waiters--
+	if flight.waiters == 0 {
+		flight.cancel()
+	}
+}
+
+func (r *Runtime) runArtifactFingerprint(ctx context.Context, abs string, flight *artifactFlight) {
+	revision, err := r.fingerprint(ctx, abs)
+
+	r.artifactMu.Lock()
+	flight.revision = revision
+	flight.err = err
+	if current, ok := r.artifactFlights[abs]; ok && current == flight {
+		// A calculation abandoned by every waiter must not publish even if its
+		// filesystem operation happened to finish after cancellation.
+		if err == nil && flight.waiters > 0 {
+			r.artifacts[abs] = revision
+		}
+		delete(r.artifactFlights, abs)
+	}
+	close(flight.done)
+	r.artifactMu.Unlock()
+	flight.cancel()
 }
 
 // fingerprintArtifact is also used to verify an already prepared generation;
