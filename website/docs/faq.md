@@ -43,7 +43,7 @@ same aggregate; then read quality together with
 
 → [sr-bench 1.0](benchmarking/sr-bench)
 
-## If llm-d already does multi-model routing, why VSR?
+## If llm-d already does multi-model routing, why Semantic Router?
 
 Because the two systems answer different questions.
 
@@ -59,7 +59,7 @@ decision."*
 
 → [Integrate with llm-d](installation/k8s/llm-d)
 
-## How do VSR and llm-d Endpoint Picker avoid conflicts?
+## How do Semantic Router and the llm-d Endpoint Picker avoid conflicts?
 
 They avoid them by **not overlapping** rather than by arbitration. Semantic Router
 resolves the pool first; llm-d then picks a replica inside it. Because the two
@@ -71,8 +71,10 @@ Two operational rules follow from that shape:
 
 - **Deploy and verify llm-d independently before adding Semantic Router**, and use one
   supported llm-d release rather than mixing copied manifests.
-- **Make the final decision visible.** Record it through headers, traces and replay
-  rather than inferring it after the fact.
+- **Make the final decision visible.** The Router writes `x-vsr-selected-model` as its
+  receipt and `x-selected-model` as the value a gateway matches on; `vllm-sr route probe
+  --expect-selected-model` asserts the receipt. Read the decision from those rather than
+  inferring it after the fact.
 
 → [Integrate with llm-d](installation/k8s/llm-d)
 
@@ -105,11 +107,11 @@ Each stage has its own surface:
 signal → policy / decision → algorithm / model → plugin → endpoint scheduling → fallback → final model
 ```
 
-1. **Preview before you generate.** `route preview` evaluates signals, projections and
+1. **Preview before you generate.** `vllm-sr route preview` evaluates signals, projections and
    the decision without calling a backend, and reports the trace evidence.
 2. **Read the provenance.** Learning-enabled preview exposes `selection_provenance`,
    including the config and state identity and the sampling seed.
-3. **Then probe for real.** `route probe` sends an actual request through Envoy — but a
+3. **Then probe for real.** `vllm-sr route probe` sends an actual request through Envoy — but a
    successful HTTP status is not sufficient: check `response.body.delivery` and the
    final assistant output, because empty output, reasoning-only output and
    `finish_reason: length` all fail delivery.
@@ -119,4 +121,4 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 Delivery, route correctness and answer quality are three separate outcomes; qualify the
 ones you did not measure instead of inferring success.
 
-→ [API and Observability](tutorials/global/api-and-observability)
+→ [CLI reference](api/cli) · [VSR headers](troubleshooting/vsr-headers) · [API and Observability](tutorials/global/api-and-observability)
