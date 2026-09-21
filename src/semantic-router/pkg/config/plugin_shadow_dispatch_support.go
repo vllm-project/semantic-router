@@ -155,6 +155,7 @@ func (c *ShadowDispatchPluginConfig) Validate() error {
 		{"price_per_million_tokens", c.Budget.PricePerMillionTokens},
 		{"reserve_tokens_per_arm", float64(c.Budget.ReserveTokensPerArm)},
 		{"max_concurrency_per_request", float64(c.Budget.MaxConcurrencyPerRequest)},
+		{"max_response_bytes_per_request", float64(c.Budget.MaxResponseBytesPerRequest)},
 	} {
 		if bound.value < 0 {
 			return fmt.Errorf("budget.%s cannot be negative", bound.name)

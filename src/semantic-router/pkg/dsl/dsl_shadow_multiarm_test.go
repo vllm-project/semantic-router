@@ -17,7 +17,7 @@ ROUTE test {
   PLUGIN shadow_dispatch {
     enabled: true
     arms: ["arm-a", "arm-b"]
-    budget: { max_calls_per_request: 2 max_tokens_per_request: 512 reserve_tokens_per_arm: 256 max_concurrency_per_request: 2 }
+    budget: { max_calls_per_request: 2 max_tokens_per_request: 512 reserve_tokens_per_arm: 256 max_concurrency_per_request: 2 max_response_bytes_per_request: 700 }
   }
 }`
 	cfg, errs := Compile(input)
@@ -43,7 +43,7 @@ ROUTE test {
 	if err != nil {
 		t.Fatalf("decompile error: %v", err)
 	}
-	for _, want := range []string{`"arm-a"`, `"arm-b"`, "max_calls_per_request: 2", "max_tokens_per_request: 512", "reserve_tokens_per_arm: 256", "max_concurrency_per_request: 2"} {
+	for _, want := range []string{`"arm-a"`, `"arm-b"`, "max_calls_per_request: 2", "max_tokens_per_request: 512", "reserve_tokens_per_arm: 256", "max_concurrency_per_request: 2", "max_response_bytes_per_request: 700"} {
 		if !strings.Contains(dsl, want) {
 			t.Errorf("decompiled DSL missing %q in:\n%s", want, dsl)
 		}

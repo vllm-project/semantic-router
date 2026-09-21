@@ -8,7 +8,7 @@ import (
 )
 
 func TestShadowBudgetCallLimit(t *testing.T) {
-	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxCallsPerRequest: 1})
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxCallsPerRequest: 1}, 0)
 	if _, ok := b.TryEnter(); !ok { // "a" is the model name, opaque to the budget
 		t.Fatal("first arm must be admitted")
 	}
@@ -20,7 +20,7 @@ func TestShadowBudgetCallLimit(t *testing.T) {
 }
 
 func TestShadowBudgetReservesTokensAtAdmission(t *testing.T) {
-	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100, ReserveTokensPerArm: 60})
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100, ReserveTokensPerArm: 60}, 0)
 	if _, ok := b.TryEnter(); !ok {
 		t.Fatal("first arm with reserve 60 must be admitted")
 	}
@@ -31,8 +31,20 @@ func TestShadowBudgetReservesTokensAtAdmission(t *testing.T) {
 	}
 }
 
+func TestShadowBudgetReservesResponseBytesAtAdmission(t *testing.T) {
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxResponseBytesPerRequest: 700}, 400)
+	if _, ok := b.TryEnter(); !ok {
+		t.Fatal("first arm with a 400-byte reservation must be admitted under 700")
+	}
+	if reason, ok := b.TryEnter(); ok {
+		t.Fatalf("second arm must be rejected: 400+400 > 700")
+	} else if reason != "budget_response_bytes_limit (700)" {
+		t.Fatalf("reason = %q, want budget_response_bytes_limit (700)", reason)
+	}
+}
+
 func TestShadowBudgetReconcileSwapsReservation(t *testing.T) {
-	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 200, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 60})
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 200, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 60}, 0)
 	b.TryEnter()
 	b.TryEnter()
 	b.Reconcile(true, 20, 10, 512) // a: 60 - 60 + 30 = 30
@@ -56,8 +68,26 @@ func TestShadowBudgetReconcileSwapsReservation(t *testing.T) {
 	}
 }
 
+func TestShadowBudgetReconcileSwapsResponseBytesReservation(t *testing.T) {
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{}, 400)
+	b.TryEnter()
+	if bytes := b.TotalBytes(); bytes != 400 {
+		t.Fatalf("bytes = %d, want 400 reserved at admission", bytes)
+	}
+	b.Reconcile(true, 0, 0, 128)
+	if bytes := b.TotalBytes(); bytes != 128 {
+		t.Fatalf("bytes = %d, want 128 (reservation swapped for the observed size)", bytes)
+	}
+	// An arm that reported no read at all releases its reservation.
+	b.TryEnter()
+	b.Reconcile(false, 0, 0, 0)
+	if bytes := b.TotalBytes(); bytes != 128 {
+		t.Fatalf("bytes = %d, want 128 after a zero-byte outcome", bytes)
+	}
+}
+
 func TestShadowBudgetCostLimit(t *testing.T) {
-	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxCostPerRequest: 0.0001, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 100})
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxCostPerRequest: 0.0001, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 100}, 0)
 	if _, ok := b.TryEnter(); ok {
 		t.Fatal("first arm reserve 100 = 0.0002 > 0.0001 should be rejected immediately")
 	}
@@ -68,7 +98,7 @@ func TestShadowBudgetNoReserveAccountsOnCompletion(t *testing.T) {
 	// the token cap can only be observed on completion. Configurations that
 	// need the cap to bind at admission are rejected at load time by
 	// ShadowDispatchPluginConfig.Validate.
-	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100})
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 100}, 0)
 	if _, ok := b.TryEnter(); !ok {
 		t.Fatal("first arm must be admitted")
 	}
@@ -83,7 +113,7 @@ func TestShadowBudgetNoReserveAccountsOnCompletion(t *testing.T) {
 }
 
 func TestShadowBudgetRefundReturnsAdmission(t *testing.T) {
-	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 200, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 60})
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxTokensPerRequest: 200, PricePerMillionTokens: 2.0, ReserveTokensPerArm: 60}, 400)
 	if _, ok := b.TryEnter(); !ok {
 		t.Fatal("arm must be admitted")
 	}
@@ -92,10 +122,13 @@ func TestShadowBudgetRefundReturnsAdmission(t *testing.T) {
 	if calls != 0 || tokens != 0 || cost != 0 {
 		t.Fatalf("after Refund calls=%d tokens=%d cost=%v, want 0/0/0", calls, tokens, cost)
 	}
+	if bytes := b.TotalBytes(); bytes != 0 {
+		t.Fatalf("after Refund bytes = %d, want 0 (the byte reservation is released too)", bytes)
+	}
 }
 
 func TestShadowBudgetConcurrencyPerRequest(t *testing.T) {
-	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxConcurrencyPerRequest: 1})
+	b := NewShadowBudget(config.ShadowDispatchBudgetConfig{MaxConcurrencyPerRequest: 1}, 0)
 	if !b.EnterInflight() {
 		t.Fatal("first in-flight slot must be granted")
 	}
@@ -108,7 +141,7 @@ func TestShadowBudgetConcurrencyPerRequest(t *testing.T) {
 	}
 	b.LeaveInflight()
 
-	unbounded := NewShadowBudget(config.ShadowDispatchBudgetConfig{})
+	unbounded := NewShadowBudget(config.ShadowDispatchBudgetConfig{}, 0)
 	for i := range 3 {
 		if !unbounded.EnterInflight() {
 			t.Fatalf("unbounded budget refused in-flight slot %d", i)

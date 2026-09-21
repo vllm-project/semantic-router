@@ -1219,6 +1219,7 @@ class ShadowDispatchBudgetConfig(BaseModel):
             "bounds the decision across requests instead"
         ),
     )
+    max_response_bytes_per_request: int = Field(default=0, ge=0)
 
 
 class ShadowDispatchPluginConfig(BaseModel):

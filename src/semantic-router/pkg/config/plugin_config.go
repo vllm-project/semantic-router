@@ -352,6 +352,10 @@ type ShadowDispatchBudgetConfig struct {
 	// flight at once (the plugin-level MaxConcurrency bounds the decision
 	// across requests instead). 0 disables the per-request bound.
 	MaxConcurrencyPerRequest int64 `json:"max_concurrency_per_request,omitempty" yaml:"max_concurrency_per_request,omitempty"`
+	// MaxResponseBytesPerRequest caps aggregate observed response bytes across
+	// the arms of one request. Each admission reserves the per-arm
+	// MaxResponseBytes, so the cap binds before dispatch. 0 disables it.
+	MaxResponseBytesPerRequest int64 `json:"max_response_bytes_per_request,omitempty" yaml:"max_response_bytes_per_request,omitempty"`
 }
 
 // GetPlugin returns the plugin entry for a specific plugin type.

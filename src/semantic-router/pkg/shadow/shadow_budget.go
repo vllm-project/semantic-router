@@ -8,18 +8,20 @@ import (
 )
 
 // ShadowBudget is the per-request aggregate budget shared by every arm of one
-// shadow_dispatch decision (issue #3376 multi-arm). Calls, reserved tokens/cost
-// and the in-flight concurrency are checked at admission; tokens, cost and
-// response bytes are accounted on arm completion. A zero field is unlimited.
+// shadow_dispatch decision (issue #3376 multi-arm). Calls, reserved
+// tokens/cost/response bytes and the in-flight concurrency are checked at
+// admission; tokens, cost and the observed response size are accounted on arm
+// completion. A zero field is unlimited.
 // Wall time is bounded by the shared job dead-line: every arm of one request
 // expires at the same instant, so the aggregate window needs no separate knob.
 //
 // Scoped to one shadow decision (issue #3376): this is not the cross-stage
 // budget ledger owned by #2861, and it is not exported as a general contract.
 type ShadowBudget struct {
-	mu       sync.Mutex
-	limit    config.ShadowDispatchBudgetConfig
-	inflight int64
+	mu                   sync.Mutex
+	limit                config.ShadowDispatchBudgetConfig
+	reserveResponseBytes int64
+	inflight             int64
 
 	calls int64
 	token int64
@@ -28,8 +30,10 @@ type ShadowBudget struct {
 }
 
 // NewShadowBudget builds a per-request budget from a decision's plugin config.
-func NewShadowBudget(limit config.ShadowDispatchBudgetConfig) *ShadowBudget {
-	return &ShadowBudget{limit: limit}
+// reserveResponseBytes is the per-arm response bound reserved at admission for
+// the aggregate byte cap.
+func NewShadowBudget(limit config.ShadowDispatchBudgetConfig, reserveResponseBytes int64) *ShadowBudget {
+	return &ShadowBudget{limit: limit, reserveResponseBytes: reserveResponseBytes}
 }
 
 // TryEnter admits one arm when every enforced dimension allows it. On
@@ -48,9 +52,13 @@ func (b *ShadowBudget) TryEnter() (string, bool) {
 	if b.limit.MaxCostPerRequest > 0 && b.cost+reserveCost > b.limit.MaxCostPerRequest {
 		return fmt.Sprintf("budget_cost_limit (%v)", b.limit.MaxCostPerRequest), false
 	}
+	if b.limit.MaxResponseBytesPerRequest > 0 && b.bytes+b.reserveResponseBytes > b.limit.MaxResponseBytesPerRequest {
+		return fmt.Sprintf("budget_response_bytes_limit (%d)", b.limit.MaxResponseBytesPerRequest), false
+	}
 	b.calls++
 	b.token += b.limit.ReserveTokensPerArm
 	b.cost += reserveCost
+	b.bytes += b.reserveResponseBytes
 	return "", true
 }
 
@@ -64,6 +72,7 @@ func (b *ShadowBudget) Refund() {
 	}
 	b.token -= b.limit.ReserveTokensPerArm
 	b.cost -= b.costOf(b.limit.ReserveTokensPerArm)
+	b.bytes -= b.reserveResponseBytes
 }
 
 // costOf converts tokens to cost at the configured price; 0 when unpriced.
@@ -97,18 +106,15 @@ func (b *ShadowBudget) LeaveInflight() {
 	}
 }
 
-// Reconcile accounts a finished arm attempt. A completed arm swaps its
-// admission reservation for the real usage; any other outcome keeps the
-// reservation (the attempt may still have spent upstream compute, and this was
-// already counted at admission). Observed response bytes are accounted for
-// every outcome; the per-request upper bound of that dimension is the per-arm
-// MaxResponseBytes times admitted calls.
+// Reconcile accounts a finished arm attempt. A completed arm swaps its token
+// and cost admission reservations for the real usage; any other outcome keeps
+// them (the attempt may still have spent upstream compute, and this was
+// already counted at admission). Response bytes are always swapped for the
+// observed size, so a read that never happened releases its reservation.
 func (b *ShadowBudget) Reconcile(completed bool, inputTokens, outputTokens, responseBytes int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if responseBytes > 0 {
-		b.bytes += responseBytes
-	}
+	b.bytes += responseBytes - b.reserveResponseBytes
 	if !completed {
 		return
 	}

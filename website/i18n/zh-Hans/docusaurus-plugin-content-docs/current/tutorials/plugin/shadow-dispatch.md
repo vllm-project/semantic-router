@@ -54,6 +54,7 @@ plugins:
         price_per_million_tokens: 0.0
         reserve_tokens_per_arm: 0
         max_concurrency_per_request: 0
+        max_response_bytes_per_request: 0
       sample_rate: 0.05
       max_concurrency: 2
       max_queue_depth: 8
@@ -77,6 +78,7 @@ plugins:
 | `budget.price_per_million_tokens` | `0` | 费用上限使用的 token→费用换算。 |
 | `budget.reserve_tokens_per_arm` | `0` | 准入时每臂预留的 token 数，使并发准入的臂无法突破 `max_tokens_per_request`/`max_cost_per_request`。 |
 | `budget.max_concurrency_per_request` | `0` | 同一请求允许同时在飞的臂数；超出的臂以原因 `budget_concurrency_limit` 丢弃。`0` = 不限。 |
+| `budget.max_response_bytes_per_request` | `0` | 同一请求跨全部臂的响应字节聚合上限。每次准入预留每臂 `max_response_bytes`，故在分发前生效，完成时以实际观测值折算。`0` = 不限。 |
 | `sample_rate` | `1.0` | 要 shadow 的合格请求比例，范围为 `[0, 1]`。`0` 保持插件已声明但永不分发。 |
 | `max_concurrency` | `2` | 该决策的进行中 shadow 调用数。 |
 | `max_queue_depth` | `8` | 等待槽位的调用。超出部分会以原因 `queue_full` 丢弃。 |

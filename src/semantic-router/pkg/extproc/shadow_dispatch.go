@@ -417,8 +417,9 @@ func (d *shadowDispatcher) submit(
 	}
 
 	// The per-request aggregate budget gates each arm at admission; arms it
-	// rejects are dropped with a deterministic reason, never run.
-	budget := shadow.NewShadowBudget(cfg.Budget)
+	// rejects are dropped with a deterministic reason, never run. Each arm
+	// reserves the per-arm response bound so the byte cap also binds early.
+	budget := shadow.NewShadowBudget(cfg.Budget, int64(cfg.MaxResponseBytes))
 	now := d.now()
 	for _, model := range targets {
 		if reason, ok := budget.TryEnter(); !ok {

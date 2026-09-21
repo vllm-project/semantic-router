@@ -6328,6 +6328,9 @@
         },
         "max_concurrency_per_request": {
           "type": "integer"
+        },
+        "max_response_bytes_per_request": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
