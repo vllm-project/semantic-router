@@ -39,4 +39,12 @@ From the repository root:
 python3 -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
 ```
 
-Collect, fit, and evaluation entrypoints land in later PRs.
+## Fit
+
+`fit.py` ranks source layers by Pearson correlation, fits a centered ridge with
+bias (keys and values separately), and writes the A1 directory via
+`write_fitted_artifact`. Collection scripts land in a later PR.
+
+```bash
+PYTHONPATH=. python3 -m unittest src.training.kv_mapper.tests.test_fit
+```
