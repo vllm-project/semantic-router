@@ -210,9 +210,12 @@ def test_report_and_comparison_use_correction_and_cache_neutral_cost(tmp_path, k
     reconcile_usage(store, baseline)
     reconcile_usage(store, candidate)
     result = compare(store, baseline, candidate)["comparisons"][0]
-    assert result["baseline_cost_usd"] == pytest.approx(0.0001375)
-    assert result["candidate_cost_usd"] == pytest.approx(0.000058)
-    assert result["cost_saving_percent"] > 50
+    assert result["baseline_subject_cost_usd"] == pytest.approx(0.0001375)
+    assert result["candidate_subject_cost_usd"] == pytest.approx(0.000058)
+    assert result["subject_cost_saving_percent"] > 50
+    assert result["baseline_total_cost_usd"] == result["baseline_subject_cost_usd"]
+    assert result["candidate_total_cost_usd"] == result["candidate_subject_cost_usd"]
+    assert result["total_cost_saving_percent"] == result["subject_cost_saving_percent"]
     assert result["cache_neutral_baseline_cost_usd"] == pytest.approx(0.00013)
     assert result["cache_neutral_candidate_cost_usd"] == pytest.approx(0.00013)
     assert result["cache_neutral_cost_saving_percent"] == 0
@@ -301,8 +304,9 @@ def test_recovery_snapshots_corrected_parent_spend_without_rewriting_history(
     with pytest.raises(RecoveryPlanError, match="eligibility changed"):
         recover(engine, parent, body, owner="alice")
 
-    def save_child(manifest, owner, key, *, recovery):
+    def save_child(manifest, owner, key, *, recovery, actor_role):
         assert recovery is True
+        assert actor_role == "local"
         return store.create(plan(manifest), owner, key)[0]
 
     monkeypatch.setattr(engine, "start", save_child)
@@ -346,7 +350,7 @@ def test_failed_recovery_excludes_accounting_reconciliation_unknowns(tmp_path):
     assert store.call(parent, call) == original
 
 
-def test_reconcile_api_owner_and_editor_scope(tmp_path):
+def test_reconcile_api_owner_and_write_scope(tmp_path):
     store = Store(tmp_path)
     run, _, _ = _saved(store)
     service = Server(("127.0.0.1", 0), store, "test-token")
@@ -356,7 +360,7 @@ def test_reconcile_api_owner_and_editor_scope(tmp_path):
     headers = {
         "Authorization": "Bearer test-token",
         "X-SR-Bench-Actor-ID": "alice",
-        "X-SR-Bench-Actor-Role": "editor",
+        "X-SR-Bench-Actor-Role": "write",
     }
     try:
         assert (
@@ -372,7 +376,7 @@ def test_reconcile_api_owner_and_editor_scope(tmp_path):
             requests.post(
                 url,
                 json={},
-                headers={**headers, "X-SR-Bench-Actor-Role": "viewer"},
+                headers={**headers, "X-SR-Bench-Actor-Role": "read"},
                 timeout=2,
             ).status_code
             == HTTPStatus.FORBIDDEN

@@ -18,7 +18,7 @@
     },
     {
       "name": "routing",
-      "description": "Preview routing behavior without invoking a generation backend."
+      "description": "Preview routing behavior without generating an answer."
     },
     {
       "name": "diagnostics",
@@ -10854,8 +10854,8 @@
     },
     "/api/v1/diagnostics/embeddings": {
       "post": {
-        "summary": "Generate text and image embeddings",
-        "description": "Generate text and image embeddings",
+        "summary": "Generate text, image, and audio embeddings",
+        "description": "Generate text, image, and audio embeddings",
         "operationId": "post_api_v1_diagnostics_embeddings",
         "tags": [
           "diagnostics"
@@ -11260,6 +11260,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "audios": {
+                    "nullable": true,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "dimension": {
                     "type": "integer"
                   },
@@ -11369,8 +11376,46 @@
                             "nullable": true,
                             "type": "object",
                             "properties": {
+                              "audio": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "layout": {
+                                    "type": "string"
+                                  },
+                                  "max_channels": {
+                                    "type": "integer"
+                                  },
+                                  "max_sample_rate": {
+                                    "type": "integer"
+                                  },
+                                  "max_seconds": {
+                                    "type": "integer"
+                                  },
+                                  "sample_rates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "max_sample_rate",
+                                  "max_seconds",
+                                  "max_channels",
+                                  "layout"
+                                ]
+                              },
                               "dimension": {
                                 "type": "integer"
+                              },
+                              "dimensions": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
                               },
                               "layer": {
                                 "type": "integer"
@@ -11799,8 +11844,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -12420,8 +12503,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -13085,8 +13206,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -13733,8 +13892,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -14380,8 +14577,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -18184,6 +18419,9 @@
                   "reason": {
                     "type": "string"
                   },
+                  "record_only": {
+                    "type": "boolean"
+                  },
                   "replay_id": {
                     "type": "string"
                   },
@@ -19545,6 +19783,9 @@
                             "items": {
                               "type": "object",
                               "properties": {
+                                "idempotency_key": {
+                                  "type": "string"
+                                },
                                 "metadata": {
                                   "nullable": true,
                                   "type": "object",
@@ -19993,6 +20234,48 @@
                               "decision_priority": {
                                 "type": "integer"
                               },
+                              "decision_ranking": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "candidates": {
+                                    "type": "integer"
+                                  },
+                                  "comparable": {
+                                    "type": "boolean"
+                                  },
+                                  "decided_by": {
+                                    "type": "string"
+                                  },
+                                  "fallback_reason": {
+                                    "type": "string"
+                                  },
+                                  "score_kind": {
+                                    "type": "string"
+                                  },
+                                  "strategy": {
+                                    "type": "string"
+                                  },
+                                  "tier": {
+                                    "type": "integer"
+                                  },
+                                  "tiered": {
+                                    "type": "boolean"
+                                  },
+                                  "winner": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "strategy",
+                                  "tiered",
+                                  "tier",
+                                  "comparable",
+                                  "decided_by",
+                                  "winner",
+                                  "candidates"
+                                ]
+                              },
                               "decision_reason": {
                                 "type": "string"
                               },
@@ -20305,6 +20588,156 @@
                               },
                               "selection_reasoning": {
                                 "type": "string"
+                              },
+                              "selection_trace": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "final_survivors": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "LoRAName": {
+                                          "type": "string"
+                                        },
+                                        "Model": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningDescription": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningEffort": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningMode": {
+                                          "type": "string"
+                                        },
+                                        "UseReasoning": {
+                                          "nullable": true,
+                                          "type": "boolean"
+                                        },
+                                        "Weight": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "Model",
+                                        "LoRAName",
+                                        "Weight",
+                                        "UseReasoning",
+                                        "ReasoningDescription",
+                                        "ReasoningMode",
+                                        "ReasoningEffort"
+                                      ]
+                                    }
+                                  },
+                                  "stages": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "action": {
+                                          "type": "string"
+                                        },
+                                        "available": {
+                                          "type": "integer"
+                                        },
+                                        "candidates": {
+                                          "nullable": true,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "candidate": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "LoRAName": {
+                                                    "type": "string"
+                                                  },
+                                                  "Model": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningDescription": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningEffort": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningMode": {
+                                                    "type": "string"
+                                                  },
+                                                  "UseReasoning": {
+                                                    "nullable": true,
+                                                    "type": "boolean"
+                                                  },
+                                                  "Weight": {
+                                                    "type": "number"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "Model",
+                                                  "LoRAName",
+                                                  "Weight",
+                                                  "UseReasoning",
+                                                  "ReasoningDescription",
+                                                  "ReasoningMode",
+                                                  "ReasoningEffort"
+                                                ]
+                                              },
+                                              "elimination_reason": {
+                                                "type": "string"
+                                              },
+                                              "metric": {
+                                                "type": "string"
+                                              },
+                                              "value": {
+                                                "nullable": true,
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "candidate"
+                                            ]
+                                          }
+                                        },
+                                        "factor": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "percentile": {
+                                          "type": "integer"
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        },
+                                        "tolerance": {
+                                          "type": "number"
+                                        },
+                                        "total": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "factor",
+                                        "action",
+                                        "reason",
+                                        "tolerance",
+                                        "available",
+                                        "total",
+                                        "candidates"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "stages",
+                                  "final_survivors"
+                                ]
                               },
                               "session_action": {
                                 "type": "string"
@@ -22944,6 +23377,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "idempotency_key": {
+                            "type": "string"
+                          },
                           "metadata": {
                             "nullable": true,
                             "type": "object",
@@ -23392,6 +23828,48 @@
                         "decision_priority": {
                           "type": "integer"
                         },
+                        "decision_ranking": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "candidates": {
+                              "type": "integer"
+                            },
+                            "comparable": {
+                              "type": "boolean"
+                            },
+                            "decided_by": {
+                              "type": "string"
+                            },
+                            "fallback_reason": {
+                              "type": "string"
+                            },
+                            "score_kind": {
+                              "type": "string"
+                            },
+                            "strategy": {
+                              "type": "string"
+                            },
+                            "tier": {
+                              "type": "integer"
+                            },
+                            "tiered": {
+                              "type": "boolean"
+                            },
+                            "winner": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "strategy",
+                            "tiered",
+                            "tier",
+                            "comparable",
+                            "decided_by",
+                            "winner",
+                            "candidates"
+                          ]
+                        },
                         "decision_reason": {
                           "type": "string"
                         },
@@ -23704,6 +24182,156 @@
                         },
                         "selection_reasoning": {
                           "type": "string"
+                        },
+                        "selection_trace": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "final_survivors": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "LoRAName": {
+                                    "type": "string"
+                                  },
+                                  "Model": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningDescription": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningEffort": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningMode": {
+                                    "type": "string"
+                                  },
+                                  "UseReasoning": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "Weight": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "Model",
+                                  "LoRAName",
+                                  "Weight",
+                                  "UseReasoning",
+                                  "ReasoningDescription",
+                                  "ReasoningMode",
+                                  "ReasoningEffort"
+                                ]
+                              }
+                            },
+                            "stages": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "type": "string"
+                                  },
+                                  "available": {
+                                    "type": "integer"
+                                  },
+                                  "candidates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "candidate": {
+                                          "type": "object",
+                                          "properties": {
+                                            "LoRAName": {
+                                              "type": "string"
+                                            },
+                                            "Model": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningDescription": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningEffort": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningMode": {
+                                              "type": "string"
+                                            },
+                                            "UseReasoning": {
+                                              "nullable": true,
+                                              "type": "boolean"
+                                            },
+                                            "Weight": {
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "Model",
+                                            "LoRAName",
+                                            "Weight",
+                                            "UseReasoning",
+                                            "ReasoningDescription",
+                                            "ReasoningMode",
+                                            "ReasoningEffort"
+                                          ]
+                                        },
+                                        "elimination_reason": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "candidate"
+                                      ]
+                                    }
+                                  },
+                                  "factor": {
+                                    "type": "string"
+                                  },
+                                  "metric": {
+                                    "type": "string"
+                                  },
+                                  "percentile": {
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "factor",
+                                  "action",
+                                  "reason",
+                                  "tolerance",
+                                  "available",
+                                  "total",
+                                  "candidates"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "stages",
+                            "final_survivors"
+                          ]
                         },
                         "session_action": {
                           "type": "string"
@@ -30670,8 +31298,8 @@
     },
     "/api/v1/routing/preview": {
       "post": {
-        "summary": "Preview configured signals and model selection without invoking a generation backend. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
-        "description": "Preview configured signals and model selection without invoking a generation backend. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+        "summary": "Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+        "description": "Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
         "operationId": "post_api_v1_routing_preview",
         "tags": [
           "routing"
@@ -30720,6 +31348,48 @@
                     },
                     "decision_error": {
                       "type": "string"
+                    },
+                    "decision_ranking": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "candidates": {
+                          "type": "integer"
+                        },
+                        "comparable": {
+                          "type": "boolean"
+                        },
+                        "decided_by": {
+                          "type": "string"
+                        },
+                        "fallback_reason": {
+                          "type": "string"
+                        },
+                        "score_kind": {
+                          "type": "string"
+                        },
+                        "strategy": {
+                          "type": "string"
+                        },
+                        "tier": {
+                          "type": "integer"
+                        },
+                        "tiered": {
+                          "type": "boolean"
+                        },
+                        "winner": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "strategy",
+                        "tiered",
+                        "tier",
+                        "comparable",
+                        "decided_by",
+                        "winner",
+                        "candidates"
+                      ]
                     },
                     "decision_result": {
                       "nullable": true,
@@ -33470,6 +34140,156 @@
                     "selection_status": {
                       "type": "string"
                     },
+                    "selection_trace": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "final_survivors": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "LoRAName": {
+                                "type": "string"
+                              },
+                              "Model": {
+                                "type": "string"
+                              },
+                              "ReasoningDescription": {
+                                "type": "string"
+                              },
+                              "ReasoningEffort": {
+                                "type": "string"
+                              },
+                              "ReasoningMode": {
+                                "type": "string"
+                              },
+                              "UseReasoning": {
+                                "nullable": true,
+                                "type": "boolean"
+                              },
+                              "Weight": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "Model",
+                              "LoRAName",
+                              "Weight",
+                              "UseReasoning",
+                              "ReasoningDescription",
+                              "ReasoningMode",
+                              "ReasoningEffort"
+                            ]
+                          }
+                        },
+                        "stages": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "type": "string"
+                              },
+                              "available": {
+                                "type": "integer"
+                              },
+                              "candidates": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "candidate": {
+                                      "type": "object",
+                                      "properties": {
+                                        "LoRAName": {
+                                          "type": "string"
+                                        },
+                                        "Model": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningDescription": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningEffort": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningMode": {
+                                          "type": "string"
+                                        },
+                                        "UseReasoning": {
+                                          "nullable": true,
+                                          "type": "boolean"
+                                        },
+                                        "Weight": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "Model",
+                                        "LoRAName",
+                                        "Weight",
+                                        "UseReasoning",
+                                        "ReasoningDescription",
+                                        "ReasoningMode",
+                                        "ReasoningEffort"
+                                      ]
+                                    },
+                                    "elimination_reason": {
+                                      "type": "string"
+                                    },
+                                    "metric": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "nullable": true,
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "candidate"
+                                  ]
+                                }
+                              },
+                              "factor": {
+                                "type": "string"
+                              },
+                              "metric": {
+                                "type": "string"
+                              },
+                              "percentile": {
+                                "type": "integer"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "tolerance": {
+                                "type": "number"
+                              },
+                              "total": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "factor",
+                              "action",
+                              "reason",
+                              "tolerance",
+                              "available",
+                              "total",
+                              "candidates"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "stages",
+                        "final_survivors"
+                      ]
+                    },
                     "signal_confidences": {
                       "nullable": true,
                       "type": "object",
@@ -33850,6 +34670,48 @@
                         },
                         "decision_error": {
                           "type": "string"
+                        },
+                        "decision_ranking": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "candidates": {
+                              "type": "integer"
+                            },
+                            "comparable": {
+                              "type": "boolean"
+                            },
+                            "decided_by": {
+                              "type": "string"
+                            },
+                            "fallback_reason": {
+                              "type": "string"
+                            },
+                            "score_kind": {
+                              "type": "string"
+                            },
+                            "strategy": {
+                              "type": "string"
+                            },
+                            "tier": {
+                              "type": "integer"
+                            },
+                            "tiered": {
+                              "type": "boolean"
+                            },
+                            "winner": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "strategy",
+                            "tiered",
+                            "tier",
+                            "comparable",
+                            "decided_by",
+                            "winner",
+                            "candidates"
+                          ]
                         },
                         "decision_result": {
                           "nullable": true,
@@ -36599,6 +37461,156 @@
                         },
                         "selection_status": {
                           "type": "string"
+                        },
+                        "selection_trace": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "final_survivors": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "LoRAName": {
+                                    "type": "string"
+                                  },
+                                  "Model": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningDescription": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningEffort": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningMode": {
+                                    "type": "string"
+                                  },
+                                  "UseReasoning": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "Weight": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "Model",
+                                  "LoRAName",
+                                  "Weight",
+                                  "UseReasoning",
+                                  "ReasoningDescription",
+                                  "ReasoningMode",
+                                  "ReasoningEffort"
+                                ]
+                              }
+                            },
+                            "stages": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "type": "string"
+                                  },
+                                  "available": {
+                                    "type": "integer"
+                                  },
+                                  "candidates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "candidate": {
+                                          "type": "object",
+                                          "properties": {
+                                            "LoRAName": {
+                                              "type": "string"
+                                            },
+                                            "Model": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningDescription": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningEffort": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningMode": {
+                                              "type": "string"
+                                            },
+                                            "UseReasoning": {
+                                              "nullable": true,
+                                              "type": "boolean"
+                                            },
+                                            "Weight": {
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "Model",
+                                            "LoRAName",
+                                            "Weight",
+                                            "UseReasoning",
+                                            "ReasoningDescription",
+                                            "ReasoningMode",
+                                            "ReasoningEffort"
+                                          ]
+                                        },
+                                        "elimination_reason": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "candidate"
+                                      ]
+                                    }
+                                  },
+                                  "factor": {
+                                    "type": "string"
+                                  },
+                                  "metric": {
+                                    "type": "string"
+                                  },
+                                  "percentile": {
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "factor",
+                                  "action",
+                                  "reason",
+                                  "tolerance",
+                                  "available",
+                                  "total",
+                                  "candidates"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "stages",
+                            "final_survivors"
+                          ]
                         },
                         "signal_confidences": {
                           "nullable": true,

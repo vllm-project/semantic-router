@@ -12,7 +12,7 @@ func (r *SemanticRouter) validatePromptGuardContext() error {
 	if cfg.MaxSequenceLength < 0 {
 		return fmt.Errorf("config.prompt_guard.max_sequence_length must be nonnegative")
 	}
-	local := cfg.Backend == nil && cfg.Protocol == "" && (cfg.Variant == "" || cfg.Variant == "mmbert32k")
+	local := cfg.Backend == nil && (cfg.Variant == "" || cfg.Variant == "mmbert32k")
 	if (cfg.MaxSequenceLength > 0 || cfg.Window != nil) && !local {
 		return fmt.Errorf("config.prompt_guard.max_sequence_length and window require the local mmbert32k variant")
 	}

@@ -12,20 +12,20 @@ import (
 // evaluation. Keeping optional values named avoids positional interface{}
 // arguments and makes new signal context additive without changing call order.
 type SignalEvaluationInput struct {
-	Text              string
-	ContextText       string
-	CurrentUserText   string
-	PriorUserMessages []string
-	NonUserMessages   []string
 	// ToolResultTexts contains request-scoped textual tool results for PII
-	// source selection. It is kept separate from RequestFacts because that
-	// structure intentionally contains only content-free request facts.
+	// source selection, separate from content-free RequestFacts.
 	ToolResultTexts          []string
 	ToolResultScanIncomplete bool
+	Text                     string
+	ContextText              string
+	CurrentUserText          string
+	PriorUserMessages        []string
+	NonUserMessages          []string
 	HasPriorAssistantReply   bool
 	Headers                  map[string]string
 	ForceEvaluateAll         bool
 	ImageURL                 string
+	Audio                    string
 	UncompressedText         string
 	SkipCompressionSignals   map[string]bool
 	ConversationFacts        ConversationFacts
@@ -36,24 +36,7 @@ type SignalEvaluationInput struct {
 // including authz role bindings. Authz errors are returned to the caller so a
 // missing identity cannot silently bypass policy.
 func (c *Classifier) EvaluateAllSignalsWithHeaders(input SignalEvaluationInput) (*SignalResults, error) {
-	results := c.evaluateAllSignalsWithContext(
-		input.Text,
-		input.ContextText,
-		input.CurrentUserText,
-		input.PriorUserMessages,
-		input.NonUserMessages,
-		input.HasPriorAssistantReply,
-		input.ForceEvaluateAll,
-		input.UncompressedText,
-		input.SkipCompressionSignals,
-		input.ConversationFacts,
-		input.ImageURL,
-		input.RequestFacts,
-		input.ToolResultTexts,
-		input.ToolResultScanIncomplete,
-		nil,
-		false,
-	)
+	results := c.evaluateAllSignalsWithContext(input, nil, false)
 	if err := c.appendAuthzFromHeaders(results, input.Headers, input.ForceEvaluateAll); err != nil {
 		return nil, err
 	}

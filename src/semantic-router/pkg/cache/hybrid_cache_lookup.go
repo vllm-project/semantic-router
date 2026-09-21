@@ -68,20 +68,17 @@ func (h *HybridCache) findSimilar(
 	logging.Debugf("%s: HNSW returned %d candidates, %d above threshold",
 		logPrefix, totalCandidates, len(candidatesWithIDs))
 
-	responseBody, candidate, found, fetchErr := h.fetchResponseFromCandidates(ctx, logPrefix, model, candidatesWithIDs)
-	if found {
+	var queryTokenBuffer [32]string
+	queryTokens := tokenizeForPolarity(query, queryTokenBuffer[:0])
+	result, candidate, fetchErr := h.fetchResponseFromCandidates(ctx, logPrefix, model, queryTokens, candidatesWithIDs)
+	if result.Found {
 		h.recordLookupHit(start, metricOp, threshold, model, candidate)
-		return LookupResult{
-			ResponseBody: responseBody,
-			Found:        true,
-			Similarity:   candidate.similarity,
-		}, nil
+		return result, nil
 	}
 
 	// The global HNSW graph may return a nearest neighbor from another model
-	// partition. Milvus owns the exact model filter, so fall back to its
-	// partitioned vector search instead of returning or silently accepting the
-	// wrong candidate.
+	// partition or one rejected by the lexical polarity floor. Milvus owns the
+	// exact model filter and checks each fetched candidate's original query.
 	milvusResult, err := h.milvusCache.LookupSimilarWithThreshold(ctx, model, query, threshold)
 	if err != nil {
 		metrics.RecordCacheOperation("hybrid", metricOp, "error", time.Since(start).Seconds())
@@ -98,6 +95,9 @@ func (h *HybridCache) findSimilar(
 	// error and must not be hidden by the cache fail-open path.
 	if fetchErr != nil {
 		return LookupResult{}, fmt.Errorf("%s: candidate fetch failed: %w", logPrefix, fetchErr)
+	}
+	if candidate.milvusID != "" && result.Similarity > milvusResult.Similarity {
+		return LookupResult{Similarity: result.Similarity}, nil
 	}
 	return LookupResult{Similarity: milvusResult.Similarity}, nil
 }
@@ -133,8 +133,9 @@ func (h *HybridCache) fetchResponseFromCandidates(
 	parent context.Context,
 	logPrefix string,
 	model string,
+	queryTokens []string,
 	candidates []candidateWithID,
-) ([]byte, candidateWithID, bool, error) {
+) (LookupResult, candidateWithID, error) {
 	if parent == nil {
 		parent = context.Background()
 	}
@@ -142,9 +143,11 @@ func (h *HybridCache) fetchResponseFromCandidates(
 	defer cancel()
 
 	var fetchErr error
+	var rejected LookupResult
+	var rejectedCandidate candidateWithID
 	for _, candidate := range candidates {
 		fetchCtx, fetchCancel := context.WithTimeout(ctx, 2*time.Second)
-		responseBody, err := h.milvusCache.GetByID(fetchCtx, candidate.milvusID, model)
+		entry, err := h.milvusCache.getEntryByID(fetchCtx, candidate.milvusID, model)
 		fetchCancel()
 		if err != nil {
 			if errors.Is(err, errMilvusCacheEntryNotFound) {
@@ -154,12 +157,16 @@ func (h *HybridCache) fetchResponseFromCandidates(
 			fetchErr = errors.Join(fetchErr, err)
 			continue
 		}
-		if responseBody != nil {
-			return responseBody, candidate, true, nil
+		if len(entry.ResponseBody) > 0 && semanticCandidateMatchesPolarity(queryTokens, entry.Query) {
+			return lookupResultFromTimestamps(entry.ResponseBody, candidate.similarity, entry.Timestamp, entry.ExpiresAt), candidate, nil
+		}
+		if candidate.similarity > rejected.Similarity {
+			rejected.Similarity = candidate.similarity
+			rejectedCandidate = candidate
 		}
 	}
 
-	return nil, candidateWithID{}, false, fetchErr
+	return rejected, rejectedCandidate, fetchErr
 }
 
 func (h *HybridCache) recordLookupHit(

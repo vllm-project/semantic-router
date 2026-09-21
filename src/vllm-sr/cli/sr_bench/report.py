@@ -13,8 +13,11 @@ from . import VERSION
 from .accounting import cache_neutral_cost, correction_metadata, effective_calls
 from .contracts import BENCHMARK_WEIGHTS, planned_cells
 from .failures import first_saved_failure
+from .native_output import model_limits
+from .target_contracts import effective_auxiliary_targets, target_inventory
 
 BUCKETS = ("input_tokens", "cached_input_tokens", "cache_write_tokens", "output_tokens")
+COMPARABLE_STATUSES = frozenset({"completed", "failed"})
 
 
 def percentile(values, q):
@@ -46,18 +49,78 @@ def paired_conservative_interval(delta, groups, weights, alpha=0.05):
 
 
 def sum_cost(calls):
-    if not calls or any(c.get("cost_usd") is None for c in calls):
+    if not calls or any(not _known_cost(c.get("cost_usd")) for c in calls):
         return None
     return sum(c["cost_usd"] for c in calls)
 
 
-def metric(target_id, results, calls, total):
+def _known_cost(value):
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value >= 0
+    )
+
+
+def output_diagnostics(results, subject_calls, total):
+    """Count saved checks and call endings, without inferring absent output text."""
+    details = [row.get("details") or {} for row in results]
+    format_checks = [
+        row["strict_format"]
+        for row in details
+        if isinstance(row.get("strict_format"), bool)
+    ]
+    finish_reasons = Counter(
+        call["finish_reason"]
+        for call in subject_calls
+        if isinstance(call.get("finish_reason"), str) and call["finish_reason"]
+    )
+    return {
+        "planned_cases": total,
+        "result_cases": len(results),
+        # This is a count of recorded flags, not proof that all other outputs
+        # were complete. Missing result/check fields remain unassessed below.
+        "output_limit_cases": sum(
+            row.get("quality_failure") == "output_limit" for row in details
+        ),
+        "strict_format": {
+            "checked_cases": len(format_checks),
+            "failed_cases": format_checks.count(False),
+            "unassessed_cases": total - len(format_checks),
+        },
+        "subject_calls": {
+            "total": len(subject_calls),
+            "finish_reasons": dict(sorted(finish_reasons.items())),
+            "unknown_finish_reason": len(subject_calls) - sum(finish_reasons.values()),
+        },
+    }
+
+
+def metric(target_id, results, calls, total, *, planned_case_ids=None):
     completed = [r for r in results if r["status"] == "completed"]
     scored = [r for r in completed if isinstance(r.get("correct"), bool)]
     correct = sum(r["correct"] for r in scored)
     subject = [c for c in calls if c["role"] == "subject"]
     overhead = [c for c in calls if c["role"] != "subject"]
-    usage_complete = bool(subject) and all(c.get("usage") is not None for c in subject)
+    receipted_cases = {c["case_id"] for c in subject if c.get("case_id")}
+    subject_coverage_complete = len(receipted_cases) == total and all(
+        r.get("case_id") in receipted_cases for r in results
+    )
+    if planned_case_ids is not None:
+        subject_coverage_complete = (
+            subject_coverage_complete and receipted_cases == set(planned_case_ids)
+        )
+    usage_complete = (
+        bool(subject)
+        and subject_coverage_complete
+        and all(c.get("usage") is not None for c in subject)
+    )
+    cost_complete = (
+        bool(subject)
+        and subject_coverage_complete
+        and all(_known_cost(c.get("cost_usd")) for c in subject)
+    )
     tokens = (
         {k: sum((c.get("usage") or {}).get(k, 0) for c in subject) for k in BUCKETS}
         if usage_complete
@@ -68,7 +131,7 @@ def metric(target_id, results, calls, total):
         for r in completed
         if r.get("latency_s") is not None
     ]
-    known = sum(c.get("cost_usd") or 0 for c in subject)
+    known = sum(c["cost_usd"] for c in subject if _known_cost(c.get("cost_usd")))
     return {
         "id": target_id,
         "total": total,
@@ -80,24 +143,26 @@ def metric(target_id, results, calls, total):
         "accuracy": correct / total if total else None,
         "accuracy_denominator": "all_planned_cases; failures and unanswered count as incorrect",
         "complete": len(completed) == total and len(scored) == total,
+        "output_diagnostics": output_diagnostics(results, subject, total),
         "accuracy_ci95": wilson(correct, total),
-        "cost_usd": sum_cost(subject),
+        "cost_usd": sum_cost(subject) if cost_complete else None,
         "cache_neutral_cost_usd": (
             sum(c["cache_neutral_cost_usd"] for c in subject)
             if subject
+            and subject_coverage_complete
             and all(c.get("cache_neutral_cost_usd") is not None for c in subject)
             else None
         ),
         "cache_neutral_cost_basis": "Counterfactual token-equivalent subject cost: all prompt tokens at the frozen fresh-input rate plus output; not billed spend.",
         "known_cost_usd": known,
-        "cost_complete": bool(subject)
-        and all(c.get("cost_usd") is not None for c in subject),
+        "cost_complete": cost_complete,
         "evaluation_cost_usd": sum_cost(overhead) if overhead else 0,
-        "total_spend_usd": sum_cost(calls),
+        "total_spend_usd": sum_cost(calls) if subject_coverage_complete else None,
         "tokens": tokens,
         "call_count": (
             sum(c["inference_call_count"] for c in subject)
             if subject
+            and subject_coverage_complete
             and all(c.get("inference_call_count") is not None for c in subject)
             else None
         ),
@@ -154,7 +219,15 @@ def make_report(store, run_id):
         }
         rows = [r for r in results if r["target_id"] == target["id"]]
         tcalls = [c for c in calls if c["target_id"] == target["id"]]
-        metrics.append(metric(target["id"], rows, tcalls, len(selected_ids)))
+        metrics.append(
+            metric(
+                target["id"],
+                rows,
+                tcalls,
+                len(selected_ids),
+                planned_case_ids=selected_ids,
+            )
+        )
         for benchmark in sorted({c["benchmark"] for c in manifest["cases"]}):
             ids = {
                 c["id"]
@@ -172,6 +245,7 @@ def make_report(store, run_id):
                         [r for r in rows if r["case_id"] in ids],
                         [c for c in tcalls if c["case_id"] in ids],
                         len(ids),
+                        planned_case_ids=ids,
                     ),
                 }
             )
@@ -290,9 +364,9 @@ def make_report(store, run_id):
         limitations.append(
             "Preview evaluates routing only; it does not measure answer quality."
         )
-    if any(not m["cost_complete"] for m in metrics):
+    if any(m["total_spend_usd"] is None for m in metrics):
         limitations.append(
-            "Some call costs are unknown; cost savings cannot be claimed for those targets."
+            "Some subject or auxiliary call costs are unknown; total cost savings cannot be claimed for those targets."
         )
     if run["status"] != "completed":
         limitations.append(
@@ -325,6 +399,22 @@ def make_report(store, run_id):
         limitations.append(
             "GPQA labels were previously seen in this project; this is a retest, not an unseen holdout claim."
         )
+    preparation = (manifest.get("dataset") or {}).get("preparation", {})
+    if any(entry["history_snapshot"] is not None for entry in preparation.values()):
+        limitations.append(
+            "History exclusions cover only the named frozen dataset/run memberships. They do not certify complete prior generation, browsing, human exposure or upstream contamination history."
+        )
+    retests = sorted(
+        family
+        for family, entry in preparation.items()
+        if entry["evaluation_role"] == "retest"
+    )
+    if retests:
+        limitations.append(
+            "Explicit retest families included in this report: "
+            + ", ".join(retests)
+            + ". Aggregate scores including them are not an unseen holdout aggregate."
+        )
     if manifest["cost_policy"] == "require_priced":
         limitations.append(
             "Dispatch reservations use frozen request estimates. Provider or router prompt/output transformations can exceed those estimates; max_cost_usd stops future dispatch from measured spend but is not a universal hard billing cap."
@@ -352,7 +442,15 @@ def make_report(store, run_id):
         "summary": {
             "targets": metrics,
             "wall_time_s": wall,
-            "total_spend_usd": 0 if manifest["mode"] == "replay" else sum_cost(calls),
+            "total_spend_usd": (
+                0
+                if manifest["mode"] == "replay"
+                else (
+                    sum_cost(calls)
+                    if all(item["total_spend_usd"] is not None for item in metrics)
+                    else None
+                )
+            ),
         },
         "benchmarks": benchmarks,
         "limitations": limitations,
@@ -382,6 +480,14 @@ def make_report(store, run_id):
 
 
 def _comparison_protocol(baseline, candidate):
+    if baseline.get("output_policy", "bounded") != candidate.get(
+        "output_policy", "bounded"
+    ):
+        raise ValueError("Cannot compare different output_policy")
+    if baseline.get("output_policy", "bounded") == "native" and model_limits(
+        baseline
+    ) != model_limits(candidate):
+        raise ValueError("Cannot compare changed frozen native model limits")
     for key in (
         "case_sha256",
         "sampling",
@@ -394,34 +500,12 @@ def _comparison_protocol(baseline, candidate):
         if baseline.get(key) != candidate.get(key):
             raise ValueError(f"Cannot compare different {key}")
 
-    def targets(manifest):
-        return {
-            **manifest.get("auxiliary_targets", {}),
-            **{target["id"]: target for target in manifest["targets"]},
-        }
-
-    def auxiliary(manifest):
-        inventory = targets(manifest)
-        resolved = {}
-        for benchmark, options in manifest.get("benchmark_options", {}).items():
-            for role in ("judge", "simulator"):
-                if ref := options.get(role):
-                    target = inventory[ref]
-                    resolved[benchmark, role] = {
-                        **{k: v for k, v in target.items() if k != "id"},
-                        "request_params": {
-                            **manifest["sampling"],
-                            **target.get("request_params", {}),
-                        },
-                    }
-        return resolved
-
-    if auxiliary(baseline) != auxiliary(candidate):
+    if effective_auxiliary_targets(baseline) != effective_auxiliary_targets(candidate):
         raise ValueError("Cannot compare changed effective judge/simulator targets")
 
     prices, profiles = {}, {}
     for manifest in (baseline, candidate):
-        for target in targets(manifest).values():
+        for target in target_inventory(manifest).values():
             for model, price in target.get("prices", {}).items():
                 if model in prices and prices[model] != price:
                     raise ValueError("Cannot compare changed frozen model prices")
@@ -449,7 +533,7 @@ def _exact_quality(report, target, weights):
 
 
 def _strongest_single(singles, report, weights):
-    """Compare frozen weighted counts exactly; never favor a costly quality tie."""
+    """Break exact quality ties by complete subject plus auxiliary spend."""
     metrics = {row["id"]: row for row in report["summary"]["targets"]}
     quality = {
         target["id"]: _exact_quality(report, target["id"], weights)
@@ -460,53 +544,111 @@ def _strongest_single(singles, report, weights):
 
     def priced(target):
         item = metrics[target]
-        return item["cost_complete"] and item["cost_usd"] is not None
+        return item["total_spend_usd"] is not None
 
     best = min(
         tied,
         key=lambda target: (
             not priced(target),
-            metrics[target]["cost_usd"] if priced(target) else math.inf,
+            metrics[target]["total_spend_usd"] if priced(target) else math.inf,
             target,
         ),
     )
     return best, tied, all(priced(target) for target in tied)
 
 
+def _cost_saving_percent(baseline, candidate, eligible):
+    if eligible and baseline is not None and baseline > 0 and candidate is not None:
+        return (1 - candidate / baseline) * 100
+    return None
+
+
+class ComparisonValidator:
+    """Shared protocol and explicit terminal outcomes for discovery and submit."""
+
+    def __init__(self, store, baseline):
+        self.store = store
+        self.baseline = baseline
+        bm = baseline["manifest"]
+        if baseline["status"] not in COMPARABLE_STATUSES or bm["mode"] != "live":
+            raise ValueError("Baseline must be a completed or failed live run")
+        self.singles = [t for t in bm["targets"] if t["kind"] == "single"]
+        if not self.singles:
+            raise ValueError("Baseline must contain a single-model target")
+        planned = planned_cells(bm)
+        selected = {
+            target["id"]: {
+                c["case_id"] for c in planned if c["target_id"] == target["id"]
+            }
+            for target in bm["targets"]
+        }
+        self.expected = selected[self.singles[0]["id"]]
+        if not self.expected or any(ids != self.expected for ids in selected.values()):
+            raise ValueError(
+                "Baseline targets must cover identical nonempty selected cases"
+            )
+        self.case_ids = [c["id"] for c in bm["cases"] if c["id"] in self.expected]
+        results = store.results(baseline["id"])
+        self.by_target = self._quality_rows(results, bm["targets"], "Baseline")
+
+    def _quality_rows(self, results, targets, label):
+        by_target = {target["id"]: {} for target in targets}
+        for result in results:
+            rows = by_target.get(result["target_id"])
+            if rows is None:
+                continue
+            case_id = result["case_id"]
+            status = result["status"]
+            if (
+                case_id in rows
+                or case_id not in self.expected
+                or status not in COMPARABLE_STATUSES
+                or (
+                    status == "completed"
+                    and not isinstance(result.get("correct"), bool)
+                )
+            ):
+                raise ValueError(
+                    f"{label} quality results lack unique terminal outcomes"
+                )
+            # A failed outcome is incorrect under the existing report denominator.
+            # This derived score never changes its saved status, grade or receipt.
+            rows[case_id] = {
+                **result,
+                "correct": result["correct"] if status == "completed" else False,
+            }
+        if any(set(rows) != self.expected for rows in by_target.values()):
+            raise ValueError(f"{label} quality results are incomplete")
+        return by_target
+
+    def validate(self, candidate):
+        if self.baseline["id"] == candidate["id"]:
+            raise ValueError("Choose two distinct runs for comparison")
+        _comparison_protocol(self.baseline["manifest"], candidate["manifest"])
+        if candidate["status"] not in COMPARABLE_STATUSES:
+            raise ValueError("Both runs must be completed or failed before comparison")
+        planned = planned_cells(candidate["manifest"])
+        if any(
+            {cell["case_id"] for cell in planned if cell["target_id"] == target["id"]}
+            != self.expected
+            for target in candidate["manifest"]["targets"]
+        ):
+            raise ValueError("Candidate targets must cover identical planned cases")
+        return self._quality_rows(
+            self.store.results(candidate["id"]),
+            candidate["manifest"]["targets"],
+            "Candidate",
+        )
+
+
 def compare(store, baseline_id, candidate_id):
     baseline = store.get(baseline_id)
     candidate = store.get(candidate_id)
-    bm = baseline["manifest"]
-    cm = candidate["manifest"]
-    _comparison_protocol(bm, cm)
-    if bm["mode"] != "live":
-        raise ValueError("Preview cannot support quality or cost-saving comparisons")
-    if baseline["status"] != "completed" or candidate["status"] != "completed":
-        raise ValueError("Both runs must complete before a paired comparison")
-    br = store.results(baseline_id)
-    cr = store.results(candidate_id)
-    singles = [t for t in bm["targets"] if t["kind"] == "single"]
-    if not singles:
-        raise ValueError("Baseline must contain a single-model target")
-    planned = planned_cells(bm)
-    selected = {
-        target["id"]: {c["case_id"] for c in planned if c["target_id"] == target["id"]}
-        for target in singles
-    }
-    expected = selected[singles[0]["id"]]
-    if any(ids != expected for ids in selected.values()):
-        raise ValueError("Baseline targets must cover identical selected cases")
-    case_ids = [c["id"] for c in bm["cases"] if c["id"] in expected]
-    by_target = {
-        t["id"]: {r["case_id"]: r for r in br if r["target_id"] == t["id"]}
-        for t in singles
-    }
-    if any(
-        len(rows) != len(case_ids)
-        or any(not isinstance(r.get("correct"), bool) for r in rows.values())
-        for rows in by_target.values()
-    ):
-        raise ValueError("Baseline quality results are incomplete")
+    validator = ComparisonValidator(store, baseline)
+    candidate_rows = validator.validate(candidate)
+    bm, cm = baseline["manifest"], candidate["manifest"]
+    singles, expected = validator.singles, validator.expected
+    case_ids, by_target = validator.case_ids, validator.by_target
     report_b = make_report(store, baseline_id)
     report_c = make_report(store, candidate_id)
     metric_by_id = {t["id"]: t for t in report_b["summary"]["targets"]}
@@ -515,13 +657,16 @@ def compare(store, baseline_id, candidate_id):
     )
     base = by_target[best]
     base_metric = metric_by_id[best]
+    priced_policy = bm["cost_policy"] == cm["cost_policy"] == "require_priced"
+    cost_eligible = tied_costs_complete and priced_policy
+    baseline_cost_reason = (
+        None
+        if tied_costs_complete
+        else "At least one strongest single-model reference has incomplete total spend (subject plus auxiliary); the cheapest strongest baseline cannot be established."
+    )
     comparisons = []
     for target in cm["targets"]:
-        rows = {r["case_id"]: r for r in cr if r["target_id"] == target["id"]}
-        if set(rows) != set(case_ids) or any(
-            not isinstance(r.get("correct"), bool) for r in rows.values()
-        ):
-            raise ValueError("Candidate quality results are incomplete")
+        rows = candidate_rows[target["id"]]
         diffs = [int(rows[i]["correct"]) - int(base[i]["correct"]) for i in case_ids]
         groups = {
             b: [
@@ -555,17 +700,21 @@ def compare(store, baseline_id, candidate_id):
         )
         bc = base_metric["cost_usd"]
         cc = cand_metric["cost_usd"]
+        total_base = base_metric["total_spend_usd"]
+        total_candidate = cand_metric["total_spend_usd"]
         neutral_base = base_metric["cache_neutral_cost_usd"]
         neutral_candidate = cand_metric["cache_neutral_cost_usd"]
-        savings = (
-            (1 - cc / bc) * 100
-            if bc is not None
-            and bc > 0
-            and cc is not None
-            and tied_costs_complete
-            and bm["cost_policy"] == cm["cost_policy"] == "require_priced"
-            else None
-        )
+        total_cost_reason = baseline_cost_reason
+        if total_cost_reason is None and not priced_policy:
+            total_cost_reason = (
+                "Total cost savings require priced accounting for both runs."
+            )
+        if total_cost_reason is None and total_candidate is None:
+            total_cost_reason = "Candidate total spend is incomplete: every planned subject case and every actual auxiliary call require known costs."
+        if total_cost_reason is None and total_base == 0:
+            total_cost_reason = (
+                "A zero-cost baseline has no defined percentage savings."
+            )
         comparisons.append(
             {
                 "baseline_target_id": best,
@@ -580,21 +729,25 @@ def compare(store, baseline_id, candidate_id):
                 "quality_delta_ci95_method": "weighted-paired-hoeffding",
                 "quality_delta_ci95_qualification": "Case-independent bounded-difference interval with frozen benchmark weights; excludes strongest-baseline-selection, source contamination and tuning-selection uncertainty.",
                 "quality_delta_bootstrap_ci95": [samples[49], samples[1949]],
-                "cost_saving_percent": savings,
-                "baseline_cost_usd": bc,
-                "candidate_cost_usd": cc,
+                "subject_cost_saving_percent": _cost_saving_percent(
+                    bc, cc, cost_eligible
+                ),
+                "baseline_subject_cost_usd": bc,
+                "candidate_subject_cost_usd": cc,
+                "total_cost_saving_percent": _cost_saving_percent(
+                    total_base, total_candidate, cost_eligible
+                ),
+                "baseline_total_cost_usd": total_base,
+                "candidate_total_cost_usd": total_candidate,
+                "baseline_evaluation_cost_usd": base_metric["evaluation_cost_usd"],
+                "candidate_evaluation_cost_usd": cand_metric["evaluation_cost_usd"],
+                "total_cost_comparison_reason": total_cost_reason,
                 "cache_neutral_baseline_cost_usd": neutral_base,
                 "cache_neutral_candidate_cost_usd": neutral_candidate,
-                "cache_neutral_cost_saving_percent": (
-                    (1 - neutral_candidate / neutral_base) * 100
-                    if neutral_base is not None
-                    and neutral_base > 0
-                    and neutral_candidate is not None
-                    and tied_costs_complete
-                    and bm["cost_policy"] == cm["cost_policy"] == "require_priced"
-                    else None
+                "cache_neutral_cost_saving_percent": _cost_saving_percent(
+                    neutral_base, neutral_candidate, cost_eligible
                 ),
-                "cache_neutral_cost_basis": "Counterfactual fresh-input token-equivalent cost against the same selected baseline; excludes cache-read/write discounts and premiums, not measured billing.",
+                "cache_neutral_cost_basis": "Subject-only counterfactual fresh-input token-equivalent cost against the same selected baseline; excludes auxiliary costs and cache-read/write discounts and premiums, not measured billing.",
                 "wins": sum(d > 0 for d in diffs),
                 "losses": sum(d < 0 for d in diffs),
                 "ties": sum(d == 0 for d in diffs),
@@ -604,15 +757,23 @@ def compare(store, baseline_id, candidate_id):
         "version": VERSION,
         "baseline_run_id": baseline_id,
         "candidate_run_id": candidate_id,
-        "baseline_selection": "best observed single model on identical cases; selection uncertainty is not included",
+        "baseline_status": baseline["status"],
+        "candidate_status": candidate["status"],
+        "baseline_quality_complete": all(
+            t["complete"] for t in report_b["summary"]["targets"]
+        ),
+        "candidate_quality_complete": all(
+            t["complete"] for t in report_c["summary"]["targets"]
+        ),
+        "baseline_targets": report_b["summary"]["targets"],
+        "candidate_targets": report_c["summary"]["targets"],
+        "quality_denominator": "all_planned_cases; explicit failed outcomes count as incorrect",
+        "baseline_selection": "best observed single model on identical planned cases; explicit failures count as incorrect; selection uncertainty is not included",
+        "baseline_selection_qualification": "This ranks delivered outcomes under the frozen limits, not model capability without execution failures. All single-model targets remain in the ranking, including failed outcomes and unknown costs.",
         "baseline_selected_target_id": best,
         "baseline_tied_best_target_ids": tied,
-        "baseline_tie_policy": "Exact frozen weighted quality; ties prefer the lowest complete known subject cost, then stable target ID. Unknown-cost ties rank after known costs and suppress savings claims.",
+        "baseline_tie_policy": "Exact frozen weighted quality; ties prefer the lowest complete known total spend (subject plus auxiliary), then stable target ID. Unknown-total ties rank after known totals and suppress all savings claims.",
         "baseline_cost_comparison_eligible": tied_costs_complete,
-        "baseline_cost_comparison_reason": (
-            None
-            if tied_costs_complete
-            else "At least one quality-tied best single has incomplete cost; the cheapest strongest baseline cannot be established."
-        ),
+        "baseline_cost_comparison_reason": baseline_cost_reason,
         "comparisons": comparisons,
     }

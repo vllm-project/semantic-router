@@ -101,7 +101,7 @@ type ArtifactDigest struct {
 
 // ExecutionInput describes one named tensor input. In SessionEvidence.InputSchema,
 // its shape preserves the loaded graph's declared dimensions, including -1 for
-// dynamic axes. ExecutionInputs separately records MIGraphX's fixed contract;
+// dynamic axes. ExecutionInputs separately records an explicitly fixed contract;
 // an empty ExecutionInputs slice does not imply a dynamic graph.
 type ExecutionInput struct {
 	Name  string  `json:"name"`
@@ -116,7 +116,20 @@ type CompilationCacheEvidence struct {
 	CompiledFileReads []string          `json:"compiled_file_reads"`
 }
 
+type AudioCapability struct {
+	SampleRates   []int  `json:"sample_rates"`
+	MaxSampleRate int    `json:"max_sample_rate"`
+	MaxSeconds    int    `json:"max_seconds"`
+	MaxChannels   int    `json:"max_channels"`
+	Layout        string `json:"layout"`
+}
+
 type Info struct {
+	Modalities             []string             `json:"modalities,omitempty"`
+	Pooling                string               `json:"pooling,omitempty"`
+	Normalization          string               `json:"normalization,omitempty"`
+	AvailableDimensions    []int                `json:"available_dimensions,omitempty"`
+	Audio                  *AudioCapability     `json:"audio,omitempty"`
 	PairScorer             *PairScorerSelection `json:"pair_scorer,omitempty"`
 	Task                   string               `json:"task"`
 	ModelLimit             int                  `json:"model_limit"`

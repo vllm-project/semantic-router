@@ -240,7 +240,9 @@ func SetupActivateHandler(
 		}
 
 		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
-			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
+			log.Printf("Setup activation aborted, config backup failed: %v", backupErr)
+			http.Error(w, "Setup activation aborted: the config backup could not be written with owner-only permissions.", http.StatusInternalServerError)
+			return
 		}
 
 		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
@@ -552,22 +554,14 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 }
 
 func backupCurrentConfig(configPath string, configDir string) error {
-	existingData, err := os.ReadFile(configPath)
-	if err != nil || len(existingData) == 0 {
+	existingData, err := readLiveConfig(configPath)
+	if err != nil {
 		return err
 	}
-
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+	if _, err := createConfigBackup(configDir, existingData); err != nil {
 		return err
 	}
-
-	version := time.Now().Format("20060102-150405")
-	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := os.WriteFile(backupFile, existingData, 0o644); err != nil {
-		return err
-	}
-	cleanupBackups(backupDir)
+	cleanupBackups(configBackupDir(configDir))
 	return nil
 }
 

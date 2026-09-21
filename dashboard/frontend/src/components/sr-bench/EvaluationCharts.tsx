@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import { money, number, percent } from './model'
+import { changeDirection, formatSignedChange } from './comparisonMetrics'
 import styles from './SrBench.module.css'
 
 export interface QualityCostPoint {
@@ -23,13 +24,30 @@ export interface QualityCostPoint {
 }
 
 const colors = ['#82b8ff', '#b59cff', '#67d8b4', '#f4ba72', '#f28f9d']
+const changeColors = {
+  positive: 'var(--color-success, #67b993)',
+  negative: 'var(--color-danger, #f69494)',
+  neutral: 'var(--text-secondary, #9c9ca8)',
+  unknown: 'var(--text-secondary, #9c9ca8)',
+}
 
-export function QualityCostChart({ points }: { points: QualityCostPoint[] }) {
+export function QualityCostChart({
+  points,
+  costBasis,
+}: {
+  points: QualityCostPoint[]
+  costBasis: 'subject' | 'total'
+}) {
+  const costLabel = costBasis === 'total' ? 'Total cost' : 'Subject model cost'
+
   return (
     <section className={styles.chartCard} aria-label="Quality and cost chart">
-      <h3>Quality and cost</h3>
+      <h3>Quality and {costLabel.toLowerCase()}</h3>
       <p className={styles.muted}>
-        Higher quality, lower cost. Recorded usage at frozen model prices.
+        Higher quality, lower cost.{' '}
+        {costBasis === 'total'
+          ? 'Includes model answers and evaluation calls at frozen prices.'
+          : 'Subject model calls at frozen prices; evaluation calls are excluded.'}
       </p>
       {points.length ? (
         <div className={styles.chartCanvas}>
@@ -39,11 +57,11 @@ export function QualityCostChart({ points }: { points: QualityCostPoint[] }) {
               <XAxis
                 type="number"
                 dataKey="cost"
-                name="Model cost"
+                name={costLabel}
                 tickCount={4}
                 minTickGap={22}
                 tickFormatter={(v) => `$${number(v, v < 0.01 ? 4 : 2)}`}
-                label={{ value: 'Model cost (USD)', position: 'bottom', offset: 5 }}
+                label={{ value: `${costLabel} (USD)`, position: 'bottom', offset: 5 }}
               />
               <YAxis
                 type="number"
@@ -61,7 +79,9 @@ export function QualityCostChart({ points }: { points: QualityCostPoint[] }) {
                     <div className={styles.chartTooltip}>
                       <strong>{item.name}</strong>
                       <div>{number(item.quality, 2)}% macro accuracy</div>
-                      <div>{money(item.cost)} model cost</div>
+                      <div>
+                        {money(item.cost)} {costLabel.toLowerCase()}
+                      </div>
                     </div>
                   ) : null
                 }}
@@ -120,16 +140,44 @@ export function IterationChart({
             <CartesianGrid stroke="var(--border-color)" strokeDasharray="3 3" />
             <XAxis dataKey="stage" />
             <YAxis yAxisId="quality" domain={[0, 100]} width={48} tickFormatter={(v) => `${v}%`} />
-            <YAxis yAxisId="saving" orientation="right" width={48} tickFormatter={(v) => `${v}%`} />
+            <YAxis
+              yAxisId="saving"
+              orientation="right"
+              width={60}
+              domain={([minimum, maximum]: [number, number]) => [
+                Math.min(0, minimum),
+                Math.max(0, maximum),
+              ]}
+              tickFormatter={(v) => `${formatSignedChange(v)}%`}
+            />
             <Tooltip
               contentStyle={{
                 background: 'var(--bg-secondary)',
                 border: '1px solid var(--border-color)',
                 borderRadius: 8,
               }}
-              formatter={(value) => `${number(value, 2)}%`}
+              formatter={(value, name) =>
+                name === 'Total cost saving' ? (
+                  <span
+                    style={{
+                      color:
+                        changeColors[changeDirection(typeof value === 'number' ? value : null)],
+                    }}
+                  >
+                    {formatSignedChange(typeof value === 'number' ? value : null)}%
+                  </span>
+                ) : (
+                  `${number(value, 2)}%`
+                )
+              }
             />
             <Legend />
+            <ReferenceLine
+              yAxisId="saving"
+              y={0}
+              stroke="var(--border-color)"
+              strokeDasharray="3 3"
+            />
             {baselineQuality !== null && (
               <ReferenceLine
                 yAxisId="quality"
@@ -154,10 +202,19 @@ export function IterationChart({
               yAxisId="saving"
               type="linear"
               dataKey="saving"
-              name="Cost saving"
-              stroke="#67d8b4"
+              name="Total cost saving"
+              stroke="var(--text-secondary, #9c9ca8)"
               strokeWidth={2}
-              dot={{ r: 4 }}
+              dot={({ cx, cy, value, key }) => (
+                <circle
+                  key={key}
+                  cx={cx}
+                  cy={cy}
+                  r={4}
+                  fill={changeColors[changeDirection(typeof value === 'number' ? value : null)]}
+                  stroke="none"
+                />
+              )}
               isAnimationActive={false}
               connectNulls={false}
             />

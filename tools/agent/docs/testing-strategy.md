@@ -20,6 +20,12 @@ not qualify every model or deployment.
 A failed Clippy invocation fails the changed-file check even when its diagnostics
 point outside the edited files.
 
+An explicit `BASE_REF` or `--base-ref` must resolve to a commit. An invalid value
+fails the check rather than silently selecting a different comparison.
+
+Local checks and CI include both paths of a rename, so moving a file cannot drop
+checks for its former domain.
+
 ## Read a CI run
 
 The PR, main, nightly, and release entrypoints share one verification plan:
@@ -109,11 +115,11 @@ RISC-V hardware or its performance and never loads the shared AMD64 libraries.
 | Go tools | `make go-tools-test` | CLI, classifier operating-point, fusion evaluation, image calibration, and offline model-compatibility tests. |
 | Dashboard | `make dashboard-check`; `make dashboard-test-wasm`; `make dashboard-test-e2e-evaluation` | Frontend and backend tests, compiled WASM behavior, and browser acceptance. |
 | Native fixtures | `CI=true make test-owned-native` | Real libraries with small tensors: ownership, isolation, cleanup, and assembly. |
-| Published Candle models | `make test-models MODEL_TEST_PROVIDER=candle` | Ten Vela families and five multimodal compatibility cases. |
+| Published Candle models | `make test-models MODEL_TEST_PROVIDER=candle` | Ten Vela families and three legacy multimodal binding compatibility cases. |
 | Published ORT models | `make test-models MODEL_TEST_PROVIDER=ort` | Ten Vela families, classifier integration, and implicit/explicit execution defaults. |
 | RISC-V QEMU | `make test-riscv-qemu` | Host/target classifier parity, owned fixtures, target ELF identity, and live router diagnostics under emulation. |
 | OpenVINO runtime | `make verify-openvino-binding` | Owned-handle lifetime and token-budget checks under the race detector, plus pinned Vela Domain and Embedding tokenization and CPU inference. |
-| Image-routing calibration | `make verify-image-routing-calibration` | Every authored scored image, the three original threshold assertions, and multimodal profile package tests. |
+| Image-routing calibration | `make verify-image-routing-calibration` | Pinned Nano export parity, four owned classification/provisioning/cache/memory contracts, every authored scored image, frozen threshold/validation assertions, and multimodal profile package tests. |
 | CLI lifecycle | `make vllm-sr-test-integration` | Live `serve`/`stop`, mounts, environment, pull policy, and request behavior. |
 | Memory | `USE_DETERMINISTIC_MEMORY_EMBEDDINGS=0 make memory-test-integration` | Vela embedding, persistent retrieval, injection, and user isolation. |
 | Kubernetes | `make verify PROFILE=envoy-ai-gateway` | Deployment and routed requests through the selected profile. |

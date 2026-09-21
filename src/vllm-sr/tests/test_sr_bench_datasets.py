@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 import requests
+from cli.sr_bench import datasets
 from cli.sr_bench.contracts import digest, plan
 from cli.sr_bench.datasets import DatasetReader
 from cli.sr_bench.service import PREFIX, Server
@@ -202,6 +203,56 @@ def test_registered_dataset_path_and_digest_are_rechecked_after_cache(tmp_path):
         reader.page("f" * 64)
 
 
+@pytest.mark.parametrize("operation", ["page", "selection"])
+def test_cache_verifies_content_on_coarse_timestamp_filesystems(
+    tmp_path, monkeypatch, operation
+):
+    manifest = _dataset(tmp_path, [_case("case")])
+    identify = datasets._identity
+    monkeypatch.setattr(datasets, "_identity", lambda path: identify(path)[:3])
+    reader = DatasetReader(tmp_path)
+
+    def read():
+        return (
+            reader.page(manifest["id"])
+            if operation == "page"
+            else reader.selection("smoke")
+        )
+
+    read()
+    read()
+    path = Path(manifest["path"])
+    original = path.read_bytes()
+    path.write_bytes(original.replace(b"Question", b"Modified"))
+    with pytest.raises(ValueError, match="digest"):
+        read()
+    path.write_bytes(original)
+    read()
+
+
+@pytest.mark.parametrize("operation", ["page", "selection"])
+def test_cache_refreshes_manifest_on_coarse_timestamp_filesystems(
+    tmp_path, monkeypatch, operation
+):
+    manifest = _dataset(tmp_path, [_case("case")])
+    identify = datasets._identity
+    monkeypatch.setattr(datasets, "_identity", lambda path: identify(path)[:3])
+    reader = DatasetReader(tmp_path)
+    if operation == "page":
+        reader.page(manifest["id"])
+    else:
+        reader.selection("smoke")
+    path = Path(manifest["path"]).with_name("manifest.json")
+    original = path.read_bytes()
+    updated = original.replace(b'"seed": 7', b'"seed": 8')
+    assert updated != original and len(updated) == len(original)
+    path.write_bytes(updated)
+    if operation == "page":
+        assert reader.detail(manifest["id"])["provenance"]["seed"] == 8
+    else:
+        assert reader.selection("smoke")["seed"] == 8
+
+
 def test_copied_metadata_never_follows_an_external_data_path(tmp_path):
     manifest = _dataset(tmp_path / "store", [_case("case")])
     path = Path(manifest["path"]).parent / "manifest.json"
@@ -340,7 +391,7 @@ def test_composition_preserves_exact_whole_benchmarks_and_is_idempotent(tmp_path
             reader.compose(ids, benchmarks)
 
 
-def test_dataset_http_is_authenticated_read_only_and_compose_is_editor_only(
+def test_dataset_http_is_authenticated_read_only_and_compose_requires_write(
     tmp_path, monkeypatch
 ):
     store = Store(tmp_path / "store")
@@ -357,7 +408,7 @@ def test_dataset_http_is_authenticated_read_only_and_compose_is_editor_only(
     headers = {
         "Authorization": "Bearer dataset-token",
         "X-SR-Bench-Actor-ID": "reader",
-        "X-SR-Bench-Actor-Role": "viewer",
+        "X-SR-Bench-Actor-Role": "read",
     }
     active, _ = store.create(
         plan(
@@ -406,7 +457,7 @@ def test_dataset_http_is_authenticated_read_only_and_compose_is_editor_only(
             ).status_code
             == 403
         )
-        headers["X-SR-Bench-Actor-Role"] = "editor"
+        headers["X-SR-Bench-Actor-Role"] = "write"
         response = requests.post(
             base + "/datasets/compose", headers=headers, json=body, timeout=2
         )
@@ -418,3 +469,98 @@ def test_dataset_http_is_authenticated_read_only_and_compose_is_editor_only(
     finally:
         service.shutdown()
         service.server_close()
+
+
+@pytest.mark.parametrize(
+    "unsupported",
+    [
+        {"exclude_case_ids": ["mmlu-pro/one"]},
+        {"exclude_run_ids": ["run-development"]},
+        {"requested_counts": {"mmlu-pro": 1}},
+    ],
+)
+def test_compose_http_rejects_unknown_fields_without_publishing(
+    tmp_path, monkeypatch, unsupported
+):
+    store = Store(tmp_path / "store")
+    selected = [_case("mmlu-pro/one"), _case("mmlu-pro/two")]
+    manifest = _dataset(
+        store.root, [*selected, _case("gpqa-diamond/one", "gpqa-diamond")]
+    )
+    service = Server(("127.0.0.1", 0), store, "dataset-token")
+    monkeypatch.setattr(
+        service.engine,
+        "start",
+        lambda *a, **k: pytest.fail("Composition must never start a run"),
+    )
+    thread = threading.Thread(target=service.serve_forever, daemon=True)
+    thread.start()
+    url = f"http://127.0.0.1:{service.server_port}{PREFIX}/datasets/compose"
+    headers = {
+        "Authorization": "Bearer dataset-token",
+        "X-SR-Bench-Actor-ID": "writer",
+        "X-SR-Bench-Actor-Role": "write",
+    }
+    body = {"dataset_ids": [manifest["id"]], "benchmarks": ["mmlu-pro"]}
+    before = {
+        path: path.read_bytes()
+        for path in (store.root / "datasets").rglob("*")
+        if path.is_file()
+    }
+    try:
+        response = requests.post(
+            url, headers=headers, json={**body, **unsupported}, timeout=2
+        )
+        assert response.status_code == 400
+        assert response.json()["error"] == "Unsupported dataset compose fields"
+        assert {
+            path: path.read_bytes()
+            for path in (store.root / "datasets").rglob("*")
+            if path.is_file()
+        } == before
+
+        response = requests.post(url, headers=headers, json=body, timeout=2)
+        assert response.status_code == 200
+        composed = response.json()["dataset"]
+        assert composed["id"] != manifest["id"]
+        assert composed["case_count"] == len(selected)
+        assert composed["benchmarks"] == ["mmlu-pro"]
+        assert [
+            json.loads(line) for line in Path(composed["path"]).read_text().splitlines()
+        ] == selected
+        assert store.list() == []
+    finally:
+        service.shutdown()
+        service.server_close()
+        thread.join(timeout=2)
+
+
+def test_default_selection_proves_full_content_and_excludes_custom_subsets(tmp_path):
+    first = _dataset(tmp_path, [_case("mmlu")])
+    bundle = _dataset(tmp_path, [_case("gpqa", "gpqa-diamond"), _case("mmlu")])
+    _write_dataset(tmp_path, [_case("custom")], "smoke", 7, first["sources"], True)
+    reader = DatasetReader(tmp_path)
+    result = reader.selection("smoke")
+    entries = {row["id"]: row for row in result["benchmarks"]}
+    assert result["seed"] == 7 and result["model_requests"] == 0
+    assert entries["mmlu-pro"]["source_ids"] == [first["id"]]
+    assert entries["gpqa-diamond"]["source_ids"] == [bundle["id"]]
+    assert entries["hle"]["eligible"] is False
+    assert "hidden-" not in json.dumps(result)
+    changed = _case("mmlu")
+    changed["answer"] = "different-private-answer"
+    _dataset(tmp_path, [changed])
+    blocked = {row["id"]: row for row in reader.selection("smoke")["benchmarks"]}
+    assert not blocked["mmlu-pro"]["eligible"]
+    assert blocked["mmlu-pro"]["source_ids"] == []
+    assert blocked["gpqa-diamond"]["eligible"]
+
+
+def test_default_selection_blocks_cross_benchmark_seed_conflicts(tmp_path):
+    _dataset(tmp_path, [_case("first")], seed=7)
+    _dataset(tmp_path, [_case("second", "gpqa-diamond")], seed=8)
+    result = DatasetReader(tmp_path).selection("smoke")
+    assert result["seed"] is None
+    assert not any(row["eligible"] for row in result["benchmarks"])
+    with pytest.raises(ValueError, match="profile"):
+        DatasetReader(tmp_path).selection("everything")

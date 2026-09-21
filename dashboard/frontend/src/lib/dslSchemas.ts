@@ -119,16 +119,37 @@ function getCuratedSignalFieldSchema(signalType: string): FieldSchema[] {
         {
           key: 'threshold',
           label: 'Threshold',
+          min: -2,
+          max: 2,
+          description:
+            'Cosine threshold [-1, 1], or positive-minus-negative margin [-2, 2] when a negative bank is present.',
           type: 'number',
           required: true,
           placeholder: '0.75',
         },
         {
           key: 'candidates',
-          label: 'Candidates',
+          label: 'Positive Text Candidates',
           type: 'string[]',
-          required: true,
           placeholder: 'Add candidate...',
+        },
+        {
+          key: 'image_candidates',
+          label: 'Positive Image Candidates',
+          type: 'string[]',
+          placeholder: './image.png or inline image data',
+        },
+        {
+          key: 'negative_candidates',
+          label: 'Negative Text Candidates',
+          type: 'string[]',
+          placeholder: 'Add contrasting text...',
+        },
+        {
+          key: 'negative_image_candidates',
+          label: 'Negative Image Candidates',
+          type: 'string[]',
+          placeholder: './image.png or inline image data',
         },
         {
           key: 'aggregation_method',

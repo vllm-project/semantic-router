@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
@@ -22,10 +23,11 @@ const (
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
-	UserID string
-	Email  string
-	Role   string
-	Perms  map[string]bool
+	UserID    string
+	SessionID string
+	Email     string
+	Role      string
+	Perms     map[string]bool
 }
 
 func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
@@ -65,7 +67,8 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
 					return
 				}
-				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) {
+				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) &&
+					!embeddedGrafanaQueryAllowed(r, service.allowedOrigins) {
 					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
 					return
 				}
@@ -91,10 +94,11 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
-				UserID: user.ID,
-				Email:  user.Email,
-				Role:   user.Role,
-				Perms:  perms,
+				UserID:    user.ID,
+				SessionID: claims.ID,
+				Email:     user.Email,
+				Role:      user.Role,
+				Perms:     perms,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -317,6 +321,8 @@ func observabilityPermission(_ string, path string) (string, bool) {
 		return PermTopologyRead, true
 	case strings.HasPrefix(path, "/api/logs"):
 		return PermLogsRead, true
+	case observability.IsGrafanaQueryPath(path), observability.IsJaegerAPIPath(path):
+		return PermLogsRead, true
 	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
 		return PermLogsRead, true
 	case strings.HasPrefix(path, "/api/topology"):
@@ -329,6 +335,9 @@ func observabilityPermission(_ string, path string) (string, bool) {
 func featurePermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/sr-bench/v1" || strings.HasPrefix(path, "/api/sr-bench/v1/"):
+		if IsSRBenchComparisonRequest(method, path) {
+			return PermEvalRead, true
+		}
 		if isSRBenchRunAction(path, "cancel") {
 			return PermEvalRun, true
 		}
@@ -343,6 +352,12 @@ func featurePermission(method, path string) (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+// IsSRBenchComparisonRequest identifies the body-based read of saved results.
+// It does not exempt the request from normal POST authentication or CSRF checks.
+func IsSRBenchComparisonRequest(method, path string) bool {
+	return method == http.MethodPost && path == "/api/sr-bench/v1/comparisons"
 }
 
 func isSRBenchRunAction(path, action string) bool {

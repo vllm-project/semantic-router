@@ -36,6 +36,8 @@ import (
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
+	velahalu "github.com/vllm-project/semantic-router/e2e/profiles/vela-halu"
+	velaomni "github.com/vllm-project/semantic-router/e2e/profiles/vela-omni"
 )
 
 var mockVLLMLocalImages = []framework.LocalImageBuild{
@@ -58,6 +60,7 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 }
 
 func init() {
+	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"envoy-ai-gateway",
@@ -111,6 +114,10 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
+	register("vela-omni", func() framework.Profile { return velaomni.NewProfile() }, framework.ProfileCapabilities{
+		LocalImages:     mockVLLMLocalImages,
+		RouterBuildArgs: map[string]string{"VELA_OMNI_VARIANTS": "nano mini"},
+	})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})

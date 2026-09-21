@@ -54,12 +54,12 @@ global:
 
 #### 否定防护 {#negation-guard}
 
-双编码器相似度无法区分 *“turn on dark mode”* 和 *“turn off dark mode”*：相反含义的查询常常超过 `similarity_threshold`，而真正的改写却低于它，因此提高阈值并不能修复误命中。`polarity_guard` 在内存后端返回命中之前校验获胜候选：
+双编码器相似度可能无法区分 *“turn on dark mode”* 和 *“turn off dark mode”*：相反含义的查询常常超过 `similarity_threshold`，而真正的改写可能低于它，因此提高阈值不能可靠地避免误命中。所有缓存后端都会在返回语义候选前执行词面校验。`polarity_guard` 还可为内存后端选择额外的校验器：
 
-- `lexical`（默认）：无需模型的层级，用于捕获否定线索和已知反义词替换。它始终开启，不需要模型。
-- `nli` / `lexical+nli`：额外对唯一最佳候选运行一次路由器的 NLI 模型，并在矛盾概率超过 `nli.contradiction_threshold` 时拒绝命中。该层级复用幻觉解释器（`global.model_catalog.modules.hallucination_mitigation.explainer`，默认 `tasksource/ModernBERT-base-nli`）；原生绑定只持有一个 NLI 模型，因此防护不能绑定另一个。选择 NLI 模式但没有该模型时，配置加载会失败。CPU 上每次校验命中大约需要 70 ms；缓存命中仍能省去一次完整生成。查找时若模型出错，防护会失败开放：仍返回命中，并记录 `cache_polarity_nli_skipped` 警告。
+- `lexical`（默认）：对词面接近的英文问题，检查明确否定线索和已知反义词替换。它在内存、Redis、Valkey、Milvus、Qdrant 和混合缓存中始终开启，不需要模型；不覆盖缺少词面线索、仅词序变化或非英文的含义变化。
+- `nli` / `lexical+nli`：内存后端额外对最佳候选运行一次 NLI 校验，在矛盾概率超过 `nli.contradiction_threshold` 时拒绝命中。该层使用幻觉解释模型（`global.model_catalog.modules.hallucination_mitigation.explainer`，默认 `tasksource/ModernBERT-base-nli`），缓存独立于配方分类器持有校验器。选择 NLI 模式但未配置该模型时，配置加载失败。CPU 上每次校验约需 70 ms；缓存命中仍可省去完整生成。如果查询时模型不可用或执行出错，未能校验的候选视为缓存未命中，请求继续到模型后端，并记录 `cache_polarity_nli_skipped` 警告。
 
-拒绝会记录为带 `tier: nli` 的 `cache_negation_reject`，计为未命中，并仍在 `x-vsr-cache-similarity` 上暴露被拒绝的分数。远程和混合缓存后端不运行该防护。
+NLI 拒绝会记录为带 `tier: nli` 的 `cache_negation_reject`，计入未命中，相似度仍通过 `x-vsr-cache-similarity` 提供。远端和混合缓存仅执行词面层：缺少原始问题的候选被拒绝，并继续检查有数量上限的已检索候选。混合缓存回退到 Milvus 时同样执行该检查。
 
 ### 记忆 {#memory}
 

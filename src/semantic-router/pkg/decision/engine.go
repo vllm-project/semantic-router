@@ -124,10 +124,17 @@ type nodeEvaluation struct {
 	scored       bool
 	matchedRules []string
 	onError      bool
+	// kind is the score kind behind confidence, and evidence counts the
+	// matched evidence leaves that produced it. Policy leaves report no
+	// kind and no evidence, so they gate eligibility without ranking.
+	kind     config.ScoreKind
+	evidence int
 }
 
 type EvaluationDiagnostics struct {
 	AppliedUnknownPolicies map[string]string `json:"applied_unknown_policies,omitempty"`
+	// Ranking explains how the winner was ordered against the rest.
+	Ranking *RankingTrace `json:"ranking,omitempty"`
 }
 
 type decisionEvaluations struct {
@@ -170,6 +177,9 @@ type DecisionResult struct {
 	// empty AND). Catch-alls rank after signal-backed decisions wherever
 	// confidence-based selection applies, regardless of scoring.
 	CatchAll bool
+	// ScoreKind names the quantity behind Confidence. Selection compares
+	// confidence only among decisions that reported the same kind.
+	ScoreKind config.ScoreKind
 }
 
 // EvaluateDecisions evaluates all decisions and returns the best match based on strategy
@@ -249,12 +259,23 @@ func (e *DecisionEngine) evaluateDecisions(
 			continue
 		}
 		if resolved.evaluation.state == evaluationTrue {
+			// A decision ranks by confidence only when its evidence is one
+			// reported score of one declared kind. An error policy that
+			// manufactured the match disqualifies it, and so does a tree that
+			// reports a different kind depending on which branch of an OR
+			// matched. A catch-all carries no evidence and ranks last anyway.
+			catchAll := isCatchAllRules(decision.Rules)
+			scored := resolved.evaluation.scored && !resolved.evaluation.onError
+			if !catchAll && len(config.DeclaredScoreKinds(&decision.Rules)) != 1 {
+				scored = false
+			}
 			results = append(results, DecisionResult{
 				Decision:         decision,
 				Confidence:       resolved.evaluation.confidence,
 				MatchedRules:     resolved.evaluation.matchedRules,
-				ConfidenceScored: resolved.evaluation.scored,
-				CatchAll:         isCatchAllRules(decision.Rules),
+				ConfidenceScored: scored,
+				CatchAll:         catchAll,
+				ScoreKind:        resolved.evaluation.kind,
 			})
 		}
 	}
@@ -264,7 +285,7 @@ func (e *DecisionEngine) evaluateDecisions(
 	}
 	if !withTrace {
 		for i := range results {
-			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, results[i].Decision.Name), results[i].Confidence)
+			metrics.RecordDecisionMatch(config.RoutingDecisionKey(e.routingScope, results[i].Decision.Name), results[i].Confidence, results[i].ConfidenceScored && !results[i].CatchAll)
 		}
 	}
 	if len(results) == 0 {
@@ -272,7 +293,7 @@ func (e *DecisionEngine) evaluateDecisions(
 		return output
 	}
 
-	output.result = e.selectBestDecision(results)
+	output.result, output.diagnostics.Ranking = e.selectBestDecision(results)
 	return output
 }
 
@@ -313,10 +334,7 @@ func (e *DecisionEngine) evaluateDecisionWithSignals(
 // isCatchAllRules reports whether a decision claims no conditions at all:
 // omitted rules or the empty-AND authoring form.
 func isCatchAllRules(rules config.RuleCombination) bool {
-	if rules.IsEmpty() {
-		return true
-	}
-	return !rules.IsLeaf() && strings.ToUpper(rules.Operator) == config.RuleOperatorAnd && len(rules.Conditions) == 0
+	return rules.IsCatchAll()
 }
 
 // evalNode recursively evaluates a RuleNode (boolean expression tree) against signal matches.
@@ -412,16 +430,23 @@ func (e *DecisionEngine) evalLeaf(
 	if !matched {
 		return nodeEvaluation{state: evaluationFalse, onError: unresolved}
 	}
-	confidence, scored := signalConfidence(signals.SignalConfidences, normalizedType, node.Name)
+	confidence, reported := signalConfidence(signals.SignalConfidences, normalizedType, node.Name)
 	if normalizedType == config.SignalTypeClassifier {
-		confidence, scored = signalPredicateValue(signals, normalizedType, node.Name, node.Label)
+		confidence, reported = signalPredicateValue(signals, normalizedType, node.Name, node.Label)
+	}
+	kind := config.SignalScoreKind(normalizedType)
+	evidence := 0
+	if kind != config.ScoreKindNone {
+		evidence = 1
 	}
 	return nodeEvaluation{
 		state:        evaluationTrue,
 		confidence:   confidence,
-		scored:       scored,
+		scored:       evidence == 1 && reported && kind != config.ScoreKindUnknown,
 		matchedRules: []string{formatMatchedRule(node)},
 		onError:      unresolved,
+		kind:         kind,
+		evidence:     evidence,
 	}
 }
 
@@ -650,6 +675,7 @@ func (e *DecisionEngine) evalAND(
 	}
 	totalConfidence := 0.0
 	matchedCount := 0
+	evidence := andEvidence{}
 	for _, child := range children {
 		childEvaluation, childTrace := e.evalNode(child, signals, policy, withTrace)
 		trace.addChild(childTrace)
@@ -671,17 +697,60 @@ func (e *DecisionEngine) evalAND(
 		}
 		totalConfidence += childEvaluation.confidence
 		matchedCount++
-		evaluation.scored = evaluation.scored && childEvaluation.scored
+		evidence.add(childEvaluation)
 		evaluation.onError = evaluation.onError || childEvaluation.onError
 		evaluation.matchedRules = append(evaluation.matchedRules, childEvaluation.matchedRules...)
 	}
 	if evaluation.state == evaluationUnknown {
 		evaluation.scored = false
-	} else if evaluation.state == evaluationTrue && matchedCount > 0 {
-		evaluation.confidence = totalConfidence / float64(matchedCount)
+		evaluation.kind = config.ScoreKindNone
+	} else if evaluation.state == evaluationTrue {
+		evidence.apply(&evaluation, totalConfidence, matchedCount)
 	}
 	trace.finish(evaluation)
 	return evaluation, trace
+}
+
+// andEvidence collects what the matched children of an AND contribute to
+// ranking. A conjunction is comparable only when exactly one evidence leaf
+// reported a score: a mean over several leaves falls as a decision gains
+// evidence, and scores of different kinds are not the same quantity.
+type andEvidence struct {
+	count      int
+	value      float64
+	kind       config.ScoreKind
+	mixedKinds bool
+	unreported bool
+}
+
+func (a *andEvidence) add(child nodeEvaluation) {
+	if child.evidence == 0 {
+		return
+	}
+	a.count += child.evidence
+	a.value = child.confidence
+	a.unreported = a.unreported || !child.scored
+	switch {
+	case a.kind == config.ScoreKindNone:
+		a.kind = child.kind
+	case child.kind != a.kind:
+		a.mixedKinds = true
+	}
+}
+
+func (a *andEvidence) apply(evaluation *nodeEvaluation, totalConfidence float64, matchedCount int) {
+	evaluation.evidence = a.count
+	if a.count == 1 && !a.mixedKinds && !a.unreported {
+		evaluation.confidence = a.value
+		evaluation.scored = true
+		evaluation.kind = a.kind
+		return
+	}
+	if matchedCount > 0 {
+		evaluation.confidence = totalConfidence / float64(matchedCount)
+	}
+	evaluation.scored = false
+	evaluation.kind = config.ScoreKindNone
 }
 
 // evalOR returns true when at least one child matches; returns the best-confidence match.
@@ -720,9 +789,15 @@ func (e *DecisionEngine) evalOR(
 	return evaluation, trace
 }
 
+// preferredMatch ranks the matching branches of an OR. A reported score wins
+// over the structural 1.0 that keyword rules, NOT guards and predicates carry,
+// so an extra matching gate cannot strip a decision of evidence it did report.
 func preferredMatch(candidate, current nodeEvaluation) bool {
 	if candidate.onError != current.onError {
 		return current.onError
+	}
+	if candidate.scored != current.scored {
+		return candidate.scored
 	}
 	return candidate.confidence > current.confidence
 }

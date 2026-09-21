@@ -160,7 +160,7 @@ func apiClassifyRoutes() []apiRoute {
 			jsonBodyFor[services.NLIRequest](),
 		),
 		managedRoute(
-			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text and image embeddings"},
+			EndpointMetadata{Path: apiDiagnosticsPath + "/embeddings", Method: "POST", Description: "Generate text, image, and audio embeddings"},
 			routePolicy{Permission: PermClassifyInvoke, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleEmbeddings,
 			jsonResponse[EmbeddingResponse](http.StatusOK, "Successful response"),
@@ -192,7 +192,7 @@ func apiRoutingRoutes() []apiRoute {
 			EndpointMetadata{
 				Path:        apiRoutingPreviewPath,
 				Method:      "POST",
-				Description: "Preview configured signals and model selection without invoking a generation backend. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+				Description: "Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
 				Parameters: []OpenAPIParameter{
 					queryParameter("trace", "Include per-decision routing trace trees.", "boolean"),
 					headerParameter(headers.SRBenchExpectedConfigHash, "Optional lowercase SHA-256 of the active runtime document. Rejects a mismatched generation before evaluating signals.", false),

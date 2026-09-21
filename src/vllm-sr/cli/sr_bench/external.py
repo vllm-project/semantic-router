@@ -21,6 +21,7 @@ from .harness_worker import (
     validate_terminal_compose,
 )
 from .setup import harness_paths, scicode_test_path, validate_tau3_text_assets
+from .target_contracts import resolve_auxiliary_target
 from .transport import CallFailure
 
 HARNESSES = {
@@ -35,30 +36,18 @@ MAX_HARNESS_STEPS = 1000
 JUDGE_VERSION = "sr-bench-reference-judge-v1"
 
 
-def _auxiliary(config, role, manifest):
-    ref = config.get(role)
-    if not isinstance(ref, str):
-        raise ValueError(f"{role} must reference a frozen target ID")
-    target = next((t for t in manifest["targets"] if t["id"] == ref), None)
-    if target is None:
-        target = manifest.get("auxiliary_targets", {}).get(ref)
-    if target is None or target.get("kind") != "single":
-        raise ValueError(f"{role} requires a fixed single-model target")
-    return target
-
-
 def preflight_case(case, manifest, cache=None):
     benchmark = case["benchmark"]
     config = manifest.get("benchmark_options", {}).get(benchmark, {})
     if benchmark in {"hle", "simpleqa-verified"}:
-        _auxiliary(config, "judge", manifest)
+        resolve_auxiliary_target(config, "judge", manifest)
         if "answer" not in case:
             raise ValueError(f"{benchmark} requires a reference answer")
         if config.get("grader_version") != JUDGE_VERSION:
             raise ValueError(f"{benchmark} requires grader_version={JUDGE_VERSION}")
     if benchmark == "tau3":
-        _auxiliary(config, "simulator", manifest)
-        _auxiliary(config, "judge", manifest)
+        resolve_auxiliary_target(config, "simulator", manifest)
+        resolve_auxiliary_target(config, "judge", manifest)
         if config.get("release") != "1.0.1":
             raise ValueError("tau3 requires release 1.0.1")
     if benchmark in HARNESSES:
@@ -183,7 +172,7 @@ def _preflight_terminal(case, config):
 
 def _judged(case, context):
     generated = context.call(case["messages"])
-    judge = _auxiliary(context.config, "judge", context.manifest)
+    judge = resolve_auxiliary_target(context.config, "judge", context.manifest)
     question = case["messages"][-1]["content"]
     payload = {
         "question": question,
@@ -261,7 +250,7 @@ class _BridgeHandler(BaseHTTPRequestHandler):
             target = (
                 None
                 if role == "subject"
-                else _auxiliary(ctx.config, role, ctx.manifest)
+                else resolve_auxiliary_target(ctx.config, role, ctx.manifest)
             )
             extra = {
                 k: v

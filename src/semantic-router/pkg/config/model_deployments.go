@@ -324,7 +324,15 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
 		}
 	}
-	if deployment.Provider == "ort" && (name == "hallucination_detector" || name == "hallucination_explainer") {
+	if decl.Adapter == "vela_halu" {
+		if name != "hallucination_detector" || (deployment.Provider != "candle" && deployment.Provider != "ort") {
+			return fmt.Errorf("vela_halu requires a local hallucination_detector binding")
+		}
+		if deployment.Input.MaxTokens > 8192 {
+			return fmt.Errorf("vela_halu task input budget cannot exceed 8192 tokens")
+		}
+	}
+	if deployment.Provider == "ort" && (name == "hallucination_explainer" || (name == "hallucination_detector" && decl.Adapter != "vela_halu")) {
 		return fmt.Errorf("%s has no ORT task adapter", name)
 	}
 	if deployment.Provider == "openvino" {

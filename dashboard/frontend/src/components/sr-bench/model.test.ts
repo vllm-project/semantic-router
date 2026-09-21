@@ -2,12 +2,44 @@ import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_LIMITS,
   effectiveRequestProfile,
+  hasScoredOutcomes,
   reportDistribution,
   makeManifest,
   money,
   tokenTotal,
   validateManifest,
 } from './model'
+import type { TargetMetrics } from './types'
+
+describe('quality evidence coverage', () => {
+  const complete: TargetMetrics = {
+    id: 'baseline',
+    total: 12,
+    completed: 12,
+    scored: 12,
+    failed: 0,
+    pending: 0,
+  }
+
+  it('requires graded or explicit failed outcomes for every planned case', () => {
+    expect(hasScoredOutcomes(complete)).toBe(true)
+    expect(hasScoredOutcomes({ ...complete, completed: 10, scored: 10, failed: 2 })).toBe(true)
+    expect(hasScoredOutcomes({ ...complete, completed: 0, scored: 0, failed: 12 })).toBe(true)
+  })
+
+  it.each([
+    { completed: 1, scored: 1, pending: 10 },
+    { completed: 1, scored: 1, pending: 0 },
+    { scored: 11 },
+    { scored: 10, failed: 2 },
+    { scored: undefined },
+    { pending: undefined },
+    { failed: -1, scored: 13, completed: 13 },
+    { total: 0, completed: 0, scored: 0 },
+  ])('does not turn missing, running or ungraded outcomes into a final score: %j', (partial) => {
+    expect(hasScoredOutcomes({ ...complete, ...partial })).toBe(false)
+  })
+})
 
 const dataset = {
   id: 'quick-v1',
@@ -88,7 +120,7 @@ describe('sr-bench run contract', () => {
       seed: 42,
     })
     expect(validateManifest(manifest)).toContain(
-      'Target baseline has a registered output limit of 4096 tokens, above the run cap of 512',
+      'Target model-a has a registered output limit of 4096 tokens, above the run cap of 512',
     )
     expect(JSON.stringify(manifest)).toBe(before)
     expect(
@@ -107,11 +139,17 @@ describe('sr-bench run contract', () => {
           { id: 'unknown' },
         ],
         'selected_models',
+        {
+          targets: [
+            { ...single, id: 'single' },
+            { ...single, id: 'balance', model: 'connected-balance', kind: 'mom' },
+          ],
+        },
       ),
     ).toEqual([
-      ['single: model-a', 250],
-      ['balance: model-a', 200],
-      ['balance: model-b', 50],
+      ['model-a: model-a', 250],
+      ['connected-balance: model-a', 200],
+      ['connected-balance: model-b', 50],
     ])
   })
   it('validates typed sampling and limit fields before preparing a plan', () => {
@@ -151,5 +189,15 @@ describe('sr-bench run contract', () => {
       }),
     ).toBeNull()
     expect(manifest.limits).not.toHaveProperty('case_timeout_s')
+  })
+  it('preserves omitted provider sampling defaults in a frozen manifest', () => {
+    const manifest = makeManifest('Frozen', 'live', 'quick', dataset, [single], DEFAULT_LIMITS)
+    delete manifest.sampling.top_p
+    delete manifest.sampling.seed
+    const before = JSON.stringify(manifest)
+    expect(validateManifest(manifest)).toBeNull()
+    expect(JSON.stringify(manifest)).toBe(before)
+    expect(manifest.sampling).not.toHaveProperty('top_p')
+    expect(manifest.sampling).not.toHaveProperty('seed')
   })
 })
