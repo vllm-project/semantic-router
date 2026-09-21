@@ -348,6 +348,7 @@ IMAGE_REGISTRY ?= $(shell \
   else \
     printf "docker.io/"; \
   fi)
+VELA_OMNI_VARIANTS ?= nano
 VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
@@ -363,6 +364,8 @@ VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
 endif
 endif
 # Hash the source only when a build consumes these arguments.
+VLLM_SR_BUILD_ARGS += --build-arg VELA_OMNI_VARIANTS="$(VELA_OMNI_VARIANTS)"
+
 VLLM_SR_DASHBOARD_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
 
 vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
@@ -568,6 +571,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_routing_preview.py \
 		src/vllm-sr/tests/test_sr_bench_grading.py \
 		src/vllm-sr/tests/test_sr_bench_harness.py \
+		src/vllm-sr/tests/test_sr_bench_history_exclusions.py \
 		src/vllm-sr/tests/test_sr_bench_bridge.py \
 		src/vllm-sr/tests/test_sr_bench_native_output.py \
 		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
@@ -579,6 +583,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_sr_bench_snapshots.py \
 		src/vllm-sr/tests/test_sr_bench_sources.py \
 		src/vllm-sr/tests/test_sr_bench_runtime.py \
+		src/vllm-sr/tests/test_sr_bench_shutdown.py \
 		src/vllm-sr/tests/test_install_package_resolution.py \
 		src/vllm-sr/tests/test_install_runtime_behavior.py \
 		src/vllm-sr/tests/test_install_script_surface.py \

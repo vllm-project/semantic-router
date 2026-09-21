@@ -12,6 +12,7 @@ export interface InsightsOutcome {
   timestamp?: string
   source: string
   target: string
+  target_ref?: string
   verdict: string
   reason?: string
   score?: number

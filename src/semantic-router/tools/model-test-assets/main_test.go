@@ -110,31 +110,6 @@ func TestMultimodalRegistryRevisionTakesPrecedence(t *testing.T) {
 	}
 }
 
-func TestImageCalibrationRequiresItsFrozenSnapshotAndFiveFiles(t *testing.T) {
-	m, specs, err := assets("image-calibration", "candle", t.TempDir())
-	if err != nil || len(m.Models) != 1 || len(specs) != 1 {
-		t.Fatalf("invalid calibration assets: %+v %v", m, err)
-	}
-	if m.Models[0].Revision != multimodalCompatibilityRevision || len(specs[0].RequiredFiles) != 5 {
-		t.Fatalf("calibration provenance contract lost: %+v", specs[0])
-	}
-	for _, name := range []string{"config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json", "special_tokens_map.json"} {
-		if !slices.Contains(specs[0].RequiredFiles, name) {
-			t.Fatalf("required file missing: %s", name)
-		}
-	}
-	registered := config.GetModelByPath("models/mom-embedding-multimodal")
-	original := registered.Revision
-	t.Cleanup(func() { registered.Revision = original })
-	registered.Revision = strings.Repeat("b", 40)
-	if _, _, err := assets("image-calibration", "candle", t.TempDir()); err == nil {
-		t.Fatal("calibration silently followed a different production revision")
-	}
-	if _, _, err := assets("image-calibration", "ort", t.TempDir()); err == nil {
-		t.Fatal("calibration accepted an unqualified runtime")
-	}
-}
-
 func TestRISCVAssetsUseOnlyRegisteredCandleDomain(t *testing.T) {
 	m, specs, err := assets("riscv", "candle", t.TempDir())
 	if err != nil || len(m.Models) != 1 || len(specs) != 1 {

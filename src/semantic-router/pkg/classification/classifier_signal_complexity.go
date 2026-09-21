@@ -11,7 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-func (c *Classifier) evaluateComplexitySignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestImageEmbeddingCache) {
+func (c *Classifier) evaluateComplexitySignal(ctx context.Context, results *SignalResults, mu *sync.Mutex, text string, imageURL string, imgCache *requestMediaEmbeddingCache) {
 	start := time.Now()
 	classifyResults, err := c.classifyComplexity(ctx, text, imageURL, imgCache)
 	elapsed := time.Since(start)
@@ -65,7 +65,7 @@ func (c *Classifier) classifyComplexity(
 	ctx context.Context,
 	text string,
 	imageURL string,
-	imgCache *requestImageEmbeddingCache,
+	imgCache *requestMediaEmbeddingCache,
 ) ([]ComplexityRuleResult, error) {
 	switch {
 	case c.complexityScoreBackend != nil:

@@ -1,6 +1,7 @@
 """Negative coverage for collected Go/Ginkgo inventories and report adapters."""
 
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -8,8 +9,10 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from image_calibration import OWNED_OMNI_TESTS
 from run_core_tests import (
     collected_go_inventory,
+    execute_owned,
     execute_tool_units,
     profile_exclusions,
     race_inventory,
@@ -222,6 +225,67 @@ class RequiredInventoryTests(unittest.TestCase):
                 (root / records[1]["source"]).write_text("// test removed\n")
                 with self.assertRaisesRegex(ValueError, "stale or unowned"):
                     profile_exclusions()
+
+    def test_owned_inventory_separates_explicit_references_and_rejects_other_skips(
+        self,
+    ):
+        references = {
+            "TestPublishedGroundedParity",
+            "TestPublishedOmniParity",
+            "TestPublishedOmniFullContext",
+        }
+        excluded, profiles = profile_exclusions()
+        self.assertTrue(references <= excluded["onnx-binding/instance"])
+        for record in profiles["excluded"]:
+            if record["test"] in references:
+                self.assertTrue(record["profile"].startswith("explicit-vela-"))
+
+        def invoke(action):
+            def run_go(args, _output, _env, *, module):
+                names = {"TestOwned"}
+                if module.name == "onnx-binding":
+                    names |= references
+                package = "test/" + module.name
+                if "-list" in args:
+                    return [
+                        {"Package": package, "Output": name + "\n"}
+                        for name in sorted(names)
+                    ]
+                if "-skip" in args:
+                    skip = args[args.index("-skip") + 1]
+                    names = {name for name in names if not re.fullmatch(skip, name)}
+                self.assertEqual(names, {"TestOwned"})
+                return [
+                    {"Package": package, "Test": name, "Action": action}
+                    for name in names
+                ]
+
+            with (
+                tempfile.TemporaryDirectory() as directory,
+                mock.patch("run_core_tests.run_go", side_effect=run_go),
+            ):
+                return execute_owned(Path(directory), {})
+
+        evidence = invoke("pass")
+        require_complete(evidence["cases"], evidence["expected_cases"])
+        self.assertEqual(len(evidence["cases"]), 3)
+        with self.assertRaisesRegex(ValueError, "did not pass"):
+            invoke("skip")
+
+    def test_owned_omni_integration_exclusions_have_the_actual_artifact_lane(self):
+        excluded, profiles = profile_exclusions()
+        indexed = {(row["package"], row["test"]): row for row in profiles["excluded"]}
+        for package, tests in OWNED_OMNI_TESTS.items():
+            for name in tests:
+                key = "./pkg/" + package
+                self.assertIn(name, excluded[key])
+                self.assertEqual(
+                    indexed[key, name]["profile"], "native.image-calibration-cpu"
+                )
+        self.assertEqual(
+            indexed["./pkg/modelruntime/native", "TestPublishedVelaHalu"]["profile"],
+            "explicit-vela-halu-reference",
+        )
 
     def test_race_and_ordinary_partitions_execute_each_selected_case_once(self) -> None:
         package = "./pkg/example"

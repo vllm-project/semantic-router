@@ -25,6 +25,8 @@ from .dataset_io import (
 from .dataset_io import (
     read_small as _read,
 )
+from .preparation import validate_cases as validate_prepared_cases
+from .preparation import validate_manifest as validate_prepared_manifest
 from .setup import harness_paths
 from .sources import _write_dataset
 
@@ -302,13 +304,14 @@ class DatasetReader:
             raise ValueError(
                 "Prepared dataset identity or content digest does not match"
             )
+        validate_prepared_manifest(manifest)
         return manifest
 
     def _scan(self, identity, manifest, remaining):
         """Validate one row at a time; exhaust before returning or publishing output."""
         manifest_path, data_path = self._paths(identity)
         key = (_identity(manifest_path), _identity(data_path))
-        ids = set()
+        ids, prepared = set(), []
         for line in verified_lines(
             data_path,
             manifest.get("sha256"),
@@ -319,9 +322,23 @@ class DatasetReader:
                 raise ValueError("Dataset exceeds the supported case limit")
             case = json.loads(line)
             _validate_frozen_case(case, manifest, ids)
+            if manifest.get("preparation"):
+                prepared.append(
+                    {
+                        "id": case["id"],
+                        "benchmark": case["benchmark"],
+                        "metadata": {
+                            "task_identity": case.get("metadata", {}).get(
+                                "task_identity"
+                            )
+                        },
+                    }
+                )
             yield case
         if len(ids) != manifest["case_count"]:
             raise ValueError("Prepared dataset case count does not match")
+        if manifest.get("preparation"):
+            validate_prepared_cases(manifest, prepared)
         if (
             _identity(manifest_path),
             _identity(data_path),
@@ -387,6 +404,11 @@ class DatasetReader:
                             "source": provenance,
                             "seed": manifest.get("seed"),
                             "split": manifest["split"],
+                            **(
+                                {"preparation": manifest["preparation"].get(benchmark)}
+                                if manifest.get("preparation")
+                                else {}
+                            ),
                         }
                     ),
                 }
@@ -466,6 +488,11 @@ class DatasetReader:
                     _source_summary(b, s)
                     for b, s in sorted(manifest.get("sources", {}).items())
                 ],
+                **(
+                    {"preparation": manifest["preparation"]}
+                    if manifest.get("preparation")
+                    else {}
+                ),
             },
         }
 
@@ -682,6 +709,7 @@ class DatasetReader:
 
     def _compose(self, dataset_ids, benchmarks, spool):
         groups, sources, identity, custom = {}, {}, None, False
+        preparation = {}
         single_source = None
         input_bytes, spool_bytes, index_bytes = 0, 0, 0
         for dataset_id in dict.fromkeys(dataset_ids):
@@ -739,12 +767,16 @@ class DatasetReader:
                     [(row[0], row[1]) for row in groups[benchmark]]
                     != [(row[0], row[1]) for row in rows]
                     or sources[benchmark] != source
+                    or preparation.get(benchmark)
+                    != manifest.get("preparation", {}).get(benchmark)
                 ):
                     raise ValueError(
                         "Selected datasets contain conflicting benchmark selections"
                     )
                 if benchmark not in groups:
                     groups[benchmark], sources[benchmark] = rows, source
+                    if benchmark in manifest.get("preparation", {}):
+                        preparation[benchmark] = manifest["preparation"][benchmark]
         if set(groups) != set(benchmarks):
             raise ValueError(
                 "Prepared datasets do not contain every selected benchmark"
@@ -775,4 +807,5 @@ class DatasetReader:
             identity[1],
             {benchmark: sources[benchmark] for benchmark in sorted(sources)},
             custom,
+            preparation=preparation or None,
         )
