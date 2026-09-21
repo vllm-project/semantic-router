@@ -103,6 +103,12 @@ var maintainedTemplatedConfigAssets = []templatedConfigAsset{
 			"PROMPT_COMPRESSION_MAX_TOKENS_PLACEHOLDER": "512",
 		},
 	},
+	{
+		rel: repoRel("bench", "cpu-vs-gpu", "config-bench-cuda.yaml"),
+		replacements: map[string]string{
+			"USE_CPU_PLACEHOLDER": "false",
+		},
+	},
 }
 
 func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
