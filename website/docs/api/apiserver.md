@@ -547,6 +547,7 @@ Inspect routing replays, metrics, and management audit; submit outcome evidence.
 | `GET` | `/api/v1/observability/replays` | List Router Replay records |
 | `GET` | `/api/v1/observability/replays/aggregate` | Aggregate Router Replay routing and cost metadata |
 | `GET` | `/api/v1/observability/replays/trajectory` | Build a recipe-scoped session trajectory with each recorded routing result |
+| `GET` | `/api/v1/observability/replays/dataset` | Export a shadow comparison dataset manifest built from the selected Router Replay records |
 | `GET` | `/api/v1/observability/replays/{id}` | Read one Router Replay record |
 | `GET` | `/api/v1/observability/audit` | Page through this Router process's bounded management mutation audit; filter by action and resume after a sequence |
 | `GET` | `/api/v1/observability/plugins/context_compression/stats` | Get redacted context-compression statistics |

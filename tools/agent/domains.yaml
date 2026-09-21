@@ -1022,8 +1022,10 @@ profiles:
       - deploy/kubernetes/router-replay/**
       - tools/test/services/mock-vllm/**
       - e2e/testcases/shadow_dispatch*.go
+      - e2e/testcases/shadow_dataset*.go
       - src/semantic-router/pkg/extproc/shadow_dispatch*.go
       - src/semantic-router/pkg/routerreplay/**
+      - src/semantic-router/pkg/shadowdataset/**
       - src/semantic-router/pkg/extproc/router_replay*.go
       - src/semantic-router/pkg/apiserver/route_router_replay*.go
       - dashboard/backend/router/router_replay*.go
