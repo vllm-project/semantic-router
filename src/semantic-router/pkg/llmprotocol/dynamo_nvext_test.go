@@ -8,8 +8,8 @@ import (
 func TestValidateDynamoRequestNVExtAcceptsDocumentedFields(t *testing.T) {
 	extension := &DynamoRequestNVExt{
 		GreedSampling: Bool(true), UseRawPrompt: Bool(false),
-		Annotations: []string{"worker_id", "timing"}, TokenData: []uint32{1, 2, 3},
-		CacheSalt: "tenant-a", ExtraFields: []string{"worker_id", "timing", "engine_data", "prompt_token_ids"},
+		Annotations: []string{"worker_id", "timing"},
+		CacheSalt:   "tenant-a", ExtraFields: []string{"worker_id", "timing", "engine_data", "prompt_token_ids"},
 		MetadataUpload:     &DynamoMetadataUpload{URL: "https://metadata.example/upload"},
 		AgentHints:         &DynamoAgentHints{Priority: int32Pointer(5), StrictPriority: uint32Pointer(1), OSL: uint32Pointer(1024), SpeculativePrefill: Bool(true), LatencySensitivity: float64Pointer(0.5)},
 		RequestTimestampMS: float64Pointer(100),
@@ -37,11 +37,10 @@ func TestValidateDynamoRequestNVExtRejectsUnsupportedAndDuplicateExtraFields(t *
 	}
 }
 
-func TestValidateDynamoRequestNVExtEnforcesStringItemAndTokenLimits(t *testing.T) {
+func TestValidateDynamoRequestNVExtEnforcesStringAndItemLimits(t *testing.T) {
 	limits := DefaultPolicy().Limits
 	limits.DynamoNVExtStringBytes = 4
 	limits.DynamoNVExtItems = 1
-	limits.DynamoNVExtTokenIDs = 1
 
 	tests := []struct {
 		name      string
@@ -50,7 +49,6 @@ func TestValidateDynamoRequestNVExtEnforcesStringItemAndTokenLimits(t *testing.T
 	}{
 		{"string", &DynamoRequestNVExt{CacheSalt: "12345"}, "dynamo_nvext_string_limit"},
 		{"items", &DynamoRequestNVExt{Annotations: []string{"a", "b"}}, "dynamo_nvext_items_limit"},
-		{"tokens", &DynamoRequestNVExt{TokenData: []uint32{1, 2}}, "dynamo_nvext_token_limit"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

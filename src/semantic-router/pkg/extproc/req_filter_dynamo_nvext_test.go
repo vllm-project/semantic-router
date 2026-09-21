@@ -159,9 +159,9 @@ func TestDynamoExtensionRequestsRejectLooperBeforeFanout(t *testing.T) {
 		backendModels config.BackendModels
 	}{
 		{
-			name: "token data",
+			name: "raw prompt",
 			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
-				RequestNVExt: &llmprotocol.DynamoRequestNVExt{TokenData: []uint32{10, 11}},
+				RequestNVExt: &llmprotocol.DynamoRequestNVExt{UseRawPrompt: llmprotocol.Bool(true)},
 			}},
 		},
 		{
@@ -247,9 +247,9 @@ func TestDynamoRequestExtensionsBypassResponseCacheReadsAndWrites(t *testing.T) 
 		headers  map[string]string
 	}{
 		{
-			name: "nvext token data",
+			name: "nvext raw prompt",
 			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
-				RequestNVExt: &llmprotocol.DynamoRequestNVExt{TokenData: []uint32{10, 11}},
+				RequestNVExt: &llmprotocol.DynamoRequestNVExt{UseRawPrompt: llmprotocol.Bool(true)},
 			}},
 		},
 		{

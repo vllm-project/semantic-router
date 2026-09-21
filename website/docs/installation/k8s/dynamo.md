@@ -32,6 +32,15 @@ Semantic response caching and Dynamo KV-cache routing are independent. A
 Semantic Router cache can reuse a prior response; Dynamo's router reuses or
 predicts token-level prefix state while serving a new request.
 
+## Pre-tokenized input
+
+Semantic Router rejects requests containing `nvext.token_data` with HTTP 400
+and error code `unsupported_dynamo_token_data`, including an empty array or
+`null`. Pre-tokenized input can differ from the text inspected by routing and
+safety policies. Omit this field and send text through `messages` (Chat
+Completions) or `input` (Responses). This restriction does not affect requesting
+`prompt_token_ids` or `completion_token_ids` in response `nvext.extra_fields`.
+
 ## Prerequisites
 
 You need:

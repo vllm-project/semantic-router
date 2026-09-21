@@ -23,7 +23,6 @@ type DynamoRequestNVExt struct {
 	UseRawPrompt       *bool
 	Annotations        []string
 	BackendInstanceID  *uint64
-	TokenData          []uint32
 	MaxThinkingTokens  *uint32
 	CacheSalt          string
 	ExtraFields        []string
@@ -140,7 +139,7 @@ func ValidateDynamoRequestNVExt(extension *DynamoRequestNVExt, limits Limits) er
 	if err != nil {
 		return err
 	}
-	bytes += routingBytes + len(extension.TokenData)*4
+	bytes += routingBytes
 	if limits.DynamoNVExtBytes > 0 && bytes > limits.DynamoNVExtBytes {
 		return NewError(ErrorInvalidRequest, "dynamo_nvext_size_limit", "Dynamo nvext request exceeds the configured limit", nil)
 	}
@@ -152,9 +151,6 @@ func validateDynamoRequestCounts(extension *DynamoRequestNVExt, limits Limits) e
 		(exceedsDynamoItems(len(extension.RoutingConstraints.RequiredTaints), limits) || exceedsDynamoItems(len(extension.RoutingConstraints.PreferredTaints), limits))
 	if exceedsDynamoItems(len(extension.Annotations), limits) || exceedsDynamoItems(len(extension.ExtraFields), limits) || tooManyRoutingItems {
 		return NewError(ErrorInvalidRequest, "dynamo_nvext_items_limit", "Dynamo nvext request item limit exceeded", nil)
-	}
-	if exceedsDynamoTokenIDs(len(extension.TokenData), limits) {
-		return NewError(ErrorInvalidRequest, "dynamo_nvext_token_limit", "Dynamo nvext request token ID limit exceeded", nil)
 	}
 	return nil
 }

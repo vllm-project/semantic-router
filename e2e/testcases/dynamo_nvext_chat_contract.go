@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"k8s.io/client-go/kubernetes"
 
@@ -45,9 +46,47 @@ func testDynamoNVExtChatContract(
 	if err := verifyStreamedDynamoNVExt(streamed); err != nil {
 		return err
 	}
+	if err := verifyDynamoTokenDataRejected(ctx, session); err != nil {
+		return err
+	}
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{"buffered": true, "streaming": true, "backend_type": "dynamo"})
+	}
+	return nil
+}
+
+func verifyDynamoTokenDataRejected(ctx context.Context, session *fixtures.ServiceSession) error {
+	for _, path := range []string{"/v1/chat/completions", "/v1/responses"} {
+		for _, tokens := range [][]uint32{{0}, {}} {
+			for _, stream := range []bool{false, true} {
+				request := map[string]any{
+					"model": "openai/gpt-oss-20b", "stream": stream,
+					"nvext": map[string]any{"token_data": tokens},
+				}
+				if path == "/v1/responses" {
+					request["input"] = "Tell me about the weather."
+				} else {
+					request["messages"] = []map[string]string{{"role": "user", "content": "Tell me about the weather."}}
+				}
+				result, err := sendProtocolMatrixRaw(ctx, session, path, request, stream, nil)
+				if err != nil {
+					return err
+				}
+				var response struct {
+					Error struct {
+						Code string `json:"code"`
+					} `json:"error"`
+				}
+				if err := json.Unmarshal(result.Body, &response); err != nil {
+					return fmt.Errorf("decode token_data rejection: %w", err)
+				}
+				if result.StatusCode != http.StatusBadRequest || response.Error.Code != "unsupported_dynamo_token_data" {
+					return fmt.Errorf("%s token_data=%v stream=%t: want HTTP 400 unsupported_dynamo_token_data, got %d: %s",
+						path, tokens, stream, result.StatusCode, truncateString(string(result.Body), 500))
+				}
+			}
+		}
 	}
 	return nil
 }

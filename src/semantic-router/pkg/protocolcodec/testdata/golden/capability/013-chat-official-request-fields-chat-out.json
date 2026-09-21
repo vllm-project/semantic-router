@@ -336,10 +336,6 @@
                 "gpu"
               ]
             },
-            "token_data": [
-              10,
-              11
-            ],
             "use_raw_prompt": false
           }
         }

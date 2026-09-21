@@ -11,7 +11,7 @@ type dynamoRequestNVExtWire struct {
 	UseRawPrompt       *bool                         `json:"use_raw_prompt,omitempty"`
 	Annotations        []string                      `json:"annotations,omitempty"`
 	BackendInstanceID  *uint64                       `json:"backend_instance_id,omitempty"`
-	TokenData          []uint32                      `json:"token_data,omitempty"`
+	TokenData          json.RawMessage               `json:"token_data,omitempty"` // Reject presence, including [] and null.
 	MaxThinkingTokens  *uint32                       `json:"max_thinking_tokens,omitempty"`
 	CacheSalt          string                        `json:"cache_salt,omitempty"`
 	ExtraFields        []string                      `json:"extra_fields,omitempty"`
@@ -101,6 +101,14 @@ func decodeDynamoRequestNVExt(raw json.RawMessage, policy llmprotocol.Policy) (*
 	if err := decodeWire(raw, &wire, policy); err != nil {
 		return nil, err
 	}
+	if len(wire.TokenData) != 0 {
+		return nil, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_dynamo_token_data",
+			"nvext.token_data is not supported: pre-tokenized input can bypass inspection of request text; omit token_data and send text input",
+			nil,
+		)
+	}
 	extension := decodeDynamoRequestNVExtWire(wire)
 	if err := llmprotocol.ValidateDynamoRequestNVExt(extension, policy.Limits); err != nil {
 		return nil, err
@@ -113,7 +121,6 @@ func decodeDynamoRequestNVExtWire(wire dynamoRequestNVExtWire) *llmprotocol.Dyna
 		GreedSampling: wire.GreedSampling, UseRawPrompt: wire.UseRawPrompt,
 		Annotations:       append([]string(nil), wire.Annotations...),
 		BackendInstanceID: wire.BackendInstanceID,
-		TokenData:         append([]uint32(nil), wire.TokenData...),
 		MaxThinkingTokens: wire.MaxThinkingTokens, CacheSalt: wire.CacheSalt,
 		ExtraFields:     append([]string(nil), wire.ExtraFields...),
 		PrefillWorkerID: wire.PrefillWorkerID, DecodeWorkerID: wire.DecodeWorkerID,
@@ -150,7 +157,6 @@ func encodeDynamoRequestNVExt(extension *llmprotocol.DynamoRequestNVExt, policy 
 		GreedSampling: extension.GreedSampling, UseRawPrompt: extension.UseRawPrompt,
 		Annotations:       append([]string(nil), extension.Annotations...),
 		BackendInstanceID: extension.BackendInstanceID,
-		TokenData:         append([]uint32(nil), extension.TokenData...),
 		MaxThinkingTokens: extension.MaxThinkingTokens, CacheSalt: extension.CacheSalt,
 		ExtraFields:     append([]string(nil), extension.ExtraFields...),
 		PrefillWorkerID: extension.PrefillWorkerID, DecodeWorkerID: extension.DecodeWorkerID,
