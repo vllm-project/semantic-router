@@ -20,6 +20,12 @@ not qualify every model or deployment.
 A failed Clippy invocation fails the changed-file check even when its diagnostics
 point outside the edited files.
 
+An explicit `BASE_REF` or `--base-ref` must resolve to a commit. An invalid value
+fails the check rather than silently selecting a different comparison.
+
+Local checks and CI include both paths of a rename, so moving a file cannot drop
+checks for its former domain.
+
 ## Read a CI run
 
 The PR, main, nightly, and release entrypoints share one verification plan:

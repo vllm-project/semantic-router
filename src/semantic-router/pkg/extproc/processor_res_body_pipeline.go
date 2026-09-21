@@ -55,12 +55,15 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	// decision carries a plugin; the plugins below then consume it. Recorded
 	// before a block returns, so a blocked response leaves the same evidence in
 	// Router Replay as a delivered one.
+	recordPrimaryOutputDigest(ctx, semanticResponse)
 	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 
 	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
+		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 		return jailbreakResponse
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
+		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
 		return hallucinationResponse
 	}
 

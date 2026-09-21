@@ -11,10 +11,40 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 )
 
 type routerProxyCredentialProvider struct {
 	token string
+}
+
+func TestGrafanaRouteServesAdapterAndRewritesDocument(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/d/router" {
+			t.Errorf("unexpected upstream request %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, "<html><head></head><body>Grafana</body></html>")
+	}))
+	defer upstream.Close()
+	mux := http.NewServeMux()
+	registerGrafanaRoutes(mux, &config.Config{GrafanaURL: upstream.URL})
+	for _, path := range []string{proxy.GrafanaAuthScriptPath, "/embedded/grafana/d/router"} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("Accept", "text/html")
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d", path, response.Code)
+		}
+		if path == proxy.GrafanaAuthScriptPath {
+			if !strings.Contains(response.Header().Get("Content-Type"), "javascript") {
+				t.Fatal("adapter was not served locally")
+			}
+		} else if !strings.Contains(response.Body.String(), proxy.GrafanaAuthScriptPath) {
+			t.Fatal("document did not install the adapter")
+		}
+	}
 }
 
 func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {

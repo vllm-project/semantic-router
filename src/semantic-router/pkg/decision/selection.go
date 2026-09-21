@@ -38,8 +38,13 @@ func (e *DecisionEngine) selectBestDecision(results []DecisionResult) *DecisionR
 	return &results[0]
 }
 
+// comparableConfidencePools reports the pools whose confidences rank against
+// each other. A pool qualifies when every member that is not a catch-all
+// reported a score and every one of those scores is the same kind, since a
+// classifier probability and a vector similarity are different quantities.
 func comparableConfidencePools(results []DecisionResult, useTieredSelection bool) map[int]bool {
 	pools := make(map[int]bool)
+	kinds := make(map[int]config.ScoreKind)
 	for _, result := range results {
 		key := 0
 		if useTieredSelection {
@@ -49,8 +54,14 @@ func comparableConfidencePools(results []DecisionResult, useTieredSelection bool
 		if !seen {
 			comparable = true
 		}
-		if !result.CatchAll && !result.ConfidenceScored {
-			comparable = false
+		if !result.CatchAll {
+			if !result.ConfidenceScored {
+				comparable = false
+			} else if kind, ranked := kinds[key]; !ranked {
+				kinds[key] = result.ScoreKind
+			} else if kind != result.ScoreKind {
+				comparable = false
+			}
 		}
 		pools[key] = comparable
 	}
@@ -66,55 +77,41 @@ func (e *DecisionEngine) useTieredSelection(results []DecisionResult) bool {
 	return false
 }
 
+// decisionResultLess orders two matched decisions. Tier is the hard
+// precedence boundary, a catch-all always ranks after a real match, and
+// routing.strategy then decides between policy ordering and evidence, the
+// same way inside a tier as without one.
 func (e *DecisionEngine) decisionResultLess(
 	left DecisionResult,
 	right DecisionResult,
 	useTieredSelection bool,
 	comparable map[int]bool,
 ) bool {
+	pool := 0
 	if useTieredSelection {
-		return tieredDecisionResultLess(left, right, comparable[left.Decision.Tier])
+		if left.Decision.Tier != right.Decision.Tier {
+			return left.Decision.Tier < right.Decision.Tier
+		}
+		pool = left.Decision.Tier
 	}
+	if left.CatchAll != right.CatchAll {
+		return right.CatchAll
+	}
+	rankedByConfidence := comparable[pool] && left.Confidence != right.Confidence
+	samePriority := left.Decision.Priority == right.Decision.Priority
 	if e.strategy == config.RoutingStrategyConfidence {
-		return confidenceDecisionResultLess(left, right, comparable[0])
+		if rankedByConfidence {
+			return left.Confidence > right.Confidence
+		}
+		if !samePriority {
+			return left.Decision.Priority > right.Decision.Priority
+		}
+		return left.Decision.Name < right.Decision.Name
 	}
-	return priorityDecisionResultLess(left, right, comparable[0])
-}
-
-func tieredDecisionResultLess(left, right DecisionResult, comparable bool) bool {
-	if left.Decision.Tier != right.Decision.Tier {
-		return left.Decision.Tier < right.Decision.Tier
-	}
-	if left.CatchAll != right.CatchAll {
-		return right.CatchAll
-	}
-	if comparable && left.Confidence != right.Confidence {
-		return left.Confidence > right.Confidence
-	}
-	if left.Decision.Priority != right.Decision.Priority {
+	if !samePriority {
 		return left.Decision.Priority > right.Decision.Priority
 	}
-	return left.Decision.Name < right.Decision.Name
-}
-
-func confidenceDecisionResultLess(left, right DecisionResult, comparable bool) bool {
-	if left.CatchAll != right.CatchAll {
-		return right.CatchAll
-	}
-	if comparable && left.Confidence != right.Confidence {
-		return left.Confidence > right.Confidence
-	}
-	if left.Decision.Priority != right.Decision.Priority {
-		return left.Decision.Priority > right.Decision.Priority
-	}
-	return left.Decision.Name < right.Decision.Name
-}
-
-func priorityDecisionResultLess(left, right DecisionResult, comparable bool) bool {
-	if left.Decision.Priority != right.Decision.Priority {
-		return left.Decision.Priority > right.Decision.Priority
-	}
-	if comparable && left.Confidence != right.Confidence {
+	if rankedByConfidence {
 		return left.Confidence > right.Confidence
 	}
 	return left.Decision.Name < right.Decision.Name

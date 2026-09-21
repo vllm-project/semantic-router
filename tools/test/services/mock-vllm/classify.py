@@ -1,7 +1,9 @@
+# Stub classification service for testing PromptGuard's HTTP backend.
 from fastapi import APIRouter, Request
 
-# prompt_guard.protocol: http_classify posts {"inputs": "<text>"} and expects a
-# score per label back. A real sequence classifier only ever sees its own
+# prompt_guard.backend with protocol http_classify posts {"inputs": "<text>"} and expects a
+# response containing either label scores or classification decisions. A real sequence
+# classifier only ever sees its own
 # sequence window (MAX_CLASSIFICATION_SEQ_LEN for the jailbreak model), so
 # content past that window is never scored - only a caller that scans the text
 # in chunks reaches it. This stand-in reproduces exactly that: it scores the

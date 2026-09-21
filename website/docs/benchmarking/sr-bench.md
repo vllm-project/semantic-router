@@ -49,6 +49,19 @@ is `<state-root>/.sr-bench/<stack>/store` and its host API is loopback port
 from the same workspace. Dashboard reloads and configuration replacement preserve
 the worker. `vllm-sr stop` stops it without deleting saved evidence.
 
+To avoid a host port conflict, set `VLLM_SR_BENCH_PORT` to an absolute port from
+1 through 65535 for both `vllm-sr serve` and `vllm-sr benchmark`. This overrides
+only the worker's loopback host port; its container port remains 8090 and the
+stack port offset is not added to the override.
+
+When only the selected Dashboard image changes, `serve` upgrades its managed
+worker after verifying the same launch settings, store and credentials. The CLI
+briefly pauses the worker to check its durable journal before replacing it.
+Active runs block the upgrade and resume unchanged; finish or cancel them before
+retrying. Saved results remain in the same store. A stopped worker, changed
+credentials or changed launch settings still require explicit reconciliation.
+The container runtime must support pausing for this image upgrade.
+
 The core container has no Docker socket or GPU passthrough and does not include
 all upstream harness dependencies. For the code and agent adapters, prepare a
 dedicated host worker with pinned interpreters, source checkouts and sandbox
@@ -141,6 +154,47 @@ corresponding `_ROOT` variables to override those locations. Exact source
 revisions and, for code or terminal tasks, digest-pinned sandbox images remain
 required. Preflight reports missing prerequisites before dispatch.
 
+## Native output capacity
+
+Set `output_policy: native` to explore each model's available output capacity
+without a shared generation-token cap. Register `native_limits` on every selected
+target, keyed by the physical response model, with verified `context_window` and
+`max_output_tokens` values. Keep model-specific reasoning settings in
+`request_params`. Omit `max_tokens` from both sampling and target overrides.
+
+The single-model adapter uses the vLLM Chat render API to count the actual
+prompt, then generates once with the smaller of the configured output capacity
+and remaining context. A MoM recipe must use `request_params.default_max_tokens:
+auto` on every reachable decision, without a smaller output limit. Its Router
+response records the actual selected-model input and output budget. Missing or
+inconsistent evidence stops qualification; the harness does not guess a budget
+from generated token usage. Native mode currently requires physical response
+identities to match selected model identities and one fully accounted dispatch.
+
+The plan derives its evidence token ceiling from the frozen native limits. Allow
+sufficient call/run time and output storage for that capacity; idle, cancellation
+and repetition controls remain active. Model maximum output and total context are
+different values, and normal end-of-answer stopping remains enabled. Native
+capacity does not force a model to fill its context. Compare native candidates
+against native baselines with the same model limits. Offline replay is unavailable
+when equivalent per-call native budget evidence cannot be established.
+
+## Answer grading
+
+The MMLU-Pro and GPQA adapters use `sr-bench-mcq-final-v2`. Capability scoring
+extracts an unambiguous answer from the visible final channel: a leading answer
+line, an explicit answer declaration, or a boxed choice. Markdown emphasis does
+not change the answer. Conflicting declarations and prose without an explicit
+answer remain unparsed; the grader does not guess from isolated letters or use
+hidden reasoning. This is a conservative sr-bench adaptation, not an exact
+reproduction of the upstream extraction heuristics.
+
+Strict answer-format compliance is reported separately from correctness.
+Truncated responses still count as output failures. Adapter versions are frozen
+in each plan, so different graders cannot silently share a comparison. Existing
+run scores remain unchanged. `benchmark regrade RUN_ID` returns a separate,
+versioned result from saved final answers without generating or rewriting them.
+
 ## Plan and run
 
 Create a JSON or YAML manifest with the prepared dataset's `path` and `sha256`,
@@ -168,7 +222,6 @@ limits:
   idle_timeout_s: 30
   max_output_tokens: 4096
   max_run_seconds: 1800
-  max_cost_usd: 5
 sampling:
   temperature: 0
   top_p: 1
@@ -198,25 +251,42 @@ task limits bound elapsed time and call counts. Priced runs reserve estimated
 spend before dispatch and stop on reported actual spend. These are not a
 provider-enforced universal hard USD cap: missing usage, inaccurate prices or
 unsupported backend accounting can leave cost unknown. Unknown usage never
-becomes zero or evidence of savings.
+becomes zero or evidence of savings. **Quality only** (`capability_only`) disables
+USD-budget stopping; request/case/run time, call and output limits still apply.
+Known spend is recorded, but missing prices or usage do not support savings claims.
 
 ## Iterate with preview, replay and live evaluation
 
-1. Run single models and the current MoM on identical quick/dev tasks. Inspect
-   wrong answers, failures, decision/model distributions and measured costs.
-2. Make one coherent routing change. Use `config validate`, `config plan` and
+1. Start with smoke: preview routing, then run a bounded live smoke to check final
+   answers, graders, identity receipts, accounting and cancellation.
+2. Create an experiment and save a quick/dev single-model matrix once, together
+   with the current MoM result. Reuse that frozen baseline for compatible iterations.
+3. Make one coherent routing change. Use `config validate`, `config plan` and
    `config apply`; wait for the expected active revision. For restart-required
    changes, use the supported `serve --replace-active-config` flow.
-3. Bind a new manifest to that revision. Preview MoM targets to check actual
-   query decisions and model selections without generating answers.
-4. For supported direct routes, replay the preview against saved single-model
-   answers. Treat quality, cost and latency as diagnostic estimates.
-5. Run the candidate live on the same dev tasks, compare paired results, then
-   use the untouched standard split for the prespecified release decision.
+   Update the registered MoM target's `config_hash` to the verified active hash;
+   existing runs keep their frozen target definitions.
+4. Derive a candidate plan from the saved baseline. It preserves the exact tasks,
+   sampling, grader options and limits while selecting registered MoM targets.
+   Preview those tasks, then inspect server-qualified replay options. Eligible
+   replay reuses saved answers; other routes require live evaluation.
+5. Evaluate promising candidates live on the same dev tasks and compare paired
+   results. Freeze the chosen policy before the prespecified standard/holdout live
+   comparison; do not tune against its failures.
 
 ```bash
+vllm-sr benchmark experiment create "Routing quality and cost" --idempotency-key study-1
+vllm-sr benchmark experiment attach EXPERIMENT_ID --run BASELINE_ID --role baseline
+vllm-sr benchmark candidate-plan BASELINE_ID --target balance --mode preview \
+  --experiment EXPERIMENT_ID > candidate-review.json
+# Inspect the plan, then extract its frozen manifest for submission.
+jq '.manifest' candidate-review.json > preview.json
 vllm-sr benchmark preview --manifest preview.json --detach
+vllm-sr benchmark replay-options --limit 10
+vllm-sr benchmark replay-options BASELINE_ID --limit 10
 vllm-sr benchmark replay --baseline BASELINE_ID --preview PREVIEW_ID
+vllm-sr benchmark comparison-options --limit 10
+vllm-sr benchmark comparison-options BASELINE_ID --limit 10
 vllm-sr benchmark compare BASELINE_ID CANDIDATE_ID
 vllm-sr benchmark regrade RUN_ID --output regrade.json
 vllm-sr benchmark export DEV_RUN_ID --output training-matrix.json
@@ -230,9 +300,76 @@ occurred and its seed. The snapshot does not update learning state, and a later
 live request can differ as state or sampling changes. Keep Learning enabled
 during this check; disabling it would test a different policy. The Dashboard
 shows these fields beside each preview case and explains unresolved selections.
+A config hash freezes configuration, not evolving Learning/session state. The
+harness does not automatically isolate, reset or replay that state across live
+candidates. Record the intended state conditions and treat uncontrolled live
+state differences as a comparison limitation. Non-Learning selectors that depend
+on telemetry can also return state-dependent snapshots.
+
+With automatic output budgets, supported single-backend previews call the
+provider's render API to resolve each candidate's input size and available output
+capacity. Rendering does not generate an answer. Selection uses the configured
+cost forecast, not the maximum output capacity as an expected token count.
+Requests needing dynamic enrichment or overflow compression remain unresolved;
+inspect `selection_status` and `selection_reason` before relying on a model choice.
+These checks cover the supported preview envelope and configured request policy,
+not unsupported caller-specific generation fields.
+
+For a single request, `vllm-sr route preview --request-file request.json` accepts
+the Router's supported request envelope: role/content/tool-call messages, tools,
+function selection, response format, output-budget fields, string metadata and
+preview options/context. It is not an arbitrary Chat Completions request;
+unsupported fields such as `temperature` and `stream` are rejected. Optional
+`--session-id`, `--conversation-id` and `--sampling-seed` describe a read-only
+preview; the seed does not fix a later live random draw. In benchmark cases,
+explicit `request_metadata` is sent to the provider; benchmark `metadata`, which
+may contain reference labels, is never forwarded as request metadata.
 
 Replay rejects state-dependent Learning snapshots, unsupported plugin, agent
 or compound execution and missing matrix cells instead of calling a model.
+**Replay** and **Compare** list only baselines with at least one compatible
+saved run, then offer only compatible choices. Discovery and submission use the
+same authoritative validator; submission checks again. Both runs must contain
+identical frozen cases and request protocols. Replay also checks actual saved
+request inputs, deterministic selection, grader identity and exactly one complete
+saved subject generation per selected cell. Case order alone may differ and
+receives an explicit receipt. It never weakens frozen content hashes or
+silently calls a model. Keep the same pending baseline/preview/idempotency key
+after a lost response; do not create a new intent to reconcile it.
+
+Compare accepts completed or failed live runs only when every planned cell has
+an explicit terminal outcome. Failed outcomes count as incorrect in the full
+planned denominator; missing outcomes and completed but ungraded answers block
+comparison. Failed statuses and unknown costs remain visible. This measures
+delivered quality under the frozen limits, including execution failures.
+
+The read-only APIs are `GET /api/sr-bench/v1/replay-options` and
+`GET /api/sr-bench/v1/comparison-options`. Omit `baseline_run_id` for baselines;
+provide it for compatible previews or live candidates. Pages use `limit` (1–25)
+and an opaque `after` cursor. CLI `benchmark replay-options` accepts that same
+cursor. An empty page with `has_more: true` is an unfinished search: use **Load
+more** or the next cursor. `scan_limited: true` means some evidence exceeded the
+per-page validation limit; it does not prove that no other compatible runs exist.
+A cursor becomes invalid when visible eligible evidence changes; refresh from
+the first page. These queries make no model requests.
+
+Experiments link baseline, initial, preview, estimate, candidate, validation and recovery
+runs without changing their original receipts. Creating or attaching an experiment,
+selecting replay options and deriving a candidate plan generate no model answers.
+Experiment membership alone does not establish paired comparability.
+A terminal full live baseline can supply a candidate plan's frozen protocol even
+if it failed; this neither retries its generations nor changes its evidence.
+Recovery children remain labeled as recovery attempts even when only one model
+from a mixed baseline is selected. They never replace the full baseline.
+Administrators can continue CLI-created experiments; other writers can only add
+new attempts to their own experiments. Read-only users can compare accessible saved runs.
+
+Delete a finished experiment from its Dashboard detail or with
+`vllm-sr benchmark experiment delete EXPERIMENT_ID`. Deletion removes only the
+group and its links; every run, result and artifact remains available. Active
+linked runs block deletion. Retrying the same deletion returns its saved receipt;
+a deleted experiment's creation key cannot recreate it.
+
 Only live runs support measured capability and savings claims. Offline regrade
 currently supports saved multiple-choice/grid final answers, preserves the
 original results and makes zero model calls. Export is limited to explicitly
@@ -270,10 +407,14 @@ its subset label and is not the full score.
 Paired comparison selects the strongest observed single model by the same
 aggregate over identical cases and records that selection.
 Exact weighted-quality ties prefer the single with the lowest complete known
-subject cost, then a stable target ID. The report lists every tied-best single.
-If any tied-best single has incomplete cost, savings remain unknown. Savings are
-`100 × (1 − candidate subject cost / baseline subject cost)` with complete,
-compatible accounting. A small dev sample shows direction; a quality
+total cost, then a stable target ID. The report lists every tied-best single.
+If any tied-best single has incomplete total cost, savings remain unknown.
+Comparisons report **total cost savings** across subject and judge/simulator
+calls, with **subject cost savings** shown separately. Both use
+`100 × (1 − candidate cost / baseline cost)` with the same scope and complete,
+compatible accounting. The API names these `total_cost_saving_percent` and
+`subject_cost_saving_percent`; cache-neutral comparisons remain subject-only.
+A small dev sample shows direction; a quality
 non-inferiority claim needs a prespecified margin and a holdout confidence
 interval. Token-equivalent self-hosted prices do not establish GPU invoice savings.
 
@@ -283,6 +424,11 @@ including all-wrong samples. The stratified bootstrap interval is retained as a
 diagnostic; a degenerate `[0, 0]` bootstrap from a small tied sample does not prove
 equivalence. Neither interval includes selection of the strongest observed
 baseline, tuning selection or dataset contamination uncertainty.
+
+Before reserving a Standard holdout, exclude previously generated, inspected or
+tuned-on cases by stable ID and input fingerprint. A different seed or a
+`holdout` split label does not establish independence. Retests remain useful,
+but report their exposure separately from unseen validation.
 
 Dashboard opens on **Runs**, with filters for name/model, status and mode. Each
 row shows the completed denominator, failures, persisted update time and target
@@ -319,13 +465,28 @@ Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
 **Recipe**. Start with the aggregate results, then inspect individual responses,
 accounting and frozen configuration as needed.
 
-**Compare iterations** selects a single-model baseline, then uses checkboxes for
-any number of completed candidate runs. Candidates are ordered by creation
-time, and selections are preserved in the URL. Quality/cost and iteration charts
-accompany paired confidence intervals, savings, tokens, latency and wall time;
-CSV and JSON export the comparison. The interface is not limited to two tuning
-iterations. Incompatible or incomplete scopes cannot become a comparison row.
-A positive estimate with an interval spanning zero is not proof of a gain.
+While a run is active, elapsed time continues updating even when no additional
+question has finished. Active calls show their phase, elapsed time, latest
+recorded response activity and received bytes. This activity helps distinguish a
+long response from one that has stopped arriving; it does not establish answer
+quality or billable token usage. Tokens and costs require a complete usage receipt.
+Use `vllm-sr benchmark show RUN_ID --calls --active` to read the same activity
+through the CLI; `--after` and `--limit` bound each page.
+
+**Compare iterations** guides two choices: a live single-model baseline with
+compatible saved outcomes, then any number of eligible candidate runs. Baselines
+without a compatible candidate are excluded. Search narrows the candidate list;
+**Select all** selects matching available runs across pages.
+Changing the baseline clears the candidates, and changing any selection hides
+previous comparison results until **Compare runs** is selected. The service still
+validates every paired outcome before showing a comparison.
+
+Candidates are ordered by creation time, and selections are preserved in the URL.
+Quality/cost and iteration charts accompany paired confidence intervals, savings,
+tokens, latency and wall time. Result cards are paginated; charts and CSV/JSON
+exports retain all selected comparisons. The interface is not limited to two
+tuning iterations. A positive estimate with an interval spanning zero is not proof
+of a gain.
 
 For a MoM target, the operator can register `capture_recipe: true` with its
 `config_hash` and canonical `preview_url`. The worker captures a redacted recipe
@@ -338,10 +499,19 @@ Deployment wiring and secrets are omitted; the download is a recipe artifact,
 not a complete deployable configuration. Existing runs without a snapshot show
 that it is unavailable rather than borrowing a later recipe.
 
-Calls and results load in pages of 100; full call bodies load on inspection.
-Metrics and routing distributions come from the complete report independently of
-loaded detail pages. Events show the latest 100 entries with access to older
-pages. Regrade and training export reuse saved evidence without new model calls.
+Calls and results fetch at most 100 rows at a time and display 25 rows per page;
+full call bodies load on inspection. Search applies to loaded rows. Metrics and
+routing distributions come from the complete report independently of loaded detail
+pages. Recovery candidates, exclusions and child attempts are also paginated.
+
+**Run events** shows human-readable saved activity, oldest first, with event-type
+filters and 25 rows per page. Opening details fetches at most 1,000 events;
+**Load more events** explicitly reads the next saved page. A full API page is
+labelled as a loaded count because the endpoint does not provide a total.
+Filtering applies only to loaded events. This is an event snapshot: **Refresh
+evidence** loads a new snapshot while run progress continues polling independently.
+A failed page read preserves its cursor and existing rows. Regrade and training
+export reuse saved evidence without new model calls.
 
 ### Recover unfinished work explicitly
 

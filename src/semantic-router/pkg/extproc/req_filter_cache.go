@@ -243,7 +243,7 @@ func (r *OpenAIRouter) performCacheLookup(
 	logging.Infof("handleCaching: Performing cache lookup - model=%s, query=%s, threshold=%.2f",
 		requestModel, logging.ContentDescriptor(ctx.RequestQuery), threshold)
 
-	spanCtx, span := tracing.StartPluginSpan(ctx.TraceContext, "response_cache", categoryName)
+	_, span := tracing.StartPluginSpan(ctx.TraceContext, "response_cache", categoryName)
 
 	startTime := time.Now()
 	identity := ctx.CacheIdentity
@@ -271,15 +271,14 @@ func (r *OpenAIRouter) performCacheLookup(
 	logging.Infof("FindSimilarWithThreshold returned: found=%v, error=%v, lookupTime=%dms", found, cacheErr, lookupTime)
 
 	tracing.SetSpanAttributes(span,
-		attribute.String(tracing.AttrCacheKey, ctx.RequestQuery),
 		attribute.Bool(tracing.AttrCacheHit, found),
 		attribute.Int64(tracing.AttrCacheLookupTimeMs, lookupTime),
-		attribute.String(tracing.AttrCategoryName, categoryName),
+		attribute.String(tracing.AttrDecisionName, categoryName),
 		attribute.Float64("cache.threshold", float64(threshold)))
 
 	if cacheErr != nil {
 		logging.Errorf("Error searching cache: %v", cacheErr)
-		tracing.RecordError(span, cacheErr)
+		tracing.RecordError(span, "cache_lookup_failed")
 		tracing.EndPluginSpan(span, "error", lookupTime, "lookup_failed")
 	} else if found {
 		ctx.VSRCacheHit = true
@@ -312,7 +311,6 @@ func (r *OpenAIRouter) performCacheLookup(
 		cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
 		response := r.createCacheHitResponse(ctx, cachedResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
 		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
-		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
 		// A semantic miss may expose this lookup's rejected-candidate score on the
@@ -321,7 +319,6 @@ func (r *OpenAIRouter) performCacheLookup(
 		metrics.RecordCachePluginMiss(requestDecisionStateKey(ctx), "response_cache")
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_miss")
 	}
-	ctx.TraceContext = spanCtx
 
 	return nil, false
 }

@@ -68,6 +68,8 @@ data:
                         "rationale": "deterministic E2E response",
                     }
                 )
+                if "__LLM_CLASSIFIER_REASONING__" in text:
+                    content = "<think>Evaluate the input labels.</think>\n" + content
                 self.send_json(200, {"choices": [{"message": {"content": content}}]})
                 return
 

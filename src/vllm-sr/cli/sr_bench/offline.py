@@ -6,12 +6,14 @@ import copy
 
 from . import VERSION
 from .accounting import BUCKETS, correction_metadata, effective_calls
-from .contracts import digest
-from .engine import basic_grade
+from .adapters import get_adapter
+from .contracts import plan_digest
+from .experiments import inherit_membership
+from .grading import FINAL_GRADER_VERSION, basic_grade
 from .provenance import capture_runner
+from .replay_validation import ReplayEligibilityError, ReplayValidator
 
 BASIC = {"mmlu-pro", "gpqa-diamond", "arc-agi-2"}
-REPLAYABLE = BASIC | {"hle", "simpleqa-verified"}
 
 
 def regrade(store, run_id):
@@ -61,7 +63,12 @@ def regrade(store, run_id):
         "version": VERSION,
         "source_run_id": run_id,
         "kind": "offline-regrade",
-        "grader_version": "sr-bench-final-v1",
+        "grader_version": FINAL_GRADER_VERSION,
+        "source_adapter_versions": run["manifest"].get("adapter_versions", {}),
+        "adapter_versions": {
+            case["benchmark"]: get_adapter(case["benchmark"]).version
+            for case in cases.values()
+        },
         "source_plan_sha256": run["manifest"]["plan_sha256"],
         "results": results,
         "changed_count": changed,
@@ -142,91 +149,40 @@ def export_training(store, run_id):
     }
 
 
-def replay(store, baseline_id, preview_id, owner="local", request_key=None):
+def replay(
+    store,
+    baseline_id,
+    preview_id,
+    owner="local",
+    request_key=None,
+    *,
+    actor_role="local",
+):
+    # Serialize the key lookup, validation and receipt creation. A known rejected
+    # request cannot race a successful replay with the same idempotency key.
+    with store.lock:
+        if request_key and (existing := store.request(owner, request_key)):
+            sources = existing["manifest"].get("replay_sources")
+            if sources != {
+                "baseline_run_id": baseline_id,
+                "preview_run_id": preview_id,
+            }:
+                raise ValueError(
+                    "idempotency key is already bound to a different replay"
+                )
+            return existing
+        return _materialize_replay(
+            store, baseline_id, preview_id, owner, request_key, actor_role
+        )
+
+
+def _materialize_replay(store, baseline_id, preview_id, owner, request_key, actor_role):
     baseline, preview = store.get(baseline_id), store.get(preview_id)
     bm, pm = baseline["manifest"], preview["manifest"]
-    if (
-        baseline["status"] != "completed"
-        or bm["mode"] != "live"
-        or preview["status"] != "completed"
-        or pm["mode"] != "preview"
-    ):
-        raise ValueError(
-            "Replay requires a completed live single-model matrix and a completed preview"
-        )
-    for key in ("case_sha256", "sampling"):
-        if bm[key] != pm[key]:
-            raise ValueError(f"Replay requires identical {key}")
-    if any(c["benchmark"] not in REPLAYABLE for c in bm["cases"]):
-        raise ValueError(
-            "Agent and code harness trajectories cannot be replayed as single selections"
-        )
-    singles = [t for t in bm["targets"] if t["kind"] == "single"]
-    if not singles or len({t["model"] for t in singles}) != len(singles):
-        raise ValueError("Replay baseline must contain unique single-model identities")
-    by_model = {t["model"]: t for t in singles}
-    baseline_rows = {
-        (r["case_id"], r["target_id"]): r for r in store.results(baseline_id)
-    }
-    baseline_calls = effective_calls(store, baseline_id)
-    preview_rows = {
-        (r["case_id"], r["target_id"]): r for r in store.results(preview_id)
-    }
-    materialized = []
-    for target in pm["targets"]:
-        for case in pm["cases"]:
-            row = preview_rows[(case["id"], target["id"])]
-            routing = row.get("details", {}).get("routing", {})
-            provenance = routing.get("selection_provenance") or {}
-            if (
-                provenance.get("state_dependent")
-                or provenance.get("mode") == "read_only_snapshot"
-            ):
-                raise ValueError(
-                    "State-dependent learning previews cannot be replayed as stateless single selections"
-                )
-            decision = routing.get("decision_result")
-            if routing.get("selection_status") != "selected" or routing.get(
-                "selection_method"
-            ) not in {"static", "single", "route_action"}:
-                raise ValueError(
-                    "Replay requires a deterministic selected single-model route; dynamic or execution-required choices are excluded"
-                )
-            if not isinstance(decision, dict) or decision.get("plugins"):
-                raise ValueError(
-                    "Replay excludes routes with request or response plugins"
-                )
-            selected = by_model.get(routing.get("selected_model"))
-            if selected is None:
-                raise ValueError(
-                    "Preview selected a model absent from the live answer matrix"
-                )
-            baseline_params = {**bm["sampling"], **selected.get("request_params", {})}
-            preview_params = {**pm["sampling"], **target.get("request_params", {})}
-            if baseline_params != preview_params:
-                raise ValueError(
-                    "Replay selected model has different frozen request parameters"
-                )
-            result = baseline_rows.get((case["id"], selected["id"]))
-            calls = [
-                c
-                for c in baseline_calls
-                if c["case_id"] == case["id"]
-                and c["target_id"] == selected["id"]
-                and c["role"] == "subject"
-            ]
-            if (
-                result is None
-                or result["status"] != "completed"
-                or len(calls) != 1
-                or calls[0]["status"] != "completed"
-            ):
-                raise ValueError(
-                    "Replay requires exactly one saved complete subject generation per selected case"
-                )
-            if calls[0].get("request", {}).get("messages") != case["messages"]:
-                raise ValueError("Saved generated prompt differs from the replay case")
-            materialized.append((case, target, result, calls[0], selected["id"]))
+    validation = ReplayValidator(store, baseline).validate(preview)
+    if not validation["eligible"]:
+        raise ReplayEligibilityError(validation["reasons"])
+    materialized = validation["materialized"]
     manifest = copy.deepcopy(pm)
     manifest.update(
         {
@@ -236,15 +192,27 @@ def replay(store, baseline_id, preview_id, owner="local", request_key=None):
                 "baseline_run_id": baseline_id,
                 "preview_run_id": preview_id,
             },
+            "replay_compatibility": validation["receipt"],
             "benchmark_options": bm.get("benchmark_options", {}),
             "auxiliary_targets": bm.get("auxiliary_targets", {}),
         }
     )
-    manifest["plan_sha256"] = digest(
-        {k: v for k, v in manifest.items() if k != "plan_sha256"}
-    )
+    inherit_membership(store, manifest, owner, actor_role, "estimate")
+    singles = {t["id"]: t for t in bm["targets"] if t["kind"] == "single"}
+    for target in manifest["targets"]:
+        target["prices"] = {
+            model: price
+            for _, selected_target, _, _, source_target in materialized
+            if selected_target["id"] == target["id"]
+            for model, price in singles[source_target].get("prices", {}).items()
+        }
+    manifest["plan_sha256"] = plan_digest(manifest)
     run, created = store.create(
-        manifest, owner, request_key, provenance=capture_runner(manifest)
+        manifest,
+        owner,
+        request_key,
+        provenance=capture_runner(manifest),
+        actor_role=actor_role,
     )
     if not created:
         return run

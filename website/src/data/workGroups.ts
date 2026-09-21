@@ -309,6 +309,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/ankit373.png',
         profile: 'https://github.com/ankit373',
       },
+      {
+        name: 'zdy782',
+        avatar: 'https://github.com/zdy782.png',
+        profile: 'https://github.com/zdy782',
+      },
     ],
   },
   {
@@ -369,6 +374,11 @@ export const workGroups: WorkGroup[] = [
         name: 'Jinwu',
         avatar: 'https://github.com/ayrnb.png',
         profile: 'https://github.com/ayrnb',
+      },
+      {
+        name: 'Krito.',
+        avatar: 'https://github.com/Kritoooo.png',
+        profile: 'https://github.com/Kritoooo',
       },
     ],
   },

@@ -159,6 +159,65 @@ config:
                   value: updated-by-router
               delete:
                 - x-vsr-e2e-deleted
+      - &tools_passthrough_decision
+        name: tools_passthrough_decision
+        description: "Deterministic route for tools passthrough provider-boundary coverage (issue #3180)."
+        priority: 540
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tools_passthrough
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+      - &tools_filtered_decision
+        name: tools_filtered_decision
+        description: "Deterministic route for tools allow-list provider-boundary coverage (issue #3180)."
+        priority: 540
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tools_filtered
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: filtered
+              semantic_selection: false
+              allow_tools:
+                - get_weather
+      - &tools_none_decision
+        name: tools_none_decision
+        description: "Deterministic route for tools removal provider-boundary coverage (issue #3180)."
+        priority: 540
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: tools_none
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: none
+              semantic_selection: false
       - &tool_selection_add_weather_decision
         name: tool_selection_add_weather_decision
         description: Contract route for tool_selection add mode (weather-aligned retrieval)
@@ -234,7 +293,7 @@ config:
             configuration:
               enabled: true
               mode: filter
-              relevance_threshold: 0.22
+              relevance_threshold: 0.95
               preserve_count: 2
       - &tool_selection_filter_threshold_decision
         name: tool_selection_filter_threshold_decision
@@ -756,6 +815,24 @@ config:
           keywords:
             - __PLUGIN_REQUEST_MUTATIONS__
           case_sensitive: true
+        - &tools_passthrough
+          name: tools_passthrough
+          operator: OR
+          keywords:
+            - __TOOLS_PASSTHROUGH__
+          case_sensitive: true
+        - &tools_filtered
+          name: tools_filtered
+          operator: OR
+          keywords:
+            - __TOOLS_FILTERED__
+          case_sensitive: true
+        - &tools_none
+          name: tools_none
+          operator: OR
+          keywords:
+            - __TOOLS_NONE__
+          case_sensitive: true
         - name: retention_probe_keywords
           operator: OR
           keywords:
@@ -946,6 +1023,9 @@ config:
         signals:
           keywords:
             - *plugin_request_mutations
+            - *tools_passthrough
+            - *tools_filtered
+            - *tools_none
             - *tool_selection_add_weather
             - *tool_selection_add_calc
             - *tool_selection_filter
@@ -954,6 +1034,9 @@ config:
             - *tool_selection_with_system_prompt
         decisions:
           - *plugin_request_mutations_decision
+          - *tools_passthrough_decision
+          - *tools_filtered_decision
+          - *tools_none_decision
           - *tool_selection_add_weather_decision
           - *tool_selection_add_calc_decision
           - *tool_selection_filter_decision

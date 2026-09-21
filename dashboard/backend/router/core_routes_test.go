@@ -387,8 +387,9 @@ func TestResolveToolsDBPathFallsBackWhenRouterContractCannotParse(t *testing.T) 
 	got := resolveToolsDBPath(&config.Config{
 		AbsConfigPath: configPath,
 		ConfigDir:     configDir,
+		ConfigBaseDir: configDir,
 	})
-	want := filepath.Join(configDir, "config", "tools_db.json")
+	want := filepath.Join(configDir, defaultToolsDBPath)
 	if got != want {
 		t.Fatalf("resolveToolsDBPath() = %q, want %q", got, want)
 	}

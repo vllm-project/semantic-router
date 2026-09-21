@@ -16,9 +16,9 @@
         "x": 0,
         "y": 0
       },
-      "id": 100,
+      "id": 1,
       "panels": [],
-      "title": "Overall Request Metrics",
+      "title": "Inference overview",
       "type": "row"
     },
     {
@@ -45,73 +45,15 @@
         }
       },
       "gridPos": {
-        "h": 6,
-        "w": 8,
+        "h": 4,
+        "w": 6,
         "x": 0,
-        "y": 1
-      },
-      "id": 1,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(increase(llm_model_requests_total[$__range]))",
-          "refId": "A"
-        }
-      ],
-      "title": "Total Requests",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "reqps"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 8,
         "y": 1
       },
       "id": 2,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
+        "colorMode": "none",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -130,12 +72,15 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(llm_model_requests_total[$__range]))",
-          "refId": "A"
+          "expr": "sum(increase(llm_request_outcomes_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\"}[$__range]))",
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
-      "title": "Average QPS",
-      "type": "stat"
+      "title": "Completed inference requests",
+      "type": "stat",
+      "description": "Terminal requests in the selected interval, including errors and cancellations. Excludes catalog, health checks and response-object operations. Prometheus increase estimates changes between scrapes."
     },
     {
       "datasource": {
@@ -161,15 +106,15 @@
         }
       },
       "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 16,
+        "h": 4,
+        "w": 6,
+        "x": 6,
         "y": 1
       },
       "id": 3,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
+        "colorMode": "none",
+        "graphMode": "none",
         "justifyMode": "auto",
         "orientation": "auto",
         "reduceOptions": {
@@ -188,12 +133,137 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(increase(llm_model_requests_total[$__range])) / (sum(increase(llm_model_requests_total[$__range])) + (sum(increase(llm_request_errors_total[$__range])) or vector(0))) * 100",
-          "refId": "A"
+          "expr": "100 * (sum(increase(llm_request_outcomes_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\",outcome=\"success\"}[$__range])) or (0 * sum(increase(llm_request_outcomes_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\"}[$__range])))) / (sum(increase(llm_request_outcomes_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\"}[$__range])) > 0)",
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
-      "title": "Success Rate",
-      "type": "stat"
+      "title": "Inference success rate",
+      "type": "stat",
+      "description": "Successful terminal inference requests / all terminal inference outcomes. Success requires a normal 2xx/3xx response without an aborted stream or processing error. No observed denominator remains No data, never zero success."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(llm_request_outcomes_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\"}[$__rate_interval]))",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "title": "Inference throughput",
+      "type": "stat",
+      "description": "Terminal inference requests per second over Grafana's scrape-aware rate interval."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(llm_model_inflight_requests{job=\"semantic-router\",instance=~\"${router_instance:regex}\"})",
+          "refId": "A",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "title": "Requests in flight",
+      "type": "stat",
+      "description": "Requests currently tracked against logical models. This is not backend queue depth or hardware utilization."
     },
     {
       "datasource": {
@@ -254,9 +324,9 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 7
+        "y": 5
       },
-      "id": 4,
+      "id": 6,
       "options": {
         "legend": {
           "calcs": [],
@@ -276,13 +346,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(llm_model_requests_total[5m]))",
-          "legendFormat": "Requests/sec",
+          "expr": "sum(rate(llm_request_outcomes_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\"}[$__rate_interval])) by (outcome)",
+          "legendFormat": "{{outcome}}",
           "refId": "A"
         }
       ],
-      "title": "Request Count Trend",
-      "type": "timeseries"
+      "title": "Inference outcomes",
+      "type": "timeseries",
+      "description": "One terminal outcome per processed inference request. Errors, cancellation, timeout and incomplete streams remain separate."
     },
     {
       "datasource": {
@@ -343,9 +414,9 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 7
+        "y": 5
       },
-      "id": 5,
+      "id": 7,
       "options": {
         "legend": {
           "calcs": [],
@@ -365,7 +436,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.5, sum(rate(llm_request_duration_seconds_bucket{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\"}[$__rate_interval])) by (le))",
           "legendFormat": "P50",
           "refId": "A"
         },
@@ -374,7 +445,7 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(llm_request_duration_seconds_bucket{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\"}[$__rate_interval])) by (le))",
           "legendFormat": "P95",
           "refId": "B"
         },
@@ -383,13 +454,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.99, sum(rate(llm_model_completion_latency_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(llm_request_duration_seconds_bucket{job=\"semantic-router\",instance=~\"${router_instance:regex}\",traffic_kind=\"inference\"}[$__rate_interval])) by (le))",
           "legendFormat": "P99",
           "refId": "C"
         }
       ],
-      "title": "Request Latency (P50/P95/P99)",
-      "type": "timeseries"
+      "title": "Inference request duration (P50/P95/P99)",
+      "type": "timeseries",
+      "description": "Time from starting request processing to its terminal outcome, including routing and response streaming. All inference outcomes contribute. Histogram estimates use finite buckets through 1800 seconds; quantiles in the overflow bucket are capped at that boundary."
     },
     {
       "collapsed": false,
@@ -397,244 +469,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 15
-      },
-      "id": 200,
-      "panels": [],
-      "title": "LLM Token Usage",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 0,
-        "y": 16
-      },
-      "id": 6,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(increase(llm_model_tokens_total[$__range]))",
-          "refId": "A"
-        }
-      ],
-      "title": "Total Tokens",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "tps"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 6,
-        "y": 16
-      },
-      "id": 7,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_model_tokens_total[$__range]))",
-          "refId": "A"
-        }
-      ],
-      "title": "Avg Tokens/sec",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "tps"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 12,
-        "y": 16
+        "y": 13
       },
       "id": 8,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_model_prompt_tokens_total[$__range]))",
-          "refId": "A"
-        }
-      ],
-      "title": "Avg Prompt Tokens/sec",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "tps"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 18,
-        "y": 16
-      },
-      "id": 9,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_model_completion_tokens_total[$__range]))",
-          "refId": "A"
-        }
-      ],
-      "title": "Avg Completion Tokens/sec",
-      "type": "stat"
+      "panels": [],
+      "title": "Recipe workflow",
+      "type": "row"
     },
     {
       "datasource": {
@@ -688,14 +528,104 @@
               }
             ]
           },
-          "unit": "tps"
+          "unit": "reqps"
         }
       },
       "gridPos": {
         "h": 8,
-        "w": 24,
+        "w": 12,
         "x": 0,
-        "y": 22
+        "y": 14
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(llm_entrypoint_requests_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (entrypoint, recipe)",
+          "legendFormat": "{{entrypoint}} \u2192 {{recipe}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Entrypoint requests by recipe",
+      "type": "timeseries",
+      "description": "Requests resolved to a configured entrypoint and recipe before selection or backend execution. This boundary is distinct from terminal outcomes above."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
       },
       "id": 10,
       "options": {
@@ -717,44 +647,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(llm_model_tokens_total[5m]))",
-          "legendFormat": "Total",
+          "expr": "sum(rate(llm_recipe_selections_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (recipe, decision, algorithm, model)",
+          "legendFormat": "{{recipe}} / {{decision}} / {{algorithm}} \u2192 {{model}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_model_prompt_tokens_total[5m]))",
-          "legendFormat": "Prompt",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_model_completion_tokens_total[5m]))",
-          "legendFormat": "Completion",
-          "refId": "C"
         }
       ],
-      "title": "Token Usage Trend",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 30
-      },
-      "id": 300,
-      "panels": [],
-      "title": "Signal Extraction",
-      "type": "row"
+      "title": "Recipe model selections",
+      "type": "timeseries",
+      "description": "Successful model selections, not completed requests or quality measurements. Logical configuration names identify each recipe's selected decision and algorithm."
     },
     {
       "datasource": {
@@ -808,14 +708,14 @@
               }
             ]
           },
-          "unit": "ops"
+          "unit": "s"
         }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 31
+        "y": 22
       },
       "id": 11,
       "options": {
@@ -837,13 +737,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(llm_signal_extraction_total[5m])) by (signal_type)",
-          "legendFormat": "{{signal_type}}",
+          "expr": "sum(rate(llm_routing_stage_duration_seconds_sum{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (recipe, stage) / (sum(rate(llm_routing_stage_duration_seconds_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (recipe, stage) > 0)",
+          "legendFormat": "{{recipe}} / {{stage}}",
           "refId": "A"
         }
       ],
-      "title": "Signal Extraction Rate by Type",
-      "type": "timeseries"
+      "title": "Recipe stage duration",
+      "type": "timeseries",
+      "description": "Observed mean duration by recipe stage. Signals includes projection evaluation; algorithm measures selection, not model generation. Means use measured sums and counts without clipping long observations to histogram bucket bounds."
     },
     {
       "datasource": {
@@ -904,7 +805,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 31
+        "y": 22
       },
       "id": 12,
       "options": {
@@ -926,13 +827,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(llm_signal_match_total[5m])) by (signal_type)",
-          "legendFormat": "{{signal_type}}",
+          "expr": "sum(rate(llm_projection_score_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (recipe, projection)",
+          "legendFormat": "{{recipe}} / {{projection}}",
           "refId": "A"
         }
       ],
-      "title": "Signal Match Rate by Type",
-      "type": "timeseries"
+      "title": "Projection evaluations",
+      "type": "timeseries",
+      "description": "Recorded projection score observations per second. A projection score is not a quality probability; inspect the request's Projection Trace in Insights for its exact score and rule inputs."
     },
     {
       "datasource": {
@@ -986,14 +888,14 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "ops"
         }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 39
+        "y": 30
       },
       "id": 13,
       "options": {
@@ -1015,13 +917,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_signal_extraction_latency_seconds_bucket[5m])) by (le, signal_type))",
+          "expr": "sum(rate(llm_signal_match_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (signal_type)",
           "legendFormat": "{{signal_type}}",
           "refId": "A"
         }
       ],
-      "title": "Signal Extraction Latency (P95) by Type",
-      "type": "timeseries"
+      "title": "Signal matches by family",
+      "type": "timeseries",
+      "description": "Recorded rule matches, not a percentage of requests. One request can match several rules and signal families."
     },
     {
       "datasource": {
@@ -1082,7 +985,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 39
+        "y": 30
       },
       "id": 14,
       "options": {
@@ -1104,13 +1007,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "topk(10, sum(rate(llm_signal_match_total[5m])) by (signal_name))",
-          "legendFormat": "{{signal_name}}",
+          "expr": "sum(rate(llm_decision_match_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (decision_name)",
+          "legendFormat": "{{decision_name}}",
           "refId": "A"
         }
       ],
-      "title": "Top 10 Matched Signals",
-      "type": "timeseries"
+      "title": "Decision rule matches",
+      "type": "timeseries",
+      "description": "All matched decision rules with recipe-scoped names. Multiple rules can match one request; the winning route appears in Recipe model selections. Rule confidence is not model-answer quality."
     },
     {
       "collapsed": false,
@@ -1118,186 +1022,12 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 47
-      },
-      "id": 400,
-      "panels": [],
-      "title": "Decision Matching",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ops"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 0,
-        "y": 48
+        "y": 38
       },
       "id": 15,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "rate(llm_decision_evaluation_total[5m])",
-          "refId": "A"
-        }
-      ],
-      "title": "Decision Evaluation Rate",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ops"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 8,
-        "y": 48
-      },
-      "id": 16,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_decision_match_total[5m]))",
-          "refId": "A"
-        }
-      ],
-      "title": "Decision Match Rate",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 8,
-        "x": 16,
-        "y": 48
-      },
-      "id": 17,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_decision_evaluation_latency_seconds_bucket[5m])) by (le))",
-          "refId": "A"
-        }
-      ],
-      "title": "Decision Evaluation Latency (P95)",
-      "type": "stat"
+      "panels": [],
+      "title": "Model responses and usage",
+      "type": "row"
     },
     {
       "datasource": {
@@ -1351,14 +1081,194 @@
               }
             ]
           },
-          "unit": "ops"
+          "unit": "tps"
         }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 54
+        "y": 39
+      },
+      "id": 16,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(llm_model_tokens_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model)",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Reported tokens by model",
+      "type": "timeseries",
+      "description": "Tokens reported by response usage. Missing usage is not measured as zero; cache responses may include reused usage. Not billed cost, physical token generation or capability. Use Evaluation for frozen-price comparisons."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 39
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(llm_model_inflight_requests{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}) by (model)",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Requests in flight by model",
+      "type": "timeseries",
+      "description": "Requests tracked against each logical model, collected at scrape time. No waiting-queue length or utilization is inferred."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 47
       },
       "id": 18,
       "options": {
@@ -1380,13 +1290,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(llm_decision_match_total[5m])) by (decision_name)",
-          "legendFormat": "{{decision_name}}",
+          "expr": "sum(rate(llm_model_completion_latency_seconds_sum{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model) / (sum(rate(llm_model_completion_latency_seconds_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model) > 0)",
+          "legendFormat": "{{model}}",
           "refId": "A"
         }
       ],
-      "title": "Decision Match Trend by Decision",
-      "type": "timeseries"
+      "title": "Response duration by model",
+      "type": "timeseries",
+      "description": "Mean duration from request-body processing through recorded response completion, including routing. This observation can include cache responses and is not the terminal-request population above."
     },
     {
       "datasource": {
@@ -1440,14 +1351,14 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "s"
         }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 54
+        "y": 47
       },
       "id": 19,
       "options": {
@@ -1469,117 +1380,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.5, sum(rate(llm_decision_confidence_bucket[5m])) by (le, decision_name))",
-          "legendFormat": "{{decision_name}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Decision Confidence (P50) by Decision",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 62
-      },
-      "id": 500,
-      "panels": [],
-      "title": "Model Distribution",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 63
-      },
-      "id": 20,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(increase(llm_model_requests_total[$__range])) by (model)",
+          "expr": "sum(rate(llm_model_first_response_observation_seconds_sum{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model) / (sum(rate(llm_model_first_response_observation_seconds_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model) > 0)",
           "legendFormat": "{{model}}",
           "refId": "A"
         }
       ],
-      "title": "Model Request Count",
-      "type": "timeseries"
+      "title": "First response observation by model",
+      "type": "timeseries",
+      "description": "Mean time from request-body processing to the first observed streaming chunk or nonstreaming response headers. Includes routing and may precede a content token; not a uniform backend time-to-first-token measurement."
     },
     {
       "datasource": {
@@ -1633,14 +1441,104 @@
               }
             ]
           },
-          "unit": "reqps"
+          "unit": "s"
         }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 71
+        "y": 55
+      },
+      "id": 20,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.5.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum(rate(llm_model_response_duration_per_output_token_seconds_sum{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model) / (sum(rate(llm_model_response_duration_per_output_token_seconds_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model) > 0)",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Response duration per output token",
+      "type": "timeseries",
+      "description": "Mean of per-response duration / reported output-token count, for responses with output tokens. Includes routing and first-response wait; not decode inter-token latency or a token-weighted aggregate."
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "ops"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 55
       },
       "id": 21,
       "options": {
@@ -1662,13 +1560,27 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(llm_model_requests_total[5m])) by (model)",
-          "legendFormat": "{{model}}",
+          "expr": "sum(rate(llm_request_errors_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model, reason)",
+          "legendFormat": "{{model}} / {{reason}}",
           "refId": "A"
         }
       ],
-      "title": "Requests by Model",
-      "type": "timeseries"
+      "title": "Recorded model errors",
+      "type": "timeseries",
+      "description": "Instrumented model error events. Use Inference outcomes for request-level denominators; these diagnostic events are not a disjoint terminal-request counter."
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 63
+      },
+      "id": 22,
+      "panels": [],
+      "title": "Plugins and response cache",
+      "type": "row"
     },
     {
       "datasource": {
@@ -1728,97 +1640,8 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 12,
-        "y": 71
-      },
-      "id": 22,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_request_errors_total[5m])) by (model, reason)",
-          "legendFormat": "{{model}}-{{reason}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Errors by Model",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
         "x": 0,
-        "y": 79
+        "y": 64
       },
       "id": 23,
       "options": {
@@ -1840,13 +1663,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_model_ttft_seconds_bucket[5m])) by (le, model))",
-          "legendFormat": "{{model}}",
+          "expr": "sum(rate(llm_plugin_execution_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (plugin_type, decision_name, status)",
+          "legendFormat": "{{plugin_type}} / {{decision_name}} / {{status}}",
           "refId": "A"
         }
       ],
-      "title": "TTFT (Time to First Token) by Model - P95",
-      "type": "timeseries"
+      "title": "Plugin executions",
+      "type": "timeseries",
+      "description": "Instrumented plugin executions and recorded outcomes. Missing series do not imply success or that every configured plugin ran."
     },
     {
       "datasource": {
@@ -1907,7 +1731,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 79
+        "y": 64
       },
       "id": 24,
       "options": {
@@ -1929,26 +1753,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_model_tpot_seconds_bucket[5m])) by (le, model))",
-          "legendFormat": "{{model}}",
+          "expr": "sum(rate(llm_plugin_execution_latency_seconds_sum{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (plugin_type) / (sum(rate(llm_plugin_execution_latency_seconds_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (plugin_type) > 0)",
+          "legendFormat": "{{plugin_type}}",
           "refId": "A"
         }
       ],
-      "title": "TPOT (Time per Output Token) by Model - P95",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 87
-      },
-      "id": 550,
-      "panels": [],
-      "title": "Routing and Model Selection",
-      "type": "row"
+      "title": "Plugin duration",
+      "type": "timeseries",
+      "description": "Mean measured duration of instrumented plugin executions. Unknown or absent observations stay absent."
     },
     {
       "datasource": {
@@ -2002,14 +1814,14 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "ops"
         }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 88
+        "y": 72
       },
       "id": 25,
       "options": {
@@ -2031,31 +1843,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(llm_model_routing_latency_seconds_bucket[5m])) by (le))",
-          "legendFormat": "P50",
+          "expr": "sum(rate(llm_response_cache_operation_duration_seconds_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\",operation=~\"lookup_exact|lookup_semantic\"}[$__rate_interval])) by (backend, operation, status)",
+          "legendFormat": "{{backend}} / {{operation}} / {{status}}",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_model_routing_latency_seconds_bucket[5m])) by (le))",
-          "legendFormat": "P95",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.99, sum(rate(llm_model_routing_latency_seconds_bucket[5m])) by (le))",
-          "legendFormat": "P99",
-          "refId": "C"
         }
       ],
-      "title": "Router Routing Latency (P50/P95/P99)",
-      "type": "timeseries"
+      "title": "Cache lookup outcomes",
+      "type": "timeseries",
+      "description": "Measured response-cache lookup hit, miss and error operations. Exact and semantic lookups stay distinct. One request can perform multiple lookups; these counts do not define a request-level hit percentage."
     },
     {
       "datasource": {
@@ -2116,7 +1911,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 88
+        "y": 72
       },
       "id": 26,
       "options": {
@@ -2138,373 +1933,577 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_model_selection_duration_seconds_bucket[5m])) by (le, method, tier))",
-          "legendFormat": "{{method}} {{tier}}",
+          "expr": "sum(rate(llm_response_cache_operation_duration_seconds_sum{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (backend, operation) / (sum(rate(llm_response_cache_operation_duration_seconds_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (backend, operation) > 0)",
+          "legendFormat": "{{backend}} / {{operation}}",
           "refId": "A"
         }
       ],
-      "title": "Model Selection Duration (P95)",
-      "type": "timeseries"
+      "title": "Cache operation duration",
+      "type": "timeseries",
+      "description": "Mean wall-clock duration measured by the response-cache service. Uses timed canonical operations, not legacy backend callbacks that can report placeholder zero durations."
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
+      "collapsed": true,
       "gridPos": {
-        "h": 8,
-        "w": 12,
+        "h": 1,
+        "w": 24,
         "x": 0,
-        "y": 96
+        "y": 80
       },
       "id": 27,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 81
+          },
+          "id": 28,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_model_cost_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model, currency)",
+              "legendFormat": "{{model}} / {{currency}} per second",
+              "refId": "A"
+            }
           ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
+          "title": "Known model cost rate",
+          "type": "timeseries",
+          "description": "Known configured-price amounts only, not invoices or hardware cost. Unknown usage or prices are omitted; a known subtotal does not prove complete accounting. Currencies remain separate; no savings percentage is inferred. Each series is currency units per second attributed to a logical model. Do not add this series to Looper attempt cost: accounting scopes can overlap."
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(increase(llm_model_selection_total[$__range])) by (method, tier)",
-          "legendFormat": "{{method}} {{tier}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Selection Count by Method and Tier",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "tps"
             }
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 81
           },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 96
-      },
-      "id": 28,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(llm_model_inflight_requests) by (model)",
-          "legendFormat": "{{model}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Inflight Requests by Model",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
+          "id": 29,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
             },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
             }
           },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ops"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 104
-      },
-      "id": 29,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_request_errors_total[5m])) by (reason)",
-          "legendFormat": "{{reason}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Request Errors by Reason",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "bars",
-            "fillOpacity": 80,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_model_prompt_tokens_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model)",
+              "legendFormat": "{{model}} / prompt",
+              "refId": "A"
             },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_model_completion_tokens_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (model)",
+              "legendFormat": "{{model}} / completion",
+              "refId": "B"
             }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 104
-      },
-      "id": 30,
-      "options": {
-        "legend": {
-          "calcs": [
-            "lastNotNull"
           ],
-          "displayMode": "table",
-          "placement": "right",
-          "showLegend": true
+          "title": "Reported prompt and completion tokens",
+          "type": "timeseries",
+          "description": "Reported usage breakdown per second. Responses with only total-token usage do not enter this breakdown. Prompt tokens can include cache reads/writes; these series alone do not establish billed-token buckets."
         },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "topk(10, sum(increase(llm_request_errors_total[$__range])) by (model))",
-          "legendFormat": "{{model}}",
-          "refId": "A"
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "ops"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 89
+          },
+          "id": 30,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_looper_attempts_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (algorithm, stage, status)",
+              "legendFormat": "{{algorithm}} / {{stage}} / {{status}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Looper attempt outcomes",
+          "type": "timeseries",
+          "description": "Detailed attempt instrumentation currently covers Confidence execution. An absent series for another algorithm does not prove zero attempts. One terminal event per instrumented attempt. Internal model/verifier attempts are distinct from public inference request outcomes."
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 89
+          },
+          "id": 31,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_looper_attempt_duration_seconds_sum{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (algorithm, stage, status) / (sum(rate(llm_looper_attempt_duration_seconds_count{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (algorithm, stage, status) > 0)",
+              "legendFormat": "{{algorithm}} / {{stage}} / {{status}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Looper attempt duration",
+          "type": "timeseries",
+          "description": "Detailed attempt instrumentation currently covers Confidence execution. An absent series for another algorithm does not prove zero attempts. Mean measured end-to-end attempt duration by stage and outcome. Milliseconds are converted to seconds by the emitter."
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 97
+          },
+          "id": 32,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_looper_attempt_cost_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (algorithm, stage, currency)",
+              "legendFormat": "{{algorithm}} / {{stage}} / {{currency}} per second",
+              "refId": "A"
+            }
+          ],
+          "title": "Known Looper attempt cost rate",
+          "type": "timeseries",
+          "description": "Detailed attempt instrumentation currently covers Confidence execution. An absent series for another algorithm does not prove zero attempts. Known configured-price amounts only, not invoices or hardware cost. Unknown usage or prices are omitted; a known subtotal does not prove complete accounting. Currencies remain separate; no savings percentage is inferred. Each series is known currency units per second. Do not sum with model cost counters."
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "tooltip": false,
+                  "viz": false,
+                  "legend": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "never",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "tps"
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 97
+          },
+          "id": 33,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.5.1",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(rate(llm_looper_attempt_tokens_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (algorithm, stage, token_type)",
+              "legendFormat": "{{algorithm}} / {{stage}} / {{token_type}}",
+              "refId": "A"
+            }
+          ],
+          "title": "Looper attempt tokens",
+          "type": "timeseries",
+          "description": "Detailed attempt instrumentation currently covers Confidence execution. An absent series for another algorithm does not prove zero attempts. Reported prompt/completion usage for internal model and verifier stages. These attempt observations may overlap model usage counters and must not be added to them."
         }
       ],
-      "title": "Top Failing Models",
-      "type": "timeseries"
+      "title": "Accounting and MoM execution",
+      "type": "row"
     },
     {
       "collapsed": false,
@@ -2512,398 +2511,11 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 112
-      },
-      "id": 575,
-      "panels": [],
-      "title": "Windowed Model Health",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 113
-      },
-      "id": 31,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "llm_model_latency_windowed_seconds",
-          "legendFormat": "{{model}} {{time_window}} avg",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "llm_model_latency_p95_windowed_seconds",
-          "legendFormat": "{{model}} {{time_window}} p95",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "llm_model_latency_p99_windowed_seconds",
-          "legendFormat": "{{model}} {{time_window}} p99",
-          "refId": "C"
-        }
-      ],
-      "title": "Windowed Model Latency",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "percentunit"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 113
-      },
-      "id": 32,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "llm_model_error_rate_windowed",
-          "legendFormat": "{{model}} {{time_window}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Windowed Model Error Rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 121
-      },
-      "id": 33,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "llm_model_queue_depth_estimated",
-          "legendFormat": "{{model}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Estimated Queue Depth by Model",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 121
+        "y": 81
       },
       "id": 34,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "llm_model_utilization_percentage",
-          "legendFormat": "{{model}} {{time_window}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Model Utilization by Window",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 129
-      },
-      "id": 590,
       "panels": [],
-      "title": "Session and Cache Warmth",
+      "title": "Telemetry health",
       "type": "row"
     },
     {
@@ -2958,14 +2570,14 @@
               }
             ]
           },
-          "unit": "ops"
+          "unit": "short"
         }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 130
+        "y": 82
       },
       "id": 35,
       "options": {
@@ -2987,13 +2599,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "sum(rate(llm_session_model_transitions_total[5m])) by (from_model, to_model)",
-          "legendFormat": "{{from_model}} to {{to_model}}",
+          "expr": "up{job=~\"semantic-router|jaeger\"}",
+          "legendFormat": "{{job}} / {{instance}}",
           "refId": "A"
         }
       ],
-      "title": "Session Model Transitions",
-      "type": "timeseries"
+      "title": "Telemetry scrape health",
+      "type": "timeseries",
+      "description": "All router and Jaeger scrape targets, independent of the Router instance filter. 1 means scrape success, 0 means failure; missing means no scrape evidence. Does not prove inference traces exist."
     },
     {
       "datasource": {
@@ -3047,14 +2660,14 @@
               }
             ]
           },
-          "unit": "percentunit"
+          "unit": "ops"
         }
       },
       "gridPos": {
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 130
+        "y": 82
       },
       "id": 36,
       "options": {
@@ -3076,565 +2689,14 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.50, sum(rate(llm_cache_warmth_estimate_bucket[5m])) by (le, model))",
-          "legendFormat": "{{model}} p50",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_cache_warmth_estimate_bucket[5m])) by (le, model))",
-          "legendFormat": "{{model}} p95",
-          "refId": "B"
-        }
-      ],
-      "title": "Cache Warmth Estimate (P50/P95)",
-      "type": "timeseries"
-    },
-    {
-      "collapsed": false,
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 138
-      },
-      "id": 600,
-      "panels": [],
-      "title": "Cache Plugin Metrics",
-      "type": "row"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "percent"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 0,
-        "y": 139
-      },
-      "id": 37,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_cache_plugin_hits_total[5m])) by (decision_name) / (sum(rate(llm_cache_plugin_hits_total[5m])) by (decision_name) + sum(rate(llm_cache_plugin_misses_total[5m])) by (decision_name)) * 100",
-          "legendFormat": "{{decision_name}}",
+          "expr": "sum(rate(llm_trace_export_spans_total{job=\"semantic-router\",instance=~\"${router_instance:regex}\"}[$__rate_interval])) by (result)",
+          "legendFormat": "{{result}}",
           "refId": "A"
         }
       ],
-      "title": "Cache Hit Rate by Decision",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ops"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 139
-      },
-      "id": 38,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_cache_plugin_hits_total[$__range])) by (decision_name)",
-          "legendFormat": "{{decision_name}} - hits",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_cache_plugin_misses_total[$__range])) by (decision_name)",
-          "legendFormat": "{{decision_name}} - misses",
-          "refId": "B"
-        }
-      ],
-      "title": "Cache Hits/Misses by Decision",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "thresholds"
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 6,
-        "x": 0,
-        "y": 147
-      },
-      "id": 39,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(llm_cache_entries_total)",
-          "refId": "A"
-        }
-      ],
-      "title": "Current Cache Items (Total)",
-      "type": "stat"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        }
-      },
-      "gridPos": {
-        "h": 6,
-        "w": 18,
-        "x": 6,
-        "y": 147
-      },
-      "id": 40,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "llm_cache_entries_total",
-          "legendFormat": "{{backend}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Cache Items by Backend",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "ops"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 153
-      },
-      "id": 41,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_cache_operations_total{operation=\"add_entry\", status=\"success\"}[$__range])) by (backend)",
-          "legendFormat": "{{backend}} - add",
-          "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_cache_operations_total{operation=\"cleanup_expired\", status=\"success\"}[$__range])) by (backend)",
-          "legendFormat": "{{backend}} - expired",
-          "refId": "B"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "sum(rate(llm_cache_operations_total{operation=\"evict\", status=\"success\"}[$__range])) by (backend)",
-          "legendFormat": "{{backend}} - evicted",
-          "refId": "C"
-        }
-      ],
-      "title": "Cache Item Operations (add/cleanup_expired/evict)",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "tooltip": false,
-              "viz": false,
-              "legend": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "s"
-        }
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 24,
-        "x": 0,
-        "y": 161
-      },
-      "id": 42,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "none"
-        }
-      },
-      "pluginVersion": "11.5.1",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${DS_PROMETHEUS}"
-          },
-          "expr": "histogram_quantile(0.95, sum(rate(llm_cache_operation_duration_seconds_bucket[$__range])) by (backend, operation, le))",
-          "legendFormat": "{{backend}} - {{operation}}",
-          "refId": "A"
-        }
-      ],
-      "title": "Cache Operation Latency (p95)",
-      "type": "timeseries"
+      "title": "Router trace export outcomes",
+      "type": "timeseries",
+      "description": "Spans in exporter batches. Excludes unsampled and SDK queue-dropped spans and does not prove durable collector storage. No data may mean no batch was exported in this interval."
     }
   ],
   "refresh": "10s",
@@ -3663,6 +2725,26 @@
         "regex": "",
         "skipUrlSync": false,
         "type": "datasource"
+      },
+      {
+        "name": "router_instance",
+        "label": "Router instance",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "query": "label_values(up{job=\"semantic-router\"}, instance)",
+        "definition": "label_values(up{job=\"semantic-router\"}, instance)",
+        "refresh": 1,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "options": []
       }
     ]
   },
@@ -3672,8 +2754,9 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "vLLM Semantic Router Dashboard",
+  "title": "vLLM Semantic Router",
+  "description": "Measured inference outcomes, recipe routing, reported model usage, plugins and telemetry health. Missing observations remain No data.",
   "uid": "vllm-semantic-router",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

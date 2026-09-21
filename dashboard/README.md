@@ -15,6 +15,11 @@ Use it to:
 - manage security policies, ML selection workflows, MCP tools, and optional
   OpenClaw workers when those features are enabled.
 
+Playground starts with the default route advertised by the Router. Named recipe
+entrypoints and orchestration aliases remain selectable alongside it; adding a
+Fusion route does not change ordinary chat's default. If the Router advertises
+only explicit entrypoints, Playground selects the first available entrypoint.
+
 The Dashboard is a control plane, not an inference proxy. Applications should
 send inference requests to Envoy.
 
@@ -103,6 +108,7 @@ variables. Defaults are defined in
 | `DASHBOARD_STATIC_DIR` | Built frontend assets. |
 | `ROUTER_CONFIG_PATH` | Canonical Router YAML read or updated by config APIs. |
 | `DASHBOARD_CONFIG_DIR` | Directory for config versions and related state. |
+| `VLLM_SR_CONFIG_BASE_DIR` | Absolute shared asset root for relative tools database paths; defaults to the process working directory. The development launcher sets the repository root and the CLI sets `/app`. |
 | `TARGET_ROUTER_API_URL` | Router management API; default `http://localhost:8080`. |
 | `TARGET_ROUTER_METRICS_URL` | Router Prometheus endpoint. |
 | `TARGET_ENVOY_URL` | Inference endpoint used by Playground and route probes. |
@@ -122,7 +128,7 @@ Feature controls:
 | `SR_BENCH_TOKEN_ENV` | Environment variable containing the service token; default `SR_BENCH_TOKEN`. The browser never receives this token. |
 | `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
-| `ML_SERVICE_URL` | Use an external ML service instead of local subprocesses. |
+| `ML_SERVICE_URL` | Use an ML service instead of local subprocesses; co-located sidecars use `http://127.0.0.1:8686`. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
@@ -258,6 +264,10 @@ The frontend does not store, copy, or forward it.
   on its own, and the server recomputes the expected value from the session id
   inside the session token rather than reading the cookie back, so planting one
   achieves nothing without the session cookie as well.
+  The embedded Grafana document loads a same-origin request adapter before its
+  application scripts. It performs the same CSRF-cookie echo for Grafana API
+  writes (including Prometheus queries); it does not exempt those requests from
+  the Dashboard's authentication, origin, CSRF, or permission checks.
 - **`SameSite=Lax` is deliberate.** `Strict` would withhold the cookie from
   top-level navigation into the dashboard, so following a link from chat or an
   alert would land on the login page despite a valid session. `Lax` still
