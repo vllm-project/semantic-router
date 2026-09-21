@@ -84,14 +84,17 @@ optimization:
 
 - **Prefer stickiness where continuity matters.** Session-scoped learning protects an
   established choice by default (built-in initialization defaults to protection on and
-  online adaptation off), so send a stable session or conversation identity for it to hold.
+  online adaptation off), but only when the Router can identify the conversation: the
+  default `scope: conversation` requires **both** `x-session-id` and `x-conversation-id`.
+  Sending either header alone leaves the request without a retained model. Session-only
+  identification applies to an explicit `scope: session`.
 - **Switch only on an explicit escalation policy.** "Cheaper" is not by itself a reason
   to move a conversation.
 - **Verify continuity, not just delivery.** Check the model actually used on
   continuation, tool completion, correction, model failure and conversation reset — an
   observed recommendation is not an applied hold.
 
-→ [Recipes](tutorials/global/recipes)
+→ [Session identification](api/session-identification) · [Recipes](tutorials/global/recipes)
 
 ## How do operators debug a bad outcome?
 
