@@ -29,6 +29,10 @@ class ReviewedPlanChangedError(ValueError):
     """A new submission differs from its reviewed hash before any dispatch."""
 
 
+class EngineClosedError(RuntimeError):
+    """Shutdown rejected a new attempt before persistence or dispatch."""
+
+
 class Context:
     def __init__(self, engine, run_id, manifest, case, target, cancel, deadline):
         self.engine = engine
@@ -225,6 +229,8 @@ class Engine:
     def __init__(self, store):
         self.store = store
         self.lock = threading.RLock()
+        self._admission = threading.Lock()
+        self._closed = False
         self.cancels = {}
         self.threads = {}
         self.spent = {}
@@ -232,6 +238,24 @@ class Engine:
         self.user_cancelled = set()
         self.first_failures = {}
         self.store.recover()
+
+    def close(self):
+        """Close admission and cancel every admitted worker without joining it."""
+        with self._admission:
+            self._closed = True
+            with self.lock:
+                for cancel in self.cancels.values():
+                    cancel.set()
+
+    def _admit(self, frozen, owner, request_key):
+        """Under the admission lock, reconcile an existing run or allow creation."""
+        if request_key and (existing := self.store.request(owner, request_key)):
+            if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
+                raise ValueError("idempotency key is already bound to a different plan")
+            return existing
+        if self._closed:
+            raise EngineClosedError("Evaluation service is shutting down")
+        return None
 
     def start(
         self,
@@ -241,26 +265,30 @@ class Engine:
         recovery=False,
         *,
         actor_role="local",
+        manifest_policy=None,
     ):
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest must be an object")
         if manifest.get("recovery") and not recovery:
             raise ValueError("Recovery lineage requires the explicit recovery endpoint")
-        frozen = plan(manifest)
-        with self.store.lock:
-            if request_key and (existing := self.store.request(owner, request_key)):
-                if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
-                    raise ValueError(
-                        "idempotency key is already bound to a different plan"
-                    )
+        frozen = plan(manifest, policy=manifest_policy)
+        with self._admission:
+            if existing := self._admit(frozen, owner, request_key):
                 return existing
-            if (
-                "plan_sha256" in manifest
-                and manifest["plan_sha256"] != frozen["plan_sha256"]
-            ):
-                raise ReviewedPlanChangedError(
-                    "Reviewed plan changed; review a new frozen plan before starting"
-                )
-            provenance = capture_runner(frozen)
-            validate_native_recipes(frozen, provenance)
+        if (
+            "plan_sha256" in manifest
+            and manifest["plan_sha256"] != frozen["plan_sha256"]
+        ):
+            raise ReviewedPlanChangedError(
+                "Reviewed plan changed; review a new frozen plan before starting"
+            )
+        provenance = capture_runner(frozen)
+        validate_native_recipes(frozen, provenance)
+        # Shutdown cannot miss a persisted run awaiting worker registration.
+        # Store.create releases its lock before we take the accounting lock.
+        with self._admission:
+            if existing := self._admit(frozen, owner, request_key):
+                return existing
             run, created = self.store.create(
                 frozen,
                 owner,
@@ -268,14 +296,14 @@ class Engine:
                 provenance=provenance,
                 actor_role=actor_role,
             )
-        if created:
-            cancel = threading.Event()
-            with self.lock:
-                self.cancels[run["id"]] = cancel
+            if created:
+                cancel = threading.Event()
                 worker = threading.Thread(
                     target=self._run, args=(run["id"], frozen, cancel), daemon=True
                 )
-                self.threads[run["id"]] = worker
+                with self.lock:
+                    self.cancels[run["id"]] = cancel
+                    self.threads[run["id"]] = worker
                 worker.start()
         return self.store.get(run["id"])
 

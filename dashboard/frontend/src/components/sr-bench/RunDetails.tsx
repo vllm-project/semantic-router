@@ -29,6 +29,7 @@ import RunLineage from './RunLineage'
 import RunElapsed from './RunElapsed'
 import RunActivity from './RunActivity'
 import RecipeEvidence from './RecipeEvidence'
+import DatasetExposure from './DatasetExposure'
 import { RunStatus } from './RunList'
 import styles from './SrBench.module.css'
 import controls from './BenchControls.module.css'
@@ -378,6 +379,14 @@ export default function RunDetails({
             aria-labelledby="run-tab-results"
             hidden={section !== 'results'}
           >
+            <DatasetExposure
+              benchmarks={
+                report?.provenance.dataset?.benchmarks ?? run.manifest.dataset?.benchmarks
+              }
+              preparation={
+                report?.provenance.dataset?.preparation ?? run.manifest.dataset?.preparation
+              }
+            />
             {run.manifest.mode === 'preview' && (
               <p className={styles.notice}>
                 Route preview only. This run provides routing diagnostics, not a capability score.
@@ -418,7 +427,9 @@ export default function RunDetails({
             {section === 'results' &&
               report &&
               run.status === 'completed' &&
-              run.manifest.mode === 'live' && <QualityCostChart points={chartPoints} />}
+              run.manifest.mode === 'live' && (
+                <QualityCostChart points={chartPoints} costBasis="subject" />
+              )}
             <h3 id="run-targets">Target comparison</h3>
             <p className={styles.muted}>
               Costs apply frozen per-token prices to recorded usage; they are not invoice or

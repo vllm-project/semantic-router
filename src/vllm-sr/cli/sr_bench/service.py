@@ -19,9 +19,9 @@ from cli.runtime_env_names import runtime_env_name_is_allowed
 from . import VERSION
 from .accounting import reconcile_usage
 from .candidate_plans import candidate_manifest, validate_candidate_protocol
-from .contracts import catalog, plan, planned_cells, resolve_dataset
+from .contracts import catalog, plan, planned_cells
 from .datasets import DatasetReader
-from .engine import Engine, ReviewedPlanChangedError
+from .engine import Engine, EngineClosedError, ReviewedPlanChangedError
 from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
 from .offline import export_training, regrade, replay
 from .recovery import RecoveryPlanError, recover, recovery_plan
@@ -80,6 +80,10 @@ class Server(ThreadingHTTPServer):
         )
         super().__init__(address, Handler)
 
+    def shutdown(self):
+        self.engine.close()
+        super().shutdown()
+
 
 class Handler(BaseHTTPRequestHandler):
     server_version = "sr-bench/1.0"
@@ -97,7 +101,7 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def _plan(self, manifest, role, actor):
-        frozen = plan(self._manifest(manifest, role))
+        frozen = plan(manifest, policy=lambda resolved: self._manifest(resolved, role))
         if membership := frozen.get("experiment"):
             self.server.experiments.get(
                 membership["id"], None if role == "admin" else actor
@@ -176,7 +180,6 @@ class Handler(BaseHTTPRequestHandler):
             return manifest
         if not isinstance(manifest, dict):
             raise ValueError("manifest must be an object")
-        manifest = resolve_dataset(manifest)
         cases = manifest.get("cases")
         if (
             not isinstance(cases, list)
@@ -351,6 +354,8 @@ class Handler(BaseHTTPRequestHandler):
                 )
             if route == ["datasets", "compose"] and method == "POST":
                 body = self._body()
+                if set(body) - {"dataset_ids", "benchmarks"}:
+                    raise ValueError("Unsupported dataset compose fields")
                 return self._send(
                     200,
                     {
@@ -398,10 +403,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(
                     201,
                     self.server.engine.start(
-                        self._manifest(manifest, role),
+                        manifest,
                         actor,
                         body.get("idempotency_key"),
                         actor_role=role,
+                        manifest_policy=lambda resolved: self._manifest(resolved, role),
                     ),
                 )
             if route == ["replays"] and method == "POST":
@@ -530,6 +536,16 @@ class Handler(BaseHTTPRequestHandler):
                     if action == "cancel" and method == "POST":
                         return self._send(200, self.server.engine.cancel(run_id))
             self._send(404, {"error": "not found"})
+        except EngineClosedError as exc:
+            self._send(
+                503,
+                {
+                    "error": str(exc),
+                    "code": "service_stopping",
+                    "dispatch_started": False,
+                    "model_requests": 0,
+                },
+            )
         except ReviewedPlanChangedError as exc:
             self._send(
                 400,
@@ -614,8 +630,6 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
     )
 
     def stop(signum, frame):
-        for event in list(server.engine.cancels.values()):
-            event.set()
         threading.Thread(target=server.shutdown, daemon=True).start()
 
     signal.signal(signal.SIGTERM, stop)
@@ -623,6 +637,7 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
     try:
         server.serve_forever(poll_interval=0.2)
     finally:
+        server.engine.close()
         server.server_close()
         for thread in list(server.engine.threads.values()):
             thread.join(timeout=5)

@@ -233,7 +233,7 @@ fn test_dense_layer_forward_tanh() {
     let output_vec: Vec<f32> = output.flatten_all().unwrap().to_vec1().unwrap();
     for &val in output_vec.iter() {
         assert!(
-            val >= -1.0 && val <= 1.0,
+            (-1.0..=1.0).contains(&val),
             "Tanh output {} out of range [-1, 1]",
             val
         );

@@ -119,6 +119,63 @@ are hashed. `--limit` creates a labeled custom subset. Never edit a prepared
 file in place. New questions, selection rules or source bytes create a new
 identity.
 
+### Reserve named evaluation history
+
+For repeated evaluations, prepare native sources with `--source-partition` to
+record their upstream partition and canonical task identity. This partition is
+the source's `test`, `dev`, or other upstream task collection; it is independent
+of sr-bench's evaluation split and seed. Use the same partition and exact source
+provenance throughout a history comparison.
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare \
+  --benchmark mmlu-pro --profile quick --source-partition test > quick.json
+# Use the dataset ID returned above; --dataset and --run may be repeated.
+vllm-sr benchmark --store ./data/sr-bench dataset exclusions \
+  --dataset DATASET_ID --run RUN_ID --output history.json
+vllm-sr benchmark --store ./data/sr-bench dataset prepare \
+  --benchmark mmlu-pro --profile standard --source-partition test \
+  --exclusion-snapshot history.json --evaluation-role holdout > standard.json
+```
+
+Snapshot compilation reads only explicitly named prepared datasets and frozen
+run manifests from the selected local store. It reserves **all memberships**,
+including planned or failed cases; membership does not establish that a model
+generated a response or a person read it. The immutable snapshot contains task
+identity hashes, reference digests, and source provenance, without question or
+answer bodies. Named-reference reads are bounded; oversized inputs fail without
+publishing a selection.
+
+Standard keeps the existing deterministic ordering and excludes the union of
+its original Quick membership and the frozen history **once**. Preparation
+either produces the exact requested count or fails before publishing a dataset.
+It never fills a shortfall with excluded tasks or changes the profile count.
+The snapshot and per-family counts become part of the new dataset identity;
+combining datasets and freezing plans preserve that provenance. Existing
+artifacts are unchanged. Preparation without the new options retains its
+original behavior and makes no additional history qualification.
+
+This first identity policy requires exact source bytes, revision, normalizer and
+upstream partition, with native task IDs (including the domain for τ³). GPQA
+uses the full hash of its native, unformatted question within that source. Older
+prepared artifacts without this identity, normalized imports, missing native
+IDs, and cross-source or cross-revision mappings fail explicitly; aliases and
+message hashes do not establish equivalence. They need separate provenance
+reconciliation before they can support an exclusion claim.
+
+Freeze `--evaluation-role retest` explicitly for a family that is being retested.
+It can be used without a history snapshot and does not claim disjointness. A
+snapshot, if supplied, still excludes its memberships; retest is never an
+automatic fallback after exhaustion. An explicitly prepared GPQA retest can
+remain in the default protocol with a retest disclosure. Its aggregate must
+remain separate from any claimed unseen aggregate. The preparation role is
+separate from the existing evaluation split label.
+
+Named-history exclusion is a finite local provenance claim. It does not certify
+complete browsing or human exposure history, or absence of upstream contamination.
+Reports retain that limitation and identify explicit retest families; these
+options do not introduce a new unseen-only scoring aggregate.
+
 Register operator-owned targets for Dashboard:
 
 ```bash
@@ -407,10 +464,14 @@ its subset label and is not the full score.
 Paired comparison selects the strongest observed single model by the same
 aggregate over identical cases and records that selection.
 Exact weighted-quality ties prefer the single with the lowest complete known
-subject cost, then a stable target ID. The report lists every tied-best single.
-If any tied-best single has incomplete cost, savings remain unknown. Savings are
-`100 × (1 − candidate subject cost / baseline subject cost)` with complete,
-compatible accounting. A small dev sample shows direction; a quality
+total cost, then a stable target ID. The report lists every tied-best single.
+If any tied-best single has incomplete total cost, savings remain unknown.
+Comparisons report **total cost savings** across subject and judge/simulator
+calls, with **subject cost savings** shown separately. Both use
+`100 × (1 − candidate cost / baseline cost)` with the same scope and complete,
+compatible accounting. The API names these `total_cost_saving_percent` and
+`subject_cost_saving_percent`; cache-neutral comparisons remain subject-only.
+A small dev sample shows direction; a quality
 non-inferiority claim needs a prespecified margin and a holdout confidence
 interval. Token-equivalent self-hosted prices do not establish GPU invoice savings.
 
@@ -420,6 +481,11 @@ including all-wrong samples. The stratified bootstrap interval is retained as a
 diagnostic; a degenerate `[0, 0]` bootstrap from a small tied sample does not prove
 equivalence. Neither interval includes selection of the strongest observed
 baseline, tuning selection or dataset contamination uncertainty.
+
+Before reserving a Standard holdout, exclude previously generated, inspected or
+tuned-on cases by stable ID and input fingerprint. A different seed or a
+`holdout` split label does not establish independence. Retests remain useful,
+but report their exposure separately from unseen validation.
 
 Dashboard opens on **Runs**, with filters for name/model, status and mode. Each
 row shows the completed denominator, failures, persisted update time and target

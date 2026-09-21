@@ -133,6 +133,8 @@ type nodeEvaluation struct {
 
 type EvaluationDiagnostics struct {
 	AppliedUnknownPolicies map[string]string `json:"applied_unknown_policies,omitempty"`
+	// Ranking explains how the winner was ordered against the rest.
+	Ranking *RankingTrace `json:"ranking,omitempty"`
 }
 
 type decisionEvaluations struct {
@@ -257,12 +259,22 @@ func (e *DecisionEngine) evaluateDecisions(
 			continue
 		}
 		if resolved.evaluation.state == evaluationTrue {
+			// A decision ranks by confidence only when its evidence is one
+			// reported score of one declared kind. An error policy that
+			// manufactured the match disqualifies it, and so does a tree that
+			// reports a different kind depending on which branch of an OR
+			// matched. A catch-all carries no evidence and ranks last anyway.
+			catchAll := isCatchAllRules(decision.Rules)
+			scored := resolved.evaluation.scored && !resolved.evaluation.onError
+			if !catchAll && len(config.DeclaredScoreKinds(&decision.Rules)) != 1 {
+				scored = false
+			}
 			results = append(results, DecisionResult{
 				Decision:         decision,
 				Confidence:       resolved.evaluation.confidence,
 				MatchedRules:     resolved.evaluation.matchedRules,
-				ConfidenceScored: resolved.evaluation.scored,
-				CatchAll:         isCatchAllRules(decision.Rules),
+				ConfidenceScored: scored,
+				CatchAll:         catchAll,
 				ScoreKind:        resolved.evaluation.kind,
 			})
 		}
@@ -281,7 +293,7 @@ func (e *DecisionEngine) evaluateDecisions(
 		return output
 	}
 
-	output.result = e.selectBestDecision(results)
+	output.result, output.diagnostics.Ranking = e.selectBestDecision(results)
 	return output
 }
 
@@ -430,7 +442,7 @@ func (e *DecisionEngine) evalLeaf(
 	return nodeEvaluation{
 		state:        evaluationTrue,
 		confidence:   confidence,
-		scored:       evidence == 1 && reported,
+		scored:       evidence == 1 && reported && kind != config.ScoreKindUnknown,
 		matchedRules: []string{formatMatchedRule(node)},
 		onError:      unresolved,
 		kind:         kind,

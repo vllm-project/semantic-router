@@ -197,10 +197,14 @@ test-multimodal-models: rust-ci download-models-multimodal-test ## Require exist
 		--manifest "$(MULTIMODAL_TEST_MANIFEST)" --output "$(MULTIMODAL_TEST_REPORT_DIR)" \
 		--device "$(MODEL_TEST_DEVICE)"
 
-download-models-image-calibration: ## Provision the frozen image-threshold calibration checkpoint
-	@cd src/semantic-router && go run ./tools/model-test-assets \
-		--provider candle --suite image-calibration \
-		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MODEL_TEST_MANIFEST)" --download
+VELA_OMNI_CALIBRATION_ARTIFACTS ?= $(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts
+
+download-models-image-calibration: ## Prepare the pinned Nano ONNX artifact and attest its manifest
+	@docker build -f tools/models/vela_omni/Dockerfile \
+		--output "type=local,dest=$(VELA_OMNI_CALIBRATION_ARTIFACTS)" .
+	@python3 tools/ci/image_calibration.py --prepare-manifest \
+		--artifact "$(VELA_OMNI_CALIBRATION_ARTIFACTS)/vela-1.0-omni-nano" \
+		--manifest "$(MODEL_TEST_MANIFEST)"
 
 verify-image-routing-calibration: rust-ci download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
 	@export $(NATIVE_ENV) && python3 tools/ci/image_calibration.py \

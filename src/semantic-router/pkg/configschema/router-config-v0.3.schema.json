@@ -949,9 +949,6 @@
         "variant": {
           "type": "string"
         },
-        "protocol": {
-          "type": "string"
-        },
         "on_error": {
           "type": "string"
         },
@@ -2440,6 +2437,24 @@
           "type": "number"
         },
         "candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_image_candidates": {
           "items": {
             "type": "string"
           },

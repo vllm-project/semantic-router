@@ -210,9 +210,12 @@ def test_report_and_comparison_use_correction_and_cache_neutral_cost(tmp_path, k
     reconcile_usage(store, baseline)
     reconcile_usage(store, candidate)
     result = compare(store, baseline, candidate)["comparisons"][0]
-    assert result["baseline_cost_usd"] == pytest.approx(0.0001375)
-    assert result["candidate_cost_usd"] == pytest.approx(0.000058)
-    assert result["cost_saving_percent"] > 50
+    assert result["baseline_subject_cost_usd"] == pytest.approx(0.0001375)
+    assert result["candidate_subject_cost_usd"] == pytest.approx(0.000058)
+    assert result["subject_cost_saving_percent"] > 50
+    assert result["baseline_total_cost_usd"] == result["baseline_subject_cost_usd"]
+    assert result["candidate_total_cost_usd"] == result["candidate_subject_cost_usd"]
+    assert result["total_cost_saving_percent"] == result["subject_cost_saving_percent"]
     assert result["cache_neutral_baseline_cost_usd"] == pytest.approx(0.00013)
     assert result["cache_neutral_candidate_cost_usd"] == pytest.approx(0.00013)
     assert result["cache_neutral_cost_saving_percent"] == 0

@@ -13,7 +13,8 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 from ci_plan import github_outputs, make_plan, previous_release  # noqa: E402
 from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
-from run_model_tests import CLASSIFIER_TESTS, MULTIMODAL_CLASSIFIER_TESTS  # noqa: E402
+from image_calibration import OWNED_OMNI_TESTS  # noqa: E402
+from run_model_tests import CLASSIFIER_TESTS  # noqa: E402
 from verification_catalog import (  # noqa: E402
     full_cpu_ids,
     load_catalog,
@@ -55,6 +56,25 @@ class SelectionTests(unittest.TestCase):
             classify(["src/semantic-router/pkg/extproc/processor.go"]).selected_jobs,
         )
 
+    def test_prepared_image_dependencies_select_calibration_and_routing(self):
+        expected = {IMAGE_CALIBRATION, "e2e.multimodal-routing"}
+        for path in (
+            "config/assets/image-routing/manifest.json",
+            "tools/calibration/image-routing/prepare_assets.py",
+            "tools/calibration/image-routing/testdata/prototype-protocol.json",
+            "tools/models/vela_omni/export.py",
+            "onnx-binding/src/model_architectures/embedding/omni/image.rs",
+            "onnx-binding/src/core/session.rs",
+            "onnx-binding/Cargo.lock",
+            "src/semantic-router/pkg/embedding/embedding.go",
+            "src/semantic-router/pkg/modelruntime/embedding_owned.go",
+            "src/semantic-router/pkg/modelruntime/native/embedding.go",
+            "src/semantic-router/pkg/modelruntime/native/embedding_omni.go",
+            "src/semantic-router/pkg/modelruntime/native/ort_execution.go",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(expected <= set(classify([path]).selected_jobs))
+
     def test_every_authored_calibration_asset_selects_its_consumer(self):
         path = ROOT / "tools/calibration/image-routing/testdata/calibration-set.json"
         manifest = json.loads(path.read_text())
@@ -73,7 +93,7 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(plan["publish_images"])
         record = plan["verifications"][0]
         self.assertEqual(record["source_sha"], SHA)
-        self.assertEqual(record["platform_id"], "candle-cpu")
+        self.assertEqual(record["platform_id"], "ort-cpu")
         self.assertEqual(record["workflow"], ".github/workflows/test-native.yml")
         self.assertEqual(record["reasons"], ["manual-selection"])
         self.assertIn(IMAGE_CALIBRATION, full_cpu_ids())
@@ -282,11 +302,27 @@ class SelectionTests(unittest.TestCase):
                 definitions.setdefault(name, []).append(
                     path.relative_to(ROOT).as_posix()
                 )
-        for name in (*CLASSIFIER_TESTS, *MULTIMODAL_CLASSIFIER_TESTS):
+        for name in CLASSIFIER_TESTS:
             self.assertEqual(len(definitions.get(name, [])), 1, name)
             self.assertTrue(
                 set(classify(definitions[name]).selected_jobs) >= NATIVE, name
             )
+
+    def test_owned_omni_definitions_select_prepared_artifact_lane(self):
+        for package, tests in OWNED_OMNI_TESTS.items():
+            paths = ROOT / "src/semantic-router/pkg" / package
+            for name in tests:
+                definitions = [
+                    path.relative_to(ROOT).as_posix()
+                    for path in paths.glob("*_test.go")
+                    if re.search(rf"^func {re.escape(name)}\(", path.read_text(), re.M)
+                ]
+                self.assertEqual(len(definitions), 1, name)
+                self.assertIn(
+                    "native.image-calibration-cpu",
+                    classify(definitions).selected_jobs,
+                    name,
+                )
 
     def test_owning_workflow_edits_select_executor_contracts(self):
         cases = {
@@ -340,6 +376,17 @@ class SelectionTests(unittest.TestCase):
             self.assertNotIn(
                 "e2e.response-api-redis", plan["expected_verification_ids"]
             )
+
+    def test_published_model_profiles_plan_their_backend_image(self):
+        for profile in ("vela-omni", "vela-halu"):
+            with self.subTest(profile=profile):
+                identifier = f"e2e.{profile}"
+                plan = make_plan([], source_sha=SHA, requested=(identifier,))
+                self.assertEqual(plan["expected_verification_ids"], [identifier])
+                self.assertEqual(
+                    plan["verifications"][0]["images"], ["extproc", "mock-vllm"]
+                )
+                self.assertEqual(set(plan["images"]), {"extproc", "mock-vllm"})
 
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
