@@ -1336,7 +1336,8 @@ pub extern "C" fn calculate_embedding_similarity(
             eprintln!("Error generating embedding for text1");
             // Clean up allocated memory before returning
             if !emb_result1.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
             }
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
@@ -1356,11 +1357,13 @@ pub extern "C" fn calculate_embedding_similarity(
         if status2 != 0 || emb_result2.error {
             eprintln!("Error generating embedding for text2");
             if !emb_result1.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
             }
             // Also clean up emb_result2
             if !emb_result2.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length) };
             }
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
@@ -1379,8 +1382,10 @@ pub extern "C" fn calculate_embedding_similarity(
         let model_id = emb_result1.model_type;
 
         // Free the raw data
-        crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
-        crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
+        // SAFETY: this live result owns the matching allocation and is released once.
+        unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
+        // SAFETY: this live result owns the matching allocation and is released once.
+        unsafe { crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length) };
 
         (emb1, emb2, model_id)
     } else {

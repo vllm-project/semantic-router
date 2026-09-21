@@ -228,7 +228,7 @@ export default function ConfigPageMoMRoutingPanel({
             onEvaluate={(entrypoint) => {
               const model = entrypoint.model_names[0]
               if (!model) return
-              navigate(`/evaluation?view=new&entrypoint=${encodeURIComponent(model)}`)
+              navigate(`/evaluation?model=${encodeURIComponent(model)}`)
             }}
             onEdit={(entrypoint, index) => setMixtureEditor({ entrypoint, index })}
             onDelete={(entrypoint, index) => {

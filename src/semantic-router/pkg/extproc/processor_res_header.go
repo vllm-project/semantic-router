@@ -5,7 +5,13 @@ import (
 )
 
 // handleResponseHeaders processes the response headers.
-func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (response *ext_proc.ProcessingResponse, err error) {
+	defer func() { bindAutomaticOutputResponseHeaders(response, ctx) }()
+	// Preserve the provider's actual HTTP status even on the skip-processing
+	// path, without invoking routing, plugins or additional metrics there.
+	if ctx != nil && v != nil {
+		ctx.UpstreamStatusCode = getStatusFromHeaders(v.ResponseHeaders.GetHeaders())
+	}
 	if skipResp := r.handleSkipProcessingResponseHeaders(v, ctx); skipResp != nil {
 		return skipResp, nil
 	}
@@ -19,7 +25,7 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		// path can avoid caching non-2xx error bodies (cache poisoning).
 		ctx.UpstreamStatusCode = outcome.statusCode
 	}
-	finishUpstreamResponseSpan(ctx, outcome)
+	annotateUpstreamResponseSpan(ctx, outcome)
 	maybeRecordResponseHeaderTTFT(ctx)
 	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx != nil && ctx.IsStreamingResponse)
 	r.observeRouterLearningProviderStatus(ctx, outcome.statusCode)

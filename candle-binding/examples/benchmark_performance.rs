@@ -56,7 +56,7 @@ fn check_gpu_memory() -> Option<(f64, f64)> {
     }
 
     let output = Command::new("nvidia-smi")
-        .args(&[
+        .args([
             "--query-gpu=memory.total,memory.free",
             "--format=csv,noheader,nounits",
         ])
@@ -302,11 +302,7 @@ fn main() -> Result<()> {
 
     // Check available GPU memory after model is loaded
     // For CPU mode, test all available lengths
-    let mut test_cases = if device.is_cuda() {
-        vec![512, 1024, 4096, 8192]
-    } else {
-        vec![512, 1024, 4096, 8192] // CPU can handle all these
-    };
+    let mut test_cases = vec![512, 1024, 4096, 8192];
     if let Device::Cuda(_) = device {
         if let Some((_total_gb, free_gb)) = check_gpu_memory() {
             println!(

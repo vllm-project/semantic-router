@@ -5,20 +5,22 @@ import type { ViewField, ViewSection } from '../components/ViewPanel'
 import { formatDateTime } from '../utils/dateTime'
 import { formatInsightsCost as formatCurrency } from '../utils/insightsCost'
 import { Link } from 'react-router-dom'
-import { ROUTER_CONFIG_EXTENSION } from '../generated/routerConfigContract'
 
 import type {
   InsightsCostSummary,
   InsightsCurrencyCostSummary,
   InsightsRecord,
-  Signal,
 } from './insightsPageTypes'
 import { buildProjectionTraceFields } from './insightsPageProjectionTrace'
+import { buildRoutingMetadataFields } from './insightsRoutingMetadata'
 import { buildRoutingExplanationSections } from './insightsPageRouting'
 import { renderToolNamesCell } from './insightsPageToolTrace'
+import { buildSignalFields, collectSignals } from './insightsRecordSignals'
+import { buildInsightsPluginFields } from './insightsRecordPlugins'
 import styles from './InsightsPage.module.css'
 
 export { filterInsightsRecords } from './insightsPageFilters'
+export { collectSignals } from './insightsRecordSignals'
 
 export const formatInsightsDecisionName = (decision: string): string =>
   formatRoutingMetadataValue('x-vsr-selected-decision', decision)
@@ -360,6 +362,36 @@ export function buildInsightsRecordSections(
     ],
   })
 
+  if (record.outcomes?.length) {
+    sections.push({
+      title: 'Outcomes',
+      fields: record.outcomes.map((outcome, index) => ({
+        label: `Outcome ${index + 1}`,
+        value: [
+          outcome.timestamp ? formatDateTime(outcome.timestamp) : 'Unknown time',
+          `${outcome.source} → ${outcome.target}`,
+          outcome.verdict,
+        ].join(' · '),
+      })),
+    })
+  }
+
+  const projectionTraceFields = buildProjectionTraceFields(record)
+  if (projectionTraceFields.length > 0) {
+    sections.push({
+      title: 'Projection Trace',
+      fields: projectionTraceFields,
+    })
+  }
+
+  const routingMetadataFields = buildRoutingMetadataFields(record)
+  if (routingMetadataFields.length > 0) {
+    sections.push({
+      title: 'Routing Metadata',
+      fields: routingMetadataFields,
+    })
+  }
+
   sections.push(...buildRoutingExplanationSections(record))
 
   sections.push({
@@ -417,31 +449,8 @@ export function buildInsightsRecordSections(
 
   sections.push({
     title: 'Plugin Status',
-    fields: [
-      { label: 'Cache', value: record.from_cache ? 'Hit' : 'Miss' },
-      { label: 'Cache similarity', value: formatSimilarityValue(record.cache_similarity) },
-      { label: 'Streaming', value: record.streaming ? 'On' : 'Off' },
-      { label: 'Guardrails', value: buildGuardrailsValue(record) },
-      { label: 'RAG', value: buildRagValue(record) },
-      { label: 'Hallucination Detection', value: buildHallucinationValue(record) },
-    ],
+    fields: buildInsightsPluginFields(record),
   })
-
-  const routingMetadataFields = buildRoutingMetadataFields(record)
-  if (routingMetadataFields.length > 0) {
-    sections.push({
-      title: 'Routing Metadata',
-      fields: routingMetadataFields,
-    })
-  }
-
-  const projectionTraceFields = buildProjectionTraceFields(record)
-  if (projectionTraceFields.length > 0) {
-    sections.push({
-      title: 'Projection Trace',
-      fields: projectionTraceFields,
-    })
-  }
 
   const requestResponseFields = buildRequestResponseFields(record, options.isReadonly)
   if (requestResponseFields.length > 0) {
@@ -452,14 +461,6 @@ export function buildInsightsRecordSections(
   }
 
   return sections
-}
-
-export function collectSignals(signals: Signal): string[] {
-  return ROUTER_CONFIG_EXTENSION.signals.flatMap(({ type }) =>
-    (signals[type] ?? []).map((value) =>
-      formatRoutingMetadataValue(`x-vsr-matched-${type.replace(/_/g, '-')}`, value),
-    ),
-  )
 }
 
 export function getInsightsCostUnavailableReason(record: InsightsRecord): string | undefined {
@@ -504,124 +505,6 @@ function renderUnavailableCost(record: InsightsRecord) {
 
 export function hasCompleteCostData(record: InsightsRecord) {
   return getInsightsCostUnavailableReason(record) === undefined
-}
-
-function buildSignalFields(signals: Signal): ViewField[] {
-  return ROUTER_CONFIG_EXTENSION.signals.flatMap(({ type: key, display_name }) => {
-    const values = signals[key]
-    if (!values?.length) {
-      return []
-    }
-
-    const label = `${display_name} signals`
-    return [
-      {
-        label,
-        value: (
-          <div className={styles.modalSignalList}>
-            {values.map((value) => (
-              <span key={`${label}-${value}`} className={styles.modalSignalPill}>
-                {formatRoutingMetadataValue(
-                  `x-vsr-matched-${String(key).replace(/_/g, '-')}`,
-                  value,
-                )}
-              </span>
-            ))}
-          </div>
-        ),
-        fullWidth: true,
-      },
-    ]
-  })
-}
-
-function buildRoutingMetadataFields(record: InsightsRecord): ViewField[] {
-  return [
-    buildTagField('Projection outputs', record.projections),
-    buildNumericMapField('Projection scores', record.projection_scores),
-    buildNumericMapField('Signal confidences', record.signal_confidences),
-    buildNumericMapField('Signal values', record.signal_values),
-  ].filter((field): field is ViewField => field !== null)
-}
-
-function buildGuardrailsValue(record: InsightsRecord) {
-  if (!(record.guardrails_enabled || record.jailbreak_enabled || record.pii_enabled)) {
-    return 'Disabled'
-  }
-
-  if (record.jailbreak_detected || record.pii_detected) {
-    return (
-      <div className={styles.alertList}>
-        {record.jailbreak_detected ? (
-          <span className={styles.alertDanger}>
-            Jailbreak: {record.jailbreak_type || 'detected'} (
-            {record.jailbreak_score_available === true &&
-            typeof record.jailbreak_confidence === 'number'
-              ? `${(record.jailbreak_confidence * 100).toFixed(1)}%`
-              : 'Score unavailable'}
-            )
-          </span>
-        ) : null}
-        {record.pii_detected ? (
-          <span className={record.pii_blocked ? styles.alertDanger : styles.alertWarn}>
-            {record.pii_blocked ? 'PII Blocked' : 'PII Found'}:{' '}
-            {record.pii_entities?.join(', ') || 'detected'}
-          </span>
-        ) : null}
-      </div>
-    )
-  }
-
-  const enabledChecks = [
-    record.jailbreak_enabled ? 'Jailbreak' : null,
-    record.pii_enabled ? 'PII' : null,
-  ]
-    .filter(Boolean)
-    .join(', ')
-
-  return <span className={styles.alertSuccess}>Clean ({enabledChecks || 'enabled'})</span>
-}
-
-function buildRagValue(record: InsightsRecord) {
-  if (!record.rag_enabled) {
-    return 'Not used'
-  }
-
-  return (
-    <div className={styles.pluginStack}>
-      <span className={styles.alertInfo}>Context Retrieved</span>
-      <span className={styles.costSubtle}>
-        Backend: {record.rag_backend || 'unknown'} | Length: {record.rag_context_length || 0} chars
-        | Score: {record.rag_similarity_score?.toFixed(3) || '-'}
-      </span>
-    </div>
-  )
-}
-
-function buildHallucinationValue(record: InsightsRecord) {
-  if (!record.hallucination_enabled) {
-    return 'Disabled'
-  }
-
-  if (!record.hallucination_detected) {
-    return <span className={styles.alertSuccess}>Not detected</span>
-  }
-
-  return (
-    <div className={styles.pluginStack}>
-      <span className={styles.alertDanger}>
-        Detected ({((record.hallucination_confidence || 0) * 100).toFixed(1)}%)
-      </span>
-      {record.hallucination_spans?.length ? (
-        <span className={styles.costSubtle}>
-          Unsupported spans: {record.hallucination_spans.slice(0, 2).join(' | ')}
-          {record.hallucination_spans.length > 2
-            ? ` (+${record.hallucination_spans.length - 2})`
-            : ''}
-        </span>
-      ) : null}
-    </div>
-  )
 }
 
 function buildRequestResponseFields(record: InsightsRecord, isReadonly: boolean): ViewField[] {
@@ -692,56 +575,8 @@ function renderReadonlyLock() {
   )
 }
 
-function buildTagField(label: string, values: string[] | undefined): ViewField | null {
-  if (!values?.length) {
-    return null
-  }
-
-  return {
-    label,
-    value: (
-      <div className={styles.modalSignalList}>
-        {values.map((value) => (
-          <span key={`${label}-${value}`} className={styles.modalSignalPill}>
-            {value}
-          </span>
-        ))}
-      </div>
-    ),
-    fullWidth: true,
-  }
-}
-
-function buildNumericMapField(
-  label: string,
-  values: Record<string, number> | undefined,
-): ViewField | null {
-  if (!values || Object.keys(values).length === 0) {
-    return null
-  }
-
-  const entries = Object.entries(values).sort(([left], [right]) => left.localeCompare(right))
-  return {
-    label,
-    value: (
-      <div className={styles.pluginStack}>
-        {entries.map(([key, value]) => (
-          <span key={`${label}-${key}`} className={styles.costSubtle}>
-            {key}: {formatNumericMetric(value)}
-          </span>
-        ))}
-      </div>
-    ),
-    fullWidth: true,
-  }
-}
-
 function formatDecisionNumber(value: number | undefined) {
   return typeof value === 'number' ? String(value) : '-'
-}
-
-function formatNumericMetric(value: number) {
-  return Number.isInteger(value) ? String(value) : value.toFixed(3)
 }
 
 function getZeroSavingsReason(record: InsightsRecord): string | null {
@@ -792,8 +627,4 @@ function formatTokenValue(value?: number) {
   return typeof value === 'number' && Number.isFinite(value)
     ? value.toLocaleString('en-US')
     : 'Not recorded'
-}
-
-function formatSimilarityValue(value?: number) {
-  return typeof value === 'number' ? value.toFixed(3) : '-'
 }

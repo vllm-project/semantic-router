@@ -390,9 +390,6 @@ pub struct GemmaEmbeddingModel {
     device: Device,
 }
 
-/// Declared widths shared by inference validation and capability discovery.
-pub const SUPPORTED_EMBEDDING_DIMENSIONS: &[usize] = &[768, 512, 256, 128];
-
 impl GemmaEmbeddingModel {
     /// Load GemmaEmbedding model from pretrained weights
     ///
@@ -546,6 +543,21 @@ impl GemmaEmbeddingModel {
         Ok(normalized)
     }
 
+    /// Advertised output views use this instance's loaded bottleneck width.
+    pub fn available_dimensions(&self) -> Vec<usize> {
+        let full = self.embedding_dimension();
+        let mut dimensions = vec![128, 256, 512, 768];
+        dimensions.retain(|dimension| *dimension <= full);
+        dimensions.push(full);
+        dimensions.sort_unstable();
+        dimensions.dedup();
+        dimensions
+    }
+
+    pub fn embedding_dimension(&self) -> usize {
+        self.dense_bottleneck.compression_layer().out_features()
+    }
+
     /// Forward pass with Matryoshka Representation support
     ///
     /// Matryoshka Representation allows truncating the embedding dimension
@@ -573,7 +585,7 @@ impl GemmaEmbeddingModel {
         embedding_dim: usize,
     ) -> UnifiedResult<Tensor> {
         // Validate embedding dimension
-        if !SUPPORTED_EMBEDDING_DIMENSIONS.contains(&embedding_dim) {
+        if !self.available_dimensions().contains(&embedding_dim) {
             return Err(UnifiedError::Validation {
                 field: "embedding_dim".to_string(),
                 expected: "768, 512, 256, or 128".to_string(),
@@ -647,5 +659,89 @@ impl CoreModel for GemmaEmbeddingModel {
 
     fn get_config(&self) -> &Self::Config {
         &self.config
+    }
+}
+
+#[cfg(test)]
+mod dimension_tests {
+    use super::*;
+    use crate::model_architectures::embedding::dense_layers::{DenseActivation, DenseLayer};
+    use candle_core::DType;
+    use std::collections::HashMap;
+
+    #[test]
+    fn loaded_dimensions_match_bottleneck_outputs() {
+        for (width, expected) in [(3, vec![3]), (256, vec![128, 256])] {
+            let device = Device::Cpu;
+            let config: GemmaEmbeddingConfig = serde_json::from_value(serde_json::json!({
+                "vocab_size": 2, "hidden_size": 4, "intermediate_size": 8,
+                "num_hidden_layers": 0, "num_attention_heads": 1,
+                "num_key_value_heads": 1, "head_dim": 4,
+                "max_position_embeddings": 8, "rms_norm_eps": 0.000001,
+                "rope_theta": 10000.0, "rope_local_base_freq": 10000.0,
+                "sliding_window": 8, "layer_types": [],
+                "use_bidirectional_attention": true, "query_pre_attn_scalar": 4,
+                "hidden_activation": "gelu_pytorch_tanh"
+            }))
+            .unwrap();
+            let weights = HashMap::from([
+                (
+                    "embed_tokens.weight".into(),
+                    Tensor::ones((2, 4), DType::F32, &device).unwrap(),
+                ),
+                (
+                    "norm.weight".into(),
+                    Tensor::ones(4, DType::F32, &device).unwrap(),
+                ),
+                (
+                    "expand.linear.weight".into(),
+                    Tensor::ones((8, 4), DType::F32, &device).unwrap(),
+                ),
+                (
+                    "compress.linear.weight".into(),
+                    Tensor::ones((width, 8), DType::F32, &device).unwrap(),
+                ),
+            ]);
+            let vb = VarBuilder::from_tensors(weights, DType::F32, &device);
+            let model = GemmaEmbeddingModel {
+                gemma_backbone: Gemma3Model::load(vb.clone(), &config).unwrap(),
+                dense_bottleneck: BottleneckDenseNet {
+                    dense1: DenseLayer::load(
+                        vb.pp("expand"),
+                        4,
+                        8,
+                        DenseActivation::Identity,
+                        false,
+                    )
+                    .unwrap(),
+                    dense2: DenseLayer::load(
+                        vb.pp("compress"),
+                        8,
+                        width,
+                        DenseActivation::Identity,
+                        false,
+                    )
+                    .unwrap(),
+                },
+                config,
+                device: device.clone(),
+            };
+            let input = Tensor::new(&[[0u32, 1]], &device).unwrap();
+            assert_eq!(model.embedding_dimension(), width);
+            assert_eq!(model.available_dimensions(), expected);
+            assert_eq!(
+                model.embedding_forward(&input, None).unwrap().dims(),
+                &[1, width]
+            );
+            for dimension in model.available_dimensions() {
+                assert_eq!(
+                    model
+                        .matryoshka_forward(&input, None, dimension)
+                        .unwrap()
+                        .dims(),
+                    &[1, dimension]
+                );
+            }
+        }
     }
 }

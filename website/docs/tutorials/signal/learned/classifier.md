@@ -76,6 +76,44 @@ not calibrated classifier probabilities. Classifier leaves are the only
 decision predicates that accept `on_error`; failures expose the bounded
 `classifier_evaluation_failed` code in eval/replay diagnostics.
 
+An LLM classifier can also attach a reasoning preference to its external model:
+
+```yaml
+global:
+  model_catalog:
+    external:
+      - name: risk-judge
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: vllm-classifier.example.com
+          port: 8000
+          protocol: http
+        llm_model_name: qwen/qwen3.8-27b
+        reasoning:
+          family: qwen3.8
+          use_reasoning: true
+          reasoning_effort: low
+```
+
+`family` references an existing reasoning family; external models cannot define
+an inline family. Both `family` and `use_reasoning` are required when the block
+is present. `reasoning_effort` is optional when reasoning is enabled and must be
+one of the family's declared levels. Disabling an always-on family, or setting
+an effort while reasoning is disabled, is rejected during configuration load.
+
+Reasoning control is currently supported only when the external classifier uses
+`llm_provider: vllm`. Mode and ordinary effort controls are projected into
+`chat_template_kwargs`; families declared with `top_level_reasoning_effort` use
+the typed top-level `reasoning_effort` field. The control applies only to
+`type: llm` classifier requests. It does not affect `sequence_classifier`,
+other router model calls, or response parsing. This is a request preference:
+the upstream model may still ignore it or fail to produce the requested JSON
+contract, which remains subject to the normal classifier error policy. If the
+model reasons anyway but still returns valid classifier JSON, the Router uses
+that JSON as before; parsing or exposing a separate reasoning trace remains
+outside this change.
+
 On failure, the decision tree evaluates this leaf as `Unknown` until the full
 AND/OR/NOT expression is known. Root-level `rules.on_unknown` then chooses
 `no_match`, `match`, or `fail_request`. `no_match` and `match` resolve only

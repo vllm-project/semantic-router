@@ -6,7 +6,18 @@ import type {
 } from './insightsPageRoutingTypes'
 import type { SignalType } from '../generated/routerConfigContract'
 
-export type Signal = Partial<Record<SignalType, string[]>>
+export type Signal = Partial<Record<SignalType, string[]>> & Record<string, string[] | undefined>
+
+export interface InsightsOutcome {
+  timestamp?: string
+  source: string
+  target: string
+  target_ref?: string
+  verdict: string
+  reason?: string
+  score?: number
+  metadata?: Record<string, string>
+}
 
 export interface ToolTraceStep {
   type: string
@@ -119,6 +130,7 @@ export interface InsightsRecord {
     }
   }
   signals: Signal
+  outcomes?: InsightsOutcome[]
   projections?: string[]
   projection_scores?: Record<string, number>
   projection_trace?: ProjectionTrace
@@ -162,6 +174,8 @@ export interface InsightsRecord {
   context_token_count?: number
   hallucination_enabled?: boolean
   hallucination_detected?: boolean
+  hallucination_score_available?: boolean
+  hallucination_score_kind?: string
   hallucination_confidence?: number
   hallucination_spans?: string[]
   prompt_tokens?: number

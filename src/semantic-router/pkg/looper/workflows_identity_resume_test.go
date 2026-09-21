@@ -62,16 +62,18 @@ func testWorkflowResumeAmbiguousIdentity(t *testing.T, conflictingID, policy str
 	if !ok {
 		t.Fatal("missing continuation ID")
 	}
-	state, ok, err := looper.toolStates.Take(ctx, stateID)
-	if err != nil || !ok {
+	recipe := config.DefaultRecipeName
+	claim, ok, err := looper.toolStates.Claim(ctx, recipe, stateID)
+	if err != nil || !ok || claim == nil {
 		t.Fatalf("load paused state: found=%v, err=%v", ok, err)
 	}
+	state := claim.State
 	// Emulate a plan persisted by a version that accepted ambiguous IDs.
 	state.Plan.Steps = append(state.Plan.Steps, workflowPlanStep{
 		ID: conflictingID, Models: []string{"worker-model"}, Prompt: "Another task.",
 	})
-	if _, putErr := looper.toolStates.Put(ctx, state); putErr != nil {
-		t.Fatalf("persist legacy plan: %v", putErr)
+	if replaceErr := looper.toolStates.Replace(ctx, recipe, stateID, claim.Token, state); replaceErr != nil {
+		t.Fatalf("persist legacy plan: %v", replaceErr)
 	}
 	before := calls.Load()
 	req.OriginalRequest = workflowToolResumeRequest(t, assistant, callID)
@@ -84,7 +86,11 @@ func testWorkflowResumeAmbiguousIdentity(t *testing.T, conflictingID, policy str
 		t.Fatalf("resume dispatched upstream calls: before=%d, after=%d", before, calls.Load())
 	}
 	// A validation failure must not consume the continuation state.
-	if _, found, takeErr := looper.toolStates.Take(ctx, stateID); takeErr != nil || !found {
-		t.Fatalf("rejected state was not restored: found=%v, err=%v", found, takeErr)
+	restored, found, claimErr := looper.toolStates.Claim(ctx, recipe, stateID)
+	if claimErr != nil || !found || restored == nil {
+		t.Fatalf("rejected state was not restored: found=%v, err=%v", found, claimErr)
+	}
+	if releaseErr := looper.toolStates.Release(ctx, recipe, stateID, restored.Token); releaseErr != nil {
+		t.Fatalf("release restored state claim: %v", releaseErr)
 	}
 }

@@ -45,6 +45,8 @@ fn fixture(labels: &[&str], winner: usize) -> TempDir {
         TemplateProcessing::builder()
             .try_single("[CLS] $A [SEP]")
             .unwrap()
+            .try_pair("[CLS] $A [SEP] $B:1 [SEP]:1")
+            .unwrap()
             .special_tokens(vec![("[CLS]", 2), ("[SEP]", 3)])
             .build()
             .unwrap(),
@@ -285,6 +287,8 @@ fn embedding_instances_keep_independent_ownership_and_normalization() {
     opts.model_type = "mmbert".into();
     let a = load(opts.clone(), "embedding").unwrap();
     let b = load(opts, "embedding").unwrap();
+    assert_eq!(a.info.available_dimensions, vec![4]);
+    assert_eq!(b.info.available_dimensions, vec![4]);
     let output = value(a.embedding("hello world", 0, 0).unwrap());
     let values = output["values"].as_array().unwrap();
     assert_eq!(values.len(), 4);
@@ -797,6 +801,8 @@ fn reranker_fixture() -> TempDir {
             .unwrap()
             .try_pair("[CLS] $A [SEP] $B:1 [SEP]:1")
             .unwrap()
+            .try_pair("[CLS] $A [SEP] $B:1 [SEP]:1")
+            .unwrap()
             .special_tokens(vec![("[CLS]", 2), ("[SEP]", 3)])
             .build()
             .unwrap(),
@@ -976,3 +982,60 @@ fn token_windows_decode_boundary_entity_once_with_original_offsets() {
 
 #[path = "tests/document_windows.rs"]
 mod document_windows;
+
+#[test]
+fn vela_halu_pair_preserves_answer_unicode_and_published_policy() {
+    let dir = fixture(&["supported", "hallucinated"], 1);
+    std::fs::write(
+        dir.path().join("operating_point.json"),
+        json!({
+            "max_input_tokens":8192,"token_threshold":0.5,"threshold_comparison":"strictly_greater",
+            "label2id":{"supported":0,"hallucinated":1},
+            "input_pair":["User request: {question}\n\n{context}","answer"],
+            "answer_offsets":"Unicode code points"
+        })
+        .to_string(),
+    )
+    .unwrap();
+    let mut options = options(&dir);
+    options.model_type = "vela_halu".into();
+    options.max_input_tokens = 32;
+    options.overflow = "reject".into();
+    let model = load(options.clone(), "hallucination").unwrap();
+    // The caller's optional plugin score gate must not change token extraction.
+    let output = value(
+        model
+            .hallucination("Paris is in France", "hello", "é 猫", 0.999)
+            .unwrap(),
+    );
+    assert_eq!(output["spans"][0]["text"], "é 猫");
+    assert_eq!(output["spans"][0]["start"], 0);
+    assert_eq!(output["spans"][0]["end"], "é 猫".len());
+    assert!(model
+        .hallucination(&"hello ".repeat(40), "", "é 猫", 0.5)
+        .is_err());
+    options.overflow = "truncate".into();
+    let truncating = load(options.clone(), "hallucination").unwrap();
+    let truncated = value(
+        truncating
+            .hallucination(&"hello ".repeat(40), "", "é 猫", 0.5)
+            .unwrap(),
+    );
+    assert_eq!(truncated["spans"][0]["text"], "é 猫");
+    assert_eq!(truncated["input"]["truncated"], true);
+    assert!(truncating
+        .hallucination("hello", "", &"answer ".repeat(40), 0.5)
+        .is_err());
+    options.max_input_tokens = 8193;
+    assert!(load(options, "hallucination").is_err());
+    let mut raw: Value =
+        serde_json::from_slice(&std::fs::read(dir.path().join("config.json")).unwrap()).unwrap();
+    raw["id2label"]["0"] = json!("hallucinated");
+    std::fs::write(dir.path().join("config.json"), raw.to_string()).unwrap();
+    let mut invalid = super::Options {
+        model_type: "vela_halu".into(),
+        ..self::options(&dir)
+    };
+    invalid.max_input_tokens = 32;
+    assert!(load(invalid, "hallucination").is_err());
+}

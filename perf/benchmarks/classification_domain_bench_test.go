@@ -25,6 +25,9 @@ func BenchmarkClassifyDomain(b *testing.B) {
 		domainTask, domainErr = benchmarkRuntime.Sequence(context.Background(), spec)
 	})
 	if domainErr != nil {
+		if missingBenchModels(domainErr) {
+			b.Skipf("Failed to initialize domain classifier: %v", domainErr)
+		}
 		b.Fatalf("prepare owned Vela Domain: %v", domainErr)
 	}
 	recordModelIdentity(b, "domain")

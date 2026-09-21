@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import yaml
@@ -34,13 +35,21 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         self.output = self.root / "reports"
         self.output.mkdir()
         self.model = self.root / "models"
-        metadata = self.model / ".cache/huggingface/download"
-        metadata.mkdir(parents=True)
-        for name in image_calibration.MODEL_FILES:
-            (self.model / name).write_text("pinned bytes for " + name)
-            (metadata / (name + ".metadata")).write_text(REVISION + "\nchecksum\n")
+        self.model.mkdir()
+        (self.model / "image.onnx").write_text("pinned graph")
+        artifact = {
+            "format_version": 1,
+            "adapter": "vela_omni",
+            "source": {"repo_id": "fixture/model", "revision": REVISION},
+            "files": {
+                "image.onnx": image_calibration.file_sha(
+                    self.model / "image.onnx"
+                ).removeprefix("sha256:")
+            },
+        }
+        (self.model / image_calibration.OMNI_MANIFEST).write_text(json.dumps(artifact))
         manifest = {
-            "provider": "candle",
+            "provider": "ort",
             "models": [
                 {
                     "name": "Multimodal",
@@ -113,11 +122,14 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
                 "commands": {
                     "profile-discovery": 0,
                     "profile-tests": 0,
+                    "owned-discovery": 0,
+                    "owned-tests": 0,
                     "calibration": 0,
                 },
             },
         )
         self.write_profile()
+        self.write_owned()
         self.source_patch = patch.object(
             image_calibration.subprocess, "check_output", return_value=SOURCE
         )
@@ -148,6 +160,24 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         self.write("report.json", self.report)
         return image_calibration.evidence(self.output, root=self.root)
 
+    def write_owned(self, *, action="pass", omit=None):
+        cases = sorted(image_calibration.owned_omni_case_ids())
+        discovery, executed = [], []
+        for identity in cases:
+            package, name = identity.rsplit("/", 1)
+            discovery.append(
+                {"Action": "output", "Package": package, "Output": name + "\n"}
+            )
+            if identity != omit:
+                executed.append({"Action": action, "Package": package, "Test": name})
+        for filename, rows in (
+            ("owned-discovery.jsonl", discovery),
+            ("owned-tests.jsonl", executed),
+        ):
+            (self.output / filename).write_text(
+                "".join(json.dumps(row) + "\n" for row in rows)
+            )
+
     def test_source_inventory_includes_scoring_threshold_and_profile_but_not_exclusions(
         self,
     ):
@@ -159,13 +189,55 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
                 "score/negative.png",
                 "threshold/office",
                 "profile/profile/TestMirror",
-            },
+            }
+            | {"owned/" + name for name in image_calibration.owned_omni_case_ids()},
         )
         self.assertEqual(collection_errors(result, "test"), [])
         self.assertEqual(result["excluded_fixtures"][0]["reason"], "ambiguous")
         # Identical positive and negative scores remain valid observations. The
         # executable Go threshold assertion, not invented perfect accuracy, gates.
         self.assertEqual(result["cases"][0]["scores"], result["cases"][1]["scores"])
+
+    def test_prototype_quality_requires_frozen_inputs_and_zero_holdout_errors(self):
+        rules = self.root / image_calibration.RULES
+        config = yaml.safe_load(rules.read_text())
+        config["routing"]["signals"]["embeddings"][0]["image_candidates"] = [
+            "./positive.png"
+        ]
+        rules.write_text(yaml.safe_dump(config))
+        for field, relative in (
+            ("prototype_manifest_sha256", "config/assets/image-routing/manifest.json"),
+            (
+                "prototype_protocol_sha256",
+                "tools/calibration/image-routing/testdata/prototype-protocol.json",
+            ),
+        ):
+            path = self.root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("{}")
+            self.report["source"][field] = image_calibration.file_sha(path)
+        self.report["rules"][0]["validation"] = {
+            "true_positive": 1,
+            "false_positive": 0,
+            "false_negative": 0,
+            "true_negative": 1,
+        }
+        self.report["checks"].append({"id": "validation/office", "passed": True})
+        self.assertIn("validation/office", self.evaluate()["expected_cases"])
+        original = copy.deepcopy(self.report)
+        for mutation in (
+            lambda r: r["rules"][0]["validation"].update(false_positive=1),
+            lambda r: r["rules"][0]["validation"].update(false_negative=1),
+            lambda r: r["rules"][0]["validation"].update(true_positive=0),
+            lambda r: r["rules"][0].pop("validation"),
+            lambda r: r["source"].update(prototype_protocol_sha256="changed"),
+            lambda r: r["source"].update(prototype_manifest_sha256="changed"),
+            lambda r: r["checks"].pop(),
+        ):
+            self.report = copy.deepcopy(original)
+            mutation(self.report)
+            with self.assertRaises(ValueError):
+                self.evaluate()
 
     def test_threshold_failure_is_preserved_for_required_gate(self):
         self.report["checks"][0]["passed"] = False
@@ -201,13 +273,12 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.evaluate()
 
-    def test_every_model_file_requires_pinned_download_metadata(self):
-        for name in image_calibration.MODEL_FILES:
-            metadata = self.model / ".cache/huggingface/download" / (name + ".metadata")
-            metadata.write_text("c" * 40 + "\n")
-            with self.assertRaisesRegex(ValueError, "snapshot metadata"):
-                self.evaluate()
-            metadata.write_text(REVISION + "\n")
+    def test_every_model_file_requires_manifest_checksum(self):
+        (self.model / "image.onnx").write_text("replaced graph")
+        with self.assertRaisesRegex(ValueError, "checksum"):
+            image_calibration.model_identity(
+                image_calibration.read(self.output / "models.json")
+            )
 
     def test_profile_missing_or_skipped_tests_and_crashed_process_fail(self):
         self.write_profile(action="skip")
@@ -222,6 +293,49 @@ class ImageCalibrationEvidenceTests(unittest.TestCase):
         self.write("execution.json", execution)
         with self.assertRaisesRegex(ValueError, "complete"):
             self.evaluate()
+
+    def test_owned_integrations_cannot_be_missing_skipped_or_failed(self):
+        for name in image_calibration.owned_omni_case_ids():
+            with self.subTest(missing=name):
+                self.write_owned(omit=name)
+                with self.assertRaises(ValueError):
+                    self.evaluate()
+        for action in ("skip", "fail"):
+            with self.subTest(action=action):
+                self.write_owned(action=action)
+                with self.assertRaises(ValueError):
+                    self.evaluate()
+        self.write_owned()
+        (self.output / "owned-discovery.jsonl").write_text("")
+        with self.assertRaisesRegex(ValueError, "inventory differs"):
+            self.evaluate()
+
+    def test_owned_commands_use_the_attested_artifact_and_exact_inventory(self):
+        normalized = {
+            "cases": [{"id": "case", "status": "passed"}],
+            "expected_cases": ["case"],
+        }
+        with (
+            patch.object(image_calibration, "ROOT", self.root),
+            patch.object(image_calibration, "evidence", return_value=normalized),
+            patch.object(
+                image_calibration.subprocess,
+                "run",
+                return_value=SimpleNamespace(returncode=0),
+            ) as run,
+        ):
+            image_calibration.run(self.output / "models.json", self.root / "execution")
+        owned = run.call_args_list[:2]
+        self.assertEqual(len(run.call_args_list), 5)
+        for call in owned:
+            self.assertEqual(call.kwargs["cwd"], self.root / "src/semantic-router")
+            self.assertEqual(call.kwargs["env"]["VELA_OMNI_ARTIFACT"], str(self.model))
+            self.assertEqual(call.kwargs["env"]["REQUIRE_OMNI_TESTS"], "1")
+            for package, tests in image_calibration.OWNED_OMNI_TESTS.items():
+                self.assertIn("./pkg/" + package, call.args[0])
+                self.assertTrue(all(name in " ".join(call.args[0]) for name in tests))
+        self.assertIn("-list", owned[0].args[0])
+        self.assertIn("-run", owned[1].args[0])
 
 
 if __name__ == "__main__":

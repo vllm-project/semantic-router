@@ -284,6 +284,11 @@ routing:
       # multimodal example.
       - name: clinical_query_intent
         query_modality: text
+        # Positive image references can complement or replace text candidates.
+        # Negative candidates subtract their aggregated cosine score.
+        image_candidates: []
+        negative_candidates: []
+        negative_image_candidates: []
         threshold: 0.72
         aggregation_method: max
         candidates:
@@ -1128,6 +1133,13 @@ routing:
           include_analysis: true
           include_intermediate_responses: true
           on_error: skip
+          # Panel-level policy when usable responses fall below
+          # min_successful_responses: fail (typed error) or fallback (route to
+          # quorum_fallback_target). Independent of on_error, which governs one
+          # failed panel attempt. Recipe-owned; requests cannot override it.
+          # quorum_fallback_target is required by, and only valid with, fallback.
+          quorum_failure_policy: fail
+          quorum_fallback_target: ""
           analysis_template: ""
           synthesis_template: ""
           judge_prompt_version: fusion-v1
@@ -1828,6 +1840,19 @@ global:
           min_turns_before_switch: 1
           switch_margin: 0.05
           stability_weight: 1.0
+          # Gate session model switches on recent-outcome evidence. Disabled by
+          # default; thresholds stay placeholders until they are calibrated.
+          progress_gate:
+            enabled: false
+            mode: observe
+            calibration_id: "" # External profile name@version; required for enforce.
+            window_size: 8
+            window_ttl_seconds: 900
+            min_window_outcomes: 3
+            min_consecutive_regressions: 2
+            min_consecutive_recoveries: 2
+            cooldown_seconds: 120
+            max_switches_per_window: 2
       state_store:
         backend: redis
         ttl_seconds: 86400
@@ -1906,7 +1931,6 @@ global:
           enabled: true
           time_windows: [1m, 5m, 1h]
           update_interval: 30s
-          queue_depth_estimation: true
           max_models: 50
       profiling:
         enabled: false
@@ -2136,6 +2160,11 @@ global:
         block_patterns:
           - api key
           - password
+      persistence:
+        timeout_seconds: 30
+        concurrency: 8
+        queue: 64
+        shutdown_grace_seconds: 5
     vector_store:
       enabled: true
       backend_type: llama_stack
@@ -2309,7 +2338,7 @@ global:
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        multimodal_model_path: models/mom-embedding-multimodal
+        multimodal_model_path: models/vela-1.0-omni-nano
         bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
@@ -2317,7 +2346,7 @@ global:
           backend: candle
           model_type: mmbert
           preload_embeddings: true
-          target_dimension: 768
+          target_dimension: 0
           target_layer: 22
           enable_soft_matching: false
           top_k: 0
@@ -2344,7 +2373,7 @@ global:
       domain_classifier: models/Vela-1.0-Encoder-307M-Domain
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
       fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      hallucination_detector: models/mom-halugate-detector
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     # admission bounds concurrent inference per system model deployment.
@@ -2413,6 +2442,19 @@ global:
         access_key: external-classifier-key
         max_tokens: 128
         temperature: 0
+      - name: external-reasoning-classifier
+        llm_provider: vllm
+        model_role: classification
+        llm_endpoint:
+          address: vllm-classifier
+          port: 8000
+          protocol: http
+          use_chat_template: true
+        llm_model_name: qwen/qwen3.8-27b
+        reasoning:
+          family: qwen3.8
+          use_reasoning: true
+          reasoning_effort: low
       - name: external-sequence-classifier
         llm_provider: openai
         model_role: classification
@@ -2632,13 +2674,13 @@ global:
           endpoint: ""
           include_explanation: false
           model_ref: hallucination_detector
-          model_id: models/mom-halugate-detector
-          threshold: 0.82
+          model_id: models/Vela-1.0-Encoder-307M-Halu
+          threshold: 0.5
           use_cpu: true
-          min_span_length: 2
-          min_span_confidence: 0.6
+          min_span_length: 1
+          min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: true
+          enable_nli_filtering: false
           nli_entailment_threshold: 0.75
         explainer:
           model_ref: hallucination_explainer

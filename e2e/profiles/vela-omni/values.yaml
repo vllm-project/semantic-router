@@ -1,0 +1,129 @@
+# This profile requires an image built with VELA_OMNI_VARIANTS="nano mini".
+# Both models run in one process, under separate recipe bindings.
+persistence:
+  enabled: false
+resources:
+  requests:
+    memory: 8Gi
+    cpu: '2'
+  limits:
+    memory: 12Gi
+    cpu: '4'
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      model: general-expert
+    models:
+      - name: general-expert
+        provider_model_id: general-expert
+        backend_refs:
+          - name: test-backend
+            provider: vllm
+            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
+            weight: 1
+  entrypoints:
+    - model_names: [vela-nano]
+      recipe: nano
+    - model_names: [vela-mini]
+      recipe: mini
+  routing:
+    modelCards:
+      - name: general-expert
+        capabilities: [chat, vision, audio_input]
+        modality: omni
+    decisions:
+      - name: fallback
+        priority: 1
+        rules: {operator: AND, conditions: []}
+        modelRefs: [{model: general-expert}]
+  recipes:
+    - name: nano
+      routing:
+        model_bindings:
+          embedding:
+            deployment: nano
+            contract: embedding.v1
+            adapter: vela_omni
+        signals:
+          embeddings:
+            - name: exact-text
+              threshold: 0.99
+              aggregation_method: max
+              candidates: [A high pitched electronic tone.]
+            - name: tone
+              query_modality: audio
+              threshold: 0.04
+              aggregation_method: max
+              candidates: [A high pitched electronic tone.]
+        decisions:
+          - name: audio-route
+            priority: 200
+            rules: {operator: AND, conditions: [{type: embedding, name: tone}], on_unknown: fail_request}
+            modelRefs: [{model: general-expert}]
+          - name: text-route
+            priority: 100
+            rules: {operator: AND, conditions: [{type: embedding, name: exact-text}]}
+            modelRefs: [{model: general-expert}]
+          - name: fallback
+            priority: 1
+            rules: {operator: AND, conditions: []}
+            modelRefs: [{model: general-expert}]
+    - name: mini
+      routing:
+        model_bindings:
+          embedding:
+            deployment: mini
+            contract: embedding.v1
+            adapter: vela_omni
+        signals:
+          embeddings:
+            - name: exact-text
+              threshold: 0.99
+              aggregation_method: max
+              candidates: [A high pitched electronic tone.]
+            - name: tone
+              query_modality: audio
+              threshold: 0.20
+              aggregation_method: max
+              candidates: [A high pitched electronic tone.]
+        decisions:
+          - name: audio-route
+            priority: 200
+            rules: {operator: AND, conditions: [{type: embedding, name: tone}], on_unknown: fail_request}
+            modelRefs: [{model: general-expert}]
+          - name: text-route
+            priority: 100
+            rules: {operator: AND, conditions: [{type: embedding, name: exact-text}]}
+            modelRefs: [{model: general-expert}]
+          - name: fallback
+            priority: 1
+            rules: {operator: AND, conditions: []}
+            modelRefs: [{model: general-expert}]
+  global:
+    model_catalog:
+      embeddings:
+        semantic:
+          multimodal_model_path: models/vela-1.0-omni-nano
+          embedding_config:
+            model_type: multimodal
+            target_dimension: 0
+            target_layer: 0
+            preload_embeddings: true
+            enable_soft_matching: false
+            top_k: 0
+      deployments:
+        nano:
+          artifact: models/vela-1.0-omni-nano
+          provider: ort
+          device: cpu
+          input: {max_tokens: 512, overflow: reject}
+        mini:
+          artifact: models/vela-1.0-omni-mini
+          provider: ort
+          device: cpu
+          input: {max_tokens: 32768, overflow: reject}
+    services:
+      api:
+        embeddings: {enabled: true}

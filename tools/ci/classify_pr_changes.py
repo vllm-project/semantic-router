@@ -252,7 +252,7 @@ def classify(
 def git_changed_files(base: str, head: str) -> list[str]:
     if base and set(base) != {"0"}:
         result = subprocess.run(
-            ["git", "diff", "--name-only", "-z", base, head],
+            args=["git", "diff", "--name-only", "--no-renames", "-z", base, head],
             check=True,
             capture_output=True,
         )

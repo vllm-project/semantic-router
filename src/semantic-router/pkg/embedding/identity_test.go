@@ -76,3 +76,17 @@ func TestContentIdentityCanonicalArtifactsAndRejectsUnverified(t *testing.T) {
 		}
 	}
 }
+
+func TestOmniContentIdentityIncludesModelProcessors(t *testing.T) {
+	descriptor := descriptorFixture()
+	descriptor.ModelType = "vela_omni"
+	descriptor.Layer = 0
+	descriptor.Dimension = 384
+	descriptor.PoolingContract = "cls-l2"
+	descriptor.Artifacts = append(descriptor.Artifacts, ArtifactDigest{Role: "processor_manifest", SHA256: strings.Repeat("5", 64)})
+	baseline := identityForTest(t, descriptor, "omni-input-v1")
+	descriptor.Artifacts[1].SHA256 = strings.Repeat("6", 64)
+	if identityForTest(t, descriptor, "omni-input-v1").Fingerprint == baseline.Fingerprint {
+		t.Fatal("processor change retained the old vector namespace")
+	}
+}

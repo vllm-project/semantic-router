@@ -122,7 +122,7 @@ func GetMissingModels(specs []ModelSpec) ([]ModelSpec, error) {
 			return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
 		}
 
-		if complete && spec.Revision != "" && spec.Revision != "main" {
+		if complete && spec.PreparedArtifact == "" && spec.Revision != "" && spec.Revision != "main" {
 			complete, err = cachedRevisionMatches(spec)
 			if err != nil {
 				return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
@@ -137,6 +137,13 @@ func GetMissingModels(specs []ModelSpec) ([]ModelSpec, error) {
 }
 
 func isSpecComplete(spec ModelSpec) (bool, error) {
+	if spec.PreparedArtifact != "" {
+		_, err := verifyPreparedArtifact(spec)
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return err == nil, err
+	}
 	if spec.FilesOnly {
 		for _, name := range spec.RequiredFiles {
 			info, err := os.Stat(filepath.Join(spec.LocalPath, name))

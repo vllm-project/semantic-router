@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
@@ -22,10 +23,11 @@ const (
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
-	UserID string
-	Email  string
-	Role   string
-	Perms  map[string]bool
+	UserID    string
+	SessionID string
+	Email     string
+	Role      string
+	Perms     map[string]bool
 }
 
 func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
@@ -65,7 +67,8 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
 					return
 				}
-				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) {
+				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) &&
+					!embeddedGrafanaQueryAllowed(r, service.allowedOrigins) {
 					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
 					return
 				}
@@ -91,10 +94,11 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
-				UserID: user.ID,
-				Email:  user.Email,
-				Role:   user.Role,
-				Perms:  perms,
+				UserID:    user.ID,
+				SessionID: claims.ID,
+				Email:     user.Email,
+				Role:      user.Role,
+				Perms:     perms,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -150,8 +154,8 @@ func requiredPermission(method, path string) string {
 }
 
 // RequiredPermissions returns every permission needed by a request. Most
-// routes require one permission; controlled-pair creation is both an evidence
-// write and an immediate two-worker launch, so it deliberately requires both.
+// routes require one permission; sr-bench run creation and recovery persist a
+// manifest and immediately launch work, so both need write and run permissions.
 func RequiredPermissions(method, path string) []string {
 	if policy, ok := routercontract.LookupManagement(method, path); ok {
 		return policy.Permissions
@@ -159,7 +163,7 @@ func RequiredPermissions(method, path string) []string {
 	if !strings.HasPrefix(path, "/api/router/") {
 		path = strings.TrimSpace(strings.ToLower(path))
 	}
-	if method == http.MethodPost && path == "/api/evaluation/v1/controlled-pairs" {
+	if method == http.MethodPost && (path == "/api/sr-bench/v1/runs" || isSRBenchRunAction(path, "recover")) {
 		return []string{PermEvalWrite, PermEvalRun}
 	}
 	primary := requiredPermission(method, path)
@@ -317,6 +321,8 @@ func observabilityPermission(_ string, path string) (string, bool) {
 		return PermTopologyRead, true
 	case strings.HasPrefix(path, "/api/logs"):
 		return PermLogsRead, true
+	case observability.IsGrafanaQueryPath(path), observability.IsJaegerAPIPath(path):
+		return PermLogsRead, true
 	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
 		return PermLogsRead, true
 	case strings.HasPrefix(path, "/api/topology"):
@@ -328,8 +334,11 @@ func observabilityPermission(_ string, path string) (string, bool) {
 
 func featurePermission(method, path string) (string, bool) {
 	switch {
-	case path == "/api/evaluation/v1" || strings.HasPrefix(path, "/api/evaluation/v1/"):
-		if isEvaluationRunAction(path) || isControlledPairCancelAction(path) {
+	case path == "/api/sr-bench/v1" || strings.HasPrefix(path, "/api/sr-bench/v1/"):
+		if IsSRBenchComparisonRequest(method, path) {
+			return PermEvalRead, true
+		}
+		if isSRBenchRunAction(path, "cancel") {
 			return PermEvalRun, true
 		}
 		if method == http.MethodPost || method == http.MethodDelete {
@@ -345,18 +354,20 @@ func featurePermission(method, path string) (string, bool) {
 	}
 }
 
-func isControlledPairCancelAction(path string) bool {
-	path = strings.TrimRight(path, "/")
-	rest := strings.TrimPrefix(path, "/api/evaluation/v1/controlled-pairs/")
-	parts := strings.Split(rest, "/")
-	return len(parts) == 2 && parts[0] != "" && parts[1] == "cancel"
+// IsSRBenchComparisonRequest identifies the body-based read of saved results.
+// It does not exempt the request from normal POST authentication or CSRF checks.
+func IsSRBenchComparisonRequest(method, path string) bool {
+	return method == http.MethodPost && path == "/api/sr-bench/v1/comparisons"
 }
 
-func isEvaluationRunAction(path string) bool {
+func isSRBenchRunAction(path, action string) bool {
 	path = strings.TrimRight(path, "/")
-	rest := strings.TrimPrefix(path, "/api/evaluation/v1/runs/")
+	rest := strings.TrimPrefix(path, "/api/sr-bench/v1/runs/")
+	if rest == path {
+		return false
+	}
 	parts := strings.Split(rest, "/")
-	return len(parts) == 2 && parts[0] != "" && (parts[1] == "start" || parts[1] == "cancel")
+	return len(parts) == 2 && parts[0] != "" && parts[1] == action
 }
 
 func openclawPermission(method, path string) (string, bool) {

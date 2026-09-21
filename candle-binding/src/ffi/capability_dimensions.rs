@@ -40,7 +40,6 @@ use super::capabilities::{
     MODEL_TYPE_GEMMA, MODEL_TYPE_MMBERT, MODEL_TYPE_MULTIMODAL, MODEL_TYPE_QWEN3,
 };
 use super::embedding::{get_batched_qwen3_dimensions, get_multimodal_refs, GLOBAL_MODEL_FACTORY};
-use crate::model_architectures::embedding::gemma_embedding::SUPPORTED_EMBEDDING_DIMENSIONS;
 use crate::model_architectures::traits::LongContextEmbeddingCapable;
 
 pub(super) fn for_model(model_type: u32) -> Result<Option<EmbeddingDimensions>, ()> {
@@ -74,10 +73,7 @@ fn loaded_metadata(model_type: u32) -> Option<(usize, Vec<usize>)> {
     match model_type {
         MODEL_TYPE_GEMMA => {
             let model = factory.get_gemma_model()?;
-            Some((
-                model.config().hidden_size,
-                SUPPORTED_EMBEDDING_DIMENSIONS.to_vec(),
-            ))
+            Some((model.embedding_dimension(), model.available_dimensions()))
         }
         MODEL_TYPE_MMBERT => {
             let model = factory.get_mmbert_model()?;

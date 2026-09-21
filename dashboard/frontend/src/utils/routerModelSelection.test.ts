@@ -113,7 +113,7 @@ describe('router model selection', () => {
     ).toBeNull()
   })
 
-  it('lists explicit routing profiles without interpreting their descriptions', () => {
+  it('keeps the advertised default beside explicit profiles without interpreting descriptions', () => {
     expect(
       listRouterModels({
         data: [
@@ -141,6 +141,7 @@ describe('router model selection', () => {
         ],
       }),
     ).toEqual([
+      { id: CANONICAL_AUTO_MODEL, description: 'Intelligent Router for Mixture-of-Models' },
       {
         id: 'vllm-sr/mom-v1-blend',
         description: 'Intelligent Router for Mixture-of-Models',
@@ -163,6 +164,29 @@ describe('router model selection', () => {
         ],
       }),
     ).toEqual([{ id: CANONICAL_AUTO_MODEL, description: '' }])
+  })
+
+  it('retains a custom default with orchestration aliases and deduplicates auto aliases', () => {
+    expect(
+      listRouterModels({
+        data: [
+          { id: 'vllm-sr/fusion', routing: routingMetadata.profile },
+          { id: 'router/production', routing: routingMetadata.defaultRoute },
+          { id: 'auto', routing: routingMetadata.defaultRoute },
+        ],
+      }),
+    ).toEqual([
+      { id: 'router/production', description: '' },
+      { id: 'vllm-sr/fusion', description: '' },
+    ])
+  })
+
+  it('keeps explicit-entrypoint-only inventories without inventing an auto route', () => {
+    expect(
+      listRouterModels({
+        data: [{ id: 'router/explicit', routing: routingMetadata.profile }],
+      }),
+    ).toEqual([{ id: 'router/explicit', description: '' }])
   })
 
   it('rejects model records without valid routing metadata', () => {

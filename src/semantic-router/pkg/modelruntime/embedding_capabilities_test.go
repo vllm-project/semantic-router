@@ -10,8 +10,39 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
+
+type audioCapabilityProvider struct {
+	embedding.Provider
+	info embedding.ModelInfo
+}
+
+func (p audioCapabilityProvider) EmbeddingInfo() embedding.ModelInfo { return p.info }
+
+func TestOriginalAudioRequirementRejectsFeatureOnlyEncoder(t *testing.T) {
+	provider := audioCapabilityProvider{info: embedding.ModelInfo{Modalities: []string{"text", "audio"}}}
+	requirements := []config.EmbeddingRequirement{{Model: "multimodal", Consumer: "audio signal", Modality: "audio"}}
+	providers := map[string]embedding.Provider{"multimodal": provider}
+	base, err := embedding.NewFuncProvider("ort", 384, func(context.Context, string) ([]float32, error) {
+		t.Fatal("capability validation must precede inference")
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.Provider = base
+	providers["multimodal"] = provider
+	if err := validatePreparedEmbeddings(context.Background(), requirements, providers); !errors.Is(err, binding.ErrCapability) {
+		t.Fatalf("feature-only audio encoder accepted for original PCM: %v", err)
+	}
+	provider.info.Audio = &binding.AudioCapability{MaxSeconds: 30, MaxChannels: 8}
+	providers["multimodal"] = provider
+	if err := validatePreparedEmbeddings(context.Background(), requirements, providers); err != nil {
+		t.Fatalf("original-PCM capability rejected: %v", err)
+	}
+}
 
 func TestOwnedRemoteEmbeddingRejectsLocalCapabilitiesBeforeProvisioning(t *testing.T) {
 	var calls atomic.Int32
@@ -44,6 +75,7 @@ func TestOwnedRemoteEmbeddingRejectsLocalCapabilitiesBeforeProvisioning(t *testi
 			cfg.SemanticCache.Enabled = true
 			cfg.SemanticCache.EmbeddingModel = "mmbert"
 		}},
+		{"audio query", func(cfg *config.RouterConfig) { cfg.EmbeddingRules[0].QueryModality = config.QueryModalityAudio }},
 		{"image query", func(cfg *config.RouterConfig) { cfg.EmbeddingRules[0].QueryModality = config.QueryModalityImage }},
 		{"image candidates", func(cfg *config.RouterConfig) {
 			cfg.ComplexityRules = []config.ComplexityRule{{Name: "image", Hard: config.ComplexityCandidates{ImageCandidates: []string{"image.png"}}}}
@@ -69,43 +101,5 @@ func TestOwnedRemoteEmbeddingRejectsLocalCapabilitiesBeforeProvisioning(t *testi
 				t.Fatal(callErr)
 			}
 		})
-	}
-}
-
-func TestBatchedEmbeddingNeedsSkipsSeparateBERTPath(t *testing.T) {
-	cfg := &config.RouterConfig{
-		SemanticCache: config.SemanticCache{
-			Enabled:        true,
-			EmbeddingModel: "bert",
-		},
-	}
-	semanticCache, mlSelection, err := batchedEmbeddingNeeds(cfg, embeddingPaths{
-		qwen3: "models/qwen3-embedding",
-		bert:  "sentence-transformers/all-MiniLM-L6-v2",
-	})
-	if err != nil {
-		t.Fatalf("batchedEmbeddingNeeds() queried BERT capabilities: %v", err)
-	}
-	if semanticCache || mlSelection {
-		t.Fatalf("batchedEmbeddingNeeds() = %v/%v, want false/false for separate BERT path", semanticCache, mlSelection)
-	}
-}
-
-func TestUnifiedEmbeddingModelConfigured(t *testing.T) {
-	paths := embeddingPaths{
-		qwen3:  "models/qwen3",
-		gemma:  "models/gemma",
-		mmBert: "models/mmbert",
-		bert:   "models/bert",
-	}
-	for _, modelType := range []string{"qwen3", " GEMMA ", "MmBert"} {
-		if !unifiedEmbeddingModelConfigured(paths, modelType) {
-			t.Errorf("unifiedEmbeddingModelConfigured(%q) = false, want true", modelType)
-		}
-	}
-	for _, modelType := range []string{"bert", "multimodal", "unknown", ""} {
-		if unifiedEmbeddingModelConfigured(paths, modelType) {
-			t.Errorf("unifiedEmbeddingModelConfigured(%q) = true, want false", modelType)
-		}
 	}
 }

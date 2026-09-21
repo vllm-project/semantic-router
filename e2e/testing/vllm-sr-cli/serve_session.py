@@ -12,6 +12,25 @@ Signed-off-by: vLLM-SR Team
 import os
 import subprocess
 from contextlib import contextmanager
+from pathlib import Path
+
+from cli.commands.runtime_support import sensitive_env_names
+
+STARTUP_DIAGNOSTIC_TAIL_CHARS = 4000
+
+
+def startup_diagnostics(stdout, stderr, returncode, secret_values=()):
+    """Keep the failure at the end of both streams without exposing credentials."""
+    sections = [f"Serve exit code: {returncode}"]
+    for name, output in (("stdout", stdout), ("stderr", stderr)):
+        text = output or ""
+        for value in sorted(set(secret_values), key=len, reverse=True):
+            if value:
+                text = text.replace(value, "[redacted]")
+        if len(text) > STARTUP_DIAGNOSTIC_TAIL_CHARS:
+            text = "[earlier output omitted]\n" + text[-STARTUP_DIAGNOSTIC_TAIL_CHARS:]
+        sections.append(f"{name}:\n{text or '[empty]'}")
+    return "\n".join(sections)
 
 
 class ServeSessionMixin:
@@ -31,6 +50,12 @@ class ServeSessionMixin:
             "ifnotpresent",
         ]
         print(f"\nStarting in background: {' '.join(cmd)}")
+
+        environment = os.environ if env is None else env
+        names = sensitive_env_names(Path(self.test_dir) / "config.yaml")
+        self._serve_secret_values = tuple(
+            environment[name] for name in names if environment.get(name)
+        )
 
         process = subprocess.Popen(
             cmd,
@@ -71,13 +96,23 @@ class ServeSessionMixin:
                 serve_process.kill()
                 stdout, stderr = serve_process.communicate(timeout=10)
             self.fail(
-                "Serve did not complete startup before the timeout: "
-                f"{(stderr or stdout or '')[:500]}"
+                "Serve did not complete startup before the timeout:\n"
+                + startup_diagnostics(
+                    stdout,
+                    stderr,
+                    serve_process.returncode,
+                    getattr(self, "_serve_secret_values", ()),
+                )
             )
         if serve_process.returncode != 0:
             self.fail(
-                "Serve failed before completing runtime startup: "
-                f"{(stderr or stdout or '')[:500]}"
+                "Serve failed before completing runtime startup:\n"
+                + startup_diagnostics(
+                    stdout,
+                    stderr,
+                    serve_process.returncode,
+                    getattr(self, "_serve_secret_values", ()),
+                )
             )
         print("  ✓ Serve command completed runtime startup")
 

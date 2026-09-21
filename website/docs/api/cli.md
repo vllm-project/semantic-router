@@ -17,25 +17,41 @@ This reference is generated from the registered CLI commands. Command descriptio
 | Command | Description |
 | --- | --- |
 | [`vllm-sr`](#vllm-sr) | vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints. |
-| [`vllm-sr benchmark`](#vllm-sr-benchmark) | Install, run, compare, and gate reproducible benchmark workloads. |
-| [`vllm-sr benchmark benchmark-install`](#vllm-sr-benchmark-benchmark-install) | Install a data-only Benchmark Pack for replay or supported live tracks. |
-| [`vllm-sr benchmark benchmarks`](#vllm-sr-benchmark-benchmarks) | Print all exact-pinned external benchmark adapter descriptors. |
-| [`vllm-sr benchmark catalog`](#vllm-sr-benchmark-catalog) | Print the versioned evaluation suites, tracks, and targets. |
-| [`vllm-sr benchmark compare`](#vllm-sr-benchmark-compare) | Compare two local immutable drafts without rerunning either workload. |
-| [`vllm-sr benchmark gate`](#vllm-sr-benchmark-gate) | Emit standalone gate evidence and fail CI on blocking draft verdicts. |
-| [`vllm-sr benchmark intelligence`](#vllm-sr-benchmark-intelligence) | Plan and run the six fixed Intelligence 1.0 benchmarks. |
-| [`vllm-sr benchmark intelligence list`](#vllm-sr-benchmark-intelligence-list) | Print the exact Intelligence 1.0 benchmark and source contracts. |
-| [`vllm-sr benchmark intelligence plan`](#vllm-sr-benchmark-intelligence-plan) | Emit secret-free commands and provenance without executing a benchmark. |
-| [`vllm-sr benchmark intelligence run`](#vllm-sr-benchmark-intelligence-run) | Execute fixed benchmark adapters and write private evidence receipts. |
-| [`vllm-sr benchmark normalizers`](#vllm-sr-benchmark-normalizers) | Print the closed native-export contracts and explicit blockers. |
-| [`vllm-sr benchmark report`](#vllm-sr-benchmark-report) | Read the local worker report draft. |
-| [`vllm-sr benchmark run`](#vllm-sr-benchmark-run) | Execute a manifest and print its finalized worker report draft. |
-| [`vllm-sr benchmark suite-install`](#vllm-sr-benchmark-suite-install) | Install a normalized suite as exploratory E0 evidence. |
-| [`vllm-sr benchmark suite-list`](#vllm-sr-benchmark-suite-list) | List browser-safe suite metadata without private artifact references. |
-| [`vllm-sr benchmark suite-normalize`](#vllm-sr-benchmark-suite-normalize) | Parse one native export into exploratory E0 replay evidence. |
-| [`vllm-sr benchmark suite-show`](#vllm-sr-benchmark-suite-show) | Print the immutable operator manifest for one installed suite. |
-| [`vllm-sr benchmark validate`](#vllm-sr-benchmark-validate) | Validate a fixed evaluation manifest without executing it. |
-| [`vllm-sr benchmark verify-source`](#vllm-sr-benchmark-verify-source) | Verify an ignored external source checkout against its exact pin. |
+| [`vllm-sr benchmark`](#vllm-sr-benchmark) | Prepare, run, inspect, and compare sr-bench 1.0 evaluations. |
+| [`vllm-sr benchmark cancel`](#vllm-sr-benchmark-cancel) | Cancel remaining work while retaining all existing evidence. |
+| [`vllm-sr benchmark candidate-plan`](#vllm-sr-benchmark-candidate-plan) | Reuse a terminal baseline's frozen protocol without repeating its requests. |
+| [`vllm-sr benchmark catalog`](#vllm-sr-benchmark-catalog) | Show the nine benchmark adapters and evaluation profiles. |
+| [`vllm-sr benchmark compare`](#vllm-sr-benchmark-compare) | Compare matched cases against the best observed single model. |
+| [`vllm-sr benchmark comparison-options`](#vllm-sr-benchmark-comparison-options) | List eligible baselines, or comparable live runs for BASELINE; no model calls. |
+| [`vllm-sr benchmark dataset`](#vllm-sr-benchmark-dataset) | Prepare reproducible fixed benchmark case sets. |
+| [`vllm-sr benchmark dataset combine`](#vllm-sr-benchmark-dataset-combine) | Create a reusable multi-benchmark dataset from prepared manifests. |
+| [`vllm-sr benchmark dataset exclusions`](#vllm-sr-benchmark-dataset-exclusions) | Freeze finite named history without inspecting outcomes or running models. |
+| [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download or read a pinned source and freeze a reusable dataset. |
+| [`vllm-sr benchmark dataset show`](#vllm-sr-benchmark-dataset-show) | Inspect a frozen dataset or list datasets in the shared store. |
+| [`vllm-sr benchmark experiment`](#vllm-sr-benchmark-experiment) | Group durable baseline, routing checks, candidates and validation runs. |
+| [`vllm-sr benchmark experiment attach`](#vllm-sr-benchmark-experiment-attach) | Link existing evidence without changing or rerunning it. |
+| [`vllm-sr benchmark experiment create`](#vllm-sr-benchmark-experiment-create) | Create an experiment without submitting model work. |
+| [`vllm-sr benchmark experiment delete`](#vllm-sr-benchmark-experiment-delete) | Delete a finished experiment's grouping and links; keep every run and result. |
+| [`vllm-sr benchmark experiment list`](#vllm-sr-benchmark-experiment-list) | Read one page of experiments. |
+| [`vllm-sr benchmark experiment show`](#vllm-sr-benchmark-experiment-show) | Read the experiment and one page of its linked runs. |
+| [`vllm-sr benchmark export`](#vllm-sr-benchmark-export) | Export a dev response matrix for training; holdout export is rejected. |
+| [`vllm-sr benchmark plan`](#vllm-sr-benchmark-plan) | Validate and freeze all cases, targets, profiles, and limits without inference. |
+| [`vllm-sr benchmark preview`](#vllm-sr-benchmark-preview) | Inspect routing decisions without producing quality scores. |
+| [`vllm-sr benchmark reconcile-usage`](#vllm-sr-benchmark-reconcile-usage) | Append an offline accounting correction from saved streams; no inference. |
+| [`vllm-sr benchmark recover`](#vllm-sr-benchmark-recover) | Create a separate attempt from a reviewed recovery plan; never auto-retry. |
+| [`vllm-sr benchmark recover-plan`](#vllm-sr-benchmark-recover-plan) | Inspect eligible continuation cells without making model requests. |
+| [`vllm-sr benchmark regrade`](#vllm-sr-benchmark-regrade) | Regrade saved MCQ/grid final outputs without mutating original evidence. |
+| [`vllm-sr benchmark replay`](#vllm-sr-benchmark-replay) | Estimate eligible static routes from saved answers without inference. |
+| [`vllm-sr benchmark replay-options`](#vllm-sr-benchmark-replay-options) | List eligible baselines, or compatible previews for BASELINE; no model calls. |
+| [`vllm-sr benchmark report`](#vllm-sr-benchmark-report) | Show quality, four-bucket usage, cost, latency, time, and limitations. |
+| [`vllm-sr benchmark run`](#vllm-sr-benchmark-run) | Execute one frozen live evaluation through the shared service. |
+| [`vllm-sr benchmark runs`](#vllm-sr-benchmark-runs) |  |
+| [`vllm-sr benchmark serve`](#vllm-sr-benchmark-serve) | Own the durable journal and workers independently of a browser. |
+| [`vllm-sr benchmark setup`](#vllm-sr-benchmark-setup) | Inspect prerequisites or explicitly install optional benchmark harnesses. |
+| [`vllm-sr benchmark show`](#vllm-sr-benchmark-show) | Read a run, bounded evidence page, or one complete saved call. |
+| [`vllm-sr benchmark target`](#vllm-sr-benchmark-target) | Manage the operator-owned target registry used by the Dashboard. |
+| [`vllm-sr benchmark target list`](#vllm-sr-benchmark-target-list) |  |
+| [`vllm-sr benchmark target register`](#vllm-sr-benchmark-target-register) | Replace the local registry from a JSON list of credential references. |
 | [`vllm-sr completion`](#vllm-sr-completion) | Generate or install shell completion for vllm-sr. |
 | [`vllm-sr completion install`](#vllm-sr-completion-install) | Install shell completions into your shell configuration. |
 | [`vllm-sr completion show`](#vllm-sr-completion-show) | Print the completion script for a shell. |
@@ -71,7 +87,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr request`](#vllm-sr-request) | Send requests through an Envoy listener. |
 | [`vllm-sr request chat`](#vllm-sr-request-chat) | Send a one-shot chat completion through the Envoy-routed HTTP API. |
 | [`vllm-sr route`](#vllm-sr-route) | Preview routing decisions or probe the routed inference path. |
-| [`vllm-sr route preview`](#vllm-sr-route-preview) | Preview signals and the selected route without calling a model backend. |
+| [`vllm-sr route preview`](#vllm-sr-route-preview) | Preview signals and model selection without generating an answer. |
 | [`vllm-sr route probe`](#vllm-sr-route-probe) | Probe a real route and assert complete assistant delivery for expected 2xx. |
 | [`vllm-sr serve`](#vllm-sr-serve) | Start vLLM Semantic Router. |
 | [`vllm-sr status`](#vllm-sr-status) | Show status of vLLM Semantic Router services. |
@@ -99,36 +115,47 @@ vLLM Semantic Router CLI - Intelligent routing and caching for vLLM endpoints.
 Usage: vllm-sr benchmark [OPTIONS] COMMAND [ARGS]...
 ```
 
-Install, run, compare, and gate reproducible benchmark workloads.
+Prepare, run, inspect, and compare sr-bench 1.0 evaluations.
 
 | Parameter | Description |
 | --- | --- |
+| `--url TEXT` | Shared sr-bench service URL; discovers the current local stack by default. Environment: SR_BENCH_URL. |
+| `--store PATH` | Durable service store; discovers the current local stack by default. Environment: SR_BENCH_STORE. |
+| `--no-autostart` | Require an already running service. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark benchmark-install` {#vllm-sr-benchmark-benchmark-install}
+### `vllm-sr benchmark cancel` {#vllm-sr-benchmark-cancel}
 
 ```text
-Usage: vllm-sr benchmark benchmark-install [OPTIONS]
+Usage: vllm-sr benchmark cancel [OPTIONS] RUN_ID
 ```
 
-Install a data-only Benchmark Pack for replay or supported live tracks.
+Cancel remaining work while retaining all existing evidence.
 
 | Parameter | Description |
 | --- | --- |
-| `--pack DIRECTORY` | Clean exact-revision checkout containing benchmark.yaml and bundle/.  [required] |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
+| `RUN_ID` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark benchmarks` {#vllm-sr-benchmark-benchmarks}
+### `vllm-sr benchmark candidate-plan` {#vllm-sr-benchmark-candidate-plan}
 
 ```text
-Usage: vllm-sr benchmark benchmarks [OPTIONS]
+Usage: vllm-sr benchmark candidate-plan [OPTIONS] BASELINE_RUN_ID
 ```
 
-Print all exact-pinned external benchmark adapter descriptors.
+Reuse a terminal baseline's frozen protocol without repeating its requests.
+
+Failed, cancelled and interrupted full-plan baselines may supply the same
+questions and settings. This does not qualify their measurements for Compare.
 
 | Parameter | Description |
 | --- | --- |
+| `BASELINE_RUN_ID` | Required argument. Type: text. |
+| `--target TEXT` | Registered MoM target; may be repeated.  [required] May be repeated. |
+| `--mode CHOICE` | [default: live] Choices: live, preview. |
+| `--name TEXT` | — |
+| `--experiment TEXT` | — |
+| `--hypothesis TEXT` | Default: . |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark catalog` {#vllm-sr-benchmark-catalog}
@@ -137,124 +164,328 @@ Print all exact-pinned external benchmark adapter descriptors.
 Usage: vllm-sr benchmark catalog [OPTIONS]
 ```
 
-Print the versioned evaluation suites, tracks, and targets.
+Show the nine benchmark adapters and evaluation profiles.
 
 | Parameter | Description |
 | --- | --- |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark compare` {#vllm-sr-benchmark-compare}
 
 ```text
-Usage: vllm-sr benchmark compare [OPTIONS]
+Usage: vllm-sr benchmark compare [OPTIONS] BASELINE_RUN_ID CANDIDATE_RUN_ID
 ```
 
-Compare two local immutable drafts without rerunning either workload.
+Compare matched cases against the best observed single model.
 
 | Parameter | Description |
 | --- | --- |
-| `--baseline TEXT` | [required] |
-| `--candidate TEXT` | [required] |
-| `--store PATH` | [default: .vllm-sr/evaluation-store] |
+| `BASELINE_RUN_ID` | Required argument. Type: text. |
+| `CANDIDATE_RUN_ID` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark gate` {#vllm-sr-benchmark-gate}
+### `vllm-sr benchmark comparison-options` {#vllm-sr-benchmark-comparison-options}
 
 ```text
-Usage: vllm-sr benchmark gate [OPTIONS] RUN_ID
+Usage: vllm-sr benchmark comparison-options [OPTIONS] [BASELINE]
 ```
 
-Emit standalone gate evidence and fail CI on blocking draft verdicts.
+List eligible baselines, or comparable live runs for BASELINE; no model calls.
+
+| Parameter | Description |
+| --- | --- |
+| `[BASELINE]` | Optional argument. Type: text. |
+| `--after TEXT` | Opaque cursor from the previous eligible options page. |
+| `--limit INTEGER RANGE` | [default: 10; 1&lt;=x&lt;=25] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset` {#vllm-sr-benchmark-dataset}
+
+```text
+Usage: vllm-sr benchmark dataset [OPTIONS] COMMAND [ARGS]...
+```
+
+Prepare reproducible fixed benchmark case sets.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset combine` {#vllm-sr-benchmark-dataset-combine}
+
+```text
+Usage: vllm-sr benchmark dataset combine [OPTIONS] MANIFESTS...
+```
+
+Create a reusable multi-benchmark dataset from prepared manifests.
+
+| Parameter | Description |
+| --- | --- |
+| `MANIFESTS...` | Required argument. Type: path. Accepts multiple values. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset exclusions` {#vllm-sr-benchmark-dataset-exclusions}
+
+```text
+Usage: vllm-sr benchmark dataset exclusions [OPTIONS]
+```
+
+Freeze finite named history without inspecting outcomes or running models.
+
+| Parameter | Description |
+| --- | --- |
+| `--dataset TEXT` | Named prepared dataset whose entire membership is reserved. May be repeated. |
+| `--run TEXT` | Named frozen run whose entire planned membership is reserved. May be repeated. |
+| `--output PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset prepare` {#vllm-sr-benchmark-dataset-prepare}
+
+```text
+Usage: vllm-sr benchmark dataset prepare [OPTIONS]
+```
+
+Download or read a pinned source and freeze a reusable dataset.
+
+| Parameter | Description |
+| --- | --- |
+| `--benchmark TEXT` | [required] |
+| `--profile CHOICE` | Choices: smoke, quick, standard. Default: quick. |
+| `--source-path PATH` | — |
+| `--revision TEXT` | — |
+| `--seed INTEGER` | Default: 20260918. |
+| `--source-partition TEXT` | Frozen upstream partition for native task identity; never an evaluation split. |
+| `--exclusion-snapshot PATH` | — |
+| `--evaluation-role CHOICE` | Explicit family role; retest is never selected automatically. Choices: holdout, retest. |
+| `--limit INTEGER` | Custom case cap; cannot be represented as an upstream full benchmark. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset show` {#vllm-sr-benchmark-dataset-show}
+
+```text
+Usage: vllm-sr benchmark dataset show [OPTIONS] [PATH]
+```
+
+Inspect a frozen dataset or list datasets in the shared store.
+
+| Parameter | Description |
+| --- | --- |
+| `[PATH]` | Optional argument. Type: path. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment` {#vllm-sr-benchmark-experiment}
+
+```text
+Usage: vllm-sr benchmark experiment [OPTIONS] COMMAND [ARGS]...
+```
+
+Group durable baseline, routing checks, candidates and validation runs.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment attach` {#vllm-sr-benchmark-experiment-attach}
+
+```text
+Usage: vllm-sr benchmark experiment attach [OPTIONS] EXPERIMENT_ID
+```
+
+Link existing evidence without changing or rerunning it.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--run TEXT` | [required] |
+| `--role CHOICE` | [required] Choices: baseline, candidate, estimate, initial, preview, recovery, smoke, validation. |
+| `--hypothesis TEXT` | Default: . |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment create` {#vllm-sr-benchmark-experiment-create}
+
+```text
+Usage: vllm-sr benchmark experiment create [OPTIONS] NAME
+```
+
+Create an experiment without submitting model work.
+
+| Parameter | Description |
+| --- | --- |
+| `NAME` | Required argument. Type: text. |
+| `--idempotency-key TEXT` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment delete` {#vllm-sr-benchmark-experiment-delete}
+
+```text
+Usage: vllm-sr benchmark experiment delete [OPTIONS] EXPERIMENT_ID
+```
+
+Delete a finished experiment's grouping and links; keep every run and result.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment list` {#vllm-sr-benchmark-experiment-list}
+
+```text
+Usage: vllm-sr benchmark experiment list [OPTIONS]
+```
+
+Read one page of experiments.
+
+| Parameter | Description |
+| --- | --- |
+| `--after INTEGER RANGE` | [x&gt;=0] Default: 0. |
+| `--limit INTEGER RANGE` | [1&lt;=x&lt;=50] Default: 20. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark experiment show` {#vllm-sr-benchmark-experiment-show}
+
+```text
+Usage: vllm-sr benchmark experiment show [OPTIONS] EXPERIMENT_ID
+```
+
+Read the experiment and one page of its linked runs.
+
+| Parameter | Description |
+| --- | --- |
+| `EXPERIMENT_ID` | Required argument. Type: text. |
+| `--after INTEGER RANGE` | [x&gt;=0] Default: 0. |
+| `--limit INTEGER RANGE` | [1&lt;=x&lt;=50] Default: 20. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark export` {#vllm-sr-benchmark-export}
+
+```text
+Usage: vllm-sr benchmark export [OPTIONS] RUN_ID
+```
+
+Export a dev response matrix for training; holdout export is rejected.
 
 | Parameter | Description |
 | --- | --- |
 | `RUN_ID` | Required argument. Type: text. |
-| `--store PATH` | [default: .vllm-sr/evaluation-store] |
-| `--allow-unavailable` | Default: false. |
-| `--help` | Show this message and exit. Default: false. |
-
-### `vllm-sr benchmark intelligence` {#vllm-sr-benchmark-intelligence}
-
-```text
-Usage: vllm-sr benchmark intelligence [OPTIONS] COMMAND [ARGS]...
-```
-
-Plan and run the six fixed Intelligence 1.0 benchmarks.
-
-| Parameter | Description |
-| --- | --- |
-| `--help` | Show this message and exit. Default: false. |
-
-### `vllm-sr benchmark intelligence list` {#vllm-sr-benchmark-intelligence-list}
-
-```text
-Usage: vllm-sr benchmark intelligence list [OPTIONS]
-```
-
-Print the exact Intelligence 1.0 benchmark and source contracts.
-
-| Parameter | Description |
-| --- | --- |
-| `--help` | Show this message and exit. Default: false. |
-
-### `vllm-sr benchmark intelligence plan` {#vllm-sr-benchmark-intelligence-plan}
-
-```text
-Usage: vllm-sr benchmark intelligence plan [OPTIONS]
-```
-
-Emit secret-free commands and provenance without executing a benchmark.
-
-| Parameter | Description |
-| --- | --- |
-| `--benchmark TEXT` | Exact catalog benchmark ID; repeat it or use all.  [default: all] May be repeated. |
-| `--model TEXT` | [required] |
-| `--base-url TEXT` | [required] |
-| `--source-root DIRECTORY` | Directory containing exact-pinned aiperf, inspect-evals, and harbor checkouts.  [required] |
 | `--output PATH` | [required] |
-| `--tokenizer TEXT` | [default: builtin] |
-| `--api-key-env TEXT` | [default: OPENAI_API_KEY] |
-| `--concurrency INTEGER` | [default: 8] |
-| `--reasoning-effort TEXT` | — |
-| `--sample-limit INTEGER` | — |
-| `--terminal-attempts INTEGER` | [default: 5] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark intelligence run` {#vllm-sr-benchmark-intelligence-run}
+### `vllm-sr benchmark plan` {#vllm-sr-benchmark-plan}
 
 ```text
-Usage: vllm-sr benchmark intelligence run [OPTIONS]
+Usage: vllm-sr benchmark plan [OPTIONS]
 ```
 
-Execute fixed benchmark adapters and write private evidence receipts.
+Validate and freeze all cases, targets, profiles, and limits without inference.
 
 | Parameter | Description |
 | --- | --- |
-| `--benchmark TEXT` | Exact catalog benchmark ID; repeat it or use all.  [default: all] May be repeated. |
-| `--model TEXT` | [required] |
-| `--base-url TEXT` | [required] |
-| `--source-root DIRECTORY` | Directory containing exact-pinned aiperf, inspect-evals, and harbor checkouts.  [required] |
+| `--manifest PATH` | [required] |
+| `--output PATH` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark preview` {#vllm-sr-benchmark-preview}
+
+```text
+Usage: vllm-sr benchmark preview [OPTIONS]
+```
+
+Inspect routing decisions without producing quality scores.
+
+| Parameter | Description |
+| --- | --- |
+| `--idempotency-key TEXT` | Bind repeated submissions to the same frozen plan, without reissuing calls. |
+| `--detach` | Return immediately with a durable run ID. Default: false. |
+| `--manifest PATH` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark reconcile-usage` {#vllm-sr-benchmark-reconcile-usage}
+
+```text
+Usage: vllm-sr benchmark reconcile-usage [OPTIONS] RUN_ID
+```
+
+Append an offline accounting correction from saved streams; no inference.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark recover` {#vllm-sr-benchmark-recover}
+
+```text
+Usage: vllm-sr benchmark recover [OPTIONS] RUN_ID
+```
+
+Create a separate attempt from a reviewed recovery plan; never auto-retry.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
+| `--plan PATH` | [required] |
+| `--idempotency-key TEXT` | [required] |
+| `--acknowledge-new-attempt` | Authorize new paid attempts for the exact reviewed failed cells. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark recover-plan` {#vllm-sr-benchmark-recover-plan}
+
+```text
+Usage: vllm-sr benchmark recover-plan [OPTIONS] RUN_ID
+```
+
+Inspect eligible continuation cells without making model requests.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
+| `--mode CHOICE` | Choices: undispatched, failed. Default: undispatched. |
+| `--output PATH` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark regrade` {#vllm-sr-benchmark-regrade}
+
+```text
+Usage: vllm-sr benchmark regrade [OPTIONS] RUN_ID
+```
+
+Regrade saved MCQ/grid final outputs without mutating original evidence.
+
+| Parameter | Description |
+| --- | --- |
+| `RUN_ID` | Required argument. Type: text. |
 | `--output PATH` | [required] |
-| `--tokenizer TEXT` | [default: builtin] |
-| `--api-key-env TEXT` | [default: OPENAI_API_KEY] |
-| `--concurrency INTEGER` | [default: 8] |
-| `--reasoning-effort TEXT` | — |
-| `--sample-limit INTEGER` | — |
-| `--terminal-attempts INTEGER` | [default: 5] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark normalizers` {#vllm-sr-benchmark-normalizers}
+### `vllm-sr benchmark replay` {#vllm-sr-benchmark-replay}
 
 ```text
-Usage: vllm-sr benchmark normalizers [OPTIONS]
+Usage: vllm-sr benchmark replay [OPTIONS]
 ```
 
-Print the closed native-export contracts and explicit blockers.
+Estimate eligible static routes from saved answers without inference.
 
 | Parameter | Description |
 | --- | --- |
-| `--runnable-only` | Default: false. |
+| `--baseline TEXT` | Completed single-model answer matrix run ID.  [required] |
+| `--preview TEXT` | Completed deterministic routing preview run ID.  [required] |
+| `--idempotency-key TEXT` | — |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark replay-options` {#vllm-sr-benchmark-replay-options}
+
+```text
+Usage: vllm-sr benchmark replay-options [OPTIONS] [BASELINE]
+```
+
+List eligible baselines, or compatible previews for BASELINE; no model calls.
+
+| Parameter | Description |
+| --- | --- |
+| `[BASELINE]` | Optional argument. Type: text. |
+| `--after TEXT` | Opaque cursor from the previous eligible options page. |
+| `--limit INTEGER RANGE` | [default: 10; 1&lt;=x&lt;=25] |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark report` {#vllm-sr-benchmark-report}
@@ -263,12 +494,12 @@ Print the closed native-export contracts and explicit blockers.
 Usage: vllm-sr benchmark report [OPTIONS] RUN_ID
 ```
 
-Read the local worker report draft.
+Show quality, four-bucket usage, cost, latency, time, and limitations.
 
 | Parameter | Description |
 | --- | --- |
 | `RUN_ID` | Required argument. Type: text. |
-| `--store PATH` | [default: .vllm-sr/evaluation-store] |
+| `--output PATH` | — |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr benchmark run` {#vllm-sr-benchmark-run}
@@ -277,103 +508,108 @@ Read the local worker report draft.
 Usage: vllm-sr benchmark run [OPTIONS]
 ```
 
-Execute a manifest and print its finalized worker report draft.
+Execute one frozen live evaluation through the shared service.
 
 | Parameter | Description |
 | --- | --- |
+| `--idempotency-key TEXT` | Bind repeated submissions to the same frozen plan, without reissuing calls. |
+| `--detach` | Return immediately with a durable run ID. Default: false. |
 | `--manifest PATH` | [required] |
-| `--store PATH` | [default: .vllm-sr/evaluation-store] |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark suite-install` {#vllm-sr-benchmark-suite-install}
+### `vllm-sr benchmark runs` {#vllm-sr-benchmark-runs}
 
 ```text
-Usage: vllm-sr benchmark suite-install [OPTIONS]
+Usage: vllm-sr benchmark runs [OPTIONS]
 ```
-
-Install a normalized suite as exploratory E0 evidence.
 
 | Parameter | Description |
 | --- | --- |
-| `--request FILE` | [required] |
-| `--bundle DIRECTORY` | [required] |
-| `--source-root DIRECTORY` | Ignored directory containing the exact-pinned benchmark checkout(s).  [required] |
-| `--export-root DIRECTORY` | Frozen export re-parsed to verify deterministic normalization; this does not attest upstream benchmark execution. |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark suite-list` {#vllm-sr-benchmark-suite-list}
+### `vllm-sr benchmark serve` {#vllm-sr-benchmark-serve}
 
 ```text
-Usage: vllm-sr benchmark suite-list [OPTIONS]
+Usage: vllm-sr benchmark serve [OPTIONS]
 ```
 
-List browser-safe suite metadata without private artifact references.
+Own the durable journal and workers independently of a browser.
 
 | Parameter | Description |
 | --- | --- |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
+| `--host TEXT` | Default: 127.0.0.1. |
+| `--port INTEGER` | Default: 8090. |
+| `--store-identity TEXT` | Canonical host store path SHA256 for an isolated runtime container. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark suite-normalize` {#vllm-sr-benchmark-suite-normalize}
+### `vllm-sr benchmark setup` {#vllm-sr-benchmark-setup}
 
 ```text
-Usage: vllm-sr benchmark suite-normalize [OPTIONS]
+Usage: vllm-sr benchmark setup [OPTIONS]
 ```
 
-Parse one native export into exploratory E0 replay evidence.
+Inspect prerequisites or explicitly install optional benchmark harnesses.
 
 | Parameter | Description |
 | --- | --- |
-| `--adapter TEXT` | [required] |
-| `--suite-id TEXT` | [required] |
-| `--suite-name TEXT` | — |
-| `--source-root DIRECTORY` | Ignored directory containing the exact-pinned benchmark checkout(s).  [required] |
-| `--export-root DIRECTORY` | Directory containing the adapter's frozen native export shape. Its origin is not attested by this command.  [required] |
-| `--output DIRECTORY` | New immutable directory for request.json and the normalized bundle.  [required] |
+| `--benchmark TEXT` | Default: all. |
+| `--install` | Install pinned optional harnesses and task sources; makes no model requests. Default: false. |
+| `--build-sandbox` | Build a local offline grading image and record its content digest. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark suite-show` {#vllm-sr-benchmark-suite-show}
+### `vllm-sr benchmark show` {#vllm-sr-benchmark-show}
 
 ```text
-Usage: vllm-sr benchmark suite-show [OPTIONS] SUITE_ID
+Usage: vllm-sr benchmark show [OPTIONS] RUN_ID
 ```
 
-Print the immutable operator manifest for one installed suite.
+Read a run, bounded evidence page, or one complete saved call.
 
 | Parameter | Description |
 | --- | --- |
-| `SUITE_ID` | Required argument. Type: text. |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
+| `RUN_ID` | Required argument. Type: text. |
+| `--results` | Default: false. |
+| `--calls` | Default: false. |
+| `--active` | Read only in-progress calls; requires --calls. Default: false. |
+| `--events` | Default: false. |
+| `--after INTEGER RANGE` | Evidence cursor from the previous page.  [x&gt;=0] Default: 0. |
+| `--limit INTEGER RANGE` | Calls/results per page.  [1&lt;=x&lt;=500] Default: 100. |
+| `--call-id TEXT` | Read one full saved call including prompt and final response. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark validate` {#vllm-sr-benchmark-validate}
+### `vllm-sr benchmark target` {#vllm-sr-benchmark-target}
 
 ```text
-Usage: vllm-sr benchmark validate [OPTIONS]
+Usage: vllm-sr benchmark target [OPTIONS] COMMAND [ARGS]...
 ```
 
-Validate a fixed evaluation manifest without executing it.
+Manage the operator-owned target registry used by the Dashboard.
 
 | Parameter | Description |
 | --- | --- |
-| `--manifest PATH` | [required] |
-| `--suite-store DIRECTORY` | [default: .vllm-sr/evaluation-suites] |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr benchmark verify-source` {#vllm-sr-benchmark-verify-source}
+### `vllm-sr benchmark target list` {#vllm-sr-benchmark-target-list}
 
 ```text
-Usage: vllm-sr benchmark verify-source [OPTIONS]
+Usage: vllm-sr benchmark target list [OPTIONS]
 ```
-
-Verify an ignored external source checkout against its exact pin.
 
 | Parameter | Description |
 | --- | --- |
-| `--adapter TEXT` | [required] |
-| `--source-root DIRECTORY` | [required] |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark target register` {#vllm-sr-benchmark-target-register}
+
+```text
+Usage: vllm-sr benchmark target register [OPTIONS]
+```
+
+Replace the local registry from a JSON list of credential references.
+
+| Parameter | Description |
+| --- | --- |
+| `--file PATH` | [required] |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr completion` {#vllm-sr-completion}
@@ -1003,13 +1239,17 @@ Preview routing decisions or probe the routed inference path.
 Usage: vllm-sr route preview [OPTIONS]
 ```
 
-Preview signals and the selected route without calling a model backend.
+Preview signals and model selection without generating an answer.
 
 | Parameter | Description |
 | --- | --- |
 | `--prompt TEXT` | Plain text prompt to evaluate. |
 | `--messages TEXT` | OpenAI-style messages JSON array string. |
 | `--model TEXT` | Routing model or entrypoint whose recipe should be evaluated. |
+| `--request-file FILE` | JSON Router Preview request; supported Chat messages and prompt fields only. |
+| `--session-id TEXT` | Read-only Learning session identity. |
+| `--conversation-id TEXT` | Read-only Learning conversation identity. |
+| `--sampling-seed INTEGER RANGE` | Preview-only exploration seed; does not fix a later live random draw.  [-9223372036854775808&lt;=x&lt;=9223372036854775807] |
 | `--endpoint TEXT` | Router management origin or /api/v1 root; defaults to the local management port. |
 | `--token-env TEXT` | Environment variable containing the Router management bearer token.  [default: VSR_MGMT_TOKEN] |
 | `--trace / --no-trace` | Include per-decision routing trace trees. Default: false. |

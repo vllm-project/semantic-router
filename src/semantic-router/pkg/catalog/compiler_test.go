@@ -122,6 +122,45 @@ func TestProviderLookupReturnsDefensiveDefaultHeaders(t *testing.T) {
 	}
 }
 
+func TestSnowflakeCortexProviderContractFixture(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider, ok := registry.Provider("snowflake-cortex")
+	if !ok {
+		t.Fatal("snowflake-cortex provider is missing")
+	}
+	if provider.DefaultProtocol != "openai/chat-completions@1" {
+		t.Fatalf("default protocol = %q", provider.DefaultProtocol)
+	}
+	wantOps := "openai/chat-completions@1#create,anthropic/messages@1#create"
+	if got := strings.Join(provider.SupportedOperations, ","); got != wantOps {
+		t.Fatalf("supported operations = %v, want %v", got, wantOps)
+	}
+	if got := strings.Join(provider.Protocols, ","); got != "openai/chat-completions@1,anthropic/messages@1" {
+		t.Fatalf("protocols = %v", got)
+	}
+	if provider.Auth.Strategy != "bearer" || provider.Auth.Header != "Authorization" || provider.Auth.Prefix != "Bearer" {
+		t.Fatalf("unexpected auth contract: %+v", provider.Auth)
+	}
+	if provider.DefaultHeaders["anthropic-version"] != "2023-06-01" {
+		t.Fatalf("unexpected default headers: %+v", provider.DefaultHeaders)
+	}
+	if provider.DefaultBaseURL != "" {
+		t.Fatalf("account-scoped provider must not pin a default base URL, got %q", provider.DefaultBaseURL)
+	}
+	if provider.Presentation.Monogram != "SF" {
+		t.Fatalf("unexpected presentation: %+v", provider.Presentation)
+	}
+	// The failure envelope has an observed fixture and a vendor decode; the
+	// accepted envelope of both declared protocols is still uncovered, so this
+	// must not claim live_verified.
+	if provider.Conformance.Status != "fixture_verified" {
+		t.Fatalf("conformance = %+v, want fixture_verified until accepted-wire conformance exists", provider.Conformance)
+	}
+}
+
 func TestBenchmarkLookupReturnsDefensiveTagsAndNormalization(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
