@@ -6,6 +6,16 @@ export interface Benchmark {
   description?: string
 }
 
+export type DatasetPreparation = Record<
+  string,
+  {
+    evaluation_role: 'holdout' | 'retest' | null
+    coverage: 'named-memberships-only' | 'no-history-qualification'
+    selected_count: number
+    excluded_count: number
+  }
+>
+
 export interface Dataset {
   id: string
   path: string
@@ -17,6 +27,7 @@ export interface Dataset {
   name?: string
   split?: string
   custom_subset?: boolean
+  preparation?: DatasetPreparation
 }
 
 export interface DatasetDetail {
@@ -34,6 +45,7 @@ export interface DatasetDetail {
   }>
   categories: Array<{ benchmark: string; name: string; count: number }>
   provenance: {
+    preparation?: DatasetPreparation
     sha256?: string
     seed?: number
     selection?: unknown
@@ -121,7 +133,12 @@ export interface Manifest {
   seed: number
   targets: Target[]
   auxiliary_targets?: Record<string, Target>
-  dataset?: { path: string; sha256: string }
+  dataset?: {
+    path: string
+    sha256: string
+    benchmarks?: string[]
+    preparation?: DatasetPreparation
+  }
   cases?: unknown[]
   limits: {
     concurrency: number
@@ -265,6 +282,7 @@ export interface Report {
   limitations: string[]
   provenance: Record<string, unknown> & {
     accounting_correction?: AccountingCorrectionReceipt | null
+    dataset?: Manifest['dataset'] | null
   }
   failure?: {
     case_id: string

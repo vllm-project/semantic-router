@@ -62,10 +62,15 @@ def native_task_identity(benchmark, row, source):
             raise ValueError("GPQA native question identity is missing")
         task = digest(question)
     else:
-        task = next(
-            (row[key] for key in ("id", "question_id", "problem_id") if key in row),
-            None,
-        )
+        if benchmark == "simpleqa-verified" and "original_index" in row:
+            task = row["original_index"]
+            if isinstance(task, str) and not task.strip():
+                raise ValueError("SimpleQA native original_index is blank")
+        else:
+            task = next(
+                (row[key] for key in ("id", "question_id", "problem_id") if key in row),
+                None,
+            )
         if type(task) is int:
             task = str(task)
         task = text(task, "native upstream task ID")

@@ -1,6 +1,7 @@
 """Synthetic history selection across the CLI, immutable datasets and frozen plans."""
 
 import copy
+import csv
 import json
 import sqlite3
 from pathlib import Path
@@ -199,6 +200,146 @@ def test_imports_and_legacy_history_do_not_acquire_identity(native, tmp_path):
         profile="smoke", evaluation_role="retest", **{**plain, "source_path": imported}
     )
     assert retest["preparation"]["mmlu-pro"]["task_source"] is None
+
+
+@pytest.mark.parametrize("original_index", [0, "0", 407, "407"])
+def test_simpleqa_native_original_index_precedes_generic_ids(native, original_index):
+    prepared = sources.prepare_dataset(profile="quick", **native)
+    source = prepared["preparation"]["mmlu-pro"]["task_source"]
+    identity = native_task_identity(
+        "simpleqa-verified", {"original_index": original_index, "id": "alias"}, source
+    )
+    assert identity["task_id"] == str(original_index)
+    assert identity["domain"] == ""
+
+
+@pytest.mark.parametrize("original_index", [True, False, None, "", " ", "\t", 0.0])
+def test_simpleqa_invalid_original_index_never_falls_back(native, original_index):
+    prepared = sources.prepare_dataset(profile="quick", **native)
+    source = prepared["preparation"]["mmlu-pro"]["task_source"]
+    with pytest.raises(ValueError):
+        native_task_identity(
+            "simpleqa-verified",
+            {"original_index": original_index, "id": "alias"},
+            source,
+        )
+
+
+def test_simpleqa_generic_native_id_retains_contract_without_index_fallback(native):
+    prepared = sources.prepare_dataset(profile="quick", **native)
+    source = prepared["preparation"]["mmlu-pro"]["task_source"]
+    assert (
+        native_task_identity("simpleqa-verified", {"id": 0}, source)["task_id"] == "0"
+    )
+    assert (
+        native_task_identity(
+            "mmlu-pro", {"original_index": 9, "question_id": 0}, source
+        )["task_id"]
+        == "0"
+    )
+    with pytest.raises(ValueError, match="native upstream task ID"):
+        native_task_identity("simpleqa-verified", {"problem": "Synthetic"}, source)
+
+
+def test_simpleqa_csv_native_ids_survive_cli_history_without_changing_case_ids(
+    native, tmp_path, monkeypatch
+):
+    monkeypatch.setitem(sources.COUNTS, "simpleqa-verified", (1, 2, 4))
+    path = tmp_path / "simpleqa.csv"
+    native_ids = [501, 0, 31, 20, 72, 94, 23, 801]
+    with path.open("w", newline="") as stream:
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=[
+                "original_index",
+                "problem",
+                "answer",
+                "topic",
+                "answer_type",
+                "multi_step",
+                "requires_reasoning",
+                "urls",
+            ],
+        )
+        writer.writeheader()
+        for identity in native_ids:
+            writer.writerow(
+                {
+                    "original_index": identity,
+                    "problem": f"Synthetic {identity}",
+                    "answer": "fixture",
+                    "topic": "fixture",
+                    "answer_type": "str",
+                    "multi_step": False,
+                    "requires_reasoning": False,
+                    "urls": "[]",
+                }
+            )
+    options = {**native, "benchmark": "simpleqa-verified", "source_path": path}
+    legacy = sources.prepare_dataset(
+        profile="quick", **{k: v for k, v in options.items() if k != "source_partition"}
+    )
+    legacy_bytes = Path(legacy["path"]).read_bytes()
+    runner = CliRunner()
+    prefix = ["--store", str(native["store"]), "--no-autostart", "dataset"]
+    prepare = [
+        "prepare",
+        "--benchmark",
+        "simpleqa-verified",
+        "--source-path",
+        str(path),
+        "--revision",
+        "fixture-v1",
+        "--source-partition",
+        "upstream-test",
+    ]
+    quick = runner.invoke(benchmark, prefix + prepare + ["--profile", "quick"])
+    assert quick.exit_code == 0, quick.output
+    qualified = json.loads(quick.output)
+    assert [c["id"] for c in cases(qualified)] == [c["id"] for c in cases(legacy)]
+    snapshot_path = tmp_path / "simpleqa-history.json"
+    snapshot = runner.invoke(
+        benchmark,
+        [
+            *prefix,
+            "exclusions",
+            "--dataset",
+            qualified["id"],
+            "--output",
+            str(snapshot_path),
+        ],
+    )
+    assert snapshot.exit_code == 0, snapshot.output
+    standard = runner.invoke(
+        benchmark,
+        prefix
+        + prepare
+        + [
+            "--profile",
+            "standard",
+            "--exclusion-snapshot",
+            str(snapshot_path),
+            "--evaluation-role",
+            "holdout",
+        ],
+    )
+    assert standard.exit_code == 0, standard.output
+    result = json.loads(standard.output)
+    selected = cases(result)
+    assert len(selected) == 4
+    source = result["preparation"]["simpleqa-verified"]["task_source"]
+    excluded = set(
+        load_snapshot(snapshot_path)["families"]["simpleqa-verified"]["task_keys"]
+    )
+    assert not {task_key(c, source) for c in selected} & excluded
+    expected = {
+        f"simpleqa-verified/{position}": str(identity)
+        for position, identity in enumerate(native_ids)
+    }
+    for case in cases(qualified) + selected:
+        assert case["metadata"]["task_identity"]["task_id"] == expected[case["id"]]
+    assert Path(legacy["path"]).read_bytes() == legacy_bytes
+    assert "preparation" not in legacy
 
 
 def test_snapshot_tamper_immutable_write_and_plan_override(native, tmp_path):
