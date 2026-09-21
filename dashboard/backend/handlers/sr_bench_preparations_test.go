@@ -42,6 +42,43 @@ func TestSRBenchPreparationProxyPreservesAsynchronousJob(t *testing.T) {
 	}
 }
 
+func TestSRBenchCollectionPreparationPreservesItemsAndBlocksReadonly(t *testing.T) {
+	const body = `{"benchmarks":["mmlu-pro","simpleqa-verified"],"profile":"smoke"}`
+	const job = `{"preparation":{"id":"prep-0123456789abcdef0123456789abcdef","benchmarks":["mmlu-pro","simpleqa-verified"],"status":"running","phase":"downloading","model_requests":0,"items":[{"benchmark":"mmlu-pro","status":"completed","phase":"reused","reused":true,"source_ids":["frozen-source"]},{"benchmark":"simpleqa-verified","status":"running","phase":"downloading","reused":false,"source_ids":[]}]}}`
+	calls := 0
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		actual, err := io.ReadAll(r.Body)
+		if err != nil || string(actual) != body || r.Method != http.MethodPost || r.URL.Path != SRBenchAPIPath+"/dataset-preparations" {
+			t.Error("collection request changed")
+		}
+		if r.Header.Get("Authorization") != "Bearer service-secret" || r.Header.Get("X-SR-Bench-Actor-ID") == "" {
+			t.Error("collection preparation lost authenticated forwarding")
+		}
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = io.WriteString(w, job)
+	}))
+	defer upstream.Close()
+	for _, readonly := range []bool{false, true} {
+		handler, err := NewSRBenchHandler(upstream.URL, "service-secret", readonly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, srBenchTestRequest(http.MethodPost, SRBenchAPIPath+"/dataset-preparations", body))
+		if readonly {
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("readonly collection accepted: %d", response.Code)
+			}
+		} else if response.Code != http.StatusAccepted || response.Body.String() != job {
+			t.Fatalf("collection state changed: status=%d body=%s", response.Code, response.Body.String())
+		}
+	}
+	if calls != 1 {
+		t.Fatalf("collection forwarded %d times", calls)
+	}
+}
+
 func TestSRBenchPreparationsRequireExactRoutesAndMethods(t *testing.T) {
 	const id = "prep-0123456789abcdef0123456789abcdef"
 	calls := 0

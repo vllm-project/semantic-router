@@ -221,7 +221,7 @@ def test_close_cancels_worker_and_closes_admission(tmp_path):
     assert entered.wait(3)
     manager.close()
     assert manager.get(job["id"])["status"] == "failed"
-    with pytest.raises(preparations.PreparationBusyError):
+    with pytest.raises(preparations.PreparationUnavailableError):
         manager.submit({"benchmark": "mmlu-pro"})
 
 
@@ -234,12 +234,55 @@ def test_close_after_thread_start_failure_does_not_join_unstarted_thread(
         raise RuntimeError("cannot start new thread")
 
     monkeypatch.setattr(threading.Thread, "start", fail_start)
-    with pytest.raises(preparations.PreparationBusyError, match="could not start"):
+    with pytest.raises(
+        preparations.PreparationUnavailableError, match="could not start"
+    ):
         manager.submit({"benchmark": "simpleqa-verified"})
-    assert manager.list()["preparations"][0]["status"] == "failed"
+    jobs = manager.list()["preparations"]
+    assert len(jobs) == 1 and jobs[0]["status"] == "failed"
+    assert jobs[0]["error_code"] == "preparation_unavailable"
     manager.close()
-    with pytest.raises(preparations.PreparationBusyError, match="stopping"):
+    with pytest.raises(preparations.PreparationUnavailableError, match="stopping"):
         manager.submit({"benchmark": "simpleqa-verified"})
+    assert manager.list()["preparations"] == jobs
+
+
+@pytest.mark.parametrize("collection", [False, True])
+@pytest.mark.parametrize("failure", ["thread_start", "stopping"])
+def test_http_unavailable_is_not_retryable_slot_busy(
+    live_service, monkeypatch, collection, failure
+):
+    server, url = live_service
+    if failure == "stopping":
+        server.preparations.close()
+    else:
+        start = threading.Thread.start
+
+        def fail_worker_start(thread):
+            if thread._target == server.preparations._run:
+                raise RuntimeError("private thread allocation details")
+            return start(thread)
+
+        monkeypatch.setattr(threading.Thread, "start", fail_worker_start)
+    body = (
+        {"benchmarks": ["mmlu-pro", "simpleqa-verified"], "profile": "smoke"}
+        if collection
+        else {"benchmark": "simpleqa-verified", "profile": "smoke"}
+    )
+    response = requests.post(
+        url + "/dataset-preparations", json=body, headers=headers(), timeout=3
+    )
+    assert response.status_code == 503
+    assert response.json()["code"] == "preparation_unavailable"
+    assert response.json()["model_requests"] == 0
+    assert "Retry explicitly" in response.json()["error"]
+    assert "private thread allocation details" not in response.text
+    jobs = server.preparations.list()["preparations"]
+    assert len(jobs) == (0 if failure == "stopping" else 1)
+    if jobs:
+        assert jobs[0]["status"] == "failed"
+        assert jobs[0]["error_code"] == "preparation_unavailable"
+    assert server.store.list() == []
 
 
 def test_low_disk_fails_before_spawning_a_downloader(tmp_path, monkeypatch):

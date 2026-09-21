@@ -94,8 +94,13 @@ async function setup(page: Page, permission: 'write' | 'read' | 'readonly' = 'wr
         profiles: [
           { id: 'smoke', purpose: 'Smoke' },
           { id: 'quick', purpose: 'Quick' },
+          { id: 'standard', purpose: 'Standard' },
         ],
-        benchmarks: [],
+        benchmarks: benchmarks.map((benchmark) => ({
+          id: benchmark.id,
+          title: benchmark.name,
+          kind: 'fixture',
+        })),
       }
     else if (path === '/datasets')
       body = {
@@ -110,7 +115,15 @@ async function setup(page: Page, permission: 'write' | 'read' | 'readonly' = 'wr
         profile: url.searchParams.get('profile'),
         seed: null,
         split: 'dev',
-        benchmarks: [],
+        benchmarks: benchmarks.map((benchmark) => ({
+          id: benchmark.id,
+          title: benchmark.name,
+          eligible: false,
+          case_count: 0,
+          source_ids: [],
+          reason_code: 'not_prepared',
+          reason: 'Prepare this benchmark for the selected profile.',
+        })),
         model_requests: 0,
       }
     else if (path === '/dataset-preparations/options') body = { benchmarks }
@@ -158,7 +171,9 @@ test('downloads from the dataset library and refreshes completed datasets withou
   await panel.getByRole('combobox', { name: 'Benchmark to download' }).click()
   await panel.getByRole('option', { name: 'MMLU-Pro', exact: true }).click()
   await expect(panel.getByText('14 questions', { exact: true })).toBeVisible()
-  await expect(panel.getByText('Dependencies: pyarrow · installed if needed')).toBeVisible()
+  await expect(panel.getByText('Dependencies: pyarrow · installed automatically')).toBeHidden()
+  await panel.getByText('Source and requirements', { exact: true }).click()
+  await expect(panel.getByText('Dependencies: pyarrow · installed automatically')).toBeVisible()
   await expect(panel.getByRole('link', { name: 'View source dataset' })).toHaveAttribute(
     'href',
     'https://example.com/mmlu',
@@ -191,8 +206,9 @@ test('downloads from the dataset library and refreshes completed datasets withou
     },
   }
   await panel.getByRole('button', { name: 'Refresh status' }).click()
+  await panel.getByText('Completed (1)', { exact: true }).click()
   await expect(
-    panel.getByRole('list', { name: 'Dataset preparations' }).getByRole('status'),
+    panel.getByRole('list', { name: 'Completed preparations' }).getByRole('status'),
   ).toHaveText('Ready to evaluate')
   await expect(panel.getByText('500 questions ready')).toBeVisible()
   await expect(
@@ -242,6 +258,38 @@ test('shows a failed preparation and retries only after the user acts', async ({
     limit: 3,
   })
   await expect(page.getByRole('button', { name: 'Retry preparation' })).toBeDisabled()
+})
+
+test('shows combined preparation history and retries the same benchmark collection', async ({
+  page,
+}) => {
+  const state = await setup(page)
+  state.preparations = [
+    job({
+      benchmark: undefined,
+      benchmarks: ['simpleqa-verified', 'mmlu-pro'],
+      status: 'failed',
+      phase: 'failed',
+      error: 'MMLU-Pro source was unavailable.',
+      seed: 123,
+    }),
+  ]
+  await page.goto('/evaluation?view=datasets&prepare=1')
+  const panel = page.getByRole('region', { name: 'Prepare datasets' })
+  await expect(panel.getByText('SimpleQA Verified, MMLU-Pro', { exact: true })).toBeVisible()
+  await expect(panel.getByText('MMLU-Pro source was unavailable.')).toBeVisible()
+  expect(state.writes).toEqual([])
+  await panel.getByRole('button', { name: 'Retry preparation' }).click()
+  await expect(panel.getByRole('button', { name: 'Preparation in progress' })).toBeDisabled()
+  expect(state.writes).toEqual([
+    {
+      path: '/dataset-preparations',
+      body: { benchmarks: ['simpleqa-verified', 'mmlu-pro'], profile: 'smoke', seed: 123 },
+    },
+  ])
+  await panel.getByRole('combobox', { name: 'Benchmark to download' }).click()
+  await panel.getByRole('option', { name: 'MMLU-Pro', exact: true }).click()
+  await expect(panel.getByRole('button', { name: 'Preparation in progress' })).toBeDisabled()
 })
 
 test('recovers a lost submission response by reading persisted jobs without an automatic retry', async ({
@@ -305,7 +353,7 @@ for (const permission of ['read', 'readonly'] as const) {
     state.preparations = [job({ status: 'failed', phase: 'failed', error: 'Download failed' })]
     await page.goto('/evaluation?view=datasets&prepare=1')
     const panel = page.getByRole('region', { name: 'Prepare datasets' })
-    await expect(panel.getByText('9 benchmarks · 3 dataset sizes:', { exact: false })).toBeVisible()
+    await expect(panel.getByRole('heading', { name: 'Manage datasets' })).toBeVisible()
     const benchmark = panel.getByRole('combobox', { name: 'Benchmark to download' })
     const size = panel.getByRole('combobox', { name: 'Dataset size' })
     await expect(benchmark).toBeEnabled()
@@ -315,9 +363,6 @@ for (const permission of ['read', 'readonly'] as const) {
     for (const item of benchmarks)
       await expect(panel.getByRole('option', { name: item.name, exact: true })).toBeVisible()
     await panel.getByRole('option', { name: 'MMLU-Pro', exact: true }).click()
-    await expect(
-      panel.getByText('Smoke: 14 · Quick: 500 · Standard: 2,000 questions'),
-    ).toBeVisible()
     for (const [profile, count] of [
       ['Quick', '500'],
       ['Standard', '2,000'],
@@ -331,6 +376,7 @@ for (const permission of ['read', 'readonly'] as const) {
       await expect(size).toContainText(profile)
       await expect(panel.getByText(`${count} questions`, { exact: true })).toBeVisible()
     }
+    await panel.getByText('Source and requirements', { exact: true }).click()
     await expect(panel.getByRole('link', { name: 'View source dataset' })).toHaveAttribute(
       'href',
       'https://example.com/mmlu',
@@ -340,8 +386,8 @@ for (const permission of ['read', 'readonly'] as const) {
     await expect(
       page.getByText(
         permission === 'readonly'
-          ? 'Dashboard is in read-only mode. You can browse benchmarks and dataset sizes, but cannot prepare or retry downloads.'
-          : 'Your account does not have evaluation write permission. You can browse benchmarks and dataset sizes, but cannot prepare or retry downloads.',
+          ? 'Preparation is disabled in read-only mode.'
+          : 'View only. Ask an administrator for dataset preparation access.',
       ),
     ).toBeVisible()
     expect(state.writes).toEqual([])
@@ -456,7 +502,9 @@ test('Refresh access reloads current account permissions and settings', async ({
   await page.goto('/evaluation?view=datasets&prepare=1')
   const panel = page.getByRole('region', { name: 'Prepare datasets' })
   await expect(
-    panel.getByText('Your account does not have evaluation write permission.', { exact: false }),
+    panel.getByText('View only. Ask an administrator for dataset preparation access.', {
+      exact: true,
+    }),
   ).toBeVisible()
   await expect(panel.getByRole('button', { name: 'Download and prepare' })).toBeDisabled()
   granted = true
@@ -467,11 +515,84 @@ test('Refresh access reloads current account permissions and settings', async ({
   expect(state.writes).toEqual([])
 })
 
-test('offers preparation directly from the empty evaluation composer', async ({ page }) => {
+test('allows missing benchmarks in the evaluation composer without a separate download step', async ({
+  page,
+}) => {
   const state = await setup(page)
   await page.goto('/evaluation?view=new')
-  await page.getByRole('button', { name: 'Prepare dataset', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Prepare dataset', exact: true })).toBeVisible()
-  await expect(page.getByText('5 questions', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText(
+      'Missing datasets and required dependencies are prepared automatically when you review.',
+    ),
+  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Prepare dataset', exact: true })).toHaveCount(0)
+  const choices = page.getByRole('group', { name: 'Included benchmarks' }).getByRole('checkbox')
+  await expect(choices).toHaveCount(9)
+  for (const choice of await choices.all()) await expect(choice).toBeEnabled()
+  await choices.first().check()
+  await expect(choices.first()).toBeChecked()
   expect(state.writes).toEqual([])
 })
+
+for (const viewport of [
+  { width: 1280, height: 1000 },
+  { width: 390, height: 844 },
+]) {
+  test(`keeps dataset management compact at ${viewport.width}px with visible failures and folded history`, async ({
+    page,
+  }, testInfo) => {
+    const state = await setup(page, 'read')
+    state.preparations = [
+      job(),
+      job({
+        id: `prep-${'b'.repeat(32)}`,
+        benchmark: 'mmlu-pro',
+        status: 'failed',
+        phase: 'failed',
+        error: 'Download failed. Check source access and retry.',
+      }),
+      ...['c', 'd'].map((id) =>
+        job({
+          id: `prep-${id.repeat(32)}`,
+          status: 'completed',
+          phase: 'completed',
+          dataset: { ...dataset, id: id.repeat(64), sha256: id.repeat(64) },
+        }),
+      ),
+    ]
+    await page.setViewportSize(viewport)
+    await page.goto('/evaluation?view=datasets&prepare=1')
+    const panel = page.getByRole('region', { name: 'Prepare datasets' })
+    await expect(panel.getByRole('heading', { name: 'Manage datasets' })).toBeVisible()
+    await expect(
+      panel.getByText('Create evaluation prepares datasets automatically. Manage downloads here.'),
+    ).toBeVisible()
+    await expect(panel.getByRole('combobox', { name: 'Benchmark to download' })).toBeEnabled()
+    await expect(panel.getByRole('combobox', { name: 'Dataset size' })).toBeEnabled()
+    await expect(panel.getByText('Downloading source data', { exact: true })).toBeVisible()
+    await expect(panel.getByText('Download failed. Check source access and retry.')).toBeVisible()
+    await expect(panel.getByRole('button', { name: 'Retry preparation' })).toBeDisabled()
+    await expect(panel.getByRole('button', { name: 'Preparation in progress' })).toBeDisabled()
+    await expect(panel.getByRole('button', { name: 'View prepared dataset' })).toHaveCount(0)
+    const refresh = panel.getByRole('button', { name: 'Refresh access' })
+    await expect(refresh).toBeEnabled()
+    const iconSize = await refresh.locator('svg').boundingBox()
+    expect(iconSize).not.toBeNull()
+    expect(iconSize!.width).toBeGreaterThan(0)
+    expect(iconSize!.width).toBeLessThanOrEqual(20)
+    expect(iconSize!.height).toBeLessThanOrEqual(20)
+    const buttonSize = await refresh.boundingBox()
+    expect(buttonSize!.height).toBeLessThanOrEqual(40)
+    expect(await panel.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true)
+    await panel.screenshot({
+      path: testInfo.outputPath(`dataset-management-${viewport.width}.png`),
+    })
+    await panel.getByText('Completed (2)', { exact: true }).click()
+    await expect(panel.getByRole('list', { name: 'Completed preparations' })).toBeVisible()
+    await expect(panel.getByRole('button', { name: 'View prepared dataset' })).toHaveCount(2)
+    expect(state.writes).toEqual([])
+  })
+}

@@ -35,13 +35,13 @@ export default function EvaluationPage() {
     refreshSettings,
   } = useReadonly()
   const writeDisabledReason = settingsLoading
-    ? 'Checking Dashboard settings before enabling dataset preparation. You can browse benchmarks and dataset sizes.'
+    ? 'Checking preparation access…'
     : settingsError
-      ? `${settingsError} You can browse benchmarks and dataset sizes while access is unavailable.`
+      ? settingsError
       : serverReadonly
-        ? 'Dashboard is in read-only mode. You can browse benchmarks and dataset sizes, but cannot prepare or retry downloads.'
+        ? 'Preparation is disabled in read-only mode.'
         : !canWriteEvaluation(user)
-          ? 'Your account does not have evaluation write permission. You can browse benchmarks and dataset sizes, but cannot prepare or retry downloads.'
+          ? 'View only. Ask an administrator for dataset preparation access.'
           : null
   const canWrite = writeDisabledReason === null
   const canRun = canWrite && canRunEvaluation(user)
@@ -290,7 +290,6 @@ export default function EvaluationPage() {
           }
           initialModel={search.get('model') ?? undefined}
           initialDataset={search.get('dataset') ?? undefined}
-          onPrepareDataset={() => setSearch({ view: 'datasets', prepare: '1', ...experimentRoute })}
           onStarted={(run) => {
             setRuns((previous) => [run, ...previous.filter((item) => item.id !== run.id)])
             setSearch({ view: 'runs', run: run.id, ...experimentRoute })

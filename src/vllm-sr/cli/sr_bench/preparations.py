@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from .preparation_collections import CollectionError, execute_collection, pending_items
 from .preparation_runtime import execute
 from .sources import COUNTS, HF_SOURCES
 
@@ -21,6 +22,10 @@ PROFILES = ("smoke", "quick", "standard")
 
 class PreparationBusyError(ValueError):
     """Only one dependency installer/source downloader owns a service at a time."""
+
+
+class PreparationUnavailableError(RuntimeError):
+    """The service cannot accept work; clients must retry explicitly."""
 
 
 def timestamp():
@@ -68,13 +73,28 @@ def preparation_options():
 def validate_request(body):
     if not isinstance(body, dict) or set(body) - {
         "benchmark",
+        "benchmarks",
         "profile",
         "seed",
         "limit",
     }:
-        raise ValueError("Preparation accepts only benchmark, profile, seed and limit")
+        raise ValueError(
+            "Preparation accepts only benchmark or benchmarks, profile, seed and single-benchmark limit"
+        )
+    collection = "benchmarks" in body
     benchmark, profile = body.get("benchmark"), body.get("profile", "quick")
-    if not isinstance(benchmark, str) or benchmark not in COUNTS:
+    if collection:
+        names = body["benchmarks"]
+        if "benchmark" in body or "limit" in body:
+            raise ValueError("Collection preparation cannot include benchmark or limit")
+        if (
+            not isinstance(names, list)
+            or not 1 <= len(names) <= len(COUNTS)
+            or any(not isinstance(name, str) or name not in COUNTS for name in names)
+            or len(set(names)) != len(names)
+        ):
+            raise ValueError("Select distinct supported benchmarks")
+    elif not isinstance(benchmark, str) or benchmark not in COUNTS:
         raise ValueError("Select a supported benchmark")
     if not isinstance(profile, str) or profile not in PROFILES:
         raise ValueError("Select smoke, quick or standard")
@@ -83,6 +103,11 @@ def validate_request(body):
         raise ValueError(
             "seed must be a nonnegative JSON safe integer (at most 2^53 - 1)"
         )
+    if collection:
+        request = {"benchmarks": sorted(names), "profile": profile}
+        if "seed" in body:
+            request["seed"] = seed
+        return request
     request = {"benchmark": benchmark, "profile": profile, "seed": seed}
     if body.get("limit") is not None:
         limit = body["limit"]
@@ -122,6 +147,14 @@ class Preparations:
                     updated_at=timestamp(),
                     error="Service restarted before preparation completed. Retry explicitly.",
                 )
+                for item in job.get("items", []):
+                    if item["status"] != "completed":
+                        item.update(
+                            status="failed",
+                            phase="failed",
+                            error_code="service_restarted",
+                            error="Service restarted before preparation completed. Retry explicitly.",
+                        )
                 write_json(path, job)
             self.jobs[job["id"]] = job
 
@@ -142,7 +175,9 @@ class Preparations:
         request = validate_request(body)
         with self.lock:
             if self.stopping.is_set():
-                raise PreparationBusyError("Dataset preparation service is stopping")
+                raise PreparationUnavailableError(
+                    "Dataset preparation service is stopping. Retry explicitly."
+                )
             for job in reversed(list(self.jobs.values())):
                 if job["request"] != request:
                     continue
@@ -162,6 +197,8 @@ class Preparations:
                 "created_at": timestamp(),
                 "updated_at": timestamp(),
             }
+            if "benchmarks" in request:
+                job.update(items=pending_items(request), model_requests=0)
             write_json(self.root / (identifier + ".json"), job)
             self.jobs[identifier] = job
             self.thread = threading.Thread(
@@ -175,14 +212,19 @@ class Preparations:
                     identifier,
                     status="failed",
                     phase="failed",
+                    error_code="preparation_unavailable",
                     error="Preparation worker could not start. Retry explicitly.",
                 )
-                raise PreparationBusyError(
-                    "Preparation worker could not start"
+                raise PreparationUnavailableError(
+                    "Preparation worker could not start. Retry explicitly."
                 ) from exc
             return copy.deepcopy(job)
 
     def _complete_dataset_exists(self, job):
+        # Completed collections must re-check today's selection conflicts and
+        # content integrity. The next job reuses verified data, not stale proof.
+        if "benchmarks" in job["request"]:
+            return False
         if job["status"] != "completed":
             return False
         dataset = job.get("dataset", {})
@@ -195,18 +237,28 @@ class Preparations:
     def _update(self, identifier, **changes):
         with self.lock:
             job = self.jobs[identifier]
-            job.update(changes, updated_at=timestamp())
+            job.update(copy.deepcopy(changes), updated_at=timestamp())
             write_json(self.root / (identifier + ".json"), job)
 
     def _run(self, identifier):
         try:
             self._update(identifier, status="running", phase="checking_dependencies")
-            dataset = self.executor(
-                self.jobs[identifier]["request"],
-                self.store,
-                lambda phase: self._update(identifier, phase=phase),
-                self.stopping,
-            )
+            request = self.jobs[identifier]["request"]
+            if "benchmarks" in request:
+                dataset = execute_collection(
+                    request,
+                    self.store,
+                    self.executor,
+                    lambda **changes: self._update(identifier, **changes),
+                    self.stopping,
+                )
+            else:
+                dataset = self.executor(
+                    request,
+                    self.store,
+                    lambda phase: self._update(identifier, phase=phase),
+                    self.stopping,
+                )
             self._update(
                 identifier, status="completed", phase="completed", dataset=dataset
             )
@@ -220,7 +272,12 @@ class Preparations:
                 if isinstance(exc, PreparationError)
                 else "Dataset preparation failed. Check the worker and retry explicitly."
             )
-            self._update(identifier, status="failed", phase="failed", error=message)
+            details = (
+                {"error_code": exc.code} if isinstance(exc, CollectionError) else {}
+            )
+            self._update(
+                identifier, status="failed", phase="failed", error=message, **details
+            )
 
     def close(self):
         with self.lock:

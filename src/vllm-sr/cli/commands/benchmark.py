@@ -10,11 +10,13 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import click
+from click.core import ParameterSource
 
 from cli.commands.benchmark_experiments import experiment
 from cli.commands.benchmark_preparations import (
     preparation_path,
     prepare_remote_dataset,
+    prepare_remote_datasets,
 )
 from cli.runtime_stack import resolve_runtime_stack
 from cli.sr_bench import setup, sources
@@ -140,7 +142,13 @@ def dataset():
 
 
 @dataset.command("prepare")
-@click.option("--benchmark", "benchmark_id", required=True)
+@click.option(
+    "--benchmark",
+    "benchmark_ids",
+    required=True,
+    multiple=True,
+    help="Benchmark ID; repeat to prepare a shared collection.",
+)
 @click.option(
     "--profile", type=click.Choice(["smoke", "quick", "standard"]), default="quick"
 )
@@ -176,7 +184,7 @@ def dataset():
 @guarded
 def dataset_prepare(
     client,
-    benchmark_id,
+    benchmark_ids,
     profile,
     source_path,
     revision,
@@ -196,6 +204,24 @@ def dataset_prepare(
         exclusion_snapshot,
         evaluation_role,
     )
+    if len(benchmark_ids) > 1:
+        if (
+            local
+            or limit is not None
+            or any(value is not None for value in local_options)
+        ):
+            raise ValueError(
+                "Multiple benchmarks require shared collection preparation; "
+                "--local, --limit, source, and history options are not supported"
+            )
+        if (
+            click.get_current_context().get_parameter_source("seed")
+            == ParameterSource.DEFAULT
+        ):
+            seed = None
+        output(prepare_remote_datasets(client, benchmark_ids, profile, seed, no_wait))
+        return
+    benchmark_id = benchmark_ids[0]
     if not local:
         if any(value is not None for value in local_options):
             raise ValueError(

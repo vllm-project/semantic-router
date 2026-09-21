@@ -101,11 +101,16 @@ of manifests, command arguments and public artifacts.
 
 ## Prepare reusable tasks and targets
 
-Open **Dashboard → Evaluation → Datasets → Prepare dataset**, select a benchmark
-and profile, and start preparation. The shared worker installs missing data
-preparation dependencies, downloads the pinned source, and freezes the selected
-tasks in its persistent store. The page shows the current phase and any access or
-installation error. Completed datasets become available to both Dashboard and CLI.
+Open **Dashboard → Evaluation → Create evaluation** and choose benchmarks,
+an evaluation size, models or recipes, and limits. Benchmarks do not need to be
+downloaded first. **Review plan** automatically reuses verified data and prepares
+missing datasets and their supported data dependencies. The creation page shows
+progress through installation, download and freezing, then presents the frozen
+plan. **Start evaluation** begins model requests only after that review.
+
+For independent data management, **Datasets → Prepare dataset** uses the same
+shared worker. Accepted preparation jobs continue if the page closes. Completed
+datasets become available to both Dashboard and CLI.
 
 The CLI uses the same service operation by default. It waits for completion and
 writes the frozen manifest to standard output, so it can still be redirected to
@@ -114,12 +119,16 @@ on that worker, not on the CLI host.
 
 ```bash
 vllm-sr benchmark --store ./data/sr-bench dataset prepare \
-  --benchmark mmlu-pro --profile quick > mmlu-quick.json
-vllm-sr benchmark --store ./data/sr-bench dataset prepare \
-  --benchmark gpqa-diamond --profile quick > gpqa-quick.json
-vllm-sr benchmark --store ./data/sr-bench dataset combine \
-  mmlu-quick.json gpqa-quick.json > quick-dataset.json
+  --benchmark mmlu-pro --benchmark gpqa-diamond \
+  --profile quick > quick-dataset.json
 ```
+
+Repeating `--benchmark` creates one service-owned collection job. It pins eligible
+existing sources, prepares only missing benchmarks with the same seed, and
+validates the final composition. Source or seed conflicts require explicit
+resolution; they are not treated as missing data. A failed job can be retried
+explicitly and can reuse verified completed items. Single-benchmark preparation
+and explicit `dataset combine` remain available.
 
 Use `--no-wait` to return the preparation job immediately. Closing the page or
 interrupting the CLI wait does not cancel the worker's preparation. Both clients
@@ -537,10 +546,11 @@ kind. Read-only polling reconnects after a temporary network failure and discove
 CLI-created runs. Closing or refreshing the page does not restart a run.
 
 In **Create evaluation**, first choose **smoke**, **quick** or **standard**, then
-select one or more prepared benchmarks, or **Select all benchmarks**. These are
+select one or more benchmarks, or **Select all benchmarks**. These are
 the actual run profiles; standard uses the holdout split. Available sources must
-share a profile, seed and split. **Review plan** composes whole benchmark groups
-from those frozen sources without downloading data, resampling questions or
+share a profile, seed and split. **Review plan** reuses verified prepared groups
+and automatically downloads missing groups and supported data dependencies in
+one background preparation job. It then composes the frozen sources without
 calling a model. Selecting all benchmarks from one source reuses its original
 identity; a subset or multi-source composition creates a reusable frozen dataset.
 Conflicting selections are rejected rather than silently merged.
@@ -551,7 +561,8 @@ read-only. **Route preview** also accepts optional session and conversation
 context for inspecting session-dependent routing. Review the frozen plan before
 starting; plan review does not generate model answers.
 
-**Datasets → Prepare dataset** downloads and freezes a built-in source through
+**Datasets → Prepare dataset** is an optional management entry point that downloads
+and freezes a built-in source through
 the same service used by `benchmark dataset prepare`. Preparation progress and
 errors survive page refreshes; completion refreshes the available datasets.
 **Datasets** also provides search, profile/benchmark filters and pagination. Open a
