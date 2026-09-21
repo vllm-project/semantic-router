@@ -377,6 +377,17 @@ class SelectionTests(unittest.TestCase):
                 "e2e.response-api-redis", plan["expected_verification_ids"]
             )
 
+    def test_published_model_profiles_plan_their_backend_image(self):
+        for profile in ("vela-omni", "vela-halu"):
+            with self.subTest(profile=profile):
+                identifier = f"e2e.{profile}"
+                plan = make_plan([], source_sha=SHA, requested=(identifier,))
+                self.assertEqual(plan["expected_verification_ids"], [identifier])
+                self.assertEqual(
+                    plan["verifications"][0]["images"], ["extproc", "mock-vllm"]
+                )
+                self.assertEqual(set(plan["images"]), {"extproc", "mock-vllm"})
+
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
             make_plan(["README.md"], source_sha=SHA, profile=profile, full=True)

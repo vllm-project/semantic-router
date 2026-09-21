@@ -60,7 +60,7 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 }
 
 func init() {
-	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{})
+	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"envoy-ai-gateway",
@@ -114,7 +114,10 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
-	register("vela-omni", func() framework.Profile { return velaomni.NewProfile() }, framework.ProfileCapabilities{RouterBuildArgs: map[string]string{"VELA_OMNI_VARIANTS": "nano mini"}})
+	register("vela-omni", func() framework.Profile { return velaomni.NewProfile() }, framework.ProfileCapabilities{
+		LocalImages:     mockVLLMLocalImages,
+		RouterBuildArgs: map[string]string{"VELA_OMNI_VARIANTS": "nano mini"},
+	})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})
