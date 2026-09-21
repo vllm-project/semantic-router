@@ -132,6 +132,9 @@ Every benchmark request must return HTTP 200, and each of the three signals
 must record at least one new `llm_signal_extraction_latency_seconds` sample
 per successful request; either check failing aborts the run with a non-zero
 exit instead of writing a report. `signal_samples.py` owns that comparison.
+The GPU phase additionally requires every prepared classifier to report a
+non-CPU device, so a phase that silently fell back to the CPU cannot be
+published as a speedup.
 
 These scripts use the container names `sr-bench-cuda`, `sr-bench-cuda-tp`,
 `envoy-bench-cuda`, and `envoy-bench-cuda-tp`. Every port is overridable
