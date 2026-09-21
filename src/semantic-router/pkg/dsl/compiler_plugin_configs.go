@@ -258,7 +258,7 @@ func (c *Compiler) compileShadowDispatchPluginConfig(fields map[string]Value) co
 			if iv, ok := getIntField(ov.Fields, "max_response_bytes_per_request"); ok {
 				cfg.Budget.MaxResponseBytesPerRequest = int64(iv)
 			}
-			}
+		}
 	}
 	cfg.ForwardHeaders = stringArrayValue(fields["forward_headers"])
 	return cfg
