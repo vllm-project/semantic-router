@@ -64,6 +64,8 @@ var BaselineRouterContract = []string{
 	"language-routing",
 	// Reask signal rule matching and routing (issue #3178)
 	"reask-routing",
+	// Context signal / block_jailbreak / block_pii priority overlap (issue #3178)
+	"context-safety-overlap",
 }
 
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
