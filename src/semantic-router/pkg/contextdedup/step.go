@@ -113,8 +113,14 @@ func applyReceipt(result Diagnostics, receipt contextcompression.TransformationR
 	case contextcompression.TransformationFailed:
 		result = withoutRemoval(result)
 		result.Outcome = OutcomeFailed
-		if result.Reason == "" || receipt.Reason != "policy_failed" {
+		switch {
+		case result.Reason == "" || receipt.Reason != "policy_failed":
 			result.Reason = receipt.Reason
+		case !evaluationFailure(result.Reason):
+			// The executor refuses a proposal it received after the context
+			// expired, so a policy that reported success was overtaken by
+			// cancellation, not by its own evaluation.
+			result.Reason = ReasonCancelled
 		}
 	default:
 		result = withoutRemoval(result)

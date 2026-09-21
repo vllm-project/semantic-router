@@ -188,8 +188,8 @@ func TestContextDedupFailureModes(t *testing.T) {
 		wantErr       bool
 		wantStatus    int
 	}{
-		{"limit_fail_open", map[string]interface{}{"enabled": true, "limits": map[string]interface{}{"max_history_turns": 2, "max_segment_turns": 2}}, false, 0},
-		{"limit_fail_closed", map[string]interface{}{"enabled": true, "failure_mode": "fail_closed", "limits": map[string]interface{}{"max_history_turns": 2, "max_segment_turns": 2}}, true, 503},
+		{"limit_fail_open", map[string]interface{}{"enabled": true, "limits": map[string]interface{}{"max_history_turns": 1}}, false, 0},
+		{"limit_fail_closed", map[string]interface{}{"enabled": true, "failure_mode": "fail_closed", "limits": map[string]interface{}{"max_history_turns": 1}}, true, 503},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			request := duplicatedConversation()
@@ -207,11 +207,14 @@ func TestContextDedupFailureModes(t *testing.T) {
 				ctx.ContextDedupDiagnostics.Reason != contextdedup.ReasonHistoryLimitExceeded {
 				t.Fatalf("unexpected diagnostics %+v", ctx.ContextDedupDiagnostics)
 			}
-			if tc.wantErr {
-				status, message := contextTransformationFailure(ctx)
-				if status != tc.wantStatus || !strings.Contains(message, "deduplication") {
-					t.Fatalf("unexpected rejection %d %q", status, message)
-				}
+			status, message := contextTransformationFailure(ctx)
+			if tc.wantErr && (status != tc.wantStatus || !strings.Contains(message, "deduplication")) {
+				t.Fatalf("unexpected rejection %d %q", status, message)
+			}
+			// A fail-open dedup failure never stops the plan, so a rejection
+			// reaching this mapping must belong to compression.
+			if !tc.wantErr && (status != 500 || !strings.Contains(message, "compression")) {
+				t.Fatalf("a fail-open dedup failure must not claim the rejection: %d %q", status, message)
 			}
 		})
 	}

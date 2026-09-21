@@ -78,8 +78,10 @@ func validateContextDedupLimits(typed *ContextDedupPluginConfig, scope string) e
 			return fmt.Errorf("%s: %s cannot exceed %d", scope, bound.field, bound.max)
 		}
 	}
+	// Only an explicit segment bound is checked against the history bound;
+	// an omitted one is derived from it.
 	limits := typed.EffectiveLimits()
-	if limits.MaxSegmentTurns > limits.MaxHistoryTurns {
+	if typed.Limits.MaxSegmentTurns > 0 && limits.MaxSegmentTurns > limits.MaxHistoryTurns {
 		return fmt.Errorf("%s: limits.max_segment_turns cannot exceed limits.max_history_turns (%d)",
 			scope, limits.MaxHistoryTurns)
 	}

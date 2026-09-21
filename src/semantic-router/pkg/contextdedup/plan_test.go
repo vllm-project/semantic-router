@@ -323,7 +323,7 @@ func TestPlanReportsNoEligibleHistory(t *testing.T) {
 func TestPlanRejectsWholeStepBeyondLimits(t *testing.T) {
 	messages := conversation(turnPair(0, "q1", "a1"), turnPair(2, "q1", "a1"), turnPair(4, "q2", "a2"), live(6))
 	for name, policy := range map[string]Policy{
-		"turns": {MaxHistoryTurns: 3, MaxSegmentTurns: 64},
+		"turns": {MaxHistoryTurns: 2, MaxSegmentTurns: 64},
 		"bytes": {MaxHistoryBytes: 10, MaxSegmentTurns: 64},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -333,9 +333,66 @@ func TestPlanRejectsWholeStepBeyondLimits(t *testing.T) {
 			}
 		})
 	}
-	ids, _ := planIDs(t, Policy{MaxHistoryTurns: 4, MaxHistoryBytes: 1 << 20, MaxSegmentTurns: 64}, messages...)
+	// Three eligible turns sit exactly at the bound; the live turn and any
+	// instruction prefix are not candidates and do not consume it.
+	ids, _ := planIDs(t, Policy{MaxHistoryTurns: 3, MaxHistoryBytes: 1 << 20, MaxSegmentTurns: 64},
+		append([]contextcompression.MessageView{protect(historyMessage(-1, -1, "system", "rules"), contextcompression.ProtectInstructions)}, messages...)...)
 	if !reflect.DeepEqual(ids, []int{2, 3}) {
 		t.Fatalf("history at the limit must still be deduplicated, got %v", ids)
+	}
+}
+
+func TestPlanRecordsMismatchOnTheDifferingTurn(t *testing.T) {
+	// [A B A B' A B] where B' carries a different item ID: the first two
+	// blocks fail proof on B', which must be blamed, not the repeated A; the
+	// third copy then repeats [A B'] and is removed.
+	messages := conversation(
+		turnPair(0, "a", "1"), turnPair(2, "b", "2"), turnPair(4, "a", "1"), turnPair(6, "b", "2"),
+		turnPair(8, "a", "1"), turnPair(10, "b", "2"), live(12),
+	)
+	base := viewResolver(messages)
+	resolver := func(id int) (llmprotocol.Message, bool) {
+		message, ok := base(id)
+		if id == 7 {
+			message.ID = "msg_7"
+		}
+		return message, ok
+	}
+	edits, diagnostics := plan(context.Background(), testPolicy(), resolver, contextcompression.TransformationView{Messages: messages})
+	if !reflect.DeepEqual(edits.RemoveMessages, []int{8, 9, 10, 11}) {
+		t.Fatalf("unexpected removals %v", edits.RemoveMessages)
+	}
+	if diagnostics.Retained[RetainedIdentityMismatch] != 1 || diagnostics.Retained[RetainedNonAdjacent] != 1 {
+		t.Fatalf("the differing turn must carry the mismatch: %+v", diagnostics.Retained)
+	}
+}
+
+func TestPlanCancelsInsideStageTwoProof(t *testing.T) {
+	// A turn with many messages must observe cancellation between message
+	// pairs, not only between scan positions.
+	var turn, copy []contextcompression.MessageView
+	turn = append(turn, historyMessage(0, 0, "user", "q"))
+	copy = append(copy, historyMessage(1000, 1000, "user", "q"))
+	for i := 1; i < 300; i++ {
+		turn = append(turn, historyMessage(i, 0, "assistant", "a"))
+		copy = append(copy, historyMessage(1000+i, 1000, "assistant", "a"))
+	}
+	messages := conversation(turn, copy, live(2000))
+	ctx, cancel := context.WithCancel(context.Background())
+	calls := 0
+	resolver := func(id int) (llmprotocol.Message, bool) {
+		calls++
+		if calls == 10 {
+			cancel()
+		}
+		return viewResolver(messages)(id)
+	}
+	edits, diagnostics := plan(ctx, testPolicy(), resolver, contextcompression.TransformationView{Messages: messages})
+	if len(edits.RemoveMessages) != 0 || diagnostics.Reason != ReasonCancelled {
+		t.Fatalf("expected cancellation during proof, got %+v", diagnostics)
+	}
+	if calls > 2*cancellationCheckInterval+2 {
+		t.Fatalf("proof kept resolving after cancellation: %d calls", calls)
 	}
 }
 

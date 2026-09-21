@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
@@ -672,12 +673,7 @@ func cloneContextDedupDiagnostics(value *ContextDedupDiagnostics) *ContextDedupD
 	}
 	cloned := *value
 	cloned.Segments = append([]ContextDedupSegment(nil), value.Segments...)
-	if value.Retained != nil {
-		cloned.Retained = make(map[string]int, len(value.Retained))
-		for reason, count := range value.Retained {
-			cloned.Retained[reason] = count
-		}
-	}
+	cloned.Retained = maps.Clone(value.Retained)
 	return &cloned
 }
 

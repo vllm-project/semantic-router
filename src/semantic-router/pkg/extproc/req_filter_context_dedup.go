@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"maps"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -145,18 +146,11 @@ func contextDedupReplayDiagnostics(ctx *RequestContext) *store.ContextDedupDiagn
 		Recovery:          diagnostics.Recovery,
 	}
 	if len(diagnostics.Retained) > 0 {
-		record.Retained = make(map[string]int, len(diagnostics.Retained))
-		for reason, count := range diagnostics.Retained {
-			record.Retained[reason] = count
-		}
+		record.Retained = maps.Clone(diagnostics.Retained)
 	}
 	for _, segment := range diagnostics.Segments {
-		record.Segments = append(record.Segments, store.ContextDedupSegment{
-			RetainedFirstMessageID: segment.RetainedFirstMessageID,
-			RemovedFirstMessageID:  segment.RemovedFirstMessageID,
-			Turns:                  segment.Turns,
-			Messages:               segment.Messages,
-		})
+		// A struct conversion fails to compile if the two shapes drift.
+		record.Segments = append(record.Segments, store.ContextDedupSegment(segment))
 	}
 	return record
 }
@@ -165,10 +159,13 @@ func contextDedupReplayDiagnostics(ctx *RequestContext) *store.ContextDedupDiagn
 // response the client receives. A deduplication that could not be evaluated
 // safely is a router-side condition the caller may retry, so it answers 503;
 // an invariant the shared executor rejected is an internal fault, and a
-// compression-only failure keeps its existing mapping.
+// compression-only failure keeps its existing mapping. A fail-open
+// deduplication never stops the plan, so its failed diagnostic cannot be the
+// cause of the rejection and the compression mapping stands.
 func contextTransformationFailure(ctx *RequestContext) (int, string) {
 	if ctx == nil || ctx.ContextDedupDiagnostics == nil ||
-		ctx.ContextDedupDiagnostics.Outcome != contextdedup.OutcomeFailed {
+		ctx.ContextDedupDiagnostics.Outcome != contextdedup.OutcomeFailed ||
+		ctx.ContextDedupPolicy.EffectiveFailureMode() != config.ContextDedupFailureClosed {
 		return 500, "Context compression failed under fail_closed policy"
 	}
 	if ctx.ContextDedupDiagnostics.Reason == "invariant_violation" {

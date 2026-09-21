@@ -180,8 +180,8 @@ func (scan *segmentScan) collapse(ctx context.Context, run []*turn) string {
 			if !identicalBlocks(run[i:i+k], run[i+k:i+2*k]) {
 				continue
 			}
-			proven, reason := scan.prove(run[i:i+k], run[i+k:i+2*k])
-			if reason == ReasonEquivalenceUnverifiable {
+			proven, reason := scan.prove(ctx, run[i:i+k], run[i+k:i+2*k])
+			if reason == ReasonEquivalenceUnverifiable || reason == ReasonCancelled {
 				return reason
 			}
 			if !proven {
@@ -213,22 +213,28 @@ func identicalBlocks(earlier, later []*turn) bool {
 }
 
 // prove runs the stage-two check over every message pair of a matched block.
-// A failed proof records the retention reason on the later block's first
-// turn; an unresolvable message aborts the whole step.
-func (scan *segmentScan) prove(earlier, later []*turn) (bool, string) {
+// A failed proof records the retention reason on the later turn whose message
+// differed; an unresolvable message or a cancelled context aborts the whole
+// step. The context is checked between message pairs because a turn may
+// carry far more messages than the scan has positions.
+func (scan *segmentScan) prove(ctx context.Context, earlier, later []*turn) (bool, string) {
 	if scan.resolver == nil {
 		return false, ReasonEquivalenceUnverifiable
 	}
 	for index := range earlier {
 		for position := range earlier[index].messages {
+			scan.checks++
+			if scan.checks%cancellationCheckInterval == 0 && ctx.Err() != nil {
+				return false, ReasonCancelled
+			}
 			first, ok := scan.resolver(earlier[index].messages[position].ID)
 			second, found := scan.resolver(later[index].messages[position].ID)
 			if !ok || !found {
 				return false, ReasonEquivalenceUnverifiable
 			}
 			if proven, reason := EquivalentMessages(first, second, scan.mode); !proven {
-				if later[0].retained == "" {
-					later[0].retained = reason
+				if later[index].retained == "" {
+					later[index].retained = reason
 				}
 				return false, reason
 			}

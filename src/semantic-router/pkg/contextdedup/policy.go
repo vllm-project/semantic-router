@@ -127,14 +127,17 @@ func evaluationFailure(reason string) bool {
 	return true
 }
 
-// withinLimits reports whether the examined history stays inside the policy's
-// bounds. Exceeding a bound rejects the whole step; it never deduplicates a
+// withinLimits reports whether the eligible history stays inside the policy's
+// bounds. Only removable history counts: instructions, the live turn, and
+// other protected content are never candidates, so they do not consume the
+// budget. Exceeding a bound rejects the whole step; it never deduplicates a
 // prefix, so the result cannot depend on scan order.
 func (p Policy) withinLimits(view contextcompression.TransformationView) bool {
 	turns := make(map[int]struct{})
 	bytes := 0
 	for _, message := range view.Messages {
-		if message.Source != contextcompression.SourceHistory {
+		if message.Source != contextcompression.SourceHistory || message.TurnID < 0 ||
+			message.Eligibility&contextcompression.EligibleHistoryRemoval == 0 {
 			continue
 		}
 		turns[message.TurnID] = struct{}{}

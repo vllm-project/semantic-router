@@ -172,6 +172,23 @@ func TestActionCancelledBeforeProposalIsNotEvaluated(t *testing.T) {
 	}
 }
 
+func TestActionReconcileMapsLateCancellationToCancelled(t *testing.T) {
+	// The executor rejects a proposal it receives after the context expired
+	// with policy_failed; the action had recorded a success, which must not
+	// surface as a failed evaluation with reason applied.
+	request := duplicatedRequest()
+	ir := contextcompression.ParseSemanticRequest(request, contextcompression.Provenance{})
+	action := NewAction(testPolicy(), "").WithResolver(RequestResolver(ir))
+	if _, err := action.propose(context.Background(), ir.TransformationView()); err != nil {
+		t.Fatal(err)
+	}
+	overtaken := contextcompression.TransformationReceipt{Kind: contextcompression.TransformDeduplicate, Status: contextcompression.TransformationFailed, Reason: "policy_failed"}
+	result := action.Reconcile([]contextcompression.TransformationReceipt{overtaken})
+	if result.Outcome != OutcomeFailed || result.Reason != ReasonCancelled || result.RemovedMessages != 0 {
+		t.Fatalf("unexpected diagnostics %+v", result)
+	}
+}
+
 func TestActionReconcileWithoutEvaluation(t *testing.T) {
 	action := NewAction(testPolicy(), "")
 	result := action.Reconcile(nil)

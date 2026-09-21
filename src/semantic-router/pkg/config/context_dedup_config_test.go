@@ -73,12 +73,11 @@ var contextDedupValidationCases = []struct {
 		wantErr: "max_segment_turns cannot exceed limits.max_history_turns (8)",
 	},
 	{
-		name: "default_segment_bound_beyond_small_history_bound",
+		name: "small_history_bound_derives_the_segment_bound",
 		payload: map[string]interface{}{
-			"enabled": false,
+			"enabled": true,
 			"limits":  map[string]interface{}{"max_history_turns": 8},
 		},
-		wantErr: "max_segment_turns cannot exceed limits.max_history_turns (8)",
 	},
 	{
 		name: "unknown_field",
@@ -142,6 +141,10 @@ func TestContextDedupEffectiveDefaults(t *testing.T) {
 	limits = policy.EffectiveLimits()
 	if limits.MaxSegmentTurns != 8 || limits.MaxHistoryTurns != DefaultContextDedupMaxHistoryTurns {
 		t.Fatalf("configured bounds must override only themselves: %+v", limits)
+	}
+	lowered := &ContextDedupPluginConfig{Limits: &ContextDedupLimitsConfig{MaxHistoryTurns: 8}}
+	if limits = lowered.EffectiveLimits(); limits.MaxSegmentTurns != 8 {
+		t.Fatalf("an omitted segment bound must follow a lowered history bound: %+v", limits)
 	}
 }
 

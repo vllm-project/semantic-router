@@ -129,21 +129,28 @@ func carriesNonText(content llmprotocol.Content) bool {
 // RequestResolver resolves view message IDs against the neutral request the
 // IR was parsed from. Both keep one entry per message in the same order, and
 // the shared executor removes from both together, so the position of a view
-// ID in the IR is the position of its message in the request.
+// ID in the IR is the position of its message in the request. The position
+// index is rebuilt whenever the request generation or message count changes,
+// so a lookup costs constant time however many messages a turn carries.
 func RequestResolver(ir *contextcompression.RequestIR) Resolver {
+	var positions map[int]int
+	var indexedGeneration uint64
+	indexedCount := -1
 	return func(id int) (llmprotocol.Message, bool) {
 		if ir == nil || ir.Semantic == nil {
 			return llmprotocol.Message{}, false
 		}
-		for position, message := range ir.Messages {
-			if message.Index != id {
-				continue
+		if positions == nil || ir.Semantic.Generation != indexedGeneration || len(ir.Messages) != indexedCount {
+			positions = make(map[int]int, len(ir.Messages))
+			for position, message := range ir.Messages {
+				positions[message.Index] = position
 			}
-			if position >= len(ir.Semantic.Messages) {
-				return llmprotocol.Message{}, false
-			}
-			return ir.Semantic.Messages[position], true
+			indexedGeneration, indexedCount = ir.Semantic.Generation, len(ir.Messages)
 		}
-		return llmprotocol.Message{}, false
+		position, ok := positions[id]
+		if !ok || position >= len(ir.Semantic.Messages) {
+			return llmprotocol.Message{}, false
+		}
+		return ir.Semantic.Messages[position], true
 	}
 }

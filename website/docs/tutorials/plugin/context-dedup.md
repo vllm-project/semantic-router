@@ -21,7 +21,9 @@ Clients that rebuild a request from a transcript, retry a send after a timeout, 
 
 ## When to Use
 
-Use it on decisions that serve clients known to re-send history, or as a cheap safeguard ahead of `context_compression` on long-session routes. Do not use it when the application depends on the router forwarding its request byte for byte, or when repeated turns carry meaning for the application even though they are identical.
+Use it on decisions that serve clients known to re-send history, or as a cheap token saver alongside `context_compression` on long-session routes. Do not use it when the application depends on the router forwarding its request byte for byte, or when repeated turns carry meaning for the application even though they are identical.
+
+Deduplication runs after decision admission. A request whose raw size already exceeds every candidate model's context window is rejected before this step runs, and the `context_compression` overflow path is applied before it as well, so this plugin lowers the tokens a dispatched request carries; it does not make an oversized request admissible.
 
 ## Configuration
 
@@ -46,9 +48,9 @@ plugins:
 | `enabled` | `false` | Omission or `false` performs no deduplication work at all. |
 | `normalization` | `exact` | `exact` compares text byte for byte. `whitespace` collapses runs of white space and trims the ends first. Neither mode changes case, punctuation, or Unicode form. |
 | `failure_mode` | `fail_open` | `fail_open` preserves the request when the policy cannot decide safely; `fail_closed` rejects it before provider dispatch. |
-| `limits.max_history_turns` | `128` | Upper bound on history turns examined per request. Beyond it the whole step is skipped; a prefix is never deduplicated. |
-| `limits.max_history_bytes` | `1048576` | Upper bound on the history text the policy inspects. Tool arguments and media are not part of that view. |
-| `limits.max_segment_turns` | `64` | Largest block of consecutive turns one repeat may span. A whole history re-sent as one block needs a bound at least as large as that history. Must not exceed `max_history_turns`. |
+| `limits.max_history_turns` | `128` | Upper bound on eligible history turns examined per request. Instructions, the live turn, and other protected content are not candidates and do not count. Beyond it the whole step is skipped; a prefix is never deduplicated. |
+| `limits.max_history_bytes` | `1048576` | Upper bound on the eligible history text the policy inspects. Tool arguments and media are not part of that view. |
+| `limits.max_segment_turns` | `64`, or `max_history_turns` when that is lower | Largest block of consecutive turns one repeat may span. A whole history re-sent as one block needs a bound at least as large as that history. An explicit value must not exceed `max_history_turns`. |
 | `limits.timeout_ms` | `50` | Budget for the policy's own scan. The shared transformation view is prepared before the policy runs and is not inside this budget. |
 
 Configuration cannot widen what may be removed. Eligibility and protection are owned by the shared context-transformation layer, and a policy that names a protected message simply has its proposal rejected.
@@ -95,7 +97,7 @@ Only adjacent repetition is removed. A block of consecutive candidate turns that
 | Adjacent repeated turns found | Remove the later copies | Same |
 | No duplicates, or no eligible history | Preserve the request; normal no-op | Same |
 | Planning limit exceeded | Preserve the request and record the reason | Reject before provider dispatch |
-| Timeout or cancellation during the scan | Preserve the request | Reject before provider dispatch |
+| Timeout or cancellation during the scan or the proof | Preserve the request | Reject before provider dispatch |
 | Request representation cannot be proven (no neutral request) | Preserve the request | Reject before provider dispatch |
 
 Every outcome records a bounded terminal reason, for example `applied`, `no_duplicates`, `history_limit_exceeded`, `cancelled`, or `equivalence_unverifiable`. A preserved request keeps its enrichment, tools, metadata, and generation exactly as they were.

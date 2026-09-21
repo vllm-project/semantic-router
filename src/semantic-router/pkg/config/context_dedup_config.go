@@ -74,27 +74,30 @@ func (c *ContextDedupPluginConfig) EffectiveFailureMode() string {
 
 // EffectiveLimits fills each omitted bound with its default. Configured values
 // are returned as written; validation rejects nonpositive or excessive ones.
+// An omitted segment bound never exceeds the effective history bound, so
+// lowering max_history_turns alone stays valid.
 func (c *ContextDedupPluginConfig) EffectiveLimits() ContextDedupLimitsConfig {
 	result := ContextDedupLimitsConfig{
 		MaxHistoryTurns: DefaultContextDedupMaxHistoryTurns,
 		MaxHistoryBytes: DefaultContextDedupMaxHistoryBytes,
-		MaxSegmentTurns: DefaultContextDedupMaxSegmentTurns,
 		TimeoutMs:       DefaultContextDedupTimeoutMs,
 	}
-	if c == nil || c.Limits == nil {
-		return result
+	if c != nil && c.Limits != nil {
+		if c.Limits.MaxHistoryTurns != 0 {
+			result.MaxHistoryTurns = c.Limits.MaxHistoryTurns
+		}
+		if c.Limits.MaxHistoryBytes != 0 {
+			result.MaxHistoryBytes = c.Limits.MaxHistoryBytes
+		}
+		if c.Limits.MaxSegmentTurns != 0 {
+			result.MaxSegmentTurns = c.Limits.MaxSegmentTurns
+		}
+		if c.Limits.TimeoutMs != 0 {
+			result.TimeoutMs = c.Limits.TimeoutMs
+		}
 	}
-	if c.Limits.MaxHistoryTurns != 0 {
-		result.MaxHistoryTurns = c.Limits.MaxHistoryTurns
-	}
-	if c.Limits.MaxHistoryBytes != 0 {
-		result.MaxHistoryBytes = c.Limits.MaxHistoryBytes
-	}
-	if c.Limits.MaxSegmentTurns != 0 {
-		result.MaxSegmentTurns = c.Limits.MaxSegmentTurns
-	}
-	if c.Limits.TimeoutMs != 0 {
-		result.TimeoutMs = c.Limits.TimeoutMs
+	if result.MaxSegmentTurns == 0 {
+		result.MaxSegmentTurns = min(DefaultContextDedupMaxSegmentTurns, result.MaxHistoryTurns)
 	}
 	return result
 }
