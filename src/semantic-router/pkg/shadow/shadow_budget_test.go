@@ -78,9 +78,11 @@ func TestShadowBudgetReconcileSwapsReservation(t *testing.T) {
 	if want := 90.0 / 1e6 * 2.0; cost != want {
 		t.Fatalf("cost = %v, want %v (cost reflects accounted tokens)", cost, want)
 	}
-	// Response bytes are accounted for every outcome, not only completions.
-	if bytes := b.TotalBytes(); bytes != 640 {
-		t.Fatalf("bytes = %d, want 640", bytes)
+	// Response bytes follow the same rule: the reservation is swapped on
+	// completion and kept by a failed attempt, so only the completed arm's
+	// observed 512 bytes are accounted here.
+	if bytes := b.TotalBytes(); bytes != 512 {
+		t.Fatalf("bytes = %d, want 512", bytes)
 	}
 }
 
@@ -94,11 +96,20 @@ func TestShadowBudgetReconcileSwapsResponseBytesReservation(t *testing.T) {
 	if bytes := b.TotalBytes(); bytes != 128 {
 		t.Fatalf("bytes = %d, want 128 (reservation swapped for the observed size)", bytes)
 	}
-	// An arm that reported no read at all releases its reservation.
-	b.TryEnter()
-	b.Reconcile(false, 0, 0, 0)
-	if bytes := b.TotalBytes(); bytes != 128 {
-		t.Fatalf("bytes = %d, want 128 after a zero-byte outcome", bytes)
+	// A failed arm keeps its reservation: its read may have consumed an error
+	// or oversized body that the result does not report.
+	failed := NewShadowBudget(config.ShadowDispatchBudgetConfig{}, 400)
+	failed.TryEnter()
+	failed.Reconcile(false, 0, 0, 0)
+	if bytes := failed.TotalBytes(); bytes != 400 {
+		t.Fatalf("bytes = %d, want 400 (a failed read keeps its reservation)", bytes)
+	}
+	// A completed arm does swap the reservation for the observed size.
+	completedAlone := NewShadowBudget(config.ShadowDispatchBudgetConfig{}, 400)
+	completedAlone.TryEnter()
+	completedAlone.Reconcile(true, 0, 0, 64)
+	if bytes := completedAlone.TotalBytes(); bytes != 64 {
+		t.Fatalf("bytes = %d, want 64 (reservation swapped for the observed size)", bytes)
 	}
 }
 

@@ -115,21 +115,21 @@ func (b *ShadowBudget) LeaveInflight() {
 	}
 }
 
-// Reconcile accounts a finished arm attempt. A completed arm swaps its token
-// and cost admission reservations for the real usage; any other outcome keeps
-// them (the attempt may still have spent upstream compute, and this was
-// already counted at admission). Response bytes are always swapped for the
-// observed size, so a read that never happened releases its reservation.
+// Reconcile accounts a finished arm attempt. A completed arm swaps its token,
+// cost and response-byte admission reservations for the real usage; any other
+// outcome keeps all three: a failed read may still have consumed an error or
+// oversized body that the result does not report, and the attempt may have
+// spent upstream compute either way.
 func (b *ShadowBudget) Reconcile(completed bool, inputTokens, outputTokens, responseBytes int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.bytes += responseBytes - b.reserveResponseBytes
 	if !completed {
 		return
 	}
 	used := inputTokens + outputTokens
 	b.token += used - b.limit.ReserveTokensPerArm
 	b.cost += b.costOf(used - b.limit.ReserveTokensPerArm)
+	b.bytes += responseBytes - b.reserveResponseBytes
 }
 
 // Total reports the accounted totals (test/observability helper).

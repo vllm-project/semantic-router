@@ -71,6 +71,7 @@ func (p *Profile) GetTestCases() []string {
 		"shadow-dispatch-fail-open-timeout",
 		"shadow-dispatch-fail-open-malformed-response",
 		"shadow-dispatch-fail-open-queue-full",
+		"shadow-dispatch-multi-arm-completes",
 	}
 }
 

@@ -32,7 +32,7 @@ func testShadowDispatchMultiArmCompletes(
 	if err != nil {
 		return err
 	}
-	record, err := run.replay(ctx, sessionID, 1)
+	record, err := run.replay(ctx, sessionID, 2)
 	if err != nil {
 		return err
 	}
