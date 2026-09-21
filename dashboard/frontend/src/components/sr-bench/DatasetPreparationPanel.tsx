@@ -15,12 +15,16 @@ import shared from './SrBench.module.css'
 import styles from './DatasetPreparationPanel.module.css'
 
 export default function DatasetPreparationPanel({
-  canWrite,
+  disabledReason,
+  accessRefreshing,
+  onRefreshAccess,
   onCompleted,
   onOpenDataset,
   onClose,
 }: {
-  canWrite: boolean
+  disabledReason: string | null
+  accessRefreshing: boolean
+  onRefreshAccess: () => void
   onCompleted: () => void
   onOpenDataset: (dataset: Dataset) => void
   onClose: () => void
@@ -31,7 +35,9 @@ export default function DatasetPreparationPanel({
   const benchmark = state.benchmarks.find((item) => item.id === benchmarkID) ?? state.benchmarks[0]
   const active = state.preparations.filter(preparationIsActive)
   const duplicate = active.some((job) => job.benchmark === benchmark?.id && job.profile === profile)
-  const disabled = !canWrite || state.submitting || state.loading
+  const profiles = ['smoke', 'quick', 'standard'] as const
+  const selectionDisabled = state.submitting || state.loading
+  const mutationDisabled = !!disabledReason || selectionDisabled
   return (
     <section className={shared.panel} aria-label="Prepare datasets">
       <div className={shared.sectionHeading}>
@@ -60,29 +66,33 @@ export default function DatasetPreparationPanel({
         <form
           onSubmit={(event) => {
             event.preventDefault()
-            if (!disabled && !active.length)
+            if (!mutationDisabled && !active.length)
               void state.prepare({ benchmark: benchmark.id, profile })
           }}
         >
+          <p className={shared.muted}>
+            {number(state.benchmarks.length)} benchmarks · {profiles.length} dataset sizes:{' '}
+            {profiles.map(profileTitle).join(', ')}. Choose a benchmark to compare question counts.
+          </p>
           <div className={shared.formGrid}>
             <BenchSelect
               label="Benchmark to download"
               value={benchmark.id}
               options={state.benchmarks.map((item) => ({ value: item.id, label: item.name }))}
               onChange={setBenchmarkID}
-              disabled={disabled}
+              disabled={selectionDisabled}
               searchable
             />
             <BenchSelect
               label="Dataset size"
               value={profile}
-              options={(['smoke', 'quick', 'standard'] as const).map((value) => ({
+              options={profiles.map((value) => ({
                 value,
                 label: profileTitle(value),
                 description: `${number(benchmark.profiles[value])} questions`,
               }))}
               onChange={(value) => setProfile(value as PreparationProfile)}
-              disabled={disabled}
+              disabled={selectionDisabled}
             />
           </div>
           <div className={styles.selection}>
@@ -94,12 +104,18 @@ export default function DatasetPreparationPanel({
               View source dataset
             </a>
           </div>
+          <p className={shared.muted}>
+            {profiles
+              .map((value) => `${profileTitle(value)}: ${number(benchmark.profiles[value])}`)
+              .join(' · ')}{' '}
+            questions
+          </p>
           {benchmark.access_note && <p className={shared.muted}>{benchmark.access_note}</p>}
           <div className={shared.actions}>
             <button
               type="submit"
               className={shared.primary}
-              disabled={disabled || active.length > 0}
+              disabled={mutationDisabled || active.length > 0}
             >
               <ProductIcon name="database" />
               {state.submitting
@@ -121,10 +137,13 @@ export default function DatasetPreparationPanel({
       {!state.loading && !state.readError && !benchmark && (
         <p className={shared.notice}>No downloadable benchmarks are available from this service.</p>
       )}
-      {!canWrite && (
-        <p className={shared.notice}>
-          Preparing datasets requires evaluation write permission and a writable Dashboard session.
-        </p>
+      {disabledReason && (
+        <div className={shared.notice}>
+          <p>{disabledReason}</p>
+          <button type="button" onClick={onRefreshAccess} disabled={accessRefreshing}>
+            <ProductIcon name="refresh" /> Refresh access
+          </button>
+        </div>
       )}
       {state.submitError && (
         <p className={shared.error} role="alert">
@@ -167,9 +186,9 @@ export default function DatasetPreparationPanel({
                 {job.status === 'failed' && (
                   <button
                     type="button"
-                    disabled={disabled || active.length > 0}
+                    disabled={mutationDisabled || active.length > 0}
                     onClick={() => {
-                      if (!disabled && !active.length)
+                      if (!mutationDisabled && !active.length)
                         void state.prepare({
                           benchmark: job.benchmark,
                           profile: job.profile,

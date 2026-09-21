@@ -136,8 +136,10 @@ vllm-sr benchmark --url http://127.0.0.1:8090 dataset show
 
 Preparation requires Evaluation write permission in Dashboard; reading options,
 progress and datasets requires read permission. Read-only Dashboard mode disables
-preparation. It does not require model generation permission, start an evaluation,
-or make model requests. Automatic dependency installation is limited to the
+preparation, while benchmark and profile selection remain available for browsing.
+If access could not be checked, use **Refresh access** to retry the settings and
+account checks. Preparing data does not require model generation permission,
+start an evaluation, or make model requests. Automatic dependency installation is limited to the
 allowlisted data preparation packages. It does not install execution harnesses,
 build sandbox images, or provision model servers. Those remain explicit worker
 setup operations. Gated sources require access approval and the appropriate

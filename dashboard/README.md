@@ -188,6 +188,9 @@ sources require access approval and credentials in the worker environment.
 Preparation continues when the page closes and makes no model requests. It
 requires Evaluation write permission and is disabled in read-only mode; viewing
 its progress only requires Evaluation read permission.
+Read-only users can still browse every benchmark and compare smoke, quick and
+standard question counts. **Refresh access** retries failed settings reads and
+refreshes the current account permissions without starting a download.
 
 The CLI waits for the manifest by default; use `dataset prepare --no-wait` and
 `dataset preparations [PREPARATION_ID]` to submit and inspect background work.

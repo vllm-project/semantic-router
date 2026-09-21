@@ -27,9 +27,23 @@ import ProductLoadingState from '../components/ProductLoadingState'
 type Inventory = 'catalog' | 'datasets' | 'targets' | 'runs'
 
 export default function EvaluationPage() {
-  const { user } = useAuth()
-  const { serverReadonly, isLoading: settingsLoading } = useReadonly()
-  const canWrite = !settingsLoading && !serverReadonly && canWriteEvaluation(user)
+  const { user, refreshSession } = useAuth()
+  const {
+    serverReadonly,
+    isLoading: settingsLoading,
+    settingsError,
+    refreshSettings,
+  } = useReadonly()
+  const writeDisabledReason = settingsLoading
+    ? 'Checking Dashboard settings before enabling dataset preparation. You can browse benchmarks and dataset sizes.'
+    : settingsError
+      ? `${settingsError} You can browse benchmarks and dataset sizes while access is unavailable.`
+      : serverReadonly
+        ? 'Dashboard is in read-only mode. You can browse benchmarks and dataset sizes, but cannot prepare or retry downloads.'
+        : !canWriteEvaluation(user)
+          ? 'Your account does not have evaluation write permission. You can browse benchmarks and dataset sizes, but cannot prepare or retry downloads.'
+          : null
+  const canWrite = writeDisabledReason === null
   const canRun = canWrite && canRunEvaluation(user)
   const [search, setSearch] = useSearchParams()
   const pendingSearch = useRef(search)
@@ -354,7 +368,12 @@ export default function EvaluationPage() {
       {view === 'datasets' && search.get('prepare') === '1' && (
         <DatasetPreparationPanel
           key={user?.id ?? ''}
-          canWrite={canWrite}
+          disabledReason={writeDisabledReason}
+          accessRefreshing={settingsLoading}
+          onRefreshAccess={() => {
+            refreshSettings()
+            void refreshSession()
+          }}
           onCompleted={refresh}
           onOpenDataset={(dataset) =>
             setSearch({ view: 'datasets', dataset: dataset.id, ...experimentRoute })
