@@ -98,14 +98,14 @@ true becomes a candidate, and ranking then picks one of them.
 
 `decision.tier` is the hard precedence boundary: a lower tier wins, and a
 decision that omits `tier` is tier 0, so it ranks ahead of every decision that
-sets one. Tiered ranking activates per request, as soon as one matched decision
-carries a tier above 0. Otherwise `routing.strategy` decides.
+sets one. Tier is compared first whenever one matched decision carries a tier
+above 0. `routing.strategy` then decides how the decisions inside that tier are
+ordered, and it means the same thing where no decision sets a tier at all.
 
-| Case | Keys, in order |
+| `routing.strategy` | Keys, in order |
 | --- | --- |
-| a matched decision sets `tier` | tier ascending, catch-all last, confidence descending, priority descending, name ascending |
-| no tier, `strategy: confidence` | catch-all last, confidence descending, priority descending, name ascending |
-| no tier, `strategy: priority` | priority descending, confidence descending, name ascending |
+| `priority` (the default) | tier ascending, catch-all last, priority descending, confidence descending, name ascending |
+| `confidence` | tier ascending, catch-all last, confidence descending, priority descending, name ascending |
 
 Confidence ranks a comparable pool only. A pool is one tier under tiered
 ranking and the whole candidate set otherwise. Every leaf is either policy or
@@ -133,16 +133,15 @@ of an `OR` matched, and a match an `on_error` policy manufactured. Inside an
 matching gate adds support without removing evidence. Name ascending is the
 final tie-break, so ranking never depends on map or file order.
 
-Two consequences are easy to miss:
+The eval API reports how one request was ranked under `decision_ranking`: the
+strategy that ran, the tier the winner came from, whether that pool was
+comparable and which decision made it incomparable, and the key that separated
+the winner from the decision behind it.
 
-- The tiered case never reads `routing.strategy`. A profile that mixes tiered
-  and untiered decisions therefore ranks its untiered pool by confidence
-  whenever a tiered decision happens to match as well.
-- The `strategy: priority` case has no catch-all rule, unlike the other two, so
-  a catch-all with a high priority can outrank a real match there.
-
-The [Decision Ranking Semantics](../../proposals/decision-ranking-semantics)
-proposal tracks the contract that replaces both.
+A catch-all ranks after every real match under either strategy, whatever
+priority it carries, so an unconditional fallback stays a fallback. The
+[Decision Ranking Semantics](../../proposals/decision-ranking-semantics)
+proposal records how this contract was settled.
 
 ## Operational Boundaries
 

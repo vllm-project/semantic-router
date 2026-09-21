@@ -1,4 +1,4 @@
-import type { Dataset } from './types'
+import type { Dataset, DatasetPreparation } from './types'
 
 const benchmarkTitles: Record<string, string> = {
   'arc-agi': 'ARC-AGI',
@@ -23,6 +23,23 @@ export const profileDescription = (id?: string) =>
     quick: 'Compare changes in a shorter evaluation loop.',
     standard: 'Evaluate broader capability coverage.',
   })[id ?? ''] ?? 'A prepared case set for your evaluation.'
+
+export const evaluationRoleTitle = (role: 'holdout' | 'retest' | null) =>
+  role === 'holdout' ? 'Holdout' : role === 'retest' ? 'Retest' : 'Role unspecified'
+
+export function datasetEvaluationTitle(
+  preparation?: DatasetPreparation,
+  benchmarks?: string[],
+): string | null {
+  if (!preparation || !Object.keys(preparation).length) return null
+  const families = new Set([...Object.keys(preparation), ...(benchmarks ?? [])])
+  const roles = new Set(
+    [...families].map((family) =>
+      evaluationRoleTitle(preparation[family]?.evaluation_role ?? null),
+    ),
+  )
+  return roles.size > 1 ? 'Mixed evaluation roles' : ([...roles][0] ?? null)
+}
 
 export function friendlyDatasetName(dataset: Pick<Dataset, 'name' | 'benchmarks'>): string {
   const raw = dataset.name?.trim()
