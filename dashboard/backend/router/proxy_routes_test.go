@@ -1,16 +1,50 @@
 package router
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 )
 
 type routerProxyCredentialProvider struct {
 	token string
+}
+
+func TestGrafanaRouteServesAdapterAndRewritesDocument(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/d/router" {
+			t.Errorf("unexpected upstream request %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, "<html><head></head><body>Grafana</body></html>")
+	}))
+	defer upstream.Close()
+	mux := http.NewServeMux()
+	registerGrafanaRoutes(mux, &config.Config{GrafanaURL: upstream.URL})
+	for _, path := range []string{proxy.GrafanaAuthScriptPath, "/embedded/grafana/d/router"} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("Accept", "text/html")
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d", path, response.Code)
+		}
+		if path == proxy.GrafanaAuthScriptPath {
+			if !strings.Contains(response.Header().Get("Content-Type"), "javascript") {
+				t.Fatal("adapter was not served locally")
+			}
+		} else if !strings.Contains(response.Body.String(), proxy.GrafanaAuthScriptPath) {
+			t.Fatal("document did not install the adapter")
+		}
+	}
 }
 
 func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
@@ -65,6 +99,69 @@ func TestRouterAPIProxyReplacesBrowserAuthorization(t *testing.T) {
 	}
 	if authorization != "Bearer router-service-token" {
 		t.Fatalf("Authorization = %q", authorization)
+	}
+}
+
+func TestPlaygroundChatProxyPreservesIdentityAndStripsBrowserCredentials(t *testing.T) {
+	t.Setenv("VLLM_SR_PORT_OFFSET", "0")
+	type upstreamRequest struct {
+		method  string
+		path    string
+		query   string
+		headers http.Header
+		body    string
+	}
+	received := make(chan upstreamRequest, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read proxied request: %v", err)
+		}
+		received <- upstreamRequest{r.Method, r.URL.Path, r.URL.RawQuery, r.Header.Clone(), string(body)}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	target, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(t.TempDir(), "runtime.yaml")
+	runtimeConfig := "version: v0.3\nlisteners:\n  - name: public\n    address: 127.0.0.1\n    port: " + target.Port() + "\n"
+	if err := os.WriteFile(configPath, []byte(runtimeConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{EnvoyURL: server.URL, RouterAPIURL: server.URL, AbsConfigPath: configPath}
+	mux := http.NewServeMux()
+	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), routerProxyCredentialProvider{token: "management-only-token"})
+
+	for _, conversation := range []string{"conversation-one", "conversation-one", "conversation-two"} {
+		body := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"hello"}]}`
+		request := httptest.NewRequest(http.MethodPost,
+			"/api/router/v1/chat/completions?authToken=browser-query-token&keep=trace", strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Session-ID", "session-one")
+		request.Header.Set("X-Conversation-ID", conversation)
+		request.Header.Set("Authorization", "Bearer browser-token")
+		request.Header.Set("Proxy-Authorization", "Bearer browser-proxy-token")
+		request.Header.Set("Cookie", "vsr_session=browser-cookie")
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("chat proxy status = %d: %s", response.Code, response.Body.String())
+		}
+		got := <-received
+		if got.method != http.MethodPost || got.path != "/v1/chat/completions" || got.query != "keep=trace" || got.body != body {
+			t.Fatalf("proxied chat request changed: %#v", got)
+		}
+		if got.headers.Get("X-Session-ID") != "session-one" || got.headers.Get("X-Conversation-ID") != conversation {
+			t.Fatalf("conversation identity not preserved: %v", got.headers)
+		}
+		for _, name := range []string{"Authorization", "Proxy-Authorization", "Cookie"} {
+			if got.headers.Get(name) != "" {
+				t.Fatalf("browser credential %s reached Envoy", name)
+			}
+		}
 	}
 }
 
@@ -219,10 +316,10 @@ func TestRouterManagementProxyAllowlistMatchesDashboardSurfaces(t *testing.T) {
 		{method: http.MethodHead, path: "/api/router/api/v1/observability/replays", want: false},
 		{method: http.MethodPost, path: "/api/router/api/v1/observability/replays", want: false},
 		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", want: true},
-		{method: http.MethodGet, path: "/api/router/api/v1/response-cache/stats", want: true},
-		{method: http.MethodPost, path: "/api/router/api/v1/response-cache/invalidate", want: true},
-		{method: http.MethodPost, path: "/api/router/api/v1/context-compression/preview", want: true},
-		{method: http.MethodDelete, path: "/api/router/api/v1/context-compression/stats", want: false},
+		{method: http.MethodGet, path: "/api/router/api/v1/storage/response-cache/stats", want: true},
+		{method: http.MethodPost, path: "/api/router/api/v1/storage/response-cache/invalidate", want: true},
+		{method: http.MethodPost, path: "/api/router/api/v1/plugins/context_compression/preview", want: true},
+		{method: http.MethodDelete, path: "/api/router/api/v1/plugins/context_compression/stats", want: false},
 		{method: http.MethodPost, path: "/api/router/api/v1/config", want: false},
 		{method: http.MethodPost, path: "/api/router/unknown", want: false},
 	}

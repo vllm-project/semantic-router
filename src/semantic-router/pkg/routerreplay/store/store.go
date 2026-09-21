@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 // Signal represents various routing signals captured during a request.
@@ -27,6 +28,7 @@ type Signal struct {
 	Modality      []string `json:"modality,omitempty"`
 	Authz         []string `json:"authz,omitempty"`
 	Jailbreak     []string `json:"jailbreak,omitempty"`
+	Safety        []string `json:"safety,omitempty"`
 	PII           []string `json:"pii,omitempty"`
 	KB            []string `json:"kb,omitempty"`
 	Conversation  []string `json:"conversation,omitempty"`
@@ -182,54 +184,70 @@ type RequestDemandSnapshot struct {
 // and memory outcome in a stable replay-facing shape. Detailed per-candidate
 // learning diagnostics live in the typed Learning block.
 type RouteDiagnostics struct {
-	Decision                       string                   `json:"decision,omitempty"`
-	DecisionTier                   int                      `json:"decision_tier,omitempty"`
-	DecisionPriority               int                      `json:"decision_priority,omitempty"`
-	SelectionMethod                string                   `json:"selection_method,omitempty"`
-	SelectionReasoning             string                   `json:"selection_reasoning,omitempty"`
-	FusionQuorum                   *FusionQuorumDiagnostics `json:"fusion_quorum,omitempty"`
-	Looper                         *LooperDiagnostics       `json:"looper,omitempty"`
-	PromptHelperModel              string                   `json:"prompt_helper_model,omitempty"`
-	PromptHelperPromptTokens       int64                    `json:"prompt_helper_prompt_tokens,omitempty"`
-	PromptHelperCompletionTokens   int64                    `json:"prompt_helper_completion_tokens,omitempty"`
-	PromptHelperTotalTokens        int64                    `json:"prompt_helper_total_tokens,omitempty"`
-	PromptHelperLatencyMs          int64                    `json:"prompt_helper_latency_ms,omitempty"`
-	OriginalModel                  string                   `json:"original_model,omitempty"`
-	ProposalModel                  string                   `json:"proposal_model,omitempty"`
-	PreviousModel                  string                   `json:"previous_model,omitempty"`
-	SelectedModel                  string                   `json:"selected_model,omitempty"`
-	SessionPolicyApplied           bool                     `json:"session_policy_applied,omitempty"`
-	SessionAction                  string                   `json:"session_action,omitempty"`
-	SessionPhase                   string                   `json:"session_phase,omitempty"`
-	SessionReason                  string                   `json:"session_reason,omitempty"`
-	HardLockReason                 string                   `json:"hard_lock_reason,omitempty"`
-	DecisionReason                 string                   `json:"decision_reason,omitempty"`
-	MemoryBackend                  string                   `json:"memory_backend,omitempty"`
-	MemoryStatus                   string                   `json:"memory_status,omitempty"`
-	MemoryReason                   string                   `json:"memory_reason,omitempty"`
-	MemoryFallbackReason           string                   `json:"memory_fallback_reason,omitempty"`
-	MemoryFailOpen                 bool                     `json:"memory_fail_open,omitempty"`
-	MemoryResultCount              int                      `json:"memory_result_count,omitempty"`
-	ContextCompressionApplied      bool                     `json:"context_compression_applied,omitempty"`
-	ContextCompressionBefore       int                      `json:"context_compression_tokens_before,omitempty"`
-	ContextCompressionAfter        int                      `json:"context_compression_tokens_after,omitempty"`
-	ContextCompressionMessages     int                      `json:"context_compression_messages,omitempty"`
-	ContextCompressionFormat       string                   `json:"context_compression_format,omitempty"`
-	ContextCompressionOmitted      int                      `json:"context_compression_omitted_chunks,omitempty"`
-	ContextCompressionSkipReason   string                   `json:"context_compression_skip_reason,omitempty"`
-	ContextCompressionStrategy     string                   `json:"context_compression_strategy,omitempty"`
-	ContextCompressionBudgetMode   string                   `json:"context_compression_budget_mode,omitempty"`
-	ContextCompressionTokenSource  string                   `json:"context_compression_token_source,omitempty"`
-	ContextCompressionTrigger      string                   `json:"context_compression_trigger,omitempty"`
-	ContextCompressionRevision     string                   `json:"context_compression_revision,omitempty"`
-	ContextCompressionRecoveryKeys int                      `json:"context_compression_recovery_keys,omitempty"`
-	ContextCompressionQuality      string                   `json:"context_compression_quality,omitempty"`
-	ContextCompressionFallback     string                   `json:"context_compression_fallback,omitempty"`
-	ContextCompressionCostSaved    float64                  `json:"context_compression_cost_saved,omitempty"`
-	RequestDemandSnapshots         []RequestDemandSnapshot  `json:"request_demand_snapshots,omitempty"`
-	Annotations                    map[string]interface{}   `json:"annotations,omitempty"`
-	SignalErrors                   map[string]string        `json:"signal_errors,omitempty"`
-	AppliedUnknownPolicies         map[string]string        `json:"applied_unknown_policies,omitempty"`
+	Decision                       string                               `json:"decision,omitempty"`
+	DecisionTier                   int                                  `json:"decision_tier,omitempty"`
+	DecisionPriority               int                                  `json:"decision_priority,omitempty"`
+	SelectionMethod                string                               `json:"selection_method,omitempty"`
+	SelectionReasoning             string                               `json:"selection_reasoning,omitempty"`
+	SelectionTrace                 *selectiontrace.MultiFactorObjective `json:"selection_trace,omitempty"`
+	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
+	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
+	PromptHelperModel              string                               `json:"prompt_helper_model,omitempty"`
+	PromptHelperPromptTokens       int64                                `json:"prompt_helper_prompt_tokens,omitempty"`
+	PromptHelperCompletionTokens   int64                                `json:"prompt_helper_completion_tokens,omitempty"`
+	PromptHelperTotalTokens        int64                                `json:"prompt_helper_total_tokens,omitempty"`
+	PromptHelperLatencyMs          int64                                `json:"prompt_helper_latency_ms,omitempty"`
+	OriginalModel                  string                               `json:"original_model,omitempty"`
+	ProposalModel                  string                               `json:"proposal_model,omitempty"`
+	PreviousModel                  string                               `json:"previous_model,omitempty"`
+	SelectedModel                  string                               `json:"selected_model,omitempty"`
+	SessionPolicyApplied           bool                                 `json:"session_policy_applied,omitempty"`
+	SessionAction                  string                               `json:"session_action,omitempty"`
+	SessionPhase                   string                               `json:"session_phase,omitempty"`
+	SessionReason                  string                               `json:"session_reason,omitempty"`
+	HardLockReason                 string                               `json:"hard_lock_reason,omitempty"`
+	DecisionReason                 string                               `json:"decision_reason,omitempty"`
+	MemoryBackend                  string                               `json:"memory_backend,omitempty"`
+	MemoryStatus                   string                               `json:"memory_status,omitempty"`
+	MemoryReason                   string                               `json:"memory_reason,omitempty"`
+	MemoryFallbackReason           string                               `json:"memory_fallback_reason,omitempty"`
+	MemoryFailOpen                 bool                                 `json:"memory_fail_open,omitempty"`
+	MemoryResultCount              int                                  `json:"memory_result_count,omitempty"`
+	ContextCompressionApplied      bool                                 `json:"context_compression_applied,omitempty"`
+	ContextCompressionBefore       int                                  `json:"context_compression_tokens_before,omitempty"`
+	ContextCompressionAfter        int                                  `json:"context_compression_tokens_after,omitempty"`
+	ContextCompressionMessages     int                                  `json:"context_compression_messages,omitempty"`
+	ContextCompressionFormat       string                               `json:"context_compression_format,omitempty"`
+	ContextCompressionOmitted      int                                  `json:"context_compression_omitted_chunks,omitempty"`
+	ContextCompressionSkipReason   string                               `json:"context_compression_skip_reason,omitempty"`
+	ContextCompressionStrategy     string                               `json:"context_compression_strategy,omitempty"`
+	ContextCompressionBudgetMode   string                               `json:"context_compression_budget_mode,omitempty"`
+	ContextCompressionTokenSource  string                               `json:"context_compression_token_source,omitempty"`
+	ContextCompressionTrigger      string                               `json:"context_compression_trigger,omitempty"`
+	ContextCompressionRevision     string                               `json:"context_compression_revision,omitempty"`
+	ContextCompressionRecoveryKeys int                                  `json:"context_compression_recovery_keys,omitempty"`
+	ContextCompressionQuality      string                               `json:"context_compression_quality,omitempty"`
+	ContextCompressionFallback     string                               `json:"context_compression_fallback,omitempty"`
+	ContextCompressionCostSaved    float64                              `json:"context_compression_cost_saved,omitempty"`
+	RequestDemandSnapshots         []RequestDemandSnapshot              `json:"request_demand_snapshots,omitempty"`
+	Annotations                    map[string]interface{}               `json:"annotations,omitempty"`
+	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
+	AppliedUnknownPolicies         map[string]string                    `json:"applied_unknown_policies,omitempty"`
+	DecisionRanking                *DecisionRanking                     `json:"decision_ranking,omitempty"`
+}
+
+// DecisionRanking records how selection ordered the matched decisions,
+// mirroring decision.RankingTrace for replay persistence.
+type DecisionRanking struct {
+	Strategy   string `json:"strategy"`
+	Tiered     bool   `json:"tiered"`
+	Tier       int    `json:"tier"`
+	Comparable bool   `json:"comparable"`
+	Fallback   string `json:"fallback_reason,omitempty"`
+	ScoreKind  string `json:"score_kind,omitempty"`
+	DecidedBy  string `json:"decided_by"`
+	Winner     string `json:"winner"`
+	Candidates int    `json:"candidates"`
 }
 
 // HallucinationSpan is a single unsupported span with its NLI explanation,
@@ -536,6 +554,7 @@ func cloneSignal(signal Signal) Signal {
 		Modality:      cloneStringSlice(signal.Modality),
 		Authz:         cloneStringSlice(signal.Authz),
 		Jailbreak:     cloneStringSlice(signal.Jailbreak),
+		Safety:        cloneStringSlice(signal.Safety),
 		PII:           cloneStringSlice(signal.PII),
 		KB:            cloneStringSlice(signal.KB),
 		Conversation:  cloneStringSlice(signal.Conversation),
@@ -618,11 +637,16 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	}
 	cloned := *value
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
+	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
 	cloned.RequestDemandSnapshots = append([]RequestDemandSnapshot(nil), value.RequestDemandSnapshots...)
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
+	if value.DecisionRanking != nil {
+		ranking := *value.DecisionRanking
+		cloned.DecisionRanking = &ranking
+	}
 	return &cloned
 }
 

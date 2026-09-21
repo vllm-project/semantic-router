@@ -98,8 +98,10 @@ func buildRoutingClassifierModels(
 
 	promptGuard := cfg.PromptGuard
 	if cfg.IsPromptGuardEnabled() {
-		backend := promptGuard.Protocol
-		if backend == "" {
+		backend := ""
+		if promptGuard.Backend != nil {
+			backend = promptGuard.Backend.Protocol
+		} else {
 			backend = promptGuard.Variant
 		}
 		if backend == "" {
@@ -164,12 +166,21 @@ func buildHallucinationModels(
 		"model_type": "modernbert",
 		"lifecycle":  "router_local",
 	}
-	if hallucinationBackend == routerconfig.HallucinationBackendEndpoint {
+	if remote, ok := remoteHallucinationBinding(cfg); ok {
+		// The binding plan is the source of truth for a remote detector: the
+		// legacy scalar desugars into it, and a recipe may bind a token_spans
+		// service (http_classify) that is not an OpenAI-compatible endpoint.
 		metadata = map[string]string{
-			"backend":             hallucinationBackend,
-			"model_type":          "openai_compatible_endpoint",
-			"lifecycle":           "external",
-			"include_explanation": fmt.Sprintf("%t", hallucinationModel.IncludeExplanation),
+			"backend":    routerconfig.HallucinationBackendEndpoint,
+			"model_type": "openai_compatible_endpoint",
+			"lifecycle":  "external",
+			"adapter":    remote.Binding.Adapter,
+			"contract":   remote.Binding.Contract,
+		}
+		if remote.Binding.Adapter == routerconfig.RemoteClassifierProtocolHTTPClassify {
+			metadata["model_type"] = "token_spans_endpoint"
+		} else {
+			metadata["include_explanation"] = fmt.Sprintf("%t", hallucinationModel.IncludeExplanation)
 		}
 	} else {
 		metadata["threshold"] = fmt.Sprintf("%.2f", hallucinationModel.Threshold)
@@ -298,4 +309,27 @@ func resolveInlineModelType(useMmBERT32K, useModernBERT, tokenLevel bool) string
 	default:
 		return "bert"
 	}
+}
+
+// remoteHallucinationBinding reports the hallucination detector's remote
+// binding when the compiled plan has one for the default recipe. A config that
+// does not compile falls back to the legacy scalar so model info still
+// answers.
+func remoteHallucinationBinding(cfg *routerconfig.RouterConfig) (routerconfig.ResolvedModelBinding, bool) {
+	recipe := cfg.RoutingScope
+	if recipe == "" {
+		recipe = routerconfig.DefaultRecipeName
+	}
+	plan, err := routerconfig.CompileModelBindings(cfg)
+	if err != nil {
+		if cfg.HallucinationMitigation.HallucinationModel.NormalizedBackend() == routerconfig.HallucinationBackendEndpoint {
+			return routerconfig.ResolvedModelBinding{Binding: routerconfig.ModelBinding{Adapter: routerconfig.RemoteClassifierProtocolHTTPChat, Contract: routerconfig.RemoteClassifierContractTokenSpans}}, true
+		}
+		return routerconfig.ResolvedModelBinding{}, false
+	}
+	spec, ok := plan.Lookup(recipe, "hallucination_detector")
+	if !ok || spec.Deployment.Provider != "http" {
+		return routerconfig.ResolvedModelBinding{}, false
+	}
+	return spec, true
 }

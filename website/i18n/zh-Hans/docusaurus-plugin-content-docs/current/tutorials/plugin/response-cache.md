@@ -1,6 +1,6 @@
 ---
 translation:
-  source_commit: "fc7bd06c6251bd2df160efd6e007fc69f3f86e72"
+  source_commit: "0f2ba0de7c435366ed68bcf03f5a1bb49b9cb90c"
   source_file: "docs/tutorials/plugin/response-cache.md"
   outdated: false
 ---
@@ -68,11 +68,15 @@ plugins:
 
 `semantic-cache`、`semantic_cache` 和 `response-cache` 作为已弃用别名被接受，并规范化为 `response_cache`。同样，`global.stores.semantic_cache` 会被读取为 `global.stores.response_cache` 的已弃用别名。不要在同一文档中同时配置两种拼写。导出、控制面板保存和 DSL 反编译始终发出规范名称。
 
+本地 `mmbert` 嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。这项绑定不会自动识别可变远程嵌入端点的模型身份。
+
 ## 运维 {#operations}
 
-管理 API 在 `/api/v1/response-cache/*` 下暴露经过脱敏的健康、能力、统计、候选配置测试、限定范围失效、基于 epoch 的清空，以及哈希链式审计视图。失效默认是 dry-run。清空需要显式确认短语 `flush response cache`，并且永不调用后端范围的 `FLUSHALL`。
+管理 API 在 `/api/v1/storage/response-cache/*` 下暴露经过脱敏的健康、能力、统计、候选配置测试、限定范围失效、基于 epoch 的清空。统一哈希链审计位于 `/api/v1/observability/audit`，需要 `audit.read` 权限。`/api/v1/plugins/response_cache` 提供插件发现与操作链接。失效默认是 dry-run。清空需要显式确认短语 `flush response cache`，并且永不调用后端范围的 `FLUSHALL`。
 
-内存后端可以在返回语义命中之前，对照相反含义的查询进行校验（`global.stores.response_cache.polarity_guard`；见[存储与工具](../global/stores-and-tools.md#negation-guard)）。启用可选 NLI 层级时，被拒绝的候选会记录为带 `tier: nli` 的 `cache_negation_reject`，报告为未命中，其相似度仍出现在 `x-vsr-cache-similarity` 上，以便接近阈值的拒绝可被诊断。
+六种缓存后端在返回语义命中前，都会执行始终开启的英文词面校验。对于词面接近、但出现明确否定或已知反义词替换的问题，即使向量相似度较高，也会拒绝该候选。远端条目缺少原始问题时同样视为未命中。拒绝一个候选后，仍可使用后续已检索到的合格候选；远端检索保持候选数量上限。这项检查不保证识别仅词序变化、缺少词面线索或非英文的含义变化。
+
+内存后端还支持可选 NLI 校验器（`global.stores.response_cache.polarity_guard`；见[存储与工具](../global/stores-and-tools.md#negation-guard)）。启用该层级时，NLI 拒绝的候选会记录为带 `tier: nli` 的 `cache_negation_reject`，报告为未命中，其相似度仍出现在 `x-vsr-cache-similarity` 上，以便接近阈值的拒绝可被诊断。
 
 缓存响应可能包含用户或租户数据。请选择合适的范围、TTL、后端认证、加密和失效流程。语义阈值必须针对配置的嵌入模型校准。长于嵌入模型上下文窗口的查询（默认 `bert` 模型为 512 个 token）不会被缓存，因为截断嵌入会匹配所有共享该前缀的查询。带个性化 RAG 或 memory 的路由，若没有显式策略，不应复用富化前的响应。完整示例见：
 [`high-recall.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/response-cache/high-recall.yaml)

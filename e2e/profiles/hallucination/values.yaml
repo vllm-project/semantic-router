@@ -108,10 +108,9 @@ config:
             use_mmbert_32k: false
         hallucination_mitigation:
           enabled: true
-          # Candle fact-check classifier gates when detection runs (same model
-          # the reference config uses).
+          # Use the canonical Vela fact-check binding to gate detection.
           fact_check:
-            model_id: models/mmbert32k-factcheck-classifier-merged
+            model_ref: fact_check_classifier
             threshold: 0.65
             use_cpu: true
             use_mmbert_32k: true

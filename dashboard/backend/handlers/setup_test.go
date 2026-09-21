@@ -555,13 +555,14 @@ func TestSetupActivateHandler(t *testing.T) {
 		t.Fatalf("expected global.model_catalog.embeddings.semantic in activated config, got %#v", embeddings["semantic"])
 	}
 	// Mirrors pkg/config/canonical_defaults global.model_catalog.embeddings.semantic.mmbert_model_path
-	if semantic["mmbert_model_path"] != "models/mmbert-embed-32k-2d-matryoshka" {
+	if semantic["mmbert_model_path"] != "models/Vela-1.0-Encoder-307M-Embedding" {
 		t.Fatalf("expected explicit mmbert default path, got %#v", semantic["mmbert_model_path"])
 	}
 
 	if info, err := os.Stat(filepath.Join(tempDir, ".vllm-sr")); err != nil || !info.IsDir() {
 		t.Fatalf(".vllm-sr output directory should exist after activation: %v", err)
 	}
+	assertSnapshotPermissions(t, tempDir)
 }
 
 func TestSetupActivateHandlerStartsCreatedSplitRuntimeContainers(t *testing.T) {

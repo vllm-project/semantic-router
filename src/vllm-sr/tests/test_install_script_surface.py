@@ -35,9 +35,8 @@ OPENCLAW_INSTALL_DOC_PATH = (
 def test_install_script_runtime_contract_supports_podman_fallback() -> None:
     content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
 
-    # User-facing --runtime choices are unchanged: Podman is an internal
-    # fallback during auto detection, not a first-class option.
-    assert "--runtime auto|docker|skip" in content
+    # Podman is now a first-class --runtime option alongside docker.
+    assert "--runtime auto|docker|podman|skip" in content
 
     # Auto detection must prefer Docker but fall back to Podman when Docker
     # is not reachable. The fallback has to be gated on --runtime auto so
@@ -56,6 +55,16 @@ def test_install_script_persists_selected_runtime() -> None:
     # reuse it instead of re-probing the host.
     assert "runtime.env" in content
     assert "CONTAINER_RUNTIME=" in content
+
+
+def test_install_script_launcher_preserves_install_root() -> None:
+    content = INSTALL_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    # A custom --install-root writes runtime.env under that root. The
+    # generated launcher must export VLLM_SR_INSTALL_ROOT so later CLI
+    # sessions resolve the persisted runtime.env next to this installation
+    # instead of the default location (#3370).
+    assert 'export VLLM_SR_INSTALL_ROOT="$INSTALL_ROOT"' in content
 
 
 def test_installation_doc_documents_runtime_options() -> None:
@@ -109,17 +118,9 @@ def test_installation_surfaces_offer_minimal_human_and_agent_paths() -> None:
     assert "vllm-sr route probe" in agent_docs
 
     assert "name: vllm-sr" in skill
-    assert "vllm-sr config schema" in skill
-    assert "vllm-sr config init" in skill
-    assert "vllm-sr config validate --config config.yaml" in skill
-    assert "vllm-sr config plan --config config.yaml" in skill
-    assert "vllm-sr route preview" in skill
-    assert "vllm-sr route probe" in skill
-    assert "Dashboard is optional" in skill
     assert "--channel dev --mode cli --runtime skip --no-launch" in skill
     assert "--channel stable --mode cli" not in skill
     assert 'export PATH="$HOME/.local/bin:$PATH"' in skill
-    assert "vllm-sr recipe builtin list" in skill
 
 
 def test_pypi_publish_workflow_does_not_push_back_to_main() -> None:

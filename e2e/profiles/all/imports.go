@@ -17,12 +17,14 @@ import (
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
 	jailbreakonerror "github.com/vllm-project/semantic-router/e2e/profiles/jailbreak-onerror"
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
+	localclassifierbackend "github.com/vllm-project/semantic-router/e2e/profiles/local-classifier-backend"
 	looper "github.com/vllm-project/semantic-router/e2e/profiles/looper"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
+	progressgate "github.com/vllm-project/semantic-router/e2e/profiles/progress-gate"
 	ragexternalapi "github.com/vllm-project/semantic-router/e2e/profiles/rag-external-api"
 	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
 	remoteembedding "github.com/vllm-project/semantic-router/e2e/profiles/remote-embedding"
@@ -39,9 +41,12 @@ import (
 
 var mockVLLMLocalImages = []framework.LocalImageBuild{
 	{
-		Dockerfile:   "tools/mock-vllm/Dockerfile",
+		Dockerfile:   "tools/test/services/mock-vllm/Dockerfile",
 		Tag:          "ghcr.io/vllm-project/semantic-router/mock-vllm:latest",
-		BuildContext: "tools/mock-vllm",
+		BuildContext: "tools/test/services/mock-vllm",
+		RolloutRestarts: []framework.RolloutRestartTarget{
+			{Namespace: "default", Deployment: "mock-vllm"},
+		},
 	},
 }
 
@@ -70,6 +75,7 @@ func init() {
 	register("category-remote-backend", func() framework.Profile { return categoryremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
 	register("complexity-remote-backend", func() framework.Profile { return complexityremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
+	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },
@@ -128,6 +134,11 @@ func init() {
 	register(
 		"response-jailbreak",
 		func() framework.Profile { return responsejailbreak.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register(
+		"progress-gate",
+		func() framework.Profile { return progressgate.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("remote-embedding", func() framework.Profile { return remoteembedding.NewProfile() }, framework.ProfileCapabilities{})

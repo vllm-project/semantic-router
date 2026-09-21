@@ -1,60 +1,62 @@
-# Deployment and model-pool details
+# Deployment and access
 
-Follow the [operations skill](../SKILL.md) for installation and capability
-preflight. A version described as dev can still be stale; missing required
-commands are a compatibility failure before any runtime mutation.
+Use this reference when installing, changing runtime topology or opening UI
+access. Discover supported flags with the installed `vllm-sr serve --help`;
+choose platform and image from the actual host, not an assumed accelerator.
 
-## Isolate the intended deployment
+## Stack identity
 
-Inspect existing processes, containers, state directories, ports, and runtime
-images before selecting a stack. Discover host acceleration vendor-neutrally.
-Use installed `serve --help` for platform, image, Dashboard, and mode options;
-record the exact package version and image identity actually launched.
+Local stacks use `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET`. The offset affects
+inference and management ports. Inspect `VLLM_SR_STATE_ROOT_DIR`: an inherited
+root can load another stack's active configuration even from a new directory.
+Keep the selected state root, runtime, image, platform and ports consistent across
+lifecycle commands. Supply the actual management endpoint explicitly.
 
-Local Docker uses `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET`. The offset
-changes inference publication as well as management ports. A separate config
-directory keeps its `.vllm-sr` state separate only when `VLLM_SR_STATE_ROOT_DIR`
-is unset. Inspect that override and explicitly select a separate state root when
-needed; an inherited root can otherwise load another stack's active config.
-Check every effective port for collisions, keep the same environment for
-lifecycle commands, and supply explicit management/inference origins for remote
-checks. Management commands do not infer a custom management port from YAML.
+Validate locally before a first launch. After startup, use Router discovery to
+check readiness, active configuration and backend reachability from its network.
+For existing deployments, use the [configuration workflow](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md).
 
-For a trial, prefer loopback publication and the minimal supported mode. Inspect
-both canonical listener addresses and actual container port bindings. Split
-containers may need an internal Router address of `0.0.0.0` even when its host
-management port is restricted to loopback. Do not expose a private management
-API just to make a remote browser convenient; use a tunnel when appropriate.
+Prefer loopback publication for a private trial. Inspect actual container port
+bindings as well as listener YAML; split containers may need an internal Router
+address of `0.0.0.0` while the host management port remains private. A tunnel does
+not close an already public port.
 
-For an initial launch, validate locally and serve before asking for live plans.
-Once the Router responds to `GET /api/v1`, follow its advertised readiness,
-startup, and inventory operations. Process startup alone is not readiness.
-Confirm backend reachability from the deployment network before routed probes.
+## Hardware and physical models
 
-## Add or replace physical models
+Size Router models separately from generation backends. Include resident weights,
+KV/runtime memory at the intended context and concurrency, and disk space.
+The CLI does not select a GPU platform automatically; verify device visibility,
+driver/image compatibility and the effective model bindings. Kubernetes devices
+and images belong in the deployment profile.
 
-1. Verify the backend's protocol, credential reference, and supported request
-   types. Query its model list and make a minimal direct request. Record both
-   requested and returned model identity; aliases need not match.
-2. Add or update the provider, matching Model Card, and decision model reference.
-   A provider or card alone does not make a model routable. Preserve the chosen
-   Recipe's lane structure and minimum candidate counts.
-3. Validate and, for an existing Router, plan against its exact management origin.
-   Changes to backend topology can require an Envoy restart. Activate through the
-   deployment workflow within the user's existing authorization; obtain only
-   missing authorization for disruption beyond that scope.
-4. Confirm readiness and active config, preview affected branches, and probe
-   actual delivery through each affected entrypoint. Assert selected-model and
-   upstream response identity separately where the backend supports it.
-5. Measure latency, cost, throughput, or task quality when those are part of the
-   requested objective. A full benchmark is not an installation prerequisite.
+When adding or replacing a backend:
 
-Document capability adaptations explicitly. A text-only derivative must report
-its unsupported image path and excluded decision; it is not a successful run of
-the full multimodal baseline. Do not reduce candidate minimums or invent a model
-to hide unavailable capability.
+1. Verify its protocol, requested/returned model identity and required capabilities
+   with a bounded direct request. Keep credential values in environment variables.
+2. Connect the provider, Model Card and recipe decision. A provider or card alone
+   does not make a model routable. Preserve candidate-count requirements and use
+   measured quality evidence; missing evidence can exclude healthy backends.
+3. Plan and activate the change, then preview and probe the affected entrypoints.
+   Backend/listener topology may require Envoy replacement.
 
-If Dashboard or Playground verification is requested, follow the optional UI
-path in the main skill and verify a real streamed completion. Server-backed
-preview and inference delivery are separate evidence. Keep credentials and raw
-private workload outputs out of source control and public receipts.
+Encoder input limits, candidate eligibility and backend prompt-plus-output context
+are distinct. Check the relevant [boundaries](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md#token-boundaries-and-public-errors)
+before advertising supported limits. A text-only derivative must disclose excluded
+modalities rather than claim full recipe coverage.
+
+## Dashboard access
+
+`--minimal` omits Dashboard. Local Docker publishes its port on all interfaces by
+default; inspect access controls before opening it. Preserve authentication state
+when updating a stack and reuse an existing valid session where available.
+
+Initial admin provisioning supports `DASHBOARD_ADMIN_EMAIL`,
+`DASHBOARD_ADMIN_PASSWORD` and optional `DASHBOARD_ADMIN_NAME`. Supply secrets
+through environment variables. Set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=false` when
+registration is not intended; bootstrap variables do not reset existing users.
+Dashboard sessions and inference API credentials are separate.
+
+Verify the requested UI flow and real routed delivery through the published
+entrypoint. Hand off the access URL/tunnel and credentials through the user's
+chosen private mechanism. Runtime-specific storage and observability settings
+are discoverable from the deployed config and product documentation.

@@ -147,6 +147,48 @@ func withSelectedDecision(ctx *RequestContext, decision *config.Decision) *Reque
 	return ctx
 }
 
+func TestUpdateResponseCache_RespectsCacheMode(t *testing.T) {
+	for _, tt := range []struct {
+		mode         string
+		wantSemantic bool
+		wantExact    bool
+	}{
+		{mode: config.ResponseCacheModeExact, wantExact: true},
+		{mode: config.ResponseCacheModeSemantic, wantSemantic: true},
+		{mode: config.ResponseCacheModeExactThenSemantic, wantSemantic: true, wantExact: true},
+	} {
+		t.Run(tt.mode, func(t *testing.T) {
+			mockCache, router, decision := cacheRouterForDecision(config.Decision{
+				Name:      "cache-mode-decision",
+				ModelRefs: []config.ModelRef{{Model: "test"}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginResponseCache,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true,
+						"mode":    tt.mode,
+					}),
+				}},
+			})
+			ctx := withSelectedDecision(&RequestContext{
+				RequestID:                     "req-cache-mode",
+				CacheRequestModel:             "auto",
+				CacheSelectedModel:            "test",
+				CacheExactFingerprint:         "fingerprint",
+				CacheCompatibilityFingerprint: "compatibility",
+				CacheSemanticSafe:             true,
+				CacheQuery:                    "hello",
+				SemanticRequest:               testNeutralRequest("auto", "hello"),
+			}, decision)
+
+			router.updateResponseCache(ctx, []byte(`{"ok":true}`))
+
+			assert.Equal(t, tt.wantSemantic, mockCache.addEntryCalled,
+				"exact-only responses must never invoke the semantic backend or its embedding path")
+			assert.Equal(t, tt.wantExact, mockCache.exactAdded)
+		})
+	}
+}
+
 func TestUpdateResponseCache_WritesExactEntryWithRequestIdentity(t *testing.T) {
 	mockCache, router, decision := cacheRouterForDecision(config.Decision{
 		Name:      "exact-cache-decision",
@@ -175,7 +217,13 @@ func TestUpdateResponseCache_WritesExactEntryWithRequestIdentity(t *testing.T) {
 	assert.True(t, mockCache.addEntryCalled)
 	assert.False(t, mockCache.updateCalled)
 	assert.True(t, mockCache.exactAdded)
-	assert.Contains(t, mockCache.addEntryModel, "exact-cache-decision")
+	assert.Equal(
+		t,
+		router.responseCacheService().
+			ResolveIdentity(responseCacheIdentity(ctx, ctx.CacheRequestModel)).
+			SemanticPartitionKey(),
+		mockCache.addEntryModel,
+	)
 	assert.Equal(t, "hello", mockCache.addEntryQuery)
 }
 

@@ -11,6 +11,7 @@ CHANGED_FILES ?=
 CHANGED_FILES_PATH ?=
 BASE_REF ?=
 HARNESS_BOOTSTRAP_DONE ?=
+CI_STATIC_ONLY ?= false
 
 AGENT_GOLANGCI_LINT_VERSION ?= $(shell cat $(CURDIR)/tools/linter/go/golangci-lint.version)
 AGENT_MARKDOWNLINT_VERSION ?= 0.43.0
@@ -26,6 +27,7 @@ AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_PYTHON ?= $(AGENT_VENV)/bin/python
 AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 AGENT_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.agent-requirements.txt
+AGENT_DOCS_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.docs-requirements.txt
 AGENT_NODEENV ?= $(AGENT_VENV)/nodeenv
 AGENT_NODE_TOOLS ?= $(AGENT_VENV)/node-tools
 AGENT_MARKDOWNLINT ?= $(AGENT_NODE_TOOLS)/node_modules/.bin/markdownlint
@@ -44,7 +46,7 @@ impact: $(HARNESS_VENV_DEPS) ## Show changed files, owners, checks, candidate CI
 
 check: $(HARNESS_BOOTSTRAP_DEPS) ## Lint changed files and run their owning domains' unit/contract checks
 	@$(LOG_TARGET)
-	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py check --base-ref "$(BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(CHANGED_FILES_PATH)"
+	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py check $(if $(filter true,$(CI_STATIC_ONLY)),--ci-static-only) --base-ref "$(BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(CHANGED_FILES_PATH)"
 
 verify: $(HARNESS_VENV_DEPS) ## Run explicitly selected integration checks (DOMAIN=... and/or PROFILE=...)
 	@$(LOG_TARGET)
@@ -77,9 +79,11 @@ harness-venv-install: ## Install the repository check dependencies
 		python3 -m venv "$(AGENT_VENV)"; \
 	fi
 	@if [ ! -f "$(AGENT_REQUIREMENTS_STAMP)" ] || \
-		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; then \
+		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" || \
+		! cmp -s tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; then \
 		"$(AGENT_PYTHON)" -m pip install -r tools/agent/requirements.txt && \
-		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; \
+		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" && \
+		cp tools/docs/requirements.txt "$(AGENT_DOCS_REQUIREMENTS_STAMP)"; \
 	fi
 	@if [ "$(abspath $(AGENT_WORKTREE_VENV))" != "$(abspath $(AGENT_VENV))" ]; then \
 		if [ -e "$(AGENT_WORKTREE_VENV)" ] && [ ! -L "$(AGENT_WORKTREE_VENV)" ]; then \
@@ -137,7 +141,7 @@ test-and-build-local: ## Reproduce the CI Test And Build job locally
 	$(MAKE) start-qdrant; \
 	$(MAKE) start-redis; \
 	$(MAKE) start-valkey; \
-	CI=true CI_MINIMAL_MODELS=true CGO_ENABLED=1 $(NATIVE_ENV) MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
+	CI=true CGO_ENABLED=1 $(NATIVE_ENV) MILVUS_URI=localhost:19530 SKIP_MILVUS_TESTS=false SKIP_QDRANT_TESTS=false SKIP_REDIS_TESTS=false SKIP_VALKEY_TESTS=false VALKEY_HOST=localhost VALKEY_PORT=6380 HF_TOKEN="$(HF_TOKEN)" HUGGINGFACE_HUB_TOKEN="$(HUGGINGFACE_HUB_TOKEN)" $(MAKE) test
 
 .PHONY: impact check verify ci-full harness-check harness-venv-install harness-bootstrap \
 	harness-node-bootstrap harness-markdown-bootstrap harness-go-bootstrap harness-rust-bootstrap \

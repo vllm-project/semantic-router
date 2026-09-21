@@ -608,7 +608,7 @@ var _ = Describe("Security Checks", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("with PII token classification", func() {
+	Context("with PII token classification", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			// Check if PII model files exist before trying to initialize
 			// This allows tests to run in CI environments where models may not be available
@@ -861,7 +861,7 @@ var _ = Describe("Security Checks", func() {
 		})
 	})
 
-	Context("PII token classification edge cases", func() {
+	Context("PII token classification edge cases", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			// Check if PII model files exist before trying to initialize
 			// This allows tests to run in CI environments where models may not be available
@@ -1013,7 +1013,7 @@ var _ = Describe("Security Checks", func() {
 		})
 	})
 
-	Context("with jailbreak detection enabled", func() {
+	Context("with jailbreak detection enabled", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			modelPath := resolveExtprocTestPath("../../../../models/mmbert32k-jailbreak-detector-merged")
 			skipExtprocSpecIfModelArtifactsMissing("Jailbreak model", modelPath)
@@ -2550,7 +2550,7 @@ var _ = Describe("Metrics recording", func() {
 			ProcessingStartTime: time.Now().Add(-75 * time.Millisecond),
 		}
 
-		before := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		before := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 
 		respHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HttpHeaders{
@@ -2562,7 +2562,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(response.GetResponseHeaders()).NotTo(BeNil())
 
-		after := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		after := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 		Expect(after).To(BeNumerically(">", before))
 		Expect(ctx.TTFTRecorded).To(BeTrue())
 		Expect(ctx.TTFTSeconds).To(BeNumerically(">", 0))
@@ -2575,7 +2575,7 @@ var _ = Describe("Metrics recording", func() {
 			StartTime:    time.Now().Add(-1 * time.Second),
 		}
 
-		beforeTPOT := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+		beforeTPOT := getHistogramSampleCount("llm_model_response_duration_per_output_token_seconds", ctx.RequestModel)
 
 		beforePrompt := getHistogramSampleCount("llm_prompt_tokens_per_request", ctx.RequestModel)
 		beforeCompletion := getHistogramSampleCount("llm_completion_tokens_per_request", ctx.RequestModel)
@@ -2593,7 +2593,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(response.GetImmediateResponse()).To(BeNil(), "unexpected response: %#v", response)
 		Expect(response.GetResponseBody()).NotTo(BeNil(), "unexpected response: %#v", response)
 
-		afterTPOT := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+		afterTPOT := getHistogramSampleCount("llm_model_response_duration_per_output_token_seconds", ctx.RequestModel)
 		Expect(afterTPOT).To(BeNumerically(">", beforeTPOT))
 
 		// New per-request token histograms should also be recorded
@@ -2620,7 +2620,7 @@ var _ = Describe("Metrics recording", func() {
 			},
 		}
 
-		before := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		before := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 
 		// Handle response headers (should NOT record TTFT for streaming)
 		response1, err := router.handleResponseHeaders(respHeaders, ctx)
@@ -2638,7 +2638,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(response2.GetResponseBody()).NotTo(BeNil())
 
-		after := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		after := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 		Expect(after).To(BeNumerically(">", before))
 		Expect(ctx.TTFTRecorded).To(BeTrue())
 		Expect(ctx.TTFTSeconds).To(BeNumerically(">", 0))

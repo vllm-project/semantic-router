@@ -68,3 +68,17 @@ func GenerateEmbeddingWithContext(ctx context.Context, text string, cfg Embeddin
 	}
 	return vector, nil
 }
+
+// embedForWrite discards a vector produced after cancellation: a write path must
+// not persist it. Retrieval keeps a result the caller has already paid for, since
+// the native ABI cannot be interrupted and the work is done either way.
+func embedForWrite(ctx context.Context, text string, cfg EmbeddingConfig) ([]float32, error) {
+	vector, err := GenerateEmbeddingWithContext(ctx, text, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if cause := ctx.Err(); cause != nil {
+		return nil, cause
+	}
+	return vector, nil
+}

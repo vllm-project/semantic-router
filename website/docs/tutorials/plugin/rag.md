@@ -112,3 +112,73 @@ Similarity thresholds are embedding-model specific. See complete examples:
 [`qdrant.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/qdrant.yaml),
 and
 [`external-api.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/rag/external-api.yaml).
+
+## Neural reranking
+
+The `vectorstore` backend can rerank its structured search hits with a local
+Vela pair scorer before formatting the context. Declare the deployment and
+the recipe-local `rag.reranker` binding, then opt the route into `rerank`:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      document-ranker:
+        artifact: models/Vela-1.0-Encoder-307M-Reranker
+        provider: candle
+        device: cpu
+        precision: native
+        input:
+          max_tokens: 4096
+          overflow: reject
+routing:
+  model_bindings:
+    rag.reranker:
+      deployment: document-ranker
+      contract: relevance_scores.v1
+      adapter: vela_reranker
+      pair_scorer:
+        layer: 22
+        dimension: 768
+```
+
+Add this plugin to a decision in the same recipe:
+
+```yaml
+plugins:
+  - type: rag
+    configuration:
+      enabled: true
+      backend: vectorstore
+      backend_config:
+        vector_store_id: vs-your-documents
+      top_k: 10
+      rerank:
+        top_k: 3
+      on_failure: block
+```
+
+`top_k` retrieves candidates; `rerank.top_k` limits the reordered hits injected
+into the prompt. Omit the latter to retain every candidate. Higher raw relevance
+logits rank first, with equal scores retaining retrieval order. Document IDs,
+chunk IDs and retrieval similarity scores stay intact. Reranker logits are
+uncalibrated and do not replace the embedding similarity threshold.
+
+The scorer uses the tokenizer's query/document pair template. The token budget
+includes both texts and special tokens; overflow is rejected without truncating
+either text. Loading validates the selected trained layer and dimension; zero
+selects the artifact's actual full depth or width. CPU cost grows with candidate
+count and pair length, so choose an explicit deployment budget.
+
+Candle artifacts must include encoder weights, `config.json`, `tokenizer.json`,
+`matryoshka_config.json` and `classification_heads.safetensors`. An ORT deployment
+selects a complete graph through the binding's `head` field. Its embedded
+`semantic_router.pair_scorer` metadata must declare the actual exit and
+`relevance_logit` contract; the graph filename is not proof of its semantics.
+
+Only reachable recipes with an enabled `rerank` plugin load a scorer. Missing
+models, invalid scores and input-limit failures follow the existing RAG
+`on_failure` policy. Cached context is isolated by recipe, embedding identity
+and scorer identity. Runtime tracing records actual rerank latency and scores;
+route preview does not execute retrieval or invent a reranker timing. Other RAG
+backends currently reject `rerank` until they expose structured candidates.

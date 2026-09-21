@@ -3,6 +3,8 @@ package extproc
 import (
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -29,6 +31,7 @@ func buildReplayRouteDiagnostics(
 		DecisionPriority:               decisionPriority,
 		SelectionMethod:                ctx.VSRSelectionMethod,
 		SelectionReasoning:             ctx.VSRSelectionReasoning,
+		SelectionTrace:                 ctx.VSRSelectionTrace.Clone(),
 		FusionQuorum:                   ctx.VSRFusionQuorum,
 		Looper:                         ctx.VSRLooperDiagnostics,
 		PromptHelperModel:              ctx.VSRPromptHelperModel,
@@ -65,20 +68,32 @@ func buildReplayRouteDiagnostics(
 		RequestDemandSnapshots:         cloneRequestDemandSnapshots(ctx.RequestDemandSnapshots),
 		SignalErrors:                   cloneReplayStringMap(ctx.VSRSignalErrors),
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
+		DecisionRanking:                replayDecisionRanking(ctx.VSRDecisionDiagnostics.Ranking),
 	}
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}
 
 	if policy, ok := protectionLearningPolicyForContext(ctx); ok {
-		diagnostics.SessionPolicyApplied = true
+		diagnostics.SessionPolicyApplied = policy.Mode == config.DecisionAdaptationModeApply &&
+			policy.Details.ProtectionTrace() != nil
 		diagnostics.SessionPhase = policy.SessionPhase()
 		diagnostics.PreviousModel = policy.CurrentModel()
 		diagnostics.ProposalModel = firstNonEmpty(policy.BaseSelectedModel(), diagnostics.ProposalModel)
-		diagnostics.SelectedModel = firstNonEmpty(policy.SelectedModel(), diagnostics.SelectedModel)
-		diagnostics.HardLockReason = policy.HardLockReason()
 		diagnostics.DecisionReason = policy.DecisionReason()
-		diagnostics.SessionAction = replaySessionAction(diagnostics, policy.HardLocked())
+		// The dispatch result is authoritative. Observe-mode traces describe a
+		// counterfactual selection and must not turn a real switch into a hold.
+		hardLocked := diagnostics.SessionPolicyApplied && policy.HardLocked() &&
+			diagnostics.SelectedModel == diagnostics.PreviousModel
+		if hardLocked {
+			diagnostics.HardLockReason = policy.HardLockReason()
+		}
+		if policy.Details.ProtectionTrace() != nil {
+			diagnostics.SessionAction = replaySessionAction(diagnostics, hardLocked)
+		}
+		if policy.Mode == config.DecisionAdaptationModeObserve {
+			diagnostics.DecisionReason = "observe_only"
+		}
 		diagnostics.SessionReason = replaySessionReason(diagnostics, policy)
 		return diagnostics
 	}
@@ -166,4 +181,24 @@ func sessionPolicyMapForReplay(ctx *RequestContext) map[string]interface{} {
 		return nil
 	}
 	return cloneReplayInterfaceMap(policy.ToMap())
+}
+
+// replayDecisionRanking carries the ranking the engine recorded into the
+// replay record, so a replayed request explains which key selected its
+// decision the same way the eval API does.
+func replayDecisionRanking(trace *decision.RankingTrace) *routerreplay.DecisionRanking {
+	if trace == nil {
+		return nil
+	}
+	return &routerreplay.DecisionRanking{
+		Strategy:   trace.Strategy,
+		Tiered:     trace.Tiered,
+		Tier:       trace.Tier,
+		Comparable: trace.Comparable,
+		Fallback:   trace.Fallback,
+		ScoreKind:  trace.ScoreKind,
+		DecidedBy:  trace.DecidedBy,
+		Winner:     trace.Winner,
+		Candidates: trace.Candidates,
+	}
 }

@@ -28,12 +28,32 @@ const (
 	SourceBoundedSameFormat SourcePreservationPolicy = "bounded_same_format"
 )
 
+// ResponseVendor identifies a provider with response-only wire extensions.
+type ResponseVendor string
+
+// ResponseVendorAzure permits Azure OpenAI response extensions.
+const ResponseVendorAzure ResponseVendor = "azure"
+
+// ResponseVendorCloudflare permits Cloudflare Workors AI response extensions:
+// decorated chat completions and a top-level errors[] array with Workors AI's
+// own integral codes instead of the canonical OpenAI error object.
+const ResponseVendorCloudflare ResponseVendor = "cloudflare"
+
+// ResponseVendorSnowflake permits Snowflake Cortex AI response handling: its
+// failures arrive as a flat object carrying the vendor's own string code instead
+// of the canonical OpenAI error object. No accepted-response decoration has been
+// observed, so this vendor changes only how failures are decoded.
+const ResponseVendorSnowflake ResponseVendor = "snowflake"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy
 	MissingStableIDs   MissingIDPolicy
 	SourcePreservation SourcePreservationPolicy
 	Limits             Limits
+	// ResponseVendor permits provider-specific fields at the response boundary.
+	// Empty keeps strict canonical decoding.
+	ResponseVendor ResponseVendor
 }
 
 type Limits struct {

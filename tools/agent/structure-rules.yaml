@@ -29,14 +29,18 @@ root_files:
     - README.md
     - SECURITY.md
     - install.sh
+    - netlify.toml
 
 languages:
   go:
     globs:
       - src/**/*.go
       - dashboard/backend/**/*.go
+      - dashboard/wasm/**/*.go
       - e2e/**/*.go
       - deploy/**/*.go
+      - tools/**/*.go
+      - bench/grounded_fusion/fusioneval/**/*.go
   python:
     globs:
       - src/**/*.py

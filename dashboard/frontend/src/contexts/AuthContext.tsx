@@ -9,7 +9,6 @@ import React, {
 import {
   installAuthenticatedFetch,
   normalizeAuthToken,
-  notifyUnauthorized,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
 import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
@@ -19,6 +18,7 @@ interface AuthContextValue {
   user: AuthUser | null
   isLoading: boolean
   isAuthenticated: boolean
+  sessionError: string | null
   login: (email: string, password: string) => Promise<void>
   setSession: (token: string, user?: AuthUser | null) => void
   logout: () => void
@@ -50,30 +50,36 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [token, setToken] = useState<string | null>(null)
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [sessionError, setSessionError] = useState<string | null>(null)
 
   // The server's clearAuthSessionCookie on logout is what actually ends the session.
   const clearSession = useCallback(() => {
     setToken(null)
     setUser(null)
+    setSessionError(null)
   }, [])
 
   const setSession = useCallback((nextToken: string, nextUser?: AuthUser | null) => {
     const validToken = normalizeAuthToken(nextToken)
     setToken(validToken)
     setUser(validToken ? (nextUser ?? null) : null)
+    setSessionError(null)
   }, [])
 
   const refreshSession = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await fetchCurrentAuthUser()
-      if (result.clearLocalToken) {
+      if (result.status === 'unauthenticated') {
         clearSession()
         return
       }
+      if (result.status === 'unavailable') {
+        setSessionError(result.message)
+        return
+      }
       setUser(result.user)
-    } catch {
-      notifyUnauthorized()
+      setSessionError(null)
     } finally {
       setIsLoading(false)
     }
@@ -133,6 +139,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         user,
         isLoading,
         isAuthenticated: hasAuthenticatedSession(token, user),
+        sessionError,
         login,
         setSession,
         logout,

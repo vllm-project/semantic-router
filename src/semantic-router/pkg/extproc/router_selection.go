@@ -386,6 +386,7 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 		return result
 	}
 
+	result.ExpectedOutputTokens = decisionCfg.ExpectedOutputTokens
 	if decisionCfg.Weights != nil {
 		result.Weights = selection.MultiFactorWeights{
 			Quality: decisionCfg.Weights.Quality,
@@ -427,6 +428,9 @@ func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionCon
 	}
 	if decisionCfg.LatencyPercentile != 0 {
 		result.LatencyPercentile = decisionCfg.LatencyPercentile
+	}
+	if decisionCfg.LatencyMetric != "" {
+		result.LatencyMetric = decisionCfg.LatencyMetric
 	}
 	if decisionCfg.OnNoCandidates != "" {
 		result.OnNoCandidates = decisionCfg.OnNoCandidates

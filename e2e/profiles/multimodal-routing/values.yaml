@@ -48,7 +48,11 @@ config:
             target_layer: 6
             preload_embeddings: true
             enable_soft_matching: false
-            top_k: 1
+            # 0 is unlimited: the matched-embeddings header carries every rule
+            # at or above its threshold, so the E2E cross-rule negatives can
+            # observe a second rule firing. top-1 would hide it behind the
+            # winning rule and make those cases pass on ranking alone.
+            top_k: 0
     router:
       config_source: kubernetes
     services:
