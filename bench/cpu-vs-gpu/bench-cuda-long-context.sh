@@ -133,13 +133,16 @@ stop_stub() { [ -z "$STUB_PID" ] || kill "$STUB_PID" 2>/dev/null || true; }
 start_router() {
     local mode=$1 config_file=$2
     docker rm -f "$SR_CONTAINER" 2>/dev/null || true
-    local gpu_flags=()
-    [ "$mode" = gpu ] && gpu_flags=(--gpus all)
+    # Both phases get the device: a CUDA-enabled Candle binding links
+    # libcuda.so.1, so even the CPU phase needs the driver mounted. The phases
+    # differ only in the config's use_cpu, which keeps the container identical.
+    local gpu_flags=(--gpus all)
     log "Starting SR in ${mode^^} mode (extproc=$EXTPROC_PORT metrics=$METRICS_PORT)..."
     docker run -d --name "$SR_CONTAINER" \
         --network host \
         "${gpu_flags[@]}" \
         -e AI_BINDING=onnx \
+        -e CUDA_VISIBLE_DEVICES="$([ "$mode" = gpu ] && echo 0 || echo "")" \
         -v "$config_file:/app/config.yaml:ro" \
         -v "$MODELS_DIR/mmbert32k-intent-classifier-merged:/app/models/mmbert32k-intent-classifier-merged:ro" \
         -v "$MODELS_DIR/mmbert32k-jailbreak-detector-merged:/app/models/mmbert32k-jailbreak-detector-merged:ro" \
