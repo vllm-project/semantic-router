@@ -562,6 +562,7 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_sr_bench_experiments.py \
 		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
 		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
+		src/vllm-sr/tests/test_plugin_shadow_dispatch.py \
 		src/vllm-sr/tests/test_routing_preview.py \
 		src/vllm-sr/tests/test_sr_bench_grading.py \
 		src/vllm-sr/tests/test_sr_bench_harness.py \

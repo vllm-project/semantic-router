@@ -13,6 +13,9 @@ import (
 // response bytes are accounted on arm completion. A zero field is unlimited.
 // Wall time is bounded by the shared job dead-line: every arm of one request
 // expires at the same instant, so the aggregate window needs no separate knob.
+//
+// Scoped to one shadow decision (issue #3376): this is not the cross-stage
+// budget ledger owned by #2861, and it is not exported as a general contract.
 type ShadowBudget struct {
 	mu       sync.Mutex
 	limit    config.ShadowDispatchBudgetConfig

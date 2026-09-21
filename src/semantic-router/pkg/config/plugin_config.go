@@ -330,6 +330,8 @@ type ShadowDispatchPluginConfig struct {
 // arms of one decision for a single request (issue #3376). Hard limits are
 // checked at admission; soft limits (tokens/cost) are reconciled on arm
 // completion. A zero value means that dimension is unlimited.
+//
+// Scoped to one shadow decision: the cross-stage budget ledger is #2861.
 type ShadowDispatchBudgetConfig struct {
 	// MaxCallsPerRequest caps how many arms may be admitted for one request.
 	MaxCallsPerRequest int64 `json:"max_calls_per_request,omitempty" yaml:"max_calls_per_request,omitempty"`

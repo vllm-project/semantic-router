@@ -1199,6 +1199,9 @@ class ShadowDispatchBudgetConfig(BaseModel):
     Mirrors the Router's ShadowDispatchBudgetConfig. A zero field is
     unlimited; without reserve_tokens_per_arm, token/cost caps can only be
     enforced on completion (all arms start together).
+
+    Scoped to one shadow decision: this is not the cross-stage budget ledger
+    owned by #2861.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -1208,7 +1211,14 @@ class ShadowDispatchBudgetConfig(BaseModel):
     max_cost_per_request: float = Field(default=0.0, ge=0.0)
     price_per_million_tokens: float = Field(default=0.0, ge=0.0)
     reserve_tokens_per_arm: int = Field(default=0, ge=0)
-    max_concurrency_per_request: int = Field(default=0, ge=0)
+    max_concurrency_per_request: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "arms of one request in flight; the plugin-level max_concurrency "
+            "bounds the decision across requests instead"
+        ),
+    )
 
 
 class ShadowDispatchPluginConfig(BaseModel):
