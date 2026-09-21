@@ -1,21 +1,24 @@
 package auth
 
 import (
+	"bytes"
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
-	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
 type contextKey string
 
 const (
 	authContextKey contextKey = "dashboardAuthContext"
+	routePolicyKey contextKey = "dashboardRoutePolicy"
+	revalidatorKey contextKey = "dashboardPermissionRevalidator"
 
 	authSessionCookieName = "vsr_session"
 	maxAccessTokenBytes   = 8192
@@ -30,66 +33,56 @@ type AuthContext struct {
 	Perms     map[string]bool
 }
 
-func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
+type permissionRevalidator func(context.Context) error
+
+var errPermissionDenied = errors.New("permission denied")
+
+// AuthenticateRequest authorizes every request against the route registry.
+// A request in a protected namespace with no registered contract is denied;
+// a registered route is served only with the session and permissions its
+// contract declares. Mutation routes are bounded, re-authorized after the body
+// is read, and given a revalidator the handler calls before its side effect.
+func AuthenticateRequest(service *Service, resolver RoutePolicyResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !requiresAuthentication(r.URL.Path) {
+			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.Path)
+			switch lookup {
+			case RouteMethodNotAllowed:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+				return
+			case RouteNotFound:
+				if isProtectedNamespace(r.URL.Path) {
+					http.Error(w, "Forbidden", http.StatusForbidden)
+					return
+				}
 				next.ServeHTTP(w, r)
 				return
 			}
-			token, tokenSource := extractAccessTokenWithSource(r)
-			if token == "" {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+			if policy.Public {
+				next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), routePolicyKey, policy)))
 				return
 			}
 
-			claims, err := service.ParseToken(token)
+			claims, ok := authenticateSession(w, r, service)
+			if !ok {
+				return
+			}
+			user, perms, err := authorizeClaims(r.Context(), service, claims, policy)
 			if err != nil {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				writeAuthorizationError(w, claims.UserID, err)
 				return
 			}
-
-			// Repairs sessions minted before this shipped, which would otherwise 403 on
-			// every write. Safe methods too, so a page load fixes it. Sets a response
-			// cookie only; it must not authorise this request.
-			if tokenSource == tokenSourceCookie {
-				if existing, cookieErr := r.Cookie(csrfCookieName); cookieErr != nil ||
-					!csrfTokenValid(service.jwtSecret, claims.ID, existing.Value) {
-					setCSRFCookie(w, r, claims.ID, service.jwtSecret, service.ttlDuration)
-				}
-			}
-
-			// The browser attaches the session cookie to any request aimed here, including
-			// one a hostile page caused, so a cookie-authenticated write must prove it
-			// originated here. Bearer is exempt: a browser never sets it. See #2465.
-			if tokenSource != tokenSourceHeader && requiresCSRFCheck(r.Method) {
-				if !originAllowed(r, service.allowedOrigins) {
-					http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
+			if policy.MaxBodyBytes > 0 && r.Body != nil {
+				if !boundRequestBody(w, r, policy) {
 					return
 				}
-				if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) &&
-					!embeddedGrafanaQueryAllowed(r, service.allowedOrigins) {
-					http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
-					return
-				}
-			}
-
-			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
-			if err != nil {
-				log.Printf("permission load failed for user %s: %v", claims.UserID, err)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
-
-			if !routerGatewayRequestAllowed(r.Method, r.URL.Path) {
-				http.Error(w, "Router management route is not exposed by the Dashboard", http.StatusForbidden)
-				return
-			}
-
-			for _, required := range RequiredPermissions(r.Method, r.URL.Path) {
-				if !perms[required] {
-					http.Error(w, "Forbidden", http.StatusForbidden)
-					return
+				if policy.Revalidate {
+					// The body may have arrived slowly. Re-resolve the actor
+					// before the handler sees the complete request.
+					if user, perms, err = authorizeClaims(r.Context(), service, claims, policy); err != nil {
+						writeAuthorizationError(w, claims.UserID, err)
+						return
+					}
 				}
 			}
 
@@ -100,257 +93,164 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				Role:      user.Role,
 				Perms:     perms,
 			})
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-// ServiceUnavailableGuard returns middleware that fails closed when the auth
-// service could not be initialized. It rejects every request to a route that
-// normally requires authentication with 503 Service Unavailable, while still
-// allowing public routes (login/bootstrap endpoints, setup state, embedded
-// assets, and the static frontend) through so the dashboard can render and
-// surface the "authentication service is not configured" state.
-//
-// This is the deny-by-default counterpart to AuthenticateRequest: it shares
-// the same requiresAuthentication policy so the set of protected routes cannot
-// drift between the two paths.
-func ServiceUnavailableGuard() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if requiresAuthentication(r.URL.Path) {
-				http.Error(w, "Authentication service is not configured", http.StatusServiceUnavailable)
+			ctx = context.WithValue(ctx, routePolicyKey, policy)
+			if policy.Revalidate {
+				ctx = context.WithValue(ctx, revalidatorKey, permissionRevalidator(func(checkCtx context.Context) error {
+					_, _, checkErr := authorizeClaims(checkCtx, service, claims, policy)
+					return checkErr
+				}))
+			}
+			request := r.WithContext(ctx)
+			if policy.AuditMode == AuditRequired {
+				serveWithRouteAudit(service, policy, w, request, next)
 				return
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, request)
 		})
 	}
 }
 
-func requiredPermission(method, path string) string {
-	if !strings.HasPrefix(path, "/api/router/") {
-		path = strings.TrimSpace(strings.ToLower(path))
+// authenticateSession parses the credential and applies the CSRF policy for
+// cookie transports. It writes the response on failure.
+func authenticateSession(w http.ResponseWriter, r *http.Request, service *Service) (*TokenClaims, bool) {
+	token, tokenSource := extractAccessTokenWithSource(r)
+	if token == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil, false
 	}
-	for _, resolver := range []func(string, string) (string, bool){
-		adminPermission,
-		settingsPermission,
-		routerPermission,
-		knowledgePermission,
-		toolsPermission,
-		observabilityPermission,
-		recipePermission,
-		featurePermission,
-	} {
-		if permission, ok := resolver(method, path); ok {
-			return permission
+	claims, err := service.ParseToken(token)
+	if err != nil {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return nil, false
+	}
+
+	// Repairs sessions minted before this shipped, which would otherwise 403 on
+	// every write. Safe methods too, so a page load fixes it. Sets a response
+	// cookie only; it must not authorise this request.
+	if tokenSource == tokenSourceCookie {
+		if existing, cookieErr := r.Cookie(csrfCookieName); cookieErr != nil ||
+			!csrfTokenValid(service.jwtSecret, claims.ID, existing.Value) {
+			setCSRFCookie(w, r, claims.ID, service.jwtSecret, service.ttlDuration)
 		}
 	}
 
-	if strings.HasPrefix(path, "/api/") {
-		return PermConfigRead
-	}
-
-	return ""
-}
-
-// RequiredPermissions returns every permission needed by a request. Most
-// routes require one permission; sr-bench run creation and recovery persist a
-// manifest and immediately launch work, so both need write and run permissions.
-func RequiredPermissions(method, path string) []string {
-	if policy, ok := routercontract.LookupManagement(method, path); ok {
-		return policy.Permissions
-	}
-	if !strings.HasPrefix(path, "/api/router/") {
-		path = strings.TrimSpace(strings.ToLower(path))
-	}
-	if method == http.MethodPost && (path == "/api/sr-bench/v1/runs" || isSRBenchRunAction(path, "recover")) {
-		return []string{PermEvalWrite, PermEvalRun}
-	}
-	primary := requiredPermission(method, path)
-	if primary == "" {
-		return nil
-	}
-	return []string{primary}
-}
-
-func recipePermission(_ string, path string) (string, bool) {
-	path = strings.TrimRight(path, "/")
-	if matchesRoute(path, "/api/recipe/import") {
-		return PermConfigWrite, true
-	}
-	if matchesAnyRoute(path, "/api/recipe/activate", "/api/recipe/deactivate") {
-		return PermConfigDeploy, true
-	}
-	if matchesRoute(path, "/api/recipe/packages") {
-		return PermConfigRead, true
-	}
-	if path == "/api/recipe" || matchesRoute(path, "/api/recipe/probes") {
-		if strings.HasSuffix(path, "/validate") {
-			return PermTopologyRead, true
+	// The browser attaches the session cookie to any request aimed here, including
+	// one a hostile page caused, so a cookie-authenticated write must prove it
+	// originated here. Bearer is exempt: a browser never sets it. See #2465.
+	if tokenSource != tokenSourceHeader && requiresCSRFCheck(r.Method) {
+		if !originAllowed(r, service.allowedOrigins) {
+			http.Error(w, "Forbidden: request origin is not permitted", http.StatusForbidden)
+			return nil, false
 		}
-		return PermConfigRead, true
-	}
-	return "", false
-}
-
-func matchesAnyRoute(path string, bases ...string) bool {
-	for _, base := range bases {
-		if matchesRoute(path, base) {
-			return true
+		if !csrfTokenValid(service.jwtSecret, claims.ID, r.Header.Get(csrfHeaderName)) &&
+			!embeddedGrafanaQueryAllowed(r, service.allowedOrigins) {
+			http.Error(w, "Forbidden: missing or invalid CSRF token", http.StatusForbidden)
+			return nil, false
 		}
 	}
-	return false
+	return claims, true
 }
 
-func matchesRoute(path, base string) bool {
-	return path == base || strings.HasPrefix(path, base+"/")
-}
-
-func adminPermission(method, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/admin/users/password"):
-		return PermUsersManage, true
-	case strings.HasPrefix(path, "/api/admin/audit-logs"), strings.HasPrefix(path, "/api/admin/permissions"):
-		return PermUsersManage, true
-	case path == "/api/admin/users" || strings.HasPrefix(path, "/api/admin/users/"):
-		if method == http.MethodGet {
-			return PermUsersView, true
+func authorizeClaims(
+	ctx context.Context,
+	service *Service,
+	claims *TokenClaims,
+	policy RoutePolicy,
+) (*User, map[string]bool, error) {
+	user, perms, err := service.ResolveSessionUser(ctx, claims)
+	if err != nil {
+		return nil, nil, err
+	}
+	if policy.SessionOnly {
+		return user, perms, nil
+	}
+	for _, permission := range policy.Permissions {
+		if !perms[permission] {
+			return nil, nil, fmt.Errorf("%w: permission %q is required", errPermissionDenied, permission)
 		}
-		return PermUsersManage, true
-	case strings.HasPrefix(path, "/api/admin/"):
-		return PermUsersManage, true
-	default:
-		return "", false
 	}
+	return user, perms, nil
 }
 
-func settingsPermission(method, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/settings"):
-		if method == http.MethodPut || method == http.MethodPost {
-			return PermConfigWrite, true
-		}
-		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/setup/validate"),
-		strings.HasPrefix(path, "/api/setup/activate"),
-		strings.HasPrefix(path, "/api/setup/import-remote"):
-		return PermConfigWrite, true
-	default:
-		return "", false
+func writeAuthorizationError(w http.ResponseWriter, userID string, err error) {
+	if errors.Is(err, errPermissionDenied) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
 	}
+	log.Printf("permission load failed for user %s: %v", userID, err)
+	http.Error(w, "Unauthorized", http.StatusUnauthorized)
 }
 
-func routerPermission(method, path string) (string, bool) {
-	if policy, ok := routercontract.LookupManagement(method, path); ok {
-		return policy.Permissions[0], true
-	}
-	switch {
-	case path == "/api/models/catalog":
-		return PermConfigRead, true
-	case path == "/api/models/discover":
-		return PermConfigWrite, true
-	case path == "/api/models/verify":
-		return PermEvalRun, true
-	case path == "/api/router/config/deploy", path == "/api/router/config/deploy/preview", path == "/api/router/config/rollback":
-		return PermConfigDeploy, true
-	case strings.HasPrefix(path, "/api/router/config/"):
-		if method == http.MethodGet {
-			return PermConfigRead, true
-		}
-		return PermConfigWrite, true
-	case path == "/api/router/v1/chat/completions" && method == http.MethodPost:
-		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/router/"):
-		return "", true
-	default:
-		return "", false
-	}
-}
-
-// Dashboard-owned config handlers and inference dispatch have their own policy.
-// Every management gateway request must exist in the shared exact allowlist.
-func routerGatewayRequestAllowed(method, path string) bool {
-	if !strings.HasPrefix(path, "/api/router/") || strings.HasPrefix(path, "/api/router/config/") {
+// boundRequestBody enforces the contract's body limit. Revalidated mutations
+// read the whole body here so the actor can be re-resolved once it has
+// arrived; other bounded routes keep streaming through a limited reader.
+func boundRequestBody(w http.ResponseWriter, r *http.Request, policy RoutePolicy) bool {
+	limited := http.MaxBytesReader(w, r.Body, policy.MaxBodyBytes)
+	if !policy.Revalidate {
+		r.Body = limited
 		return true
 	}
-	if path == "/api/router/v1/chat/completions" && (method == http.MethodPost || method == http.MethodOptions) {
-		return true
-	}
-	_, ok := routercontract.LookupManagement(method, path)
-	return ok
-}
-
-func knowledgePermission(_ string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/wizmap/"), path == "/embedded/wizmap":
-		return PermConfigRead, true
-	default:
-		return "", false
-	}
-}
-
-func toolsPermission(method string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/mcp/tools/execute"):
-		return PermToolsUse, true
-	case path == "/api/mcp/tools":
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case path == "/api/mcp/servers":
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case strings.HasPrefix(path, "/api/mcp/servers/") && strings.HasSuffix(path, "/status"):
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case strings.HasPrefix(path, "/api/tools"):
-		return PermToolsUse, true
-	case strings.HasPrefix(path, "/api/mcp/"):
-		return PermMcpManage, true
-	default:
-		return "", false
-	}
-}
-
-func readOrManagePermission(method, readPermission, managePermission string) string {
-	if method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
-		return readPermission
-	}
-	return managePermission
-}
-
-func observabilityPermission(_ string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/status"):
-		return PermTopologyRead, true
-	case strings.HasPrefix(path, "/api/logs"):
-		return PermLogsRead, true
-	case observability.IsGrafanaQueryPath(path), observability.IsJaegerAPIPath(path):
-		return PermLogsRead, true
-	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
-		return PermLogsRead, true
-	case strings.HasPrefix(path, "/api/topology"):
-		return PermTopologyRead, true
-	default:
-		return "", false
-	}
-}
-
-func featurePermission(method, path string) (string, bool) {
-	switch {
-	case path == "/api/sr-bench/v1" || strings.HasPrefix(path, "/api/sr-bench/v1/"):
-		if IsSRBenchComparisonRequest(method, path) {
-			return PermEvalRead, true
+	body, err := io.ReadAll(limited)
+	if err != nil {
+		var maxErr *http.MaxBytesError
+		if errors.As(err, &maxErr) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+		} else {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
 		}
-		if isSRBenchRunAction(path, "cancel") {
-			return PermEvalRun, true
-		}
-		if method == http.MethodPost || method == http.MethodDelete {
-			return PermEvalWrite, true
-		}
-		return PermEvalRead, true
-	case strings.HasPrefix(path, "/api/openclaw/"), strings.HasPrefix(path, "/embedded/openclaw/"):
-		return openclawPermission(method, path)
-	case strings.HasPrefix(path, "/api/ml-pipeline/"):
-		return PermMlPipeline, true
-	default:
-		return "", false
+		return false
+	}
+	r.Body = io.NopCloser(bytes.NewReader(body))
+	r.ContentLength = int64(len(body))
+	return true
+}
+
+func serveWithRouteAudit(
+	service *Service,
+	policy RoutePolicy,
+	w http.ResponseWriter,
+	r *http.Request,
+	next http.Handler,
+) {
+	rw := &auditResponseWriter{ResponseWriter: w}
+	next.ServeHTTP(rw, r)
+	ac, _ := AuthFromContext(r)
+	_ = service.store.AddAuditLog(context.WithoutCancel(r.Context()), AuditLog{
+		UserID:     ac.UserID,
+		Action:     policy.AuditAction,
+		Resource:   string(policy.ResourceOwner),
+		Method:     r.Method,
+		Path:       r.URL.Path,
+		IP:         r.RemoteAddr,
+		UserAgent:  r.UserAgent(),
+		StatusCode: rw.statusCodeOr200(),
+		CreatedAt:  time.Now().Unix(),
+	})
+}
+
+// ServiceUnavailableGuard fails closed when the auth service could not be
+// initialized. Every registered protected route, and every unregistered path
+// in a protected namespace, answers 503 Service Unavailable; public routes and
+// the static frontend stay reachable so the Dashboard can surface the
+// "authentication service is not configured" state.
+//
+// It consults the same registry as AuthenticateRequest so healthy and degraded
+// startup cannot drift apart.
+func ServiceUnavailableGuard(resolver RoutePolicyResolver) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.Path)
+			switch {
+			case lookup == RouteMethodNotAllowed:
+				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			case lookup == RouteFound && policy.Public:
+				next.ServeHTTP(w, r)
+			case lookup == RouteFound || isProtectedNamespace(r.URL.Path):
+				http.Error(w, "Authentication service is not configured", http.StatusServiceUnavailable)
+			default:
+				next.ServeHTTP(w, r)
+			}
+		})
 	}
 }
 
@@ -360,63 +260,44 @@ func IsSRBenchComparisonRequest(method, path string) bool {
 	return method == http.MethodPost && path == "/api/sr-bench/v1/comparisons"
 }
 
-func isSRBenchRunAction(path, action string) bool {
-	path = strings.TrimRight(path, "/")
-	rest := strings.TrimPrefix(path, "/api/sr-bench/v1/runs/")
-	if rest == path {
+// RoutePolicyFromContext returns the contract policy that admitted the request.
+func RoutePolicyFromContext(r *http.Request) (RoutePolicy, bool) {
+	policy, ok := r.Context().Value(routePolicyKey).(RoutePolicy)
+	return policy, ok
+}
+
+// RevalidateRequest re-resolves the live session and its current permissions.
+// Handlers call it immediately before a privileged side effect so a session
+// revoked or demoted while the request was in flight cannot commit.
+func RevalidateRequest(r *http.Request) error {
+	revalidate, ok := r.Context().Value(revalidatorKey).(permissionRevalidator)
+	if !ok {
+		return errors.New("live permission revalidation is unavailable")
+	}
+	return revalidate(r.Context())
+}
+
+// WithPermissionRevalidator installs a revalidator, for tests and for callers
+// that dispatch outside AuthenticateRequest.
+func WithPermissionRevalidator(ctx context.Context, check func(context.Context) error) context.Context {
+	return context.WithValue(ctx, revalidatorKey, permissionRevalidator(check))
+}
+
+// RejectRevokedMutation writes 403 and reports true when the live session no
+// longer authorizes the request. Requests admitted without a revalidator, such
+// as direct handler tests, are not rejected.
+func RejectRevokedMutation(w http.ResponseWriter, r *http.Request) bool {
+	if r == nil {
 		return false
 	}
-	parts := strings.Split(rest, "/")
-	return len(parts) == 2 && parts[0] != "" && parts[1] == action
-}
-
-func openclawPermission(method, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/openclaw/"):
-		return PermOpenClawRead, true
-	case strings.HasPrefix(path, "/api/openclaw/mcp"):
-		return PermMcpManage, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/provision",
-		"/api/openclaw/start",
-		"/api/openclaw/stop",
-		"/api/openclaw/containers/",
-		"/api/openclaw/next-port",
-	):
-		return PermOpenClaw, true
-	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
-		return PermOpenClawRead, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/status",
-		"/api/openclaw/skills",
-		"/api/openclaw/token",
-	):
-		return PermOpenClawRead, true
-	case hasAnyPrefix(path,
-		"/api/openclaw/teams",
-		"/api/openclaw/workers",
-		"/api/openclaw/rooms",
-	):
-		return openclawMethodPermission(method), true
-	default:
-		return openclawMethodPermission(method), true
+	if _, ok := r.Context().Value(revalidatorKey).(permissionRevalidator); !ok {
+		return false
 	}
-}
-
-func hasAnyPrefix(path string, prefixes ...string) bool {
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
+	if err := RevalidateRequest(r); err != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return true
 	}
 	return false
-}
-
-func openclawMethodPermission(method string) string {
-	if method == http.MethodGet {
-		return PermOpenClawRead
-	}
-	return PermOpenClaw
 }
 
 func AuthFromContext(r *http.Request) (AuthContext, bool) {
@@ -441,29 +322,6 @@ func Require(permission string, next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		next(w, r)
-	}
-}
-
-func AuditMiddleware(store *Store, action, resource string, next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		rw := &auditResponseWriter{ResponseWriter: w}
-		next(rw, r)
-		ac, ok := AuthFromContext(r)
-		uid := ""
-		if ok {
-			uid = ac.UserID
-		}
-		_ = store.AddAuditLog(r.Context(), AuditLog{
-			UserID:     uid,
-			Action:     action,
-			Resource:   resource,
-			Method:     r.Method,
-			Path:       r.URL.Path,
-			IP:         r.RemoteAddr,
-			UserAgent:  r.UserAgent(),
-			StatusCode: rw.statusCodeOr200(),
-			CreatedAt:  time.Now().Unix(),
-		})
 	}
 }
 
@@ -526,43 +384,34 @@ func normalizeAccessToken(raw string) string {
 	return token
 }
 
-func requiresAuthentication(path string) bool {
-	path = strings.TrimSpace(strings.ToLower(path))
-
-	switch {
-	case strings.HasPrefix(path, "/api/auth/login"):
-		return false
-	case strings.HasPrefix(path, "/api/auth/logout"):
-		return false
-	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
-		return false
-	case strings.HasPrefix(path, "/api/auth/invitations/"):
-		return false
-	case strings.HasPrefix(path, "/api/auth/me"):
-		return true
-	case strings.HasPrefix(path, "/api/setup/state"):
-		return false
-	case path == "/api/status" || path == "/api/status/":
-		return false
-	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
-		return false
-	case strings.HasPrefix(path, "/api/"):
-		return true
-	case strings.HasPrefix(path, "/embedded/"):
-		return true
-	default:
-		return false
-	}
-}
-
 type auditResponseWriter struct {
 	http.ResponseWriter
 	status int
 }
 
 func (w *auditResponseWriter) WriteHeader(status int) {
-	w.status = status
+	if w.status == 0 {
+		w.status = status
+	}
 	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *auditResponseWriter) Write(payload []byte) (int, error) {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	return w.ResponseWriter.Write(payload)
+}
+
+func (w *auditResponseWriter) Flush() {
+	if w.status == 0 {
+		w.status = http.StatusOK
+	}
+	_ = http.NewResponseController(w.ResponseWriter).Flush()
+}
+
+func (w *auditResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
 }
 
 func (w *auditResponseWriter) statusCodeOr200() int {

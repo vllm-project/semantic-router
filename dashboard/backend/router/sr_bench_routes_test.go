@@ -18,11 +18,8 @@ func TestSRBenchRoutesUseIndependentServiceAndRetireEvaluation(t *testing.T) {
 	defer upstream.Close()
 	t.Setenv("BENCH_TEST_TOKEN", "service-secret")
 	cfg := &config.Config{SRBenchURL: upstream.URL, SRBenchTokenEnv: "BENCH_TEST_TOKEN"}
-	mux := http.NewServeMux()
+	mux := dashboardauth.NewPolicyMux()
 	registerSRBenchRoutes(mux, cfg)
-	mux.HandleFunc("/api/", func(http.ResponseWriter, *http.Request) {
-		t.Error("retired or unsupported benchmark endpoint escaped to generic proxy")
-	})
 	if !cfg.SRBenchAvailable || cfg.SRBenchUnavailableReason != "" {
 		t.Fatal("configured sr-bench was unavailable")
 	}
@@ -34,6 +31,9 @@ func TestSRBenchRoutesUseIndependentServiceAndRetireEvaluation(t *testing.T) {
 		t.Fatalf("catalog response=%d calls=%d", response.Code, calls)
 	}
 	for _, path := range []string{"/api/evaluation", "/api/evaluation/v1/runs", "/api/sr-bench/v1/unknown"} {
+		if _, lookup := mux.LookupRoutePolicy("GET", path); lookup != dashboardauth.RouteNotFound {
+			t.Fatalf("path=%q lookup=%v, want unregistered", path, lookup)
+		}
 		response = httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest("GET", path, nil))
 		if response.Code != 404 {
@@ -45,7 +45,7 @@ func TestSRBenchRoutesUseIndependentServiceAndRetireEvaluation(t *testing.T) {
 func TestSRBenchMissingAuthenticationFailsClosedWithoutLeakingConfig(t *testing.T) {
 	t.Setenv("BENCH_TEST_TOKEN", "")
 	cfg := &config.Config{SRBenchURL: "http://127.0.0.1:8090", SRBenchTokenEnv: "BENCH_TEST_TOKEN"}
-	mux := http.NewServeMux()
+	mux := dashboardauth.NewPolicyMux()
 	registerSRBenchRoutes(mux, cfg)
 	if cfg.SRBenchAvailable || cfg.SRBenchUnavailableReason == "" {
 		t.Fatal("missing token did not disable sr-bench")

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -220,6 +221,9 @@ func SetupActivateHandler(
 			return
 		}
 		defer release()
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 
 		// The candidate was validated before acquiring the shared config lock.
 		// A concurrent activation may have completed while this request waited.

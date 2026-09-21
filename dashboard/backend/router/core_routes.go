@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
@@ -14,6 +15,14 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
+)
+
+const (
+	maxConfigBodyBytes  = 16 << 20
+	maxProbeBodyBytes   = 2 << 20
+	maxToolBodyBytes    = 256 << 10
+	maxMLBodyBytes      = 2 << 20
+	maxCompactBodyBytes = 64 << 10
 )
 
 type coreRouteOptions struct {
@@ -29,24 +38,28 @@ type configRouteOptions struct {
 
 // setupResolver is required, not an option, because the setup routes have no
 // fallback source of truth for setup mode.
-func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver, routeOptions ...coreRouteOptions) {
+func registerCoreRoutes(routes *auth.PolicyMux, cfg *config.Config, setupResolver *setupmode.Resolver, routeOptions ...coreRouteOptions) {
 	options := coreRouteOptions{}
 	if len(routeOptions) > 0 {
 		options = routeOptions[0]
 	}
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.recipeStore})
-	registerHealthAndSetupRoutes(mux, cfg, setupResolver)
-	registerConfigRoutes(mux, cfg, configRouteOptions{
+	registerHealthAndSetupRoutes(routes, cfg, setupResolver)
+	registerConfigRoutes(routes, cfg, configRouteOptions{
 		credentialStore:          store,
 		modelVerificationAuditor: options.modelVerificationAuditor,
 	})
-	registerToolRoutes(mux, cfg)
-	registerStatusRoutes(mux, cfg, options.statusHandler, store)
-	registerTopologyRoutes(mux, cfg, store)
-	registerRecipeRoutes(mux, cfg, store)
+	registerToolRoutes(routes, cfg)
+	registerStatusRoutes(routes, cfg, options.statusHandler, store)
+	registerTopologyRoutes(routes, cfg, store)
+	registerRecipeRoutes(routes, cfg, store)
 }
 
-func registerRecipeRoutes(mux *http.ServeMux, cfg *config.Config, stores ...*recipe.Store) {
+func configRead(pattern string, sensitivity auth.Sensitivity) auth.RouteContract {
+	return auth.ProtectedRoute(pattern, auth.PermConfigRead, sensitivity, auth.ResourceOwnerConfig, http.MethodGet)
+}
+
+func registerRecipeRoutes(routes *auth.PolicyMux, cfg *config.Config, stores ...*recipe.Store) {
 	recipeDir := dashboardActiveRecipeDirectory(cfg)
 	store := selectedRecipeStore(cfg, stores)
 	service := recipe.NewService(recipe.Options{
@@ -66,22 +79,40 @@ func registerRecipeRoutes(mux *http.ServeMux, cfg *config.Config, stores ...*rec
 		RuntimeConfigWritable: cfg.RuntimeConfigWritable,
 		RecipeStoreWritable:   cfg.RecipeStoreWritable,
 	}))
-	mux.HandleFunc("/api/recipe", handler.Descriptor)
-	mux.HandleFunc("/api/recipe/probes", handler.Probes)
-	mux.HandleFunc("/api/recipe/probes/", handler.ProbeAction)
-	mux.HandleFunc("/api/recipe/packages", handler.Packages)
-	mux.HandleFunc("/api/recipe/packages/", handler.Packages)
-	mux.HandleFunc("/api/recipe/import", handler.ImportPackage)
-	mux.HandleFunc("/api/recipe/import/", handler.ImportPackage)
-	mux.HandleFunc("/api/recipe/activate", handler.ActivatePackage)
-	mux.HandleFunc("/api/recipe/activate/", handler.ActivatePackage)
-	mux.HandleFunc("/api/recipe/activate/preview", handler.PreviewPackageActivation)
-	mux.HandleFunc("/api/recipe/activate/preview/", handler.PreviewPackageActivation)
-	mux.HandleFunc("/api/recipe/deactivate", handler.DeactivatePackage)
-	mux.HandleFunc("/api/recipe/deactivate/", handler.DeactivatePackage)
-	mux.HandleFunc("/api/recipe/deactivate/preview", handler.PreviewPackageDeactivation)
-	mux.HandleFunc("/api/recipe/deactivate/preview/", handler.PreviewPackageDeactivation)
+	routes.HandleFunc(configRead("/api/recipe", auth.SensitivityOperational), handler.Descriptor)
+	routes.HandleFunc(configRead("/api/recipe/probes", auth.SensitivityOperational), handler.Probes)
+	routes.HandleGroup([]auth.RouteContract{
+		configRead("/api/recipe/probes/{decision}/{variant}", auth.SensitivityOperational),
+		auth.ProtectedBoundedRoute("/api/recipe/probes/{decision}/{variant}/run-plan", auth.PermConfigRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxProbeBodyBytes, http.MethodPost),
+		auth.ProtectedBoundedRoute("/api/recipe/probes/{decision}/{variant}/validate", auth.PermTopologyRead, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxProbeBodyBytes, http.MethodPost),
+	}, http.HandlerFunc(handler.ProbeAction))
+	routes.HandleGroup([]auth.RouteContract{
+		configRead("/api/recipe/packages", auth.SensitivityOperational),
+		configRead("/api/recipe/packages/", auth.SensitivityOperational),
+	}, http.HandlerFunc(handler.Packages))
+	routes.HandleGroup(recipePackageMutationContracts("/api/recipe/import", auth.PermConfigWrite, "recipe.import"), http.HandlerFunc(handler.ImportPackage))
+	routes.HandleGroup(recipePackageMutationContracts("/api/recipe/activate", auth.PermConfigDeploy, "recipe.activate"), http.HandlerFunc(handler.ActivatePackage))
+	routes.HandleGroup(recipePackagePreviewContracts("/api/recipe/activate/preview"), http.HandlerFunc(handler.PreviewPackageActivation))
+	routes.HandleGroup(recipePackageMutationContracts("/api/recipe/deactivate", auth.PermConfigDeploy, "recipe.deactivate"), http.HandlerFunc(handler.DeactivatePackage))
+	routes.HandleGroup(recipePackagePreviewContracts("/api/recipe/deactivate/preview"), http.HandlerFunc(handler.PreviewPackageDeactivation))
 	log.Printf("Active Recipe API endpoints registered: /api/recipe, /api/recipe/probes/*, /api/recipe/packages, /api/recipe/import, /api/recipe/activate/preview, /api/recipe/activate, /api/recipe/deactivate/preview, /api/recipe/deactivate")
+}
+
+// Package handlers own the whole subtree under the mutation permission and
+// answer a no-store 404 for anything but the canonical path or its
+// trailing-slash alias.
+func recipePackageMutationContracts(pattern, permission, action string) []auth.RouteContract {
+	return []auth.RouteContract{
+		auth.ProtectedMutationRoute(pattern, permission, action, auth.SensitivitySecret, auth.ResourceOwnerConfig, maxConfigBodyBytes, http.MethodPost),
+		auth.ProtectedMutationRoute(pattern+"/", permission, action, auth.SensitivitySecret, auth.ResourceOwnerConfig, maxConfigBodyBytes, http.MethodPost),
+	}
+}
+
+func recipePackagePreviewContracts(pattern string) []auth.RouteContract {
+	return []auth.RouteContract{
+		auth.ProtectedBoundedRoute(pattern, auth.PermConfigDeploy, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxConfigBodyBytes, http.MethodPost),
+		auth.ProtectedBoundedRoute(pattern+"/", auth.PermConfigDeploy, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxConfigBodyBytes, http.MethodPost),
+	}
 }
 
 func recoverRecipeActivationOnStartup(cfg *config.Config, recover func(context.Context) error) {
@@ -94,19 +125,31 @@ func recoverRecipeActivationOnStartup(cfg *config.Config, recover func(context.C
 	}
 }
 
-func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) {
+func registerHealthAndSetupRoutes(routes *auth.PolicyMux, cfg *config.Config, setupResolver *setupmode.Resolver) {
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
-	mux.HandleFunc("/healthz", handlers.HealthCheck)
-	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg, setupResolver))
-	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath, setupResolver))
-	mux.HandleFunc("/api/setup/import-remote", handlers.SetupImportRemoteHandler(cfg.AbsConfigPath, setupResolver))
-	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath, setupResolver))
-	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir, setupResolver))
-	mux.HandleFunc("/api/setup/presets", handlers.PresetsHandler())
-	mux.HandleFunc("/api/setup/presets/delta", handlers.PresetDeltaHandler())
+	routes.HandleFunc(auth.PublicRoute("/healthz", http.MethodGet, http.MethodHead), handlers.HealthCheck)
+	routes.HandleFunc(configRead("/api/settings", auth.SensitivityOperational), handlers.SettingsHandler(cfg, setupResolver))
+	routes.HandleFunc(auth.PublicRoute("/api/setup/state", http.MethodGet), handlers.SetupStateHandler(cfg.AbsConfigPath, setupResolver))
+	routes.HandleFunc(
+		auth.ProtectedBoundedRoute("/api/setup/import-remote", auth.PermConfigWrite, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxCompactBodyBytes, http.MethodPost),
+		handlers.SetupImportRemoteHandler(cfg.AbsConfigPath, setupResolver),
+	)
+	routes.HandleFunc(
+		auth.ProtectedBoundedRoute("/api/setup/validate", auth.PermConfigWrite, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxConfigBodyBytes, http.MethodPost),
+		handlers.SetupValidateHandler(cfg.AbsConfigPath, setupResolver),
+	)
+	routes.HandleFunc(
+		auth.ProtectedMutationRoute("/api/setup/activate", auth.PermConfigWrite, "setup.activate", auth.SensitivitySecret, auth.ResourceOwnerConfig, maxConfigBodyBytes, http.MethodPost),
+		handlers.SetupActivateHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir, setupResolver),
+	)
+	routes.HandleFunc(configRead("/api/setup/presets", auth.SensitivityOperational), handlers.PresetsHandler())
+	routes.HandleFunc(
+		auth.ProtectedBoundedRoute("/api/setup/presets/delta", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, maxProbeBodyBytes, http.MethodPost),
+		handlers.PresetDeltaHandler(),
+	)
 }
 
-func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions ...configRouteOptions) {
+func registerConfigRoutes(routes *auth.PolicyMux, cfg *config.Config, routeOptions ...configRouteOptions) {
 	if err := handlers.RestrictExistingConfigSnapshots(cfg.ConfigDir); err != nil {
 		log.Printf("Warning: could not restrict existing config snapshots: %v", err)
 	}
@@ -116,49 +159,77 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions .
 	}
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.credentialStore})
-	mux.HandleFunc("/api/models/catalog", handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
-	mux.HandleFunc("/api/models/discover", handlers.ModelDiscoveryHandler(nil))
-	mux.HandleFunc("/api/models/verify", handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))
-	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/schema", handlers.ConfigSchemaHandler(cfg.RouterAPIURL, store))
-	mux.HandleFunc("/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/update", handlers.UpdateConfigHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	mux.HandleFunc("/api/router/config/deploy/preview", handlers.DeployPreviewHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/deploy", handlers.DeployHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	mux.HandleFunc("/api/router/config/rollback", handlers.RollbackHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	mux.HandleFunc("/api/router/config/versions", handlers.ConfigVersionsHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/deployments", handlers.ConfigDeploymentsHandler())
-	mux.HandleFunc("/api/router/config/deployments/", handlers.ConfigDeploymentDetailHandler())
-	mux.HandleFunc("/api/router/config/active-projection", handlers.ActiveConfigProjectionHandler())
+	configWrite := func(pattern, action string, methods ...string) auth.RouteContract {
+		return auth.ProtectedMutationRoute(pattern, auth.PermConfigWrite, action, auth.SensitivitySecret, auth.ResourceOwnerConfig, maxConfigBodyBytes, methods...)
+	}
+	routes.HandleFunc(configRead("/api/models/catalog", auth.SensitivityOperational), handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
+	routes.HandleFunc(
+		auth.ProtectedBoundedRoute("/api/models/discover", auth.PermConfigWrite, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxProbeBodyBytes, http.MethodPost),
+		handlers.ModelDiscoveryHandler(nil),
+	)
+	routes.HandleFunc(
+		auth.ProtectedDelegatedMutationRoute("/api/models/verify", auth.PermEvalRun, "model.inference_verify", auth.SensitivitySensitive, auth.ResourceOwnerInference, maxProbeBodyBytes, http.MethodPost),
+		handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor),
+	)
+	routes.HandleFunc(configRead("/api/router/config/all", auth.SensitivitySecret), handlers.ConfigHandler(cfg.AbsConfigPath))
+	routes.HandleFunc(configRead("/api/router/config/schema", auth.SensitivityOperational), handlers.ConfigSchemaHandler(cfg.RouterAPIURL, store))
+	routes.HandleFunc(configRead("/api/router/config/yaml", auth.SensitivitySecret), handlers.ConfigYAMLHandler(cfg.AbsConfigPath))
+	routes.HandleFunc(configWrite("/api/router/config/update", "config.update", http.MethodPost, http.MethodPut), handlers.UpdateConfigHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
+	routes.HandleFunc(
+		auth.ProtectedBoundedRoute("/api/router/config/deploy/preview", auth.PermConfigDeploy, auth.SensitivitySensitive, auth.ResourceOwnerConfig, maxConfigBodyBytes, http.MethodPost),
+		handlers.DeployPreviewHandler(cfg.AbsConfigPath),
+	)
+	routes.HandleFunc(
+		auth.ProtectedMutationRoute("/api/router/config/deploy", auth.PermConfigDeploy, "config.deploy", auth.SensitivitySecret, auth.ResourceOwnerConfig, maxConfigBodyBytes, http.MethodPost),
+		handlers.DeployHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir),
+	)
+	routes.HandleFunc(
+		auth.ProtectedMutationRoute("/api/router/config/rollback", auth.PermConfigDeploy, "config.rollback", auth.SensitivitySecret, auth.ResourceOwnerConfig, maxCompactBodyBytes, http.MethodPost),
+		handlers.RollbackHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir),
+	)
+	routes.HandleFunc(configRead("/api/router/config/versions", auth.SensitivityOperational), handlers.ConfigVersionsHandler(cfg.AbsConfigPath))
+	routes.HandleFunc(configRead("/api/router/config/deployments", auth.SensitivityOperational), handlers.ConfigDeploymentsHandler())
+	routes.HandleFunc(configRead("/api/router/config/deployments/{version}", auth.SensitivitySensitive), handlers.ConfigDeploymentDetailHandler())
+	routes.HandleFunc(configRead("/api/router/config/active-projection", auth.SensitivitySensitive), handlers.ActiveConfigProjectionHandler())
 	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/discover, /api/models/verify, /api/router/config/all, /api/router/config/schema, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
 
-	mux.HandleFunc("/api/router/config/global", handlers.RouterDefaultsHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/global/update", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	mux.HandleFunc("/api/router/config/global/raw", handlers.GlobalConfigYAMLHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/router/config/global/raw/update", handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
-	mux.HandleFunc("/api/router/api/v1/storage/knowledge-bases", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, store))
-	mux.HandleFunc("/api/router/api/v1/storage/knowledge-bases/", handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, store))
+	routes.HandleFunc(configRead("/api/router/config/global", auth.SensitivitySensitive), handlers.RouterDefaultsHandler(cfg.AbsConfigPath))
+	routes.HandleFunc(configWrite("/api/router/config/global/update", "config.global.update", http.MethodPost, http.MethodPut), handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
+	routes.HandleFunc(configRead("/api/router/config/global/raw", auth.SensitivitySecret), handlers.GlobalConfigYAMLHandler(cfg.AbsConfigPath))
+	routes.HandleFunc(configWrite("/api/router/config/global/raw/update", "config.global_raw.update", http.MethodPost, http.MethodPut), handlers.UpdateGlobalConfigYAMLHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
+	// Knowledge-base storage is served by the Dashboard classifier proxy, not
+	// the generic Router gateway, but shares the gateway contract.
+	routes.HandleGroup(
+		routerManagementContracts(isKnowledgeBasePath),
+		handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, store),
+	)
 	log.Printf("Global config API endpoints registered: /api/router/config/global, /api/router/config/global/update, /api/router/config/global/raw, /api/router/config/global/raw/update")
 }
 
-func registerToolRoutes(mux *http.ServeMux, cfg *config.Config) {
-	mux.HandleFunc("/api/tools-db", func(w http.ResponseWriter, r *http.Request) {
-		// Configuration saves can change the selected database without restarting
-		// Dashboard. Resolve the current canonical path for each refresh.
-		handlers.ToolsDBHandler(resolveToolsDBPath(cfg))(w, r)
-	})
+func registerToolRoutes(routes *auth.PolicyMux, cfg *config.Config) {
+	routes.HandleFunc(
+		auth.ProtectedRoute("/api/tools-db", auth.PermToolsUse, auth.SensitivitySensitive, auth.ResourceOwnerTools, http.MethodGet),
+		func(w http.ResponseWriter, r *http.Request) {
+			// Configuration saves can change the selected database without restarting
+			// Dashboard. Resolve the current canonical path for each refresh.
+			handlers.ToolsDBHandler(resolveToolsDBPath(cfg))(w, r)
+		},
+	)
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
-	mux.HandleFunc("/api/tools/web-search", handlers.WebSearchHandler())
+	tool := func(pattern string) auth.RouteContract {
+		return auth.ProtectedBoundedRoute(pattern, auth.PermToolsUse, auth.SensitivitySensitive, auth.ResourceOwnerTools, maxToolBodyBytes, http.MethodPost)
+	}
+	routes.HandleFunc(tool("/api/tools/web-search"), handlers.WebSearchHandler())
 	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
 
-	mux.HandleFunc("/api/tools/open-web", handlers.OpenWebHandler())
+	routes.HandleFunc(tool("/api/tools/open-web"), handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
-	mux.HandleFunc("/api/tools/weather", handlers.WeatherHandler())
+	routes.HandleFunc(tool("/api/tools/weather"), handlers.WeatherHandler())
 	log.Printf("Weather API endpoint registered: /api/tools/weather")
 
-	mux.HandleFunc("/api/tools/fetch-raw", handlers.FetchRawHandler())
+	routes.HandleFunc(tool("/api/tools/fetch-raw"), handlers.FetchRawHandler())
 	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
 }
 
@@ -185,25 +256,33 @@ func resolveToolsDBPath(cfg *config.Config) string {
 	return filepath.Join(projectRoot, toolSelection.ToolsDBPath)
 }
 
-func registerStatusRoutes(mux *http.ServeMux, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {
+func registerStatusRoutes(routes *auth.PolicyMux, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {
 	store := selectedRecipeStore(cfg, credentialProvider)
 	if statusHandler == nil {
 		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, store)
 	}
-	mux.HandleFunc("/api/status", statusHandler)
+	// The status summary is the unauthenticated liveness surface the frontend
+	// polls before login.
+	routes.HandleFunc(auth.PublicRoute("/api/status", http.MethodGet), statusHandler)
 	log.Printf("Status API endpoint registered: /api/status")
 
-	mux.HandleFunc("/api/logs", handlers.LogsHandler(cfg.RouterAPIURL))
+	routes.HandleFunc(
+		auth.ProtectedRoute("/api/logs", auth.PermLogsRead, auth.SensitivitySensitive, auth.ResourceOwnerObservability, http.MethodGet),
+		handlers.LogsHandler(cfg.RouterAPIURL),
+	)
 	log.Printf("Logs API endpoint registered: /api/logs")
 }
 
-func registerTopologyRoutes(mux *http.ServeMux, cfg *config.Config, credentialProvider ...*recipe.Store) {
+func registerTopologyRoutes(routes *auth.PolicyMux, cfg *config.Config, credentialProvider ...*recipe.Store) {
 	store := selectedRecipeStore(cfg, credentialProvider)
-	mux.HandleFunc("/api/topology/test-query", handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
+	routes.HandleFunc(
+		auth.ProtectedBoundedRoute("/api/topology/test-query", auth.PermTopologyRead, auth.SensitivitySensitive, auth.ResourceOwnerInference, maxProbeBodyBytes, http.MethodPost),
+		handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store),
+	)
 	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
 }
 
-func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config, wf *workflowstore.Store) {
+func registerMLPipelineRoutes(routes *auth.PolicyMux, cfg *config.Config, wf *workflowstore.Store) {
 	if !cfg.MLPipelineEnabled {
 		log.Printf("ML Pipeline feature disabled")
 		return
@@ -225,13 +304,25 @@ func registerMLPipelineRoutes(mux *http.ServeMux, cfg *config.Config, wf *workfl
 	}
 	mlHandler := handlers.NewMLPipelineHandler(mlRunner)
 
-	mux.HandleFunc("/api/ml-pipeline/jobs", mlHandler.ListJobsHandler())
-	mux.HandleFunc("/api/ml-pipeline/jobs/", mlHandler.GetJobHandler())
-	mux.HandleFunc("/api/ml-pipeline/benchmark", mlHandler.RunBenchmarkHandler())
-	mux.HandleFunc("/api/ml-pipeline/train", mlHandler.RunTrainHandler())
-	mux.HandleFunc("/api/ml-pipeline/config", mlHandler.GenerateConfigHandler())
-	mux.HandleFunc("/api/ml-pipeline/download/", mlHandler.DownloadOutputHandler())
-	mux.HandleFunc("/api/ml-pipeline/stream/", mlHandler.StreamProgressHandler())
+	mlRead := func(pattern string) auth.RouteContract {
+		return auth.ProtectedRoute(pattern, auth.PermMlPipeline, auth.SensitivitySensitive, auth.ResourceOwnerML, http.MethodGet)
+	}
+	mlMutation := func(pattern, action string) auth.RouteContract {
+		return auth.ProtectedMutationRoute(pattern, auth.PermMlPipeline, action, auth.SensitivitySensitive, auth.ResourceOwnerML, maxMLBodyBytes, http.MethodPost)
+	}
+	routes.HandleFunc(mlRead("/api/ml-pipeline/jobs"), mlHandler.ListJobsHandler())
+	routes.HandleGroup([]auth.RouteContract{
+		mlRead("/api/ml-pipeline/jobs/{id}"),
+		mlRead("/api/ml-pipeline/jobs/{id}/events"),
+	}, mlHandler.GetJobHandler())
+	routes.HandleFunc(mlMutation("/api/ml-pipeline/benchmark", "ml.benchmark"), mlHandler.RunBenchmarkHandler())
+	routes.HandleFunc(mlMutation("/api/ml-pipeline/train", "ml.train"), mlHandler.RunTrainHandler())
+	routes.HandleFunc(mlMutation("/api/ml-pipeline/config", "ml.config.generate"), mlHandler.GenerateConfigHandler())
+	routes.HandleGroup([]auth.RouteContract{
+		mlRead("/api/ml-pipeline/download/{id}"),
+		mlRead("/api/ml-pipeline/download/{id}/{index}"),
+	}, mlHandler.DownloadOutputHandler())
+	routes.HandleFunc(mlRead("/api/ml-pipeline/stream/{id}"), mlHandler.StreamProgressHandler())
 	log.Printf("ML Pipeline API endpoints registered: /api/ml-pipeline/*")
 
 	if trainingDir != "" {

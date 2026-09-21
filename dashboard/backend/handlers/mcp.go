@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 )
@@ -114,6 +115,9 @@ func (h *MCPHandler) CreateServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.AddServer(&config); err != nil {
 			writeMCPInternalError(w, "Add server", err)
 			return
@@ -157,6 +161,9 @@ func (h *MCPHandler) UpdateServerHandler() http.HandlerFunc {
 
 		config.ID = id
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.UpdateServer(&config); err != nil {
 			writeMCPInternalError(w, "Update server", err)
 			return
@@ -196,6 +203,9 @@ func (h *MCPHandler) DeleteServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.DeleteServer(id); err != nil {
 			writeMCPInternalError(w, "Delete server", err)
 			return
@@ -236,6 +246,9 @@ func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 		defer cancel()
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.Connect(ctx, id); err != nil {
 			writeMCPInternalError(w, "Connect server", err)
 			return
@@ -271,6 +284,9 @@ func (h *MCPHandler) DisconnectServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.Disconnect(id); err != nil {
 			writeMCPInternalError(w, "Disconnect server", err)
 			return

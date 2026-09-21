@@ -7,12 +7,18 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
 	"github.com/vllm-project/semantic-router/dashboard/backend/observability"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
+)
+
+const (
+	chatCompletionsPath   = "/api/router/v1/chat/completions"
+	maxInferenceBodyBytes = 16 << 20
 )
 
 // The Referer of a request made from a page whose URL carried ?authToken= holds a live
@@ -53,7 +59,7 @@ type dashboardProxySet struct {
 }
 
 func registerProxyRoutes(
-	mux *http.ServeMux,
+	routes *auth.PolicyMux,
 	cfg *config.Config,
 	feedbackStore playgroundFeedbackStore,
 	credentialProvider ...routerauth.CredentialProvider,
@@ -66,14 +72,14 @@ func registerProxyRoutes(
 		envoy: configureEnvoyProxy(cfg),
 	}
 	attachPlaygroundReplayTracking(proxies.envoy, feedbackStore)
-	registerRouterAPIProxy(mux, cfg, proxies.envoy, feedbackStore, provider)
-	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
-	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
+	registerRouterAPIProxy(routes, cfg, proxies.envoy, feedbackStore, provider)
+	proxies.grafanaStatic = registerGrafanaRoutes(routes, cfg)
+	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(routes, cfg)
 
-	registerSmartAPIRouter(mux, proxies)
-	registerMetricsRoutes(mux, cfg)
-	registerPrometheusRoutes(mux, cfg)
-	registerWizMapRoutes(mux, cfg)
+	registerObservabilityAPIRoutes(routes, proxies)
+	registerMetricsRoutes(routes, cfg)
+	registerPrometheusRoutes(routes, cfg)
+	registerWizMapRoutes(routes, cfg)
 }
 
 func configureEnvoyProxy(cfg *config.Config) *httputil.ReverseProxy {
@@ -99,12 +105,12 @@ func configureEnvoyProxy(cfg *config.Config) *httputil.ReverseProxy {
 		request.URL.Host = target.Host
 		request.Host = target.Host
 	}
-	log.Printf("Envoy proxy configured: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
+	log.Printf("Envoy proxy configured: %s → %s", cfg.EnvoyURL, chatCompletionsPath)
 	return envoyProxy
 }
 
 func registerRouterAPIProxy(
-	mux *http.ServeMux,
+	routes *auth.PolicyMux,
 	cfg *config.Config,
 	envoyProxy *httputil.ReverseProxy,
 	feedbackStore playgroundFeedbackStore,
@@ -122,11 +128,22 @@ func registerRouterAPIProxy(
 	}
 	attachRouterReplayResponseRedaction(routerAPIProxy)
 
-	mux.HandleFunc("/api/router/", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleGroup(routerGatewayContracts(), http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, feedbackStore, credentialProvider)
-	})
+	}))
 	log.Printf("Router API proxy configured: %s (excluding /api/router/config/*)", cfg.RouterAPIURL)
 	return routerAPIProxy
+}
+
+// routerGatewayContracts is the exact Router surface the Dashboard exposes:
+// inference through Envoy under its own permission, plus every management
+// route in the shared allowlist except knowledge-base storage, which the
+// classifier proxy owns.
+func routerGatewayContracts() []auth.RouteContract {
+	contracts := []auth.RouteContract{
+		auth.ProtectedBoundedRoute(chatCompletionsPath, auth.PermInferenceRun, auth.SensitivitySecret, auth.ResourceOwnerInference, maxInferenceBodyBytes, http.MethodPost),
+	}
+	return append(contracts, routerManagementContracts(isGatewayProxyPath)...)
 }
 
 func serveRouterAPIProxy(
@@ -195,7 +212,7 @@ func routeRouterTrafficToEnvoy(
 		return false
 	}
 
-	if r.URL.Path == "/api/router/v1/chat/completions" && (r.Method == http.MethodPost || r.Method == http.MethodOptions) {
+	if r.URL.Path == chatCompletionsPath && (r.Method == http.MethodPost || r.Method == http.MethodOptions) {
 		r.URL.Path = strings.TrimPrefix(r.URL.Path, "/api/router")
 		log.Printf("Proxying chat completions to Envoy: %s %s", r.Method, r.URL.Path)
 		if middleware.HandleCORSPreflight(w, r) {
@@ -207,10 +224,23 @@ func routeRouterTrafficToEnvoy(
 	return false
 }
 
-func registerGrafanaRoutes(mux *http.ServeMux, cfg *config.Config) *httputil.ReverseProxy {
+// embeddedObservabilityRoute fronts a proxied observability UI whose own
+// frontend issues reads and writes; all of them stay behind logs.read and the
+// session CSRF policy.
+func embeddedObservabilityRoute(pattern string) auth.RouteContract {
+	return auth.ProtectedRoute(
+		pattern,
+		auth.PermLogsRead,
+		auth.SensitivitySensitive,
+		auth.ResourceOwnerObservability,
+		http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete,
+	)
+}
+
+func registerGrafanaRoutes(routes *auth.PolicyMux, cfg *config.Config) *httputil.ReverseProxy {
 	if cfg.GrafanaURL == "" {
-		mux.HandleFunc(
-			"/embedded/grafana/",
+		routes.HandleFunc(
+			embeddedObservabilityRoute("/embedded/grafana/"),
 			serviceUnavailableHTMLHandler("Grafana", "TARGET_GRAFANA_URL", "http://localhost:3000"),
 		)
 		log.Printf("Warning: Grafana URL not configured")
@@ -221,8 +251,11 @@ func registerGrafanaRoutes(mux *http.ServeMux, cfg *config.Config) *httputil.Rev
 	if err != nil {
 		log.Fatalf("grafana proxy error: %v", err)
 	}
-	mux.HandleFunc(proxy.GrafanaAuthScriptPath, proxy.GrafanaAuthScriptHandler)
-	mux.HandleFunc("/embedded/grafana/", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleFunc(
+		auth.ProtectedRoute(proxy.GrafanaAuthScriptPath, auth.PermLogsRead, auth.SensitivityOperational, auth.ResourceOwnerObservability, http.MethodGet, http.MethodHead),
+		proxy.GrafanaAuthScriptHandler,
+	)
+	routes.HandleFunc(embeddedObservabilityRoute("/embedded/grafana/"), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -236,20 +269,21 @@ func registerGrafanaRoutes(mux *http.ServeMux, cfg *config.Config) *httputil.Rev
 		return nil
 	}
 
-	registerStaticProxyRoute(mux, "/public/", grafanaStaticProxy, "Grafana static proxy not configured")
-	registerStaticProxyRoute(mux, "/avatar/", grafanaStaticProxy, "Grafana static proxy not configured")
+	registerStaticProxyRoute(routes, "/public/", grafanaStaticProxy, "Grafana static proxy not configured")
+	registerStaticProxyRoute(routes, "/avatar/", grafanaStaticProxy, "Grafana static proxy not configured")
 	log.Printf("Grafana proxy configured: %s", cfg.GrafanaURL)
 	log.Printf("Grafana static assets proxied: /public/, /avatar/")
 	return grafanaStaticProxy
 }
 
+// Static assets outside the API namespace carry no session data.
 func registerStaticProxyRoute(
-	mux *http.ServeMux,
+	routes *auth.PolicyMux,
 	pattern string,
 	staticProxy *httputil.ReverseProxy,
 	message string,
 ) {
-	mux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleFunc(auth.PublicRoute(pattern, http.MethodGet, http.MethodHead), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -263,12 +297,12 @@ func registerStaticProxyRoute(
 }
 
 func registerJaegerRoutes(
-	mux *http.ServeMux,
+	routes *auth.PolicyMux,
 	cfg *config.Config,
 ) (*httputil.ReverseProxy, *httputil.ReverseProxy) {
 	if cfg.JaegerURL == "" {
-		mux.HandleFunc(
-			"/embedded/jaeger/",
+		routes.HandleFunc(
+			embeddedObservabilityRoute("/embedded/jaeger/"),
 			serviceUnavailableHTMLHandler("Jaeger", "TARGET_JAEGER_URL", "http://localhost:16686"),
 		)
 		log.Printf("Info: Jaeger URL not configured (optional)")
@@ -290,28 +324,25 @@ func registerJaegerRoutes(
 	if err != nil {
 		log.Fatalf("jaeger proxy error: %v", err)
 	}
-	mux.HandleFunc("/embedded/jaeger", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleGroup([]auth.RouteContract{
+		embeddedObservabilityRoute("/embedded/jaeger"),
+		embeddedObservabilityRoute("/embedded/jaeger/"),
+	}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
 		jaegerProxy.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/embedded/jaeger/", func(w http.ResponseWriter, r *http.Request) {
-		if middleware.HandleCORSPreflight(w, r) {
-			return
-		}
-		jaegerProxy.ServeHTTP(w, r)
-	})
+	}))
 
 	if jaegerStaticProxy != nil {
-		mux.HandleFunc("/static/", func(w http.ResponseWriter, r *http.Request) {
+		routes.HandleFunc(auth.PublicRoute("/static/", http.MethodGet, http.MethodHead), func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
 			log.Printf("Proxying Jaeger /static/ asset: %s", r.URL.Path)
 			jaegerStaticProxy.ServeHTTP(w, r)
 		})
-		mux.HandleFunc("/dependencies", func(w http.ResponseWriter, r *http.Request) {
+		routes.HandleFunc(auth.PublicRoute("/dependencies", http.MethodGet, http.MethodHead), func(w http.ResponseWriter, r *http.Request) {
 			if middleware.HandleCORSPreflight(w, r) {
 				return
 			}
@@ -324,46 +355,62 @@ func registerJaegerRoutes(
 	return jaegerAPIProxy, jaegerStaticProxy
 }
 
-func registerSmartAPIRouter(mux *http.ServeMux, proxies dashboardProxySet) {
-	mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
+// registerObservabilityAPIRoutes exposes the root-relative API calls the
+// embedded Grafana and Jaeger frontends make: Grafana's data-source query and
+// the Jaeger query API. Nothing else under /api/ reaches an upstream.
+func registerObservabilityAPIRoutes(routes *auth.PolicyMux, proxies dashboardProxySet) {
+	observabilityRead := func(pattern string) auth.RouteContract {
+		return auth.ProtectedRoute(pattern, auth.PermLogsRead, auth.SensitivitySensitive, auth.ResourceOwnerObservability, http.MethodGet)
+	}
+	jaegerContracts := make([]auth.RouteContract, 0, 8)
+	for _, pattern := range []string{"/api/services", "/api/traces", "/api/operations", "/api/dependencies"} {
+		jaegerContracts = append(jaegerContracts, observabilityRead(pattern), observabilityRead(pattern+"/"))
+	}
+	routes.HandleGroup(jaegerContracts, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
-		if strings.HasPrefix(r.URL.Path, "/api/router/config/") {
-			http.NotFound(w, r)
-			return
-		}
-
 		log.Printf("API request: %s %s (from: %s)",
 			r.Method, r.URL.Path, redactCredentialParams(r.Header.Get("Referer")))
-
-		if proxies.jaegerAPI != nil && observability.IsJaegerAPIPath(r.URL.Path) {
-			log.Printf("Routing to Jaeger API: %s", r.URL.Path)
-			proxies.jaegerAPI.ServeHTTP(w, r)
+		if proxies.jaegerAPI == nil || !observability.IsJaegerAPIPath(r.URL.Path) {
+			writeNoUpstreamResponse(w)
 			return
 		}
-		if proxies.grafanaStatic != nil {
+		log.Printf("Routing to Jaeger API: %s", r.URL.Path)
+		proxies.jaegerAPI.ServeHTTP(w, r)
+	}))
+
+	routes.HandleFunc(
+		auth.ProtectedBoundedRoute("/api/ds/query", auth.PermLogsRead, auth.SensitivitySensitive, auth.ResourceOwnerObservability, maxRouterProbeBodyBytes, http.MethodPost),
+		func(w http.ResponseWriter, r *http.Request) {
+			if middleware.HandleCORSPreflight(w, r) {
+				return
+			}
+			if proxies.grafanaStatic == nil || !observability.IsGrafanaQueryPath(r.URL.Path) {
+				writeNoUpstreamResponse(w)
+				return
+			}
 			log.Printf("Routing to Grafana API: %s", r.URL.Path)
 			proxies.grafanaStatic.ServeHTTP(w, r)
-			return
-		}
-
-		log.Printf("No handler available for: %s", r.URL.Path)
-		w.Header().Set("Content-Type", "application/json")
-		http.Error(w, `{"error":"Service not available","message":"No API handler configured for this path"}`, http.StatusBadGateway)
-	})
+		},
+	)
 }
 
-func registerMetricsRoutes(mux *http.ServeMux, cfg *config.Config) {
-	mux.HandleFunc("/metrics/router", func(w http.ResponseWriter, r *http.Request) {
+func writeNoUpstreamResponse(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	http.Error(w, `{"error":"Service not available","message":"No API handler configured for this path"}`, http.StatusBadGateway)
+}
+
+func registerMetricsRoutes(routes *auth.PolicyMux, cfg *config.Config) {
+	routes.HandleFunc(auth.PublicRoute("/metrics/router", http.MethodGet, http.MethodHead), func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, cfg.RouterMetrics, http.StatusTemporaryRedirect)
 	})
 }
 
-func registerPrometheusRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerPrometheusRoutes(routes *auth.PolicyMux, cfg *config.Config) {
 	if cfg.PrometheusURL == "" {
-		mux.HandleFunc(
-			"/embedded/prometheus/",
+		routes.HandleFunc(
+			embeddedObservabilityRoute("/embedded/prometheus/"),
 			serviceUnavailableHTMLHandler("Prometheus", "TARGET_PROMETHEUS_URL", "http://localhost:9090"),
 		)
 		log.Printf("Warning: Prometheus URL not configured")
@@ -374,17 +421,14 @@ func registerPrometheusRoutes(mux *http.ServeMux, cfg *config.Config) {
 	if err != nil {
 		log.Fatalf("prometheus proxy error: %v", err)
 	}
-	mux.HandleFunc("/embedded/prometheus", func(w http.ResponseWriter, r *http.Request) {
+	routes.HandleGroup([]auth.RouteContract{
+		embeddedObservabilityRoute("/embedded/prometheus"),
+		embeddedObservabilityRoute("/embedded/prometheus/"),
+	}, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
 		prometheusProxy.ServeHTTP(w, r)
-	})
-	mux.HandleFunc("/embedded/prometheus/", func(w http.ResponseWriter, r *http.Request) {
-		if middleware.HandleCORSPreflight(w, r) {
-			return
-		}
-		prometheusProxy.ServeHTTP(w, r)
-	})
+	}))
 	log.Printf("Prometheus proxy configured: %s", cfg.PrometheusURL)
 }

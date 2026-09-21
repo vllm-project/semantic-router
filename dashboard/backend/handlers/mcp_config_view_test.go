@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
 )
 
@@ -99,13 +97,6 @@ func TestMCPReadResponsesRedactStoredServerSecrets(t *testing.T) {
 		t.Fatal(addErr)
 	}
 	handler := NewMCPHandler(manager, false)
-
-	if got := auth.RequiredPermissions(http.MethodGet, "/api/mcp/servers"); !reflect.DeepEqual(got, []string{auth.PermMcpRead}) {
-		t.Fatalf("list permissions = %q, want %q", got, []string{auth.PermMcpRead})
-	}
-	if got := auth.RequiredPermissions(http.MethodGet, "/api/mcp/servers/"+config.ID+"/status"); !reflect.DeepEqual(got, []string{auth.PermMcpRead}) {
-		t.Fatalf("status permissions = %q, want %q", got, []string{auth.PermMcpRead})
-	}
 
 	tests := []struct {
 		name    string

@@ -63,9 +63,7 @@ func TestPasswordRotationRejectsOversizedPasswordWithBadRequest(t *testing.T) {
 	admin := newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
 	target := newTestUser(t, svc, "target@example.com", RoleRead, "active")
 
-	mux := http.NewServeMux()
-	RegisterAdminRoutes(mux, svc)
-	handler := AuthenticateRequest(svc)(mux)
+	handler := adminTestHandler(svc)
 
 	body, err := json.Marshal(map[string]string{
 		"userId":   target.ID,
@@ -98,9 +96,7 @@ func TestPasswordRotationAcceptsPasswordAtTheLimit(t *testing.T) {
 	admin := newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
 	target := newTestUser(t, svc, "target@example.com", RoleRead, "active")
 
-	mux := http.NewServeMux()
-	RegisterAdminRoutes(mux, svc)
-	handler := AuthenticateRequest(svc)(mux)
+	handler := adminTestHandler(svc)
 
 	password := strings.Repeat("a", MaxPasswordBytes)
 	body, err := json.Marshal(map[string]string{"userId": target.ID, "password": password})
@@ -130,9 +126,7 @@ func TestInvitationAcceptanceRejectsOversizedPasswordWithBadRequest(t *testing.T
 	svc := newTestAuthService(t)
 	admin := newTestUser(t, svc, "admin@example.com", RoleAdmin, "active")
 
-	mux := http.NewServeMux()
-	RegisterAdminRoutes(mux, svc)
-	handler := AuthenticateRequest(svc)(mux)
+	handler := adminTestHandler(svc)
 
 	createBody, err := json.Marshal(map[string]string{
 		"email": "new-user@example.com",

@@ -46,10 +46,10 @@ func TestEmbeddedObservabilityNativeQueriesUseAuthenticatedProxy(t *testing.T) {
 	defer jaeger.Close()
 
 	cfg := &config.Config{GrafanaURL: grafana.URL, JaegerURL: jaeger.URL}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	proxies := dashboardProxySet{grafanaStatic: registerGrafanaRoutes(mux, cfg)}
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
-	registerSmartAPIRouter(mux, proxies)
+	registerObservabilityAPIRoutes(mux, proxies)
 	handler := wrapWithAuth(mux, svc)
 
 	const query = `{"queries":[{"refId":"A","datasource":{"uid":"metrics"},"expr":"up"}],"from":"1","to":"2"}`
@@ -127,27 +127,31 @@ func TestJaegerRootRouteBoundariesMatchPermissionClassification(t *testing.T) {
 	}))
 	defer grafana.Close()
 	cfg := &config.Config{GrafanaURL: grafana.URL, JaegerURL: jaeger.URL}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	proxies := dashboardProxySet{grafanaStatic: registerGrafanaRoutes(mux, cfg)}
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
-	registerSmartAPIRouter(mux, proxies)
-	for _, tc := range []struct{ path, upstream, permission string }{
-		{"/api/services", "jaeger", auth.PermLogsRead},
-		{"/api/services/example/operations", "jaeger", auth.PermLogsRead},
-		{"/api/traces/example", "jaeger", auth.PermLogsRead},
-		{"/api/operations", "jaeger", auth.PermLogsRead},
-		{"/api/dependencies", "jaeger", auth.PermLogsRead},
-		{"/api/services-status", "grafana", auth.PermConfigRead},
-		{"/api/traces-summary", "grafana", auth.PermConfigRead},
-		{"/api/operations-old", "grafana", auth.PermConfigRead},
-		{"/api/dependencies-other", "grafana", auth.PermConfigRead},
+	registerObservabilityAPIRoutes(mux, proxies)
+	for _, tc := range []struct{ method, path, upstream, permission string }{
+		{http.MethodGet, "/api/services", "jaeger", auth.PermLogsRead},
+		{http.MethodGet, "/api/services/example/operations", "jaeger", auth.PermLogsRead},
+		{http.MethodGet, "/api/traces/example", "jaeger", auth.PermLogsRead},
+		{http.MethodGet, "/api/operations", "jaeger", auth.PermLogsRead},
+		{http.MethodGet, "/api/dependencies", "jaeger", auth.PermLogsRead},
+		{http.MethodPost, "/api/ds/query", "grafana", auth.PermLogsRead},
 	} {
+		policy, lookup := mux.LookupRoutePolicy(tc.method, tc.path)
 		response := httptest.NewRecorder()
-		mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, tc.path, nil))
-		permissions := auth.RequiredPermissions(http.MethodGet, tc.path)
-		if response.Code != http.StatusNoContent || response.Header().Get("X-Test-Upstream") != tc.upstream ||
-			len(permissions) != 1 || permissions[0] != tc.permission {
-			t.Fatalf("path=%s status=%d upstream=%s permissions=%v", tc.path, response.Code, response.Header().Get("X-Test-Upstream"), permissions)
+		mux.ServeHTTP(response, httptest.NewRequest(tc.method, tc.path, strings.NewReader("{}")))
+		if lookup != auth.RouteFound || len(policy.Permissions) != 1 || policy.Permissions[0] != tc.permission ||
+			response.Code != http.StatusNoContent || response.Header().Get("X-Test-Upstream") != tc.upstream {
+			t.Fatalf("path=%s lookup=%v permissions=%v status=%d upstream=%s", tc.path, lookup, policy.Permissions, response.Code, response.Header().Get("X-Test-Upstream"))
+		}
+	}
+	// Nothing else under /api/ reaches Grafana any more: the old catch-all
+	// inherited config.read and forwarded unknown paths upstream.
+	for _, path := range []string{"/api/services-status", "/api/traces-summary", "/api/operations-old", "/api/dependencies-other", "/api/frontend-metrics"} {
+		if _, lookup := mux.LookupRoutePolicy(http.MethodGet, path); lookup != auth.RouteNotFound {
+			t.Fatalf("path=%s lookup=%v, want unregistered", path, lookup)
 		}
 	}
 }

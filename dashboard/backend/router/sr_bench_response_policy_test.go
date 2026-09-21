@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 func TestSRBenchResponsePolicyCoversEveryResponseShape(t *testing.T) {
@@ -43,10 +45,13 @@ func TestSRBenchResponsePolicyCoversEveryResponseShape(t *testing.T) {
 func TestSRBenchResponsePolicyIncludesAuthenticationFailures(t *testing.T) {
 	t.Parallel()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc(srBenchAPIPath+"/catalog", func(http.ResponseWriter, *http.Request) {
-		t.Fatal("sr-bench handler ran while authentication was unavailable")
-	})
+	mux := auth.NewPolicyMux()
+	mux.HandleFunc(
+		auth.ProtectedRoute(srBenchAPIPath+"/catalog", auth.PermEvalRead, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, http.MethodGet),
+		func(http.ResponseWriter, *http.Request) {
+			t.Fatal("sr-bench handler ran while authentication was unavailable")
+		},
+	)
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, srBenchAPIPath+"/catalog", nil)
 

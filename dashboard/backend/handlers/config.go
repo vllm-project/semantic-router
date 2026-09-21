@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -96,6 +97,9 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 		defer release()
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 
 		// Read existing config so runtime rollback can restore the previous file if needed.
 		existingData, err := os.ReadFile(configPath)
@@ -205,6 +209,9 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 		defer release()
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 
 		existingData, err := os.ReadFile(configPath)
 		if err != nil {

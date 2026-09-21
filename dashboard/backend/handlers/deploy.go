@@ -11,6 +11,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -160,7 +161,7 @@ func DeployHandler(configPath string, readonlyMode bool, configDir string) http.
 
 		log.Printf("[Deploy] Received: YAML=%d bytes, DSL=%d bytes", len(req.YAML), len(req.DSL))
 
-		deployDirectWrite(w, configPath, configDir, req)
+		deployDirectWrite(w, r, configPath, configDir, req)
 	}
 }
 
@@ -196,7 +197,7 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 			return
 		}
 
-		rollbackDirectWrite(w, configPath, configDir, rollbackReq.Version)
+		rollbackDirectWrite(w, r, configPath, configDir, rollbackReq.Version)
 	}
 }
 
@@ -215,13 +216,16 @@ func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 
 // ==================== Deploy: write canonical config.yaml ====================
 
-func deployDirectWrite(w http.ResponseWriter, configPath string, configDir string, req DeployRequest) {
+func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string, configDir string, req DeployRequest) {
 	release, err := beginOrdinaryRuntimeConfigMutation(configDir)
 	if err != nil {
 		writeRuntimeConfigMutationError(w, err)
 		return
 	}
 	defer release()
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 
 	fragmentBytes := []byte(req.YAML)
 	if _, decodeErr := decodeYAMLTaggedBytes[routingFragmentDocument](fragmentBytes); decodeErr != nil {
@@ -477,13 +481,16 @@ func looksLikeFullCanonicalDeployBase(raw []byte) (bool, error) {
 	return false, nil
 }
 
-func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir string, version string) {
+func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath string, configDir string, version string) {
 	release, err := beginOrdinaryRuntimeConfigMutation(configDir)
 	if err != nil {
 		writeRuntimeConfigMutationError(w, err)
 		return
 	}
 	defer release()
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 
 	// Find backup file
 	backupData, err := readConfigBackup(configDir, version)

@@ -132,7 +132,7 @@ func TestPlaygroundOutcomeProxyForcesRecordOnlyForReadRole(t *testing.T) {
 	defer server.Close()
 
 	store := &fakePlaygroundFeedbackStore{}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -205,7 +205,7 @@ func TestPlaygroundOutcomeProxyPreservesWriterLearningBehavior(t *testing.T) {
 	defer server.Close()
 
 	store := &fakePlaygroundFeedbackStore{}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, routerProxyCredentialProvider{token: "router-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes", strings.NewReader(
 		`{"replay_id":"replay-1","target":"model","target_ref":"model-a","verdict":"good_fit"}`,
@@ -229,7 +229,7 @@ func TestPlaygroundOutcomeProxyRejectsForeignSessionBeforeRouterLookup(t *testin
 	defer server.Close()
 
 	store := &fakePlaygroundFeedbackStore{validateErr: auth.ErrPlaygroundReplayNotOwned}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, routerProxyCredentialProvider{token: "router-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes", strings.NewReader(
 		`{"replay_id":"replay-1","target":"model","target_ref":"model-a","verdict":"good_fit"}`,
@@ -257,7 +257,7 @@ func TestPlaygroundOutcomeProxySurfacesRouterFailureAndReleasesClaim(t *testing.
 	defer server.Close()
 
 	store := &fakePlaygroundFeedbackStore{}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, routerProxyCredentialProvider{token: "router-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes", strings.NewReader(
 		`{"replay_id":"replay-1","target":"model","target_ref":"model-a","verdict":"good_fit"}`,
@@ -283,7 +283,7 @@ func TestPlaygroundOutcomeProxyReusesIdempotencyKeyAfterLostResponse(t *testing.
 	defer server.Close()
 
 	store := &fakePlaygroundFeedbackStore{claimKey: "persisted-feedback-key"}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	proxy := registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -353,7 +353,7 @@ func TestPlaygroundOutcomeProxyRejectsInProgressRouterReplay(t *testing.T) {
 	defer server.Close()
 
 	store := &fakePlaygroundFeedbackStore{}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, routerProxyCredentialProvider{token: "router-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes", strings.NewReader(
 		`{"replay_id":"replay-1","target":"model","target_ref":"model-a","verdict":"good_fit"}`,

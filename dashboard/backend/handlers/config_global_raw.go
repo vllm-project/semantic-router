@@ -10,6 +10,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -68,6 +69,9 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 		defer release()
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 
 		existingData, err := os.ReadFile(configPath)
 		if err != nil {

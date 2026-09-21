@@ -38,12 +38,13 @@ const (
 	PermMlPipeline     = "mlpipeline.manage"
 	PermFeedbackSubmit = "feedback.submit"
 	PermReplayRead     = "replay.read"
+	PermInferenceRun   = "inference.run"
 )
 
 var DefaultRolePermissions = map[string][]string{
-	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
-	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead},
-	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead},
+	RoleAdmin: {PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
+	RoleWrite: {PermConfigRead, PermConfigWrite, PermConfigDeploy, PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead, PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
+	RoleRead:  {PermConfigRead, PermEvalRead, PermTopologyRead, PermOpenClawRead, PermMcpRead, PermToolsUse, PermFeedbackSubmit, PermReplayRead, PermInferenceRun},
 }
 
 var SupportedRoles = []string{RoleAdmin, RoleWrite, RoleRead}
@@ -59,7 +60,7 @@ var AllPermissions = []string{
 	PermUsersManage, PermUsersView, PermConfigRead, PermConfigWrite, PermConfigDeploy,
 	PermEvalRead, PermEvalWrite, PermEvalRun, PermTopologyRead, PermLogsRead, PermOpenClawRead,
 	PermOpenClaw, PermMcpRead, PermMcpManage, PermToolsUse, PermMlPipeline,
-	PermFeedbackSubmit, PermReplayRead,
+	PermFeedbackSubmit, PermReplayRead, PermInferenceRun,
 }
 
 func normalizeRole(raw string) (string, error) {

@@ -113,7 +113,9 @@ func (s *Store) GetEffectivePermissions(ctx context.Context, role string, userID
 	}
 
 	if userID != "" {
-		uRows, err := s.db.QueryContext(ctx, `SELECT permission_key FROM user_permissions WHERE user_id = ? AND allowed = 1`, userID)
+		// A user-level row overrides the role grant in both directions, so a
+		// permission can be revoked from one user without editing the role.
+		uRows, err := s.db.QueryContext(ctx, `SELECT permission_key, allowed FROM user_permissions WHERE user_id = ?`, userID)
 		if err != nil {
 			return nil, err
 		}
@@ -122,8 +124,14 @@ func (s *Store) GetEffectivePermissions(ctx context.Context, role string, userID
 		}()
 		for uRows.Next() {
 			var p string
-			if err := uRows.Scan(&p); err == nil {
+			var allowed int
+			if err := uRows.Scan(&p, &allowed); err != nil {
+				return nil, err
+			}
+			if allowed == 1 {
 				permMap[p] = true
+			} else {
+				delete(permMap, p)
 			}
 		}
 		if err := uRows.Err(); err != nil {
@@ -131,6 +139,18 @@ func (s *Store) GetEffectivePermissions(ctx context.Context, role string, userID
 		}
 	}
 	return permMap, nil
+}
+
+// SetUserPermission grants (allowed=true) or revokes (allowed=false) one
+// permission for one user independently of the user's role.
+func (s *Store) SetUserPermission(ctx context.Context, userID, permission string, allowed bool) error {
+	value := 0
+	if allowed {
+		value = 1
+	}
+	_, err := s.db.ExecContext(ctx, `INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,?)
+ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed = excluded.allowed`, userID, strings.TrimSpace(permission), value)
+	return err
 }
 
 func (s *Store) CountActiveUsersWithPermission(ctx context.Context, permission string, excludeUserID string) (int, error) {

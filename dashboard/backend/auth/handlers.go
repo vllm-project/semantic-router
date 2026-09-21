@@ -55,14 +55,46 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 	return mux
 }
 
-func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
-	mux.HandleFunc("/api/admin/users", adminUsersCollectionHandler(svc))
-	mux.HandleFunc("/api/admin/users/", adminUserItemHandler(svc))
-	mux.HandleFunc("/api/admin/permissions", adminPermissionsHandler(svc))
-	mux.HandleFunc("/api/admin/audit-logs", adminAuditLogsHandler(svc))
-	mux.HandleFunc("/api/admin/users/password", adminUserPasswordHandler(svc))
-	mux.HandleFunc("/api/admin/invitations", adminInvitationsHandler(svc))
-	mux.HandleFunc("/api/admin/invitations/", adminInvitationItemHandler(svc))
+// RegisterAdminRoutes binds the user-administration API to its authorization
+// contracts. Handlers that write their own audit rows declare delegated audit
+// so the row carries the acted-on user rather than only the route.
+func RegisterAdminRoutes(routes *PolicyMux, svc *Service) {
+	const maxAdminBodyBytes = 64 << 10
+	routes.HandleFunc(
+		ProtectedRoute("/api/admin/users", PermUsersView, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet),
+		adminUsersCollectionHandler(svc),
+	)
+	routes.HandleFunc(
+		Route("/api/admin/users/{id}",
+			ReadPolicy(http.MethodGet, PermUsersView, SensitivitySensitive, ResourceOwnerAuth),
+			DelegatedMutationPolicy(http.MethodPatch, PermUsersManage, "user.update", SensitivitySecret, ResourceOwnerAuth, maxAdminBodyBytes),
+			DelegatedMutationPolicy(http.MethodDelete, PermUsersManage, "user.delete", SensitivitySecret, ResourceOwnerAuth, NoBodyLimit),
+		),
+		adminUserItemHandler(svc),
+	)
+	routes.HandleFunc(
+		ProtectedDelegatedMutationRoute("/api/admin/users/password", PermUsersManage, "user.password", SensitivitySecret, ResourceOwnerAuth, maxAdminBodyBytes, http.MethodPost),
+		adminUserPasswordHandler(svc),
+	)
+	routes.HandleFunc(
+		ProtectedRoute("/api/admin/permissions", PermUsersManage, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet),
+		adminPermissionsHandler(svc),
+	)
+	routes.HandleFunc(
+		ProtectedRoute("/api/admin/audit-logs", PermUsersManage, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet),
+		adminAuditLogsHandler(svc),
+	)
+	routes.HandleFunc(
+		Route("/api/admin/invitations",
+			ReadPolicy(http.MethodGet, PermUsersManage, SensitivitySensitive, ResourceOwnerAuth),
+			DelegatedMutationPolicy(http.MethodPost, PermUsersManage, "invitation.create", SensitivitySecret, ResourceOwnerAuth, maxAdminBodyBytes),
+		),
+		adminInvitationsHandler(svc),
+	)
+	routes.HandleGroup([]RouteContract{
+		ProtectedDelegatedMutationRoute("/api/admin/invitations/{id}", PermUsersManage, "invitation.revoke", SensitivitySecret, ResourceOwnerAuth, NoBodyLimit, http.MethodDelete),
+		ProtectedDelegatedMutationRoute("/api/admin/invitations/{id}/rotate", PermUsersManage, "invitation.rotate", SensitivitySecret, ResourceOwnerAuth, NoBodyLimit, http.MethodPost),
+	}, adminInvitationItemHandler(svc))
 }
 
 func writeAudit(r *http.Request, svc *Service, action, resource, actorID string) {

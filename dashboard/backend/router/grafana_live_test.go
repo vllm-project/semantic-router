@@ -48,7 +48,7 @@ func TestGrafanaLiveRetainsCookieAuthAndOriginChecks(t *testing.T) {
 		_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"ready":true}`))
 	}))
 	defer upstream.Close()
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerGrafanaRoutes(mux, &config.Config{GrafanaURL: upstream.URL})
 	dashboard := httptest.NewServer(wrapWithAuth(mux, svc))
 	defer dashboard.Close()

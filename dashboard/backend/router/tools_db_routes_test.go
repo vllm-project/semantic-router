@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
@@ -33,7 +34,7 @@ func TestToolsDBRouteFollowsSavedConfig(t *testing.T) {
 		}
 	}
 	saveConfig("first.json")
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerToolRoutes(mux, &config.Config{AbsConfigPath: configPath, ConfigDir: root, ConfigBaseDir: root})
 	assertDatabase := func(name string) {
 		t.Helper()
@@ -107,7 +108,7 @@ func TestToolsDBRouteResourcePathContract(t *testing.T) {
 				}
 			}
 			cfg := &config.Config{AbsConfigPath: configPath, ConfigDir: t.TempDir(), ConfigBaseDir: root}
-			mux := http.NewServeMux()
+			mux := auth.NewPolicyMux()
 			registerToolRoutes(mux, cfg)
 			response := httptest.NewRecorder()
 			mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/tools-db", nil))
@@ -154,7 +155,7 @@ func TestToolsDBRouteKeepsExplicitContainerAssetRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{AbsConfigPath: configPath, ConfigDir: root, ConfigBaseDir: root}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerToolRoutes(mux, cfg)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/tools-db", nil))
@@ -175,7 +176,7 @@ func TestToolsDBRouteReadsRepositoryConfigFromDevWorkingDirectory(t *testing.T) 
 		ConfigDir:     filepath.Join(repoRoot, "config"),
 		ConfigBaseDir: repoRoot,
 	}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerToolRoutes(mux, cfg)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/tools-db", nil))

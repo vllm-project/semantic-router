@@ -40,7 +40,7 @@ func TestSRBenchExperimentsUseAuthenticatedActorAndCSRF(t *testing.T) {
 	}))
 	defer upstream.Close()
 	t.Setenv("BENCH_EXPERIMENT_TEST_TOKEN", "service-secret")
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerSRBenchRoutes(mux, &config.Config{SRBenchURL: upstream.URL, SRBenchTokenEnv: "BENCH_EXPERIMENT_TEST_TOKEN"})
 	handler := wrapWithAuth(mux, svc)
 	request := func(method, path, origin, csrf string, authenticated bool) *httptest.ResponseRecorder {

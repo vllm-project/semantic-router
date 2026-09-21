@@ -11,26 +11,29 @@ import (
 )
 
 type authRouteSpec struct {
-	path   string
-	method string
+	path    string
+	methods []string
+	// session routes need a live login but no permission; the rest are public.
+	session bool
 }
 
 var dashboardAuthRouteSpecs = []authRouteSpec{
-	{path: "/api/auth/login", method: http.MethodPost},
-	{path: "/api/auth/logout", method: http.MethodPost},
-	{path: "/api/auth/me", method: http.MethodGet},
-	{path: "/api/auth/bootstrap/can-register", method: http.MethodGet},
-	{path: "/api/auth/bootstrap/register", method: http.MethodPost},
-	{path: "/api/auth/invitations", method: "*"},
+	{path: "/api/auth/login", methods: []string{http.MethodPost}},
+	{path: "/api/auth/logout", methods: []string{http.MethodPost}},
+	{path: "/api/auth/me", methods: []string{http.MethodGet}, session: true},
+	{path: "/api/auth/bootstrap/can-register", methods: []string{http.MethodGet}},
+	{path: "/api/auth/bootstrap/register", methods: []string{http.MethodPost}},
+	{path: "/api/auth/invitations/{token}", methods: []string{http.MethodGet}},
+	{path: "/api/auth/invitations/{token}/accept", methods: []string{http.MethodPost}},
 }
 
 const authUnavailableResponse = `{"error":"Service not available","message":"Authentication service is not configured"}`
 
-func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) *auth.Service {
+func setupAuthRoutes(routes *auth.PolicyMux, cfg *config.Config, setupResolver *setupmode.Resolver) *auth.Service {
 	store, err := auth.NewStore(cfg.AuthDBPath)
 	if err != nil {
 		log.Printf("failed to init auth store: %v", err)
-		registerAuthUnavailableRoutes(mux)
+		registerAuthUnavailableRoutes(routes)
 		return nil
 	}
 
@@ -55,67 +58,46 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setu
 		log.Printf("failed to ensure bootstrap admin: %v", err)
 	}
 
-	registerAuthProxyRoutes(mux, authSvc)
-	auth.RegisterAdminRoutes(mux, authSvc)
+	registerAuthProxyRoutes(routes, authSvc)
+	auth.RegisterAdminRoutes(routes, authSvc)
 	return authSvc
 }
 
-func registerAuthUnavailableRoutes(mux *http.ServeMux) {
+func registerAuthUnavailableRoutes(routes *auth.PolicyMux) {
+	unavailable := func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, authUnavailableResponse, http.StatusServiceUnavailable)
+	}
 	for _, spec := range dashboardAuthRouteSpecs {
-		if spec.method == "*" {
-			mux.HandleFunc(spec.path+"/", func(w http.ResponseWriter, r *http.Request) {
-				http.Error(w, authUnavailableResponse, http.StatusServiceUnavailable)
-			})
-			continue
-		}
-		registerAuthMethodRoute(mux, spec.path, spec.method, func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, authUnavailableResponse, http.StatusServiceUnavailable)
-		})
+		registerAuthRoute(routes, spec, unavailable)
 	}
 }
 
-func registerAuthProxyRoutes(mux *http.ServeMux, authSvc *auth.Service) {
+func registerAuthProxyRoutes(routes *auth.PolicyMux, authSvc *auth.Service) {
 	authRoutes := auth.AuthRoutes(authSvc)
 	for _, spec := range dashboardAuthRouteSpecs {
-		if spec.method == "*" {
-			mux.HandleFunc(spec.path+"/", func(w http.ResponseWriter, r *http.Request) {
-				authRoutes.ServeHTTP(w, r)
-			})
-			continue
-		}
-		path := spec.path
-		registerAuthMethodRoute(mux, path, spec.method, func(w http.ResponseWriter, r *http.Request) {
-			cloneReq := *r
-			cloneURL := *r.URL
-			cloneURL.Path = path
-			cloneReq.URL = &cloneURL
-			authRoutes.ServeHTTP(w, &cloneReq)
+		registerAuthRoute(routes, spec, func(w http.ResponseWriter, r *http.Request) {
+			authRoutes.ServeHTTP(w, r)
 		})
 	}
 }
 
-func registerAuthMethodRoute(
-	mux *http.ServeMux,
-	path string,
-	method string,
-	handler http.HandlerFunc,
-) {
-	wrapped := func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != method {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
+// registerAuthRoute installs the exact path and its trailing-slash alias under
+// one contract. The public auth mux behind it keeps its own method checks.
+func registerAuthRoute(routes *auth.PolicyMux, spec authRouteSpec, handler http.HandlerFunc) {
+	contracts := make([]auth.RouteContract, 0, 2)
+	for _, pattern := range []string{spec.path, spec.path + "/{$}"} {
+		if spec.session {
+			contracts = append(contracts, auth.SessionRoute(pattern, auth.SensitivitySensitive, auth.ResourceOwnerAuth, spec.methods...))
+			continue
 		}
-		handler(w, r)
+		contracts = append(contracts, auth.PublicRoute(pattern, spec.methods...))
 	}
-	mux.HandleFunc(path, wrapped)
-	mux.HandleFunc(path+"/", wrapped)
+	routes.HandleGroup(contracts, handler)
 }
 
-func wrapWithAuth(mux *http.ServeMux, authSvc *auth.Service) *http.ServeMux {
-	wrappedMux := http.NewServeMux()
+func wrapWithAuth(routes *auth.PolicyMux, authSvc *auth.Service) http.Handler {
 	if authSvc != nil {
-		wrappedMux.Handle("/", withSRBenchResponsePolicy(auth.AuthenticateRequest(authSvc)(mux)))
-		return wrappedMux
+		return withSRBenchResponsePolicy(auth.AuthenticateRequest(authSvc, routes)(routes))
 	}
 	// authSvc is nil only when the auth store failed to initialize. Fail
 	// closed: deny every route that requires authentication rather than
@@ -124,6 +106,5 @@ func wrapWithAuth(mux *http.ServeMux, authSvc *auth.Service) *http.ServeMux {
 	// static frontend remain reachable so the dashboard can surface the
 	// misconfiguration.
 	log.Printf("WARNING: auth service unavailable; authenticated routes are failing closed (503). Check AuthDBPath/JWT configuration.")
-	wrappedMux.Handle("/", withSRBenchResponsePolicy(auth.ServiceUnavailableGuard()(mux)))
-	return wrappedMux
+	return withSRBenchResponsePolicy(auth.ServiceUnavailableGuard(routes)(routes))
 }

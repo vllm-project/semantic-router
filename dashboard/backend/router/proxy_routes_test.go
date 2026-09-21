@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 )
@@ -27,7 +28,7 @@ func TestGrafanaRouteServesAdapterAndRewritesDocument(t *testing.T) {
 		_, _ = io.WriteString(w, "<html><head></head><body>Grafana</body></html>")
 	}))
 	defer upstream.Close()
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerGrafanaRoutes(mux, &config.Config{GrafanaURL: upstream.URL})
 	for _, path := range []string{proxy.GrafanaAuthScriptPath, "/embedded/grafana/d/router"} {
 		request := httptest.NewRequest(http.MethodGet, path, nil)
@@ -50,22 +51,18 @@ func TestGrafanaRouteServesAdapterAndRewritesDocument(t *testing.T) {
 func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 	t.Parallel()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerProxyRoutes(mux, &config.Config{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
-	_, pattern := mux.Handler(req)
-	if pattern != "/api/" {
-		t.Fatalf("matched route = %q, want generic API fallback %q", pattern, "/api/")
+	if _, lookup := mux.LookupRoutePolicy(http.MethodGet, req.URL.Path); lookup != auth.RouteNotFound {
+		t.Fatalf("fleet-sim lookup = %v, want unregistered", lookup)
 	}
 
 	recorder := httptest.NewRecorder()
 	mux.ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusBadGateway {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadGateway)
-	}
-	if !strings.Contains(recorder.Body.String(), "No API handler configured for this path") {
-		t.Fatalf("response body = %q, want generic API fallback", recorder.Body.String())
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
 	}
 }
 
@@ -81,7 +78,7 @@ func TestRouterAPIProxyReplacesBrowserAuthorization(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -133,7 +130,7 @@ func TestPlaygroundChatProxyPreservesIdentityAndStripsBrowserCredentials(t *test
 		t.Fatal(err)
 	}
 	cfg := &config.Config{EnvoyURL: server.URL, RouterAPIURL: server.URL, AbsConfigPath: configPath}
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), nil, routerProxyCredentialProvider{token: "management-only-token"})
 
 	for _, conversation := range []string{"conversation-one", "conversation-one", "conversation-two"} {
@@ -177,7 +174,7 @@ func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -221,7 +218,7 @@ func TestRouterAPIProxyExposesKnowledgeBaseActivationHash(t *testing.T) {
 		_, _ = w.Write([]byte(snapshot))
 	}))
 	defer upstream.Close()
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: upstream.URL},
@@ -252,7 +249,7 @@ func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -286,7 +283,7 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
@@ -298,10 +295,15 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer dashboard-user-jwt")
 	recorder := httptest.NewRecorder()
 
+	// An undeclared Router path has no contract, so it is never dispatched to
+	// the proxy; the authentication layer denies it before this mux is reached.
+	if _, lookup := mux.LookupRoutePolicy(http.MethodPost, req.URL.Path); lookup != auth.RouteNotFound {
+		t.Fatalf("unknown mutation lookup = %v, want unregistered", lookup)
+	}
 	mux.ServeHTTP(recorder, req)
 
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
 	}
 	if calls != 0 {
 		t.Fatalf("upstream calls = %d, want 0", calls)

@@ -54,13 +54,23 @@ Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted
 boundary and allow only that component to supply identity headers.
 
+Every Dashboard API and embedded-service route is registered together with
+the permission, sensitivity, and audit action that guard it. A request to a
+path under `/api/` or `/embedded/` that has no registered route is denied,
+and a registered route is served only for its declared methods. Privileged
+mutations bound their request body, re-resolve the session and its current
+permissions after the body has arrived, and check them again immediately
+before committing, so a session revoked or demoted while a request is in
+flight cannot complete a write.
+
 Relevant Dashboard permissions include:
 
 | Permission | Purpose | Default roles |
 | --- | --- | --- |
+| `inference.run` | Send Playground chat requests through the Router. Independent of configuration access. | admin, write, read |
 | `feedback.submit` | Submit routing feedback. Read-role feedback is recorded on the replay without updating model experience. | admin, write, read |
 | `replay.read` | List replay records. | admin, write, read |
-| `logs.read` | Read bounded local-stack service logs. | admin, write |
+| `logs.read` | Read bounded local-stack service logs and embedded observability data. | admin, write |
 
 The Router management API distinguishes replay metadata from replay detail.
 The Dashboard service can retrieve complete records, then removes captured

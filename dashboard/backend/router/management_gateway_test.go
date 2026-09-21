@@ -23,13 +23,18 @@ func TestManagementGatewaySharesRBACAndReadonlyPolicy(t *testing.T) {
 	}))
 	defer upstream.Close()
 	for _, readonly := range []bool{false, true} {
-		mux := http.NewServeMux()
+		mux := auth.NewPolicyMux()
 		registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL, ReadonlyMode: readonly}, nil, nil, routerProxyCredentialProvider{token: "router-management"})
 		for _, policy := range routercontract.ManagementPolicies() {
+			if isKnowledgeBasePath(policy.Path) {
+				// Knowledge-base storage is bound to the classifier proxy in
+				// registerConfigRoutes rather than the generic gateway.
+				continue
+			}
 			path := strings.NewReplacer("{type}", "rag", "{id}", "record-1", "{name}", "example").Replace(policy.Path)
-			perms := auth.RequiredPermissions(policy.Method, path)
-			if !reflect.DeepEqual(perms, policy.Permissions) {
-				t.Fatalf("RBAC drift for %s %s: %v", policy.Method, path, perms)
+			routePolicy, lookup := mux.LookupRoutePolicy(policy.Method, path)
+			if lookup != auth.RouteFound || !reflect.DeepEqual(routePolicy.Permissions, policy.Permissions) {
+				t.Fatalf("RBAC drift for %s %s: lookup=%v permissions=%v", policy.Method, path, lookup, routePolicy.Permissions)
 			}
 			request := httptest.NewRequest(policy.Method, path+"?authToken=browser-query", strings.NewReader(`{}`))
 			request.Header.Set("Authorization", "Bearer browser-jwt")
@@ -55,24 +60,36 @@ func TestManagementGatewayRejectsUndeclaredAndOldRoutes(t *testing.T) {
 	calls := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(http.StatusNoContent) }))
 	defer upstream.Close()
-	mux := http.NewServeMux()
+	mux := auth.NewPolicyMux()
 	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, nil, nil, routerProxyCredentialProvider{token: "managed"})
+	// Undeclared routes never receive a contract, so the mux itself cannot
+	// dispatch them and the authentication layer denies them ahead of it.
 	for _, test := range []struct {
 		method, path string
-		want         int
+		want         auth.RouteLookup
 	}{
-		{http.MethodGet, "/api/router/api/v1/response-cache/stats", http.StatusNotFound},
-		{http.MethodPost, "/api/router/api/v1/context-compression/preview", http.StatusForbidden},
-		{http.MethodPatch, "/api/router/api/v1/config", http.StatusForbidden},
-		{http.MethodPut, "/api/router/api/v1/config/recipes/private", http.StatusForbidden},
-		{http.MethodGet, "/api/router/api/v1/observability/replays/id/extra", http.StatusNotFound},
-		{http.MethodPost, "/api/router/api/v1/plugins/unknown/probe", http.StatusForbidden},
-		{http.MethodPost, "/api/router/api/v1/diagnostics/models/unknown", http.StatusForbidden},
+		{http.MethodGet, "/api/router/api/v1/response-cache/stats", auth.RouteNotFound},
+		{http.MethodPost, "/api/router/api/v1/context-compression/preview", auth.RouteNotFound},
+		{http.MethodPatch, "/api/router/api/v1/config", auth.RouteNotFound},
+		{http.MethodPut, "/api/router/api/v1/config/recipes/private", auth.RouteNotFound},
+		{http.MethodGet, "/api/router/api/v1/observability/replays/id/extra", auth.RouteNotFound},
+		{http.MethodPost, "/api/router/api/v1/plugins/unknown/probe", auth.RouteNotFound},
+		{http.MethodPost, "/api/router/api/v1/diagnostics/models/unknown", auth.RouteNotFound},
+		{http.MethodPost, "/api/router/api/v1/config/hash", auth.RouteMethodNotAllowed},
 	} {
+		if _, lookup := mux.LookupRoutePolicy(test.method, test.path); lookup != test.want {
+			t.Fatalf("%+v lookup = %v", test, lookup)
+		}
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, httptest.NewRequest(test.method, test.path, nil))
-		if w.Code != test.want {
-			t.Fatalf("%+v got %d", test, w.Code)
+		wantStatus := http.StatusNotFound
+		if test.want == auth.RouteMethodNotAllowed {
+			// The mux still owns the pattern; the gateway allowlist refuses the
+			// method itself, and the authentication layer answers 405 first.
+			wantStatus = http.StatusForbidden
+		}
+		if w.Code != wantStatus {
+			t.Fatalf("%+v dispatched with status %d, want %d", test, w.Code, wantStatus)
 		}
 	}
 	if calls != 0 {

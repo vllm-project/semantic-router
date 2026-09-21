@@ -35,7 +35,7 @@ func TestAuthenticateRequestAcceptsSessionCookie(t *testing.T) {
 		t.Fatalf("ParseToken() error = %v", err)
 	}
 
-	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := AuthenticateRequest(svc, protectedResolver(PermConfigRead))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ac, ok := AuthFromContext(r)
 		if !ok {
 			t.Fatalf("missing auth context")
@@ -160,7 +160,7 @@ func TestLogoutHandlerRevokesSessionToken(t *testing.T) {
 		t.Fatalf("logout status = %d, want %d", logoutRecorder.Code, http.StatusOK)
 	}
 
-	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := AuthenticateRequest(svc, protectedResolver(PermConfigRead))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)

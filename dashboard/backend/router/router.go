@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
@@ -17,6 +18,13 @@ import (
 type Server struct {
 	Handler http.Handler
 	Close   func() error
+	// routes is the sealed registry every request is authorized against.
+	routes *auth.PolicyMux
+}
+
+// RouteContracts returns the registered route inventory for contract tests.
+func (s *Server) RouteContracts() []auth.RouteContract {
+	return s.routes.Contracts()
 }
 
 // Setup configures all routes and returns the dashboard server bundle.
@@ -24,12 +32,12 @@ type Server struct {
 // setupResolver is built by main, not here, so that the process has exactly one
 // resolver and one cache over the config file.
 func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
-	mux := http.NewServeMux()
+	routes := auth.NewPolicyMux()
 
 	// The bootstrap gate consults the resolver on every unauthenticated
 	// can-register / register call, so it must be wired before any request
 	// arrives. Wiring it later compiles but panics at request time.
-	authSvc := setupAuthRoutes(mux, cfg, setupResolver)
+	authSvc := setupAuthRoutes(routes, cfg, setupResolver)
 
 	wf, err := workflowstore.Open(cfg.WorkflowDBPath, workflowstore.Options{
 		LegacyOpenClawDir: cfg.OpenClawDataDir,
@@ -50,7 +58,10 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 		handlers.SetConfigProjectionStore(cp)
 	}
 
-	mux.HandleFunc("/api/workflows/health", handlers.WorkflowHealthHandler(wf))
+	routes.HandleFunc(
+		auth.ProtectedRoute("/api/workflows/health", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerWorkflow, http.MethodGet),
+		handlers.WorkflowHealthHandler(wf),
+	)
 	log.Printf("Workflow health API registered: /api/workflows/health")
 
 	openClawHandler := newOpenClawHandler(cfg, wf)
@@ -63,21 +74,23 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	statusMonitor := handlers.NewStatusMonitor(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, statusHistory, recipeStore)
 	statusMonitor.Start()
 
-	registerCoreRoutes(mux, cfg, setupResolver, coreRouteOptions{
+	registerCoreRoutes(routes, cfg, setupResolver, coreRouteOptions{
 		recipeStore:              recipeStore,
 		modelVerificationAuditor: authSvc,
 		statusHandler:            statusMonitor.Handler(),
 	})
-	registerSRBenchRoutes(mux, cfg)
-	SetupMCP(mux, cfg, wf, openClawHandler)
-	registerMLPipelineRoutes(mux, cfg, wf)
-	registerOpenClawRoutes(mux, cfg, openClawHandler)
-	registerProxyRoutes(mux, cfg, authSvc, recipeStore)
+	registerSRBenchRoutes(routes, cfg)
+	SetupMCP(routes, cfg, wf, openClawHandler)
+	registerMLPipelineRoutes(routes, cfg, wf)
+	registerOpenClawRoutes(routes, cfg, openClawHandler)
+	registerProxyRoutes(routes, cfg, authSvc, recipeStore)
 
 	// Static frontend must be registered last.
-	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))
+	routes.HandleFallback("/", handlers.StaticFileServer(cfg.StaticDir))
+	routes.Seal()
 	return &Server{
-		Handler: wrapWithAuth(mux, authSvc),
+		Handler: wrapWithAuth(routes, authSvc),
+		routes:  routes,
 		Close: func() error {
 			var projectionClose error
 			if cp != nil {

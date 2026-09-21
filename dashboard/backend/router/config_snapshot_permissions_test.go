@@ -1,12 +1,12 @@
 package router
 
 import (
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 )
 
@@ -24,7 +24,7 @@ func TestRegisterConfigRoutesRestrictsExistingSnapshots(t *testing.T) {
 	if err := os.WriteFile(snapshot, []byte("ordinary prior config"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	registerConfigRoutes(http.NewServeMux(), &config.Config{ConfigDir: root, AbsConfigPath: filepath.Join(root, "config.yaml")})
+	registerConfigRoutes(auth.NewPolicyMux(), &config.Config{ConfigDir: root, AbsConfigPath: filepath.Join(root, "config.yaml")})
 	for path, want := range map[string]os.FileMode{state: 0o755, backups: 0o700, snapshot: 0o600} {
 		info, err := os.Stat(path)
 		if err != nil {

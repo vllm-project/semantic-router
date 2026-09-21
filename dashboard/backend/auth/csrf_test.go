@@ -297,7 +297,7 @@ func (f csrfFixture) serve(t *testing.T, r *http.Request) (*httptest.ResponseRec
 	t.Helper()
 
 	handlerRan := false
-	handler := AuthenticateRequest(f.svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := AuthenticateRequest(f.svc, csrfTestResolver())(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		handlerRan = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
