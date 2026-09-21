@@ -91,3 +91,18 @@ PYTHONPATH=. python3 src/training/kv_mapper/fit_run.py \
 ```bash
 PYTHONPATH=. python3 -m unittest src.training.kv_mapper.tests.test_fit
 ```
+
+## Eval
+
+`eval.py` computes KV-space rel_err / cosine / R² and paired bootstrap CIs on
+per-item scores (same examples, every arm). `eval_report.py` reads a JSON dump
+from a GPU run and writes the report. Inject / HellaSwag / CoQA collection
+stays on the GPU box; this PR is the CI math.
+
+```bash
+PYTHONPATH=. python3 src/training/kv_mapper/eval_report.py \
+  --items /tmp/inject_items.json --output /tmp/inject_report.json
+```
+
+`items.json` shape: `metric`, optional `reference` (default `cold`), and
+`arms` mapping arm name to a list of per-item scores of equal length.
