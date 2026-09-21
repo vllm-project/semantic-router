@@ -23,12 +23,13 @@ func bindMemoryEmbedding(cfg *config.RouterConfig, sets ...*embedding.Set) (*con
 }
 
 func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.ConsumerSettings) (embedding.ContentIdentity, error)) (*config.RouterConfig, error) {
-	if strings.ToLower(strings.TrimSpace(detectMemoryEmbeddingModel(cfg))) != "mmbert" {
+	model := strings.ToLower(strings.TrimSpace(detectMemoryEmbeddingModel(cfg)))
+	if model != "mmbert" && model != "multimodal" {
 		return cfg, nil
 	}
 	bound := *cfg
 	bound.Memory = cfg.Memory
-	bound.Memory.EmbeddingModel = "mmbert"
+	bound.Memory.EmbeddingModel = model
 	backend := bound.Memory.Backend
 	if backend == "" {
 		backend = "milvus"
@@ -70,17 +71,24 @@ func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.Co
 	default:
 		return nil, fmt.Errorf("unsupported memory backend: %q", backend)
 	}
-	if *dimension <= 0 {
+	if *dimension == 0 && model == "mmbert" {
 		*dimension = 256
 	}
-	fingerprint, deterministic := memory.DeterministicEmbeddingFingerprint(memory.EmbeddingConfig{Model: memory.EmbeddingModelMMBERT, Dimension: *dimension})
+	fingerprint, deterministic := memory.DeterministicEmbeddingFingerprint(memory.EmbeddingConfig{Model: memory.EmbeddingModelType(model), Dimension: *dimension})
+	if deterministic && *dimension == 0 {
+		return nil, fmt.Errorf("simulated multimodal memory requires an explicit storage dimension")
+	}
 	if !deterministic {
 		identity, err := resolve(embedding.ConsumerSettings{
-			ModelType: "mmbert", Dimension: *dimension, Layer: 0, InputPolicy: "memory-content-v1",
+			ModelType: model, Dimension: *dimension, Layer: 0, InputPolicy: "memory-content-v1",
 		})
 		if err != nil {
 			return nil, fmt.Errorf("bind memory embedding representation: %w", err)
 		}
+		if identity.Descriptor.Dimension <= 0 || (*dimension > 0 && *dimension != identity.Descriptor.Dimension) {
+			return nil, fmt.Errorf("memory dimension %d differs from prepared representation %d", *dimension, identity.Descriptor.Dimension)
+		}
+		*dimension = identity.Descriptor.Dimension
 		fingerprint = identity.Fingerprint
 	}
 	if fingerprint == "" {

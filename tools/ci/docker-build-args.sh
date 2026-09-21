@@ -53,6 +53,11 @@ fi
   echo 'BUILDKIT_INLINE_CACHE=1'
   echo "CARGO_BUILD_JOBS=${cargo_build_jobs}"
   echo 'CARGO_INCREMENTAL=1'
+  # The immutable E2E candidate includes both Omni variants. Production CLI
+  # images keep their smaller default unless explicitly built with both.
+  if [[ "${image_name}" == "extproc" ]]; then
+    echo 'VELA_OMNI_VARIANTS=nano mini'
+  fi
   echo 'RUSTC_WRAPPER=""'
   echo 'CARGO_NET_GIT_FETCH_WITH_CLI=true'
   if [[ -n "${dashboard_version}" ]]; then

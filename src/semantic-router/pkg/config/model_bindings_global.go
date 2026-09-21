@@ -64,14 +64,14 @@ func resolveGlobalModelBindings(cfg *RouterConfig) (map[string]ResolvedModelBind
 		}
 		resolved[name] = ResolvedModelBinding{Recipe: GlobalModelScope, Name: name, Binding: decl, Deployment: deployment, Admission: cfg.ModelAdmission[decl.Deployment]}
 	}
-	if spec, ok := resolved["embedding"]; ok && cfg.NeedsSemanticResponseCache() {
+	if _, ok := resolved["embedding"]; ok && cfg.NeedsSemanticResponseCache() {
 		model := SemanticCacheEmbeddingModel(cfg)
 		primary := strings.ToLower(strings.TrimSpace(cfg.EmbeddingConfig.ModelType))
 		if primary == "" {
 			primary = "qwen3"
 		}
-		if model != primary || (spec.Deployment.Provider != "http" && spec.Binding.Adapter != model) {
-			return nil, fmt.Errorf("global.stores.response_cache.embedding_model %q must match the global embedding model %q and adapter %q", model, primary, spec.Binding.Adapter)
+		if model != primary {
+			return nil, fmt.Errorf("global.stores.response_cache.embedding_model %q must match the global embedding model %q", model, primary)
 		}
 	}
 	return resolved, nil

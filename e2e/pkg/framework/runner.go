@@ -88,6 +88,10 @@ func (r *Runner) buildAndLoadImages(ctx context.Context) error {
 		BuildArgs:    localDockerBuildArgs(),
 	}
 
+	for name, value := range r.profileCapabilities.RouterBuildArgs {
+		buildOpts.BuildArgs[name] = value
+	}
+
 	prebuilt := os.Getenv("E2E_PREBUILT_EXT_PROC_IMAGE")
 	if os.Getenv("PREBUILT_RUNTIME_IMAGES") == "1" && prebuilt == "" {
 		return fmt.Errorf("prebuilt execution requires E2E_PREBUILT_EXT_PROC_IMAGE")

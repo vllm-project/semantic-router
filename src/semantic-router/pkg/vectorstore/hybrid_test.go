@@ -215,6 +215,34 @@ func TestFuseScores_Weighted(t *testing.T) {
 	}
 }
 
+func TestFuseScores_WeightedMissingBM25StaysAtZero(t *testing.T) {
+	results := FuseScores(
+		map[string]float64{"vector-only": 0.9},
+		map[string]float64{"lexical-low": 1.0, "lexical-high": 3.0},
+		nil,
+		&HybridSearchConfig{
+			Mode:         "weighted",
+			VectorWeight: 0,
+			BM25Weight:   1,
+			NgramWeight:  0,
+		},
+	)
+
+	found := false
+	for _, result := range results {
+		if result.ChunkID != "vector-only" {
+			continue
+		}
+		found = true
+		if result.FinalScore != 0 {
+			t.Fatalf("missing BM25 score = %f, want 0", result.FinalScore)
+		}
+	}
+	if !found {
+		t.Fatal("vector-only result was not returned")
+	}
+}
+
 func TestFuseScores_RRF(t *testing.T) {
 	vectorScores := map[string]float64{"a": 0.9, "b": 0.5}
 	bm25Scores := map[string]float64{"b": 3.0, "a": 1.0}

@@ -3,7 +3,9 @@
 //! Every call acquires an Arc before leaving the registry lock. Removing a
 //! handle cannot unload a model underneath an in-flight native operation.
 
+mod embedding_dimensions;
 mod generative;
+mod grounding;
 mod pair_scores;
 mod sequence;
 mod tasks;
@@ -80,6 +82,7 @@ struct Info {
     overflow: String,
     labels: Vec<String>,
     modalities: Vec<String>,
+    available_dimensions: Vec<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pair_scorer: Option<PairScorerSelection>,
 }
@@ -226,21 +229,31 @@ fn load_selected(
     }
     let modern = matches!(
         options.model_type.as_str(),
-        "modernbert" | "mmbert" | "mmbert32k" | "mmbert-32k"
+        "modernbert" | "mmbert" | "mmbert32k" | "mmbert-32k" | "vela_halu"
     );
+    let vela_halu = options.model_type == "vela_halu";
+    if vela_halu {
+        ensure!(
+            task == "hallucination",
+            "capability: vela_halu requires grounded text input"
+        );
+        grounding::validate_policy(&options.model_path, &raw)?;
+    }
     let architectural_max_tokens = raw["max_position_embeddings"]
         .as_u64()
         .or_else(|| raw["text_max_position_embeddings"].as_u64())
         .unwrap_or(512) as usize;
     // An omitted classification budget preserves the historical default. An
     // explicit budget is checked against the loaded adapter and checkpoint.
-    let limit = if modern || task == "embedding" || generative {
+    let limit = if vela_halu {
+        architectural_max_tokens.min(8192)
+    } else if modern || task == "embedding" || generative {
         architectural_max_tokens
     } else {
         architectural_max_tokens.min(512)
     };
     let max_input_tokens = if options.max_input_tokens == 0 {
-        if task == "embedding" || task == "pair_scores" || generative {
+        if vela_halu || task == "embedding" || task == "pair_scores" || generative {
             limit
         } else {
             limit.min(512)
@@ -452,7 +465,7 @@ fn load_selected(
         _ => bail!("capability: model type does not implement requested task"),
     };
     let overflow = if options.overflow.is_empty() {
-        if generative || task == "pair_scores" {
+        if vela_halu || generative || task == "pair_scores" {
             "reject".to_owned()
         } else {
             "truncate".to_owned()
@@ -503,8 +516,10 @@ fn load_selected(
             labels = vec!["SUPPORTED".to_owned(), "HALLUCINATED".to_owned()];
         }
         ensure!(
-            labels.len() == 2,
-            "capability: hallucination requires two labels"
+            labels.len() == 2
+                && labels[0].eq_ignore_ascii_case("supported")
+                && labels[1].eq_ignore_ascii_case("hallucinated"),
+            "capability: hallucination requires supported=0, hallucinated=1 labels"
         );
     }
     let modalities = if task == "embedding" {
@@ -522,6 +537,7 @@ fn load_selected(
     .into_iter()
     .map(str::to_owned)
     .collect();
+    let available_dimensions = embedding_dimensions::for_model(&model);
     let pair_scorer = match &model {
         Model::Reranker(model) => Some(model.selection()),
         _ => None,
@@ -542,6 +558,7 @@ fn load_selected(
             overflow,
             labels,
             modalities,
+            available_dimensions,
             pair_scorer,
         },
     }))

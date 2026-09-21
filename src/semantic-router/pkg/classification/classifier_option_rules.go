@@ -48,7 +48,7 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 		})
 		return nil, err
 	}
-	return withKeywordEmbeddingClassifier(createEmbeddingInitializer(), keywordEmbeddingClassifier), nil
+	return withKeywordEmbeddingClassifier(keywordEmbeddingClassifier), nil
 }
 
 func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provider, error) {

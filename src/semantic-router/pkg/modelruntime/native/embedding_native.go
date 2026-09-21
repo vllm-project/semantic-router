@@ -5,113 +5,74 @@ import (
 	"fmt"
 	"io"
 
-	candle "github.com/vllm-project/semantic-router/candle-binding"
-	ort "github.com/vllm-project/semantic-router/onnx-binding/instance"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 )
 
-type ownedEmbeddingEngine interface {
+// Each resource owns one engine. Optional operations are capabilities, so new
+// implementations do not add backend branches to request dispatch.
+type embeddingEngine interface {
 	io.Closer
 	embed(string, embedding.Options) (tasks.EmbeddingResult, error)
 }
-
-type embeddingEngine struct {
-	openvino ownedEmbeddingEngine
-	candle   *candle.EmbeddingModel
-	ort      *ort.EmbeddingModel
-	multi    *ort.MultiModalModel
+type imageEmbeddingEngine interface {
+	embedImage([]byte, int) ([]float32, error)
 }
-
-func (e *embeddingEngine) Close() error {
-	if e.openvino != nil {
-		return e.openvino.Close()
-	}
-	if e.candle != nil {
-		return e.candle.Close()
-	}
-	if e.ort != nil {
-		return e.ort.Close()
-	}
-	return e.multi.Close()
+type audioFeatureEmbeddingEngine interface {
+	embedAudioFeatures([]float32, int, int, int) ([]float32, error)
 }
-
-func (e *embeddingEngine) embed(text string, options embedding.Options) (tasks.EmbeddingResult, error) {
-	if e.openvino != nil {
-		return e.openvino.embed(text, options)
-	}
-	if e.candle != nil {
-		out, err := e.candle.EmbedAtLayer(text, options.Dimension, options.Layer)
-		return tasks.EmbeddingResult{Embedding: out.Values, Input: &tasks.InputUsage{OriginalTokens: out.Input.InputTokens, ProcessedTokens: out.Input.ProcessedTokens, Truncated: out.Input.Truncated}}, nativeError(err)
-	}
-	if e.ort != nil {
-		out, err := e.ort.Encode(text, options.Layer, options.Dimension)
-		return embeddingORTResult(out), ortError(err)
-	}
-	if options.Layer != 0 {
-		return tasks.EmbeddingResult{}, fmt.Errorf("%w: ORT multimodal embedding has no layer early exit", binding.ErrCapability)
-	}
-	out, err := e.multi.EncodeText(text, options.Dimension)
-	return embeddingORTResult(out), ortError(err)
+type audioEmbeddingEngine interface {
+	embedAudio(embedding.AudioRequest) ([]float32, error)
 }
-
-func embeddingORTResult(out ort.EmbeddingResult) tasks.EmbeddingResult {
-	result := tasks.EmbeddingResult{Embedding: out.Values}
-	if out.Input != nil {
-		result.Input = &tasks.InputUsage{OriginalTokens: out.Input.OriginalTokens, ProcessedTokens: out.Input.ProcessedTokens, Truncated: out.Input.Truncated}
-	}
-	return result
+type windowEmbeddingEngine interface {
+	windows(string, int) ([]embedding.Window, error)
+}
+type descriptorEmbeddingEngine interface {
+	RuntimeDescriptor(int, int) (string, error)
 }
 
 func (p *EmbeddingProvider) EmbedImage(ctx context.Context, data []byte, dimension int) ([]float32, error) {
-	var vector []float32
-	err := p.resource.Use(ctx, func(value io.Closer) error {
-		engine, ok := value.(*embeddingEngine)
+	return p.mediaEmbedding(ctx, dimension, func(value io.Closer) ([]float32, error) {
+		engine, ok := value.(imageEmbeddingEngine)
 		if !ok {
-			return fmt.Errorf("%w: embedding provider has no image encoder", binding.ErrCapability)
+			return nil, fmt.Errorf("%w: embedding provider has no image encoder", binding.ErrCapability)
 		}
-		var err error
-		if engine.candle != nil {
-			var out candle.InstanceEmbeddingOutput
-			out, err = engine.candle.EmbedImage(data, dimension)
-			vector = out.Values
-		} else if engine.multi != nil {
-			var out ort.EmbeddingResult
-			out, err = engine.multi.EncodeImageBytes(data, dimension)
-			vector = out.Values
-		} else {
-			return fmt.Errorf("%w: embedding provider has no image encoder", binding.ErrCapability)
-		}
-		if err != nil {
-			return nativeError(ortError(err))
-		}
-		return validateEmbedding(embedding.TextRequest{Options: embedding.Options{Dimension: dimension}}, vector)
+		return engine.embedImage(data, dimension)
 	})
-	return vector, err
 }
 
-func (p *EmbeddingProvider) EmbedAudio(ctx context.Context, data []float32, bins, frames, dimension int) ([]float32, error) {
+// EmbedAudioFeatures accepts model-specific mel features, never raw PCM.
+func (p *EmbeddingProvider) EmbedAudioFeatures(ctx context.Context, data []float32, bins, frames, dimension int) ([]float32, error) {
+	return p.mediaEmbedding(ctx, dimension, func(value io.Closer) ([]float32, error) {
+		engine, ok := value.(audioFeatureEmbeddingEngine)
+		if !ok {
+			return nil, fmt.Errorf("%w: embedding provider has no audio feature input", binding.ErrCapability)
+		}
+		return engine.embedAudioFeatures(data, bins, frames, dimension)
+	})
+}
+
+func (p *EmbeddingProvider) EmbedAudio(ctx context.Context, request embedding.AudioRequest) ([]float32, error) {
+	if err := request.Validate(); err != nil {
+		return nil, err
+	}
+	return p.mediaEmbedding(ctx, request.Options.Dimension, func(value io.Closer) ([]float32, error) {
+		engine, ok := value.(audioEmbeddingEngine)
+		if !ok {
+			return nil, fmt.Errorf("%w: embedding provider has no PCM audio input", binding.ErrCapability)
+		}
+		return engine.embedAudio(request)
+	})
+}
+
+func (p *EmbeddingProvider) mediaEmbedding(ctx context.Context, dimension int, call func(io.Closer) ([]float32, error)) ([]float32, error) {
 	var vector []float32
 	err := p.resource.Use(ctx, func(value io.Closer) error {
-		engine, ok := value.(*embeddingEngine)
-		if !ok {
-			return fmt.Errorf("%w: embedding provider has no audio encoder", binding.ErrCapability)
-		}
 		var err error
-		if engine.candle != nil {
-			var out candle.InstanceEmbeddingOutput
-			out, err = engine.candle.EmbedAudio(data, bins, frames, dimension)
-			vector = out.Values
-		} else if engine.multi != nil {
-			var out ort.EmbeddingResult
-			out, err = engine.multi.EncodeAudio(data, bins, frames, dimension)
-			vector = out.Values
-		} else {
-			return fmt.Errorf("%w: embedding provider has no audio encoder", binding.ErrCapability)
-		}
+		vector, err = call(value)
 		if err != nil {
-			return nativeError(ortError(err))
+			return err
 		}
 		return validateEmbedding(embedding.TextRequest{Options: embedding.Options{Dimension: dimension}}, vector)
 	})
@@ -121,30 +82,13 @@ func (p *EmbeddingProvider) EmbedAudio(ctx context.Context, data []float32, bins
 func (p *EmbeddingProvider) Windows(ctx context.Context, text string, limit int) ([]embedding.Window, error) {
 	var windows []embedding.Window
 	err := p.resource.Use(ctx, func(value io.Closer) error {
-		engine, ok := value.(*embeddingEngine)
+		engine, ok := value.(windowEmbeddingEngine)
 		if !ok {
-			return fmt.Errorf("%w: remote embedding token windows unavailable", binding.ErrCapability)
+			return fmt.Errorf("%w: embedding token windows unavailable", binding.ErrCapability)
 		}
-		if engine.candle != nil {
-			ranges, err := engine.candle.Windows(text, limit)
-			for _, r := range ranges {
-				windows = append(windows, embedding.Window{Start: r.Start, End: r.End})
-			}
-			return nativeError(err)
-		}
-		var ranges []ort.TextWindow
 		var err error
-		if engine.ort != nil {
-			ranges, err = engine.ort.Windows(text, limit)
-		} else if engine.multi != nil {
-			ranges, err = engine.multi.Windows(text, limit)
-		} else {
-			return fmt.Errorf("%w: remote embedding token windows unavailable", binding.ErrCapability)
-		}
-		for _, r := range ranges {
-			windows = append(windows, embedding.Window{Start: r.Start, End: r.End})
-		}
-		return ortError(err)
+		windows, err = engine.windows(text, limit)
+		return err
 	})
 	return windows, err
 }
