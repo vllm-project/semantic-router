@@ -110,10 +110,20 @@ func (m *MemoryBackend) InsertChunks(_ context.Context, vectorStoreID string, ch
 		return fmt.Errorf("collection not found: %s", vectorStoreID)
 	}
 
-	for _, chunk := range chunks {
-		if m.maxEntries > 0 && len(col.chunks) >= m.maxEntries {
+	if m.maxEntries > 0 {
+		newIDs := make(map[string]struct{}, len(chunks))
+		for _, chunk := range chunks {
+			if _, exists := col.chunks[chunk.ID]; exists {
+				continue
+			}
+			newIDs[chunk.ID] = struct{}{}
+		}
+		if len(col.chunks)+len(newIDs) > m.maxEntries {
 			return fmt.Errorf("collection %s has reached maximum entries (%d)", vectorStoreID, m.maxEntries)
 		}
+	}
+
+	for _, chunk := range chunks {
 		col.chunks[chunk.ID] = chunk
 	}
 
