@@ -56,9 +56,13 @@ generate_config() {
 generate_envoy() {
     # Backend cluster is STATIC; point it at the stub (STUB_PORT) so requests
     # get 200, not 503 — the destination header can't redirect a STATIC cluster.
+    # failure_mode_allow is turned off: with it on, Envoy forwards a request
+    # upstream unclassified when ext_proc cannot serve it, and that request
+    # returns a fast 200 that would be counted as classifier throughput.
     sed -e "s/port_value: 50051/port_value: ${EXTPROC_PORT}/" \
         -e "s/port_value: 8801/port_value: ${ENVOY_PORT}/" \
         -e "s/port_value: 8000/port_value: ${STUB_PORT}/" \
+        -e "s/failure_mode_allow: true/failure_mode_allow: false/" \
         "$SCRIPT_DIR/envoy-bench.yaml" > "$RESULTS_DIR/envoy-tp.yaml"
     echo "$RESULTS_DIR/envoy-tp.yaml"
 }
@@ -142,6 +146,62 @@ trap cleanup EXIT
 
 scrape_metrics() { curl -s "$METRICS_URL" > "$1" 2>/dev/null; }
 
+# A level's last responses can reach the client marginally before their samples
+# are visible on /metrics, so the closing snapshot waits for the counters to
+# stop moving instead of racing them. A real bypass does not settle: the count
+# stays short and the gate still fails.
+scrape_metrics_settled() {
+    local out=$1 previous current
+    previous=$(domain_samples)
+    for _ in $(seq 1 20); do
+        sleep 0.25
+        current=$(domain_samples)
+        [ "$current" = "$previous" ] && break
+        previous=$current
+    done
+    scrape_metrics "$out"
+}
+
+domain_samples() {
+    curl -s "$METRICS_URL" | python3 -c "
+import re
+import sys
+
+for line in sys.stdin:
+    match = re.match(r'llm_signal_extraction_latency_seconds_count\{.*signal_type=\"domain\"\}\s+([\d.eE+-]+)', line)
+    if match:
+        print(int(float(match.group(1))))
+        break
+else:
+    print(0)
+"
+}
+
+# payload -> drives sequential requests until every one of them is classified.
+# A freshly started router answers the first requests through Envoy before its
+# classifiers take traffic; those requests return a fast 200 that never reached
+# signal extraction, and they would otherwise land inside a measured level.
+warm_until_classifying() {
+    local payload=$1 attempt code before after ok
+    for attempt in 1 2 3; do
+        before=$(domain_samples)
+        ok=0
+        for _ in 1 2 3 4 5; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 300 \
+                -X POST "http://localhost:${ENVOY_PORT}/v1/chat/completions" \
+                -H "Content-Type: application/json" -d @"$payload" 2>/dev/null || echo "000")
+            [ "$code" = 200 ] && ok=$((ok + 1))
+        done
+        after=$(domain_samples)
+        if [ "$ok" -eq 5 ] && [ "$((after - before))" -ge 5 ]; then
+            log "warm: ${ok}/5 requests classified"
+            return 0
+        fi
+        log "warm attempt ${attempt}: ${ok}/5 ok, $((after - before))/5 classified; retrying"
+    done
+    return 1
+}
+
 # mode -> in the GPU phase every prepared classifier must report a GPU device.
 # `--gpus all` only exposes the device; whether the router uses it depends on
 # the model bindings, so without this check a CPU-on-CPU run would be published
@@ -179,30 +239,38 @@ PY
 }
 
 # mode concurrency payload -> runs one concurrency level and prints its row.
-# Fails when the level returned errors, or when the classifiers recorded fewer
-# samples than the requests that succeeded.
+# Throughput is reported over classified requests, never over raw HTTP
+# successes: a saturated router completes some requests without running signal
+# extraction, and counting those would overstate classifier throughput. The
+# level fails on any error and on a level that classified nothing at all.
 run_concurrency() {
-    local mode=$1 c=$2 payload=$3
+    local mode=$1 c=$2 payload=$3 p50 p95 p99
     local before="$RESULTS_DIR/m-tp-${mode}-${c}-before.txt"
     local after="$RESULTS_DIR/m-tp-${mode}-${c}-after.txt"
-    local row ok http_err conn_err
+    local row ok http_err conn_err qps classified elapsed
     scrape_metrics "$before"
     row=$(python3 "$SCRIPT_DIR/load_test.py" \
         "http://localhost:${ENVOY_PORT}/v1/chat/completions" "$DURATION" "$c" "$payload") || {
         log "ERROR: concurrency ${c} (${mode}) produced no successful responses"
         return 1
     }
-    scrape_metrics "$after"
-    echo "$row"
-    read -r _ ok http_err conn_err _ _ _ _ <<< "$row"
+    scrape_metrics_settled "$after"
+    read -r _ ok http_err conn_err qps p50 p95 p99 <<< "$row"
     if [ "$http_err" -ne 0 ] || [ "$conn_err" -ne 0 ]; then
         log "ERROR: concurrency ${c} (${mode}) saw ${http_err} HTTP and ${conn_err} transport errors"
         return 1
     fi
-    if ! python3 "$SCRIPT_DIR/signal_samples.py" "$before" "$after" "$ok" domain,jailbreak,pii; then
+    if ! classified=$(python3 "$SCRIPT_DIR/signal_samples.py" "$before" "$after" 1 domain | awk '{print $2}'); then
         log "ERROR: concurrency ${c} (${mode}) completed ${ok} requests without signal extraction"
         return 1
     fi
+    elapsed=$(python3 -c "print(f'{$ok / $qps:.3f}')" 2>/dev/null || echo 0)
+    python3 -c "
+elapsed = $elapsed
+classified = $classified
+print(f'$c {$ok} {classified} {$ok - classified} $http_err $conn_err '
+      f'{classified / elapsed if elapsed else 0:.1f} $p50 $p95 $p99')
+"
 }
 
 main() {
@@ -219,12 +287,16 @@ main() {
             log "ERROR: ${mode} phase is not running on the GPU"
             return 1
         }
+        warm_until_classifying "$payload" || {
+            log "ERROR: ${mode} requests are reaching the upstream without being classified"
+            return 1
+        }
         python3 "$SCRIPT_DIR/load_test.py" \
             "http://localhost:${ENVOY_PORT}/v1/chat/completions" 5 4 "$payload" >/dev/null || {
             log "ERROR: ${mode} warmup produced no successful responses"
             return 1
         }
-        echo "conc ok http_err conn_err qps p50 p95 p99"
+        echo "conc ok classified unclassified http_err conn_err qps_classified p50 p95 p99"
         for c in $CONCURRENCIES; do
             run_concurrency "$mode" "$c" "$payload" || return 1
         done

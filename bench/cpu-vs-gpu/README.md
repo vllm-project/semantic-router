@@ -127,6 +127,16 @@ CONCURRENCIES="1 8 16 32" \
 ./bench/cpu-vs-gpu/bench-cuda-throughput.sh
 ```
 
+The throughput script reports `qps_classified`, computed over the requests the
+router actually classified rather than over HTTP successes. A saturated router
+completes a few requests without running signal extraction — the run above
+observed 3 of 19 at concurrency 16 on CPU — and counting those would overstate
+classifier throughput. Each row prints `ok`, `classified` and `unclassified`
+so that gap stays visible. The level fails outright if any request errored or
+if nothing was classified at all, and the Envoy config it generates sets
+`failure_mode_allow: false` so a request can never reach the upstream by
+skipping ExtProc.
+
 Both scripts refuse to publish numbers from a run that did not classify.
 Every benchmark request must return HTTP 200, and each of the three signals
 must record at least one new `llm_signal_extraction_latency_seconds` sample
