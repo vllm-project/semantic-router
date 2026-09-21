@@ -31,7 +31,7 @@ type manifest struct {
 
 func main() {
 	provider := flag.String("provider", "candle", "artifact format: candle or ort")
-	suite := flag.String("suite", "runtime", "runtime, perf, openvino, riscv, multimodal, or image-calibration")
+	suite := flag.String("suite", "runtime", "runtime, perf, openvino, riscv, or multimodal")
 	output := flag.String("output", "models", "model directory")
 	manifestPath := flag.String("manifest", "", "write artifact identities as JSON")
 	download := flag.Bool("download", false, "download and verify required artifacts")
@@ -67,9 +67,6 @@ func assets(suite, provider, output string) (manifest, []modeldownload.ModelSpec
 	}
 	if suite == "multimodal" {
 		return multimodalAssets(provider, output)
-	}
-	if suite == "image-calibration" {
-		return imageCalibrationAssets(provider, output)
 	}
 	if !slices.Contains([]string{"runtime", "perf", "openvino", "riscv"}, suite) {
 		return result, nil, fmt.Errorf("unknown model suite %q", suite)

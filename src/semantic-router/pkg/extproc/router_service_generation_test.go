@@ -236,6 +236,52 @@ func TestRouterServiceSwapPublishesBeforeRetiredGenerationDrains(t *testing.T) {
 	}
 }
 
+func TestRouterServiceSwapBlocksProcessUntilPublishCompletes(t *testing.T) {
+	first := (&routerComponents{resources: newResourceScope()}).buildRouter()
+	second := (&routerComponents{resources: newResourceScope()}).buildRouter()
+	service := NewRouterService(first)
+	t.Cleanup(func() { _ = service.Close() })
+
+	inPublish := make(chan struct{})
+	releasePublish := make(chan struct{})
+	processReturned := make(chan struct{})
+	swapErr := make(chan error, 1)
+
+	go func() {
+		swapErr <- service.Swap(second, func(AcquireFunc) {
+			close(inPublish)
+			<-releasePublish
+		})
+	}()
+
+	select {
+	case <-inPublish:
+	case <-time.After(time.Second):
+		t.Fatal("Swap() publish callback did not start")
+	}
+
+	go func() {
+		_ = service.Process(NewMockStream(nil))
+		close(processReturned)
+	}()
+
+	select {
+	case <-processReturned:
+		t.Fatal("Process observed the new generation before store policy publication finished")
+	case <-time.After(40 * time.Millisecond):
+	}
+
+	close(releasePublish)
+	if err := <-swapErr; err != nil {
+		t.Fatalf("Swap() error = %v", err)
+	}
+	select {
+	case <-processReturned:
+	case <-time.After(time.Second):
+		t.Fatal("Process did not proceed after publication completed")
+	}
+}
+
 func TestRouterServiceCloseWaitsForAllRetiredGenerationsAndRejectsReload(t *testing.T) {
 	firstStore := &countingCloseStore{Storage: store.NewMemoryStore(10, 0)}
 	secondStore := &countingCloseStore{Storage: store.NewMemoryStore(10, 0)}

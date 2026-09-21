@@ -66,7 +66,11 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 	if err := validateAnthropicResponseResource(wire); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
-	diagnostics := anthropicResponseMetadataDiagnostics(wire, policy)
+	diagnostics, err := anthropicStopSequenceDiagnostics(body, "", policy)
+	if err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	diagnostics = appendDiagnostics(diagnostics, anthropicResponseMetadataDiagnostics(wire, policy), policy.Limits.Diagnostics)
 	response, err := decodeAnthropicResponseResource(wire, policy)
 	if err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
@@ -280,6 +284,11 @@ func (AnthropicMessagesCodec) DecodeTransportError(
 	body []byte,
 	policy llmprotocol.Policy,
 ) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	// Snowflake declares the Anthropic Messages operation as well, and its
+	// transport failure envelope is the same flat vendor object on both paths.
+	if policy.ResponseVendor == llmprotocol.ResponseVendorSnowflake {
+		return decodeSnowflakeTransportError(body, policy, llmprotocol.AnthropicMessagesV1)
+	}
 	var wire anthropicTransportErrorWire
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
 		return llmprotocol.TransportError{}, nil, err

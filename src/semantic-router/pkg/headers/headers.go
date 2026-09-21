@@ -93,6 +93,14 @@ const (
 	// Example values: "deepseek-v31", "phi4", "gpt-4"
 	VSRSelectedModel = "x-vsr-selected-model"
 
+	// VSREffectiveInputTokens is the selected backend's rendered input size for
+	// the finalized automatic-output dispatch, including its chat template.
+	VSREffectiveInputTokens = "x-vsr-effective-input-tokens" // #nosec G101 -- public header name, not a credential
+
+	// VSREffectiveMaxOutputTokens is the resolved output token limit sent to the
+	// selected backend for that automatic-output dispatch, including reasoning.
+	VSREffectiveMaxOutputTokens = "x-vsr-effective-max-output-tokens" // #nosec G101 -- public header name, not a credential
+
 	// VSRSelectedAlgorithm indicates the model-selection algorithm used after
 	// the routing decision matched. Example values: "static", "elo", "knn",
 	// "router_dc", "fusion", "remom", "workflows".
@@ -375,6 +383,11 @@ const (
 	// Used by the ext_proc when routing requests to MiniMax models.
 	UserMiniMaxKey = "x-user-minimax-key"
 
+	// UserCloudflareWorkersAIKey carries the user's Cloudflare Workors AI API token,
+	// injected by the auth backend. The endpoint is account-scoped, so the account
+	// identifier travels in the operator's base URL and only the token is per user.
+	UserCloudflareWorkersAIKey = "x-user-cloudflare-workers-ai-key"
+
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).
 	// Override via authz.identity.user_id_header for other backends:
@@ -404,6 +417,15 @@ const (
 	// VSRInternalAuth authenticates in-process request context that must not
 	// be accepted from external callers or forwarded to model backends.
 	VSRInternalAuth = "x-vsr-internal-auth"
+
+	// VSROutcomeSource carries server-attested outcome provenance between a
+	// trusted control plane and the Router management API. External callers
+	// must not be allowed to supply this header through a proxy.
+	VSROutcomeSource = "x-vsr-outcome-source"
+
+	// VSROutcomePrincipal carries an opaque, server-attested identity used to
+	// isolate outcome-ingest rate limits. It is not persisted with the outcome.
+	VSROutcomePrincipal = "x-vsr-outcome-principal"
 )
 
 // Looper Request Headers

@@ -24,6 +24,7 @@ import (
 	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	piiremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/pii-remote-backend"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
+	progressgate "github.com/vllm-project/semantic-router/e2e/profiles/progress-gate"
 	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
 	remoteembedding "github.com/vllm-project/semantic-router/e2e/profiles/remote-embedding"
 	responseapi "github.com/vllm-project/semantic-router/e2e/profiles/response-api"
@@ -35,6 +36,8 @@ import (
 	routingstrategies "github.com/vllm-project/semantic-router/e2e/profiles/routing-strategies"
 	streaming "github.com/vllm-project/semantic-router/e2e/profiles/streaming"
 	vectorstoreregistry "github.com/vllm-project/semantic-router/e2e/profiles/vectorstore-registry"
+	velahalu "github.com/vllm-project/semantic-router/e2e/profiles/vela-halu"
+	velaomni "github.com/vllm-project/semantic-router/e2e/profiles/vela-omni"
 )
 
 var mockVLLMLocalImages = []framework.LocalImageBuild{
@@ -42,6 +45,9 @@ var mockVLLMLocalImages = []framework.LocalImageBuild{
 		Dockerfile:   "tools/test/services/mock-vllm/Dockerfile",
 		Tag:          "ghcr.io/vllm-project/semantic-router/mock-vllm:latest",
 		BuildContext: "tools/test/services/mock-vllm",
+		RolloutRestarts: []framework.RolloutRestartTarget{
+			{Namespace: "default", Deployment: "mock-vllm"},
+		},
 	},
 }
 
@@ -54,6 +60,7 @@ var dashboardLocalImages = []framework.LocalImageBuild{
 }
 
 func init() {
+	register("vela-halu", func() framework.Profile { return velahalu.NewProfile() }, framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages})
 	register("agentgateway", func() framework.Profile { return agentgateway.NewProfile() }, framework.ProfileCapabilities{})
 	register(
 		"envoy-ai-gateway",
@@ -107,6 +114,10 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
+	register("vela-omni", func() framework.Profile { return velaomni.NewProfile() }, framework.ProfileCapabilities{
+		LocalImages:     mockVLLMLocalImages,
+		RouterBuildArgs: map[string]string{"VELA_OMNI_VARIANTS": "nano mini"},
+	})
 	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})
@@ -128,6 +139,11 @@ func init() {
 	register(
 		"response-jailbreak",
 		func() framework.Profile { return responsejailbreak.NewProfile() },
+		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+	)
+	register(
+		"progress-gate",
+		func() framework.Profile { return progressgate.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("remote-embedding", func() framework.Profile { return remoteembedding.NewProfile() }, framework.ProfileCapabilities{})

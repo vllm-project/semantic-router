@@ -56,6 +56,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	}
 	ctx.UserContent = snapshot.UserContent
 	ctx.RequestImageURL = snapshot.FirstImageURL
+	ctx.RequestAudio = snapshot.FirstAudio
 
 	decisionState, earlyResponse := r.runRequestPreRoutingStages(originalModel, snapshot, ctx)
 	if earlyResponse != nil {
@@ -236,7 +237,17 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	// Persist the final dispatch demand, including automatic output resolved
 	// below. Defer also preserves a record when finalization fails or panics;
 	// Process owns its terminal lifecycle and response headers run afterwards.
-	defer r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
+	//
+	// The shadow goes out from here too. Its job copies ctx.RouterReplayID when
+	// the job is built, and a job built before the record exists carries an
+	// empty one, which makes every shadow outcome drop silently.
+	dispatched := false
+	defer func() {
+		r.startRouterReplay(ctx, originalModel, dispatch.logicalModel, decisionName)
+		if dispatched {
+			r.dispatchShadowIfConfigured(ctx, dispatch)
+		}
+	}()
 
 	// Handle tool selection
 	r.handleToolSelectionForRequest(request, response, ctx)
@@ -244,7 +255,7 @@ func (r *OpenAIRouter) handleEntrypointModelRouting(request *llmprotocol.Request
 	if err != nil {
 		return nil, err
 	}
-	r.dispatchShadowIfConfigured(ctx, dispatch)
+	dispatched = true
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)

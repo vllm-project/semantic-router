@@ -1473,8 +1473,8 @@ type ToolsConfig struct {
 
 // PromptGuardConfig defines prompt guard configuration.
 //
-// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
-// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.protocol) || size(self.protocol) == 0) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.max_sequence_length) || self.max_sequence_length == 0 || (!has(self.backend) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="max_sequence_length requires the local mmbert32k variant"
+// +kubebuilder:validation:XValidation:rule="!has(self.window) || (!has(self.backend) && (!has(self.variant) || size(self.variant) == 0 || self.variant == 'mmbert32k'))",message="window requires the local mmbert32k variant"
 // +kubebuilder:validation:XValidation:rule="!has(self.window) || self.window.size <= (has(self.max_sequence_length) && self.max_sequence_length > 0 ? self.max_sequence_length : 512)",message="window.size must not exceed max_sequence_length (512 when omitted or zero)"
 type PromptGuardConfig struct {
 	// Backend selects a named external classifier and its typed result contract.
@@ -1499,11 +1499,6 @@ type PromptGuardConfig struct {
 	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
 	Variant string `json:"variant,omitempty"`
-	// Protocol is retired and rejected at admission. Configure Backend with
-	// the protocol, contract and explicit external model name instead.
-	// +kubebuilder:validation:Enum=http_chat;http_classify
-	// +optional
-	Protocol string `json:"protocol,omitempty"`
 	// +kubebuilder:default="models/Vela-1.0-Encoder-307M-Guard"
 	// +optional
 	ModelID string `json:"model_id,omitempty"`

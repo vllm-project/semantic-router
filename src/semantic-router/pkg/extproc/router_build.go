@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -54,12 +55,14 @@ type routerComponents struct {
 	lookupTable           lookuptable.LookupTable
 	memoryStore           memory.Store
 	memoryExtractor       *memory.MemoryExtractor
+	memoryPersistence     *memory.PersistenceRunner
 	protocolCodecs        *protocolcodec.Registry
 	looperClient          *looper.Client
 	credentialResolver    *authz.CredentialResolver
 	rateLimiter           *ratelimit.RateLimitResolver
 	lookupTableCancel     func()
 	routerSessionStore    *sessiontelemetry.RouterSessionStateStoreSlot
+	workflowStateService  *looper.WorkflowStateService
 	resources             *resourceScope
 }
 
@@ -273,6 +276,15 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 	if components.memoryStore != nil {
 		components.resources.add(components.memoryStore.Close)
 	}
+	// Resources close in reverse order, so retire writes before closing the store.
+	components.memoryPersistence = createMemoryPersistenceRunner(cfg, components.memoryExtractor)
+	if components.memoryPersistence != nil {
+		// RetireAndWait treats a non-positive grace as its own default.
+		grace := time.Duration(cfg.Memory.Persistence.ShutdownGraceSeconds) * time.Second
+		components.resources.addDraining(func() error {
+			return components.memoryPersistence.RetireAndWait(grace)
+		}, components.memoryPersistence.Done())
+	}
 
 	components.credentialResolver = buildCredentialResolver(cfg)
 	components.rateLimiter = buildRateLimitResolver(cfg)
@@ -287,6 +299,11 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		logging.ComponentEvent("extproc", "rate_limit_resolver_initialized", map[string]interface{}{
 			"providers": components.rateLimiter.ProviderNames(),
 		})
+	}
+
+	components.workflowStateService = newWorkflowStateServiceIfEnabled(cfg)
+	if components.workflowStateService != nil {
+		components.resources.add(components.workflowStateService.Close)
 	}
 
 	return components, nil
@@ -355,6 +372,21 @@ func registerRouterSessionStore(
 	})
 }
 
+func createMemoryPersistenceRunner(cfg *config.RouterConfig, extractor *memory.MemoryExtractor) *memory.PersistenceRunner {
+	// Workers and queue storage follow the memory store that was actually built:
+	// enablement alone still yields a nil extractor when the backend is
+	// unreachable, and every write would then be suppressed as "no_extractor".
+	if cfg == nil || extractor == nil || !isMemoryEnabled(cfg) {
+		return nil
+	}
+	persistence := cfg.Memory.Persistence
+	return memory.NewPersistenceRunner(
+		time.Duration(persistence.TimeoutSeconds)*time.Second,
+		persistence.Concurrency,
+		persistence.Queue,
+	)
+}
+
 func registerModelSelectorResources(
 	resources *resourceScope,
 	registries map[config.RecipeName]*selection.Registry,
@@ -403,6 +435,8 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
 		Config:                  components.cfg,
 		Embeddings:              components.embeddings,
+		serviceEmbeddings:       components.serviceEmbeddings,
+		cacheEmbeddings:         components.cacheEmbeddings,
 		rerankers:               components.rerankers,
 		CategoryDescriptions:    components.categoryDescriptions,
 		Classifier:              components.classifier,
@@ -422,12 +456,14 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ShadowDispatcher:        components.shadowDispatcher,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
+		memoryPersistence:       components.memoryPersistence,
 		ProtocolCodecs:          components.protocolCodecs,
 		looperClient:            components.looperClient,
 		CredentialResolver:      components.credentialResolver,
 		RateLimiter:             components.rateLimiter,
 		lookupTableCancel:       components.lookupTableCancel,
 		routerSessionStateStore: components.routerSessionStore,
+		WorkflowStateService:    components.workflowStateService,
 		resources:               components.resources,
 	}
 	if components.classificationSvc != nil {
@@ -442,4 +478,14 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	})
 
 	return router
+}
+
+// newWorkflowStateServiceIfEnabled owns one workflow tool-state store for the
+// router generation when any routing profile uses algorithm.type=workflows,
+// including recipe-only configs whose decisions are not on the flat list.
+func newWorkflowStateServiceIfEnabled(cfg *config.RouterConfig) *looper.WorkflowStateService {
+	if cfg == nil || !cfg.HasFlowDecision() {
+		return nil
+	}
+	return looper.NewWorkflowStateService(&cfg.Looper)
 }

@@ -11,17 +11,47 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
+	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 )
 
 type routerProxyCredentialProvider struct {
 	token string
 }
 
+func TestGrafanaRouteServesAdapterAndRewritesDocument(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/d/router" {
+			t.Errorf("unexpected upstream request %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = io.WriteString(w, "<html><head></head><body>Grafana</body></html>")
+	}))
+	defer upstream.Close()
+	mux := http.NewServeMux()
+	registerGrafanaRoutes(mux, &config.Config{GrafanaURL: upstream.URL})
+	for _, path := range []string{proxy.GrafanaAuthScriptPath, "/embedded/grafana/d/router"} {
+		request := httptest.NewRequest(http.MethodGet, path, nil)
+		request.Header.Set("Accept", "text/html")
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, request)
+		if response.Code != http.StatusOK {
+			t.Fatalf("%s status = %d", path, response.Code)
+		}
+		if path == proxy.GrafanaAuthScriptPath {
+			if !strings.Contains(response.Header().Get("Content-Type"), "javascript") {
+				t.Fatal("adapter was not served locally")
+			}
+		} else if !strings.Contains(response.Body.String(), proxy.GrafanaAuthScriptPath) {
+			t.Fatal("document did not install the adapter")
+		}
+	}
+}
+
 func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	registerProxyRoutes(mux, &config.Config{})
+	registerProxyRoutes(mux, &config.Config{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
 	_, pattern := mux.Handler(req)
@@ -55,6 +85,7 @@ func TestRouterAPIProxyReplacesBrowserAuthorization(t *testing.T) {
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
+		nil,
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
@@ -103,7 +134,7 @@ func TestPlaygroundChatProxyPreservesIdentityAndStripsBrowserCredentials(t *test
 	}
 	cfg := &config.Config{EnvoyURL: server.URL, RouterAPIURL: server.URL, AbsConfigPath: configPath}
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), routerProxyCredentialProvider{token: "management-only-token"})
+	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), nil, routerProxyCredentialProvider{token: "management-only-token"})
 
 	for _, conversation := range []string{"conversation-one", "conversation-one", "conversation-two"} {
 		body := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"hello"}]}`
@@ -151,6 +182,7 @@ func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
+		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
 	for _, target := range []string{
@@ -190,7 +222,13 @@ func TestRouterAPIProxyExposesKnowledgeBaseActivationHash(t *testing.T) {
 	}))
 	defer upstream.Close()
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, nil, routerProxyCredentialProvider{token: "router-service-token"})
+	registerRouterAPIProxy(
+		mux,
+		&config.Config{RouterAPIURL: upstream.URL},
+		nil,
+		nil,
+		routerProxyCredentialProvider{token: "router-service-token"},
+	)
 	request := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)
 	request.Header.Set("Authorization", "Bearer dashboard-user-jwt")
 	response := httptest.NewRecorder()
@@ -218,6 +256,7 @@ func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
+		nil,
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
@@ -251,6 +290,7 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
+		nil,
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)

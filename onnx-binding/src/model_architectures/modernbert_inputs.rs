@@ -140,13 +140,18 @@ pub(crate) fn resolved_inputs(
     Ok(result)
 }
 
-/// Resolve fixed MIGraphX execution only; CPU retains dynamic short inputs.
+/// Resolve explicit GPU execution budgets before graph partitioning. CPU
+/// retains dynamic short inputs, and legacy ROCm callers remain dynamic.
 pub(crate) fn prepare_session(
     options: &crate::core::instance_options::InstanceOptions,
     path: &std::path::Path,
     execution_limit: usize,
 ) -> UnifiedResult<crate::core::instance_options::PreparedSession> {
-    if options.provider == crate::core::instance_options::Provider::Migraphx {
+    use crate::core::instance_options::Provider;
+    if options.provider == Provider::Rocm && options.execution_max_input_tokens.is_some() {
+        let inputs = resolved_inputs(path, 1, execution_limit)?;
+        options.create_session_with_fixed_contract(path, &inputs)
+    } else if options.provider == Provider::Migraphx {
         let inputs = resolved_inputs(path, 1, execution_limit)?;
         options.create_session_with_contract(path, &inputs)
     } else {

@@ -1,6 +1,8 @@
 package extproc
 
 import (
+	"slices"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -29,6 +31,18 @@ func (r *OpenAIRouter) applyPreDispatchToolsPolicy(
 
 func stripSemanticToolPolicy(request *llmprotocol.Request, stripHistory bool) (bool, int) {
 	return llmprotocol.StripTools(request, stripHistory)
+}
+
+// cloneMessagesForToolStrip detaches exactly what StripTools overwrites. That
+// filter compacts each Content slice in place, so a preview needs its own
+// message and content backing arrays; it never mutates a block's own fields,
+// and drops tool blocks whole, so the deep memory-snapshot clone is not needed.
+func cloneMessagesForToolStrip(messages []llmprotocol.Message) []llmprotocol.Message {
+	result := slices.Clone(messages)
+	for index := range result {
+		result[index].Content = slices.Clone(messages[index].Content)
+	}
+	return result
 }
 
 func clearSemanticToolChoiceWhenNoTools(request *llmprotocol.Request) bool {
