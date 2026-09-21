@@ -3655,7 +3655,7 @@ model_config:
 				profile := &ProviderProfile{
 					Type:       "azure-openai",
 					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/astra-prod",
-					APIVersion: "2026-09-03",
+					APIVersion: "2024-10-21",
 				}
 				path, err := profile.ResolveCreatePath("openai/responses@1")
 				Expect(err).NotTo(HaveOccurred())
@@ -3666,12 +3666,12 @@ model_config:
 				profile := &ProviderProfile{
 					Type:       "azure-openai",
 					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/astra-prod",
-					APIVersion: "2026-09-03",
+					APIVersion: "2024-10-21",
 				}
 				path, err := profile.ResolveCreatePath("openai/chat-completions@1")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal(
-					"/openai/deployments/astra-prod/chat/completions?api-version=2026-09-03"))
+					"/openai/deployments/astra-prod/chat/completions?api-version=2024-10-21"))
 			})
 
 			It("should resolve catalog-backed private runtimes", func() {

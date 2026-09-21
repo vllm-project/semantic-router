@@ -1,16 +1,24 @@
 package extproc
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
 type catalogReasoningWireCase struct {
@@ -353,56 +361,128 @@ func providerReasoningControls(request map[string]interface{}) map[string]interf
 	return controls
 }
 
-// TestAzureOpenAIResponsesProviderBoundary pins the Azure wire contract for the
-// v1 Responses route. Azure roots that route at the host and carries the
-// deployment name in the body, so it must not reuse the deployment-scoped base
-// URL or the api-version query that Chat Completions still needs.
-func TestAzureOpenAIResponsesProviderBoundary(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(`
+func TestAzureOpenAIProviderDispatch(t *testing.T) {
+	tests := []struct {
+		name         string
+		apiFormat    string
+		effort       string
+		request      string
+		wantPath     string
+		wantControls map[string]interface{}
+		wantTools    string
+	}{
+		{
+			name: "Chat xhigh", apiFormat: config.APIFormatOpenAI, effort: "xhigh",
+			request:      `{"model":"routed","messages":[{"role":"user","content":"hello"}]}`,
+			wantPath:     "/openai/deployments/astra-prod/chat/completions?api-version=2024-10-21",
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Responses max with tools", apiFormat: config.APIFormatResponses, effort: "max",
+			request:      `{"model":"routed","messages":[{"role":"user","content":"weather in Paris"}],"tools":[{"type":"function","function":{"name":"lookup_weather","description":"Look up weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"],"additionalProperties":false},"strict":true}}]}`,
+			wantPath:     "/openai/v1/responses",
+			wantControls: map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+			wantTools:    `[{"type":"function","name":"lookup_weather","description":"Look up weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"],"additionalProperties":false},"strict":true}]`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			type observation struct {
+				path          string
+				apiKey        string
+				authorization string
+				body          []byte
+			}
+			received := make(chan observation, 1)
+			fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				body, err := io.ReadAll(request.Body)
+				if err != nil {
+					http.Error(writer, err.Error(), http.StatusBadRequest)
+					return
+				}
+				received <- observation{
+					path: request.URL.RequestURI(), apiKey: request.Header.Get("api-key"),
+					authorization: request.Header.Get("Authorization"), body: body,
+				}
+				writer.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(fixture.Close)
+
+			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
 version: v0.3
 providers:
   models:
     - name: routed
       catalog: openai/gpt-6-astra
-      api_format: responses
+      api_format: %s
       provider_model_id: astra-prod
       backend_refs:
         - name: primary
           provider: azure-openai
-          endpoint: 127.0.0.1:8000
-          protocol: http
+          endpoint: %s/openai/deployments/astra-prod
+          api_version: "2024-10-21"
+          api_key: azure-fixture-key
 routing: {}
-`))
-	require.NoError(t, err)
+`, test.apiFormat, fixture.URL)))
+			require.NoError(t, err)
+			router := &OpenAIRouter{
+				Config: cfg,
+				CredentialResolver: authz.NewCredentialResolver(
+					authz.NewStaticConfigProvider(cfg),
+				),
+			}
+			decision := &config.Decision{Name: "azure", ModelRefs: []config.ModelRef{{
+				Model: "routed",
+				ModelReasoningControl: config.ModelReasoningControl{
+					UseReasoning: boolPtr(true), ReasoningEffort: test.effort,
+				},
+			}}}
+			ctx := routingTestContext(llmprotocol.OpenAIChatV1, nil)
+			ctx.VSRSelectedDecision = decision
+			request, immediate := router.prepareProtocolRequest([]byte(test.request), ctx)
+			require.Nil(t, immediate)
+			response, err := router.handleEntrypointModelRouting(
+				request, "routed", decision.Name, entropy.ReasoningDecision{UseReasoning: true}, "routed", ctx,
+			)
+			require.NoError(t, err)
+			require.Nil(t, response.GetImmediateResponse())
+			common := response.GetRequestBody().GetResponse()
+			require.NotNil(t, common)
+			emitted := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+			dispatch, err := router.resolveProviderDispatch("routed", decision.Name, true)
+			require.NoError(t, err)
+			baseURL := providerEndpointScheme(cfg, dispatch.backendName, dispatch.profile) + "://" + dispatch.backendAddress
+			require.Equal(t, fixture.URL, baseURL)
+			outbound, err := http.NewRequest(
+				http.MethodPost, baseURL+emitted[":path"], bytes.NewReader(common.GetBodyMutation().GetBody()),
+			)
+			require.NoError(t, err)
+			for name, value := range emitted {
+				if !strings.HasPrefix(name, ":") {
+					outbound.Header.Set(name, value)
+				}
+			}
+			result, err := fixture.Client().Do(outbound)
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, result.Body.Close()) })
+			require.Equal(t, http.StatusOK, result.StatusCode)
 
-	params := cfg.ModelConfig["routed"]
-	require.Len(t, params.PreferredEndpoints, 1)
-	profile := cfg.ProviderProfiles[params.PreferredEndpoints[0]]
-	profile.BaseURL = "https://myresource.openai.azure.com/openai/deployments/astra-prod"
-	profile.APIVersion = "2026-09-03"
-
-	responsesPath, err := profile.ResolveCreatePath("openai/responses@1")
-	require.NoError(t, err)
-	assert.Equal(t, "/openai/v1/responses", responsesPath)
-	assert.NotContains(t, responsesPath, "api-version")
-	assert.NotContains(t, responsesPath, "/deployments/")
-
-	chatPath, err := profile.ResolveCreatePath("openai/chat-completions@1")
-	require.NoError(t, err)
-	assert.Equal(
-		t,
-		"/openai/deployments/astra-prod/chat/completions?api-version=2026-09-03",
-		chatPath,
-	)
-
-	registry, err := modelcatalog.BuiltIn()
-	require.NoError(t, err)
-	definition, ok := registry.Provider("azure-openai")
-	require.True(t, ok)
-	assert.Equal(t, "api-key", definition.Auth.Header)
-	assert.Empty(t, definition.Auth.Prefix)
-
-	// The router emits the logical name and the gateway rewrites it to the
-	// provider model ID, so the deployment name has to survive in the config.
-	assert.Equal(t, "astra-prod", params.ExternalModelIDs["azure-openai"])
+			observed := <-received
+			assert.Equal(t, test.wantPath, observed.path)
+			assert.Equal(t, "azure-fixture-key", observed.apiKey)
+			assert.Empty(t, observed.authorization)
+			wire := unmarshalReasoningRequest(t, observed.body)
+			assert.Equal(t, "astra-prod", wire["model"])
+			assert.Equal(t, test.wantControls, providerReasoningControls(wire))
+			tools, err := json.Marshal(wire["tools"])
+			require.NoError(t, err)
+			if test.wantTools == "" {
+				assert.Empty(t, wire["tools"])
+			} else {
+				assert.JSONEq(t, test.wantTools, string(tools))
+			}
+			t.Logf("path=%s api-key=%s model=%v reasoning=%v tools=%s",
+				observed.path, observed.apiKey, wire["model"], providerReasoningControls(wire), tools)
+		})
+	}
 }

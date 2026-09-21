@@ -5,53 +5,59 @@ import (
 	"strings"
 )
 
-// ResolveOperationPath resolves one provider/protocol operation from the
-// catalog and applies the provider override and configured base-path prefix.
-// Callers own URL parsing and operation-specific query parameters.
-func (registry *Registry) ResolveOperationPath(providerID, protocolID, operationID, basePath string) (string, error) {
+// ResolvedOperation keeps an operation's path and API-version policy together.
+type ResolvedOperation struct {
+	Path               string
+	UseAPIVersionQuery bool
+}
+
+// ResolveOperation resolves the wire path and query policy for one provider operation.
+func (registry *Registry) ResolveOperation(providerID, protocolID, operationID, basePath string) (ResolvedOperation, error) {
 	provider, ok := registry.Provider(providerID)
 	if !ok {
-		return "", fmt.Errorf("unknown provider ID %q", providerID)
+		return ResolvedOperation{}, fmt.Errorf("unknown provider ID %q", providerID)
 	}
 	if protocolID == "" {
 		protocolID = provider.DefaultProtocol
 	}
 	if !containsString(provider.Protocols, protocolID) {
-		return "", fmt.Errorf("provider %q does not support protocol %q", providerID, protocolID)
+		return ResolvedOperation{}, fmt.Errorf("provider %q does not support protocol %q", providerID, protocolID)
 	}
 	operationKey := protocolID + "#" + operationID
 	if !containsString(provider.SupportedOperations, operationKey) {
-		return "", fmt.Errorf("provider %q does not support operation %q", providerID, operationKey)
+		return ResolvedOperation{}, fmt.Errorf("provider %q does not support operation %q", providerID, operationKey)
 	}
 	protocol, ok := registry.Protocol(protocolID)
 	if !ok {
-		return "", fmt.Errorf("unknown protocol %q", protocolID)
+		return ResolvedOperation{}, fmt.Errorf("unknown protocol %q", protocolID)
 	}
 	operationPath, err := resolveProtocolOperationPath(protocol, operationID)
 	if err != nil {
-		return "", err
+		return ResolvedOperation{}, err
 	}
-	if override, ok := provider.OperationOverrides[operationKey]; ok && override.Path != "" {
-		if override.AbsolutePath {
-			return override.Path, nil
-		}
-		return joinBasePath(basePath, override.Path), nil
+	resolved := ResolvedOperation{
+		Path:               joinProtocolOperationPath(basePath, protocol.DefaultBasePath, operationPath),
+		UseAPIVersionQuery: provider.APIVersionQuery,
 	}
 	if override := provider.PathOverrides[operationKey]; override != "" {
-		return joinBasePath(basePath, override), nil
+		resolved.Path = joinBasePath(basePath, override)
 	}
-	return joinProtocolOperationPath(basePath, protocol.DefaultBasePath, operationPath), nil
+	if override, ok := provider.OperationOverrides[operationKey]; ok {
+		if override.Path != "" {
+			resolved.Path = joinBasePath(basePath, override.Path)
+			if override.AbsolutePath {
+				resolved.Path = override.Path
+			}
+		}
+		resolved.UseAPIVersionQuery = provider.APIVersionQuery && !override.SuppressAPIVersion
+	}
+	return resolved, nil
 }
 
-// OperationOverride returns the per-operation wire override a provider declares
-// for one protocol operation, if any.
-func (registry *Registry) OperationOverride(providerID, protocolID, operationID string) (OperationOverride, bool) {
-	provider, ok := registry.Provider(providerID)
-	if !ok {
-		return OperationOverride{}, false
-	}
-	override, ok := provider.OperationOverrides[protocolID+"#"+operationID]
-	return override, ok
+// ResolveOperationPath returns an operation path without its query policy.
+func (registry *Registry) ResolveOperationPath(providerID, protocolID, operationID, basePath string) (string, error) {
+	operation, err := registry.ResolveOperation(providerID, protocolID, operationID, basePath)
+	return operation.Path, err
 }
 
 // ResolveProtocolOperationPath returns the canonical wire path declared by a

@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -100,6 +101,25 @@ func TestRegistryRejectsInvalidIndexResultStates(t *testing.T) {
 			t.Fatalf("invalid index result was accepted: %+v: %v", result, err)
 		}
 	}
+}
+
+func TestRegistryRejectsConflictingOperationOverrides(t *testing.T) {
+	var document snapshot
+	if err := json.Unmarshal([]byte(builtInCatalogJSON), &document); err != nil {
+		t.Fatal(err)
+	}
+	for index := range document.Providers {
+		if document.Providers[index].ID != "azure-openai" {
+			continue
+		}
+		document.Providers[index].PathOverrides["openai/responses@1#create"] = "/responses"
+		_, err := registryFromSnapshot(document, "sha256:test")
+		if err == nil || !strings.Contains(err.Error(), "both path_overrides and operation_overrides") {
+			t.Fatalf("ambiguous provider operation was accepted: %v", err)
+		}
+		return
+	}
+	t.Fatal("azure-openai provider is missing")
 }
 
 func TestProviderLookupReturnsDefensiveDefaultHeaders(t *testing.T) {

@@ -196,6 +196,14 @@ def _validate_provider_operation_overrides(
         raise CatalogBuildError(
             f"{path}.operation_overrides references an unknown operation"
         )
+    duplicate_operations: set[str] = (
+        overrides.keys() & item.get("path_overrides", {}).keys()
+    )
+    if duplicate_operations:
+        raise CatalogBuildError(
+            f"{path} has operations in both path_overrides and operation_overrides: "
+            f"{', '.join(sorted(duplicate_operations))}"
+        )
     for operation, override in overrides.items():
         label = f"{path}.operation_overrides[{operation!r}]"
         if not isinstance(override, dict):
