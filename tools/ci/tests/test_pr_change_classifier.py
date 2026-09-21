@@ -287,7 +287,7 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan([path], source_sha=SHA)
         self.assertIn("operator", plan["expected_verification_ids"])
         self.assertTrue(
-            {"operator", "operator-bundle", "extproc", "mock-vllm"}
+            {"operator", "operator-bundle", "extproc", "provider-mocker"}
             <= set(plan["images"])
         )
         self.assertNotIn(
@@ -342,7 +342,7 @@ class SelectionTests(unittest.TestCase):
             "src/fleet-sim/tests/test_simulation.py": "fleet-sim",
             "src/training/tests/test_export.py": "training",
             "tools/ci/training-test-requirements.txt": "training",
-            "tools/test/services/mock-vllm/tests/test_fixture_latency.py": "mock-provider",
+            "tools/test/services/provider-mocker/tests/test_fixture_latency.py": "mock-provider",
             "bench/test_agentic_routing_experiment.py": "learning-tools",
             "bench/test_openai_fault_proxy.py": "soak-tools",
         }
@@ -359,20 +359,20 @@ class SelectionTests(unittest.TestCase):
 
     def test_shared_mock_changes_select_declared_pr_consumers(self):
         for path in (
-            "tools/test/services/mock-vllm/app.py",
-            "tools/test/services/mock-vllm/requirements.txt",
-            "tools/test/services/mock-vllm/tests/test_fixture_latency.py",
+            "tools/test/services/provider-mocker/provider_mocker/app.py",
+            "tools/test/services/provider-mocker/requirements.txt",
+            "tools/test/services/provider-mocker/tests/test_fixture_latency.py",
         ):
             plan = make_plan([path], source_sha=SHA)
             expected = {
                 "e2e." + name
                 for name in profile_records(selection="pr")
-                if "mock-vllm" in profile_image_dependencies()[name]
+                if "provider-mocker" in profile_image_dependencies()[name]
             }
             self.assertTrue(expected <= set(plan["expected_verification_ids"]))
             self.assertIn("operator", plan["expected_verification_ids"])
             self.assertIn("mock-provider", plan["expected_verification_ids"])
-            self.assertIn("mock-vllm", plan["images"])
+            self.assertIn("provider-mocker", plan["images"])
             self.assertNotIn(
                 "e2e.response-api-redis", plan["expected_verification_ids"]
             )
@@ -408,7 +408,7 @@ class SelectionTests(unittest.TestCase):
     def test_full_cpu_never_removes_affected_pr_verifications(self):
         for path in (
             "e2e/profiles/route-action/profile.go",
-            "tools/test/services/mock-vllm/app.py",
+            "tools/test/services/provider-mocker/provider_mocker/app.py",
         ):
             affected = make_plan([path], source_sha=SHA)
             for profile in ("pr", "nightly", "release"):
@@ -439,7 +439,7 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(record["runtime"], "candle")
                 self.assertEqual(record["device"], "cpu")
                 self.assertEqual(record["platform"], "linux/amd64")
-                self.assertEqual(record["images"], ["extproc", "mock-vllm"])
+                self.assertEqual(record["images"], ["extproc", "provider-mocker"])
         for path in (
             "e2e/profiles/local-classifier-backend/profile.go",
             "e2e/testcases/local_classifier_routing.go",
@@ -457,10 +457,10 @@ class SelectionTests(unittest.TestCase):
             ],
             source_sha=SHA,
         )
-        self.assertEqual(plan["images"], ["dashboard", "llm-katan", "vllm-sr"])
+        self.assertEqual(plan["images"], ["dashboard", "provider-mocker", "vllm-sr"])
         self.assertEqual(plan["publish_images"], [])
         baseline = make_plan(["e2e/profiles/ai-gateway/profile.go"], source_sha=SHA)
-        self.assertIn("mock-vllm", baseline["images"])
+        self.assertIn("provider-mocker", baseline["images"])
 
     def test_main_only_publishes_affected_inputs(self):
         docs = make_plan(["README.md"], source_sha=SHA, profile="main")

@@ -31,7 +31,7 @@ class OperatorRequestTests(unittest.TestCase):
                     "message": {
                         "content": json.dumps(
                             {
-                                "mock": "mock-vllm",
+                                "mock": "provider-mocker",
                                 "protocol": "chat_completions",
                                 "model": "backend",
                                 "user": ["nonce"],

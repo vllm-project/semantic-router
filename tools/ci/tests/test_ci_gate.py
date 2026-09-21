@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 from check_ci_gate import evaluate_gate  # noqa: E402
 from ci_plan import digest, make_plan  # noqa: E402
 from ci_results import make_receipt  # noqa: E402
+from provider_mocker_image import IMAGE, REGISTRY  # noqa: E402
 
 SHA = "a" * 40
 
@@ -24,6 +25,35 @@ def completed(paths=None, *, full=False):
         {"id": f"image:{name}", "sha256": "b" * 64, "source_sha": SHA}
         for name in plan["images"]
     ]
+    if IMAGE in plan["image_sources"]:
+        source = plan["image_sources"][IMAGE]
+        if source["source"] == "published":
+            source.update(
+                {
+                    "registry_digest": "sha256:" + "d" * 64,
+                    "ref": REGISTRY + "@sha256:" + "d" * 64,
+                    "image_source_sha": "e" * 40,
+                    "images": [
+                        {
+                            "platform": "linux/amd64",
+                            "manifest": "sha256:" + "f" * 64,
+                            "config": "sha256:" + "1" * 64,
+                        }
+                    ],
+                }
+            )
+        build = next(item for item in builds if item["id"] == "image:" + IMAGE)
+        build.update(
+            {
+                key: value
+                for key, value in source.items()
+                if key not in {"id", "source", "lookup_ref"}
+            }
+        )
+        build["acquisition"] = source["source"]
+        plan["plan_sha256"] = digest(
+            {k: v for k, v in plan.items() if k != "plan_sha256"}
+        )
     if plan["native"]:
         builds.append({"id": "native:cpu", "sha256": "c" * 64, "source_sha": SHA})
     receipts = []
@@ -63,6 +93,27 @@ class GateTests(unittest.TestCase):
         for full in (False, True):
             plan, receipts, builds = completed(full=full)
             self.assertTrue(evaluate_gate(plan, receipts, builds=builds).passed)
+
+    def test_published_fixture_requires_planned_input_and_registry_identity(self):
+        plan, receipts, builds = completed(["e2e/testing/run_memory_integration.sh"])
+        fixture = next(item for item in builds if item["id"] == "image:" + IMAGE)
+        self.assertNotEqual(fixture["image_source_sha"], SHA)
+        self.assertTrue(evaluate_gate(plan, receipts, builds=builds).passed)
+        for field in (
+            "inputs_sha256",
+            "registry_digest",
+            "image_source_sha",
+            "ref",
+            "images",
+            "acquisition",
+            "source_sha",
+        ):
+            candidate = copy.deepcopy(builds)
+            next(item for item in candidate if item["id"] == "image:" + IMAGE)[
+                field
+            ] = "wrong"
+            with self.subTest(field=field):
+                self.assertFalse(evaluate_gate(plan, receipts, builds=candidate).passed)
 
     def test_missing_result_cannot_be_hidden_by_omitting_needs(self):
         plan, receipts, builds = completed()

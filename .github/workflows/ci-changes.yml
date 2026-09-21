@@ -23,6 +23,10 @@ on:
         value: ${{ jobs.plan.outputs.dispatch }}
       images:
         value: ${{ jobs.plan.outputs.images }}
+      build_images:
+        value: ${{ jobs.plan.outputs.build_images }}
+      published_images:
+        value: ${{ jobs.plan.outputs.published_images }}
       publish_images:
         value: ${{ jobs.plan.outputs.publish_images }}
       build_native:
@@ -73,6 +77,8 @@ jobs:
       plan: ${{ steps.plan.outputs.plan }}
       dispatch: ${{ steps.plan.outputs.dispatch }}
       images: ${{ steps.plan.outputs.images }}
+      build_images: ${{ steps.plan.outputs.build_images }}
+      published_images: ${{ steps.plan.outputs.published_images }}
       publish_images: ${{ steps.plan.outputs.publish_images }}
       build_native: ${{ steps.plan.outputs.build_native }}
       multiarch: ${{ steps.plan.outputs.multiarch }}

@@ -135,7 +135,7 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 
 	// Step 6: Deploy Mock LLM (to receive routed requests)
 	p.log("Step 6/7: Deploying Mock LLM service")
-	if err := p.deployMockLLM(ctx, deployer, opts); err != nil {
+	if err := p.deployMockLLM(ctx, opts); err != nil {
 		return fmt.Errorf("failed to deploy mock LLM: %w", err)
 	}
 
@@ -186,32 +186,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 	return nil
 }
 
-func (p *Profile) deployMockLLM(ctx context.Context, deployer *helm.Deployer, opts *framework.SetupOptions) error {
-	// Deploy mock-vllm for testing
-	mockOpts := helm.InstallOptions{
-		ReleaseName: "mock-llm",
-		Chart:       "deploy/helm/mock-vllm",
-		Namespace:   "default",
-		Set: map[string]string{
-			"image.repository": "ghcr.io/vllm-project/semantic-router/mock-vllm",
-			"image.tag":        "latest",
-			"image.pullPolicy": "Never",
-			"service.port":     "8000",
-		},
-		Wait:    true,
-		Timeout: "5m",
-	}
-
-	if err := deployer.Install(ctx, mockOpts); err != nil {
-		// If mock-vllm chart doesn't exist, create a simple deployment
-		p.log("Mock LLM chart not found, creating simple deployment...")
-		return p.deploySimpleMockLLM(ctx, opts)
-	}
-
-	return deployer.WaitForDeployment(ctx, "default", "mock-llm", 5*time.Minute)
-}
-
-func (p *Profile) deploySimpleMockLLM(ctx context.Context, opts *framework.SetupOptions) error {
+func (p *Profile) deployMockLLM(ctx context.Context, opts *framework.SetupOptions) error {
 	// Create a simple mock LLM deployment using kubectl
 	manifest := `
 apiVersion: apps/v1
@@ -233,7 +208,7 @@ spec:
     spec:
       containers:
       - name: mock-llm
-        image: ghcr.io/vllm-project/semantic-router/mock-vllm:latest
+        image: semantic-router-ci/provider-mocker:e2e-test
         imagePullPolicy: Never
         ports:
         - containerPort: 8000
@@ -482,9 +457,9 @@ func (p *Profile) getKindNodes(ctx context.Context) ([]string, error) {
 	return nodes, nil
 }
 
-// Note: We use mock-vllm for E2E testing, so no real LLM models are needed.
+// Note: We use provider-mocker for E2E testing, so no real LLM models are needed.
 // The 4 LLM model names (llama-3.2-1b, etc.) are just identifiers for routing.
-// mock-vllm simulates the LLM endpoints without actual model inference.
+// provider-mocker simulates the LLM endpoints without actual model inference.
 
 // Gateway deployment functions
 

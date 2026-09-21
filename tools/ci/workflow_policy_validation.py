@@ -8,7 +8,7 @@ from typing import Any, Protocol
 
 import yaml
 from ci_plan import EXECUTORS
-from classify_pr_changes import PRODUCTION_RELEASE_IMAGES
+from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
 from domain_registry import job_records, load_domain_registry
 from image_artifacts import publication_tags
 from verification_catalog import catalog_errors
@@ -165,8 +165,7 @@ def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
         errors.append("release images must consume the planner publication inventory")
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
-        "- `anthropic-shim`",
-        "- `llm-katan`",
+        "- `provider-mocker`",
         "- `vllm-sr-sim`",
     }
     if any(bullet in release_text for bullet in fixture_bullets):
@@ -216,11 +215,14 @@ def validate_nightly_docker_owner(
 def validate_fixture_tag_policy(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
-    for image in ("anthropic-shim", "llm-katan"):
-        if "nightly" not in publication_tags(image, "nightly", "", False, "20260101"):
-            errors.append(
-                f"nightly fixture {image} must retain its mutable nightly tag"
-            )
+    if "provider-mocker" in set(NIGHTLY_IMAGES) | RELEASE_IMAGES:
+        errors.append("provider-mocker cannot follow product publication schedules")
+    for mode in ("pr", "nightly", "release"):
+        try:
+            publication_tags("provider-mocker", mode, "", False, "20260101")
+        except ValueError:
+            continue
+        errors.append(f"provider-mocker cannot be published in {mode} mode")
 
 
 def validate_security_boundary(

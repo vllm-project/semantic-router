@@ -6,9 +6,6 @@ on:
       verification:
         type: string
         default: '{}'
-      prebuilt-images:
-        type: boolean
-        default: false
       run_integration:
         description: Run operator Kind integration coverage.
         required: false
@@ -136,80 +133,6 @@ jobs:
             exit 1
           fi
 
-  docker-build:
-    name: Operator Smoke Images
-    if: inputs.run_integration && !inputs.prebuilt-images
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Set local tags for integration tests
-        id: local-tags
-        run: |
-          echo "operator=semantic-router-operator:test" >> $GITHUB_OUTPUT
-          echo "bundle=semantic-router-operator-bundle:test" >> $GITHUB_OUTPUT
-          echo "extproc=semantic-router-extproc:test" >> $GITHUB_OUTPUT
-
-      - name: Build operator image (local for tests)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deploy/operator/Dockerfile
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: ${{ steps.local-tags.outputs.operator }}
-          cache-from: type=gha,scope=operator
-          cache-to: type=gha,mode=max,scope=operator,ignore-error=true
-
-      - name: Build extproc image (local for tests)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./tools/docker/Dockerfile.extproc
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: ${{ steps.local-tags.outputs.extproc }}
-          cache-from: type=gha,scope=extproc
-          cache-to: type=gha,mode=max,scope=extproc,ignore-error=true
-
-      - name: Build request-observing backend fixture
-        run: |
-          docker build -t semantic-router-operator-mock:test tools/test/services/mock-vllm
-          docker save -o /tmp/operator-mock-image.tar semantic-router-operator-mock:test
-      - uses: actions/upload-artifact@v4
-        with:
-          name: operator-mock-image
-          path: /tmp/operator-mock-image.tar
-          retention-days: 1
-
-      - name: Save operator image for integration tests
-        run: docker save -o /tmp/operator-image.tar ${{ steps.local-tags.outputs.operator }}
-
-      - name: Save extproc image for integration tests
-        run: docker save -o /tmp/extproc-image.tar ${{ steps.local-tags.outputs.extproc }}
-
-      - name: Upload operator image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: operator-image
-          path: /tmp/operator-image.tar
-          retention-days: 1
-
-      - name: Upload extproc image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: extproc-image
-          path: /tmp/extproc-image.tar
-          retention-days: 1
-
   bundle-validate:
     name: OLM Bundle
     runs-on: ubuntu-24.04
@@ -243,21 +166,13 @@ jobs:
           fi
 
       - name: Load validated bundle image
-        if: inputs.prebuilt-images
         uses: ./.github/actions/load-ci-images
         with:
           images: '["operator-bundle"]'
       - name: Inspect shared bundle image
-        if: inputs.prebuilt-images
         run: docker image inspect "$E2E_PREBUILT_OPERATOR_BUNDLE_IMAGE"
-      - name: Build standalone bundle image
-        if: ${{ !inputs.prebuilt-images }}
-        run: docker build -f bundle/Dockerfile -t semantic-router-operator-bundle:test .
       - name: Preserve consumed bundle identity
-        env:
-          PREBUILT: ${{ inputs.prebuilt-images }}
-        run: |
-          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
+        run: cp "$CI_IMAGE_RECEIPTS" artifacts.json
       - uses: actions/upload-artifact@v4
         with:
           name: operator-bundle
@@ -266,10 +181,10 @@ jobs:
 
   integration-test:
     name: Routed Requests (${{ matrix.cache-backend }})
-    if: ${{ !cancelled() && inputs.run_integration && (inputs.prebuilt-images || needs.docker-build.result == 'success') }}
+    if: ${{ !cancelled() && inputs.run_integration && needs.checks.result == 'success' && needs.bundle-validate.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [docker-build]
+    needs: [checks, bundle-validate]
     strategy:
       fail-fast: false
       max-parallel: 2
@@ -516,24 +431,14 @@ jobs:
           fi
 
       - name: Load verified operator and request-path images
-        if: inputs.prebuilt-images
         uses: ./.github/actions/load-ci-images
         with:
-          images: '["operator","extproc","mock-vllm"]'
+          images: '["operator","extproc","provider-mocker"]'
       - name: Assign verified local tags
-        if: inputs.prebuilt-images
         run: |
           docker tag "$E2E_PREBUILT_OPERATOR_IMAGE" semantic-router-operator:test
           docker tag "$E2E_PREBUILT_EXT_PROC_IMAGE" semantic-router-extproc:test
-          docker tag "$E2E_PREBUILT_MOCK_VLLM_IMAGE" semantic-router-operator-mock:test
-      - uses: actions/download-artifact@v4
-        if: ${{ !inputs.prebuilt-images }}
-        with:
-          name: operator-mock-image
-          path: /tmp
-      - name: Load standalone request backend fixture
-        if: ${{ !inputs.prebuilt-images }}
-        run: docker load --input /tmp/operator-mock-image.tar
+          docker tag "$E2E_PREBUILT_PROVIDER_MOCKER_IMAGE" semantic-router-operator-mock:test
       - name: Deploy request-observing backend
         run: |
           kind load docker-image semantic-router-operator-mock:test --name operator-test-${{ matrix.cache-backend }}
@@ -542,17 +447,6 @@ jobs:
           kubectl -n semantic-router-test patch deployment operator-mock -p '{"spec":{"template":{"spec":{"containers":[{"name":"semantic-router-operator-mock","imagePullPolicy":"Never"}]}}}}'
           kubectl -n semantic-router-test expose deployment operator-mock --port=8000 --target-port=8000 --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n semantic-router-test rollout status deployment/operator-mock --timeout=120s
-
-      - name: Download operator image artifact
-        if: ${{ !inputs.prebuilt-images }}
-        uses: actions/download-artifact@v4
-        with:
-          name: operator-image
-          path: /tmp
-
-      - name: Load operator image into Docker
-        if: ${{ !inputs.prebuilt-images }}
-        run: docker load --input /tmp/operator-image.tar
 
       - name: Verify operator image loaded
         run: |
@@ -576,17 +470,6 @@ jobs:
             docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
             exit 1
           }
-
-      - name: Download extproc image artifact
-        if: ${{ !inputs.prebuilt-images }}
-        uses: actions/download-artifact@v4
-        with:
-          name: extproc-image
-          path: /tmp
-
-      - name: Load extproc image into Docker
-        if: ${{ !inputs.prebuilt-images }}
-        run: docker load --input /tmp/extproc-image.tar
 
       - name: Verify extproc image loaded
         run: |
@@ -1071,10 +954,7 @@ jobs:
           python3 tools/ci/check_operator_request.py --url http://127.0.0.1:18801 --model operator-ci-model --output operator-request.json
       - name: Preserve consumed request-path image identities
         if: always()
-        env:
-          PREBUILT: ${{ inputs.prebuilt-images }}
-        run: |
-          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
+        run: cp "$CI_IMAGE_RECEIPTS" artifacts.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:

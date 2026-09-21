@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Reconcile actual execution receipts with the complete pre-execution CI plan."""
+
 from __future__ import annotations
 
 import argparse
@@ -12,6 +13,7 @@ from typing import Any
 
 from ci_plan import digest
 from ci_results import collection_errors, execution_errors
+from provider_mocker_image import validate_acquisition
 from verification_catalog import full_cpu_ids
 
 
@@ -68,12 +70,23 @@ def evaluate_gate(
         build_map[name] = build
         if build.get("source_sha") != plan.get("source_sha"):
             errors.append(f"build {name}: source SHA differs")
+        if name == "image:provider-mocker":
+            expected = plan.get("image_sources", {}).get("provider-mocker", {})
+            if build.get("inputs_sha256") != expected.get("inputs_sha256"):
+                errors.append("provider-mocker build inputs differ from plan")
+            if build.get("acquisition") != expected.get("source"):
+                errors.append("provider-mocker acquisition mode differs from plan")
+            if expected.get("source") == "published":
+                try:
+                    validate_acquisition(build, expected)
+                except ValueError as error:
+                    errors.append(str(error))
     expected_builds = {f"image:{name}" for name in plan.get("images", [])}
     if plan.get("native"):
         expected_builds.add("native:cpu")
     if set(build_map) != expected_builds:
         errors.append(
-            f"build inventory mismatch: missing={sorted(expected_builds-set(build_map))}, extra={sorted(set(build_map)-expected_builds)}"
+            f"build inventory mismatch: missing={sorted(expected_builds - set(build_map))}, extra={sorted(set(build_map) - expected_builds)}"
         )
     for name in required:
         receipt, record = actual.get(name), planned.get(name)
@@ -157,6 +170,18 @@ def load_builds(directory: Path) -> list[dict]:
                 "id": f"image:{record['id']}",
                 "source_sha": record["source_sha"],
                 "sha256": record["sha256"],
+                **{
+                    key: record[key]
+                    for key in (
+                        "acquisition",
+                        "inputs_sha256",
+                        "registry_digest",
+                        "image_source_sha",
+                        "ref",
+                        "images",
+                    )
+                    if key in record
+                },
             }
         )
     native = directory / "ci-build-native-cpu/receipt.json"

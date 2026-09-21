@@ -6,6 +6,9 @@ on:
       images:
         type: string
         required: true
+      published-images:
+        type: string
+        default: '[]'
       mode:
         type: string
         default: pr
@@ -21,6 +24,7 @@ permissions:
 
 jobs:
   image:
+    if: inputs.images != '[]'
     name: Container Image (${{ matrix.image }})
     runs-on: ubuntu-24.04
     timeout-minutes: 180
@@ -51,10 +55,11 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
           MULTIARCH: ${{ inputs.multiarch }}
+          MODE: ${{ inputs.mode }}
         run: |
           args=()
           if [[ "$MULTIARCH" == true ]]; then args+=(--multiarch); fi
-          python tools/ci/image_artifacts.py definition --image "$IMAGE" "${args[@]}"
+          python tools/ci/image_artifacts.py definition --image "$IMAGE" --mode "$MODE" "${args[@]}"
           mkdir -p .agent-harness/image-output
       - name: Resolve final candidate build arguments
         id: build-args
@@ -76,6 +81,7 @@ jobs:
           outputs: type=oci,dest=.agent-harness/image-output/image.tar
           tags: semantic-router-ci/${{ matrix.image }}:${{ github.sha }}
           build-args: ${{ steps.build-args.outputs.args }}
+          labels: ${{ steps.definition.outputs.labels }}
           provenance: false
           cache-from: type=gha,scope=${{ matrix.image }}-candidate
           cache-to: type=gha,mode=max,scope=${{ matrix.image }}-candidate,ignore-error=true
@@ -103,6 +109,40 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ci-build-image-${{ matrix.image }}
+          path: .agent-harness/image-output/manifest.json
+          include-hidden-files: true
+          if-no-files-found: error
+
+  published:
+    name: Reuse Image (${{ matrix.image.id }})
+    if: inputs.published-images != '[]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(inputs.published-images) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install OCI image transport
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+      - name: Acquire the qualified image by digest
+        env:
+          PUBLISHED_IMAGE: ${{ toJSON(matrix.image) }}
+        run: python3 tools/ci/image_artifacts.py acquire --directory .agent-harness/image-output
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-image-${{ matrix.image.id }}
+          path: .agent-harness/image-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-build-image-${{ matrix.image.id }}
           path: .agent-harness/image-output/manifest.json
           include-hidden-files: true
           if-no-files-found: error

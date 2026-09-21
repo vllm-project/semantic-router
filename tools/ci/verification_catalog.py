@@ -27,9 +27,8 @@ def profile_image_dependencies() -> dict[str, list[str]]:
     """
     source = (ROOT / "e2e/profiles/all/imports.go").read_text()
     fixtures = {
-        "mockVLLMLocalImages": ["mock-vllm"],
+        "providerMockerLocalImages": ["provider-mocker"],
         "dashboardLocalImages": ["dashboard"],
-        "anthropicshim.LocalImages()": ["anthropic-shim"],
     }
     result = {}
     for match in re.finditer(
