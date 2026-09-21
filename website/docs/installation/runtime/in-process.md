@@ -101,8 +101,8 @@ curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \
 ```
 
 Preview runs the classifier and reports the selected decision, signal scores,
-errors, and timings. It does not call the answer backend. To test a complete
-request:
+errors, and timings without generating an answer. Native output selection may
+call the backend's render endpoint to check capacity. To test a complete request:
 
 ```bash
 curl -fsS http://localhost:8899/v1/chat/completions \

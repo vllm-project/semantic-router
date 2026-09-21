@@ -1,5 +1,5 @@
 export type TerrainContour = {
-  color: string
+  colorToken: string
   label: string
   max: number
   min: number
@@ -10,28 +10,28 @@ export const TERRAIN_CONTOURS: TerrainContour[] = [
   {
     min: 0.15,
     max: 0.22,
-    color: '#3f3f46',
+    colorToken: '--site-border-strong',
     label: 'SIGNAL FIELD',
     text: 'SIGNAL FIELD. INTENT CONTEXT SAFETY MODALITY HISTORY KNOWLEDGE. ',
   },
   {
     min: 0.35,
     max: 0.42,
-    color: '#71717a',
+    colorToken: '--site-muted',
     label: 'PREFERENCE LAYER',
     text: 'PREFERENCE LAYER. USER PRODUCT WORKLOAD POLICY COST QUALITY LATENCY. ',
   },
   {
     min: 0.55,
     max: 0.62,
-    color: '#a1a1aa',
+    colorToken: '--site-muted-bright',
     label: 'DECISION SURFACE',
     text: 'DECISION SURFACE. SELECT CASCADE COORDINATE FUSE VERIFY FALLBACK. ',
   },
   {
     min: 0.75,
     max: 0.82,
-    color: '#e4e4e7',
+    colorToken: '--site-text',
     label: 'MODEL FLEET',
     text: 'MODEL FLEET. FRONTIER OPEN SPECIALIZED EDGE HETEROGENEOUS INFERENCE. ',
   },

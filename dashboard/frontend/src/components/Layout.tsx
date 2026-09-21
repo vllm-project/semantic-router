@@ -56,7 +56,7 @@ const Layout: React.FC<LayoutProps> = ({
   )
   const pendingMenuFocusRef = useRef<'active-tab' | 'last-link' | null>(null)
   const { user, logout } = useAuth()
-  const { evaluationAvailable } = useReadonly()
+  const { srBenchAvailable } = useReadonly()
   const location = useLocation()
   const configSection = getConfigSectionFromPathname(location.pathname)
   const navigate = useNavigate()
@@ -68,7 +68,7 @@ const Layout: React.FC<LayoutProps> = ({
     BUILD_MENU_CATEGORIES,
     (item) =>
       canAccessMenuItem(item) &&
-      (item.kind !== 'route' || item.to !== '/evaluation' || evaluationAvailable) &&
+      (item.kind !== 'route' || item.to !== '/evaluation' || srBenchAvailable) &&
       (canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'),
   )
   const operateMenuCategories = filterLayoutMenuCategories(

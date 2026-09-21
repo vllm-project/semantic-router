@@ -43,8 +43,8 @@ interface AuthenticatedAppRoutesProps {
   user: PermissionUser | null
   setupMode: boolean
   settingsLoading: boolean
-  evaluationAvailable: boolean
-  evaluationUnavailableReason: string
+  srBenchAvailable: boolean
+  srBenchUnavailableReason: string
 }
 
 const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
@@ -84,16 +84,16 @@ const renderShellContent = (
 const renderShellElement = (
   route: ShellRouteDefinition,
   settingsLoading: boolean,
-  evaluationAvailable: boolean,
-  evaluationUnavailableReason: string,
+  srBenchAvailable: boolean,
+  srBenchUnavailableReason: string,
 ) => {
   const content = renderShellContent(route, shellPageElements[route.page])
   if (route.page !== 'evaluation') return content
   return (
     <EvaluationAvailabilityRoute
-      available={evaluationAvailable}
+      available={srBenchAvailable}
       isLoading={settingsLoading}
-      reason={evaluationUnavailableReason}
+      reason={srBenchUnavailableReason}
     >
       {content}
     </EvaluationAvailabilityRoute>
@@ -105,8 +105,8 @@ export const renderAuthenticatedAppRoutes = ({
   user,
   setupMode,
   settingsLoading,
-  evaluationAvailable,
-  evaluationUnavailableReason,
+  srBenchAvailable,
+  srBenchUnavailableReason,
 }: AuthenticatedAppRoutesProps): React.ReactElement => (
   <>
     <Route
@@ -119,12 +119,7 @@ export const renderAuthenticatedAppRoutes = ({
         path={route.path}
         element={
           canAccessDashboardPath(user, route.path) ? (
-            renderShellElement(
-              route,
-              settingsLoading,
-              evaluationAvailable,
-              evaluationUnavailableReason,
-            )
+            renderShellElement(route, settingsLoading, srBenchAvailable, srBenchUnavailableReason)
           ) : (
             <Navigate to="/dashboard" replace />
           )

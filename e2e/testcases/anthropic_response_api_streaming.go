@@ -65,7 +65,7 @@ func testAnthropicResponseAPIStreaming(ctx context.Context, client *kubernetes.C
 		fmt.Println("[Test] Testing Response API streaming over the anthropic-shim backend")
 	}
 
-	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, "MoM", "", "Say hello in a few words.")
+	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, "MoM", "", "Say hello in a few words.", nil)
 	if err != nil {
 		return err
 	}

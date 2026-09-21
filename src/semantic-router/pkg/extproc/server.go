@@ -14,6 +14,8 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -75,17 +77,19 @@ var (
 
 // Server represents a gRPC server for the Envoy ExtProc
 type Server struct {
-	modelPool  *binding.Pool
-	configPath string
-	service    *RouterService
-	server     *grpc.Server
-	port       int
-	secure     bool
-	certPath   string
-	runtime    *routerruntime.Registry
-	reloadMu   sync.Mutex
-	servingMu  sync.Mutex
-	lifecycle  serverLifecycle
+	modelPool    *binding.Pool
+	configPath   string
+	service      *RouterService
+	server       *grpc.Server
+	port         int
+	secure       bool
+	certPath     string
+	runtime      *routerruntime.Registry
+	reloadMu     sync.Mutex
+	servingMu    sync.Mutex
+	servingReady chan struct{}
+	healthServer *health.Server
+	lifecycle    serverLifecycle
 }
 
 // NewServer creates a new ExtProc gRPC server
@@ -164,6 +168,11 @@ func (s *Server) Start() error {
 
 // StartContext serves requests until ctx is cancelled or the gRPC server fails.
 func (s *Server) StartContext(ctx context.Context) error {
+	return s.StartContextWithReady(ctx, nil)
+}
+
+// StartContextWithReady calls onServing once the listener is accepting requests.
+func (s *Server) StartContextWithReady(ctx context.Context, onServing func()) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -234,7 +243,20 @@ func (s *Server) StartContext(ctx context.Context) error {
 		return errors.New("router server is shutting down")
 	}
 	s.server = grpcServer
+	s.healthServer = health.NewServer()
+	s.healthServer.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+	healthpb.RegisterHealthServer(grpcServer, s.healthServer)
+	ready := s.servingReadyLocked()
 	s.servingMu.Unlock()
+	lis = &servingListener{Listener: lis, onServing: func() {
+		close(ready)
+		if !s.usesKubernetesConfigSource() {
+			s.markServingReady()
+		}
+		if onServing != nil {
+			onServing()
+		}
+	}}
 
 	// Run the server in a separate goroutine
 	serverErrCh := make(chan error, 1)
@@ -308,6 +330,9 @@ func (s *Server) shutdownServing(ctx context.Context) error {
 	var shutdownErr error
 	s.servingMu.Lock()
 	grpcServer := s.server
+	if s.healthServer != nil {
+		s.healthServer.Shutdown()
+	}
 	s.servingMu.Unlock()
 	if grpcServer != nil {
 		gracefulCtx := ctx
@@ -602,7 +627,11 @@ func (s *Server) reloadRouterFromConfigLocked(
 	source string,
 	configPath string,
 	candidateCfg *config.RouterConfig,
-) (reloadErr error) {
+) error {
+	return s.reloadRouterFromConfigLockedContext(context.Background(), source, configPath, candidateCfg)
+}
+
+func (s *Server) reloadRouterFromConfigLockedContext(ctx context.Context, source, configPath string, candidateCfg *config.RouterConfig) (reloadErr error) {
 	if candidateCfg == nil {
 		return errors.New("config reload candidate is nil")
 	}
@@ -653,6 +682,14 @@ func (s *Server) reloadRouterFromConfigLocked(
 		_ = newRouter.Close()
 		return fmt.Errorf("runtime warmup failed: %w", err)
 	}
+	if err := ctx.Err(); err != nil {
+		_ = newRouter.Close()
+		return err
+	}
+	if s.lifecycle.isStopping() {
+		_ = newRouter.Close()
+		return errors.New("router server is shutting down")
+	}
 	s.runtime.SetConfigActivationStage(attempt, "publication")
 	if source == "file" {
 		release := s.runtime.LockConfigPublication()
@@ -667,14 +704,15 @@ func (s *Server) reloadRouterFromConfigLocked(
 	}
 	inheritRouterLearningState(s.service.GetRouter(), newRouter)
 
-	// Kubernetes updates are already published through config.Replace in the
-	// controller callback. Replacing again here would re-enqueue the same config
-	// update and can cause duplicate reload notifications.
+	// Registry-backed generations publish only after a successful swap.
 	if source != "kubernetes" && s.runtime == nil {
 		replaceReloadConfig(candidateCfg)
 	}
 	logLoadedRouterConfig(configPath, candidateCfg)
 	if err := s.service.Swap(newRouter, func(acquire AcquireFunc) {
+		if newRouter != nil {
+			newRouter.WorkflowStateService.CommitStorePolicy()
+		}
 		publishRouterState(candidateCfg, newRouter, s.runtime, acquire)
 	}); err != nil {
 		return err

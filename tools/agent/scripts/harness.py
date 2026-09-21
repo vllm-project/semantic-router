@@ -271,7 +271,10 @@ def main() -> int:
     if args.command == "verify":
         return run_verify(split_names(args.domains), split_names(args.profiles))
 
-    base_ref = resolve_base_ref(getattr(args, "base_ref", None))
+    try:
+        base_ref = resolve_base_ref(getattr(args, "base_ref", None))
+    except ValueError as exc:
+        parser.error(str(exc))
     changed_files = changed_files_for_args(parser, args)
     if args.command == "changed-files":
         print("\n".join(changed_files))

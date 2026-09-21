@@ -38,13 +38,14 @@ request deadlines.
 
 ## Inspect the executed path
 
-Route Preview runs your configured signals without calling a generation backend:
+Route Preview runs your configured signals without generating an answer. Native
+output selection may call the backend's render endpoint to check capacity:
 
 ```bash
 curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \
   -H 'Content-Type: application/json' \
   -d '{"model":"auto","text":"Help me debug this Python program."}' \
-  | jq '{decision_result, signal_confidences, signal_values, signal_errors, metrics, eval_trace}'
+  | jq '{decision_result, signal_confidences, signal_values, signal_errors, metrics, eval_trace, decision_ranking}'
 ```
 
 Replace `auto` with your public entrypoint name; the Vela AMD recipe uses
@@ -57,6 +58,7 @@ Replace `auto` with your public entrypoint name; the Vela AMD recipe uses
 | `signal_errors` | Failed or unavailable signal evaluations |
 | `metrics` | Time spent evaluating the request and signals |
 | `eval_trace` | How conditions produced the routing decision |
+| `decision_ranking` | Which key ordered the matched decisions, and why confidence did not |
 
 Preview does not run RAG retrieval or reranking. Test those with a real
 `/v1/chat/completions` request after indexing documents. Its trace includes
