@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -29,6 +30,9 @@ func NewProfile() *Profile {
 			Name:                     "vela-halu",
 			SemanticRouterValuesFile: valuesFile,
 			ResourceManifests:        resourceManifests,
+			WaitDeployments: []helpers.DeploymentRef{
+				{Namespace: "default", Name: "vllm-llama3-8b-instruct"},
+			},
 		}),
 	}
 }

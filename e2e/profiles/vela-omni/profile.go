@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
@@ -15,6 +16,9 @@ func NewProfile() *Profile {
 	return &Profile{stack: gatewaystack.New(gatewaystack.Config{
 		Name: "vela-omni", SemanticRouterValuesFile: "e2e/profiles/vela-omni/values.yaml",
 		ResourceManifests: []string{"e2e/profiles/ai-gateway/gateway-resources/backend.yaml", "deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml"},
+		WaitDeployments: []helpers.DeploymentRef{
+			{Namespace: "default", Name: "vllm-llama3-8b-instruct"},
+		},
 	})}
 }
 func (p *Profile) Name() string { return "vela-omni" }
