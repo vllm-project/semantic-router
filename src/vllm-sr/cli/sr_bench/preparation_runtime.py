@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import suppress
 from pathlib import Path
 
 MIN_FREE_BYTES = 1024**3
@@ -96,16 +97,12 @@ def execute(request, store, progress, stopping):
                 return value["dataset"]
             finally:
                 # A finished leader can still have installer/download children.
-                try:
+                with suppress(ProcessLookupError):
                     os.killpg(process.pid, signal.SIGTERM)
-                except ProcessLookupError:
-                    pass
                 if process.poll() is None:
                     try:
                         process.wait(timeout=3)
                     except subprocess.TimeoutExpired:
-                        try:
+                        with suppress(ProcessLookupError):
                             os.killpg(process.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
                         process.wait(timeout=3)

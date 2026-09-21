@@ -7,9 +7,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import Mock
 
 import pytest
-from click.testing import CliRunner
-
 from cli.sr_bench import VERSION
+from click.testing import CliRunner
 
 command = importlib.import_module("cli.commands.benchmark")
 preparations = importlib.import_module("cli.commands.benchmark_preparations")
@@ -78,7 +77,11 @@ def service(tmp_path, monkeypatch):
             self.end_headers()
             self.wfile.write(json.dumps(data).encode())
 
-        do_GET = do_POST = handle_request
+        def do_GET(self):
+            self.handle_request()
+
+        def do_POST(self):
+            self.handle_request()
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)

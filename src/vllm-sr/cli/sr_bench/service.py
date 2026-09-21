@@ -24,7 +24,7 @@ from .datasets import DatasetReader
 from .engine import Engine, EngineClosedError, ReviewedPlanChangedError
 from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
 from .offline import export_training, regrade, replay
-from .preparations import Preparations, PreparationBusyError, preparation_options
+from .preparations import PreparationBusyError, Preparations, preparation_options
 from .recovery import RecoveryPlanError, recover, recovery_plan
 from .replay_validation import ReplayEligibilityError
 from .report import compare, make_report
@@ -356,7 +356,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(202, {"preparation": job})
             if (
                 route[0] == "dataset-preparations"
-                and len(route) == 2
+                and len(route) == RUN_ROUTE_PARTS
                 and method == "GET"
             ):
                 return self._send(
