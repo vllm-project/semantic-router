@@ -121,7 +121,7 @@ class ComponentBatchTests(unittest.TestCase):
         stages = {
             "learning-tools": ["test-learning-tools", "test-calibration"],
             "soak-tools": ["soak-test", "proxy-tests"],
-            "mock-provider": ["test-provider-simulator"],
+            "mock-provider": ["test-provider-mocker"],
             "e2e-unit": ["test-e2e-unit"],
             "training": ["torch", "training-deps", "test-training-contracts"],
         }

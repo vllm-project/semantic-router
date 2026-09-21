@@ -136,7 +136,7 @@ func sendResponseJailbreakStreamingRequest(ctx context.Context, localPort, promp
 }
 
 // chatStreamedContent joins the content deltas of an OpenAI chat completion SSE
-// stream and reports how many frames carried them. mock-vllm streams the answer
+// stream and reports how many frames carried them. provider-mocker streams the answer
 // in fixed-size chunks, so the text under test can straddle two frames and has
 // to be reassembled.
 func chatStreamedContent(streamBody []byte) (string, int) {

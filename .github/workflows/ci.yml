@@ -55,7 +55,8 @@ jobs:
     if: needs.plan.outputs.images != '[]'
     uses: ./.github/workflows/build-artifacts.yml
     with:
-      images: ${{ needs.plan.outputs.images }}
+      images: ${{ needs.plan.outputs.build_images }}
+      published-images: ${{ needs.plan.outputs.published_images }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
@@ -174,7 +175,6 @@ jobs:
     uses: ./.github/workflows/operator-ci.yml
     with:
       verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).operator[matrix.label]) }}
-      prebuilt-images: true
       run_integration: true
       integration_matrix: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).operator[matrix.label].integration_matrix) }}
     secrets: inherit

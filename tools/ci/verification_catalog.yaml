@@ -83,7 +83,7 @@ verifications:
     boundary: [unit, integration, e2e]
     executor: operator
     workflow: .github/workflows/operator-ci.yml
-    images: [operator, operator-bundle, extproc, mock-vllm]
+    images: [operator, operator-bundle, extproc, provider-mocker]
     services: [kind]
     runtime: candle
     device: cpu
@@ -95,7 +95,7 @@ verifications:
     executor: local
     workflow: .github/workflows/test-local.yml
     suite: cli
-    images: [vllm-sr, dashboard]
+    images: [vllm-sr, dashboard, provider-mocker]
     services: [docker, envoy, controlled-backend]
     runtime: candle
     device: cpu
@@ -107,8 +107,8 @@ verifications:
     executor: local
     workflow: .github/workflows/test-local.yml
     suite: memory
-    images: [vllm-sr, dashboard, llm-katan]
-    services: [docker, envoy, milvus, llm-katan]
+    images: [vllm-sr, dashboard, provider-mocker]
+    services: [docker, envoy, milvus, provider-mocker]
     runtime: candle
     device: cpu
     inventory: memory-15-required-cases-v1
@@ -240,8 +240,8 @@ verifications:
     executor: tools
     worker: router
     workflow: .github/workflows/test-tools.yml
-    target: test-provider-simulator
-    inventory: provider-simulator-protocol-and-latency-framework-discovery
+    target: test-provider-mocker
+    inventory: provider-mocker-native-protocol-and-scenario-discovery
   learning-tools:
     display_name: Routing Tools
     activity: test

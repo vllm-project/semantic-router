@@ -48,7 +48,7 @@ class DisplayNameTests(unittest.TestCase):
         by_id = {row["id"]: row for row in rows}
         self.assertEqual(by_id["learning-tools"]["target"], "test-learning-tools")
         self.assertEqual(by_id["soak-tools"]["target"], "soak-test")
-        self.assertEqual(by_id["mock-provider"]["target"], "test-provider-simulator")
+        self.assertEqual(by_id["mock-provider"]["target"], "test-provider-mocker")
         self.assertEqual(
             workflow("test-tools.yml")["jobs"]["tests"]["name"],
             "${{ fromJSON(inputs.batch).display_name }}",
@@ -138,12 +138,17 @@ class DisplayNameTests(unittest.TestCase):
                     key: before[key]
                     for key in (
                         "images",
+                        "build_images",
                         "publish_images",
                         "multiarch",
                         "publish_helm",
                         "publish_python",
                     )
                 }
+                source = before["image_sources"].get("provider-mocker")
+                unchanged["published_images"] = (
+                    [source] if source and source["source"] == "published" else []
+                )
                 unchanged.update(plan=before, build_native=before["native"])
                 for executor in EXECUTORS:
                     rows = (
@@ -191,8 +196,9 @@ class DisplayNameTests(unittest.TestCase):
                 rows[0]["display_name"] = (
                     rows[1]["display_name"] if invalid == "duplicate" else invalid
                 )
-                with self.subTest(family=family, invalid=invalid), self.assertRaises(
-                    ValueError
+                with (
+                    self.subTest(family=family, invalid=invalid),
+                    self.assertRaises(ValueError),
                 ):
                     github_outputs(plan)
 

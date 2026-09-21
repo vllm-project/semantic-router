@@ -62,7 +62,7 @@ func testAnthropicResponseAPIBuffered(ctx context.Context, client *kubernetes.Cl
 // /v1/responses client.
 func testAnthropicResponseAPIStreaming(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing Response API streaming over the anthropic-shim backend")
+		fmt.Println("[Test] Testing Response API streaming over the provider-protocols backend")
 	}
 
 	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, "MoM", "", "Say hello in a few words.", nil)

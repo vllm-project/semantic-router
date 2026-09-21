@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Produce one immutable verification and build plan for every CI entrypoint."""
+
 from __future__ import annotations
 
 import argparse
@@ -18,6 +19,8 @@ from classify_pr_changes import (
     git_changed_files,
 )
 from domain_registry import domain_records, load_domain_registry, matching_domains
+from provider_mocker_image import IMAGE as MOCKER_IMAGE
+from provider_mocker_image import acquisition, published_from_plan, resolve_published
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,
@@ -140,6 +143,17 @@ def make_plan(
         | set(publish_images)
         | {image for record in verifications for image in record["images"]}
     )
+    image_sources = (
+        {MOCKER_IMAGE: acquisition(paths if profile in {"pr", "main"} else [])}
+        if MOCKER_IMAGE in images
+        else {}
+    )
+    reused = [
+        name
+        for name, record in image_sources.items()
+        if record["source"] == "published"
+    ]
+    build_images = [name for name in images if name not in reused]
     plan = {
         "schema_version": 1,
         "source_sha": source_sha,
@@ -154,6 +168,8 @@ def make_plan(
         "verifications": verifications,
         "expected_verification_ids": ids,
         "images": images,
+        "build_images": build_images,
+        "image_sources": image_sources,
         "native": any(record["native"] for record in verifications),
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
@@ -196,6 +212,10 @@ def github_outputs(plan: dict) -> dict[str, str]:
     outputs = {
         "plan": json.dumps(plan, separators=(",", ":")),
         "images": json.dumps(plan["images"]),
+        "build_images": json.dumps(plan["build_images"]),
+        "published_images": json.dumps(
+            [published_from_plan(plan)] if published_from_plan(plan) else []
+        ),
         "publish_images": json.dumps(plan["publish_images"]),
         "build_native": str(plan["native"]).lower(),
         "multiarch": str(plan["multiarch"]).lower(),
@@ -287,6 +307,11 @@ def main() -> int:
         draft=args.draft,
         requested=tuple(args.verification),
     )
+    if published := published_from_plan(plan):
+        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
+        plan["plan_sha256"] = digest(
+            {key: value for key, value in plan.items() if key != "plan_sha256"}
+        )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")
     if args.github_output:
@@ -294,7 +319,7 @@ def main() -> int:
             for key, value in github_outputs(plan).items():
                 stream.write(f"{key}={value}\n")
     print(
-        f"Planned {len(plan['verifications'])} verifications; {len(plan['images'])} image builds; full CPU={plan['full_cpu']}"
+        f"Planned {len(plan['verifications'])} verifications; {len(plan['build_images'])} image builds; full CPU={plan['full_cpu']}"
     )
     return 0
 
