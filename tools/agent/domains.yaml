@@ -1044,6 +1044,7 @@ profiles:
       - src/semantic-router/pkg/vectorstore/metadata_registry*.go
       - src/semantic-router/pkg/postgres/**
   rag-external-api:
+    display_name: External API RAG
     owner: e2e
     coverage_role: external-rag-request-and-response-boundary
     selection: manual
