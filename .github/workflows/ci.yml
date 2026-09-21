@@ -413,7 +413,36 @@ jobs:
           path: .agent-harness/ci/results
       - name: Reconcile source, dependencies, qualified combinations and cases
         env:
-          EXECUTOR_RESULTS: ${{ toJSON(needs) }}
+          # Job outputs include the full plan and dispatch copies. Keep them out of
+          # the process environment; the complete plan is downloaded above.
+          EXECUTOR_RESULTS: >-
+            {
+              "plan": {"result": "${{ needs.plan.result }}"},
+              "image-router": {"result": "${{ needs.image-router.result }}"},
+              "image-local": {"result": "${{ needs.image-local.result }}"},
+              "image-dashboard": {"result": "${{ needs.image-dashboard.result }}"},
+              "image-operator": {"result": "${{ needs.image-operator.result }}"},
+              "image-fixtures": {"result": "${{ needs.image-fixtures.result }}"},
+              "image-distribution": {"result": "${{ needs.image-distribution.result }}"},
+              "native-build": {"result": "${{ needs.native-build.result }}"},
+              "quality": {"result": "${{ needs.quality.result }}"},
+              "generated": {"result": "${{ needs.generated.result }}"},
+              "security": {"result": "${{ needs.security.result }}"},
+              "core": {"result": "${{ needs.core.result }}"},
+              "storage": {"result": "${{ needs.storage.result }}"},
+              "dashboard": {"result": "${{ needs.dashboard.result }}"},
+              "operator": {"result": "${{ needs.operator.result }}"},
+              "local": {"result": "${{ needs.local.result }}"},
+              "recipes": {"result": "${{ needs.recipes.result }}"},
+              "native-shared": {"result": "${{ needs.native-shared.result }}"},
+              "native-independent": {"result": "${{ needs.native-independent.result }}"},
+              "performance": {"result": "${{ needs.performance.result }}"},
+              "package": {"result": "${{ needs.package.result }}"},
+              "tools": {"result": "${{ needs.tools.result }}"},
+              "e2e-router": {"result": "${{ needs.e2e-router.result }}"},
+              "e2e-fixtures": {"result": "${{ needs.e2e-fixtures.result }}"},
+              "e2e-dashboard": {"result": "${{ needs.e2e-dashboard.result }}"}
+            }
         run: |
           python3 tools/ci/check_ci_gate.py \
             --plan .agent-harness/ci/plan.json \
