@@ -303,7 +303,7 @@ func TestMergeStoredSnapshotRefusesUnreadablePayload(t *testing.T) {
 
 func TestMergeStoredSnapshotFoldsReadablePayload(t *testing.T) {
 	now := time.Now()
-	stored, err := json.Marshal(RouterSessionSnapshot{
+	stored, err := encodeRedisRouterSessionSnapshot(RouterSessionSnapshot{
 		SessionID:      "readable",
 		LastSeen:       now.Add(-time.Minute),
 		RecentOutcomes: []TurnOutcome{mergeTestOutcome("remote-turn", now.Add(-time.Minute))},
@@ -323,5 +323,52 @@ func TestMergeStoredSnapshotFoldsReadablePayload(t *testing.T) {
 	}
 	if len(merged.RecentOutcomes) != 2 {
 		t.Fatalf("merge dropped a writer's outcome: %+v", merged.RecentOutcomes)
+	}
+}
+
+// A merge must read the encoding the store writes and leave a value the loader
+// can still read, otherwise one merge drops the stored replica's facts.
+func TestMergeStoredSnapshotKeepsTheStoreEncoding(t *testing.T) {
+	now := time.Now()
+	stored, err := encodeRedisRouterSessionSnapshot(RouterSessionSnapshot{
+		SessionID:      "codec",
+		LastSeen:       now.Add(-time.Minute),
+		RecentOutcomes: []TurnOutcome{mergeTestOutcome("remote-turn", now.Add(-time.Minute))},
+	})
+	if err != nil {
+		t.Fatalf("encode stord snapshot: %v", err)
+	}
+	local := RouterSessionSnapshot{
+		SessionID:      "codec",
+		LastSeen:       now,
+		RecentOutcomes: []TurnOutcome{mergeTestOutcome("local-turn", now)},
+	}
+
+	merged, err := mergeStoredSnapshot(stored, local)
+	if err != nil {
+		t.Fatalf("merge of the store's own encoding: %v", err)
+	}
+	if len(merged.RecentOutcomes) != 2 {
+		t.Fatalf("merge dropped a replica's outcome: %+v", merged.RecentOutcomes)
+	}
+	payload, err := encodeRedisRouterSessionSnapshot(merged)
+	if err != nil {
+		t.Fatalf("encode merged snapshot: %v", err)
+	}
+	restored, found, err := decodeRedisRouterSessionSnapshot(payload, "codec")
+	if err != nil || !found || len(restored.RecentOutcomes) != 2 {
+		t.Fatalf("merged write-back is not loadable: found=%t err=%v", found, err)
+	}
+}
+
+// A readable payload in another encoding (stores that predate the codec wrote
+// bare snapshots) is unreadable here, and a merge must not overwrite its facts.
+func TestMergeStoredSnapshotRejectsForeignEncoding(t *testing.T) {
+	legacy, err := json.Marshal(RouterSessionSnapshot{SessionID: "legacy", CurrentModel: "frontier"})
+	if err != nil {
+		t.Fatalf("marshal legavy snapshot: %v", err)
+	}
+	if _, err := mergeStoredSnapshot(legacy, RouterSessionSnapshot{SessionID: "legacy"}); err == nil {
+		t.Fatal("a payload in another encoding merged without an error, so a Set would overwrite it")
 	}
 }

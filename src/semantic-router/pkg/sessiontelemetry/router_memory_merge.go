@@ -1,7 +1,7 @@
 package sessiontelemetry
 
 import (
-	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 )
@@ -15,13 +15,17 @@ type RouterSessionStateMerger interface {
 	Merge(local RouterSessionSnapshot, ttl time.Duration) error
 }
 
-// mergeStoredSnapshot folds a stored payload into the local snapshot. An
-// unreadable payload is an error rather than an empty base, because writing
-// over it would discard the facts this merge exists to keep.
+// mergeStoredSnapshot folds a stored payload, read through the store codec,
+// into the local snapshot. An unreadable payload is an error rather than an
+// empty base, because writing over it would discard the facts this merge exists
+// to keep.
 func mergeStoredSnapshot(stored []byte, local RouterSessionSnapshot) (RouterSessionSnapshot, error) {
-	var remote RouterSessionSnapshot
-	if err := json.Unmarshal(stored, &remote); err != nil {
+	remote, found, err := decodeRedisRouterSessionSnapshot(stored, local.SessionID)
+	if err != nil {
 		return RouterSessionSnapshot{}, err
+	}
+	if !found {
+		return RouterSessionSnapshot{}, fmt.Errorf("stored session snapshot is not in the current encoding, so its facts cannot be merged")
 	}
 	return mergeRouterSessionSnapshots(remote, local), nil
 }

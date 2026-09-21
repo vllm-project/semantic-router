@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // RouterSessionStateStore is an optional shared backing store for protection state.
@@ -209,7 +211,14 @@ func persistRouterSessionState(sessionID string) {
 	// A store that can merge keeps concurrent writers' facts; the plain Save
 	// path is the fallback for stores without that capability.
 	if merger, ok := store.(RouterSessionStateMerger); ok {
-		_ = merger.Merge(snapshot, routerMemoryTTL)
+		if err := merger.Merge(snapshot, routerMemoryTTL); err != nil {
+			// A merge that cannot read the stored payload leaves the local
+			// snapshot unpersisted; without this the loss is silent.
+			logging.ComponentWarnEvent("router", "session_state_merge_failed", map[string]interface{}{
+				"session_id": sessionID,
+				"error":      err.Error(),
+			})
+		}
 		return
 	}
 	_ = store.Save(snapshot, routerMemoryTTL)
@@ -325,11 +334,18 @@ func decodeRedisRouterSessionSnapshot(payload []byte, sessionID string) (RouterS
 	return snapshot, true, nil
 }
 
-func (s *redisRouterSessionStore) Save(snapshot RouterSessionSnapshot, ttl time.Duration) error {
-	payload, err := json.Marshal(redisRouterSessionEnvelope{
+// encodeRedisRouterSessionSnapshot is the write side of the store codec. Every
+// value the store persisches goes through it, so the loader and the merge read
+// what Save wrote.
+func encodeRedisRouterSessionSnapshot(snapshot RouterSessionSnapshot) ([]byte, error) {
+	return json.Marshal(redisRouterSessionEnvelope{
 		Version:  redisRouterSessionEncodingVersion,
 		Snapshot: snapshot,
 	})
+}
+
+func (s *redisRouterSessionStore) Save(snapshot RouterSessionSnapshot, ttl time.Duration) error {
+	payload, err := encodeRedisRouterSessionSnapshot(snapshot)
 	if err != nil {
 		return err
 	}
@@ -371,7 +387,7 @@ func (s *redisRouterSessionStore) Merge(local RouterSessionSnapshot, ttl time.Du
 					return err
 				}
 			}
-			payload, err := json.Marshal(merged)
+			payload, err := encodeRedisRouterSessionSnapshot(merged)
 			if err != nil {
 				return err
 			}
