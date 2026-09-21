@@ -31,7 +31,7 @@ env:
 
 jobs:
   checks:
-    name: Operator Checks
+    name: Source Contracts
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -180,7 +180,7 @@ jobs:
           if-no-files-found: error
 
   integration-test:
-    name: Routed Requests (${{ matrix.cache-backend }})
+    name: Routed Requests
     if: ${{ !cancelled() && inputs.run_integration && needs.checks.result == 'success' && needs.bundle-validate.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -189,7 +189,7 @@ jobs:
       fail-fast: false
       max-parallel: 2
       matrix:
-        include: ${{ fromJSON(inputs.integration_matrix) }}
+        cache-backend: ${{ fromJSON(inputs.integration_matrix).*.cache-backend }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -227,7 +227,7 @@ jobs:
           kubectl wait --for condition=established --timeout=60s crd/httproutes.gateway.networking.k8s.io
 
       - name: Deploy Redis
-        if: matrix.deploy-redis == true
+        if: matrix.cache-backend == 'redis'
         run: |
           echo "Deploying Redis..."
           kubectl create namespace cache-backends || true
@@ -288,7 +288,7 @@ jobs:
           echo "Redis deployed successfully"
 
       - name: Deploy Milvus
-        if: matrix.deploy-milvus == true
+        if: (matrix.cache-backend == 'milvus' || matrix.cache-backend == 'hybrid')
         run: |
           echo "Deploying Milvus Standalone..."
           kubectl create namespace cache-backends || true
@@ -356,7 +356,7 @@ jobs:
           sleep 10
 
       - name: Deploy Qdrant
-        if: matrix.deploy-qdrant == true
+        if: matrix.cache-backend == 'qdrant'
         run: |
           echo "Deploying Qdrant..."
           kubectl create namespace cache-backends || true
@@ -414,17 +414,17 @@ jobs:
           echo "Qdrant deployed successfully"
 
       - name: Create cache credentials secrets
-        if: matrix.deploy-redis == true || matrix.deploy-milvus == true
+        if: matrix.cache-backend == 'redis' || (matrix.cache-backend == 'milvus' || matrix.cache-backend == 'hybrid')
         run: |
           kubectl create namespace semantic-router-test || true
 
-          if [ "${{ matrix.deploy-redis }}" == "true" ]; then
+          if [ "${{ matrix.cache-backend == 'redis' }}" == "true" ]; then
             kubectl create secret generic redis-credentials \
               --from-literal=password=testpassword \
               -n semantic-router-test
           fi
 
-          if [ "${{ matrix.deploy-milvus }}" == "true" ]; then
+          if [ "${{ matrix.cache-backend == 'milvus' || matrix.cache-backend == 'hybrid' }}" == "true" ]; then
             kubectl create secret generic milvus-credentials \
               --from-literal=password=Milvus \
               -n semantic-router-test
@@ -767,7 +767,7 @@ jobs:
           apiVersion: vllm.ai/v1alpha1
           kind: SemanticRouter
           metadata:
-            name: ${{ matrix.router-name }}
+            name: test-router-${{ matrix.cache-backend }}
             namespace: semantic-router-test
           spec:
             replicas: 1
@@ -845,7 +845,7 @@ jobs:
         run: |
           echo "Waiting for deployment to be created..."
           for i in {1..30}; do
-            if kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test 2>/dev/null; then
+            if kubectl get deployment test-router-${{ matrix.cache-backend }} -n semantic-router-test 2>/dev/null; then
               echo "Deployment found!"
               break
             fi
@@ -856,10 +856,10 @@ jobs:
       - name: Verify resources created
         run: |
           echo "=== Checking Deployment ==="
-          kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test -o yaml || true
+          kubectl get deployment test-router-${{ matrix.cache-backend }} -n semantic-router-test -o yaml || true
 
           echo "=== Checking Service ==="
-          kubectl get service ${{ matrix.router-name }} -n semantic-router-test || true
+          kubectl get service test-router-${{ matrix.cache-backend }} -n semantic-router-test || true
 
           echo "=== Checking ConfigMap ==="
           kubectl get configmap -n semantic-router-test || true
@@ -874,7 +874,7 @@ jobs:
         run: |
           echo "Waiting for pod to be created..."
           for i in {1..60}; do
-            POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
             if [ -n "$POD_NAME" ]; then
               echo "Pod $POD_NAME found!"
               break
@@ -887,7 +887,7 @@ jobs:
         run: |
           echo "Waiting for pod to be ready (downloading models may take several minutes)..."
           kubectl wait --for=condition=ready pod \
-            -l app.kubernetes.io/instance=${{ matrix.router-name }} \
+            -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} \
             -n semantic-router-test \
             --timeout=300s || {
               echo "Pod failed to become ready within 5 minutes"
@@ -896,7 +896,7 @@ jobs:
               echo "=== Pod Events ==="
               kubectl get events -n semantic-router-test --sort-by='.lastTimestamp'
               echo "=== Pod Logs ==="
-              POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+              POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
               if [ -n "$POD_NAME" ]; then
                 kubectl logs $POD_NAME -n semantic-router-test --all-containers --tail=100 || true
               fi
@@ -915,7 +915,7 @@ jobs:
       - name: Get semantic router logs
         if: always()
         run: |
-          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
           if [ -n "$POD_NAME" ]; then
             echo "=== Semantic Router Pod Logs ==="
             kubectl logs $POD_NAME -n semantic-router-test --all-containers --tail=200 || true
@@ -926,10 +926,10 @@ jobs:
       - name: Verify deployment reconciliation
         run: |
           echo "=== Checking SemanticRouter Status ==="
-          kubectl get semanticrouter ${{ matrix.router-name }} -n semantic-router-test -o yaml || true
+          kubectl get semanticrouter test-router-${{ matrix.cache-backend }} -n semantic-router-test -o yaml || true
 
           echo "=== Verifying Deployment Exists ==="
-          if kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test; then
+          if kubectl get deployment test-router-${{ matrix.cache-backend }} -n semantic-router-test; then
             echo "✓ Deployment successfully created by operator"
           else
             echo "✗ Deployment not found"
@@ -937,7 +937,7 @@ jobs:
           fi
 
           echo "=== Verifying Service Exists ==="
-          if kubectl get service ${{ matrix.router-name }} -n semantic-router-test; then
+          if kubectl get service test-router-${{ matrix.cache-backend }} -n semantic-router-test; then
             echo "✓ Service successfully created by operator"
           else
             echo "✗ Service not found"
@@ -946,7 +946,7 @@ jobs:
 
       - name: Verify a routed request through reconciled Envoy and backend
         env:
-          ROUTER_NAME: ${{ matrix.router-name }}
+          ROUTER_NAME: test-router-${{ matrix.cache-backend }}
         run: |
           kubectl -n semantic-router-test port-forward "service/$ROUTER_NAME" 18801:8801 > /tmp/operator-port-forward.log 2>&1 &
           forward_pid=$!
@@ -979,7 +979,7 @@ jobs:
               --all-containers > /tmp/operator-logs/operator.log || true
           fi
 
-          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
           if [ -n "$POD_NAME" ]; then
             kubectl logs $POD_NAME -n semantic-router-test --all-containers > /tmp/operator-logs/semantic-router.log || true
           fi
@@ -1000,7 +1000,7 @@ jobs:
           kind delete cluster --name operator-test-${{ matrix.cache-backend }} || true
 
   result:
-    name: Operator Results
+    name: Results
     if: always() && inputs.verification != '{}'
     needs: [checks, bundle-validate, integration-test]
     runs-on: ubuntu-24.04

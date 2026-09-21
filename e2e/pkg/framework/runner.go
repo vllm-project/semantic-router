@@ -427,7 +427,7 @@ func (r *Runner) collectSemanticRouterLogs(ctx context.Context, client *kubernet
 	}
 
 	// Write logs to file
-	logFilename := "semantic-router-logs.txt"
+	logFilename := reportPath("semantic-router-logs.txt")
 	if err := os.WriteFile(logFilename, []byte(allLogs.String()), 0o644); err != nil {
 		return fmt.Errorf("failed to write log file: %w", err)
 	}

@@ -13,8 +13,15 @@ from typing import Any
 
 from ci_plan import digest
 from ci_results import collection_errors, execution_errors
+from execution_batches import (
+    dispatch_job,
+    e2e_batches,
+    expected_dispatch_jobs,
+    image_producers,
+    native_batches,
+)
 from provider_mocker_image import validate_acquisition
-from verification_catalog import full_cpu_ids
+from verification_catalog import full_cpu_ids, load_catalog
 
 
 @dataclass(frozen=True)
@@ -52,6 +59,30 @@ def evaluate_gate(
             errors.append(f"full CPU required inventory omitted: {sorted(missing)}")
     if not required and not (plan.get("draft") and plan.get("profile") == "pr"):
         errors.append("non-draft plan has no required verifications")
+    try:
+        if plan.get("expected_dispatch_jobs") != expected_dispatch_jobs(plan):
+            errors.append(
+                "plan dispatch inventory differs from required contracts and artifacts"
+            )
+        if plan.get("image_producers") != image_producers(plan["images"]):
+            errors.append("plan image producer inventory differs")
+        for record in planned.values():
+            if record.get("dispatch_job") != dispatch_job(record):
+                errors.append(f"{record['id']}: dispatch identity differs")
+        for field, build_batches in (
+            ("native_batches", native_batches),
+            ("e2e_batches", e2e_batches),
+        ):
+            if plan.get(field) != build_batches(plan["verifications"]):
+                errors.append(
+                    f"plan {field} differs from required verification inventory"
+                )
+    except (ValueError, KeyError, TypeError) as error:
+        errors.append(f"invalid dispatch plan: {error}")
+    if plan.get("full_cpu_version") != load_catalog()["full_cpu"]["version"]:
+        errors.append("plan full CPU inventory version differs")
+    if plan.get("native") != any(record["native"] for record in planned.values()):
+        errors.append("plan native dependency differs from required contracts")
     actual = {}
     for receipt in receipts:
         name = receipt.get("id")
@@ -141,11 +172,7 @@ def evaluate_gate(
                     f"{name}: consumed artifact {artifact.get('id')} differs from build"
                 )
     if jobs is not None:
-        expected_jobs = {"plan"} | {record["executor"] for record in planned.values()}
-        if plan.get("images"):
-            expected_jobs.add("images")
-        if plan.get("native"):
-            expected_jobs.add("native-build")
+        expected_jobs = plan.get("expected_dispatch_jobs", [])
         for name, record in jobs.items():
             if record.get("result") in {"failure", "cancelled"}:
                 errors.append(f"prerequisite {name}: {record['result']}")
