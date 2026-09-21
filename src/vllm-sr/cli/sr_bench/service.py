@@ -638,6 +638,11 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
         raise ValueError("store-identity must be a SHA256 digest")
     root = Path(store).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # This process owns both preparation and source-backed dataset reads. Keep
+    # their default task cache together under the persistent service store.
+    os.environ.setdefault(
+        "SR_BENCH_HOME", str(root / "preparation-runtime" / "sources")
+    )
     lock = (root / "service.lock").open("a+")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

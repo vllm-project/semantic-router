@@ -13,6 +13,8 @@ import time
 from contextlib import suppress
 from pathlib import Path
 
+from . import setup
+
 MIN_FREE_BYTES = 1024**3
 MAX_LOG_BYTES = 8 * 1024**2
 PREPARATION_TIMEOUT = 1800
@@ -33,8 +35,10 @@ def require_capacity(store):
 def execute(request, store, progress, stopping):
     require_capacity(store)
     environment = os.environ.copy()
-    # Downloaded sources, dependencies and jobs survive container replacement.
-    environment["SR_BENCH_HOME"] = str(store / "preparation-runtime" / "sources")
+    # Readers and evaluators must resolve the same source-backed tasks as the
+    # downloader. The standalone service chooses a persistent default at startup;
+    # embedded owners keep their existing setup.home() without global mutation.
+    environment.setdefault("SR_BENCH_HOME", str(setup.home()))
     source_root = str(Path(__file__).resolve().parents[2])
     environment["PYTHONPATH"] = os.pathsep.join(
         filter(None, [source_root, environment.get("PYTHONPATH")])

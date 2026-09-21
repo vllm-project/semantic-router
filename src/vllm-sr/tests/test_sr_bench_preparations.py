@@ -225,6 +225,23 @@ def test_close_cancels_worker_and_closes_admission(tmp_path):
         manager.submit({"benchmark": "mmlu-pro"})
 
 
+def test_close_after_thread_start_failure_does_not_join_unstarted_thread(
+    tmp_path, monkeypatch
+):
+    manager = preparations.Preparations(tmp_path)
+
+    def fail_start(thread):
+        raise RuntimeError("cannot start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", fail_start)
+    with pytest.raises(preparations.PreparationBusyError, match="could not start"):
+        manager.submit({"benchmark": "simpleqa-verified"})
+    assert manager.list()["preparations"][0]["status"] == "failed"
+    manager.close()
+    with pytest.raises(preparations.PreparationBusyError, match="stopping"):
+        manager.submit({"benchmark": "simpleqa-verified"})
+
+
 def test_low_disk_fails_before_spawning_a_downloader(tmp_path, monkeypatch):
     monkeypatch.setattr(
         runtime.shutil, "disk_usage", lambda _: type("Usage", (), {"free": 0})()
