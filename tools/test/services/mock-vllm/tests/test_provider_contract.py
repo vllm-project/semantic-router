@@ -9,11 +9,11 @@ import httpx
 import pytest
 from app import app
 from chat_request import ChatRequest
+from provider_boundary import RAG_FIXTURE_CONTEXT
 from provider_contract import (
     protocol_request_field_inventory,
     provider_request_field_inventory,
 )
-from provider_boundary import RAG_FIXTURE_CONTEXT
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[5]
 CAPABILITY_FIXTURES = (

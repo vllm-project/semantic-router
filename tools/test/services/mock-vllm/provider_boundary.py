@@ -13,6 +13,7 @@ SESSION_HEADER = "x-vsr-test-session-id"
 _OBSERVED_HEADER_PREFIX = "x-vsr-e2e-"
 _MAX_REQUEST_STORE_SESSIONS = 32
 RAG_FIXTURE_CONTEXT = "E2E RAG fact: Project Zephyr rotates signing keys every 17 days."
+RAG_FIXTURE_TOP_K = 2
 
 router = APIRouter()
 
@@ -107,7 +108,7 @@ async def rag_search(request: Request):
         return invalid_request_response(
             "query must select the RAG E2E fixture", "query"
         )
-    if body.get("top_k") != 2:
+    if body.get("top_k") != RAG_FIXTURE_TOP_K:
         return invalid_request_response("top_k must equal 2", "top_k")
     if request.headers.get("x-vsr-e2e-rag-fixture") != "provider-boundary":
         return invalid_request_response(
