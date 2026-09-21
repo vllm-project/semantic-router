@@ -5,7 +5,7 @@ description: 安装 vLLM Semantic Router 并发送你的第一条已路由请求
 translation:
   source_commit: "12c2aa4feb5c5d40d90104d8b09cade1facf0bf5"
   source_file: "docs/installation/installation.md"
-  outdated: false
+  outdated: true
 ---
 
 import Tabs from '@theme/Tabs'

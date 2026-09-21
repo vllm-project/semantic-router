@@ -2,7 +2,7 @@
 translation:
   source_commit: "f538b1e52efaa172923a6764c8ad9ab18e0188af"
   source_file: "docs/tutorials/algorithm/looper/fusion.md"
-  outdated: false
+  outdated: true
 ---
 
 # 融合

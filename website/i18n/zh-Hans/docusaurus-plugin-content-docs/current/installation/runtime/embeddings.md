@@ -4,7 +4,7 @@ description: 使用 Vela 进行语义路由和检索，或连接远程嵌入服�
 translation:
   source_commit: "8506d548e0217bb14ef45aeba21875c0013e16ee"
   source_file: "docs/installation/runtime/embeddings.md"
-  outdated: false
+  outdated: true
 ---
 
 嵌入模型将文本转换为向量，用于语义匹配、检索、缓存和记忆。Vela Embedding 是默认的本地模型。选择下方的 CPU 配置、[AMD GPU](#amd-gpu) 或[远程服务](#remote-embeddings)，将配置片段合入现有 Router 配置。

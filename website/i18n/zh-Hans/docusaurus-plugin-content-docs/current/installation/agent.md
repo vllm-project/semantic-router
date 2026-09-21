@@ -5,7 +5,7 @@ description: 向 Agent 提供一条提示词，即可通过 CLI 和 Router API �
 translation:
   source_commit: "aa8c4a7d17848ba060a509ea9917b380a1c25f7f"
   source_file: "docs/installation/agent.md"
-  outdated: false
+  outdated: true
 ---
 
 import CodeBlock from '@theme/CodeBlock'

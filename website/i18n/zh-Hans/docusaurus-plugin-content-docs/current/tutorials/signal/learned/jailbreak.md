@@ -2,7 +2,7 @@
 translation:
   source_commit: "96eb530f67c9d6fbd59fd1a82e857b3a7eb330ba"
   source_file: "docs/tutorials/signal/learned/jailbreak.md"
-  outdated: false
+  outdated: true
 ---
 
 # 越狱检测信号 {#jailbreak-signal}

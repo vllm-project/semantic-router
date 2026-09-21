@@ -2,7 +2,7 @@
 translation:
   source_commit: "a65e60e035f593b80c0a9c1963c34a53abe90444"
   source_file: "docs/tutorials/signal/learned/pii.md"
-  outdated: false
+  outdated: true
 ---
 
 # 个人身份信息信号 {#pii-signal}

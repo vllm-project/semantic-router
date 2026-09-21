@@ -4,7 +4,7 @@ description: 理解 canonical v0.3 YAML 文档，以及路由、providers、配�
 translation:
   source_commit: "d8e75b89b7290df941743270c69a111f80dde50a"
   source_file: "docs/installation/configuration.md"
-  outdated: false
+  outdated: true
 ---
 
 # 配置
