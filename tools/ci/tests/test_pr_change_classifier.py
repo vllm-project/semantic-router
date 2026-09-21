@@ -13,8 +13,7 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 from ci_plan import github_outputs, make_plan, previous_release  # noqa: E402
 from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
-from image_calibration import OWNED_OMNI_TESTS  # noqa: E402
-from run_model_tests import CLASSIFIER_TESTS  # noqa: E402
+from run_model_tests import CLASSIFIER_TESTS, OWNED_OMNI_TESTS  # noqa: E402
 from verification_catalog import (  # noqa: E402
     full_cpu_ids,
     load_catalog,
@@ -97,7 +96,7 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(record["workflow"], ".github/workflows/test-native.yml")
         self.assertEqual(record["reasons"], ["manual-selection"])
         self.assertIn(IMAGE_CALIBRATION, full_cpu_ids())
-        self.assertNotIn("e2e.multimodal-routing", full_cpu_ids())
+        self.assertIn("e2e.multimodal-routing", full_cpu_ids())
         for requested in (("unknown",), (IMAGE_CALIBRATION, IMAGE_CALIBRATION)):
             with self.assertRaises(ValueError):
                 make_plan([], source_sha=SHA, requested=requested)
@@ -128,7 +127,13 @@ class SelectionTests(unittest.TestCase):
             workflow["on"]["workflow_dispatch"]["inputs"]["verification"]["type"],
             "string",
         )
-        for job in ("images", "package"):
+        for job in (
+            "image-router",
+            "image-local",
+            "image-fixtures",
+            "image-distribution",
+            "package",
+        ):
             self.assertEqual(
                 workflow["jobs"][job]["with"]["mode"],
                 "${{ fromJSON(needs.plan.outputs.plan).profile }}",
@@ -319,7 +324,7 @@ class SelectionTests(unittest.TestCase):
                 ]
                 self.assertEqual(len(definitions), 1, name)
                 self.assertIn(
-                    "native.image-calibration-cpu",
+                    "native.ort-cpu",
                     classify(definitions).selected_jobs,
                     name,
                 )
@@ -509,8 +514,8 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan(["candle-binding/src/lib.rs"], source_sha=SHA)
         outputs = github_outputs(plan)
         self.assertEqual(outputs["build_native"], "true")
-        self.assertIsInstance(json.loads(outputs["native"]), list)
-        self.assertGreater(len(json.loads(outputs["native"])), 0)
+        self.assertIsInstance(json.loads(outputs["native-shared"]), list)
+        self.assertGreater(len(json.loads(outputs["native-shared"])), 0)
 
     def test_riscv_is_an_emulated_native_contract_with_preserved_source_triggers(self):
         identity = "native.candle-riscv64-qemu"

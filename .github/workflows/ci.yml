@@ -1,4 +1,4 @@
-name: Product Verification
+name: CI
 
 on:
   workflow_dispatch:
@@ -49,27 +49,92 @@ jobs:
       draft: ${{ inputs.draft || false }}
       verification: ${{ github.event_name == 'workflow_dispatch' && inputs.verification || '' }}
 
-  images:
-    name: Build / Images
+  image-router:
+    name: Artifacts / Router Image
     needs: plan
-    if: needs.plan.outputs.images != '[]'
+    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-router'].images) != '[]'
     uses: ./.github/workflows/build-artifacts.yml
     with:
-      images: ${{ needs.plan.outputs.build_images }}
-      published-images: ${{ needs.plan.outputs.published_images }}
+      images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-router'].build_images) }}
+      published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-router'].published_images) }}
+      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
+      tag: ${{ inputs.tag }}
+      multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
+    secrets: inherit
+
+  image-local:
+    name: Artifacts / Local Runtime Image
+    needs: plan
+    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].images) != '[]'
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].build_images) }}
+      published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-local'].published_images) }}
+      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
+      tag: ${{ inputs.tag }}
+      multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
+    secrets: inherit
+
+  image-dashboard:
+    name: Artifacts / Dashboard Image
+    needs: plan
+    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-dashboard'].images) != '[]'
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-dashboard'].build_images) }}
+      published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-dashboard'].published_images) }}
+      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
+      tag: ${{ inputs.tag }}
+      multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
+    secrets: inherit
+
+  image-operator:
+    name: Artifacts / Operator Images
+    needs: plan
+    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-operator'].images) != '[]'
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-operator'].build_images) }}
+      published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-operator'].published_images) }}
+      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
+      tag: ${{ inputs.tag }}
+      multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
+    secrets: inherit
+
+  image-fixtures:
+    name: Artifacts / Provider Fixture
+    needs: plan
+    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-fixtures'].images) != '[]'
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-fixtures'].build_images) }}
+      published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-fixtures'].published_images) }}
+      mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
+      tag: ${{ inputs.tag }}
+      multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
+    secrets: inherit
+
+  image-distribution:
+    name: Artifacts / Distribution Images
+    needs: plan
+    if: toJSON(fromJSON(needs.plan.outputs.image_producers)['image-distribution'].images) != '[]'
+    uses: ./.github/workflows/build-artifacts.yml
+    with:
+      images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-distribution'].build_images) }}
+      published-images: ${{ toJSON(fromJSON(needs.plan.outputs.image_producers)['image-distribution'].published_images) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
       multiarch: ${{ needs.plan.outputs.multiarch == 'true' }}
     secrets: inherit
 
   native-build:
-    name: Build
+    name: Artifacts / Native Libraries
     needs: plan
     if: needs.plan.outputs.build_native == 'true'
     uses: ./.github/workflows/build-native.yml
 
   quality:
-    name: Quality
+    name: Quality / Source
     needs: plan
     if: needs.plan.outputs.quality != '[]'
     uses: ./.github/workflows/pre-commit.yml
@@ -79,7 +144,7 @@ jobs:
       website: ${{ fromJSON(needs.plan.outputs.plan).quality_context.website }}
 
   generated:
-    name: Quality
+    name: Quality / Generated
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
@@ -90,145 +155,141 @@ jobs:
       verifications: ${{ needs.plan.outputs.generated }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
 
-  # Static caller names also label skipped jobs, before matrix expansion.
   security:
     name: Quality / Security
     needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.security != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.security).*.display_name }}
     uses: ./.github/workflows/security-scan.yml
     permissions:
       contents: read
       actions: read
       security-events: write
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).security[matrix.label]) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.security)[0]) }}
     secrets: inherit
 
   core:
-    name: Tests / Core
+    name: Tests / Components / Router
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.core != '[]'
       && needs.native-build.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.core).*.display_name }}
     uses: ./.github/workflows/test-and-build.yml
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).core[matrix.label]) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.core)[0]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   storage:
-    name: Tests / Storage
+    name: Tests / Integration / Storage
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.storage != '[]'
       && needs.native-build.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.storage).*.display_name }}
     uses: ./.github/workflows/test-storage.yml
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).storage[matrix.label]) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.storage)[0]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   dashboard:
-    name: Tests / Dashboard
+    name: Tests / Components / Dashboard
     needs: [plan, native-build]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.dashboard != '[]'
       && needs.native-build.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.dashboard).*.display_name }}
     uses: ./.github/workflows/dashboard-test.yml
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).dashboard[matrix.label]) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dashboard)[0]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
     secrets: inherit
 
   operator:
-    name: Tests / Operator
-    needs: [plan, images]
+    name: Tests / E2E / Operator
+    needs: [plan, image-router, image-operator, image-fixtures]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.operator != '[]'
-      && needs.images.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.operator).*.display_name }}
+      && needs.image-router.result == 'success'
+      && needs.image-operator.result == 'success'
+      && needs.image-fixtures.result == 'success'
     uses: ./.github/workflows/operator-ci.yml
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).operator[matrix.label]) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.operator)[0]) }}
       run_integration: true
-      integration_matrix: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).operator[matrix.label].integration_matrix) }}
+      integration_matrix: ${{ toJSON(fromJSON(needs.plan.outputs.operator)[0].integration_matrix) }}
     secrets: inherit
 
   local:
-    name: Tests / Local Stack
-    needs: [plan, images]
+    name: Tests / E2E / Local Stack
+    needs: [plan, image-local, image-dashboard, image-fixtures]
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.local != '[]'
-      && needs.images.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.local).*.display_name }}
-    uses: ./.github/workflows/test-local.yml
-    with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).local[matrix.label]) }}
-      prebuilt-images: true
-    secrets: inherit
-
-  recipes:
-    name: Tests / Recipes
-    needs: [plan, images]
-    if: >-
-      !cancelled() && needs.plan.result == 'success'
-      && needs.plan.outputs.recipes != '[]'
-      && needs.images.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.recipes).*.display_name }}
-    uses: ./.github/workflows/recipe-conformance.yml
-    with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).recipes[matrix.label]) }}
-      prebuilt-images: true
-    secrets: inherit
-
-  native:
-    name: Tests / Native Inference
-    needs: [plan, native-build]
-    if: >-
-      !cancelled() && needs.plan.result == 'success'
-      && needs.plan.outputs.native != '[]'
-      && (needs.native-build.result == 'success' || needs.native-build.result == 'skipped')
+      && needs.image-local.result == 'success'
+      && needs.image-dashboard.result == 'success'
+      && needs.image-fixtures.result == 'success'
     strategy:
       fail-fast: false
       max-parallel: 2
       matrix:
-        label: ${{ fromJSON(needs.plan.outputs.native).*.display_name }}
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['local'] }}
+    uses: ./.github/workflows/test-local.yml
+    with:
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['local'][matrix.label]) }}
+      prebuilt-images: true
+    secrets: inherit
+
+  recipes:
+    name: Tests / Conformance / Recipes
+    needs: [plan, image-local]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.recipes != '[]'
+      && needs.image-local.result == 'success'
+    uses: ./.github/workflows/recipe-conformance.yml
+    with:
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.recipes)[0]) }}
+      prebuilt-images: true
+    secrets: inherit
+
+  native-shared:
+    name: Tests / CPU Contracts
+    needs: [plan, native-build]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.native-shared != '[]'
+      && needs.native-build.result == 'success'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['native-shared'] }}
     uses: ./.github/workflows/test-native.yml
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).native[matrix.label]) }}
-      native-artifact: ${{ fromJSON(needs.plan.outputs.dispatch).native[matrix.label].native && needs.native-build.outputs.artifact-name || '' }}
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['native-shared'][matrix.label]) }}
+      native-artifact: ${{ needs.native-build.outputs.artifact-name }}
+    secrets: inherit
+
+  native-independent:
+    name: Tests / Emulated Contracts
+    needs: [plan]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.native-independent != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['native-independent'] }}
+    uses: ./.github/workflows/test-native.yml
+    with:
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['native-independent'][matrix.label]) }}
     secrets: inherit
 
   performance:
@@ -238,13 +299,9 @@ jobs:
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.performance != '[]'
       && needs.native-build.result == 'success'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.performance).*.display_name }}
     uses: ./.github/workflows/performance-test.yml
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).performance[matrix.label]) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.performance)[0]) }}
       native-artifact: ${{ needs.native-build.outputs.artifact-name }}
       base-ref: ${{ inputs.performance-base-ref || github.event.pull_request.base.sha || github.event.before || 'HEAD^' }}
     secrets: inherit
@@ -255,13 +312,9 @@ jobs:
     if: >-
       !cancelled() && needs.plan.result == 'success'
       && needs.plan.outputs.package != '[]'
-    strategy:
-      fail-fast: false
-      matrix:
-        label: ${{ fromJSON(needs.plan.outputs.package).*.display_name }}
     uses: ./.github/workflows/package-check.yml
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).package[matrix.label]) }}
+      verification: ${{ toJSON(fromJSON(needs.plan.outputs.package)[0]) }}
       mode: ${{ fromJSON(needs.plan.outputs.plan).profile }}
       tag: ${{ inputs.tag }}
     secrets: inherit
@@ -271,41 +324,77 @@ jobs:
     needs: [plan]
     if: >-
       !cancelled() && needs.plan.result == 'success'
-      && needs.plan.outputs.component_batches != '[]'
+      && needs.plan.outputs.tools != '[]'
     strategy:
       fail-fast: false
       max-parallel: 2
       matrix:
-        label: ${{ fromJSON(needs.plan.outputs.component_batches).*.display_name }}
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['tools'] }}
     uses: ./.github/workflows/test-tools.yml
     with:
-      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).tools[matrix.label]) }}
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['tools'][matrix.label]) }}
     secrets: inherit
 
-  e2e:
-    name: Tests / Kubernetes
-    needs: [plan, images]
+  e2e-router:
+    name: Tests / E2E / Kubernetes Router
+    needs: [plan, image-router]
     if: >-
       !cancelled() && needs.plan.result == 'success'
-      && needs.plan.outputs.e2e != '[]'
-      && needs.images.result == 'success'
+      && needs.plan.outputs.e2e-router != '[]'
+      && needs.image-router.result == 'success'
     strategy:
       fail-fast: false
       max-parallel: 2
       matrix:
-        label: ${{ fromJSON(needs.plan.outputs.e2e).*.display_name }}
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['e2e-router'] }}
     uses: ./.github/workflows/integration-test-k8s.yml
     with:
-      verification: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch).e2e[matrix.label]) }}
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['e2e-router'][matrix.label]) }}
       prebuilt-images: true
-      profiles: ${{ format('["{0}"]', fromJSON(needs.plan.outputs.dispatch).e2e[matrix.label].profile) }}
-      baseline-suite: ${{ fromJSON(needs.plan.outputs.dispatch).e2e[matrix.label].baseline_suite }}
+    secrets: inherit
+
+  e2e-fixtures:
+    name: Tests / E2E / Kubernetes Providers
+    needs: [plan, image-router, image-fixtures]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.e2e-fixtures != '[]'
+      && needs.image-router.result == 'success'
+      && needs.image-fixtures.result == 'success'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['e2e-fixtures'] }}
+    uses: ./.github/workflows/integration-test-k8s.yml
+    with:
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['e2e-fixtures'][matrix.label]) }}
+      prebuilt-images: true
+    secrets: inherit
+
+  e2e-dashboard:
+    name: Tests / E2E / Kubernetes Dashboard
+    needs: [plan, image-router, image-dashboard]
+    if: >-
+      !cancelled() && needs.plan.result == 'success'
+      && needs.plan.outputs.e2e-dashboard != '[]'
+      && needs.image-router.result == 'success'
+      && needs.image-dashboard.result == 'success'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        label: ${{ fromJSON(needs.plan.outputs.worker_labels)['e2e-dashboard'] }}
+    uses: ./.github/workflows/integration-test-k8s.yml
+    with:
+      batch: ${{ toJSON(fromJSON(needs.plan.outputs.dispatch)['e2e-dashboard'][matrix.label]) }}
+      prebuilt-images: true
     secrets: inherit
 
   gate:
     name: Gate
     if: always()
-    needs: [plan, images, native-build, quality, generated, security, core, storage, dashboard, operator, local, recipes, native, performance, package, tools, e2e]
+    needs: [plan, image-router, image-local, image-dashboard, image-operator, image-fixtures, image-distribution, native-build, quality, generated, security, core, storage, dashboard, operator, local, recipes, native-shared, native-independent, performance, package, tools, e2e-router, e2e-fixtures, e2e-dashboard]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4

@@ -68,14 +68,16 @@ def verification_records(registry: dict) -> dict[str, dict]:
             **defaults,
             "activity": "test",
             "display_name": profile.get("display_name", ""),
+            "category": "e2e",
             "boundary": ["e2e"],
             "executor": "e2e",
             "workflow": ".github/workflows/integration-test-k8s.yml",
             "profile": name,
             "images": images,
             "services": ["kind", "gateway", "controlled-backend"],
-            "runtime": "candle",
-            "device": "cpu",
+            "runtime": profile.get("runtime", "candle"),
+            "device": profile.get("device", "cpu"),
+            "resource_class": profile.get("resource_class", "standard"),
             "inventory": f"e2e-profile:{name}",
             "contract": profile["coverage_role"],
         }
@@ -105,6 +107,19 @@ def catalog_errors(registry: dict) -> list[str]:
             errors.append(f"verification {name} has a duplicate display_name: {label}")
         else:
             display_names.add(label)
+        if record.get("category") not in {
+            "quality",
+            "components",
+            "integration",
+            "conformance",
+            "runtime",
+            "e2e",
+            "performance",
+            "packages",
+        }:
+            errors.append(f"verification {name} has no stable presentation category")
+        if record.get("resource_class", "standard") not in {"standard", "model"}:
+            errors.append(f"verification {name} has an invalid resource class")
         if record["executor"] == "tools":
             worker = catalog["component_workers"].get(record.get("worker"))
             if not worker or not worker.get("display_name"):

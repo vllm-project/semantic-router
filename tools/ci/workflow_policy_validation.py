@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
-from ci_plan import EXECUTORS
 from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
 from domain_registry import job_records, load_domain_registry
+from execution_batches import ALL_DISPATCH_JOBS, dispatch_job
 from image_artifacts import publication_tags
 from verification_catalog import catalog_errors
 
@@ -84,7 +84,7 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
     if not shared:
         errors.append("missing shared ci.yml")
         return
-    expected = {"plan", "images", "native-build", *EXECUTORS}
+    expected = set(ALL_DISPATCH_JOBS)
     gate = shared.jobs.get("gate", {})
     if needs(gate) != expected or gate.get("if") != "always()":
         errors.append(
@@ -100,7 +100,7 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
             "ci.yml must reconcile execution artifacts against the pre-execution plan"
         )
     for record in job_records().values():
-        call = shared.jobs.get(record["executor"], {})
+        call = shared.jobs.get(dispatch_job(record), {})
         if local_target(call) != Path(record["workflow"]).name:
             errors.append(f"ci.yml: no executor for {record['workflow']}")
     errors.extend(catalog_errors(load_domain_registry()))

@@ -25,7 +25,7 @@ permissions:
 jobs:
   image:
     if: inputs.images != '[]'
-    name: Container Image (${{ matrix.image }})
+    name: Build Image
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     strategy:
@@ -114,14 +114,10 @@ jobs:
           if-no-files-found: error
 
   published:
-    name: Reuse Image (${{ matrix.image.id }})
+    name: Reuse Qualified Image
     if: inputs.published-images != '[]'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        image: ${{ fromJSON(inputs.published-images) }}
     steps:
       - uses: actions/checkout@v4
       - name: Install OCI image transport
@@ -130,11 +126,11 @@ jobs:
           sudo apt-get install -y skopeo
       - name: Acquire the qualified image by digest
         env:
-          PUBLISHED_IMAGE: ${{ toJSON(matrix.image) }}
+          PUBLISHED_IMAGE: ${{ toJSON(fromJSON(inputs.published-images)[0]) }}
         run: python3 tools/ci/image_artifacts.py acquire --directory .agent-harness/image-output
       - uses: actions/upload-artifact@v4
         with:
-          name: ci-image-${{ matrix.image.id }}
+          name: ci-image-${{ fromJSON(inputs.published-images)[0].id }}
           path: .agent-harness/image-output/
           include-hidden-files: true
           if-no-files-found: error
@@ -142,7 +138,7 @@ jobs:
           retention-days: 3
       - uses: actions/upload-artifact@v4
         with:
-          name: ci-build-image-${{ matrix.image.id }}
+          name: ci-build-image-${{ fromJSON(inputs.published-images)[0].id }}
           path: .agent-harness/image-output/manifest.json
           include-hidden-files: true
           if-no-files-found: error

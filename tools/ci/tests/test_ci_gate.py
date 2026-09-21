@@ -189,19 +189,9 @@ class GateTests(unittest.TestCase):
 
     def test_skipped_failed_cancelled_executor_is_never_success(self):
         plan, receipts, builds = completed()
-        jobs = {
-            "plan": {"result": "success"},
-            **{
-                record["executor"]: {"result": "success"}
-                for record in plan["verifications"]
-            },
-        }
-        if plan["native"]:
-            jobs["native-build"] = {"result": "success"}
-        if plan["images"]:
-            jobs["images"] = {"result": "success"}
+        jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
         self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
-        for executor in ("native", "native-build"):
+        for executor in ("native-shared", "native-build"):
             for status in ("skipped", "failure", "cancelled"):
                 jobs[executor]["result"] = status
                 self.assertFalse(
@@ -219,6 +209,32 @@ class GateTests(unittest.TestCase):
         )
         plan = make_plan(["README.md"], source_sha=SHA)
         self.assertFalse(evaluate_gate(plan, []).passed)
+
+    def test_dispatch_cannot_hide_a_selected_worker_or_move_a_contract(self):
+        plan, receipts, builds = completed(full=True)
+        for mutate in (
+            lambda value: value["expected_dispatch_jobs"].remove("native-shared"),
+            lambda value: value["native_batches"].pop(),
+            lambda value: value["e2e_batches"].pop(),
+            lambda value: value["image_producers"].update({"image-router": []}),
+            lambda value: value.update(full_cpu_version=1),
+        ):
+            candidate = copy.deepcopy(plan)
+            mutate(candidate)
+            candidate["plan_sha256"] = digest(
+                {key: value for key, value in candidate.items() if key != "plan_sha256"}
+            )
+            self.assertFalse(evaluate_gate(candidate, receipts, builds=builds).passed)
+
+    def test_successful_batch_does_not_replace_a_missing_individual_receipt(self):
+        plan, receipts, builds = completed(full=True)
+        jobs = {name: {"result": "success"} for name in plan["expected_dispatch_jobs"]}
+        self.assertTrue(evaluate_gate(plan, receipts, builds=builds, jobs=jobs).passed)
+        for identity in ("native.image-calibration-cpu", "e2e.vela-omni"):
+            selected = [receipt for receipt in receipts if receipt["id"] != identity]
+            verdict = evaluate_gate(plan, selected, builds=builds, jobs=jobs)
+            self.assertFalse(verdict.passed)
+            self.assertIn(f"required verification {identity}: missing", verdict.errors)
 
     def test_cli_missing_artifact_fails_and_explains(self):
         plan, _, _ = completed()
