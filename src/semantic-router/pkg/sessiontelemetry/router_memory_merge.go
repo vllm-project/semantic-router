@@ -25,7 +25,11 @@ func mergeStoredSnapshot(stored []byte, local RouterSessionSnapshot) (RouterSess
 		return RouterSessionSnapshot{}, err
 	}
 	if !found {
-		return RouterSessionSnapshot{}, fmt.Errorf("stored session snapshot is not in the current encoding, so its facts cannot be merged")
+		// found is false both for a payload the codec cannot read and for one
+		// whose identity belongs to another key: neither holds facts this merge
+		// can fold, so it reports instead of overwriting them. The key is left
+		// to its TTL and the persister logs the rejction.
+		return RouterSessionSnapshot{}, fmt.Errorf("stored session snapshot is not readable for this session, so its facts cannot be merged")
 	}
 	return mergeRouterSessionSnapshots(remote, local), nil
 }
@@ -34,6 +38,9 @@ func mergeStoredSnapshot(stored []byte, local RouterSessionSnapshot) (RouterSess
 // one. Every rule is monotonic: a merge may add facts but never drop or
 // regress one, so retries and out-of-order persistence are safe.
 func mergeRouterSessionSnapshots(remote, local RouterSessionSnapshot) RouterSessionSnapshot {
+	// In production both guards sit below mergeStoredSnapshot, which rejcts a
+	// payload it cannot read or one that belongs to another identity; they
+	// cover direct callers.
 	if local.SessionID == "" {
 		return remote
 	}
