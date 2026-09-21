@@ -92,9 +92,13 @@ generate_envoy() {
     # Reuse the shared envoy-bench.yaml, moving ext_proc/listener to our ports.
     # The backend cluster is STATIC, so point it at the stub (STUB_PORT); the
     # config's x-vsr-destination-endpoint header cannot redirect a STATIC cluster.
+    # failure_mode_allow is turned off so a request cannot reach the upstream
+    # by skipping ext_proc: such a request would return a fast 200 whose wall
+    # clock is not a classification measurement.
     sed -e "s/port_value: 50051/port_value: ${EXTPROC_PORT}/" \
         -e "s/port_value: 8801/port_value: ${ENVOY_PORT}/" \
         -e "s/port_value: 8000/port_value: ${STUB_PORT}/" \
+        -e "s/failure_mode_allow: true/failure_mode_allow: false/" \
         "$SCRIPT_DIR/envoy-bench.yaml" > "$RESULTS_DIR/envoy.yaml"
     echo "$RESULTS_DIR/envoy.yaml"
 }
