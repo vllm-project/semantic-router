@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -259,9 +260,9 @@ func interpolateExternalAPICustomRequestPlaceholders(value, query string, topK i
 		case "{{.Query}}", externalAPIUserContentPlaceholder:
 			result.WriteString(query)
 		case "{{.TopK}}", externalAPITopKPlaceholder:
-			result.WriteString(fmt.Sprintf("%d", topK))
+			result.WriteString(strconv.Itoa(topK))
 		case "{{.Threshold}}", externalAPIThresholdPlaceholder:
-			result.WriteString(fmt.Sprintf("%.3f", threshold))
+			result.WriteString(strconv.FormatFloat(threshold, 'f', 3, 64))
 		}
 		i += len(placeholder)
 	}
