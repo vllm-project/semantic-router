@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import requests
-
 from cli.sr_bench import preparation_runtime as runtime
 from cli.sr_bench import preparation_worker as worker
 from cli.sr_bench import preparations
