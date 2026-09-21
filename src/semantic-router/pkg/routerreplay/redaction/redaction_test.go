@@ -63,7 +63,7 @@ func TestRedactResponseBodyRemovesRecordFreeTextAndPrivacySurfaces(t *testing.T)
 		"pii_entities":["private-canary"],
 		"hallucination_spans":["private-canary"],
 		"hallucination_span_details":[{"text":"private-canary","explanation":"private-canary","severity":2}],
-		"outcomes":[{"source":"user","target":"model","target_ref":"private-canary","verdict":"failed","reason":"private-canary","metadata":{"note":"private-canary"}}],
+		"outcomes":[{"source":"user","target":"model","target_ref":"private-canary","verdict":"failed","reason":"private-canary","metadata":{"note":"private-canary"},"idempotency_key":"private-canary"}],
 		"session_policy":{"user_id":"private-canary"},
 		"route_diagnostics":{"selected_model":"model-a","selection_reasoning":"private-canary","annotations":{"note":"private-canary"},"signal_errors":{"signal":"private-canary"}},
 		"learning":{"adaptation":{"method":"routing_sampling","reason":"private-canary"}}
@@ -122,7 +122,8 @@ func assertRedactedHallucinationDetail(t *testing.T, record map[string]any) {
 func assertRedactedOutcome(t *testing.T, record map[string]any) {
 	t.Helper()
 	outcome := record["outcomes"].([]any)[0].(map[string]any)
-	if outcome["target_ref"] != "" || outcome["reason"] != "" || len(outcome["metadata"].(map[string]any)) != 0 {
+	if outcome["target_ref"] != "" || outcome["reason"] != "" || outcome["idempotency_key"] != "" ||
+		len(outcome["metadata"].(map[string]any)) != 0 {
 		t.Fatalf("outcome content not cleared: %#v", outcome)
 	}
 	if outcome["source"] != "user" || outcome["target"] != "model" || outcome["verdict"] != "failed" {
