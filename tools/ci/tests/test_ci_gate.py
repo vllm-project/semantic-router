@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
+import re
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -12,11 +15,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 from check_ci_gate import evaluate_gate  # noqa: E402
-from ci_plan import digest, make_plan  # noqa: E402
+from ci_plan import digest, github_outputs, make_plan  # noqa: E402
 from ci_results import make_receipt  # noqa: E402
+from execution_batches import ALL_DISPATCH_JOBS  # noqa: E402
 from provider_mocker_image import IMAGE, REGISTRY  # noqa: E402
+from validate_workflows import load_workflows  # noqa: E402
+from workflow_policy_validation import validate_gate_transport  # noqa: E402
 
 SHA = "a" * 40
+MAX_GATE_ENV_BYTES = 4096
 
 
 def completed(paths=None, *, full=False):
@@ -258,6 +265,186 @@ class GateTests(unittest.TestCase):
             )
             self.assertEqual(result.returncode, 1)
             self.assertIn("required verification", summary.read_text())
+
+
+class GateTransportTests(unittest.TestCase):
+    def setUp(self):
+        errors = []
+        self.gate = load_workflows(errors)["ci.yml"].jobs["gate"]
+        self.assertEqual(errors, [])
+        self.step = next(
+            step
+            for step in self.gate["steps"]
+            if "check_ci_gate.py" in step.get("run", "")
+        )
+
+    def environment(self, jobs):
+        def substitute(match):
+            return jobs[match[1]]["result"]
+
+        return {
+            key: re.sub(r"\$\{\{ needs\.([\w-]+)\.result \}\}", substitute, value)
+            for key, value in self.step["env"].items()
+        }
+
+    def test_full_plan_outputs_never_enter_process_environment(self):
+        plan, receipts, builds = completed(full=True)
+        jobs = {
+            name: {
+                "result": (
+                    "success" if name in plan["expected_dispatch_jobs"] else "skipped"
+                )
+            }
+            for name in ALL_DISPATCH_JOBS
+        }
+        jobs["plan"]["outputs"] = {
+            **github_outputs(plan),
+            "extra_large_output": "x" * (256 * 1024),
+        }
+        self.assertGreater(len(json.dumps(jobs).encode()), 128 * 1024)
+        environment = self.environment(jobs)
+        self.assertTrue(
+            all(
+                len(value.encode()) < MAX_GATE_ENV_BYTES
+                for value in environment.values()
+            )
+        )
+        projected = json.loads(environment["EXECUTOR_RESULTS"])
+        self.assertEqual(
+            projected, {name: {"result": job["result"]} for name, job in jobs.items()}
+        )
+        self.assertTrue(
+            evaluate_gate(plan, receipts, builds=builds, jobs=projected).passed
+        )
+        projected["image-distribution"]["result"] = "failure"
+        self.assertFalse(
+            evaluate_gate(plan, receipts, builds=builds, jobs=projected).passed
+        )
+
+    def test_workflow_policy_rejects_oversized_or_incomplete_transport(self):
+        errors = []
+        validate_gate_transport(self.gate, errors)
+        self.assertEqual(errors, [])
+        expected = json.loads(self.step["env"]["EXECUTOR_RESULTS"])
+        incomplete = {
+            name: value for name, value in expected.items() if name != "native-build"
+        }
+        with_output = {**expected, "outputs": "${{ needs.plan.outputs.plan }}"}
+        for value in (
+            "${{ toJSON(needs) }}",
+            json.dumps(incomplete),
+            json.dumps(with_output),
+        ):
+            with self.subTest(value=value[:50]):
+                self.step["env"]["EXECUTOR_RESULTS"] = value
+                errors = []
+                validate_gate_transport(self.gate, errors)
+                self.assertTrue(any("without job outputs" in error for error in errors))
+
+    def test_plan_cannot_move_back_from_artifact_to_environment(self):
+        self.gate["steps"] = [
+            step
+            for step in self.gate["steps"]
+            if step.get("with", {}).get("name") != "ci-plan"
+        ]
+        errors = []
+        validate_gate_transport(self.gate, errors)
+        self.assertTrue(any("independently downloaded" in error for error in errors))
+
+    def test_shell_reconciles_large_file_plan_and_rejects_missing_or_changed_evidence(
+        self,
+    ):
+        plan, receipts, builds = completed(full=True)
+        plan["paths"] = [
+            f"website/docs/large-change-{index}.md" for index in range(5000)
+        ]
+        plan["plan_sha256"] = digest(
+            {key: value for key, value in plan.items() if key != "plan_sha256"}
+        )
+        jobs = {
+            name: {
+                "result": (
+                    "success" if name in plan["expected_dispatch_jobs"] else "skipped"
+                )
+            }
+            for name in ALL_DISPATCH_JOBS
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = root / ".agent-harness/ci"
+            results = directory / "results"
+            results.mkdir(parents=True)
+            native_bytes = json.dumps({"platform": "linux/amd64"}).encode()
+            native_digest = hashlib.sha256(native_bytes).hexdigest()
+            for build in builds:
+                if build["id"] == "native:cpu":
+                    output = results / "ci-build-native-cpu"
+                    output.mkdir()
+                    (output / "manifest.json").write_bytes(native_bytes)
+                    (output / "receipt.json").write_text(
+                        json.dumps([{**build, "sha256": native_digest}])
+                    )
+                else:
+                    name = build["id"].removeprefix("image:")
+                    output = results / f"ci-build-image-{name}"
+                    output.mkdir()
+                    (output / "manifest.json").write_text(
+                        json.dumps(
+                            {
+                                "images": [{"platform": "linux/amd64"}],
+                                **build,
+                                "id": name,
+                            }
+                        )
+                    )
+            for receipt in receipts:
+                for collection in (
+                    receipt["artifacts"],
+                    receipt["evidence"]["artifacts"],
+                ):
+                    for artifact in collection:
+                        if artifact["id"] == "native:cpu":
+                            artifact["sha256"] = native_digest
+                receipt["evidence_sha256"] = digest(receipt["evidence"])
+                output = results / f"ci-result-{receipt['id']}"
+                output.mkdir()
+                (output / "result.json").write_text(json.dumps(receipt))
+            plan_path = directory / "plan.json"
+            plan_path.write_text(json.dumps(plan))
+            self.assertGreater(plan_path.stat().st_size, 128 * 1024)
+            script = self.step["run"].replace(
+                "python3 tools/ci/check_ci_gate.py",
+                f"{shlex.quote(sys.executable)} {shlex.quote(str(ROOT / 'tools/ci/check_ci_gate.py'))}",
+            )
+            environment = {**os.environ, **self.environment(jobs), "GITHUB_SHA": SHA}
+            environment.pop("GITHUB_STEP_SUMMARY", None)
+
+            def run():
+                return subprocess.run(
+                    ["bash", "-e", "-c", script],
+                    cwd=root,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            actual = run()
+            self.assertEqual(actual.returncode, 0, actual.stdout + actual.stderr)
+            environment["GITHUB_SHA"] = "f" * 40
+            self.assertIn("plan source SHA differs", run().stdout)
+            environment["GITHUB_SHA"] = SHA
+            plan["paths"].append("tampered")
+            plan_path.write_text(json.dumps(plan))
+            self.assertIn("plan schema or content digest is invalid", run().stdout)
+            plan["paths"].pop()
+            plan_path.write_text(json.dumps(plan))
+            (results / f"ci-result-{receipts[-1]['id']}" / "result.json").unlink()
+            actual = run()
+            self.assertEqual(actual.returncode, 1)
+            self.assertIn(
+                f"required verification {receipts[-1]['id']}: missing", actual.stdout
+            )
 
 
 if __name__ == "__main__":

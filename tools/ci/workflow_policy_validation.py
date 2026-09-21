@@ -44,6 +44,39 @@ def needs(job: dict[str, Any]) -> set[str]:
     return set()
 
 
+def validate_gate_transport(gate: dict[str, Any], errors: list[str]) -> None:
+    steps = gate.get("steps", [])
+    reconciliations = [
+        step for step in steps if "check_ci_gate.py" in step.get("run", "")
+    ]
+    expected = {
+        name: {"result": "${{ needs." + name + ".result }}"}
+        for name in ALL_DISPATCH_JOBS
+    }
+    try:
+        actual = json.loads(
+            reconciliations[0].get("env", {}).get("EXECUTOR_RESULTS", "")
+        )
+    except (ValueError, TypeError, IndexError):
+        actual = None
+    if len(reconciliations) != 1 or actual != expected:
+        errors.append(
+            "ci.yml gate must pass only every prerequisite's result, without job outputs"
+        )
+    if not any(
+        step.get("uses", "").startswith("actions/download-artifact@")
+        and step.get("with", {}).get("name") == "ci-plan"
+        and step.get("with", {}).get("path") == ".agent-harness/ci"
+        for step in steps
+    ) or not any(
+        "--plan .agent-harness/ci/plan.json" in step.get("run", "")
+        for step in reconciliations
+    ):
+        errors.append(
+            "ci.yml gate must read the independently downloaded ci-plan artifact"
+        )
+
+
 def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) -> None:
     dispatcher = workflows.get("pr.yml")
     if not dispatcher or "pull_request" not in dispatcher.events:
@@ -90,6 +123,7 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
         errors.append(
             "ci.yml gate must aggregate every executor and build prerequisite"
         )
+    validate_gate_transport(gate, errors)
     text = shared.path.read_text()
     if (
         "check_ci_gate.py" not in text
