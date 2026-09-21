@@ -139,6 +139,42 @@ trap cleanup EXIT
 
 scrape_metrics() { curl -s "$METRICS_URL" > "$1" 2>/dev/null; }
 
+# mode -> in the GPU phase every prepared classifier must report a GPU device.
+# `--gpus all` only exposes the device; whether the router uses it depends on
+# the model bindings, so without this check a CPU-on-CPU run would be published
+# as a speedup.
+verify_device() {
+    local mode=$1
+    local log="$RESULTS_DIR/bindings-tp-${mode}.txt"
+    [ "$mode" = gpu ] || return 0
+    docker logs "$SR_CONTAINER" > "$log" 2>&1
+    python3 - "$log" <<'PY'
+import json
+import sys
+
+ready = []
+for line in open(sys.argv[1]):
+    if "model_binding_ready" not in line:
+        continue
+    try:
+        event = json.loads(line)
+    except ValueError:
+        continue
+    if event.get("event") == "model_binding_ready":
+        ready.append((event.get("binding", ""), event.get("provider", ""), event.get("device", "")))
+
+if not ready:
+    print("ERROR: no model_binding_ready events; cannot prove which device ran", file=sys.stderr)
+    sys.exit(1)
+for name, provider, device in ready:
+    print(f"{name} {provider or 'unset'} {device or 'unset'}")
+on_cpu = [name for name, _, device in ready if device in ("", "cpu")]
+if on_cpu:
+    print("ERROR: GPU phase prepared these bindings on the CPU: " + ", ".join(on_cpu), file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
 # mode concurrency payload -> runs one concurrency level and prints its row.
 # Fails when the level returned errors, or when the classifiers recorded fewer
 # samples than the requests that succeeded.
@@ -176,6 +212,10 @@ main() {
         echo "===== ${mode^^} ====="
         start_router "$mode" "$(generate_config "$mode")" || return 1
         start_envoy "$envoy_cfg"
+        verify_device "$mode" || {
+            log "ERROR: ${mode} phase is not running on the GPU"
+            return 1
+        }
         python3 "$SCRIPT_DIR/load_test.py" \
             "http://localhost:${ENVOY_PORT}/v1/chat/completions" 5 4 "$payload" >/dev/null || {
             log "ERROR: ${mode} warmup produced no successful responses"

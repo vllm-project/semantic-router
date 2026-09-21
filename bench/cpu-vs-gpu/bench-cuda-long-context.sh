@@ -272,6 +272,42 @@ verify_signal_samples() {
     python3 "$SCRIPT_DIR/signal_samples.py" "$1" "$2" "$3" domain,jailbreak,pii
 }
 
+# mode -> in the GPU phase every prepared classifier must report a GPU device.
+# `--gpus all` only exposes the device; whether the router uses it depends on
+# the model bindings, so without this check a CPU-on-CPU run would be published
+# as a speedup.
+verify_device() {
+    local mode=$1
+    local log="$RESULTS_DIR/bindings-${mode}-${TIMESTAMP}.txt"
+    [ "$mode" = gpu ] || return 0
+    docker logs "$SR_CONTAINER" > "$log" 2>&1
+    python3 - "$log" <<'PY'
+import json
+import sys
+
+ready = []
+for line in open(sys.argv[1]):
+    if "model_binding_ready" not in line:
+        continue
+    try:
+        event = json.loads(line)
+    except ValueError:
+        continue
+    if event.get("event") == "model_binding_ready":
+        ready.append((event.get("binding", ""), event.get("provider", ""), event.get("device", "")))
+
+if not ready:
+    print("ERROR: no model_binding_ready events; cannot prove which device ran", file=sys.stderr)
+    sys.exit(1)
+for name, provider, device in ready:
+    print(f"{name} {provider or 'unset'} {device or 'unset'}")
+on_cpu = [name for name, _, device in ready if device in ("", "cpu")]
+if on_cpu:
+    print("ERROR: GPU phase prepared these bindings on the CPU: " + ", ".join(on_cpu), file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
 run_phase() {
     local mode=$1 config_file envoy_cfg sz
     config_file=$(generate_config "$mode")
@@ -279,6 +315,11 @@ run_phase() {
     log "=== PHASE ${mode^^} ==="
     start_router "$mode" "$config_file" || return 1
     start_envoy "$envoy_cfg"
+    if ! verify_device "$mode"; then
+        log "ERROR: ${mode} phase is not running on the GPU; aborting"
+        stop_containers "$mode"
+        return 1
+    fi
     for sz in "${SIZES[@]}"; do
         send_requests "$mode" "$sz" "$WARMUP_REQUESTS" warmup
         if [ "$SEND_OK" -eq 0 ]; then
