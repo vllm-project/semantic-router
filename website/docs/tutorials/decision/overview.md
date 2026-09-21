@@ -133,6 +133,11 @@ of an `OR` matched, and a match an `on_error` policy manufactured. Inside an
 matching gate adds support without removing evidence. Name ascending is the
 final tie-break, so ranking never depends on map or file order.
 
+The eval API reports how one request was ranked under `decision_ranking`: the
+strategy that ran, the tier the winner came from, whether that pool was
+comparable and which decision made it incomparable, and the key that separated
+the winner from the decision behind it.
+
 A catch-all ranks after every real match under either strategy, whatever
 priority it carries, so an unconditional fallback stays a fallback. The
 [Decision Ranking Semantics](../../proposals/decision-ranking-semantics)

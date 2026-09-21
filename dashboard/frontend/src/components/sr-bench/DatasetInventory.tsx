@@ -3,11 +3,13 @@ import ProductIcon from '../ProductIcon'
 import { number } from './model'
 import {
   benchmarkTitle,
+  datasetEvaluationTitle,
   friendlyDatasetName,
   profileDescription,
   profileTitle,
 } from './datasetPresentation'
 import DatasetDetails from './DatasetDetails'
+import DatasetExposure from './DatasetExposure'
 import BenchSelect from './BenchSelect'
 import type { Dataset, Run } from './types'
 import shared from './SrBench.module.css'
@@ -207,9 +209,8 @@ export default function DatasetInventory({
                         <div className={styles.cardTop}>
                           <ProductIcon name="database" width={21} height={21} />
                           <span>
-                            {dataset.split === 'holdout'
-                              ? 'Holdout'
-                              : profileTitle(dataset.profile)}
+                            {datasetEvaluationTitle(dataset.preparation, dataset.benchmarks) ??
+                              profileTitle(dataset.profile)}
                           </span>
                           <ProductIcon name="arrow-right" width={18} height={18} />
                         </div>
@@ -220,6 +221,11 @@ export default function DatasetInventory({
                           {(dataset.benchmarks?.length ?? 0) > 3 &&
                             ` +${dataset.benchmarks!.length - 3} more`}
                         </p>
+                        <DatasetExposure
+                          preparation={dataset.preparation}
+                          benchmarks={dataset.benchmarks}
+                          compact
+                        />
                         <div className={styles.cardMetrics}>
                           <strong>
                             {number(dataset.case_count)} <span>questions</span>
