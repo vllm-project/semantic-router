@@ -3,7 +3,7 @@
 
 # Configuration
 KIND_CLUSTER_NAME ?= semantic-router-cluster
-KIND_CONFIG_FILE ?= tools/kind/kind-config.yaml
+KIND_CONFIG_FILE ?= tools/dev/kind/kind-config.yaml
 KUBE_NAMESPACE ?= vllm-semantic-router-system
 DOCKER_IMAGE ?= ghcr.io/vllm-project/semantic-router/extproc:latest
 
@@ -33,7 +33,7 @@ create-cluster: ## Create a kind cluster with optimized configuration
 	fi
 	@if [ ! -f "$(KIND_CONFIG_FILE)" ]; then \
 		echo "$(YELLOW)[INFO]$(NC) Kind config not found: $(KIND_CONFIG_FILE). Generating..."; \
-		bash tools/kind/generate-kind-config.sh; \
+		bash tools/dev/kind/generate-kind-config.sh; \
 	fi
 	@echo "$(BLUE)[INFO]$(NC) Creating cluster with config: $(KIND_CONFIG_FILE)"
 	@mkdir -p /tmp/kind-semantic-router
@@ -114,7 +114,7 @@ test-api: ## Test the Classification API
 	@curl -s -f http://localhost:8080/health || (echo "$(RED)[ERROR]$(NC) Health check failed. Is port-forward running?" && exit 1)
 	@echo "$(GREEN)[SUCCESS]$(NC) Health check passed"
 	@echo "$(BLUE)[INFO]$(NC) Testing intent classification..."
-	@curl -s -X POST http://localhost:8080/api/v1/classify/intent \
+	@curl -s -X POST http://localhost:8080/api/v1/diagnostics/classify/intent \
 		-H "Content-Type: application/json" \
 		-d '{"text": "What is machine learning?"}' | head -c 200
 	@echo ""

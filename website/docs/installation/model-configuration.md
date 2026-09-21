@@ -65,6 +65,25 @@ The Router creates a sparse local Model Card for `local-chat`. Add a matching
 window, capabilities, tags, or LoRAs. Add benchmark measurements independently
 under top-level `evaluation.records[]`.
 
+## Check task capabilities before dispatch
+
+The selected model must satisfy both the provider protocol's capabilities and
+its declared task capabilities. The same checks apply when the Router selects
+a fallback from the matched decision. A fallback cannot reintroduce a model
+that was excluded by the request's context-window check.
+
+Model Card capability metadata accepts protocol names such as `image_input`
+and `image_generation`. The catalog aliases `vision`, `audio`, and `video`
+describe image, audio, and video **input**, respectively; they do not grant
+media-generation support. `structured_output` maps to `structured_json`, and
+`tool_use` maps to `tools`. Descriptive labels such as `long_context` or `coding`
+do not erase recognized capability declarations alongside them.
+
+A model without any recognized capability declaration retains protocol-only
+compatibility. For an annotated model, a protocol that can encode a request
+does not override missing task capabilities. When no eligible decision model
+can serve the requested task, the Router returns `unsupported_capability`.
+
 ## Configure Models in the Dashboard
 
 Open **Build → Models → Add Model**. You can then:
@@ -81,12 +100,63 @@ The Dashboard edits the same v0.3 document as YAML. Use one authoring owner for
 a deployment and review the exported YAML before serving it. See
 [Configuration workflows](configuration-workflows).
 
+## Routing capabilities
+
+Author-declared model capabilities act as an eligibility filter before model
+selection: candidates whose declared capabilities cannot express a request are
+filtered out before the configured selection algorithm scores the survivors, so
+a compatible model with a higher score can win over one that merely appears
+first. Final dispatch only validates the chosen model: a late capability
+mismatch returns an error rather than restarting the selection or replacing the
+chosen candidate. Declare them on a model card:
+
+```yaml
+routing:
+  modelCards:
+    - name: image-backend
+      capabilities: [image_generation]
+```
+
+The protocol capability vocabulary is defined by the `llmprotocol` package,
+and a declaration reaches capability-aware dispatch in one of these states:
+
+1. **No recognized declaration** — the model is unannotated and stays eligible
+   on wire expressibility alone.
+2. **Task/modality declaration** — names like `image_input`, `image_output`,
+   `image_generation`, `audio_input`, `audio_output`, `video_input`,
+   `video_output`, `file_input`, and `file_output` steer the declared-task
+   filter: an annotated model must declare every task bit the request requires,
+   otherwise the dispatch is rejected with `unsupported_capability`.
+3. **Transport/accounting declaration** — names like `tools`, `reasoning`,
+   `streaming`, and `structured_json` are recognized, yet they carry no task
+   bit. Such a model is annotated, so it does not qualify for a media task it
+   never declared; text requests require no task bit and are unaffected.
+4. **Catalog aliases** — `vision`, `audio`, and `video` project onto
+   `image_input`, `audio_input`, and `video_input`; `structured_output` maps to
+   `structured_json` and `tool_use` maps to `tools`. Projection runs before the
+   filter, so a card declaring `[image_input, vision]` is filtered on
+   `image_input` alone: it stays eligible for image requests and is rejected
+   for audio, which it never declared.
+5. **Descriptive labels** — names outside the protocol vocabulary and its
+   aliases (e.g. `long_context`, `coding`) are metadata: they contribute no
+   task bit and do not void recognized names in the same declaration, so a
+   declaration of descriptive labels alone is treated as unannotated.
+
+The pre-scoring filter and the final validation apply the same qualification,
+so validation cannot admit a model the filter would have denied.
+
 ## Validate the result
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
 Validation resolves catalog entries, Provider mappings, reasoning controls,
 Model Card identities, and backend-pool compatibility before startup.
+
+## Configure models used by Router tasks
+
+For classifiers, safety checks, and embeddings used inside the Router, start
+with [Router Runtime](native-backends). It covers in-process and external
+models, their configuration, and operations.

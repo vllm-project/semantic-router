@@ -30,7 +30,9 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 		allMessagesText:   strings.Join(history.nonUserMessages, " "),
 		currentUserText:   history.currentUserMessage,
 		priorUserMessages: append([]string(nil), history.priorUserMessages...),
-		hasAssistantReply: history.hasAssistantReply,
+		// Feedback applies to a new textual user turn after an answer. Tool
+		// results and assistant prefills must not reclassify stale user text.
+		hasAssistantReply: history.hasAssistantReply && history.lastMessageRole == "user" && history.lastUserHasText,
 		conversationFacts: classification.ConversationFacts{
 			HasDeveloperMessage:       history.hasDeveloperMessage,
 			UserMessageCount:          history.userMessageCount,
@@ -50,6 +52,7 @@ func (r *OpenAIRouter) prepareSignalEvaluationInput(history signalConversationHi
 			LastUserAfterToolResult:   history.lastUserAfterToolResult,
 		},
 		requestFacts: classification.RequestFacts{
+			JailbreakInput:         history.jailbreakInput,
 			Metadata:               cloneRoutingMetadata(history.metadata),
 			ContextTokenFloor:      history.contextTokenFloor,
 			ContextTextBytes:       history.contextTextBytes,
@@ -121,6 +124,7 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRMatchedModality = signals.MatchedModalityRules
 	ctx.VSRMatchedAuthz = signals.MatchedAuthzRules
 	ctx.VSRMatchedJailbreak = signals.MatchedJailbreakRules
+	ctx.VSRMatchedSafety = signals.MatchedSafetyRules
 	ctx.VSRMatchedPII = signals.MatchedPIIRules
 	ctx.VSRMatchedKB = signals.MatchedKBRules
 	ctx.VSRMatchedConversation = signals.MatchedConversationRules
@@ -133,12 +137,15 @@ func (r *OpenAIRouter) applySignalResultsToContext(ctx *RequestContext, signals 
 	ctx.VSRSignalConfidences = cloneReplayFloat64Map(signals.SignalConfidences)
 	ctx.VSRSignalValues = cloneReplayFloat64Map(signals.SignalValues)
 	ctx.VSRSignalErrors = cloneReplayStringMap(signals.SignalErrors)
+	ctx.VSRSignalErrorMatches = cloneReplayBoolMap(signals.SignalErrorMatches)
 	ctx.VSRProjectionTrace = cloneProjectionTraceForReplay(signals.ProjectionTrace)
 
-	if signals.JailbreakDetected {
+	if signals.JailbreakDetected || signals.JailbreakScoreAvailable {
 		ctx.JailbreakDetected = signals.JailbreakDetected
 		ctx.JailbreakType = signals.JailbreakType
 		ctx.JailbreakConfidence = signals.JailbreakConfidence
+		ctx.JailbreakScoreAvailable = signals.JailbreakScoreAvailable
+		ctx.JailbreakDecision = signals.JailbreakDecision
 	}
 	if signals.PIIDetected {
 		ctx.PIIDetected = signals.PIIDetected
@@ -188,6 +195,17 @@ func cloneReplayStringMap(values map[string]string) map[string]string {
 	return cloned
 }
 
+func cloneReplayBoolMap(values map[string]bool) map[string]bool {
+	if values == nil {
+		return nil
+	}
+	cloned := make(map[string]bool, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
+}
+
 func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules := []string{}
 	allMatchedRules = append(allMatchedRules, signals.MatchedKeywordRules...)
@@ -204,6 +222,7 @@ func collectMatchedSignalRules(signals *classification.SignalResults) []string {
 	allMatchedRules = append(allMatchedRules, signals.MatchedModalityRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedAuthzRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedJailbreakRules...)
+	allMatchedRules = append(allMatchedRules, signals.MatchedSafetyRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedPIIRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedKBRules...)
 	allMatchedRules = append(allMatchedRules, signals.MatchedConversationRules...)

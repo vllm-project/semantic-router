@@ -42,7 +42,9 @@ func (v *FaithfulnessVerifier) Kind() VerifierKind { return VerifierKindFaithful
 
 // Verify implements Verifier. req.TrustedContext is the source material,
 // req.Task the question; each candidate is scored and its unsupported spans
-// are carried in the candidate's Flags.
+// are carried in the candidate's Flags. It measures evidence and never decides,
+// so it reports tie and leaves accept/rerank/escalate policy to the caller
+// (issue #2857).
 func (v *FaithfulnessVerifier) Verify(ctx context.Context, req *VerifierRequest) (*VerifierResult, error) {
 	if v.detect == nil {
 		return nil, NewVerifierError(VerifierFailureUnavailable, fmt.Errorf("hallucination detector backend not configured"))
@@ -54,7 +56,7 @@ func (v *FaithfulnessVerifier) Verify(ctx context.Context, req *VerifierRequest)
 	best := -1.0
 	scores := make([]CandidateScore, 0, len(req.Candidates))
 	for _, c := range req.Candidates {
-		spans, _, err := v.detect(req.TrustedContext, req.Task, c.Content)
+		spans, _, err := v.detect(ctx, req.TrustedContext, req.Task, c.Content)
 		if err != nil {
 			return nil, &VerifierError{Code: VerifierFailureUnavailable, Err: err}
 		}
@@ -67,7 +69,7 @@ func (v *FaithfulnessVerifier) Verify(ctx context.Context, req *VerifierRequest)
 		}
 	}
 	return &VerifierResult{
-		Disposition: DispositionApprove,
+		Disposition: DispositionTie,
 		Confidence:  &best,
 		Kind:        v.Kind(),
 		Version:     v.version,
@@ -124,7 +126,7 @@ func (v *PeerConsistencyVerifier) Verify(ctx context.Context, req *VerifierReque
 			}
 			// Directional consistency: does peer (premise) entail/contradict
 			// candidate c (hypothesis)?
-			entail, contradict, err := nliPairSignalWith(v.nli, peer.Content, c.Content)
+			entail, contradict, err := nliPairSignalWith(ctx, v.nli, peer.Content, c.Content)
 			if err != nil {
 				return nil, &VerifierError{Code: VerifierFailureUnavailable, Err: err}
 			}

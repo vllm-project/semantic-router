@@ -53,11 +53,12 @@ func TestLLMLabelClassifierMaxTokens(t *testing.T) {
 					ModelName:     "test-model",
 					MaxTokens:     tt.configured,
 				},
+				nil,
 			)
 			if err != nil {
 				t.Fatalf("newLLMLabelClassifier() error = %v", err)
 			}
-			classifier.(*llmLabelClassifier).client.baseURL = server.URL
+			setTestVLLMClientURL(classifier.(*llmLabelClassifier).client, server.URL)
 
 			if _, err := classifier.Classify(context.Background(), "hello"); err != nil {
 				t.Fatalf("Classify() error = %v", err)

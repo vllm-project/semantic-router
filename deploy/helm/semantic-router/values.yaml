@@ -157,8 +157,8 @@ observability:
     thresholds:
       requestErrorRate: 0.05
       completionLatencyP95Seconds: 30
-      ttftP95Seconds: 5
-      tpotP95Seconds: 0.25
+      firstResponseObservationP95Seconds: 5
+      responseDurationPerOutputTokenP95Seconds: 0.25
       routingLatencyP95Seconds: 0.1
       inflightRequests: 50
       cacheHitRate: 0.2
@@ -306,7 +306,6 @@ config:
       api:
         batch_classification:
           max_batch_size: 100
-          concurrency_threshold: 5
           max_concurrency: 8
           metrics:
             enabled: true

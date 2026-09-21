@@ -28,7 +28,7 @@ describe('Mixture-of-Models workspace contracts', () => {
     expect(source).toContain('getRecipeProbe(')
     expect(source).toContain('validateRecipeProbe(')
     expect(source).toContain('createRecipeProbeRunPlan(')
-    expect(source).not.toContain('/api/v1/eval')
+    expect(source).not.toContain('/api/v1/routing/preview')
     expect(source).not.toContain('simulate')
   })
 

@@ -2,11 +2,14 @@
 
 import json
 import math
+import posixpath
 import re
 import warnings
 from datetime import date, datetime
 from enum import Enum
-from typing import Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Dict, List, Literal, Optional
+
+from .models_safety import SafetyRule
 
 from pydantic import (
     BaseModel,
@@ -25,10 +28,10 @@ from .config_contract import (
     ClassifierSignalType,
     UnknownPolicy,
 )
+from .config_schema import surface_types
 from .context_bands import normalize_token_count, validate_context_band
 
 RoutingStrategy = Literal["priority", "confidence"]
-LOCAL_CLASSIFIER_LABEL_COUNT = 2
 SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
@@ -66,15 +69,40 @@ class EmbeddingSignal(BaseModel):
     payload the embedding rule's query is computed from. It defaults to
     ``"text"`` when omitted, preserving existing behavior. ``"image"`` and
     ``"audio"`` require ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``
-    in the router config so the query and candidate embeddings land in the same
-    shared space.
+    or an explicit embedding binding with those capabilities. Positive and negative
+    text/image candidates are encoded in that same prepared model space.
     """
 
     name: str
     threshold: float
-    candidates: List[str]
-    aggregation_method: str = "max"
+    candidates: List[StrictStr] = Field(default_factory=list)
+    image_candidates: List[StrictStr] = Field(default_factory=list)
+    negative_candidates: List[StrictStr] = Field(default_factory=list)
+    negative_image_candidates: List[StrictStr] = Field(default_factory=list)
+    aggregation_method: Literal["max", "mean", "any"] = "max"
     query_modality: Optional[Literal["text", "image", "audio"]] = None
+    prototype_scoring: Optional["PrototypeScoringConfig"] = None
+
+    @model_validator(mode="after")
+    def validate_candidate_banks(self):
+        if not self.candidates and not self.image_candidates:
+            raise ValueError(
+                "embedding requires positive candidates or image_candidates"
+            )
+        for values in (
+            self.candidates,
+            self.image_candidates,
+            self.negative_candidates,
+            self.negative_image_candidates,
+        ):
+            if any(not value.strip() for value in values):
+                raise ValueError("embedding candidates must be non-empty strings")
+        bound = 2 if self.negative_candidates or self.negative_image_candidates else 1
+        if not math.isfinite(self.threshold) or not -bound <= self.threshold <= bound:
+            raise ValueError(
+                f"embedding threshold must be finite and within [-{bound}, {bound}]"
+            )
+        return self
 
 
 class ProjectionPartition(BaseModel):
@@ -378,6 +406,7 @@ class ComplexityRule(BaseModel):
     easy: ComplexityCandidates
     description: Optional[str] = None
     composer: Optional["Rules"] = None  # Forward reference, defined below
+    prototype_scoring: Optional[PrototypeScoringConfig] = None
 
 
 class JailbreakRule(BaseModel):
@@ -556,6 +585,7 @@ class ClassifierSignal(BaseModel):
     model_path: Optional[str] = None
     labels: List[str]
     instructions: Optional[str] = None
+    disable_rationale: StrictBool = False
     use_cpu: bool = False
 
     @model_validator(mode="after")
@@ -579,32 +609,33 @@ class ClassifierSignal(BaseModel):
             self._validate_sequence()
         return self
 
-    def _validate_local(self):
-        if not self.model_path:
-            raise ValueError("local classifiers require model_path")
-        if len(self.labels) != LOCAL_CLASSIFIER_LABEL_COUNT:
-            raise ValueError("local classifiers require exactly two labels")
-        if self.model or self.instructions:
-            raise ValueError("local classifiers do not accept model or instructions")
+    def _validate_local(self) -> None:
+        if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
+            raise ValueError("local classifiers require at least two labels")
+        if self.model or self.instructions or self.disable_rationale:
+            raise ValueError(
+                "local classifiers do not accept model, instructions or disable_rationale"
+            )
 
     def _validate_llm(self):
-        if not self.model:
-            raise ValueError("llm classifiers require model")
         if not self.instructions:
             raise ValueError("llm classifiers require instructions")
         if self.model_path or self.use_cpu:
             raise ValueError("llm classifiers do not accept model_path or use_cpu")
 
-    def _validate_sequence(self):
-        if not self.model:
-            raise ValueError("sequence_classifier classifiers require model")
+    def _validate_sequence(self) -> None:
         if len(self.labels) < SEQUENCE_CLASSIFIER_MIN_LABEL_COUNT:
             raise ValueError(
                 "sequence_classifier classifiers require at least two labels"
             )
-        if self.model_path or self.use_cpu or self.instructions:
+        if (
+            self.model_path
+            or self.use_cpu
+            or self.instructions
+            or self.disable_rationale
+        ):
             raise ValueError(
-                "sequence_classifier classifiers do not accept model_path, use_cpu or instructions"
+                "sequence_classifier classifiers do not accept model_path, use_cpu, instructions or disable_rationale"
             )
 
 
@@ -625,6 +656,7 @@ class Signals(BaseModel):
     modality: Optional[List[ModalityRule]] = []
     role_bindings: Optional[List[RoleBindingRule]] = []
     jailbreak: Optional[List[JailbreakRule]] = []
+    safety: list[SafetyRule] = Field(default_factory=list)
     hallucination: Optional[List[HallucinationRule]] = []
     pii: Optional[List[PIIRule]] = []
     kb: Optional[List[KBSignal]] = []
@@ -641,7 +673,7 @@ class Signals(BaseModel):
             for signal in getattr(self, family) or []:
                 name = (
                     signal.name.lower()
-                    if family in {"metadata", "classifiers", "input_modality"}
+                    if family in {"metadata", "classifiers", "input_modality", "safety"}
                     else signal.name
                 )
                 if name in seen:
@@ -705,8 +737,8 @@ class Condition(BaseModel):
             raise ValueError("leaf condition node cannot define child conditions")
         if self.label is not None and self.type != "classifier":
             raise ValueError("label is only valid for classifier conditions")
-        if self.type == "classifier" and (self.label is None or self.predicate is None):
-            raise ValueError("classifier conditions require label and predicate")
+        if self.type == "classifier" and self.label is None:
+            raise ValueError("classifier conditions require a label")
         if self.on_error is not None and self.type != "classifier":
             raise ValueError("on_error is only valid for classifier conditions")
         if self.on_unknown is not None:
@@ -750,23 +782,11 @@ class Rules(BaseModel):
         return data
 
 
-class PluginType(str, Enum):
-    """Supported plugin types."""
-
-    RESPONSE_CACHE = "response_cache"
-    SYSTEM_PROMPT = "system_prompt"
-    HEADER_MUTATION = "header_mutation"
-    HALLUCINATION = "hallucination"
-    ROUTER_REPLAY = "router_replay"
-    MEMORY = "memory"
-    RAG = "rag"
-    FAST_RESPONSE = "fast_response"
-    REQUEST_PARAMS = "request_params"
-    RESPONSE_JAILBREAK = "response_jailbreak"
-    TOOLS = "tools"
-    TOOL_SELECTION = "tool_selection"
-    CONTEXT_COMPRESSION = "context_compression"
-    SHADOW_DISPATCH = "shadow_dispatch"
+PluginType = Enum(
+    "PluginType",
+    {plugin_type.upper(): plugin_type for plugin_type in surface_types("plugins")},
+    type=str,
+)
 
 
 class ResponseCacheSemanticConfig(BaseModel):
@@ -877,7 +897,14 @@ class ContextCompressionTargetConfig(BaseModel):
         return self
 
 
+class ContextCompressionCurrentUserConfig(BaseModel):
+    mode: Literal["preserve", "truncate"] = "preserve"
+
+
 class ContextCompressionTargetsConfig(BaseModel):
+    current_user: ContextCompressionCurrentUserConfig = Field(
+        default_factory=ContextCompressionCurrentUserConfig
+    )
     tool_outputs: ContextCompressionTargetConfig = Field(
         default_factory=lambda: ContextCompressionTargetConfig(
             mode="extractive", min_tokens=2000, target_tokens=1000
@@ -952,6 +979,9 @@ class RequestParamsPluginConfig(BaseModel):
     """Configuration for request_params plugin."""
 
     blocked_params: Optional[List[str]] = None
+    default_max_tokens: Optional[
+        Annotated[int, Field(ge=1, strict=True)] | Literal["auto"]
+    ] = None
     max_tokens_limit: Optional[int] = Field(default=None, ge=1)
     max_n: Optional[int] = Field(default=None, ge=1)
     strip_unknown: Optional[bool] = None
@@ -1147,7 +1177,7 @@ class RouterReplayPluginConfig(BaseModel):
 
     The router_replay plugin captures routing decisions and payload snippets
     for later debugging and replay. Records are stored in memory and accessible
-    via the /v1/router_replay API endpoint.
+    via the /api/v1/observability/replays API endpoint.
     """
 
     enabled: bool = True
@@ -1270,6 +1300,13 @@ class MemoryPluginConfig(BaseModel):
     )
 
 
+class RAGRerankConfig(BaseModel):
+    """Select the number of neural-reranked vectorstore hits to inject."""
+
+    model_config = ConfigDict(extra="forbid")
+    top_k: Optional[int] = Field(default=None, ge=1)
+
+
 class RAGPluginConfig(BaseModel):
     """Configuration for RAG (Retrieval-Augmented Generation) plugin.
 
@@ -1283,6 +1320,19 @@ class RAGPluginConfig(BaseModel):
     - openai: OpenAI file_search with vector stores
     - hybrid: Multi-backend with fallback strategy
     """
+
+    rerank: Optional[RAGRerankConfig] = None
+
+    @model_validator(mode="after")
+    def validate_neural_rerank(self):
+        if self.enabled and self.rerank is not None:
+            if self.backend != "vectorstore":
+                raise ValueError(
+                    "Neural rerank requires the structured vectorstore backend"
+                )
+            if self.rerank.top_k is not None and self.rerank.top_k > (self.top_k or 5):
+                raise ValueError("rerank.top_k cannot exceed candidate top_k")
+        return self
 
     # Required: Enable RAG retrieval
     enabled: bool = Field(..., description="Enable RAG retrieval for this decision")
@@ -1656,7 +1706,7 @@ class Decision(BaseModel):
     action: Optional[DecisionAction] = None
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
-    modelRefs: List[ModelRef] = Field(alias="modelRefs")
+    modelRefs: List[ModelRef] = Field(default_factory=list, alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
@@ -2217,12 +2267,88 @@ class Providers(BaseModel):
         return self.defaults.reasoning_effort
 
 
+class PairScorerSelection(BaseModel):
+    """An immutable trained exit; zero resolves to actual full depth/width."""
+
+    model_config = ConfigDict(extra="forbid")
+    layer: int = Field(default=0, ge=0)
+    dimension: int = Field(default=0, ge=0)
+
+
+class OperatingPointReference(BaseModel):
+    """Explicit immutable score policy; relative paths are inside the deployment."""
+
+    model_config = ConfigDict(extra="forbid")
+    path: str = Field(min_length=1)
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+    @field_validator("path")
+    @classmethod
+    def validate_policy_path(cls, value):
+        normalized = posixpath.normpath(value)
+        if value != value.strip() or (
+            not posixpath.isabs(value)
+            and (normalized == ".." or normalized.startswith("../"))
+        ):
+            raise ValueError(
+                "operating point path must be trimmed and stay inside the artifact"
+            )
+        return value
+
+
+class ModelBinding(BaseModel):
+    """A shared task default or recipe-owned use of a model deployment."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    deployment: str
+    contract: str
+    adapter: str
+    head: Optional[str] = None
+    mapping_path: Optional[str] = None
+    pair_scorer: Optional[PairScorerSelection] = None
+    operating_point: Optional[OperatingPointReference] = None
+
+
+def _validate_unbound_classifier_selectors(profile):
+    for rule in profile.signals.classifiers or []:
+        if f"classifier.{rule.name}" in profile.model_bindings:
+            continue
+        if rule.type == CLASSIFIER_TYPE_LOCAL and not rule.model_path:
+            raise ValueError("local classifiers require model_path or a model binding")
+        if rule.type != CLASSIFIER_TYPE_LOCAL and not rule.model:
+            raise ValueError(
+                f"{rule.type} classifiers require model or a model binding"
+            )
+    return profile
+
+
+class CandidateRequirements(BaseModel):
+    """Recipe candidate constraints; input token accounting remains estimated."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    capabilities: Optional[Literal["declared"]] = None
+    context: Optional[Literal["known_limits"]] = None
+
+
+class RoutingDataPolicy(BaseModel):
+    """Standing recipe restrictions; false replay cannot be enabled by a decision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    replay: Optional[StrictBool] = None
+
+
 class Routing(BaseModel):
     """Canonical routing block."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
+    model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
+    candidate_requirements: Optional[CandidateRequirements] = None
+    data_policy: Optional[RoutingDataPolicy] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
@@ -2263,6 +2389,9 @@ class RecipeRouting(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    model_bindings: Dict[str, ModelBinding] = Field(default_factory=dict)
+    candidate_requirements: Optional[CandidateRequirements] = None
+    data_policy: Optional[RoutingDataPolicy] = None
     signals: Signals = Field(default_factory=Signals)
     projections: Projections = Field(default_factory=Projections)
     decisions: List[Decision] = Field(default_factory=list)
@@ -2335,6 +2464,16 @@ class UserConfig(BaseModel):
     recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
     setup: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_classifier_selectors(self):
+        # Global serving defaults are available only at document scope. Do not
+        # reject a valid inherited selector while parsing a child profile.
+        from cli.model_runtime_defaults import iter_effective_routing_profiles
+
+        for _, profile in iter_effective_routing_profiles(self):
+            _validate_unbound_classifier_selectors(profile)
+        return self
 
     @property
     def signals(self) -> Signals:

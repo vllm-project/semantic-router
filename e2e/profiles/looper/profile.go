@@ -6,7 +6,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
@@ -61,8 +60,18 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"looper-ratings-happy-path",
+		"looper-fusion-analysis-modes",
+		"looper-fusion-synthesis-trace",
 		"looper-fusion-usable-quorum",
 		"looper-confidence-telemetry",
+		"looper-fusion-quorum-fallback",
+		"looper-fusion-quorum-zero-usable",
+		"looper-fusion-quorum-fallback-failure",
+		"looper-fusion-quorum-budget-exhausted",
+		"looper-fusion-quorum-deadline-cancellation",
+		"looper-fusion-quorum-fallback-anthropic",
+		"looper-fusion-quorum-fallback-responses",
+		"looper-fusion-quorum-caller-cancellation",
 	}
 }
 

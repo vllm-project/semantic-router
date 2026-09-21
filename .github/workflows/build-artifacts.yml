@@ -1,0 +1,108 @@
+name: Build Container Artifacts
+
+on:
+  workflow_call:
+    inputs:
+      images:
+        type: string
+        required: true
+      mode:
+        type: string
+        default: pr
+      tag:
+        type: string
+        default: ''
+      multiarch:
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Container Image (${{ matrix.image }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        image: ${{ fromJSON(inputs.images) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/free-disk-space
+      - uses: docker/setup-qemu-action@v3
+        if: inputs.multiarch
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+        with:
+          # Mini's isolated export peaks below 10 GiB; serialize build stages
+          # so Rust compilation cannot overlap it on the 16 GiB runner.
+          buildkitd-config-inline: |
+            [worker.oci]
+              max-parallelism = 1
+          driver-opts: |
+            image=moby/buildkit:latest
+            network=host
+      - name: Resolve build definition
+        id: definition
+        env:
+          IMAGE: ${{ matrix.image }}
+          MULTIARCH: ${{ inputs.multiarch }}
+        run: |
+          args=()
+          if [[ "$MULTIARCH" == true ]]; then args+=(--multiarch); fi
+          python tools/ci/image_artifacts.py definition --image "$IMAGE" "${args[@]}"
+          mkdir -p .agent-harness/image-output
+      - name: Resolve final candidate build arguments
+        id: build-args
+        env:
+          MATRIX_IMAGE: ${{ matrix.image }}
+          CARGO_BUILD_JOBS: '8'
+          DASHBOARD_VERSION_MODE: ${{ inputs.mode == 'pr' && 'pr' || inputs.mode == 'release' && 'release' || 'publish' }}
+          PR_NUMBER: ${{ github.event.pull_request.number || '0' }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          IS_NIGHTLY: ${{ inputs.mode == 'nightly' }}
+          NIGHTLY_DATE: ${{ steps.definition.outputs.date }}
+        run: bash tools/ci/docker-build-args.sh
+      - name: Build immutable candidate
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ steps.definition.outputs.context }}
+          file: ${{ steps.definition.outputs.dockerfile }}
+          platforms: ${{ steps.definition.outputs.platforms }}
+          outputs: type=oci,dest=.agent-harness/image-output/image.tar
+          tags: semantic-router-ci/${{ matrix.image }}:${{ github.sha }}
+          build-args: ${{ steps.build-args.outputs.args }}
+          provenance: false
+          cache-from: type=gha,scope=${{ matrix.image }}-candidate
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}-candidate,ignore-error=true
+      - name: Seal candidate identity
+        env:
+          IMAGE: ${{ matrix.image }}
+          MODE: ${{ inputs.mode }}
+          TAG: ${{ inputs.tag }}
+          MULTIARCH: ${{ inputs.multiarch }}
+          CI_IMAGE_BUILD_ARGS: ${{ steps.build-args.outputs.args }}
+          CI_IMAGE_BUILD_DATE: ${{ steps.definition.outputs.date }}
+        run: |
+          args=()
+          if [[ "$MULTIARCH" == true ]]; then args+=(--multiarch); fi
+          python tools/ci/image_artifacts.py seal --image "$IMAGE" \
+            --directory .agent-harness/image-output --mode "$MODE" --tag "$TAG" "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-image-${{ matrix.image }}
+          path: .agent-harness/image-output/
+          include-hidden-files: true
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-build-image-${{ matrix.image }}
+          path: .agent-harness/image-output/manifest.json
+          include-hidden-files: true
+          if-no-files-found: error

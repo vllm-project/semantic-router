@@ -10,7 +10,7 @@ static_resources:
   - name: {{ listener.name }}
     address:
       socket_address:
-        address: {{ listener.address }}
+        address: {{ listener.address | tojson }}
         port_value: {{ listener.port }}
     perConnectionBufferLimitBytes: 524288000
     filter_chains:
@@ -37,13 +37,13 @@ static_resources:
               - "x-authz-user-groups"
               routes:
               {% for model in models %}
-              # Route for model: {{ model.name }}
+              # Route for model: {{ model.name | tojson }}
               - match:
                   prefix: "/"
                   headers:
                   - name: x-selected-model
                     string_match:
-                      exact: "{{ model.name }}"
+                      exact: {{ model.name | tojson }}
                 {% if model.route_request_headers %}
                 request_headers_to_add:
                 {% for header in model.route_request_headers %}
@@ -56,7 +56,6 @@ static_resources:
                 route:
                   cluster: {{ model.cluster_name }}_cluster
                   timeout: {{ listener.timeout | default('1200s') }}
-                  idleTimeout: 1200s
                   {% if model.reliability.retry_count | default(0) > 0 %}
                   retry_policy:
                     retry_on: {{ model.reliability.retry_on | default('connect-failure,refused-stream') }}
@@ -68,15 +67,9 @@ static_resources:
                   {% else %}
                   host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
                   {% endif %}
-                  {% if model.path_prefix %}
-                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
-                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
-                  regex_rewrite:
-                    pattern:
-                      google_re2: {}
-                      regex: "^/v1([/?].*)?$"
-                    substitution: "{{ model.path_prefix }}\\1"
-                  {% endif %}
+                  # ext_proc has already resolved the complete provider path for
+                  # requests carrying x-selected-model, so this route must not
+                  # prefix it a second time.
               {% endfor %}
               # Default route (no x-selected-model header)
               - match:
@@ -159,13 +152,14 @@ static_resources:
               grpc_service:
                 envoy_grpc:
                   cluster_name: extproc_service
-                timeout: 1200s
               processing_mode:
                 request_header_mode: "SEND"
                 response_header_mode: "SEND"
                 request_body_mode: "BUFFERED"
                 response_body_mode: "BUFFERED"
-              message_timeout: {{ listener.timeout | default('1200s') }}
+              # Unlike route/idle timeouts, zero expires immediately here.
+              # Bound each Router processing step independently of chat duration.
+              message_timeout: 1200s
           - name: envoy.filters.http.router
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -225,7 +219,7 @@ static_resources:
   {% endif %}
 
   {% for model in models %}
-  # Cluster for model: {{ model.name }}
+  # Cluster for model: {{ model.name | tojson }}
   - name: {{ model.cluster_name }}_cluster
     connect_timeout: 10s
     type: {{ model.cluster_type }}

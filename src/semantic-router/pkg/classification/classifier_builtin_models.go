@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -45,13 +45,8 @@ func (c *Classifier) IsJailbreakEnabled() bool {
 		return false
 	}
 
-	if c.Config.PromptGuard.Protocol != "" {
-		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		hasExternalConfig := externalCfg != nil &&
-			externalCfg.ModelEndpoint.Address != "" &&
-			externalCfg.ModelName != ""
-
-		return c.Config.PromptGuard.JailbreakMappingPath != "" && hasExternalConfig
+	if c.Config.PromptGuard.Backend != nil {
+		return c.Config.PromptGuard.JailbreakMappingPath != "" && c.jailbreakInference != nil
 	}
 
 	return c.Config.PromptGuard.ModelID != "" && c.Config.PromptGuard.JailbreakMappingPath != ""
@@ -67,12 +62,7 @@ func (c *Classifier) initializeJailbreakClassifier() error {
 		return err
 	}
 
-	if c.Config.PromptGuard.Protocol != "" {
-		externalCfg := c.Config.FindExternalModelByRole(config.ModelRoleGuardrail)
-		logging.ComponentEvent("classifier", "jailbreak_detector_init_started", map[string]interface{}{
-			"mode":      c.Config.PromptGuard.Protocol,
-			"model_ref": externalCfg.ModelName,
-		})
+	if c.Config.PromptGuard.Backend != nil {
 		return nil
 	}
 
@@ -102,6 +92,9 @@ func (c *Classifier) CheckForJailbreak(ctx context.Context, text string) (bool, 
 
 // CheckForJailbreakWithThreshold analyzes the given text for jailbreak attempts with a custom threshold.
 func (c *Classifier) CheckForJailbreakWithThreshold(ctx context.Context, text string, threshold float32) (bool, string, float32, error) {
+	if jailbreakDecisionBackend(c.jailbreakInference) != nil {
+		return false, "", 0, tasks.ErrProbabilitiesUnavailable
+	}
 	if !c.IsJailbreakEnabled() {
 		return false, "", 0.0, fmt.Errorf("jailbreak detection is not enabled or properly configured")
 	}
@@ -164,7 +157,7 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 			continue
 		}
 
-		isJailbreak, jailbreakType, confidence, err := c.CheckForJailbreakWithThreshold(ctx, content, threshold)
+		verdict, err := c.contentJailbreakVerdict(ctx, content, threshold)
 		if err != nil {
 			logging.Errorf("Error analyzing content %d: %v", i, err)
 			failedCount++
@@ -174,15 +167,16 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 
 		detection := JailbreakDetection{
 			Content:       content,
-			IsJailbreak:   isJailbreak,
-			JailbreakType: jailbreakType,
-			Confidence:    confidence,
+			IsJailbreak:   verdict.Detected,
+			JailbreakType: verdict.Label,
+			Confidence:    verdict.Confidence,
+			Decision:      verdict.Decision,
 			ContentIndex:  i,
 		}
 
 		detections = append(detections, detection)
 
-		if isJailbreak {
+		if verdict.Detected {
 			hasJailbreak = true
 		}
 	}
@@ -200,11 +194,17 @@ func (c *Classifier) AnalyzeContentForJailbreakWithThreshold(ctx context.Context
 
 // IsPIIEnabled checks if PII detection is properly configured.
 func (c *Classifier) IsPIIEnabled() bool {
-	return c.Config.PIIModel.Active() && c.Config.PIIModel.ModelID != "" && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
+	modelConfigured := c.Config.PIIModel.ModelID != "" || c.Config.PIIModel.Backend != nil
+	return c.Config.PIIModel.Active() && modelConfigured && c.Config.PIIMappingPath != "" && c.PIIMapping != nil
 }
 
 // initializePIIClassifier initializes the PII token classification model.
 func (c *Classifier) initializePIIClassifier() error {
+	if c.Config.PIIModel.Backend != nil {
+		// Remote inference is fully constructed during classifier assembly and has
+		// no local model lifecycle to execute.
+		return nil
+	}
 	if !c.IsPIIEnabled() || c.piiInitializer == nil {
 		return fmt.Errorf("PII detection is not properly configured")
 	}

@@ -223,7 +223,7 @@ routing:
     )
 
     # --- cluster assertions ---
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["connect_timeout"] == "10s"
     assert cluster["type"] == "STATIC"
     lb_endpoints = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"]
@@ -248,12 +248,15 @@ routing:
     route_action = route["route"]
     assert route_action["auto_host_rewrite"] is True
     assert "host_rewrite_literal" not in route_action
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
-    assert route_action["regex_rewrite"]["substitution"] == "/v1\\1"
+    assert "regex_rewrite" not in route_action
 
     default_route_action = _default_route(rendered)["route"]
     assert default_route_action["auto_host_rewrite"] is True
     assert "host_rewrite_literal" not in default_route_action
+    assert (
+        default_route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
+    )
+    assert default_route_action["regex_rewrite"]["substitution"] == "/v1\\1"
 
 
 def test_base_url_path_rewrite_is_idempotent(tmp_path, monkeypatch):
@@ -295,38 +298,44 @@ routing:
         router_api_host="localhost",
     )
 
-    for route in (_model_route(rendered, "gemini-model"), _default_route(rendered)):
-        rewrite = route["route"]["regex_rewrite"]
-        pattern = rewrite["pattern"]["regex"]
-        substitution = rewrite["substitution"]
+    # ext_proc owns the complete path after model selection. The fallback route
+    # still rewrites the original ingress path when semantic processing is skipped.
+    assert "regex_rewrite" not in _model_route(rendered, "gemini-model")["route"]
 
-        assert pattern == r"^/v1([/?].*)?$"
-        for request_path, upstream_path in (
-            ("/v1", "/v1beta/openai"),
-            (
-                "/v1/chat/completions",
-                "/v1beta/openai/chat/completions",
-            ),
-            (
-                "/v1?api-version=test",
-                "/v1beta/openai?api-version=test",
-            ),
-        ):
-            rewritten_path = re.sub(pattern, substitution, request_path)
-            assert rewritten_path == upstream_path
-            assert re.sub(pattern, substitution, rewritten_path) == upstream_path
+    rewrite = _default_route(rendered)["route"]["regex_rewrite"]
+    pattern = rewrite["pattern"]["regex"]
+    substitution = rewrite["substitution"]
+    assert pattern == r"^/v1([/?].*)?$"
+    for request_path, upstream_path in (
+        ("/v1", "/v1beta/openai"),
+        (
+            "/v1/chat/completions",
+            "/v1beta/openai/chat/completions",
+        ),
+        (
+            "/v1?api-version=test",
+            "/v1beta/openai?api-version=test",
+        ),
+    ):
+        rewritten_path = re.sub(pattern, substitution, request_path)
+        assert rewritten_path == upstream_path
+        assert re.sub(pattern, substitution, rewritten_path) == upstream_path
 
 
-@pytest.mark.skip(
-    reason=(
-        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
-        "paths that still begin with the /v1 segment after rewriting."
-    )
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "/v1/chat",
+        "/v1/provider",
+        "/v1/provider.v2",
+        "/v1/provider+api",
+        "/v1/provider/nested",
+    ],
 )
-def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(
-    tmp_path, monkeypatch
+def test_selected_model_route_does_not_rewrite_overlapping_provider_path(
+    tmp_path, monkeypatch, prefix
 ):
-    """Document the known gap: /v1/chat -> /v1/provider/chat rewrites twice today."""
+    """Do not confuse an overlapping provider prefix with an ingress path."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -344,7 +353,7 @@ providers:
       provider_model_id: "provider-model"
       backend_refs:
         - name: "provider"
-          base_url: "https://api.example.com/v1/provider"
+          base_url: "https://api.example.com/v1/chat"
           provider: "openai"
           weight: 100
 routing:
@@ -360,20 +369,33 @@ routing:
       modelRefs:
         - model: "provider-model"
           use_reasoning: false
-""",
+""".replace(
+            "https://api.example.com/v1/chat", "https://api.example.com" + prefix
+        ),
         extproc_host="localhost",
         router_api_host="localhost",
     )
 
-    for route in (_model_route(rendered, "provider-model"), _default_route(rendered)):
-        rewrite = route["route"]["regex_rewrite"]
-        pattern = rewrite["pattern"]["regex"]
-        substitution = rewrite["substitution"]
-        upstream_path = "/v1/provider/chat/completions"
+    assert "regex_rewrite" not in _model_route(rendered, "provider-model")["route"]
 
-        rewritten_path = re.sub(pattern, substitution, "/v1/chat/completions")
-        assert rewritten_path == upstream_path
-        assert re.sub(pattern, substitution, rewritten_path) == upstream_path
+    rewrite = _default_route(rendered)["route"]["regex_rewrite"]
+    assert rewrite["pattern"]["regex"] == r"^/v1([/?].*)?$"
+    assert rewrite["substitution"] == prefix + "\\1"
+    for suffix in (
+        "",
+        "?key=value",
+        "/chat/completions",
+        "/responses?stream=true",
+        "/providers/chat",
+    ):
+        assert (
+            re.sub(
+                rewrite["pattern"]["regex"],
+                rewrite["substitution"],
+                "/v1" + suffix,
+            )
+            == prefix + suffix
+        )
 
 
 def test_provider_reliability_renders_retry_outlier_and_least_request(
@@ -430,7 +452,7 @@ routing:
         "retry_on": "connect-failure,refused-stream",
         "num_retries": 2,
     }
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["lb_policy"] == "LEAST_REQUEST"
     assert cluster["least_request_lb_config"]["choice_count"] == 2
     assert cluster["outlier_detection"]["consecutive_5xx"] == 5
@@ -447,7 +469,7 @@ def test_backend_ref_domain_with_path_produces_correct_envoy_cluster_and_route(
 ):
     """Backend ref https://api.example.com/compatible-mode/v1 should produce
     address=api.example.com, port=443, host_authority=api.example.com (standard
-    port omitted), LOGICAL_DNS cluster, and regex_rewrite for path prefix."""
+    port omitted), LOGICAL_DNS cluster, and a fallback path-prefix rewrite."""
     rendered = _render_envoy_config(
         tmp_path,
         monkeypatch,
@@ -486,7 +508,7 @@ routing:
     )
 
     # --- cluster assertions ---
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["dns_lookup_family"] == "V4_ONLY"
     ep = cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0]["endpoint"]
@@ -499,8 +521,15 @@ routing:
     route_action = route["route"]
     # standard port 443 → host_authority should omit port
     assert route_action["host_rewrite_literal"] == "api.example.com"
-    assert route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
-    assert route_action["regex_rewrite"]["substitution"] == "/compatible-mode/v1\\1"
+    assert "regex_rewrite" not in route_action
+    default_route_action = _default_route(rendered)["route"]
+    assert (
+        default_route_action["regex_rewrite"]["pattern"]["regex"] == r"^/v1([/?].*)?$"
+    )
+    assert (
+        default_route_action["regex_rewrite"]["substitution"]
+        == "/compatible-mode/v1\\1"
+    )
 
 
 def test_backend_ref_https_base_url_uses_tls_and_explicit_extra_headers(
@@ -551,7 +580,7 @@ routing:
         router_api_host="localhost",
     )
 
-    cluster = _cluster_by_name(rendered, "test_model_cluster")
+    cluster = _cluster_by_name(rendered, "model_test_2dmodel_cluster")
     assert cluster["type"] == "LOGICAL_DNS"
     assert cluster["transport_socket"]["name"] == "envoy.transport_sockets.tls"
     tls_context = cluster["transport_socket"]["typed_config"]
@@ -568,7 +597,11 @@ routing:
     route = _model_route(rendered, "test-model")
     route_action = route["route"]
     assert route_action["host_rewrite_literal"] == "openrouter.ai"
-    assert route_action["regex_rewrite"]["substitution"] == "/api/v1\\1"
+    assert "regex_rewrite" not in route_action
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"]
+        == "/api/v1\\1"
+    )
 
     headers = {
         item["header"]["key"]: item["header"]["value"]
@@ -698,7 +731,7 @@ routing:
     )
 
     route = _model_route(rendered, "claude-sonnet-4.6")
-    assert route["route"]["cluster"] == "claude_sonnet_4.6_cluster"
+    assert route["route"]["cluster"] == "model_claude_2dsonnet_2d4_2e6_cluster"
     assert route["route"]["host_rewrite_literal"] == "domain.com"
 
     with pytest.raises(AssertionError):

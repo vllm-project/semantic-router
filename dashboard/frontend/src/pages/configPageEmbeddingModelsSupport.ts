@@ -194,14 +194,14 @@ export function embeddingModelsFields(): FieldConfig[] {
       name: 'mmbert_model_path',
       label: 'mmBERT Model Path',
       type: 'text',
-      placeholder: 'models/mmbert-embed-32k-2d-matryoshka',
+      placeholder: 'models/Vela-1.0-Encoder-307M-Embedding',
       shouldHide: hideForRemote,
     },
     {
       name: 'multimodal_model_path',
       label: 'Multimodal Model Path',
       type: 'text',
-      placeholder: 'models/mom-embedding-multimodal',
+      placeholder: 'models/vela-1.0-omni-nano',
       shouldHide: hideForRemote,
     },
     {
@@ -259,6 +259,7 @@ function validateRemoteEndpoint(
   if (
     typeof dimensions === 'number' &&
     typeof targetDimension === 'number' &&
+    targetDimension > 0 &&
     dimensions !== targetDimension
   ) {
     throw new Error(

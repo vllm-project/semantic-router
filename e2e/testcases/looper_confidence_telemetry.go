@@ -61,14 +61,14 @@ func testLooperConfidenceTelemetry(ctx context.Context, client *kubernetes.Clien
 	defer management.Close()
 	replayID, err := fetchFirstReplayRecordID(
 		management,
-		"/v1/router_replay?decision=looper_confidence_trace_decision&limit=1",
+		"/api/v1/observability/replays?decision=looper_confidence_trace_decision&limit=1",
 		false,
 	)
 	if err != nil {
 		return fmt.Errorf("list confidence replay: %w", err)
 	}
 
-	replayResponse, err := fixtures.DoGETRequest(ctx, management.HTTPClient(15*time.Second), management.URL("/v1/router_replay/"+replayID))
+	replayResponse, err := fixtures.DoGETRequest(ctx, management.HTTPClient(15*time.Second), management.URL("/api/v1/observability/replays/"+replayID))
 	if err != nil {
 		return fmt.Errorf("fetch confidence replay: %w", err)
 	}

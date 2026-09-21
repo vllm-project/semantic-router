@@ -178,12 +178,20 @@ export type RecipeProbeRequestShape = 'text' | 'messages' | 'tools'
 export interface RecipeProbeExpectedRoute {
   decision: string
   recipe?: string
+  selection_status?:
+    | 'selected'
+    | 'planned_final'
+    | 'fallback'
+    | 'execution_required'
+    | 'unavailable'
+    | 'failed'
   algorithm?: string
   alias?: string
   plugins: string[]
   forbidden_plugins: string[]
   plugin_match?: string
   signals: Record<string, string[]>
+  signal_values?: Record<string, { gte?: number; lte?: number }>
   forbidden_signals: Record<string, string[]>
   signal_match?: string
 }
@@ -225,7 +233,8 @@ export interface RecipeProbeDetail extends RecipeProbeSummary {
     message_index: number
     content_index: number
     target_text_bytes: number
-    character: string
+    character?: string
+    text?: string
   }
   image_fixtures?: Record<
     string,
@@ -286,12 +295,13 @@ export interface RecipeProbeValidationResult {
     plugins: string[]
     recommended_models: string[]
     matched_signals: Record<string, string[]>
+    signal_values?: Record<string, unknown>
     trace_decisions: string[]
   }
   checks: Record<
     'decision' | 'model' | 'recipe' | 'algorithm' | 'plugins' | 'signals' | 'alias' | 'trace',
     boolean
-  >
+  > & { signal_values?: boolean }
   failures: string[]
   provenance?: {
     status: 'verified' | 'unverified'

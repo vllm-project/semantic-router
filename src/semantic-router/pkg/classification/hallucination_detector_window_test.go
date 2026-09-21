@@ -1,6 +1,7 @@
 package classification
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -25,11 +26,16 @@ func TestHallucinationDetector_LongContextReachesAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 	if err = detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}
 
-	result, err := detector.Detect(toolContext, userQuestion, assistantAnswer)
+	result, err := detector.Detect(context.Background(), toolContext, userQuestion, assistantAnswer)
 	if err != nil {
 		t.Fatalf("Detection failed: %v", err)
 	}
@@ -56,11 +62,16 @@ func TestHallucinationDetector_LongAnswerTailIsScanned(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 	if err = detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}
 
-	result, err := detector.Detect(toolContext, userQuestion, assistantAnswer)
+	result, err := detector.Detect(context.Background(), toolContext, userQuestion, assistantAnswer)
 	if err != nil {
 		t.Fatalf("Detection failed: %v", err)
 	}
@@ -106,6 +117,11 @@ func TestHallucinationDetector_LongAnswerTailIsScannedWithNLI(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create detector: %v", err)
 	}
+	t.Cleanup(func() {
+		if closeErr := detector.Close(); closeErr != nil {
+			t.Errorf("Failed to close detector: %v", closeErr)
+		}
+	})
 	if err = detector.Initialize(); err != nil {
 		t.Fatalf("Failed to initialize detector: %v", err)
 	}
@@ -118,7 +134,7 @@ func TestHallucinationDetector_LongAnswerTailIsScannedWithNLI(t *testing.T) {
 		t.Fatalf("Failed to initialize NLI: %v", err)
 	}
 
-	result, err := detector.DetectWithNLI(toolContext, userQuestion, assistantAnswer)
+	result, err := detector.DetectWithNLI(context.Background(), toolContext, userQuestion, assistantAnswer)
 	if err != nil {
 		t.Fatalf("Detection failed: %v", err)
 	}

@@ -78,7 +78,7 @@ func (r *OpenAIRouter) evaluateHallucinationSignal(ctx *RequestContext, assistan
 		return
 	}
 	for _, rule := range rules {
-		metrics.RecordSignalExtraction(config.SignalTypeHallucination, rule.Name, latency)
+		classifier.RecordSignalExtraction(config.SignalTypeHallucination, rule.Name, latency)
 	}
 	r.publishHallucinationSignal(ctx, rules, evidence, "")
 }
@@ -104,7 +104,7 @@ func (r *OpenAIRouter) detectHallucinationEvidence(
 	useNLI bool,
 ) (*ResponseHallucinationEvidence, error) {
 	if !useNLI {
-		result, err := classifier.DetectHallucination(ctx.ToolResultsContext, ctx.UserContent, answer)
+		result, err := classifier.DetectHallucination(ctx.embeddingContext(), ctx.ToolResultsContext, ctx.UserContent, answer)
 		if err != nil {
 			return nil, err
 		}
@@ -112,13 +112,14 @@ func (r *OpenAIRouter) detectHallucinationEvidence(
 			return nil, fmt.Errorf("hallucination detector returned no result")
 		}
 		return &ResponseHallucinationEvidence{
-			Detected:   result.HallucinationDetected,
-			Confidence: result.Confidence,
-			Spans:      result.UnsupportedSpans,
+			Detected:       result.HallucinationDetected,
+			Confidence:     result.Confidence,
+			ScoreAvailable: result.ScoreAvailable, ScoreKind: result.ScoreKind,
+			Spans: result.UnsupportedSpans,
 		}, nil
 	}
 
-	result, err := classifier.DetectHallucinationWithNLI(ctx.ToolResultsContext, ctx.UserContent, answer)
+	result, err := classifier.DetectHallucinationWithNLI(ctx.embeddingContext(), ctx.ToolResultsContext, ctx.UserContent, answer)
 	if err != nil {
 		return nil, err
 	}
@@ -133,15 +134,17 @@ func (r *OpenAIRouter) detectHallucinationEvidence(
 // the same detection differently.
 func hallucinationEvidenceFromNLI(result *classification.EnhancedHallucinationResult) *ResponseHallucinationEvidence {
 	evidence := &ResponseHallucinationEvidence{
-		Detected:   result.HallucinationDetected,
-		Confidence: result.Confidence,
+		Detected:       result.HallucinationDetected,
+		Confidence:     result.Confidence,
+		ScoreAvailable: result.ScoreAvailable, ScoreKind: result.ScoreKind,
 	}
 	if len(result.Spans) == 0 {
 		return evidence
 	}
 	evidence.Enhanced = &EnhancedHallucinationInfo{
-		Confidence: result.Confidence,
-		Spans:      make([]EnhancedHallucinationSpan, 0, len(result.Spans)),
+		Confidence:     result.Confidence,
+		ScoreAvailable: result.ScoreAvailable, ScoreKind: result.ScoreKind,
+		Spans: make([]EnhancedHallucinationSpan, 0, len(result.Spans)),
 	}
 	for _, span := range result.Spans {
 		evidence.Spans = append(evidence.Spans, span.Text)
@@ -150,8 +153,10 @@ func hallucinationEvidenceFromNLI(result *classification.EnhancedHallucinationRe
 			Start:                   span.Start,
 			End:                     span.End,
 			HallucinationConfidence: span.HallucinationConfidence,
+			ScoreAvailable:          span.ScoreAvailable,
 			NLILabel:                span.NLILabelStr,
 			NLIConfidence:           span.NLIConfidence,
+			NLIScoreAvailable:       span.NLILabel != classification.NLIUnknown,
 			Severity:                span.Severity,
 			Explanation:             span.Explanation,
 		})
@@ -168,13 +173,24 @@ func (r *OpenAIRouter) publishHallucinationSignal(ctx *RequestContext, rules []c
 	if evidence != nil {
 		detected, confidence = evidence.Detected, evidence.Confidence
 	}
-	signal := classification.EvaluateResponseHallucinationSignal(rules, detected, confidence, failureCode)
+	metadata := classification.HallucinationScore{}
+	if evidence != nil {
+		metadata.Available = evidence.ScoreAvailable
+		metadata.Kind = evidence.ScoreKind
+	}
+	signal := classification.EvaluateResponseHallucinationSignal(rules, detected, confidence, failureCode, metadata)
 	if signal == nil {
 		return
 	}
 	ctx.VSRHallucinationEvidence = evidence
 	ctx.VSRMatchedHallucination = append(ctx.VSRMatchedHallucination, signal.MatchedRules...)
 	recordResponseSignal(ctx, signal.Confidences, signal.Errors)
+	if len(signal.Values) > 0 && ctx.VSRSignalValues == nil {
+		ctx.VSRSignalValues = make(map[string]float64)
+	}
+	for key, value := range signal.Values {
+		ctx.VSRSignalValues[key] = value
+	}
 }
 
 // hallucinationSignalOutcome reads the published signal back for the plugin:
@@ -190,6 +206,9 @@ func (r *OpenAIRouter) hallucinationSignalOutcome(ctx *RequestContext) (matched 
 			return false, code, true
 		}
 		if _, ok := ctx.VSRSignalConfidences[key]; ok {
+			observed = true
+		}
+		if ctx.VSRHallucinationEvidence != nil {
 			observed = true
 		}
 	}

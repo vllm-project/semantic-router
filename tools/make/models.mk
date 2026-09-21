@@ -4,16 +4,34 @@
 
 ##@ Models
 
-test-training-contracts: ## Run dependency-light model training contract tests
-	@python3 -m unittest discover -s src/training/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
-	@python3 -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
+test-model-selection-parity: ## Compare Python-trained selectors with the current Rust C ABI
+ifneq ($(PREBUILT_NATIVE_LIBS),1)
+	@cargo test --locked --manifest-path ml-binding/Cargo.toml
+endif
+	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_native_parity.py
+
+.PHONY: test-model-selection-parity
+
+.PHONY: onnx-artifact-test
+onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with real CPU inference
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/artifact_tests -p 'test_*.py'
+
+test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/mmbert_32k/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/small/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_embeddings/multimodal/large/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/safety_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/user_feedback_classifier/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/pii_model_fine_tuning_lora/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/sequence_repair/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_classifier/classifier_model_fine_tuning_lora/tests -p 'test_*.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/model_eval/tests -p 'test_*.py'
 	@"$(AGENT_PYTHON)" -m pytest -q \
 		src/training/model_eval/test_provenance.py \
+		src/training/model_eval/test_artifact_inventory.py \
+		src/training/model_eval/test_baseline_artifact.py \
 		src/training/model_classifier/prompt_guard_fine_tuning_lora/test_jailbreak_provenance.py
 
 # Models are automatically downloaded by the router at startup in production.
@@ -22,6 +40,14 @@ test-training-contracts: ## Run dependency-light model training contract tests
 # Hugging Face org for mmBERT models
 HF_ORG := llm-semantic-router
 MODELS_DIR := models
+
+# The checked-in reference suite targets
+# peft-internal-testing/tiny-random-BertForSequenceClassification at
+# 325bf1727142e5f4216ca8e3eef68752321979ac. The model remains external and
+# must be downloaded at that exact revision before running qualification.
+CANDLE_COMPAT_LABELS ?= LABEL_0,LABEL_1
+CANDLE_COMPAT_SUITE ?= pkg/modelruntime/compatibility/testdata/tiny-random-bert-cpu-suite-v1.json
+CANDLE_COMPAT_OUTPUT ?= $(CURDIR)/.agent-harness/compatibility/candle-cpu-receipt.json
 
 # mmBERT merged models (for Rust inference)
 MMBERT_MODELS := \
@@ -78,44 +104,121 @@ download-models: ## Download models using router's built-in download logic
 	@echo ""
 	@echo "Running router with --download-only flag..."
 	@echo "This may take a few minutes depending on your network speed..."
-	@export LD_LIBRARY_PATH=${PWD}/candle-binding/target/release:${PWD}/ml-binding/target/release:${PWD}/nlp-binding/target/release && \
+	@export $(NATIVE_ENV) && \
 		./bin/router -config=config/config.yaml --download-only
 	@echo ""
 	@echo "Models downloaded successfully"
 
-download-models-lora: ## Download LoRA models (same as download-models now)
+QWEN3_EMBEDDING_REPO := Qwen/Qwen3-Embedding-0.6B
+QWEN3_EMBEDDING_DIR := mom-embedding-pro
+
+download-qwen3-embedding: ## Download the Qwen3 embedding model for binding tests and benchmarks
+	@echo "⬇️  Downloading $(QWEN3_EMBEDDING_REPO)..."
+	@mkdir -p "$(MODELS_DIR)"
+	@hf download $(QWEN3_EMBEDDING_REPO) --local-dir "$(MODELS_DIR)/$(QWEN3_EMBEDDING_DIR)"
+
+download-models-lora: ## Download models for LoRA and advanced embedding tests
 	@$(MAKE) download-models
+	@$(MAKE) download-qwen3-embedding
 
-# Minimal model set for perf/benchmarks (CI performance tests).
-# The component benchmarks initialize classifiers/embeddings directly instead
-# of going through the router's startup download, so these must be
-# pre-downloaded:
-# - classification benchmarks auto-discover the intent+pii+jailbreak merged
-#   classifiers (see src/semantic-router/pkg/classification/model_discovery_scan.go)
-# - cache benchmarks need the Qwen3 embedding model at models/mom-embedding-pro
-#   (see perf/benchmarks/cache_bench_test.go and config/registry.go)
-# The onnx/ subdirs are excluded to keep CI download and cache size small.
-PERF_BENCH_CLASSIFIER_MODELS := \
-	mmbert32k-intent-classifier-merged \
-	mmbert32k-pii-detector-merged \
-	mmbert32k-jailbreak-detector-merged
+# The evaluation registry pins current Vela native snapshots. The MMBERT lists
+# below and their download targets intentionally remain explicit legacy tools.
+.PHONY: download-eval-models
+download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
+	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
 
-PERF_BENCH_EMBEDDING_REPO := Qwen/Qwen3-Embedding-0.6B
-PERF_BENCH_EMBEDDING_DIR := mom-embedding-pro
+.PHONY: qualify-candle-cpu check-candle-qualification-source test-modelcompat-native check-modelcompat
 
-download-models-perf: ## Download the minimal model set for performance benchmarks
-	@echo "📦 Downloading perf benchmark models..."
-	@mkdir -p $(MODELS_DIR)
-	@for model in $(PERF_BENCH_CLASSIFIER_MODELS); do \
-		echo ""; \
-		echo "⬇️  Downloading $$model..."; \
-		hf download $(HF_ORG)/$$model --exclude "onnx/*" --local-dir $(MODELS_DIR)/$$model; \
-	done
-	@echo ""
-	@echo "⬇️  Downloading $(PERF_BENCH_EMBEDDING_REPO)..."
-	@hf download $(PERF_BENCH_EMBEDDING_REPO) --local-dir $(MODELS_DIR)/$(PERF_BENCH_EMBEDDING_DIR)
-	@echo ""
-	@echo "Perf benchmark models downloaded to $(MODELS_DIR)/"
+# Offline command tests are owned by the shared Go-tool registry. Native
+# qualification stays explicit and never downloads a checkpoint by default.
+test-modelcompat-native: ## Test the native receipt round-trip against an explicitly supplied pinned fixture
+	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
+	@$(MAKE) rust-ci
+	@cd src/semantic-router && $(NATIVE_ENV) CGO_ENABLED=1 CANDLE_MODEL_PATH="$(abspath $(CANDLE_MODEL_PATH))" \
+		go test -race -count=1 -v -run '^TestNativeCandleCPUCommandRoundTrip$$' ../../tools/modelcompat/*.go
+
+check-modelcompat: test-modelcompat harness-go-bootstrap ## Test and lint the offline compatibility tool
+	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config ../../tools/linter/go/.golangci.yml ../../tools/modelcompat/*.go
+
+# Do not attribute a working-tree build to HEAD. Local planning artifacts outside
+# the compiled source trees do not affect this source check.
+check-candle-qualification-source:
+	@git diff --quiet HEAD -- || { echo "Candle qualification requires committed sources (tracked changes found)"; exit 1; }
+	@untracked="$$(git ls-files --others --exclude-standard -- src/semantic-router candle-binding tools/modelcompat)" && \
+		test -z "$$untracked" || { echo "Candle qualification requires committed sources (untracked source files found)"; exit 1; }
+
+qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Candle compatibility receipt (requires CANDLE_MODEL_PATH and CANDLE_ARTIFACT_REVISION)
+	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
+	@test -n "$(CANDLE_ARTIFACT_REVISION)" || (echo "CANDLE_ARTIFACT_REVISION is required" && exit 1)
+	@$(MAKE) rust-ci
+	@mkdir -p "$(dir $(CANDLE_COMPAT_OUTPUT))"
+	@cd src/semantic-router && \
+		$(NATIVE_ENV) \
+		go run ../../tools/modelcompat/main.go qualify-candle-cpu \
+			--model-path "$(abspath $(CANDLE_MODEL_PATH))" \
+			--artifact-revision "$(CANDLE_ARTIFACT_REVISION)" \
+			--router-revision "$(shell git rev-parse HEAD)" \
+			--labels "$(CANDLE_COMPAT_LABELS)" \
+			--suite "$(CANDLE_COMPAT_SUITE)" \
+			--output "$(abspath $(CANDLE_COMPAT_OUTPUT))"
+	@echo "Candle CPU compatibility receipt: $(CANDLE_COMPAT_OUTPUT)"
+
+# Test artifacts use the runtime registry's pinned releases, independent of the
+# example config's on-demand model graph. No Hugging Face IDs are duplicated here.
+MODEL_TEST_PROVIDER ?= candle
+MODEL_TEST_DEVICE ?= cpu
+MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests/$(MODEL_TEST_PROVIDER)-cpu
+MODEL_TEST_MODELS_DIR ?= $(CURDIR)/$(MODELS_DIR)
+MODEL_TEST_MANIFEST ?= $(MODEL_TEST_REPORT_DIR)/models.json
+MULTIMODAL_TEST_REPORT_DIR ?= $(MODEL_TEST_REPORT_DIR)/multimodal
+MULTIMODAL_TEST_MANIFEST ?= $(MULTIMODAL_TEST_REPORT_DIR)/models.json
+PERF_MODEL_MANIFEST ?= $(CURDIR)/reports/models.json
+
+download-models-test: ## Provision every maintained runtime model at its registered revision
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--provider "$(MODEL_TEST_PROVIDER)" --suite runtime \
+		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MODEL_TEST_MANIFEST)" --download
+
+test-models: rust-ci download-models-test ## Require actual published-model CPU inference (MODEL_TEST_PROVIDER=candle|ort)
+	@export $(NATIVE_ENV) && python3 tools/ci/run_model_tests.py \
+		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)" \
+		--device "$(MODEL_TEST_DEVICE)"
+	@if [ "$(MODEL_TEST_PROVIDER)" = candle ]; then \
+		$(MAKE) test-multimodal-models; \
+	fi
+
+download-models-multimodal-test: ## Provision the pinned multimodal compatibility checkpoint
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--provider candle --suite multimodal \
+		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MULTIMODAL_TEST_MANIFEST)" --download
+
+test-multimodal-models: rust-ci download-models-multimodal-test ## Require existing text/image compatibility contracts on Candle CPU
+	@export $(NATIVE_ENV) && python3 tools/ci/run_model_tests.py --suite multimodal \
+		--manifest "$(MULTIMODAL_TEST_MANIFEST)" --output "$(MULTIMODAL_TEST_REPORT_DIR)" \
+		--device "$(MODEL_TEST_DEVICE)"
+
+VELA_OMNI_CALIBRATION_ARTIFACTS ?= $(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts
+
+download-models-image-calibration: ## Prepare the pinned Nano ONNX artifact and attest its manifest
+	@docker build -f tools/models/vela_omni/Dockerfile \
+		--output "type=local,dest=$(VELA_OMNI_CALIBRATION_ARTIFACTS)" .
+	@python3 tools/ci/image_calibration.py --prepare-manifest \
+		--artifact "$(VELA_OMNI_CALIBRATION_ARTIFACTS)/vela-1.0-omni-nano" \
+		--manifest "$(MODEL_TEST_MANIFEST)"
+
+verify-image-routing-calibration: rust-ci download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
+	@export $(NATIVE_ENV) && python3 tools/ci/image_calibration.py \
+		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)"
+
+.PHONY: download-models-image-calibration verify-image-routing-calibration
+
+download-models-perf: ## Provision the canonical Vela classifier and embedding benchmark artifacts
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--provider candle --suite perf --output "$(CURDIR)/$(MODELS_DIR)" \
+		--manifest "$(PERF_MODEL_MANIFEST)" --download
+
+.PHONY: download-models-test test-models download-models-perf \
+	download-models-multimodal-test test-multimodal-models
 
 download-mmbert: ## Download all mmBERT merged models for Rust inference
 	@echo "📦 Downloading mmBERT merged models from Hugging Face..."
@@ -321,7 +424,6 @@ clean-mmbert: ## Remove downloaded mmBERT models
 # Training configuration (optimized for mmBERT-32K LoRA fine-tuning)
 # Hyperparameters validated on 2026-02-02:
 #   - Intent Classifier: 92% accuracy (MMLU-Pro + supplement data)
-#   - Jailbreak Detector: 97.7% training accuracy (toxic-chat + salad-data)
 #   - PII Detector: 97.2% training accuracy (AI4Privacy + Presidio combined dataset)
 #   - Feedback Detector: 98.8% accuracy (4-class, requires higher rank)
 TRAIN_EPOCHS ?= 5
@@ -361,7 +463,7 @@ LORA_DIR := $(TRAINING_DIR)/model_classifier
 # Output directories for 32K models
 MMBERT32K_MODELS_DIR := models/mmbert32k
 
-train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
+train-mmbert32k-all: ## Train remaining legacy mmBERT-32K tasks (Guard retired)
 	@echo "🚀 Training all mmBERT-32K models..."
 	@echo "   Base model: llm-semantic-router/mmbert-32k-yarn"
 	@echo "   Epochs: $(TRAIN_EPOCHS), Batch size: $(TRAIN_BATCH_SIZE)"
@@ -369,7 +471,6 @@ train-mmbert32k-all: ## Train all mmBERT-32K models (LoRA + Merged)
 	@$(MAKE) train-mmbert32k-feedback
 	@$(MAKE) train-mmbert32k-intent
 	@$(MAKE) train-mmbert32k-pii
-	@$(MAKE) train-mmbert32k-jailbreak
 	@$(MAKE) train-mmbert32k-factcheck
 	@echo ""
 	@echo "All mmBERT-32K models trained successfully!"
@@ -469,23 +570,12 @@ train-mmbert32k-pii-presidio-only: ## Train PII Detector with Presidio only (leg
 		--no-ai4privacy
 	@echo "Presidio-only PII training complete"
 
-train-mmbert32k-jailbreak: ## Train Jailbreak Detector (toxic-chat + salad-data)
-	@echo "Training Jailbreak Detector with mmBERT-32K..."
-	@mkdir -p $(MMBERT32K_MODELS_DIR)
-	python $(LORA_DIR)/prompt_guard_fine_tuning_lora/jailbreak_bert_finetuning_lora.py \
-		--mode train \
-		--model mmbert-32k \
-		--lora-rank $(LORA_RANK) \
-		--lora-alpha $(LORA_ALPHA) \
-		--epochs $(TRAIN_EPOCHS) \
-		--batch-size $(TRAIN_BATCH_SIZE) \
-		--learning-rate $(TRAIN_LR) \
-		--max-samples $(MAX_SAMPLES)
-	@echo "Jailbreak Detector training complete (97.7% accuracy expected)"
-	@# Move to organized directory
-	@if [ -d "lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model" ]; then \
-		mv lora_jailbreak_classifier_mmbert-32k_r$(LORA_RANK)_model $(MMBERT32K_MODELS_DIR)/jailbreak-detector-lora; \
-	fi
+train-mmbert32k-jailbreak: ## Retired: use the explicit Vela Guard sequence trainer
+	@echo "Legacy Guard training is retired. Use the Vela Base with:"
+	@echo "  python -m src.training.model_classifier.sequence_repair.train --method full --fresh-head"
+	@echo "Supply --base, --base-id, --base-revision, --contract, --train, --dev, and --output explicitly."
+	@echo "See src/training/model_classifier/prompt_guard_fine_tuning_lora/README.md."
+	@exit 2
 
 train-mmbert32k-factcheck: ## Train Fact Check Classifier
 	@echo "Training Fact Check Classifier with mmBERT-32K..."
@@ -584,15 +674,15 @@ ROCM_IMAGE ?= rocm/vllm:v0.14.0_amd_dev
 
 train-mmbert32k-gpu: ## Train all mmBERT-32K models on GPU (ROCm Docker)
 	@echo "🚀 Training mmBERT-32K models on GPU..."
-	@./tools/models/train-mmbert32k-gpu.sh
+	@./src/training/model_classifier/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-quick: ## Quick GPU training (fewer samples, 3 epochs)
 	@echo "🚀 Quick GPU training (3 epochs, 2000 samples)..."
-	TRAIN_EPOCHS=3 MAX_SAMPLES=2000 ./tools/models/train-mmbert32k-gpu.sh
+	TRAIN_EPOCHS=3 MAX_SAMPLES=2000 ./src/training/model_classifier/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-full: ## Full GPU training (more samples, 10 epochs)
 	@echo "🚀 Full GPU training (10 epochs, 20000 samples)..."
-	TRAIN_EPOCHS=10 MAX_SAMPLES=20000 TRAIN_BATCH_SIZE=32 ./tools/models/train-mmbert32k-gpu.sh
+	TRAIN_EPOCHS=10 MAX_SAMPLES=20000 TRAIN_BATCH_SIZE=32 ./src/training/model_classifier/train-mmbert32k-gpu.sh
 
 train-mmbert32k-gpu-shell: ## Open interactive shell in GPU training container
 	@echo "🐚 Opening interactive shell in ROCm container..."
@@ -617,56 +707,15 @@ check-gpu: ## Check GPU availability in Docker container
 		$(ROCM_IMAGE) \
 		python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm: {torch.cuda.is_available()}'); print(f'GPUs: {torch.cuda.device_count()}'); [print(f'  GPU {i}: {torch.cuda.get_device_name(i)} ({torch.cuda.get_device_properties(i).total_memory/1024**3:.0f}GB)') for i in range(torch.cuda.device_count())]"
 
-# Convert models to OpenVINO format for openvino-binding tests
-convert-openvino-test-models: ## Convert models to OpenVINO IR format for openvino-binding tests
-	@echo "Converting models to OpenVINO IR format for tests..."
-	@echo "==============================================================="
-	@echo "This will convert required benchmark/test models to OpenVINO"
-	@echo "==============================================================="
-	@mkdir -p openvino-binding/test_models
-	@mkdir -p openvino-binding/test_models/all-MiniLM-L6-v2
-	@mkdir -p openvino-binding/test_models/category_classifier_modernbert
-	
-	@echo "\n[1/3] Converting all-MiniLM-L6-v2 embedding model..."
-	@if [ ! -f "openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml" ]; then \
-	echo "  -> Exporting with optimum-cli"; \
-	optimum-cli export openvino \
-	--model sentence-transformers/all-MiniLM-L6-v2 \
-	--task feature-extraction \
-	openvino-binding/test_models/all-MiniLM-L6-v2 \
-	--weight-format fp32; \
-	else \
-	echo "  -> Already exists: openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml"; \
-	fi
-	
-	@echo "\n[2/3] Converting category_classifier_modernbert model..."
-	@if [ ! -f "openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml" ]; then \
-	echo "  -> Exporting with optimum-cli"; \
-	optimum-cli export openvino \
-	--model llm-semantic-router/mmbert32k-intent-classifier-merged \
-	--task text-classification \
-	openvino-binding/test_models/category_classifier_modernbert \
-	--weight-format fp32; \
-	else \
-	echo "  -> Already exists: openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml"; \
-	fi
-	
-	@echo "\n[3/3] Converting tokenizers to native OpenVINO format..."
-	@if [ "$$SKIP_TOKENIZER_CONVERSION" = "1" ]; then \
-	echo "  -> SKIP_TOKENIZER_CONVERSION=1 set, skipping tokenizer conversion"; \
-	else \
-	command -v python3 >/dev/null 2>&1 && PYTHON_CMD=python3 || PYTHON_CMD=python; \
-	$$PYTHON_CMD openvino-binding/scripts/convert_test_tokenizers.py || { \
-	echo ""; \
-	echo "Tokenizer conversion failed; models are still usable with fallback tokenization."; \
-	echo "To skip tokenizer conversion explicitly:"; \
-	echo "  export SKIP_TOKENIZER_CONVERSION=1"; \
-	echo "  make convert-openvino-test-models"; \
-	}; \
-	fi
-	
-	@echo "\n==============================================================="
-	@echo "OpenVINO test models are ready"
-	@echo "  - openvino-binding/test_models/all-MiniLM-L6-v2"
-	@echo "  - openvino-binding/test_models/category_classifier_modernbert"
-	@echo "==============================================================="
+# Convert only the immutable registered Vela graphs; tokenizer failure is fatal.
+convert-openvino-test-models: ## Convert pinned Vela Domain and Embedding ONNX graphs to OpenVINO IR
+	@mkdir -p "$(OPENVINO_TEST_REPORT_DIR)"
+	@rm -f "$(OPENVINO_TEST_REPORT_DIR)/models.json" "$(OPENVINO_TEST_REPORT_DIR)/inference.json"
+	@$(OPENVINO_PYTHON) -m unittest discover -s openvino-binding/scripts -p convert_published_models_test.py
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--suite openvino --provider ort --output "$(OPENVINO_TEST_SOURCE_DIR)" \
+		--manifest "$(OPENVINO_TEST_REPORT_DIR)/sources.json" --download
+	@$(OPENVINO_PYTHON) openvino-binding/scripts/convert_published_models.py \
+		--sources "$(OPENVINO_TEST_REPORT_DIR)/sources.json" \
+		--output "$(OPENVINO_TEST_MODEL_DIR)" \
+		--manifest "$(OPENVINO_TEST_REPORT_DIR)/models.json"

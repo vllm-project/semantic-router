@@ -368,6 +368,11 @@ recipes:
       - name: unified_balance_reasoning_markers
         operator: OR
         keywords:
+        - "\\bprove\\b"
+        - "\\bproof\\b"
+        - formal derivation
+        - 严格证明
+        - 数学证明
         - analyze the tradeoffs
         - analyze the trade-offs
         - from first principles
@@ -398,6 +403,9 @@ recipes:
       - name: unified_balance_verification_markers
         operator: OR
         keywords:
+        - "\\bverify\\b"
+        - "\\bcite\\b"
+        - "\\bcitations?\\b"
         - verify the answer
         - cite sources
         - fact-check
@@ -537,7 +545,7 @@ recipes:
           value_source: confidence
         - type: fact_check
           name: needs_fact_check
-          weight: 0.45
+          weight: 0.1
         - type: user_feedback
           name: wrong_answer
           weight: 0.35
@@ -1604,6 +1612,7 @@ recipes:
       pii:
       - name: unified_privacy_pii_strict
         threshold: 0.7
+        pii_types_allowed: [GPE]
         description: Detect personally identifiable information that must remain local.
       kb:
       - name: unified_privacy_policy
@@ -1807,9 +1816,15 @@ global:
           store_backend: file
           ttl_seconds: 1800
   model_catalog:
+    admission:
+      prompt_guard:
+        max_concurrency: 8
+        max_queue: 16
+        queue_timeout_ms: 5000
+        on_overflow: wait
     embeddings:
       semantic:
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+        mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
         use_cpu: true
         embedding_config:
           model_type: mmbert
@@ -1820,28 +1835,33 @@ global:
           top_k: 1
           min_score_threshold: 0.5
     system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
-      hallucination_detector: models/mom-halugate-detector
+      prompt_guard: models/Vela-1.0-Encoder-307M-Guard
+      pii_classifier: models/Vela-1.0-Encoder-307M-PII
+      fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
       hallucination_explainer: models/mom-halugate-explainer
-      feedback_detector: models/mmbert32k-feedback-detector-merged
+      feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     modules:
       prompt_guard:
         enabled: true
-        model_id: models/mmbert32k-jailbreak-detector-merged
+        model_id: models/Vela-1.0-Encoder-307M-Guard
         threshold: 0.7
         use_cpu: true
         variant: mmbert32k
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        max_sequence_length: 32768
+        window:
+          size: 512
+          overlap: 255
+        positive_labels: [jailbreak]
+        jailbreak_mapping_path: models/Vela-1.0-Encoder-307M-Guard/jailbreak_type_mapping.json
         model_ref: prompt_guard
       classifier:
         pii:
-          model_id: models/mmbert32k-pii-detector-merged
+          model_id: models/Vela-1.0-Encoder-307M-PII
           threshold: 0.9
           use_cpu: true
           use_mmbert_32k: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          pii_mapping_path: models/Vela-1.0-Encoder-307M-PII/pii_mapping.json
           model_ref: pii_classifier
       complexity:
         prototype_scoring:
@@ -1852,19 +1872,19 @@ global:
           top_m: 2
       hallucination_mitigation:
         fact_check:
-          model_id: models/mmbert32k-factcheck-classifier-merged
-          threshold: 0.5
+          model_id: models/Vela-1.0-Encoder-307M-FactCheck
+          threshold: 0.85
           use_cpu: true
           use_mmbert_32k: true
           model_ref: fact_check_classifier
         detector:
-          model_id: models/mom-halugate-detector
-          threshold: 0.8
+          model_id: models/Vela-1.0-Encoder-307M-Halu
+          threshold: 0.5
           use_cpu: true
-          min_span_length: 2
-          min_span_confidence: 0.6
+          min_span_length: 1
+          min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: true
+          enable_nli_filtering: false
           nli_entailment_threshold: 0.75
           model_ref: hallucination_detector
         explainer:
@@ -1874,7 +1894,7 @@ global:
           model_ref: hallucination_explainer
       feedback_detector:
         enabled: true
-        model_id: models/mmbert32k-feedback-detector-merged
+        model_id: models/Vela-1.0-Encoder-307M-Feedback
         threshold: 0.5
         use_cpu: true
         use_modernbert: false

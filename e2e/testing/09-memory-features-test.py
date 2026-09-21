@@ -17,6 +17,7 @@ Test classes live in the memory_tests package:
   - MemoryStorageTest: Conversation turns stored in Milvus
   - PerDecisionMemoryDisabledTest: Decision with memory.enabled=false skips retrieval
   - PerDecisionThresholdOverrideTest: Decision-level threshold overrides global default
+  - MemoryPersistenceReceiptTest: Persistence receipts and fail-open on backend failure
 
 Prerequisites:
   - Milvus running
@@ -33,15 +34,18 @@ Usage:
     ROUTER_ENDPOINT=http://localhost:8888 python e2e/testing/09-memory-features-test.py
 """
 
+import json
 import os
 import sys
 import unittest
+from pathlib import Path
 
 import requests
 from memory_tests import (
     ChatCompletionsMemoryTest,
     MemoryContentIntegrityTest,
     MemoryInjectionPipelineTest,
+    MemoryPersistenceReceiptTest,
     MemoryStorageTest,
     PerDecisionMemoryDisabledTest,
     PerDecisionThresholdOverrideTest,
@@ -51,6 +55,8 @@ from memory_tests import (
     UserIsolationTest,
 )
 from memory_tests.base import HTTP_OK
+from memory_tests.reporting import InventoryResult, summarize_result, test_ids
+from memory_tests.test_persistence_receipts_unit import PersistenceReceiptAssertionsTest
 
 
 def run_tests():
@@ -71,7 +77,8 @@ def run_tests():
         if response.status_code == HTTP_OK:
             print("✅ Router is healthy")
         else:
-            print(f"⚠️  Router health check returned {response.status_code}")
+            print(f"❌ Router health check returned {response.status_code}")
+            return 1
     except requests.exceptions.RequestException as e:
         print(f"❌ Cannot reach router: {e}")
         sys.exit(1)
@@ -95,14 +102,26 @@ def run_tests():
         # P1: Per-decision plugin behavior
         PerDecisionMemoryDisabledTest,
         PerDecisionThresholdOverrideTest,
+        PersistenceReceiptAssertionsTest,
+        # P2: Persistence receipts — runs last, stops the memory backend
+        MemoryPersistenceReceiptTest,
     ]
 
     for test_class in test_classes:
         tests = loader.loadTestsFromTestCase(test_class)
         suite.addTests(tests)
 
-    runner = unittest.TextTestRunner(verbosity=2)
+    inventory = test_ids(suite)
+    runner = unittest.TextTestRunner(verbosity=2, resultclass=InventoryResult)
     result = runner.run(suite)
+    report = summarize_result(
+        result, inventory, required=os.environ.get("CI_REQUIRE_MEMORY_TESTS") == "1"
+    )
+    report_path = Path(
+        os.environ.get("MEMORY_TEST_REPORT_PATH", "memory-test-report.json")
+    )
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
     # Print summary
     print("\n" + "=" * 60)
@@ -112,12 +131,15 @@ def run_tests():
     total = result.testsRun
     failures = len(result.failures)
     errors = len(result.errors)
-    passed = total - failures - errors
+    passed = report["passed"]
 
     print(f"Total tests: {total}")
     print(f"Passed: {passed}")
     print(f"Failed: {failures}")
     print(f"Errors: {errors}")
+    print(f"Skipped: {report['skipped']}")
+    for problem in report["inventory_errors"]:
+        print(f"❌ {problem}")
 
     if failures > 0:
         print("\n❌ Failures:")
@@ -129,7 +151,7 @@ def run_tests():
         for test, traceback in result.errors:
             print(f"  - {test}: {traceback.split(chr(10))[-2]}")
 
-    if failures == 0 and errors == 0:
+    if report["successful"]:
         print("\n✅ All tests passed!")
         return 0
     else:

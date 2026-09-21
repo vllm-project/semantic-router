@@ -28,6 +28,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
@@ -607,7 +608,7 @@ var _ = Describe("Security Checks", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	Context("with PII token classification", func() {
+	Context("with PII token classification", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			// Check if PII model files exist before trying to initialize
 			// This allows tests to run in CI environments where models may not be available
@@ -634,7 +635,7 @@ var _ = Describe("Security Checks", func() {
 			It("should detect multiple PII types in text with token classification", func() {
 				text := "My email is john.doe@example.com and my phone is (555) 123-4567"
 
-				piiTypes, err := router.Classifier.ClassifyPII(text)
+				piiTypes, err := router.Classifier.ClassifyPII(context.Background(), text)
 				Expect(err).NotTo(HaveOccurred())
 
 				// If PII classifier is available, should detect entities
@@ -654,13 +655,13 @@ var _ = Describe("Security Checks", func() {
 			It("should return empty slice for text with no PII", func() {
 				text := "What is the weather like today? It's a beautiful day."
 
-				piiTypes, err := router.Classifier.ClassifyPII(text)
+				piiTypes, err := router.Classifier.ClassifyPII(context.Background(), text)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(piiTypes).To(BeEmpty())
 			})
 
 			It("should handle empty text gracefully", func() {
-				piiTypes, err := router.Classifier.ClassifyPII("")
+				piiTypes, err := router.Classifier.ClassifyPII(context.Background(), "")
 				Expect(err).NotTo(HaveOccurred())
 				Expect(piiTypes).To(BeEmpty())
 			})
@@ -671,7 +672,7 @@ var _ = Describe("Security Checks", func() {
 				cfg.PIIModel.Threshold = 0.99
 
 				text := "Contact me at test@example.com"
-				piiTypes, err := router.Classifier.ClassifyPII(text)
+				piiTypes, err := router.Classifier.ClassifyPII(context.Background(), text)
 				Expect(err).NotTo(HaveOccurred())
 
 				// With high threshold, should detect fewer entities
@@ -696,7 +697,7 @@ var _ = Describe("Security Checks", func() {
 				}
 
 				// Check if PII classifier is available by testing with known PII text
-				testPII, err := router.Classifier.ClassifyPII("test@example.com")
+				testPII, err := router.Classifier.ClassifyPII(context.Background(), "test@example.com")
 				Expect(err).NotTo(HaveOccurred())
 
 				if len(testPII) == 0 {
@@ -704,7 +705,7 @@ var _ = Describe("Security Checks", func() {
 				}
 
 				for _, tc := range testCases {
-					piiTypes, err := router.Classifier.ClassifyPII(tc.text)
+					piiTypes, err := router.Classifier.ClassifyPII(context.Background(), tc.text)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed for case: %s", tc.description))
 
 					if tc.shouldFind {
@@ -724,7 +725,7 @@ var _ = Describe("Security Checks", func() {
 					"Another email: user2@test.org and phone (555) 333-4444",
 				}
 
-				detectedPII := router.Classifier.DetectPIIInContent(contentList)
+				detectedPII := router.Classifier.DetectPIIInContent(context.Background(), contentList)
 
 				// If PII classifier is available, should detect entities
 				// If not available (candle-binding issues), should return empty slice gracefully
@@ -742,13 +743,13 @@ var _ = Describe("Security Checks", func() {
 			})
 
 			It("should handle empty content list", func() {
-				detectedPII := router.Classifier.DetectPIIInContent([]string{})
+				detectedPII := router.Classifier.DetectPIIInContent(context.Background(), []string{})
 				Expect(detectedPII).To(BeEmpty())
 			})
 
 			It("should handle content list with empty strings", func() {
 				contentList := []string{"", "  ", "Normal text", ""}
-				detectedPII := router.Classifier.DetectPIIInContent(contentList)
+				detectedPII := router.Classifier.DetectPIIInContent(context.Background(), contentList)
 				Expect(detectedPII).To(BeEmpty())
 			})
 
@@ -759,7 +760,7 @@ var _ = Describe("Security Checks", func() {
 				}
 
 				// This should not cause the entire operation to fail
-				detectedPII := router.Classifier.DetectPIIInContent(contentList)
+				detectedPII := router.Classifier.DetectPIIInContent(context.Background(), contentList)
 
 				// Should still process valid content
 				Expect(len(detectedPII)).To(BeNumerically(">=", 0))
@@ -772,7 +773,7 @@ var _ = Describe("Security Checks", func() {
 					"Contact John at john.doe@example.com or call (555) 123-4567",
 				}
 
-				hasPII, results, err := router.Classifier.AnalyzeContentForPII(contentList)
+				hasPII, results, err := router.Classifier.AnalyzeContentForPII(context.Background(), contentList)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(len(results)).To(Equal(1))
 
@@ -803,7 +804,7 @@ var _ = Describe("Security Checks", func() {
 			})
 
 			It("should handle empty content gracefully", func() {
-				hasPII, results, err := router.Classifier.AnalyzeContentForPII([]string{""})
+				hasPII, results, err := router.Classifier.AnalyzeContentForPII(context.Background(), []string{""})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(hasPII).To(BeFalse())
 				Expect(len(results)).To(Equal(0)) // Empty content is skipped
@@ -816,7 +817,7 @@ var _ = Describe("Security Checks", func() {
 					"Explain quantum physics",
 				}
 
-				hasPII, results, err := router.Classifier.AnalyzeContentForPII(contentList)
+				hasPII, results, err := router.Classifier.AnalyzeContentForPII(context.Background(), contentList)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(hasPII).To(BeFalse())
 
@@ -829,7 +830,7 @@ var _ = Describe("Security Checks", func() {
 			It("should detect various entity types with correct metadata", func() {
 				content := "My name is John Smith, email john@example.com, phone (555) 123-4567"
 
-				hasPII, results, err := router.Classifier.AnalyzeContentForPII([]string{content})
+				hasPII, results, err := router.Classifier.AnalyzeContentForPII(context.Background(), []string{content})
 				Expect(err).NotTo(HaveOccurred())
 
 				if hasPII && len(results) > 0 && results[0].HasPII {
@@ -860,7 +861,7 @@ var _ = Describe("Security Checks", func() {
 		})
 	})
 
-	Context("PII token classification edge cases", func() {
+	Context("PII token classification edge cases", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			// Check if PII model files exist before trying to initialize
 			// This allows tests to run in CI environments where models may not be available
@@ -889,7 +890,7 @@ var _ = Describe("Security Checks", func() {
 				longText += "Contact me at test@example.com for more information. "
 				longText += strings.Repeat("More text here. ", 50)
 
-				piiTypes, err := router.Classifier.ClassifyPII(longText)
+				piiTypes, err := router.Classifier.ClassifyPII(context.Background(), longText)
 				Expect(err).NotTo(HaveOccurred())
 
 				// Should still detect PII in long text
@@ -905,7 +906,7 @@ var _ = Describe("Security Checks", func() {
 				}
 
 				for _, text := range testCases {
-					_, err := router.Classifier.ClassifyPII(text)
+					_, err := router.Classifier.ClassifyPII(context.Background(), text)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed for text: %s", text))
 					// Should not crash, regardless of detection results
 				}
@@ -921,7 +922,7 @@ var _ = Describe("Security Checks", func() {
 				}
 
 				for _, text := range testCases {
-					_, err := router.Classifier.ClassifyPII(text)
+					_, err := router.Classifier.ClassifyPII(context.Background(), text)
 					Expect(err).NotTo(HaveOccurred(), fmt.Sprintf("Failed for text: %s", text))
 					// These may or may not be detected as PII, but should not cause errors
 				}
@@ -948,7 +949,7 @@ var _ = Describe("Security Checks", func() {
 						defer wg.Done()
 						for j := 0; j < numCalls; j++ {
 							text := testTexts[j%len(testTexts)]
-							_, err := router.Classifier.ClassifyPII(text)
+							_, err := router.Classifier.ClassifyPII(context.Background(), text)
 							if err != nil {
 								errorChan <- fmt.Errorf("goroutine %d, call %d: %w", goroutineID, j, err)
 							}
@@ -1012,7 +1013,7 @@ var _ = Describe("Security Checks", func() {
 		})
 	})
 
-	Context("with jailbreak detection enabled", func() {
+	Context("with jailbreak detection enabled", Label("model-artifacts"), func() {
 		BeforeEach(func() {
 			modelPath := resolveExtprocTestPath("../../../../models/mmbert32k-jailbreak-detector-merged")
 			skipExtprocSpecIfModelArtifactsMissing("Jailbreak model", modelPath)
@@ -1684,7 +1685,9 @@ var _ = Describe("Caching Functionality", func() {
 		// Disable PII detection for caching tests (not needed and avoids model loading issues)
 		cfg.PIIModel.ModelID = ""
 
-		var err error
+		provider, err := embedding.NewFuncProvider("test", 2, func(_ context.Context, text string) ([]float32, error) { return []float32{float32(len(text)), 1}, nil })
+		Expect(err).NotTo(HaveOccurred())
+
 		router, err = CreateTestRouter(cfg)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1696,6 +1699,7 @@ var _ = Describe("Caching Functionality", func() {
 			MaxEntries:          100,
 			TTLSeconds:          3600,
 			EmbeddingModel:      "bert",
+			EmbeddingProvider:   provider,
 		}
 		cacheBackend, err := cache.NewCacheBackend(cacheConfig)
 		Expect(err).NotTo(HaveOccurred())
@@ -1918,13 +1922,14 @@ func TestVSRHeadersAddedOnSuccessfulNonCachedResponse(t *testing.T) {
 
 	// Create request context with VSR decision information
 	ctx := &RequestContext{
-		VSRSelectedDecisionName:       "math_decision",
-		VSRSelectedDecisionConfidence: 0.91,
-		VSRSelectedCategory:           "math",
-		VSRReasoningMode:              "on",
-		VSRSelectedModel:              "deepseek-v31",
-		VSRCacheHit:                   false, // Not a cache hit
-		VSRInjectedSystemPrompt:       true,  // System prompt was injected
+		VSRSelectedDecisionName:             "math_decision",
+		VSRSelectedDecisionConfidence:       0.91,
+		VSRSelectedDecisionConfidenceScored: true,
+		VSRSelectedCategory:                 "math",
+		VSRReasoningMode:                    "on",
+		VSRSelectedModel:                    "deepseek-v31",
+		VSRCacheHit:                         false, // Not a cache hit
+		VSRInjectedSystemPrompt:             true,  // System prompt was injected
 		VSRDecisionDiagnostics: decision.EvaluationDiagnostics{
 			AppliedUnknownPolicies: map[string]string{"guarded": "no_match"},
 		},
@@ -2545,7 +2550,7 @@ var _ = Describe("Metrics recording", func() {
 			ProcessingStartTime: time.Now().Add(-75 * time.Millisecond),
 		}
 
-		before := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		before := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 
 		respHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 			ResponseHeaders: &ext_proc.HttpHeaders{
@@ -2557,7 +2562,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(response.GetResponseHeaders()).NotTo(BeNil())
 
-		after := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		after := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 		Expect(after).To(BeNumerically(">", before))
 		Expect(ctx.TTFTRecorded).To(BeTrue())
 		Expect(ctx.TTFTSeconds).To(BeNumerically(">", 0))
@@ -2570,7 +2575,7 @@ var _ = Describe("Metrics recording", func() {
 			StartTime:    time.Now().Add(-1 * time.Second),
 		}
 
-		beforeTPOT := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+		beforeTPOT := getHistogramSampleCount("llm_model_response_duration_per_output_token_seconds", ctx.RequestModel)
 
 		beforePrompt := getHistogramSampleCount("llm_prompt_tokens_per_request", ctx.RequestModel)
 		beforeCompletion := getHistogramSampleCount("llm_completion_tokens_per_request", ctx.RequestModel)
@@ -2588,7 +2593,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(response.GetImmediateResponse()).To(BeNil(), "unexpected response: %#v", response)
 		Expect(response.GetResponseBody()).NotTo(BeNil(), "unexpected response: %#v", response)
 
-		afterTPOT := getHistogramSampleCount("llm_model_tpot_seconds", ctx.RequestModel)
+		afterTPOT := getHistogramSampleCount("llm_model_response_duration_per_output_token_seconds", ctx.RequestModel)
 		Expect(afterTPOT).To(BeNumerically(">", beforeTPOT))
 
 		// New per-request token histograms should also be recorded
@@ -2615,7 +2620,7 @@ var _ = Describe("Metrics recording", func() {
 			},
 		}
 
-		before := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		before := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 
 		// Handle response headers (should NOT record TTFT for streaming)
 		response1, err := router.handleResponseHeaders(respHeaders, ctx)
@@ -2633,7 +2638,7 @@ var _ = Describe("Metrics recording", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(response2.GetResponseBody()).NotTo(BeNil())
 
-		after := getHistogramSampleCount("llm_model_ttft_seconds", ctx.RequestModel)
+		after := getHistogramSampleCount("llm_model_first_response_observation_seconds", ctx.RequestModel)
 		Expect(after).To(BeNumerically(">", before))
 		Expect(ctx.TTFTRecorded).To(BeTrue())
 		Expect(ctx.TTFTSeconds).To(BeNumerically(">", 0))

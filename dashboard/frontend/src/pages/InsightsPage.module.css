@@ -128,20 +128,6 @@
   text-transform: capitalize;
 }
 
-.recordStatusSuccess {
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.recordStatusError {
-  border-color: rgba(239, 68, 68, 0.35);
-  color: #fca5a5;
-}
-
-.recordStatusNeutral {
-  color: rgba(255, 255, 255, 0.58);
-}
-
 .recordTrace {
   grid-column: 1 / -1;
   overflow: hidden;
@@ -424,6 +410,7 @@
 .recordSections {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: start;
   gap: 1rem;
   margin-top: 1rem;
 }
@@ -441,6 +428,10 @@
 
 .recordSectionCompact {
   grid-column: span 4;
+}
+
+.recordSectionHalf {
+  grid-column: span 6;
 }
 
 .recordSectionFeature {
@@ -512,6 +503,11 @@
   transform: rotate(180deg);
 }
 
+.recordStructured {
+  min-width: 0;
+  padding: 1.15rem;
+}
+
 .recordFields {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -554,6 +550,87 @@
   margin-bottom: 0.65rem;
 }
 
+.recordMetrics {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.recordFieldsThree {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.recordSectionNote {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.recordSectionNote strong {
+  font-weight: 550;
+}
+
+.recordExplanation {
+  grid-column: 1 / -1;
+  min-width: 0;
+  border-top: 1px solid var(--color-border);
+}
+
+.recordExplanation summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-height: 38px;
+  padding: 0.7rem 0 0;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.75rem;
+}
+
+.recordExplanation summary::-webkit-details-marker {
+  display: none;
+}
+
+.recordExplanation summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.recordExplanation summary svg {
+  flex-shrink: 0;
+  transition: transform 150ms ease;
+}
+
+.recordExplanation[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.recordExplanation dl {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0;
+  padding-top: 1rem;
+  font-size: 0.75rem;
+  line-height: 1.65;
+}
+
+.recordExplanation dt {
+  margin-bottom: 0.2rem;
+  color: var(--color-text);
+  font-weight: 550;
+}
+
+.recordExplanation dd {
+  margin: 0;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 820px) {
   .recordPage {
     width: min(100% - 1.25rem, 1180px);
@@ -561,9 +638,15 @@
 
   .recordSection,
   .recordSectionCompact,
+  .recordSectionHalf,
   .recordSectionFeature,
   .recordSectionWide {
     grid-column: 1 / -1;
+  }
+
+  .recordMetrics,
+  .recordFieldsThree {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .recordHero,
@@ -584,6 +667,10 @@
 @media (max-width: 520px) {
   .recordFields {
     grid-template-columns: 1fr;
+  }
+
+  .recordFields.recordMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .recordFieldWide {
@@ -738,41 +825,6 @@
 .filterSelect:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.emptyState {
-  display: flex;
-  justify-content: center;
-  padding: 3rem 1rem 1rem;
-  text-align: center;
-}
-
-.emptyHint {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  align-items: center;
-  max-width: 640px;
-}
-
-.configHint {
-  margin: 0;
-  padding: 1rem;
-  width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: rgba(0, 0, 0, 0.3);
-  color: var(--color-primary-light);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  text-align: left;
-  white-space: pre;
-}
-
-.emptySubtext {
-  margin: 0;
-  color: var(--color-text-secondary);
-  opacity: 0.84;
 }
 
 .pagination {
@@ -978,18 +1030,21 @@
 }
 
 .statusSuccess {
-  background: rgba(143, 148, 156, 0.15);
-  color: var(--color-primary-light);
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: var(--color-success);
 }
 
 .statusError {
   background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.35);
   color: var(--color-danger);
 }
 
 .statusPending {
   background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.35);
+  color: var(--color-warning);
 }
 
 .statusUnknown {
@@ -1030,6 +1085,58 @@
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.pluginStack > p {
+  margin: 0;
+}
+
+.pluginEvidence {
+  min-width: 0;
+}
+
+.pluginEvidence > summary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.2rem 1.1rem 0.2rem 0;
+  position: relative;
+  cursor: pointer;
+  list-style: none;
+  font-size: 0.78rem;
+}
+
+.pluginEvidence > summary::-webkit-details-marker {
+  display: none;
+}
+
+.pluginEvidence > summary > svg {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.15rem;
+  transition: transform 150ms ease;
+}
+
+.pluginEvidence[open] > summary > svg {
+  transform: rotate(180deg);
+}
+
+.pluginEvidence > summary:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.pluginEvidence > .pluginStack {
+  gap: 0.25rem;
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.pluginEvidence ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.2rem;
 }
 
 .alertDanger,
