@@ -62,6 +62,9 @@ func TestEncodeDispatchRequestInjectsAnthropicPromptCacheMarkers(t *testing.T) {
 	}
 	assertPromptCacheWireRequest(t, wire)
 	assertPromptCacheReceipt(t, ctx, promptCacheActionInserted, 2, 0)
+	t.Logf("action=%s inserted=%d preserved=%d instruction_marker=%+v tool_marker=%+v message_marker=%v",
+		ctx.PromptCacheAction, ctx.PromptCacheInserted, ctx.PromptCachePreserved,
+		wire.System[1].CacheControl, wire.Tools[1].CacheControl, wire.Messages[0].Content[0].CacheControl)
 	if request.Generation != 1 {
 		t.Fatalf("retained request generation = %d, want 1", request.Generation)
 	}
