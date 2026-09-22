@@ -64,6 +64,14 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
+	// Restore reasoning_content that the codec round-trip stripped.
+	// This is a no-op when ReasoningContentPassthrough is nil (single-turn
+	// requests and non-thinking-model endpoints are unaffected).
+	if len(ctx.ReasoningContentPassthrough) > 0 {
+		if err := request.RestoreReasoningContent(ctx.ReasoningContentPassthrough); err != nil {
+			return nil, fmt.Errorf("reasoning_content passthrough restore: %w", err)
+		}
+	}
 	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch.targetFormat, ctx); protocolErr != nil {
 		return nil, protocolErr
 	}
