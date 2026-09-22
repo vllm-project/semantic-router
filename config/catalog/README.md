@@ -119,7 +119,7 @@ without duplicating its intrinsic identity. Virtual recipes are materialized
 from packaged assets and keep their own evaluation directory.
 
 The built-in physical inventory is curated at the creator-company level. The
-current baseline contains 87 physical cards from 23 mainstream creators and
+current baseline contains 89 physical cards from 24 mainstream creators and
 five separately stored virtual cards. For each creator, prefer roughly the
 latest three generations or representative product lines over accumulating a
 shallow long tail of lesser-known creators. This policy is about Model Cards,
@@ -138,6 +138,16 @@ representatives, or a creator that falls below that depth. The policy
 is not emitted into runtime snapshots or exposed in user configuration; whether
 a candidate is mainstream and which recent lines are representative remains a
 review decision rather than a mechanical release-date ranking.
+A creator may carry a reviewed `min_representatives` below the default when it
+has fewer current, separately selectable product lines and the alternative
+would be reviving a retired or deprecated product. Thinking Machines Lab holds
+a two-representative exception. Writer holds a one-representative exception:
+its first-party catalog, reviewed on 2026-09-20, lists Palmyra X6 as the only
+line not on a deprecation path, since Palmyra X5 and Palmyra X4 are both
+scheduled for deprecation on 2026-12-14 with migration to X6. The Palmyra X5
+card stays in the catalog with `lifecycle: deprecated` so its mapping and
+evidence remain visible until Writer removes the model, but it is not a
+representative.
 
 ## User configuration boundary
 
