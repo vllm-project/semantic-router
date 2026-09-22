@@ -447,6 +447,7 @@ class Handler(BaseHTTPRequestHandler):
                         actor,
                         body.get("idempotency_key"),
                         actor_role=role,
+                        engine=self.server.engine,
                     ),
                 )
             if route == ["comparisons"] and method == "POST":

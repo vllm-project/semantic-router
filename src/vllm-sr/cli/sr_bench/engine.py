@@ -10,6 +10,7 @@ import time
 from http import HTTPStatus
 
 import requests
+from contextlib import contextmanager
 
 from cli.routing_preview import build_preview_request, case_request_fields
 
@@ -247,14 +248,31 @@ class Engine:
                 for cancel in self.cancels.values():
                     cancel.set()
 
+    @contextmanager
+    def admiss_replayed(self, owner, request_key):
+        """Hold shutdown admission across a replay that writes a run outside `start`.
+
+        A known idempotency key is left to the caller's reconcile, and a new one is
+        not admitted once admission is closed, the check `_admit` makes for a start.
+        The store lock is held with the admission for the writes that follow.
+        """
+        with self._admission, self.store.lock:
+            if not (request_key and self.store.request(owner, request_key)):
+                self.reject_when_closing()
+            yield
+
+    def reject_when_closing(self):
+        """A new run is not admitted once shutdown closed admission."""
+        if self._closed:
+            raise EngineClosedError("Evaluation service is shutting down")
+
     def _admit(self, frozen, owner, request_key):
         """Under the admission lock, reconcile an existing run or allow creation."""
         if request_key and (existing := self.store.request(owner, request_key)):
             if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
                 raise ValueError("idempotency key is already bound to a different plan")
             return existing
-        if self._closed:
-            raise EngineClosedError("Evaluation service is shutting down")
+        self.reject_when_closing()
         return None
 
     def start(

@@ -157,10 +157,15 @@ def replay(
     request_key=None,
     *,
     actor_role="local",
+    engine=None,
 ):
     # Serialize the key lookup, validation and receipt creation. A known rejected
-    # request cannot race a successful replay with the same idempotency key.
-    with store.lock:
+    # request cannot race a successful replay with the same idempotency key. A replay
+    # the service drives holds the engine's shutdown admission with the store lock.
+    admission = (
+        engine.admiss_replayed(owner, request_key) if engine is not None else store.lock
+    )
+    with admission:
         if request_key and (existing := store.request(owner, request_key)):
             sources = existing["manifest"].get("replay_sources")
             if sources != {
