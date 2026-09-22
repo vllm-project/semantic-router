@@ -157,7 +157,7 @@ def main():
             mismatches.append(f"seed {prev_seed} -> {args.seed}")
         if prev_ratio is not None and prev_ratio != args.ratio:
             mismatches.append(f"ratio {prev_ratio} -> {args.ratio}")
-        if prev_stratify is not None and prev_stratify != args.stratify_key:
+        if prev_stratify != args.stratify_key:
             mismatches.append(f"stratify_key {prev_stratify} -> {args.stratify_key}")
         if mismatches:
             print(

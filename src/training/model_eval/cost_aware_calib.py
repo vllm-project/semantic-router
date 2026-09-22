@@ -88,6 +88,7 @@ import json
 import logging
 import os
 from collections import defaultdict
+from urllib.parse import quote, unquote
 
 logger = logging.getLogger(__name__)
 
@@ -257,19 +258,25 @@ def summarize_token_costs(models_data):
 
 
 def _encode_model_id(model_name):
-    """Encode a (possibly slash-bearing) model id into a flat filename.
+    """Encode a model id into a flat, injective filename stem.
+
+    Uses ``urllib.parse.quote`` with ``safe=''`` so every non-alphanumeric
+    character (including ``/``) is percent-encoded. This is injective:
+    ``org/model`` -> ``org%2Fmodel`` and the distinct served-model name
+    ``org__slash__model`` -> ``org__slash__model`` (unchanged) map to
+    different filenames, so two different model ids can never collide.
 
     Reversible with ``_decode_model_id``. Used by write_token_costs and
     load_token_costs (in result_to_config.py) so a qualified id like
     ``org/model`` round-trips through the token-cost file and is looked
     up under the same key at config-generation time.
     """
-    return model_name.replace("/", "__slash__")
+    return quote(model_name, safe="")
 
 
 def _decode_model_id(filename_stem):
     """Reverse of ``_encode_model_id``."""
-    return filename_stem.replace("__slash__", "/")
+    return unquote(filename_stem)
 
 
 def write_token_costs(token_costs, out_dir):

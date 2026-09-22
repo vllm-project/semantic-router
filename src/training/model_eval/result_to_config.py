@@ -40,6 +40,7 @@ import glob
 import json
 import os
 from collections import defaultdict
+from urllib.parse import unquote
 
 import yaml
 
@@ -451,8 +452,9 @@ def load_token_costs(token_costs_dir):
     """Load per-model token cost JSONs from a directory.
 
     Returns {model_name: {category: avg_tokens}}. Missing dir or files -> {}.
-    Model ids are decoded with the same reversible encoding used by
-    cost_aware_calib.write_token_costs, so ``org/model`` round-trips.
+    Model ids are decoded with the same injective encoding used by
+    cost_aware_calib.write_token_costs (``urllib.parse.unquote``), so
+    ``org/model`` round-trips.
     """
     if not token_costs_dir or not os.path.isdir(token_costs_dir):
         return {}
@@ -461,7 +463,7 @@ def load_token_costs(token_costs_dir):
         if not fname.endswith(".json"):
             continue
         stem = fname[:-5]
-        model_name = stem.replace("__slash__", "/")
+        model_name = unquote(stem)
         with open(os.path.join(token_costs_dir, fname), encoding="utf-8") as f:
             out[model_name] = {k: float(v) for k, v in json.load(f).items()}
     return out
@@ -577,9 +579,17 @@ def build_cost_aware_domain_signals(
                 }
             )
 
-        # When cost_lambda > 0, re-rank model_scores by the new score
+        # When cost_lambda > 0, re-rank model_scores by the new score.
+        # Tie-break by lower normalized token cost, matching the
+        # cost_aware_calib.py scan() tie-break so an existing static
+        # selector keeps the cheaper model at equal score.
         if cost_lambda > 0 and token_costs:
-            model_scores.sort(key=lambda m: (-m["score"], m["model"]))
+            model_scores.sort(
+                key=lambda m: (
+                    -m["score"],
+                    _norm_cost(token_costs, m["model"], category_name),
+                )
+            )
 
         domains.append(
             {
