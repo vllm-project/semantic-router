@@ -22,7 +22,7 @@ gateway answers "how do I reach N backends"; Semantic Router answers "which mode
 recipe and policy should serve this request" — and then runs through whatever gateway
 or listener you already have.
 
-→ [System Overview](overview/semantic-router-overview) · [Mixture of Models](overview/mom-model-family)
+See the [System Overview](overview/semantic-router-overview) for the component layout and [Mixture of Models](overview/mom-model-family) for the serving model behind it.
 
 ## How do we measure routing accuracy and business value?
 
@@ -41,7 +41,7 @@ same aggregate; then read quality together with
 - coverage is reported with the score — missing or ungraded results are not zeros, and
   a small dev win or a zero observed difference does not establish equivalence.
 
-→ [sr-bench 1.0](benchmarking/sr-bench)
+[sr-bench 1.0](benchmarking/sr-bench) defines the full measurement protocol, from freezing cases to reading the outcome.
 
 ## If llm-d already does multi-model routing, why Semantic Router?
 
@@ -57,7 +57,7 @@ llm-d should not decide business policy, and Semantic Router is not meant to cho
 The project states the rule directly: *"Do not configure both systems to make the same
 decision."*
 
-→ [Integrate with llm-d](installation/k8s/llm-d)
+The [llm-d integration guide](installation/k8s/llm-d) states this boundary in its deployment context.
 
 ## How do Semantic Router and the llm-d Endpoint Picker avoid conflicts?
 
@@ -76,7 +76,7 @@ Two operational rules follow from that shape:
   --expect-selected-model` asserts the receipt. Read the decision from those rather than
   inferring it after the fact.
 
-→ [Integrate with llm-d](installation/k8s/llm-d)
+See [Integrate with llm-d](installation/k8s/llm-d) for the shared deployment and decision rules.
 
 ## How do we avoid hurting multi-turn / agentic workloads?
 
@@ -96,7 +96,7 @@ optimization:
   continuation, tool completion, correction, model failure and conversation reset — an
   observed recommendation is not an applied hold.
 
-→ [Session identification](api/session-identification) · [Recipes](tutorials/global/recipes)
+[Session identification](api/session-identification) defines the header contract, and [Recipes](tutorials/global/recipes) shows where protection and escalation are configured.
 
 ## How do operators debug a bad outcome?
 
@@ -121,4 +121,4 @@ signal → policy / decision → algorithm / model → plugin → endpoint sched
 Delivery, route correctness and answer quality are three separate outcomes; qualify the
 ones you did not measure instead of inferring success.
 
-→ [CLI reference](api/cli) · [VSR headers](troubleshooting/vsr-headers) · [API and Observability](tutorials/global/api-and-observability)
+The [CLI reference](api/cli) documents every flag shown here, [VSR headers](troubleshooting/vsr-headers) lists the receipt headers, and [API and Observability](tutorials/global/api-and-observability) covers the telemetry surfaces.
