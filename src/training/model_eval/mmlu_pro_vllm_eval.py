@@ -83,6 +83,15 @@ def parse_args():
     parser.add_argument(
         "--seed", type=int, default=42, help="Random seed for reproducibility"
     )
+    parser.add_argument(
+        "--chat-template-kwargs",
+        type=str,
+        default="",
+        help="JSON string merged into the request body via extra_body. "
+        "Example: "
+        '\'{"chat_template_kwargs": {"enable_thinking": false}}\' '
+        "to disable reasoning mode for thinking models (e.g. DeepSeek/Qwen).",
+    )
     return parser.parse_args()
 
 
@@ -191,17 +200,25 @@ def extract_answer(response: str) -> Optional[str]:
 
 
 def call_model_with_retry(
-    client: OpenAI, model: str, prompt: str, max_tokens: int, temperature: float
+    client: OpenAI,
+    model: str,
+    prompt: str,
+    max_tokens: int,
+    temperature: float,
+    chat_template_kwargs: dict = None,
 ) -> Tuple[str, bool]:
     """Call the model with retry logic for handling timeouts and errors."""
     for attempt in range(MAX_RETRIES):
         try:
-            response = client.chat.completions.create(
+            kwargs = dict(
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 max_tokens=max_tokens,
                 temperature=temperature,
             )
+            if chat_template_kwargs:
+                kwargs["extra_body"] = chat_template_kwargs
+            response = client.chat.completions.create(**kwargs)
             return response.choices[0].message.content, True
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
@@ -222,6 +239,7 @@ def process_question(
     use_cot: bool,
     max_tokens: int,
     temperature: float,
+    chat_template_kwargs: dict = None,
 ) -> Dict[str, Any]:
     """Process a single question and return the results."""
     question = question_data["question"]
@@ -238,7 +256,7 @@ def process_question(
 
     start_time = time.time()
     response_text, success = call_model_with_retry(
-        client, model, prompt, max_tokens, temperature
+        client, model, prompt, max_tokens, temperature, chat_template_kwargs
     )
     end_time = time.time()
 
@@ -269,6 +287,7 @@ def evaluate_model(
     concurrent_requests: int,
     max_tokens: int,
     temperature: float,
+    chat_template_kwargs: dict = None,
 ) -> pd.DataFrame:
     """Evaluate a model on the MMLU-Pro dataset."""
     client = OpenAI(base_url=endpoint, api_key=api_key if api_key else "dummy")
@@ -289,6 +308,7 @@ def evaluate_model(
                 use_cot,
                 max_tokens,
                 temperature,
+                chat_template_kwargs,
             )
             futures.append(future)
 
@@ -391,6 +411,17 @@ def save_results(
 def main():
     args = parse_args()
 
+    # Warn on small sample sizes (measured ~±20pp/q noise at 5 samples)
+    if args.samples_per_category < 50:
+        import sys as _sys
+
+        print(
+            f"WARNING: --samples-per-category={args.samples_per_category} "
+            f"is below 50; accuracy numbers are noisy and should only be "
+            f"used for pipeline smoke-testing, not capability conclusions.",
+            file=_sys.stderr,
+        )
+
     # Set random seed for reproducibility
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -427,6 +458,13 @@ def main():
     # Evaluate each model
     for model in args.models:
         print(f"\nEvaluating model: {model}")
+        # Parse chat-template-kwargs JSON if provided
+        ctk = None
+        if args.chat_template_kwargs:
+            import json
+
+            ctk = json.loads(args.chat_template_kwargs)
+
         results_df = evaluate_model(
             df=df,
             model=model,
@@ -436,6 +474,7 @@ def main():
             concurrent_requests=args.concurrent_requests,
             max_tokens=args.max_tokens,
             temperature=args.temperature,
+            chat_template_kwargs=ctk,
         )
 
         # Analyze and save results
