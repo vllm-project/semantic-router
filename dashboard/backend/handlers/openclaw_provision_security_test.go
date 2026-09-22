@@ -459,7 +459,6 @@ func TestContainedMkdirAllRejectsSymlinkedComponent(t *testing.T) {
 	}
 }
 
-
 // Regression: configured tag values are case-sensitive too. The environment
 // parser must not lowercase administrator-provided tags.
 func TestLoadOpenClawImagePolicyPreservesTagCase(t *testing.T) {
