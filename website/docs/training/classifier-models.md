@@ -1,189 +1,145 @@
 ---
-title: mmBERT-32K Classifier Models
-sidebar_label: Classifier Models
+title: Train Vela Classifiers
+sidebar_label: Classifiers
 ---
 
-# mmBERT-32K classifier models
+# Train Vela classifiers
 
-The current classifier family adapts the same multilingual, long-context
-ModernBERT encoder to several routing decisions. Sharing a foundation keeps
-tokenization and encoder behavior consistent, while each task has its own
-labels, data preparation, training loss, and output head.
+Vela classifiers turn a request into a routing signal. Adapt them when your
+application needs better coverage of a language, domain, or request pattern.
+All tasks use the shared Vela Encoder foundation.
 
-## Shared architecture and training pattern
+To use the published models, start with
+[Vela runtime configuration](../tutorials/global/vela-models.md).
 
-Intent, jailbreak, feedback, modality, and fact-check models use sequence
-classification:
+## Choose the task and labels
 
-```text
-request -> mmBERT-32K encoder -> pooled representation -> task classifier -> label
-```
+| Model | Output | Example use |
+| --- | --- | --- |
+| Domain | 14 subject areas | Route a legal question to a specialist |
+| Guard | `benign`, `jailbreak` | Detect attempts to override instructions |
+| Feedback | Four feedback types plus `NO_FEEDBACK` | Handle an unsatisfactory answer |
+| Modality | `AR`, `DIFFUSION`, `BOTH` | Choose text, image, or combined output |
+| FactCheck | `FACT_CHECK_NEEDED`, `NO_FACT_CHECK_NEEDED` | Select an answer-verification path |
+| PII | Token labels for 17 entity types | Find personal information for redaction |
 
-The PII model uses token classification:
+[Safety and Hazard](./mmbert-safety-classifier) have a separate guide for
+content-risk detection. Guard's task is prompt-attack detection; ordinary
+harmful content belongs to Safety.
 
-```text
-request -> mmBERT-32K encoder -> one classifier output per token -> BIO entities
-```
+### Domain
 
-The training scripts apply LoRA updates to ModernBERT attention and MLP
-projections while training the task head. A run can retain the adapter or merge
-it into the base weights. The `-lora` and `-merged` artifacts therefore share
-the same logical architecture and label contract.
+Domain predicts biology, business, chemistry, computer science, economics,
+engineering, health, history, law, math, other, philosophy, physics, or psychology.
+Include requests outside the specialist domains so the model learns a useful
+`other` class.
 
-For the five standard sequence/token workflows, the repository also provides
-convenience targets:
-
-```bash
-make train-mmbert32k-intent
-make train-mmbert32k-jailbreak
-make train-mmbert32k-feedback
-make train-mmbert32k-factcheck
-make train-mmbert32k-pii
-```
-
-Run the selected Python entrypoint with `--help` before overriding the target's
-defaults. Dataset downloads, output checkpoints, and caches should live
-outside Git.
-
-## Intent classifier
-
-The intent model predicts one of 14 subject areas: biology, business,
-chemistry, computer science, economics, engineering, health, history, law,
-math, other, philosophy, physics, or psychology.
-
-It is a 14-way sequence classifier trained on MMLU-Pro questions plus
-supplementary examples that improve the `other` fallback. The standard target
-uses LoRA rank 32 and alpha 64, five epochs, batch 16, and learning rate
-`2e-5`. Evaluation reports accuracy and weighted F1; deployment evaluation
-should also inspect per-class recall and confusion with `other`.
-
-MMLU-Pro publishes only `validation` (70 rows) and `test` (12032 rows), so the
-training pool has to come out of `test`. The trainer reserves a stratified 20%
-of `test` before it samples anything, keeps those rows off the gradient path,
-and writes their row indices together with the metrics measured on them to
-`heldout_eval.json` beside the checkpoint. Quote that number: accuracy over the
-whole `test` split covers rows the model trained on, so it is not held-out
-evidence.
-
-Artifacts:
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-merged),
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-intent-classifier-lora).
-
-## Jailbreak detector
-
-The jailbreak model is a binary sequence classifier for `benign` versus
-`jailbreak`. Training combines ToxicChat, Salad-Data attack examples, and
-explicit short and long attack-pattern augmentation. The pipeline trains the
-classification head together with LoRA adapters and selects a checkpoint using
-held-out classification metrics.
-
-The released model card records LoRA rank 48 and alpha 96. The current standard
-target defaults to rank 32, alpha 64, five epochs, batch 16, and learning rate
-`2e-5`; override rank and alpha when reproducing the released configuration.
-Evaluate benign false positives separately from missed attacks and include
-multilingual, obfuscated, long-context, and indirect-prompt slices; aggregate
-accuracy alone is not a safety threshold.
-
-Artifacts:
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-merged),
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-jailbreak-detector-lora).
-
-## Feedback detector
-
-The feedback model predicts four states from a user's follow-up message:
+### Feedback
 
 | Label | Meaning |
 | --- | --- |
-| `SAT` | The answer satisfied the user |
-| `NEED_CLARIFICATION` | The user needs clarification |
-| `WRONG_ANSWER` | The answer appears incorrect |
-| `WANT_DIFFERENT` | The user wants a different result or approach |
+| `SAT` | The user is satisfied with the answer |
+| `NEED_CLARIFICATION` | The user needs an explanation of the answer |
+| `WRONG_ANSWER` | The user reports an incorrect answer |
+| `WANT_DIFFERENT` | The user requests a different format or approach |
+| `NO_FEEDBACK` | The message does not express feedback |
 
-It uses weighted cross-entropy to compensate for class imbalance. The standard
-LoRA run uses rank 64 and alpha 128, up to 10 epochs, batch 16, learning rate
-`2e-5`, early checkpoint selection by macro F1, and a 512-token training limit.
+The input is the current user follow-up. Include ordinary new questions as
+`NO_FEEDBACK`; a positive statement unrelated to the answer is not satisfaction.
+Keep ambiguous replies separate when the missing conversation prevents a
+reliable label.
 
-Artifacts:
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-merged),
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-feedback-detector-lora).
+### FactCheck and Modality
 
-## Modality router
+FactCheck decides whether an answer needs verification; it does not determine
+whether a claim is true. Include factual questions alongside creative and
+non-factual requests.
 
-The modality router predicts how a downstream response should be produced:
+Modality predicts the requested output from text. `AR` means text,
+`DIFFUSION` means an image, and `BOTH` means a combined response. It is a text
+classifier and does not inspect uploaded images.
 
-| Label | Route |
-| --- | --- |
-| `AR` | Autoregressive text model |
-| `DIFFUSION` | Image-generation model |
-| `BOTH` | A text explanation plus visual output |
+## Prepare your data
 
-Training assembles text requests, image-generation prompts, and mixed-modality
-examples. The `BOTH` class can include reviewed seed/template examples and
-optional examples synthesized through an OpenAI-compatible endpoint. The
-trainer auto-selects LoRA rank from dataset size unless it is explicitly set,
-uses focal loss and class weights, oversamples severe minority classes, and
-selects by validation F1. The released model card records rank 16, alpha 32,
-10 epochs, batch 32, and learning rate `2e-5`. The current script defaults to
-eight epochs and chooses rank 16 for its default 6,000-example dataset.
+The shared sequence trainer expects JSONL rows with `id`, `text`, `label`,
+and `group_id`. Keep related examples in one partition and preserve
+`source`, `language`, `length_bucket`, and `position` when you need those
+evaluation slices. A separate `contract.json` defines the ordered labels.
+
+Use the [sequence training reference](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair)
+for file formats and source preparation. The
+[application recipes](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_classifier/vela-applications.md)
+provide Feedback and Guard dataset builders. Review their source labels against
+your task, especially quoted attacks, benign instructions, and neutral follow-ups.
+
+## Train a sequence classifier
+
+Download a fixed revision of Vela Encoder to `/models/vela-base` and set
+`VELA_BASE_REVISION` to that revision. The example below assumes your
+FactCheck contract and training/development files are already prepared.
 
 ```bash
-python src/training/model_classifier/modality_routing_classifier/\
-modality_routing_bert_finetuning_lora.py --help
+python -m src.training.model_classifier.sequence_repair.train \
+  --method full --fresh-head \
+  --base /models/vela-base \
+  --base-id llm-semantic-router/Vela-1.0-Encoder-307M \
+  --base-revision "${VELA_BASE_REVISION:?Set the downloaded revision}" \
+  --contract /data/factcheck/contract.json \
+  --train /data/factcheck/train.jsonl --dev /data/factcheck/dev.jsonl \
+  --output /data/factcheck/run \
+  --steps 600 --batch-size 4 --accumulate 4 \
+  --max-length 32768 --microbatch-token-budget 32768 \
+  --learning-rate 0.00001 --head-learning-rate 0.0001 \
+  --eval-every 200 --evaluation-dtype float32 --selection source-macro-f1
 ```
 
-Artifacts:
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-merged),
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-modality-router-lora).
+`--fresh-head` initializes the classifier and trains it with the complete
+encoder. For deliberate continuation, supply a compatible Vela task checkpoint
+and omit that flag. Choose step count and sampling for your data; the example
+settings are a starting point.
 
-## Fact-check classifier
+The input limit includes special tokens. Oversize training examples are
+reported as rejected, and evaluation rejects overflow. Include real long
+examples when increasing the limit.
 
-The fact-check model predicts `FACT_CHECK_NEEDED` or
-`NO_FACT_CHECK_NEEDED`. It is a routing model: it decides whether a request
-should enter a verification path; it does not determine whether a claim is
-true.
+### Continue a model while preserving existing behavior
 
-Positive examples are information-seeking questions from sources such as
-QASPER and Natural Questions. Negative examples include creative-writing,
-code, and other non-information-seeking requests. The builder balances the two
-classes and creates stratified train, validation, and test splits. The standard
-target uses LoRA rank 32 and alpha 64, five epochs, batch 16, and learning rate
-`2e-5`; the script selects by validation F1.
+When adapting a published classifier, start from that task checkpoint and omit
+`--fresh-head`. The optional `--trainable-last-layers` setting updates only the
+last encoder blocks and classification head. Mark old training examples with
+`retention_replay: true` and use `--retention-targets` to constrain changes to
+their predictions while learning from new labels.
 
-Artifacts:
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-merged),
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-factcheck-classifier-lora).
+Follow the [continuation workflow](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair#preserve-behavior-during-continued-training)
+to generate targets and configure training. Compare both attack recall and false
+alarms on separate development requests before replacing a deployed Guard model.
 
 ## PII detector
 
-The PII model is the exception to the sequence-classification pattern. It uses
-a token-classification head and BIO encoding: `B-TYPE` marks the first token
-of an entity, `I-TYPE` continues it, and `O` marks non-entity tokens. The
-released model exposes 17 entity types as 35 labels (`O` plus two labels per
-entity type).
+PII requires entity-span training rather than one label per request. The model
+uses BIO labels: `B-TYPE` starts an entity, `I-TYPE` continues it, and `O`
+marks other tokens.
 
-The released model card records Presidio training, LoRA rank 32, five epochs,
-batch 16, and learning rate `1e-4`. The current standard target expands that
-method with a 70/30 AI4Privacy/Presidio mix, character-span alignment to
-mmBERT subword tokens, rank 48, alpha 96, and eight epochs. Select and report
-entity-level F1 rather than token accuracy, which is dominated by `O` tokens.
+Use the [PII training workflow](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/pii_model_fine_tuning_lora),
+including `train_repair.py`, to align character spans with tokenizer outputs
+and train the token classifier. Evaluate entity-level precision, recall, and F1.
+Token accuracy can hide missed entities because most tokens are `O`.
 
-Artifacts:
-[`merged`](https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-merged),
-[`LoRA`](https://huggingface.co/llm-semantic-router/mmbert32k-pii-detector-lora).
+## Evaluate and deploy
 
-## Validate the artifact contract
+Compare the original and trained checkpoints on the same held-out requests.
+Inspect per-class errors, languages, short and long inputs, and requests that
+should produce no match. Choose thresholds using development data.
 
-Before publishing or configuring a classifier, verify all of the following:
+Export the selected model with
+[the sequence exporter](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier/sequence_repair#freeze-then-evaluate-the-independent-test).
+It includes the trained weights, tokenizer, and task-specific label mappings.
+PII uses its own export workflow.
 
-- the tokenizer and base-model revision match the training run;
-- `id2label` and `label2id` preserve the documented order;
-- the adapter includes the task head, or the merged model contains full model
-  weights;
-- the runtime uses the same truncation and normalization rules;
-- adapter and merged logits agree on fixed examples;
-- held-out metrics and failure slices are stored with the artifact.
+Finally, configure [local model bindings](../installation/runtime/in-process.md)
+and send representative requests through
+[route preview](../installation/runtime/lifecycle-diagnostics.md). Check the
+actual signal and decision as well as model confidence.
 
-The training entrypoints and artifact mapping are under
-[`src/training/model_classifier`](https://github.com/vllm-project/semantic-router/tree/main/src/training/model_classifier).
-For the hierarchical content-safety models, continue with
-[Train the safety classifiers](./mmbert-safety-classifier).
+The [artifact index](https://github.com/vllm-project/semantic-router/blob/main/src/training/model_artifacts.json)
+retains entrypoints for earlier mmBERT adapters and merged releases.

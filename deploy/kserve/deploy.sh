@@ -25,15 +25,17 @@ SIM_INFERENCESERVICE_B="model-b"
 MODEL_NAME_A="Model-A"
 MODEL_NAME_B="Model-B"
 STORAGE_CLASS=""
-MODELS_PVC_SIZE="10Gi"
+MODELS_PVC_SIZE="20Gi"
 CACHE_PVC_SIZE="5Gi"
 # Embedding model directory for semantic caching and tools similarity.
 # Supported canonical options:
-#   - mom-embedding-ultra (default mmBERT 32K)
+#   - Vela-1.0-Encoder-307M-Embedding (default)
+#   - mom-embedding-ultra (explicit legacy mmBERT)
 #   - mom-embedding-pro   (Qwen3 embedding)
 #   - mom-embedding-flash (EmbeddingGemma)
-EMBEDDING_MODEL="mom-embedding-ultra"
+EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
 EMBEDDING_MODEL_REPO=""
+EMBEDDING_MODEL_REVISION="main"
 EMBEDDING_MODEL_TYPE="mmbert"
 EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
 DRY_RUN=false
@@ -62,9 +64,9 @@ Optional:
   --sim-model-b NAME                 Simulator model name for B (default: Model-B)
   --classifier-gpu                   Run semantic router classifier on GPU
   -s, --storage-class CLASS          StorageClass for PVCs (default: cluster default)
-  --models-pvc-size SIZE             Size for models PVC (default: 10Gi)
+  --models-pvc-size SIZE             Size for models PVC (default: 20Gi)
   --cache-pvc-size SIZE              Size for cache PVC (default: 5Gi)
-  --embedding-model MODEL            Embedding model directory (default: mom-embedding-ultra)
+  --embedding-model MODEL            Embedding model directory (default: Vela-1.0-Encoder-307M-Embedding)
   --dry-run                          Generate manifests without applying
   --skip-validation                  Skip pre-deployment validation
   -h, --help                         Show this help message
@@ -110,6 +112,7 @@ substitute_vars() {
         -e "s|{{MODEL_NAME_B}}|$MODEL_NAME_B|g" \
         -e "s|{{EMBEDDING_MODEL}}|$EMBEDDING_MODEL|g" \
         -e "s|{{EMBEDDING_MODEL_REPO}}|$EMBEDDING_MODEL_REPO|g" \
+        -e "s|{{EMBEDDING_MODEL_REVISION}}|$EMBEDDING_MODEL_REVISION|g" \
         -e "s|{{PREDICTOR_SERVICE_IP}}|${PREDICTOR_SERVICE_IP:-10.0.0.1}|g" \
         -e "s|{{PREDICTOR_SERVICE_IP_A}}|${PREDICTOR_SERVICE_IP_A:-10.0.0.1}|g" \
         -e "s|{{PREDICTOR_SERVICE_IP_B}}|${PREDICTOR_SERVICE_IP_B:-10.0.0.1}|g" \
@@ -125,9 +128,17 @@ substitute_vars() {
 }
 
 resolve_embedding_settings() {
+    EMBEDDING_MODEL_REVISION="main"
     case "$1" in
+        Vela-1.0-Encoder-307M-Embedding)
+            EMBEDDING_MODEL="Vela-1.0-Encoder-307M-Embedding"
+            EMBEDDING_MODEL_REPO="llm-semantic-router/Vela-1.0-Encoder-307M-Embedding"
+            EMBEDDING_MODEL_REVISION="1e57cebf5a7b7fec6e6973f05bbca97c5cca4436"
+            EMBEDDING_MODEL_TYPE="mmbert"
+            EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
+            ;;
         mom-embedding-ultra|mmbert|mmbert-embedding|mmbert-embed-32k-2d-matryoshka)
-            EMBEDDING_MODEL="mom-embedding-ultra"
+            EMBEDDING_MODEL="mmbert-embed-32k-2d-matryoshka"
             EMBEDDING_MODEL_REPO="llm-semantic-router/mmbert-embed-32k-2d-matryoshka"
             EMBEDDING_MODEL_TYPE="mmbert"
             EMBEDDING_MODEL_PATH_KEY="mmbert_model_path"
@@ -146,7 +157,7 @@ resolve_embedding_settings() {
             ;;
         *)
             echo -e "${RED}Unsupported embedding model: $1${NC}"
-            echo "Use one of: mom-embedding-ultra, mom-embedding-pro, mom-embedding-flash"
+            echo "Use one of: Vela-1.0-Encoder-307M-Embedding, mom-embedding-ultra, mom-embedding-pro, mom-embedding-flash"
             exit 1
             ;;
     esac
@@ -511,9 +522,9 @@ else
     echo -e "${YELLOW}⚠ Missing configmap source: $CONFIGMAP_SRC${NC}"
 fi
 
-if [ "$EMBEDDING_MODEL" != "mom-embedding-ultra" ]; then
+if [ "$EMBEDDING_MODEL" != "Vela-1.0-Encoder-307M-Embedding" ]; then
     patch_generated_router_config "$TEMP_DIR/configmap-router-config.yaml" \
-      ".global.stores.semantic_cache.embedding_model = \"$EMBEDDING_MODEL_TYPE\" |
+      ".global.stores.response_cache.embedding_model = \"$EMBEDDING_MODEL_TYPE\" |
        .global.model_catalog.embeddings.semantic.$EMBEDDING_MODEL_PATH_KEY = \"models/$EMBEDDING_MODEL\" |
        .global.model_catalog.embeddings.semantic.embedding_config.model_type = \"$EMBEDDING_MODEL_TYPE\""
     echo -e "${GREEN}✓${NC} Patched configmap-router-config.yaml for custom embedding model"
@@ -685,7 +696,7 @@ echo "# 1. Test health endpoint"
 echo "curl -sk https://$API_ROUTE_URL/health"
 echo ""
 echo "# 2. Test classifier API"
-echo "curl -sk -X POST https://$API_ROUTE_URL/api/v1/classify/intent \\"
+echo "curl -sk -X POST https://$API_ROUTE_URL/api/v1/diagnostics/classify/intent \\"
 echo "  -H \"Content-Type: application/json\" \\"
 echo "  -d '{\"text\": \"What is machine learning?\"}'"
 echo ""

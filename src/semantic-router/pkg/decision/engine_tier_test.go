@@ -43,7 +43,7 @@ func TestDecisionEngine_SelectBestDecisionUsesConfidenceWithinTier(t *testing.T)
 			testDecision("math-route", "domain", "math", 200, 2),
 			testDecision("science-route", "domain", "science", 100, 2),
 		},
-		"priority",
+		"confidence",
 	)
 
 	result, err := engine.EvaluateDecisionsWithSignals(&SignalMatches{

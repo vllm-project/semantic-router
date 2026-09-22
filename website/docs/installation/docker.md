@@ -20,7 +20,7 @@ Complete the [Quickstart](/docs/installation) to install the CLI and create a
 configuration, or start from an existing canonical YAML file:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
@@ -35,6 +35,21 @@ or opens first-run setup in the Dashboard. The default local endpoints are:
 
 Ports can change with the active configuration or a stack port offset. Use
 `vllm-sr status` when you are unsure which endpoints are active.
+
+After starting containers, the CLI waits up to 1800 seconds for Router
+readiness, or Dashboard readiness during first-run setup. Set
+`--startup-timeout SECONDS` to a positive integer when model loading or GPU
+compilation needs a different budget:
+
+```bash
+vllm-sr serve --config config.yaml --startup-timeout 7200
+```
+
+Choose the budget using startup measurements for your models and hardware.
+This option applies to the local Docker target and does not change inference
+request deadlines. On timeout, the CLI exits with an error and leaves the
+containers available for `vllm-sr status` and `vllm-sr logs router`.
+Use `vllm-sr stop` when you want to stop them.
 
 ## Connect model backends
 

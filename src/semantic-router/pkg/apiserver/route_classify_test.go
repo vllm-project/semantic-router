@@ -241,7 +241,7 @@ func runBatchClassificationHTTPCase(t *testing.T, apiServer *ClassificationAPISe
 	t.Helper()
 
 	t.Run(tt.name, func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/api/v1/classify/batch", bytes.NewBufferString(tt.requestBody))
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/diagnostics/classify/batch", bytes.NewBufferString(tt.requestBody))
 		req.Header.Set("Content-Type", "application/json")
 
 		rr := httptest.NewRecorder()

@@ -7,22 +7,8 @@ import (
 	"testing"
 	"time"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
-
-type countingEmbeddingInitializer struct {
-	calls  int
-	onInit func()
-}
-
-func (i *countingEmbeddingInitializer) Init(string, string, string, bool, string, string) error {
-	i.calls++
-	if i.onInit != nil {
-		i.onInit()
-	}
-	return nil
-}
 
 type countingCoreClassifierInitializer struct {
 	calls int
@@ -43,36 +29,26 @@ func (i *countingPIIInitializer) Init(string, bool, int) error {
 }
 
 func TestNewClassifierWithOptionsDefersRuntimeInitialization(t *testing.T) {
-	cfg := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				EmbeddingRules: []config.EmbeddingRule{
-					{
-						Name:       "support",
-						Candidates: []string{"hello"},
-					},
-				},
-			},
-		},
-	}
-	initializer := &countingEmbeddingInitializer{}
-
-	classifier, err := newClassifierWithOptions(
-		cfg,
-		withKeywordEmbeddingClassifier(initializer, &EmbeddingClassifier{}),
-	)
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "support", Candidates: []string{"hello"}}}
+	calls := 0
+	provider := newTestTextProvider(func(string) ([]float32, error) { calls++; return makeEmbedding(1), nil })
+	ec, err := NewEmbeddingClassifierWithProvider(cfg.EmbeddingRules, config.HNSWConfig{PreloadEmbeddings: true}, provider)
 	if err != nil {
-		t.Fatalf("newClassifierWithOptions() error = %v", err)
+		t.Fatal(err)
 	}
-	if initializer.calls != 0 {
-		t.Fatalf("initializer called during build: got %d, want 0", initializer.calls)
+	classifier, err := newClassifierWithOptions(cfg, withKeywordEmbeddingClassifier(ec))
+	if err != nil {
+		t.Fatal(err)
 	}
-
+	if calls != 0 {
+		t.Fatalf("constructor performed %d inference calls", calls)
+	}
 	if err := classifier.InitializeRuntime(); err != nil {
-		t.Fatalf("InitializeRuntime() error = %v", err)
+		t.Fatal(err)
 	}
-	if initializer.calls != 1 {
-		t.Fatalf("initializer calls = %d, want 1", initializer.calls)
+	if calls != 1 {
+		t.Fatalf("warmup calls = %d, want 1", calls)
 	}
 }
 
@@ -92,61 +68,26 @@ func TestClassifierBuildParallelismSerializesExplicitCandleRuntime(t *testing.T)
 	}
 }
 
-func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T) {
-	cfg := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				EmbeddingRules: []config.EmbeddingRule{{
-					Name:       "support",
-					Candidates: []string{"hello"},
-				}},
-			},
-		},
-		InlineModels: config.InlineModels{
-			EmbeddingModels: config.EmbeddingModels{
-				EmbeddingConfig: config.HNSWConfig{
-					ModelType:         "mmbert",
-					PreloadEmbeddings: true,
-				},
-			},
-		},
+func TestInitializeRuntimeWarmsPreparedProviderOnce(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.EmbeddingRules = []config.EmbeddingRule{{Name: "support", Candidates: []string{"hello"}}}
+	calls := 0
+	provider := newTestTextProvider(func(string) ([]float32, error) { calls++; return makeEmbedding(1), nil })
+	ec, err := NewEmbeddingClassifierWithProvider(cfg.EmbeddingRules, config.HNSWConfig{PreloadEmbeddings: true}, provider)
+	if err != nil {
+		t.Fatal(err)
 	}
-
-	backendInitialized := false
-	initializer := &countingEmbeddingInitializer{onInit: func() {
-		backendInitialized = true
-	}}
-	originalFunc := getEmbedding2DMatryoshka
-	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
-		if !backendInitialized {
-			return nil, errors.New("embedding preload ran before backend initialization")
+	classifier, err := newClassifierWithOptions(cfg, withKeywordEmbeddingClassifier(ec))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := classifier.InitializeRuntime(); err != nil {
+			t.Fatal(err)
 		}
-		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
-	t.Cleanup(func() {
-		getEmbedding2DMatryoshka = originalFunc
-	})
-
-	embeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, cfg.EmbeddingConfig)
-	if err != nil {
-		t.Fatalf("NewEmbeddingClassifier() error = %v", err)
-	}
-	classifier, err := newClassifierWithOptions(
-		cfg,
-		withKeywordEmbeddingClassifier(initializer, embeddingClassifier),
-	)
-	if err != nil {
-		t.Fatalf("newClassifierWithOptions() error = %v", err)
-	}
-
-	if err := classifier.InitializeRuntime(); err != nil {
-		t.Fatalf("InitializeRuntime() error = %v", err)
-	}
-	if initializer.calls != 1 {
-		t.Fatalf("initializer calls = %d, want 1", initializer.calls)
-	}
-	if got := embeddingClassifier.GetPreloadStats(); got != 1 {
-		t.Fatalf("preloaded candidates = %d, want 1", got)
+	if calls != 1 || ec.GetPreloadStats() != 1 {
+		t.Fatalf("warmup calls=%d cached=%d, want 1 each", calls, ec.GetPreloadStats())
 	}
 }
 
@@ -328,7 +269,7 @@ func TestInitializeRuntimeInitializesJailbreakClassifierForResponseStageConsumer
 	}
 }
 
-func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) {
+func TestUnsupportedLocalHallucinationBackendRejectsCandidate(t *testing.T) {
 	original := nativeBackendCapabilities
 	t.Cleanup(func() { nativeBackendCapabilities = original })
 	nativeBackendCapabilities = NativeBackendCapabilities{Name: "test-backend"}
@@ -344,8 +285,8 @@ func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) 
 			continue
 		}
 		hallucinationTaskFound = true
-		if !task.BestEffort {
-			t.Fatal("unsupported local hallucination task must degrade without aborting unrelated startup")
+		if task.BestEffort {
+			t.Fatal("required hallucination task must reject an unusable candidate")
 		}
 		err := task.Run(context.Background())
 		if err == nil || !strings.Contains(err.Error(), "does not support local hallucination detection") {
@@ -355,8 +296,8 @@ func TestUnsupportedLocalHallucinationBackendIsExplicitlyDegraded(t *testing.T) 
 	if !hallucinationTaskFound {
 		t.Fatal("configured local hallucination task was silently omitted")
 	}
-	if err := classifier.InitializeRuntime(); err != nil {
-		t.Fatalf("best-effort unsupported hallucination backend aborted startup: %v", err)
+	if err := classifier.InitializeRuntime(); err == nil {
+		t.Fatal("unsupported required model must reject candidate preparation")
 	}
 	if classifier.IsHallucinationDetectorReady() {
 		t.Fatal("unsupported local hallucination backend must not report ready")

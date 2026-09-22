@@ -1,0 +1,377 @@
+version: 1
+# Verification boundaries are independent of features, launchers and inference providers.
+# Paths belong only in tools/agent/domains.yaml; concrete cases belong to their framework.
+defaults:
+  runner: ubuntu-24.04
+  platform: linux/amd64
+  runtime: none
+  device: none
+  native: false
+  images: []
+  services: []
+component_workers:
+  cli:
+    display_name: CLI and Fleet
+    go: false
+  model:
+    display_name: Model Tools
+    go: false
+  router:
+    display_name: Router Tools
+    go: true
+verifications:
+  quality:
+    display_name: Source Quality
+    activity: quality
+    boundary: []
+    executor: quality
+    category: quality
+    workflow: .github/workflows/pre-commit.yml
+    always: true
+    inventory: changed-source-format-lint-v1
+  generated-contracts:
+    display_name: Generated Contracts
+    activity: quality
+    boundary: []
+    executor: generated
+    category: quality
+    workflow: .github/workflows/check-generated.yml
+    native: true
+    inventory: canonical-generated-contracts-v1
+  security:
+    display_name: Security Checks
+    activity: quality
+    boundary: []
+    executor: security
+    category: quality
+    workflow: .github/workflows/security-scan.yml
+    inventory: trusted-ast-and-rendered-iac-v1
+  soak-tools:
+    display_name: Soak Tools
+    activity: test
+    boundary: [unit, integration]
+    executor: tools
+    category: components
+    worker: router
+    workflow: .github/workflows/test-tools.yml
+    target: soak-test
+    inventory: soak-client-and-fault-proxy-framework-discovery
+  core:
+    display_name: Core Tests
+    activity: test
+    boundary: [unit, integration]
+    executor: core
+    category: components
+    workflow: .github/workflows/test-and-build.yml
+    native: true
+    inventory: go-core-native-abi-and-selector-parity
+  storage:
+    display_name: Storage Integration
+    activity: test
+    boundary: [integration]
+    executor: storage
+    category: integration
+    workflow: .github/workflows/test-storage.yml
+    native: true
+    services: [milvus, redis, qdrant, valkey, postgres]
+    inventory: required-storage-framework-discovery
+  dashboard:
+    display_name: Dashboard Tests
+    activity: test
+    boundary: [unit, integration]
+    executor: dashboard
+    category: components
+    workflow: .github/workflows/dashboard-test.yml
+    native: true
+    inventory: dashboard-go-vitest-and-controlled-api-browser
+  operator:
+    display_name: Kubernetes Operator
+    activity: test
+    boundary: [unit, integration, e2e]
+    executor: operator
+    category: e2e
+    workflow: .github/workflows/operator-ci.yml
+    images: [operator, operator-bundle, extproc, provider-mocker]
+    services: [kind]
+    runtime: candle
+    device: cpu
+    inventory: operator-unit-generated-olm-reconcile-and-routed-request
+  local.cli:
+    display_name: Stack Lifecycle and Routing
+    activity: test
+    boundary: [e2e]
+    executor: local
+    category: e2e
+    workflow: .github/workflows/test-local.yml
+    suite: cli
+    images: [vllm-sr, dashboard, provider-mocker]
+    services: [docker, envoy, controlled-backend]
+    runtime: candle
+    device: cpu
+    inventory: cli-live-lifecycle
+  local.memory:
+    display_name: Memory Contracts
+    activity: test
+    boundary: [e2e]
+    executor: local
+    category: e2e
+    workflow: .github/workflows/test-local.yml
+    suite: memory
+    images: [vllm-sr, dashboard, provider-mocker]
+    services: [docker, envoy, milvus, provider-mocker]
+    runtime: candle
+    device: cpu
+    inventory: memory-15-required-cases-v1
+  recipe-conformance:
+    display_name: Recipe Preview
+    activity: test
+    boundary: [integration]
+    executor: recipes
+    category: conformance
+    workflow: .github/workflows/recipe-conformance.yml
+    images: [vllm-sr]
+    services: [docker, envoy, management-api]
+    runtime: candle
+    device: cpu
+    inventory: maintained-recipe-source-aware-shards
+  native.candle-cpu:
+    display_name: Candle CPU
+    activity: test
+    boundary: [integration]
+    executor: native
+    category: runtime
+    workflow: .github/workflows/test-native.yml
+    platform_id: candle-cpu
+    runtime: candle
+    device: cpu
+    native: true
+    target: test-models
+    inventory: published-vela-v1+multimodal-v1
+  native.candle-riscv64-qemu:
+    display_name: Candle RISC-V (QEMU)
+    activity: test
+    boundary: [unit, integration]
+    executor: native
+    category: runtime
+    workflow: .github/workflows/test-native.yml
+    platform_id: candle-riscv64-qemu
+    platform: linux/riscv64
+    runtime: candle
+    device: cpu
+    execution:
+      mode: qemu-user
+      host_platform: linux/amd64
+    target: test-riscv-qemu
+    evidence: riscv-qemu
+    timeout_minutes: 150
+    inventory: candle-riscv64-parity-owned-fixtures-and-router-smoke-v1
+  native.ort-cpu:
+    display_name: ONNX Runtime CPU
+    activity: test
+    boundary: [integration]
+    executor: native
+    category: runtime
+    workflow: .github/workflows/test-native.yml
+    platform_id: ort-cpu
+    runtime: ort
+    device: cpu
+    native: true
+    target: test-models
+    inventory: published-vela-v1
+  native.image-calibration-cpu:
+    display_name: Image Routing Conformance
+    activity: test
+    boundary: [unit, integration]
+    executor: native
+    category: conformance
+    workflow: .github/workflows/test-native.yml
+    platform_id: ort-cpu
+    runtime: ort
+    device: cpu
+    native: true
+    target: verify-image-routing-calibration
+    inventory: image-routing-calibration-source-fixtures-and-thresholds
+    evidence: image-calibration
+  native.openvino-cpu:
+    display_name: OpenVINO CPU
+    activity: test
+    boundary: [unit, integration]
+    executor: native
+    category: runtime
+    workflow: .github/workflows/test-native.yml
+    platform_id: openvino-cpu
+    runtime: openvino
+    device: cpu
+    native: true
+    target: verify-openvino-binding
+    inventory: owned-openvino-lifetimes-budgets-and-published-vela-v2
+  performance:
+    display_name: Production Benchmarks
+    activity: performance
+    boundary: [integration]
+    executor: performance
+    category: performance
+    workflow: .github/workflows/performance-test.yml
+    native: true
+    runtime: candle
+    device: cpu
+    inventory: production-benchmark-and-paired-model-inventory
+  cli-package:
+    display_name: CLI Package
+    activity: package
+    boundary: [integration]
+    executor: package
+    category: packages
+    workflow: .github/workflows/package-check.yml
+    inventory: catalog-snapshot-and-installed-wheel
+  cli-unit:
+    display_name: CLI Unit Tests
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: cli
+    workflow: .github/workflows/test-tools.yml
+    target: vllm-sr-test
+    inventory: cli-unittest-discovery
+  fleet-sim:
+    display_name: Fleet Simulation
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: cli
+    workflow: .github/workflows/test-tools.yml
+    target: vllm-sr-sim-test
+    inventory: simulator-pytest-discovery
+  training:
+    display_name: Training Contracts
+    activity: test
+    boundary: [unit, integration]
+    executor: tools
+    category: components
+    worker: model
+    workflow: .github/workflows/test-tools.yml
+    target: test-training-contracts
+    inventory: training-contracts-and-tiny-model-cpu-inference
+  mock-provider:
+    display_name: Provider Simulator
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: router
+    workflow: .github/workflows/test-tools.yml
+    target: test-provider-mocker
+    inventory: provider-mocker-native-protocol-and-scenario-discovery
+  learning-tools:
+    display_name: Routing Tools
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: router
+    workflow: .github/workflows/test-tools.yml
+    target: test-learning-tools
+    inventory: routing-authoring-calibration-and-learning-tools-framework-discovery
+
+  harness-tools:
+    display_name: CI Harness
+    activity: test
+    boundary: [unit, integration]
+    executor: tools
+    category: components
+    worker: router
+    workflow: .github/workflows/test-tools.yml
+    target: harness-check
+    inventory: ci-and-agent-framework-discovery
+  e2e-unit:
+    display_name: E2E Framework
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: router
+    workflow: .github/workflows/test-tools.yml
+    target: test-e2e-unit
+    inventory: e2e-go-helper-and-profile-discovery
+  onnx-artifacts:
+    display_name: ONNX Artifacts
+    activity: test
+    boundary: [integration]
+    executor: tools
+    category: components
+    worker: model
+    workflow: .github/workflows/test-tools.yml
+    target: onnx-artifact-test
+    inventory: external-onnx-weight-packing-cpu-inference
+  ck-rewrite:
+    display_name: Attention Graph Rewriter
+    activity: test
+    boundary: [unit]
+    executor: tools
+    category: components
+    worker: model
+    workflow: .github/workflows/test-tools.yml
+    target: ck-rewrite-test
+    inventory: attention-graph-rewriter-contracts
+
+# Versioned required inventory, shared by ci/full, nightly and release. A new
+# public PR-CI deployment must be mapped here, not silently treated as a rotation.
+full_cpu:
+  version: 2
+  required:
+    - quality
+    - generated-contracts
+    - security
+    - soak-tools
+    - core
+    - storage
+    - dashboard
+    - operator
+    - local.cli
+    - local.memory
+    - recipe-conformance
+    - native.candle-cpu
+    - native.candle-riscv64-qemu
+    - native.ort-cpu
+    - native.image-calibration-cpu
+    - native.openvino-cpu
+    - performance
+    - cli-package
+    - cli-unit
+    - fleet-sim
+    - training
+    - mock-provider
+    - learning-tools
+    - harness-tools
+    - e2e-unit
+    - onnx-artifacts
+    - ck-rewrite
+    - e2e.envoy-ai-gateway
+    - e2e.local-classifier-backend
+    - e2e.dashboard
+    - e2e.remote-embedding
+    - e2e.agentgateway
+    - e2e.aibrix
+    - e2e.istio
+    - e2e.llm-d
+    - e2e.streaming
+    - e2e.vela-omni
+    - e2e.vela-halu
+    - e2e.multimodal-routing
+  support_contracts:
+    Helm chart: [core]
+    Local deployment: [local.cli]
+    Kubernetes Operator: [operator]
+    agentgateway: [e2e.agentgateway]
+    Envoy AI Gateway: [e2e.envoy-ai-gateway]
+    AIBrix: [e2e.aibrix]
+    Istio Gateway: [e2e.istio]
+    llm-d: [e2e.llm-d]
+    Streaming with Envoy AI Gateway: [e2e.streaming]
+  excluded:
+    cuda: No CUDA runner is declared in this CPU inventory; image build is not device qualification.
+    rocm: No ROCm runner is declared in this CPU inventory; image build is not device qualification.
+    manual-deployments: Public Manual integrations require their opt-in services or hardware.
+    experimental-examples: Experimental examples are not promoted to release obligations.

@@ -133,10 +133,13 @@ func parseYAMLBytesWithOptions(
 		return nil, fmt.Errorf("failed to marshal normalized config input: %w", marshalErr)
 	}
 
-	// Warn about unknown YAML fields (typos) before parsing into typed structs.
-	WarnUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-
-	cfg, err := parseRouterConfigPayload(expandedData, raw)
+	if !isCanonicalConfig(raw) {
+		return nil, canonicalConfigRequiredError(raw)
+	}
+	if validationErr := validateKnownFields(raw, reflect.TypeOf(CanonicalConfig{})); validationErr != nil {
+		return nil, validationErr
+	}
+	cfg, err := parseCanonicalConfigPayload(expandedData, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -475,13 +478,35 @@ func rejectUnsupportedProtectionLearningFields(prefix string, raw map[string]int
 		}
 	}
 	if tuning, ok := raw["tuning"]; ok {
-		if err := rejectUnknownMapFields(prefix+".tuning", nestedStringMap(tuning), []string{
+		tuningMap := nestedStringMap(tuning)
+		if err := rejectUnknownMapFields(prefix+".tuning", tuningMap, []string{
 			"idle_timeout_seconds",
 			"min_turns_before_switch",
 			"switch_margin",
 			"stability_weight",
+			"progress_gate",
 		}); err != nil {
 			return err
+		}
+		if gate, ok := tuningMap["progress_gate"]; ok {
+			if err := rejectUnknownMapFields(
+				prefix+".tuning.progress_gate",
+				nestedStringMap(gate),
+				[]string{
+					"enabled",
+					"mode",
+					"calibration_id",
+					"window_size",
+					"window_ttl_seconds",
+					"min_window_outcomes",
+					"min_consecutive_regressions",
+					"min_consecutive_recoveries",
+					"cooldown_seconds",
+					"max_switches_per_window",
+				},
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -503,13 +528,6 @@ func rejectUnknownMapFields(prefix string, raw map[string]interface{}, allowed [
 	}
 	sort.Strings(unknown)
 	return fmt.Errorf("unsupported Router Learning config fields: %s", strings.Join(unknown, ", "))
-}
-
-func parseRouterConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {
-	if !isCanonicalConfig(raw) {
-		return nil, canonicalConfigRequiredError(raw)
-	}
-	return parseCanonicalConfigPayload(data, raw)
 }
 
 func parseCanonicalConfigPayload(data []byte, raw map[string]interface{}) (*RouterConfig, error) {

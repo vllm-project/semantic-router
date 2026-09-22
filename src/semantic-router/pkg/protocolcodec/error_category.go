@@ -28,7 +28,7 @@ func upstreamSemanticValidationError(err error) error {
 func decodeProviderErrorCategory(values ...string) llmprotocol.ErrorCategory {
 	for _, value := range values {
 		switch strings.ToLower(strings.TrimSpace(value)) {
-		case "invalid_request", "invalid_request_error", "bad_request", "validation_error", "request_too_large":
+		case "invalid_request", "invalid_request_error", "bad_request", "badrequesterror", "validation_error", "request_too_large":
 			return llmprotocol.ErrorInvalidRequest
 		case "authentication", "authentication_error", "unauthorized":
 			return llmprotocol.ErrorAuthentication

@@ -8,18 +8,45 @@ import (
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
 
+// CanonicalConfigVersion identifies the steady-state public configuration
+// contract accepted by the Router and published through configschema.
+const CanonicalConfigVersion = "v0.3"
+
 // CanonicalConfig is the public v0.3 config contract.
 type CanonicalConfig struct {
-	Version     string                `yaml:"version,omitempty"`
-	Listeners   []Listener            `yaml:"listeners,omitempty"`
-	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
-	Evaluation  *CanonicalEvaluation  `yaml:"evaluation,omitempty"`
-	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
+	// Version selects the canonical configuration contract understood by the Router.
+	Version string `yaml:"version,omitempty"`
+	// Listeners expose named public request entry points through Envoy.
+	Listeners []Listener `yaml:"listeners,omitempty"`
+	// Providers define model endpoints, credentials, and provider defaults.
+	Providers CanonicalProviders `yaml:"providers,omitempty"`
+	// Evaluation defines operator-owned benchmarks, indices, and model measurements.
+	Evaluation *CanonicalEvaluation `yaml:"evaluation,omitempty"`
+	// Routing contains model cards, signals, projections, decisions, and routing strategy.
+	Routing CanonicalRouting `yaml:"routing,omitempty"`
+	// Entrypoints map public model names to isolated routing recipes.
 	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
-	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
-	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
+	// Recipes package the routing policy and plugins used by an entrypoint.
+	Recipes []CanonicalRecipe `yaml:"recipes,omitempty"`
+	// Global contains shared Router services, model assets, learning, and protection settings.
+	Global *CanonicalGlobal `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
+}
+
+// CanonicalConfigDocument is the complete product configuration document. Its
+// canonical Router payload is embedded so every consumer shares the same Go
+// field contract, while setup remains explicit control-plane metadata rather
+// than Router runtime state.
+type CanonicalConfigDocument struct {
+	CanonicalConfig `yaml:",inline"`
+	Setup           *CanonicalSetup `yaml:"setup,omitempty"`
+}
+
+// CanonicalSetup is the product bootstrap state. The Dashboard removes this
+// block when setup is activated.
+type CanonicalSetup struct {
+	Mode bool `yaml:"mode,omitempty"`
 }
 
 // CanonicalEvaluation is the single operator-owned evaluation surface. It
@@ -47,11 +74,14 @@ type CanonicalEvaluationRecord struct {
 
 // CanonicalRouting contains the DSL-owned routing surface.
 type CanonicalRouting struct {
-	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
-	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
-	Projections CanonicalProjections `yaml:"projections,omitempty"`
-	Decisions   []Decision           `yaml:"decisions,omitempty"`
-	Strategy    RoutingStrategy      `yaml:"strategy,omitempty"`
+	CandidateRequirements *CandidateRequirements  `yaml:"candidate_requirements,omitempty"`
+	DataPolicy            *RoutingDataPolicy      `yaml:"data_policy,omitempty"`
+	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
+	ModelCards            []RoutingModel          `yaml:"modelCards,omitempty"`
+	Signals               CanonicalSignals        `yaml:"signals,omitempty"`
+	Projections           CanonicalProjections    `yaml:"projections,omitempty"`
+	Decisions             []Decision              `yaml:"decisions,omitempty"`
+	Strategy              RoutingStrategy         `yaml:"strategy,omitempty"`
 }
 
 // CanonicalSignals groups routing signals under routing.signals.
@@ -70,6 +100,7 @@ type CanonicalSignals struct {
 	Modality      []ModalityRule         `yaml:"modality,omitempty"`
 	RoleBindings  []RoleBinding          `yaml:"role_bindings,omitempty"`
 	Jailbreak     []JailbreakRule        `yaml:"jailbreak,omitempty"`
+	Safety        []SafetyRule           `yaml:"safety,omitempty"`
 	Hallucination []HallucinationRule    `yaml:"hallucination,omitempty"`
 	PII           []PIIRule              `yaml:"pii,omitempty"`
 	KB            []KBSignalRule         `yaml:"kb,omitempty"`
@@ -113,7 +144,9 @@ type RoutingModel struct {
 func isCanonicalConfig(raw map[string]interface{}) bool {
 	_, hasRouting := raw["routing"]
 	_, hasGlobal := raw["global"]
-	return hasRouting || hasGlobal
+	_, hasRecipes := raw["recipes"]
+	_, hasEntrypoints := raw["entrypoints"]
+	return hasRouting || hasGlobal || hasRecipes || hasEntrypoints
 }
 
 func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error) {
@@ -162,6 +195,9 @@ func normalizeCanonicalConfig(canonical *CanonicalConfig) (*RouterConfig, error)
 }
 
 func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
+	cfg.ModelBindings = cloneModelMap(canonical.Routing.ModelBindings)
+	cfg.CandidateRequirements = canonical.Routing.CandidateRequirements.Clone()
+	cfg.DataPolicy = canonical.Routing.DataPolicy.Clone()
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 	cfg.Decisions = copyDecisions(canonical.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
@@ -175,6 +211,9 @@ func applyCanonicalRoutingState(cfg *RouterConfig, canonical *CanonicalConfig) {
 
 func validateCanonicalContract(canonical *CanonicalConfig) error {
 	if err := validateCanonicalVersion(canonical); err != nil {
+		return err
+	}
+	if err := canonical.Routing.CandidateRequirements.Validate(); err != nil {
 		return err
 	}
 	modelsByName, err := canonicalModelCardIndex(canonical.Routing)
@@ -198,8 +237,8 @@ func validateCanonicalVersion(canonical *CanonicalConfig) error {
 	if canonical == nil {
 		return fmt.Errorf("config cannot be nil")
 	}
-	if canonical.Version != "" && canonical.Version != "v0.3" {
-		return fmt.Errorf("unsupported config version %q: v0.3 is required", canonical.Version)
+	if canonical.Version != "" && canonical.Version != CanonicalConfigVersion {
+		return fmt.Errorf("unsupported config version %q: %s is required", canonical.Version, CanonicalConfigVersion)
 	}
 	return nil
 }
@@ -446,6 +485,7 @@ func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {
 		ModalityRules:      append([]ModalityRule(nil), signals.Modality...),
 		RoleBindings:       append([]RoleBinding(nil), signals.RoleBindings...),
 		JailbreakRules:     append([]JailbreakRule(nil), signals.Jailbreak...),
+		SafetyRules:        append([]SafetyRule(nil), signals.Safety...),
 		HallucinationRules: append([]HallucinationRule(nil), signals.Hallucination...),
 		PIIRules:           append([]PIIRule(nil), signals.PII...),
 		KBRules:            append([]KBSignalRule(nil), signals.KB...),

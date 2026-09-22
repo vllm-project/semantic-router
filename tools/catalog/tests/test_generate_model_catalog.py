@@ -735,13 +735,17 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 "strategy": "bearer",
                 "header": "Authorization",
                 "prefix": "Bearer",
+                "injected_header": "x-user-cloudflare-workers-ai-key",
             },
         )
         self.assertEqual(
             provider["presentation"],
             {"logo": "monogram", "monogram": "Cf", "monochrome": False},
         )
-        self.assertEqual(provider["conformance"], {"status": "unverified"})
+        self.assertEqual(
+            provider["conformance"],
+            {"status": "live_verified", "verified_at": "2026-09-19"},
+        )
         self.assertNotIn("models", provider)
 
     def test_core_reasoning_families_match_native_control_surfaces(self) -> None:
@@ -1073,6 +1077,128 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             self.assertEqual(subject.get("run_kind"), "independent")
             self.assertTrue(subject.get("source_model"))
             self.assertRegex(subject.get("source_model_slug", ""), catalog.SLUG)
+
+    def test_fireworks_serverless_model_ids_are_not_stale(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        fireworks = providers["fireworks"]
+        expected_mappings = {
+            "meta/muse-glimmer-30b": "accounts/fireworks/models/muse-glimmer-30b",
+            "moonshot/kimi-k3": "accounts/fireworks/models/kimi-k3",
+            "thinking-machines/inkling": "accounts/fireworks/models/inkling",
+        }
+        actual_mappings = {
+            binding["catalog"]: binding["id"] for binding in fireworks["models"]
+        }
+        self.assertEqual(actual_mappings, expected_mappings)
+
+    def test_fireworks_serverless_mappings_have_no_duplicates(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        fireworks = providers["fireworks"]
+        bindings = fireworks["models"]
+        native_ids = [binding["id"] for binding in bindings]
+        self.assertEqual(len(native_ids), len(set(native_ids)))
+        model_protocol_pairs = [
+            (binding["catalog"], protocol)
+            for binding in bindings
+            for protocol in binding["protocols"]
+        ]
+        self.assertEqual(len(model_protocol_pairs), len(set(model_protocol_pairs)))
+
+    def test_fireworks_models_use_supported_protocols(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        fireworks = providers["fireworks"]
+        expected_protocols = {"openai/chat-completions@1"}
+        self.assertEqual(expected_protocols, set(fireworks["protocols"]))
+        for binding in fireworks["models"]:
+            self.assertEqual(set(binding["protocols"]), expected_protocols)
+
+    def test_together_serverless_mappings_match_the_dated_catalog(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        together = next(
+            provider
+            for provider in resources["providers"]
+            if provider["id"] == "together"
+        )
+        models = {model["id"]: model for model in resources["models"]}
+        expected: dict[str, tuple[str, float, float, float, int, str | None]] = {
+            "minimax/minimax-m3": (
+                "MiniMaxAI/MiniMax-M3",
+                0.30,
+                0.06,
+                1.20,
+                524288,
+                "FP4",
+            ),
+            "moonshot/kimi-k3": (
+                "moonshotai/Kimi-K3",
+                3.00,
+                0.30,
+                15.00,
+                1048576,
+                None,
+            ),
+            "zai/glm-5.2": ("zai-org/GLM-5.2", 1.40, 0.26, 4.40, 1048575, "FP4"),
+        }
+        bindings = together["models"]
+        self.assertEqual(len(bindings), 3)
+        self.assertEqual(
+            {binding["catalog"]: binding["id"] for binding in bindings},
+            {model_id: facts[0] for model_id, facts in expected.items()},
+        )
+        self.assertEqual(len({binding["id"] for binding in bindings}), 3)
+        self.assertEqual(
+            len({models[binding["catalog"]]["publisher"] for binding in bindings}), 3
+        )
+        for binding in bindings:
+            with self.subTest(model=binding["catalog"]):
+                _, prompt, cached, completion, context, quantization = expected[
+                    binding["catalog"]
+                ]
+                self.assertEqual(binding["relationship"], "managed_cloud")
+                self.assertEqual(binding["lifecycle"], "active")
+                self.assertIn("chat", models[binding["catalog"]]["capabilities"])
+                self.assertEqual(
+                    binding["pricing"],
+                    {
+                        "currency": "USD",
+                        "prompt_per_1m": prompt,
+                        "cached_input_per_1m": cached,
+                        "completion_per_1m": completion,
+                    },
+                )
+                restrictions: dict[str, int | str] = {"context_window_size": context}
+                if quantization is not None:
+                    restrictions["quantization"] = quantization
+                self.assertEqual(binding["restrictions"], restrictions)
+                self.assertEqual(
+                    binding["verification"],
+                    {
+                        "status": "claimed",
+                        "verified_at": "2026-09-16",
+                        "source": "https://docs.together.ai/docs/serverless/models",
+                    },
+                )
+
+    def test_together_mappings_claim_only_supported_chat_operations(self) -> None:
+        _, resources, _ = catalog.load_and_validate()
+        together = next(
+            provider
+            for provider in resources["providers"]
+            if provider["id"] == "together"
+        )
+        protocol = "openai/chat-completions@1"
+        self.assertEqual(together["default_base_url"], "https://api.together.ai/v1")
+        self.assertEqual(together["protocols"], [protocol])
+        self.assertEqual(together["default_protocol"], protocol)
+        self.assertEqual(
+            together["supported_operations"],
+            [f"{protocol}#create", f"{protocol}#list_models"],
+        )
+        for binding in together["models"]:
+            self.assertEqual(binding["protocols"], [protocol])
 
 
 if __name__ == "__main__":

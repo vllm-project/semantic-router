@@ -14,72 +14,19 @@ type signalDispatch struct {
 	evaluate   func()
 }
 
-func (c *Classifier) buildSignalDispatchers(
-	results *SignalResults,
-	mu *sync.Mutex,
-	textForSignal func(string) string,
-	contextText string,
-	currentUserText string,
-	priorUserMessages []string,
-	nonUserMessages []string,
-	hasPriorAssistantReply bool,
-	imgArg string,
-	imgCache *requestImageEmbeddingCache, // may be nil; both image-consuming evaluators handle nil via cache.resolve's nil-receiver fallthrough
-	convFacts ConversationFacts,
-	requestCtx context.Context,
-	requestFacts RequestFacts,
-	usedSignals map[string]bool,
-) []signalDispatch {
-	dispatchers := c.buildPrimarySignalDispatchers(
-		requestFacts.Context,
-		results,
-		mu,
-		textForSignal,
-		currentUserText,
-		priorUserMessages,
-		hasPriorAssistantReply,
-		imgArg,
-		imgCache,
-		requestCtx,
-	)
+func (c *Classifier) buildSignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, mediaCache *requestMediaEmbeddingCache, usedSignals map[string]bool) []signalDispatch {
+	dispatchers := c.buildPrimarySignalDispatchers(input, results, mu, textForSignal, mediaCache)
 	dispatchers = append(dispatchers, c.buildRequestFactSignalDispatchers(
-		results,
-		mu,
-		textForSignal,
-		contextText,
-		currentUserText,
-		imgArg,
-		imgCache,
-		requestFacts,
-		requestCtx,
+		results, mu, textForSignal, input.ContextText, input.CurrentUserText,
+		input.ImageURL, mediaCache, input.RequestFacts, input.RequestFacts.Context,
 	)...)
-	return append(
-		dispatchers,
-		c.buildPolicySignalDispatchers(
-			results,
-			mu,
-			textForSignal,
-			priorUserMessages,
-			nonUserMessages,
-			convFacts,
-			requestFacts,
-			usedSignals,
-		)...,
-	)
+	return append(dispatchers, c.buildPolicySignalDispatchers(
+		results, mu, textForSignal, input.PriorUserMessages, input.NonUserMessages,
+		input.ConversationFacts, input.RequestFacts, usedSignals,
+	)...)
 }
 
-func (c *Classifier) buildPrimarySignalDispatchers(
-	ctx context.Context,
-	results *SignalResults,
-	mu *sync.Mutex,
-	textForSignal func(string) string,
-	currentUserText string,
-	priorUserMessages []string,
-	hasPriorAssistantReply bool,
-	imgArg string,
-	imgCache *requestImageEmbeddingCache,
-	requestCtx context.Context,
-) []signalDispatch {
+func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, results *SignalResults, mu *sync.Mutex, textForSignal func(string) string, mediaCache *requestMediaEmbeddingCache) []signalDispatch {
 	return []signalDispatch{
 		{
 			config.SignalTypeKeyword, "Keyword",
@@ -88,32 +35,36 @@ func (c *Classifier) buildPrimarySignalDispatchers(
 		{
 			config.SignalTypeEmbedding, "Embedding",
 			func() {
-				c.evaluateEmbeddingSignal(results, mu, textForSignal(config.SignalTypeEmbedding), imgArg, imgCache)
+				c.evaluateEmbeddingSignal(input.RequestFacts.Context, results, mu, embeddingSignalInput{Text: textForSignal(config.SignalTypeEmbedding), Image: input.ImageURL, Audio: input.Audio}, mediaCache)
 			},
 		},
 		{
 			config.SignalTypeDomain, "Domain",
-			func() { c.evaluateDomainSignal(requestCtx, results, mu, textForSignal(config.SignalTypeDomain)) },
+			func() {
+				c.evaluateDomainSignal(input.RequestFacts.Context, results, mu, textForSignal(config.SignalTypeDomain))
+			},
 		},
 		{
 			config.SignalTypeFactCheck, "Fact-check",
-			func() { c.evaluateFactCheckSignal(requestCtx, results, mu, textForSignal(config.SignalTypeFactCheck)) },
+			func() {
+				c.evaluateFactCheckSignal(input.RequestFacts.Context, results, mu, textForSignal(config.SignalTypeFactCheck))
+			},
 		},
 		{
 			config.SignalTypeUserFeedback, "User feedback",
 			func() {
 				c.evaluateUserFeedbackSignal(
-					requestCtx,
+					input.RequestFacts.Context,
 					results,
 					mu,
 					textForSignal(config.SignalTypeUserFeedback),
-					hasPriorAssistantReply,
+					input.HasPriorAssistantReply,
 				)
 			},
 		},
 		{
 			config.SignalTypeReask, "Reask",
-			func() { c.evaluateBoundedReaskSignal(results, mu, currentUserText, priorUserMessages) },
+			func() { c.evaluateBoundedReaskSignal(results, mu, input.CurrentUserText, input.PriorUserMessages) },
 		},
 		{
 			config.SignalTypePreference, "Preference",
@@ -133,7 +84,7 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 	contextText string,
 	currentUserText string,
 	imgArg string,
-	imgCache *requestImageEmbeddingCache,
+	imgCache *requestMediaEmbeddingCache,
 	requestFacts RequestFacts,
 	requestCtx context.Context,
 ) []signalDispatch {
@@ -168,7 +119,7 @@ func (c *Classifier) buildRequestFactSignalDispatchers(
 		},
 		{
 			config.SignalTypeModality, "Modality",
-			func() { c.evaluateModalitySignal(results, mu, textForSignal(config.SignalTypeModality)) },
+			func() { c.evaluateModalitySignal(requestCtx, results, mu, textForSignal(config.SignalTypeModality)) },
 		},
 	}
 }

@@ -18,17 +18,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-// Operation describes one static operation in a remote model protocol. Path
-// is the absolute request path; Query, when set, is the already-encoded query
-// string without its leading "?", kept apart from Path so a provider version
-// selector such as Azure's api-version travels as a validated query rather
-// than as path text.
+// Operation describes one static operation in a remote model protocol. An
+// empty Path targets the configured base URL exactly. Query, when set, is the
+// already-encoded query string without its leading "?". SuccessStatusCode
+// narrows success to one 2xx status; zero accepts any 2xx.
 type Operation struct {
-	Name      string
-	Method    string
-	Path      string
-	Query     string
-	RetrySafe bool
+	Name              string
+	Method            string
+	Path              string
+	Query             string
+	SuccessStatusCode int
+	RetrySafe         bool
 }
 
 // Options defines bounded transport behavior. Byte limits and AttemptTimeout
@@ -231,8 +231,13 @@ func validateOperation(operation Operation) error {
 	if strings.TrimSpace(operation.Method) == "" {
 		return fmt.Errorf("operation method is required")
 	}
-	if !strings.HasPrefix(operation.Path, "/") || strings.ContainsAny(operation.Path, "?#") {
+	if operation.Path != "" &&
+		(!strings.HasPrefix(operation.Path, "/") || strings.ContainsAny(operation.Path, "?#")) {
 		return fmt.Errorf("operation path must be an absolute path without query or fragment")
+	}
+	if operation.SuccessStatusCode != 0 &&
+		(operation.SuccessStatusCode < http.StatusOK || operation.SuccessStatusCode >= http.StatusMultipleChoices) {
+		return fmt.Errorf("operation success status code must be between 200 and 299")
 	}
 	if strings.ContainsAny(operation.Query, "?#") {
 		return fmt.Errorf("operation query must not contain a fragment or a second query marker")
@@ -280,8 +285,10 @@ func (c *Client) newRequest(
 	attempt int,
 ) (*http.Request, *Error) {
 	target := *c.baseURL
-	target.Path = path.Join(c.baseURL.Path, operation.Path)
-	target.RawPath = ""
+	if operation.Path != "" {
+		target.Path = path.Join(c.baseURL.Path, operation.Path)
+		target.RawPath = ""
+	}
 	target.RawQuery = operation.Query
 	httpRequest, err := http.NewRequestWithContext(ctx, operation.Method, target.String(), bytes.NewReader(request.Body))
 	if err != nil {
@@ -315,7 +322,7 @@ func (c *Client) readResponse(
 			Cause:      fmt.Errorf("%w: %s", ErrRedirectRejected, redirectTarget(response)),
 		}
 	}
-	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
+	if !operationAcceptsStatus(operation, response.StatusCode) {
 		errorBody, truncated, readErr := readBounded(response.Body, c.options.MaxErrorBytes)
 		if readErr != nil {
 			return Result{}, &Error{
@@ -370,6 +377,13 @@ func redirectTarget(response *http.Response) string {
 		return "relative location"
 	}
 	return parsed.Scheme + "://" + parsed.Host
+}
+
+func operationAcceptsStatus(operation Operation, statusCode int) bool {
+	if operation.SuccessStatusCode != 0 {
+		return statusCode == operation.SuccessStatusCode
+	}
+	return statusCode >= http.StatusOK && statusCode < http.StatusMultipleChoices
 }
 
 func readBounded(reader io.Reader, limit int64) ([]byte, bool, error) {

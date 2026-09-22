@@ -44,6 +44,12 @@ The Dashboard is available at <http://localhost:8700>. The routed
 OpenAI-compatible listener uses the first port in `config.yaml` (`8899` in the
 reference config).
 
+For local `serve`, `listeners[].address` controls the host port publication.
+Use `127.0.0.1` or `::1` for host-only access. Envoy listens on the container
+bridge interface so both the published port and Dashboard can reach it; this
+keeps the host loopback restriction, including after Dashboard config saves.
+Standalone `config envoy` generation retains the configured listener address.
+
 `vllm-sr serve` starts the routing stack. It does not start the physical LLM
 backends referenced by `providers.models`; those endpoints must already be
 running and reachable.
@@ -60,15 +66,24 @@ vllm-sr stop
 Add `--minimal` to run Router and Envoy without Dashboard or observability. Add
 `--readonly` to keep Dashboard available without config editing.
 
+Local startup waits up to 1800 seconds for readiness after containers start.
+Use `--startup-timeout SECONDS` with a positive integer when model loading or
+GPU compilation needs a different budget, for example
+`vllm-sr serve --startup-timeout 7200`. This Docker-only option also covers
+Dashboard readiness during first-run setup. If the wait expires, the CLI exits
+with an error and leaves containers running for `vllm-sr status` and
+`vllm-sr logs router`; use `vllm-sr stop` to stop them. Request inference
+deadlines are configured separately.
+
 ## Test routing
 
-`eval` reports which signals, decision, algorithm, and plugins matched without
+`route preview` reports which signals, decision, algorithm, and plugins matched without
 calling the selected model backend:
 
 ```bash
-vllm-sr eval --prompt "Explain inflation in plain English."
-vllm-sr eval --prompt "Explain inflation in plain English." --json
-vllm-sr eval \
+vllm-sr route preview --prompt "Explain inflation in plain English."
+vllm-sr route preview --prompt "Explain inflation in plain English." --json
+vllm-sr route preview \
   --model vllm-sr/mom-v1-blend \
   --prompt "Summarize this architecture plan." \
   --json
@@ -78,23 +93,23 @@ Use `--messages` for an OpenAI-style messages array and `--endpoint` when the
 Router management API is not at `http://localhost:8080`:
 
 ```bash
-vllm-sr eval \
+vllm-sr route preview \
   --messages '[{"role":"user","content":"Explain inflation."}]' \
   --endpoint http://localhost:8080
 ```
 
-`chat` sends a real one-shot completion through the routed listener. It uses
+`request chat` sends a real one-shot completion through the routed listener. It uses
 `vllm-sr/auto` unless `--model` is set:
 
 ```bash
-vllm-sr chat "Hello"
-vllm-sr chat --model my-virtual-model --json "Hello"
-vllm-sr chat --base-url https://gateway.example.com "Hello"
+vllm-sr request chat "Hello"
+vllm-sr request chat --model my-virtual-model --json "Hello"
+vllm-sr request chat --base-url https://gateway.example.com "Hello"
 ```
 
 `--base-url` must point to an OpenAI-compatible routed endpoint, such as an
 ingress or port-forwarded gateway. It is not the Router management API used by
-`eval` and `rag list`.
+`route preview` and `storage vector-stores`.
 
 ## Choose a configuration
 
@@ -104,7 +119,7 @@ from a [maintained Recipe](../../config/recipes/README.md), or fork a bundled
 virtual model.
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
@@ -163,17 +178,43 @@ For source-controlled deployments, validate and serve one complete user-owned
 configuration:
 
 ```bash
-vllm-sr validate --config my-models.yaml
+vllm-sr config validate --config my-models.yaml
 vllm-sr serve --config my-models.yaml
 ```
 
-To evaluate concurrently running baseline and candidate deployments from one
-Dashboard, point `EVALUATION_DEPLOYMENTS_DIR` at the strict, read-only
-`evaluation-deployments.v1` registry described in the
-[Evaluation Plane guide](../../website/docs/benchmarking/evaluation-plane.md#address-baseline-and-candidate-deployments-together),
-then use the same `vllm-sr serve` command. The CLI mounts that directory into
-Dashboard only; Router and Envoy do not inherit it. Leaving the variable unset
-preserves the current single-runtime behavior.
+## Evaluate single models and MoM
+
+`vllm-sr benchmark` and Dashboard **Evaluation** use sr-bench 1.0. Both clients
+share a durable worker, frozen datasets, run IDs, per-benchmark quality, token
+buckets, costs, latency and wall time. The old evaluation command/API is removed.
+
+```bash
+vllm-sr benchmark catalog
+vllm-sr benchmark setup --benchmark all
+vllm-sr benchmark dataset prepare --benchmark mmlu-pro --profile quick
+vllm-sr benchmark plan --manifest candidate.json --output frozen.json
+vllm-sr benchmark run --manifest frozen.json --detach
+vllm-sr benchmark report RUN_ID
+vllm-sr benchmark compare BASELINE_ID CANDIDATE_ID
+```
+
+The managed core worker survives Dashboard/config reloads. An image-only upgrade
+replaces an idle worker while preserving its journal; active runs must finish or
+be cancelled first. Set `VLLM_SR_BENCH_PORT` for both `serve` and `benchmark` when
+the default `8090 + stack port offset` host port is occupied. The override is an
+absolute loopback host port and does not change Dashboard's internal connection.
+For optional code and
+agent harnesses, prepare a dedicated worker and select it with `SR_BENCH_URL`;
+this suppresses managed worker creation. Keep service/model credential values
+in the worker environment. Register targets on its host with
+`benchmark target register --file targets.json` for Dashboard selection.
+
+Quick/dev sets enable bounded tuning; standard is disjoint holdout. Preview has
+no capability score, and replay is a saved-answer estimate. Priced live runs are
+required for a measured savings claim. Unknown usage is not zero, and spend
+reservations are not a universal provider-enforced hard USD cap. See the
+[sr-bench guide](../../website/docs/benchmarking/sr-bench.md) for setup, manifests,
+all nine adapters, failure recovery, regrading and dev-only training export.
 
 ## Deploy to Kubernetes
 
@@ -205,12 +246,12 @@ gateway, profile, and production guidance.
 
 ## Inspect vector stores
 
-`rag list` reads vector stores created through the Router's OpenAI-compatible
-Vector Stores API. It does not create, modify, or delete stores.
+`storage vector-stores` reads vector stores from the Router management API. It
+does not create, modify, or delete stores.
 
 ```bash
-vllm-sr rag list
-vllm-sr rag list --endpoint http://router.example.com:8080
+vllm-sr storage vector-stores
+vllm-sr storage vector-stores --endpoint http://router.example.com:8080
 ```
 
 The Router must be running with a vector-store backend enabled. `--endpoint`
@@ -246,9 +287,10 @@ vllm-sr stop
 
 ## Troubleshooting
 
-- `eval` and `rag list` use the Router management API, normally port `8080`.
-- `chat` uses the routed inference listener from `config.yaml`, normally port
-  `8899`.
+- `route preview` and `storage vector-stores` use the Router management API,
+  normally port `8080`.
+- `request chat` uses the routed inference listener from `config.yaml`, normally
+  port `8899`.
 - A healthy Router and Envoy do not prove that an external model backend can
   generate. Use Dashboard **Verify** or `chat` to test the backend path.
 - If a lifecycle command reports that the stack is busy, let the active

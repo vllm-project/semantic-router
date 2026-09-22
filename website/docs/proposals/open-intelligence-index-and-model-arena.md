@@ -5,7 +5,7 @@ created: 2026-09-09
 status: Implemented
 ---
 
-> **Status:** Implemented in [PR #3634](https://github.com/vllm-project/semantic-router/pull/3634) · **Tracks:** [#3577](https://github.com/vllm-project/semantic-router/issues/3577)
+> **Status:** Implemented · **Tracks:** [#3577](https://github.com/vllm-project/semantic-router/issues/3577)
 
 ## Decision
 
@@ -21,7 +21,9 @@ but is never estimated, silently reweighted, or copied across model variants.
 
 ## Capability roadmap
 
-Version 1.0 is the active text-intelligence contract. Versions 1.5 and 2.0 are
+Version 1.0 is the active text-intelligence contract. Its HLE leaf is the frozen
+2,158-question May 2025 text-only subset; image-bearing HLE questions never enter
+the 1.0 score. Versions 1.5 and 2.0 are
 design locks, not active catalog indices; each activates only after its benchmark
 revisions, runners, scorers, and comparison cohort are frozen.
 
@@ -31,7 +33,7 @@ Intelligence 1.0
 │   └── MMLU-Pro           100%
 ├── Reasoning               40%
 │   ├── GPQA Diamond        50%
-│   └── Humanity's Last Exam 50%
+│   └── HLE 1.0 text-only   50%
 ├── Coding                  20%
 │   ├── LiveCodeBench v6    50%
 │   └── SciCode             50%
@@ -45,7 +47,7 @@ Intelligence 1.5
 │   └── MMLU-Pro           100%
 ├── Reasoning               40%
 │   ├── GPQA Diamond        50%
-│   └── Humanity's Last Exam 50%
+│   └── HLE 1.0 text-only   50%
 ├── Coding                  20%
 │   ├── LiveCodeBench v6    50%
 │   └── SciCode             50%
@@ -60,7 +62,7 @@ Intelligence 2.0
 │   └── MMLU-Pro           100%
 ├── Reasoning               30%
 │   ├── GPQA Diamond        50%
-│   └── Humanity's Last Exam 50%
+│   └── HLE 1.0 text-only   50%
 ├── Coding                  15%
 │   ├── LiveCodeBench v6    50%
 │   └── SciCode             50%
@@ -89,7 +91,7 @@ whether a model behaves safely, so it is not part of Safety.
 | --- | --- | --- | --- |
 | General | MMLU-Pro | Broad multi-domain knowledge and reasoning | [repository](https://github.com/TIGER-AI-Lab/MMLU-Pro), [paper](https://arxiv.org/abs/2406.01574), [data](https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro) |
 | Reasoning | GPQA Diamond | Graduate-level scientific reasoning | [repository](https://github.com/idavidrein/gpqa), [paper](https://arxiv.org/abs/2311.12022), [data](https://huggingface.co/datasets/idavidrein/gpqa) |
-| Reasoning | Humanity's Last Exam | Frontier, cross-domain closed-answer reasoning | [repository](https://github.com/centerforaisafety/HLE), [paper](https://arxiv.org/abs/2501.14249), [data](https://huggingface.co/datasets/cais/hle) |
+| Reasoning | Humanity's Last Exam (text-only) | Frontier, cross-domain closed-answer reasoning over the frozen 2,158 text-only questions | [repository](https://github.com/centerforaisafety/HLE), [paper](https://arxiv.org/abs/2501.14249), [data](https://huggingface.co/datasets/cais/hle) |
 | Coding | LiveCodeBench v6 | Recent competitive code generation | [repository](https://github.com/LiveCodeBench/LiveCodeBench), [paper](https://arxiv.org/abs/2403.07974), [data](https://huggingface.co/datasets/livecodebench/code_generation_lite) |
 | Coding | SciCode | Executable scientific-programming problems | [repository](https://github.com/scicode-bench/SciCode), [paper](https://arxiv.org/abs/2407.13168), [data](https://huggingface.co/datasets/SciCode1/SciCode) |
 | Agentic | Terminal-Bench 2.1 | Long-horizon work in a terminal environment | [tasks](https://github.com/harbor-framework/terminal-bench-2), [dataset](https://hub.harborframework.com/datasets/terminal-bench/terminal-bench-2-1), [runner](https://github.com/harbor-framework/harbor) |
@@ -97,6 +99,10 @@ whether a model behaves safely, so it is not part of Safety.
 All six have public inputs, executable evaluation code, and a public scoring
 path. Each catalog record still pins the exact benchmark revision, profile,
 checkpoint, reasoning effort, harness, tools, run conditions, date, and source.
+For HLE, `no-tools` alone does not prove that image-bearing questions were
+excluded: such published results remain visible under `published-no-tools` but
+cannot enter Intelligence 1.0 without an explicit 2,158-question text-only
+protocol.
 Terminal and agent benchmarks are joint measurements of a model and a frozen
 agent harness; a model name alone never identifies such a result.
 
@@ -195,9 +201,9 @@ Benchmarks are the Arena's third layer. The previous standalone benchmark
 explorer is removed from both the public Hub and Dashboard so ranking, filters,
 and URL state cannot diverge between two presentations of the same evidence.
 
-The generated snapshot currently contains 101 model cards and 1,509 evaluation
+The generated snapshot currently contains 101 model cards and 1,510 evaluation
 records. Unique models with available 1.0 results are: General 35, Reasoning 86,
-Coding 23, Agentic 77, and Overall 21. Overall therefore clears the initial
+Coding 24, Agentic 77, and Overall 21. Overall therefore clears the initial
 20-model target while keeping strict completeness. New GLM-5.3 and Qwen3.8
 cards remain visible in their supported capability and benchmark views even
 when a missing leaf prevents Overall eligibility.

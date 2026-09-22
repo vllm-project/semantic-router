@@ -24,6 +24,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 // StageContextWindowError reports a Looper-generated request that no longer
@@ -44,28 +45,21 @@ func (e *StageContextWindowError) Error() string {
 	)
 }
 
-func (l *BaseLooper) callModelWithContextGate(
+func (l *BaseLooper) dispatchModel(
 	ctx context.Context,
 	baseReq *Request,
 	stageReq *openai.ChatCompletionNewParams,
-	modelName string,
-	streaming bool,
-	iteration int,
-	logprobsConfig *LogprobsConfig,
-	accessKey string,
+	target ModelTarget,
+	options CallOptions,
 ) (*ModelResponse, error) {
-	if err := validateLooperStageContext(baseReq, stageReq, modelName); err != nil {
+	if err := validateLooperStageContext(baseReq, stageReq, target.Name); err != nil {
 		return nil, err
 	}
-	return l.client.CallModel(
-		ctx,
-		stageReq,
-		modelName,
-		streaming,
-		iteration,
-		logprobsConfig,
-		accessKey,
-	)
+	options.candidateRequest = baseReq
+	if baseReq != nil {
+		ctx = contextWithRoutingRecipe(ctx, baseReq.RecipeName)
+	}
+	return l.client.CallModelWithOptions(ctx, *stageReq, target, options)
 }
 
 // startConfidenceModelAttempt validates and dispatches one traced Confidence model call.
@@ -85,8 +79,22 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 	attemptCtx, attempt := startAttempt(ctx, modelAttemptSpec(
 		baseReq, stageReq, stage, role, modelName,
 	))
-	response, err := l.client.CallModel(
-		attemptCtx, stageReq, modelName, streaming, iteration, logprobsConfig, accessKey,
+	decisionName := ""
+	if baseReq != nil {
+		decisionName = baseReq.DecisionName
+		attemptCtx = contextWithRoutingRecipe(attemptCtx, baseReq.RecipeName)
+	}
+	response, err := l.client.CallModelWithOptions(
+		attemptCtx,
+		*stageReq,
+		ModelTarget{Name: modelName, AccessKey: accessKey},
+		CallOptions{
+			candidateRequest: baseReq,
+			DecisionName:     decisionName,
+			Iteration:        iteration,
+			Mode:             responseMode(streaming),
+			Logprobs:         logprobsConfig,
+		},
 	)
 	if err != nil && attempt != nil {
 		attempt.finish(attemptResult{err: err, reason: attemptReasonFromError(err)})
@@ -99,6 +107,11 @@ func validateLooperStageContext(
 	stageReq *openai.ChatCompletionNewParams,
 	modelName string,
 ) error {
+	if baseReq != nil && selection.CandidateRequirementsEnabled(baseReq.CandidateRequirements) {
+		// The final wire check counts the whole stage plus its actual output
+		// limit once. The legacy original-plus-growth estimate is not additive.
+		return nil
+	}
 	if baseReq == nil || baseReq.BaseContextTokens <= 0 || stageReq == nil {
 		return nil
 	}

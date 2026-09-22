@@ -8,7 +8,7 @@ VLLM_SR_CONTAINER_IMAGE_ROCM = (
 VLLM_SR_CONTAINER_IMAGE_CUDA = (
     "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest"
 )
-VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.34-latest"
+VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT = "envoyproxy/envoy:v1.35.3"
 VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT = (
     "ghcr.io/vllm-project/semantic-router/dashboard:latest"
 )
@@ -35,7 +35,7 @@ DEFAULT_METRICS_PORT = 9190
 DEFAULT_MILVUS_PORT = 19530
 
 # Health check
-HEALTH_CHECK_TIMEOUT = 1800  # 5 minutes (increased for model loading)
+HEALTH_CHECK_TIMEOUT = 1800  # Default local startup readiness budget: 30 minutes.
 HEALTH_CHECK_INTERVAL = 2
 
 # File descriptor limits

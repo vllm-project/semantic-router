@@ -18,8 +18,8 @@ providers:
 		t.Fatalf("parse canonical provider defaults: %v", err)
 	}
 
-	if warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); len(warnings) != 0 {
-		t.Fatalf("canonical provider defaults produced unknown-field warnings: %v", warnings)
+	if diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{})); len(diagnostics) != 0 {
+		t.Fatalf("canonical provider defaults produced unknown-field diagnostics: %v", diagnostics)
 	}
 }
 
@@ -42,9 +42,34 @@ routing:
 		t.Fatalf("parse canonical config: %v", err)
 	}
 
-	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
-	if len(warnings) != 1 || !strings.Contains(warnings[0], `Unknown field "featured"`) {
-		t.Fatalf("featured must remain repository-only Provider metadata, warnings: %v", warnings)
+	diagnostics := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
+	if len(diagnostics) != 1 || !strings.Contains(diagnostics[0], `unknown field "featured"`) {
+		t.Fatalf("featured must remain repository-only Provider metadata, diagnostics: %v", diagnostics)
+	}
+}
+
+func TestParseYAMLBytesRejectsUnknownCanonicalField(t *testing.T) {
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.3
+providers:
+  defaults:
+    model: private-model
+routing:
+  modelCards:
+    - name: private-model
+      descriptin: typo
+`))
+	if err == nil {
+		t.Fatal("expected unknown canonical field to be rejected")
+	}
+	for _, fragment := range []string{
+		`unknown field "descriptin"`,
+		"routing.modelCards",
+		`did you mean "description"`,
+	} {
+		if !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("expected error to contain %q, got: %s", fragment, err)
+		}
 	}
 }
 
@@ -474,6 +499,9 @@ global:
 	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
 		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
 	}
+	if got := cfg.Memory.Persistence.Queue; got != 64 {
+		t.Fatalf("expected sparse memory override to preserve default persistence queue 64, got %d", got)
+	}
 }
 
 func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *testing.T) {
@@ -534,19 +562,19 @@ global:
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 
-	if cfg.CategoryModel.ModelID != "models/mmbert32k-intent-classifier-merged" {
+	if cfg.CategoryModel.ModelID != "models/Vela-1.0-Encoder-307M-Domain" {
 		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
 	}
 	if cfg.CategoryModel.Variant != CategoryVariantMmBERT32K || cfg.CategoryModel.UseMmBERT32K {
 		t.Fatalf("expected sparse category override to keep canonical mmBERT-32K variant, got variant=%q legacy=%v", cfg.CategoryModel.Variant, cfg.CategoryModel.UseMmBERT32K)
 	}
-	if cfg.PIIModel.ModelID != "models/mmbert32k-pii-detector-merged" {
+	if cfg.PIIModel.ModelID != "models/Vela-1.0-Encoder-307M-PII" {
 		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
 	}
 	if !cfg.PIIModel.UseMmBERT32K {
 		t.Fatal("expected sparse PII override to keep mmBERT-32K enabled")
 	}
-	if cfg.PromptGuard.ModelID != "models/mmbert32k-jailbreak-detector-merged" {
+	if cfg.PromptGuard.ModelID != "models/Vela-1.0-Encoder-307M-Guard" {
 		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
 	}
 	if cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {
@@ -842,7 +870,6 @@ global:
         model_ref: ""
         model_id: ""
         jailbreak_mapping_path: ""
-        use_mmbert_32k: false
       classifier:
         domain:
           model_ref: ""

@@ -6,6 +6,13 @@ status: Implemented
 ---
 
 > **Status:** Implemented · **Created:** 2026-09-04
+>
+> The catalog architecture in this record remains current. Its original
+> benchmark set, index weights, coverage threshold, and inventory counts are a
+> historical snapshot and are superseded by
+> [Open Intelligence Architecture](./open-intelligence-index-and-model-arena).
+> Use the [Intelligence Index](../benchmarking/open-intelligence-index) for the
+> active 1.0 contract.
 
 ## Problem
 
@@ -1219,4 +1226,4 @@ model-onboarding path.
 - [Terminal-Bench 2.1](https://github.com/harbor-framework/terminal-bench-2-1)
 - [Unified Config Contract v0.3](./unified-config-contract-v0-3)
 - [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor)
-- [Evaluation Plane](../benchmarking/evaluation-plane)
+- [sr-bench 1.0](../benchmarking/sr-bench)

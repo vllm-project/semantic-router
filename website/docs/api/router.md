@@ -20,8 +20,11 @@ queries. See [Router management API](./apiserver).
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
 | `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
 
-Other `/v1/*` paths fail closed. In particular, Router Replay paths are not
-available on a public inference listener.
+Other `/v1/*` paths fail closed. In particular, `/v1/files`,
+`/v1/vector_stores`, and Router Replay paths are not available on a public
+inference listener. Router-owned file and vector-store operations use
+`/api/v1/storage/files` and `/api/v1/storage/vector-stores` on the management
+listener.
 
 See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
@@ -88,6 +91,23 @@ Anthropic Messages. The client may use any supported inference path; the Router
 translates once at the provider boundary and returns the client's original wire
 format.
 
+### vLLM Chat controls
+
+For Chat backends that implement these vLLM extensions, the Router preserves
+these fields through routing and request edits:
+
+| Field | Accepted values |
+| --- | --- |
+| `top_k` | Integer: `-1` or `0` disables filtering; positive values limit candidate tokens. |
+| `min_p` | Number from 0 to 1. |
+| `repetition_penalty` | Finite number greater than 0. |
+| `cache_salt` | String of 1–128 characters, excluding `@`, `/`, `\`, and NUL. |
+
+`cache_salt` selects a backend prefix-cache namespace without changing the
+prompt. Reuse a salt for requests that may share cached prefixes. The Router
+also preserves `chat_template_kwargs`, such as `enable_thinking`. These
+extensions are rejected when the target protocol cannot represent them.
+
 ### Responses API
 
 ```bash
@@ -126,6 +146,32 @@ Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,
 `x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
 
+## Request budget errors
+
+With `candidate_requirements.context: known_limits`, the Router checks estimated
+input plus the effective output allowance against the candidates' configured
+limits. If all candidates fail only the budget check, it returns HTTP 400:
+
+| Error code | Meaning |
+| --- | --- |
+| `context_length_exceeded` | The prepared input and requested output do not fit. |
+| `max_output_tokens_exceeded` | The requested output exceeds the configured model limit. |
+
+Missing capabilities, unknown limits, unavailable selection evidence, and mixed
+failures retain their existing selection-error behavior. Budget checks do not
+truncate requests by themselves; opt into
+[context compression](../tutorials/plugin/context-compression.md) when appropriate.
+
+These counts are estimates. A backend can still reject a request; its valid
+HTTP status and meaningful message are retained. vLLM integer codes are exposed
+as strings in OpenAI-compatible errors: `BadRequestError` with `code: 400`
+becomes `invalid_request_error` with `code: "400"`.
+
+A streaming request rejected before generation receives the same non-2xx JSON
+error, not a successful SSE stream. When Replay is enabled, it records the
+failed status and body; Router budget rejections use
+`terminal_reason: request_budget_exceeded`.
+
 ## Router Replay
 
 Router Replay records routing decisions and selected request lifecycle data.
@@ -149,21 +195,81 @@ retention appropriate to the data being captured.
 Replay queries go to the management API:
 
 ```bash
-curl -sS 'http://localhost:8080/v1/router_replay?limit=20' \
+curl -sS 'http://localhost:8080/api/v1/observability/replays?limit=20' \
   -H "Authorization: Bearer ${VSR_MGMT_TOKEN}"
 ```
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/v1/router_replay` | List and filter records |
-| `GET` | `/v1/router_replay/{id}` | Read one record |
-| `GET` | `/v1/router_replay/aggregate` | Aggregate routing and cost metadata |
-| `GET` | `/v1/router_replay/trajectory?session_id=...` | Reconstruct one session trajectory |
+| `GET` | `/api/v1/observability/replays` | List and filter records |
+| `GET` | `/api/v1/observability/replays/{id}` | Read one record |
+| `GET` | `/api/v1/observability/replays/aggregate` | Aggregate routing and cost metadata |
+| `GET` | `/api/v1/observability/replays/trajectory?session_id=...&recipe=...` | Reconstruct one recipe's session trajectory |
 
 List and aggregate requests accept filters such as `recipe`, `decision`,
 `model`, `session_id`, `cache_status`, and `search`. Pagination uses `limit`
 and `offset`; `limit` is capped at 100. `showDetails=true` requests large body
 fields, so use it only when those fields are needed.
+
+Trajectory queries use the exact recipe name. Omitting `recipe` is supported
+only when the session's records belong to one recipe; an ambiguous session
+returns `400`. An explicit empty `recipe=` selects older, unscoped records.
+The response includes each request's route, latency, and lifecycle, including
+multiple requests at the same turn index.
+
+Records, trajectory routes, and messages include `conversation_id` when an
+explicit conversation identity is available. Messages are grouped by conversation
+and turn, so separate conversations in one session can each start at turn zero.
+Insights shows their boundaries and complete IDs.
+
+Dashboard Insights shows these routes alongside recorded signals, projections,
+candidate scores, and session-switch reasons. In `observe` mode, candidate and
+hold explanations describe what protection would have done; the selected model
+and route history still describe actual dispatch. Protection's `candidate_models`
+lists eligible models independently of their scores; an unrecorded score appears
+as `—`, while a recorded zero remains zero. Missing identity or evidence
+is displayed explicitly. A recipe's `data_policy.replay: false` prevents its
+requests from appearing in Replay, including rejected requests.
+
+### Configured-rate cost estimates
+
+Insights uses recorded token usage and configured input, cached-input,
+cache-write, and output rates. These are estimates, not invoices or GPU running
+costs; infrastructure charges and billing adjustments are excluded.
+
+| Field | Meaning |
+| --- | --- |
+| `actual_cost` | Estimated cost of the selected model for the recorded usage. |
+| `baseline_cost` | Highest same-currency estimate in the selected recipe's model pool, using that same usage. |
+| `baseline_model` | The model used for that comparison. Equal costs use model-name order. |
+| `cost_savings` | The difference between the baseline and actual estimate. |
+| `currency` | Currency of the recorded estimate; no exchange-rate conversion is applied. |
+
+The baseline covers the recipe's models across all its decisions: model
+references, explicit candidate-iteration models, and route destinations. A
+permitted default-model fallback is included only for decisions that can use it;
+auxiliary planners and judges do not enlarge the pool. Other recipes, unpriced
+models, and different currencies are excluded. Direct requests without a recipe
+compare against themselves. Alternative-model eligibility and tokenization are
+not re-evaluated; this is a rate comparison, not another inference.
+
+Missing usage, price, currency, or baseline stays unknown, with the reason shown
+in Insights. Explicitly configured free rates remain zero. Cache hits have zero
+additional model-inference cost; cache storage and lookup costs are excluded.
+Existing records keep their captured prices and baseline. **Price not recorded**
+means the historical record has no price; configuring rates today does not
+backfill it.
+
+Aggregates use `summary.by_currency`, a sorted array with `currency`,
+`total_saved`, `baseline_spend`, `actual_spend`, and `cost_record_count` for each
+currency. With one currency, the flat summary fields mirror that group. With
+multiple currencies, flat `currency` is omitted and flat amounts are zero
+placeholders: use `by_currency`, not those placeholders. There is no combined
+cross-currency total.
+
+`cost_record_count` counts complete estimates. `excluded_record_count` includes
+non-completed requests and records missing the data needed for a complete
+estimate; it does not imply that every excluded request lacks pricing.
 
 When bearer authentication is enabled, replay callers need `replay.read`.
 Prompt, response, tool, and other sensitive details remain redacted unless the
@@ -190,6 +296,7 @@ An HTTP `200` response header alone does not make a streaming record
 | Check health or readiness | Management API on `8080` |
 | Read or change configuration | Management API on `8080` |
 | Inspect replay records | Management API on `8080` |
+| Manage Router-owned files or vector stores | Management API on `8080` under `/api/v1/storage/*` |
 
 Do not expose the management port as a substitute for the public inference
 listener. Its endpoints can reveal configuration and operational data or make

@@ -3,7 +3,7 @@
 # Configuration
 IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/vllm-sr
 ROUTER_IMAGE_NAME ?= $(IMAGE_NAME)
-ENVOY_IMAGE ?= envoyproxy/envoy:v1.34-latest
+ENVOY_IMAGE ?= envoyproxy/envoy:v1.35.3
 DASHBOARD_IMAGE_NAME ?= ghcr.io/vllm-project/semantic-router/dashboard
 IMAGE_TAG ?= latest
 FULL_IMAGE = $(IMAGE_NAME):$(IMAGE_TAG)
@@ -114,7 +114,7 @@ dev-serve:
 # Development test - validate config and render router/envoy outputs
 dev-test: install
 	@echo "Testing canonical configuration rendering..."
-	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config validate --config $(CONFIG_FILE)
 	python -m cli.main config router --config $(CONFIG_FILE) >/dev/null
 	python -m cli.main config envoy --config $(CONFIG_FILE) >/dev/null
 	@echo ""
@@ -149,6 +149,7 @@ docker-build-envoy:
 	@echo "Image: $(FULL_ENVOY_IMAGE)"
 	@echo ""
 	@docker image inspect $(FULL_ENVOY_IMAGE) >/dev/null 2>&1 || docker pull $(FULL_ENVOY_IMAGE)
+	@docker run --rm $(FULL_ENVOY_IMAGE) --version >/dev/null
 	@echo ""
 	@echo "Docker image available: $(FULL_ENVOY_IMAGE)"
 	@echo ""
@@ -218,7 +219,7 @@ install:
 # Configuration commands
 validate: install
 	@echo "Validating configuration..."
-	python -m cli.main validate --config $(CONFIG_FILE)
+	python -m cli.main config validate --config $(CONFIG_FILE)
 
 config-router: install
 	@echo "Printing canonical router configuration..."

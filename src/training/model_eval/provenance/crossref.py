@@ -19,7 +19,22 @@ from typing import Any
 
 from .manifest import ManifestError, load_manifests
 
-__all__ = ["artifact_identity_digest", "validate_bundle"]
+__all__ = [
+    "artifact_identity_digest",
+    "file_digest",
+    "validate_bundle",
+    "verify_artifact_bytes",
+]
+
+DIGEST_CHUNK_BYTES = 1024 * 1024
+
+
+def file_digest(path: Path) -> str:
+    hasher = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(DIGEST_CHUNK_BYTES), b""):
+            hasher.update(chunk)
+    return f"sha256:{hasher.hexdigest()}"
 
 
 def artifact_identity_digest(files: list[dict[str, Any]]) -> str:
@@ -35,6 +50,28 @@ def artifact_identity_digest(files: list[dict[str, Any]]) -> str:
         hasher.update(str(entry.get("digest", "")).encode("utf-8"))
         hasher.update(b"\0")
     return f"sha256:{hasher.hexdigest()}"
+
+
+def verify_artifact_bytes(manifest: dict[str, Any], directory: Path) -> list[str]:
+    """Re-hash the files an artifact manifest lists and report every mismatch.
+
+    Cross-reference validation reads no bytes, so it proves that a bundle is
+    internally consistent and nothing about the directory a caller is measuring.
+    A caller that attributes numbers to a manifest identity needs both.
+    """
+    problems: list[str] = []
+    for entry in manifest["files"]:
+        path = Path(directory) / entry["path"]
+        if not path.is_file():
+            problems.append(f"{entry['path']} is missing from {directory}")
+            continue
+        digest = file_digest(path)
+        if digest != entry["digest"]:
+            problems.append(
+                f"{entry['path']} hashes to {digest}, but {manifest['id']} "
+                f"records {entry['digest']}"
+            )
+    return problems
 
 
 def validate_bundle(directory: Path) -> dict[str, Any]:

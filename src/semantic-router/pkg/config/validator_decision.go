@@ -10,6 +10,12 @@ import (
 )
 
 func validateDecisionContracts(cfg *RouterConfig) error {
+	if err := validateClassifierContextLimits(cfg); err != nil {
+		return err
+	}
+	if err := validateSafetySignalContracts(cfg); err != nil {
+		return err
+	}
 	if err := validateMetadataContracts(cfg); err != nil {
 		return err
 	}
@@ -25,41 +31,8 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 	if err := validateDecisionEmitContracts(cfg); err != nil {
 		return err
 	}
+	reportAmbiguousConfidencePools(cfg)
 	return validateDecisionPluginContracts(cfg)
-}
-
-func validateDecisionModelContracts(cfg *RouterConfig) error {
-	for _, decision := range cfg.AllRoutingDecisions() {
-		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules, true); err != nil {
-			return err
-		}
-		warnUnguardedClassifierConditions(decision)
-		if err := validateDecisionAnnotations(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionModelRefs(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionAction(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionAlgorithmConfig(decision.Name, decision.ModelRefs, decision.Algorithm); err != nil {
-			return err
-		}
-		if err := validateDecisionPromptModel(cfg, decision); err != nil {
-			return err
-		}
-		if err := validateDecisionWorkflowModelRefs(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionCandidateIterations(decision); err != nil {
-			return err
-		}
-		if err := validateDecisionOutputContractSpec(decision); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func validateDecisionRuleNode(cfg *RouterConfig, decisionName string, node *RuleNode, root bool) error {
@@ -171,6 +144,11 @@ func validateClassifierDecisionLeaf(
 			decisionName,
 			node.Name,
 		)
+	}
+	if bound, ok := cfg.ModelBindings["classifier."+node.Name]; ok && bound.OperatingPoint != nil && bound.Contract == RemoteClassifierContractLabelScores {
+		// A prepared operating point supplies the default label threshold. An
+		// explicit predicate remains a query of the raw independent score.
+		return nil
 	}
 	if node.Predicate == nil {
 		return fmt.Errorf(
@@ -444,6 +422,11 @@ func validateDecisionRAGAndMemoryPlugins(cfg *RouterConfig, decision *Decision) 
 		if err := ragCfg.Validate(); err != nil {
 			return fmt.Errorf("decision '%s': RAG plugin: %w", decision.Name, err)
 		}
+		if ragCfg.Enabled && ragCfg.Rerank != nil {
+			if _, ok := cfg.ModelBindings[RAGRerankerConsumer]; !ok {
+				return fmt.Errorf("decision %q: rerank requires recipe-local model_bindings.%s", decision.Name, RAGRerankerConsumer)
+			}
+		}
 	}
 
 	cacheCfg := decision.GetResponseCacheConfig()
@@ -634,12 +617,8 @@ func validateAlgorithmBlockContract(
 }
 
 func blocklessAlgorithmTypeSupported(normalizedType string) bool {
-	switch normalizedType {
-	case "static", "knn", "kmeans", "svm", "mlp":
-		return true
-	default:
-		return false
-	}
+	configField, supported := DecisionAlgorithmConfigField(normalizedType)
+	return supported && configField == ""
 }
 
 func validateMigratedLearningAlgorithm(decisionName string, normalizedType string, algorithm *AlgorithmConfig) error {
@@ -671,47 +650,23 @@ func validateMigratedLearningAlgorithm(decisionName string, normalizedType strin
 }
 
 func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := make([]string, 0, 14)
+	configuredBlocks := configuredDecisionAlgorithmBlocks(algorithm)
 	addBlock := func(name string, configured bool) {
 		if configured {
 			configuredBlocks = append(configuredBlocks, name)
 		}
 	}
 
-	addBlock("confidence", algorithm.Confidence != nil)
-	addBlock("ratings", algorithm.Ratings != nil)
-	addBlock("remom", algorithm.ReMoM != nil)
-	addBlock("fusion", algorithm.Fusion != nil)
-	addBlock("workflows", algorithm.Workflows != nil)
 	addBlock("elo", algorithm.Elo != nil)
-	addBlock("router_dc", algorithm.RouterDC != nil)
-	addBlock("automix", algorithm.AutoMix != nil)
-	addBlock("hybrid", algorithm.Hybrid != nil)
 	addBlock("rl_driven", algorithm.RLDriven != nil)
 	addBlock("gmtrouter", algorithm.GMTRouter != nil)
-	addBlock("latency_aware", algorithm.LatencyAware != nil)
-	addBlock("multi_factor", algorithm.MultiFactor != nil)
-	addBlock("prompt", algorithm.Prompt != nil)
 	addBlock("session_aware", algorithm.SessionAware != nil)
 	return configuredBlocks
 }
 
 func expectedAlgorithmBlock(normalizedType string) (string, bool) {
-	expectedBlockByType := map[string]string{
-		"confidence":    "confidence",
-		"ratings":       "ratings",
-		"remom":         "remom",
-		"fusion":        "fusion",
-		"workflows":     "workflows",
-		"router_dc":     "router_dc",
-		"automix":       "automix",
-		"hybrid":        "hybrid",
-		"latency_aware": "latency_aware",
-		"multi_factor":  "multi_factor",
-		"prompt":        "prompt",
-	}
-	expectedBlock, ok := expectedBlockByType[normalizedType]
-	return expectedBlock, ok
+	expectedBlock, supported := DecisionAlgorithmConfigField(normalizedType)
+	return expectedBlock, supported && expectedBlock != ""
 }
 
 func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRef, normalizedType string, algorithm *AlgorithmConfig) error {
@@ -739,6 +694,9 @@ func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorS
 		return fmt.Errorf("decision '%s': algorithm.type=multi_factor requires algorithm.multi_factor configuration", decisionName)
 	}
 	path := fmt.Sprintf("decision '%s', algorithm.multi_factor", decisionName)
+	if cfg.ExpectedOutputTokens != nil && *cfg.ExpectedOutputTokens <= 0 {
+		return fmt.Errorf("%s.expected_output_tokens must be positive", path)
+	}
 	if err := validateMultiFactorObjective(cfg, path); err != nil {
 		return err
 	}
@@ -747,6 +705,11 @@ func validateDecisionMultiFactorAlgorithm(decisionName string, cfg *MultiFactorS
 	}
 	if cfg.LatencyPercentile < 0 || cfg.LatencyPercentile > 100 {
 		return fmt.Errorf("%s.latency_percentile must be within [1, 100] when declared", path)
+	}
+	switch cfg.LatencyMetric {
+	case "", "ttft", "tpot":
+	default:
+		return fmt.Errorf("%s.latency_metric must be %q or %q", path, "ttft", "tpot")
 	}
 	switch cfg.OnNoCandidates {
 	case "", "cheapest", "first", "fail":

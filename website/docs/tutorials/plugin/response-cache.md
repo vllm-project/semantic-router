@@ -78,18 +78,37 @@ deprecated aliases and normalize to `response_cache`. Likewise,
 document. Export, Dashboard saves, and DSL decompilation always emit the
 canonical names.
 
+For local `mmbert` embeddings, including Vela Embedding, changing the model,
+tokenizer, representation size, or inference settings starts a separate cache
+space. The router retains your tenant namespace and explicit cache revision;
+historical entries remain stored until their normal expiry or explicit cleanup.
+The first requests after a model upgrade are cache misses. Restarting with the
+same representation reuses its compatible cache. This binding does not infer
+the identity of a mutable remote embedding endpoint.
+
 ## Operations
 
 The management API exposes redacted health, capabilities, statistics, candidate
-configuration testing, scoped invalidation, epoch-based flush, and a
-hash-chained audit view under `/api/v1/response-cache/*`. Invalidation defaults
+configuration testing, scoped invalidation, and epoch-based flush under
+`/api/v1/storage/response-cache/*`. The plugin descriptor at
+`/api/v1/plugins/response_cache` links to these operations. Hash-chained audit
+is shared across management operations at `/api/v1/observability/audit`
+(`audit.read`). Invalidation defaults
 to dry-run. Flush requires the explicit confirmation phrase
 `flush response cache` and never calls backend-wide `FLUSHALL`.
 
-The in-memory backend can verify a semantic hit against opposite-meaning
-queries before serving it (`global.stores.response_cache.polarity_guard`; see
-[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With the
-optional NLI tier enabled, a rejected candidate is logged as
+All six cache backends apply an always-on English lexical check before serving
+a semantic hit. Near-identical questions with explicit negation or a known
+antonym swap are rejected even when their vector similarity is high. Remote
+entries without their original question are also misses. A rejected candidate
+does not prevent a later eligible fetched candidate from being used; remote
+search remains bounded by its candidate limit. This check does not establish
+semantic equivalence for word-order-only, cue-less, or non-English changes.
+
+The in-memory backend additionally supports the optional NLI verifier
+(`global.stores.response_cache.polarity_guard`; see
+[Stores and Tools](../global/stores-and-tools.md#negation-guard)). With this
+optional tier enabled, an NLI-rejected candidate is logged as
 `cache_negation_reject` with `tier: nli`, is reported as a miss, and its
 similarity still appears on `x-vsr-cache-similarity` so near-threshold
 rejections stay diagnosable.

@@ -7,7 +7,9 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/imageurl"
 )
 
@@ -29,6 +31,7 @@ type IntentMessage struct {
 }
 
 type intentSignalInput struct {
+	semanticRequest   *llmprotocol.Request
 	evaluationText    string
 	contextText       string
 	currentUserText   string
@@ -81,6 +84,13 @@ type intentMessageContentPart struct {
 }
 
 func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
+	if req.PreviewContext != nil {
+		for _, identity := range []string{req.PreviewContext.SessionID, req.PreviewContext.ConversationID} {
+			if len(identity) > 1024 || strings.ContainsAny(identity, "\r\n\x00") {
+				return intentSignalInput{}, fmt.Errorf("%w: preview identity must be at most 1024 bytes without control separators", ErrInvalidRequestFacts)
+			}
+		}
+	}
 	if err := validateIntentMetadata(req.Metadata); err != nil {
 		return intentSignalInput{}, err
 	}
@@ -113,6 +123,7 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 			// input, and counting it would diverge from the data-plane path.
 			input.requestFacts.InputModality.TextContentCount = 1
 		}
+		input.semanticRequest = req.neutralSelectionRequest(fallbackText(rawText, useTopLevelTextFallback))
 		return input, nil
 	}
 
@@ -144,6 +155,7 @@ func (req IntentRequest) resolveSignalInput() (intentSignalInput, error) {
 	if text != "" {
 		fallbackInput.requestFacts.InputModality.TextContentCount = 1
 	}
+	fallbackInput.semanticRequest = req.neutralSelectionRequest(rawText)
 	return fallbackInput, nil
 }
 
@@ -175,11 +187,37 @@ func estimateIntentRequestContext(
 	req IntentRequest,
 	additionalUserText string,
 ) (classification.RequestContextEstimate, error) {
+	envelope, err := intentRequestEnvelope(req, additionalUserText)
+	if err != nil {
+		return classification.RequestContextEstimate{}, err
+	}
+
+	return classification.EstimateOpenAIRequestContext(envelope), nil
+}
+
+// neutralSelectionRequest uses the production wire decoder for strict Preview
+// facts. Legacy signal extraction remains tolerant; an unsupported envelope
+// yields unknown selection facts and therefore fails only opt-in strict selection.
+func (req IntentRequest) neutralSelectionRequest(additionalUserText string) *llmprotocol.Request {
+	envelope, err := intentRequestEnvelope(req, additionalUserText)
+	if err != nil {
+		return nil
+	}
+	policy := llmprotocol.DefaultPolicy()
+	policy.SourcePreservation = llmprotocol.SourceDisabled
+	request, _, _, err := (protocolcodec.OpenAIChatCodec{}).DecodeRequest(envelope, policy)
+	if err != nil {
+		return nil
+	}
+	return &request
+}
+
+func intentRequestEnvelope(req IntentRequest, additionalUserText string) ([]byte, error) {
 	estimateMessages := append([]IntentMessage(nil), req.Messages...)
 	if additionalUserText != "" {
 		content, err := json.Marshal(additionalUserText)
 		if err != nil {
-			return classification.RequestContextEstimate{}, err
+			return nil, err
 		}
 		estimateMessages = append(estimateMessages, IntentMessage{
 			Role:    "user",
@@ -207,12 +245,12 @@ func estimateIntentRequestContext(
 		MaxCompletionTokens: req.MaxCompletionTokens,
 	})
 	if err != nil {
-		return classification.RequestContextEstimate{}, fmt.Errorf(
+		return nil, fmt.Errorf(
 			"estimate intent request context: %w",
 			err,
 		)
 	}
-	return classification.EstimateOpenAIRequestContext(envelope), nil
+	return envelope, nil
 }
 
 // applyTopLevelTextFallback fills empty text slots from req.Text when the

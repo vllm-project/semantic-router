@@ -25,6 +25,14 @@ def run_resolver(**overrides: str) -> str:
 
 
 class DockerBuildArgumentTests(unittest.TestCase):
+    def test_e2e_image_contains_both_omni_variants(self) -> None:
+        output = run_resolver(MATRIX_IMAGE="extproc")
+        self.assertIn("VELA_OMNI_VARIANTS=nano mini\n", output)
+
+    def test_other_images_keep_their_model_bundle_defaults(self) -> None:
+        output = run_resolver(MATRIX_IMAGE="envoy")
+        self.assertNotIn("VELA_OMNI_VARIANTS", output)
+
     def test_release_dashboard_uses_stable_tag(self) -> None:
         output = run_resolver(
             DASHBOARD_VERSION_MODE="release",

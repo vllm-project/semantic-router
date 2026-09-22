@@ -64,32 +64,25 @@ func (r *OpenAIRouter) prepareProviderDispatch(
 	if changed {
 		request.Generation++
 	}
-	required := llmprotocol.RequiredCapabilities(*request)
-	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch.targetFormat, ctx); protocolErr != nil {
-		rerouted, ok := r.rerouteToQualifiedDecisionModel(request, dispatch, required, ctx)
-		if !ok {
-			return nil, protocolErr
-		}
-		dispatch = rerouted
-		ctx.ImmediateProtocolError = nil
-		// The reasoning mode is model-scoped (family/effort come from the
-		// model's reasoning config), so a reroute must re-apply it against the
-		// rerouted model. System prompt and request params are decision-scoped
-		// and were already applied to the shared request, so they are not
-		// re-applied here.
-		if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
-			r.applySemanticReasoningMode(
-				request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
-			)
-		}
+	if err := r.prepareDispatchContextOverflow(ctx, request, dispatch.logicalModel); err != nil {
+		return nil, err
+	}
+	if err := r.prepareAutomaticDispatch(ctx, request, dispatch); err != nil {
+		return nil, err
+	}
+	// Selection already compared capable candidates. Late mutations may still
+	// invalidate the result, but cannot restart routing or bypass its policies.
+	if protocolErr := r.rejectDispatchCapabilityMismatch(request, dispatch, ctx); protocolErr != nil {
+		return nil, protocolErr
 	}
 	ctx.TargetFormat = dispatch.targetFormat
+	// Bind response policy where the backend is selected.
+	ctx.ResponseVendor = resolveResponseVendor(dispatch.profile)
 	ctx.SemanticRequest = request
-	// Per-model accounting (token tracking, TTFB, usage attribution) keys off
-	// the model that actually serves the request. A capability reroute may
-	// redirect this request to a sibling modelRef, so RequestModel must be the
-	// final dispatch model, not the decision-selected one.
+	// Per-model accounting keys off the validated concrete dispatch model.
 	ctx.RequestModel = dispatch.logicalModel
+
+	ctx.VSRSelectedModel = dispatch.logicalModel
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_prepared", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -106,24 +99,19 @@ func (r *OpenAIRouter) codecCapabilitiesForFormat(format llmprotocol.WireFormat)
 	return r.ProtocolCodecs.CapabilitiesFor(format)
 }
 
-// rejectDispatchCapabilityMismatch applies the same wire-fidelity gate the
-// codec engine enforces at encode, but at dispatch time so a request whose
-// required capabilities the chosen backend wire cannot express surfaces as a
-// protocol error instead of a generic 500 from encoding. This is the first
-// slice of capability-driven dispatch: it turns "crash with 500" into "clean
-// 400 unsupported_capability" and gives future capability-aware re-routing a
-// single check point.
+// rejectDispatchCapabilityMismatch applies both wire fidelity and declared
+// model task constraints to the primary dispatch, using the same qualification
+// as fallback candidates. A wire's ability to encode a task does not establish
+// that the selected model can execute it.
 func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	request *llmprotocol.Request,
-	format llmprotocol.WireFormat,
+	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
-	available, ok := r.codecCapabilitiesForFormat(format)
-	if !ok {
-		// Unknown wire formats are rejected earlier by wireFormatForModel.
-		return nil
+	if err := r.validateDispatchRequirements(request, dispatch, ctx); err != nil {
+		return err
 	}
-	if err := llmprotocol.RequireCapabilities(format, available, llmprotocol.RequiredCapabilities(*request)); err != nil {
+	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(*request)); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
 			ctx.ImmediateProtocolError = protocolError
@@ -133,10 +121,9 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	return nil
 }
 
-// declaredModelCapabilities parses a model's configured capability
-// declarations. A model with no declaration (or an unparsable one) is treated
-// as unannotated and stays eligible on wire expressibility alone; the declared
-// filter only steers among annotated candidates.
+// declaredModelCapabilities projects recognized model facts without allowing
+// descriptive catalog labels to erase their constraints. A model with no
+// recognized declaration retains the unannotated compatibility behavior.
 func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.CapabilitySet, bool) {
 	if r == nil || r.Config == nil {
 		return llmprotocol.CapabilitySet{}, false
@@ -145,90 +132,22 @@ func (r *OpenAIRouter) declaredModelCapabilities(model string) (llmprotocol.Capa
 	if !ok || len(params.Capabilities) == 0 {
 		return llmprotocol.CapabilitySet{}, false
 	}
-	declared, err := llmprotocol.ParseCapabilities(params.Capabilities)
-	if err != nil {
-		return llmprotocol.CapabilitySet{}, false
-	}
-	return declared, true
+	return llmprotocol.ModelCapabilities(params.Capabilities)
 }
 
-// rerouteToQualifiedDecisionModel tries to satisfy the required capabilities
-// by dispatching to another modelRef offered by the selected decision, when
-// the originally selected model's wire format cannot express them. It returns
-// the re-resolved dispatch and whether a qualified candidate was found.
-//
-// Candidates are considered in modelRef order; the first whose wire format can
-// express every required capability wins. This is capability-driven selection
-// at the dispatch seam: routing prefers a qualified backend over a clean
-// rejection, and only rejects when no candidate qualifies.
-func (r *OpenAIRouter) rerouteToQualifiedDecisionModel(
-	request *llmprotocol.Request,
-	selected *providerDispatch,
-	required llmprotocol.CapabilitySet,
-	ctx *RequestContext,
-) (*providerDispatch, bool) {
-	if r == nil || r.Config == nil || request == nil || selected == nil || ctx == nil {
-		return nil, false
+func (r *OpenAIRouter) providerCapabilityMismatch(model string, format llmprotocol.WireFormat, required llmprotocol.CapabilitySet) error {
+	available, ok := r.codecCapabilitiesForFormat(format)
+	if !ok {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability", fmt.Sprintf("model %q has no codec for %q", model, format), nil)
 	}
-	decision := ctx.VSRSelectedDecision
-	if decision == nil || decision.Name == "" {
-		return nil, false
+	if err := llmprotocol.RequireCapabilities(format, available, required); err != nil {
+		return err
 	}
-	model := r.findQualifiedRerouteModel(decision, selected, required)
-	if model == "" {
-		return nil, false
+	if declared, annotated := r.declaredModelCapabilities(model); annotated && !declared.Contains(required.TaskCapabilities()) {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_capability",
+			fmt.Sprintf("model %q does not declare the required tasks: %s", model, strings.Join(required.TaskCapabilities().Names(), ", ")), nil)
 	}
-	candidate, err := r.resolveProviderDispatch(model, decision.Name, selected.useReasoning)
-	if err != nil {
-		return nil, false
-	}
-	request.Model = candidate.upstreamModel
-	ctx.TargetFormat = candidate.targetFormat
-	logging.ComponentDebugEvent("extproc", "provider_dispatch_rerouted", map[string]interface{}{
-		"request_id":  ctx.RequestID,
-		"from":        selected.logicalModel,
-		"to":          model,
-		"wire_format": candidate.targetFormat,
-	})
-	return candidate, true
-}
-
-// findQualifiedRerouteModel returns the first decision modelRef, in declared
-// order, that can express every required capability and is not the currently
-// selected model; "" when no sibling qualifies.
-func (r *OpenAIRouter) findQualifiedRerouteModel(
-	decision *config.Decision,
-	selected *providerDispatch,
-	required llmprotocol.CapabilitySet,
-) string {
-	for _, modelRef := range decision.ModelRefs {
-		model := modelRef.Model
-		if model == "" || model == selected.logicalModel {
-			continue
-		}
-		if r.qualifiedRerouteCandidate(model, required) != "" {
-			return model
-		}
-	}
-	return ""
-}
-
-// qualifiedRerouteCandidate reports the model's wire format when the model can
-// express every required capability, or "" when it cannot serve the request.
-// Expressibility is judged on the wire format's codec capability set first,
-// then narrowed by the model's own declared capabilities when annotated.
-func (r *OpenAIRouter) qualifiedRerouteCandidate(model string, required llmprotocol.CapabilitySet) llmprotocol.WireFormat {
-	format, err := wireFormatForModel(r.Config.GetModelAPIFormat(model))
-	if err != nil {
-		return ""
-	}
-	if set, ok := r.codecCapabilitiesForFormat(format); !ok || !set.Contains(required) {
-		return ""
-	}
-	if declared, ok := r.declaredModelCapabilities(model); ok && !declared.Contains(required.TaskCapabilities()) {
-		return ""
-	}
-	return format
+	return nil
 }
 
 func (r *OpenAIRouter) resolveProviderDispatch(
@@ -264,15 +183,10 @@ func (r *OpenAIRouter) prepareProviderRequest(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) (bool, error) {
-	changed, err := r.materializeResponseObjectContext(request, ctx)
+	changed, err := r.prepareModelInput(request, ctx)
 	if err != nil {
 		return false, err
 	}
-	inlined, err := r.resolveImageFileReferences(request)
-	if err != nil {
-		return false, err
-	}
-	changed = inlined || changed
 	changed = request.Model != dispatch.upstreamModel || request.Stream != ctx.ExpectStreamingResponse || changed
 	request.Model = dispatch.upstreamModel
 	request.Stream = ctx.ExpectStreamingResponse
@@ -296,7 +210,7 @@ func (r *OpenAIRouter) applyDispatchDecision(
 	changed := false
 	if dispatch.targetFormat != llmprotocol.OpenAIChatV1 {
 		changed = r.applySemanticReasoningMode(
-			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.VSRSelectedDecision,
+			request, dispatch.logicalModel, dispatch.targetFormat, dispatch.useReasoning, ctx.decisionForCandidate(dispatch.logicalModel),
 		)
 	}
 	injected, err := r.addSemanticSystemPromptIfConfigured(
@@ -357,7 +271,10 @@ func (r *OpenAIRouter) buildProviderDispatchResponse(
 	appendRoutingHeaders(&state.setHeaders, dispatch.logicalModel)
 	setProviderRequestPath(&state.setHeaders, dispatch.profile, dispatch.targetFormat)
 	r.applyDecisionHeaderMutations(state, ctx)
-	return buildRequestBodyContinueResponse(state, nil, false)
+	// Body-stage model and path mutations can change the Envoy route selected
+	// during headers. Apply the same cache policy to every provider dispatch,
+	// including internal multi-model calls and unchanged logical model names.
+	return buildRequestBodyContinueResponse(state, nil, r.shouldClearRouteCache())
 }
 
 // finalizeProviderDispatchResponse serializes the request only after every
@@ -371,6 +288,26 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if dispatch == nil || response == nil {
 		return nil, status.Error(codes.Internal, "provider dispatch is unavailable")
 	}
+	if err := selectionRequestContext(ctx).Err(); err != nil {
+		return nil, err
+	}
+	if response.GetImmediateResponse() != nil {
+		return response, nil
+	}
+	if ctx != nil && ctx.SemanticRequest != nil {
+		if err := r.prepareAutomaticDispatch(ctx, ctx.SemanticRequest, dispatch); err != nil {
+			return nil, err
+		}
+		if err := r.rejectDispatchCapabilityMismatch(ctx.SemanticRequest, dispatch, ctx); err != nil {
+			return nil, err
+		}
+	}
+	captureRequestDemand(
+		ctx,
+		requestDemandStageProviderBound,
+		ctx.SemanticRequest,
+		dispatch.logicalModel,
+	)
 	body, err := r.encodeDispatchRequest(ctx)
 	if err != nil {
 		metrics.RecordRequestError(dispatch.logicalModel, "serialization_error")
@@ -391,6 +328,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, len(body))
 	common.BodyMutation = &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{Body: body},
+	}
+	if err := commitAgenticSessionDecision(ctx); err != nil {
+		return nil, err
 	}
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_encoded", map[string]interface{}{
 		"request_id":  ctx.RequestID,
@@ -431,7 +371,6 @@ func (r *OpenAIRouter) startUpstreamSpanAndInjectHeaders(
 	spanContext, upstreamSpan := tracing.StartSpan(
 		ctx.TraceContext, tracing.SpanUpstreamRequest, trace.WithSpanKind(trace.SpanKindClient),
 	)
-	ctx.TraceContext = spanContext
 	ctx.UpstreamSpan = upstreamSpan
 	tracing.SetSpanAttributes(upstreamSpan,
 		attribute.String(tracing.AttrModelName, model),

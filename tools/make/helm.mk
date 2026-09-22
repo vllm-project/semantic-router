@@ -130,14 +130,23 @@ helm-ci-setup:
 		helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update; \
 		helm repo add grafana https://grafana.github.io/helm-charts --force-update; \
 		helm repo update; \
-		helm dependency build $(HELM_CHART_PATH); \
+		for attempt in 1 2 3; do \
+			if helm dependency build $(HELM_CHART_PATH); then \
+				break; \
+			fi; \
+			if [ "$$attempt" -eq 3 ]; then \
+				exit 1; \
+			fi; \
+			echo "$(YELLOW)[WARN]$(NC) Helm dependency download failed; retrying ($$((attempt + 1))/3)"; \
+			sleep 5; \
+		done; \
 	else \
 		echo "$(YELLOW)[WARN]$(NC) Skipping helm repo add/update; using Chart.lock dependency versions"; \
 		helm dependency build $(HELM_CHART_PATH) --skip-refresh; \
 	fi
 
 helm-ci-validate: ## Run the CI Helm lint and template validation flow
-helm-ci-validate: helm-ci-setup
+helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 	@$(LOG_TARGET)
 	@$(MAKE) helm-lint
 	@mkdir -p "$$(dirname "$(HELM_TEMPLATE_OUTPUT)")" "$$(dirname "$(HELM_BACKEND_TARGET_OUTPUT)")"
@@ -145,8 +154,7 @@ helm-ci-validate: helm-ci-setup
 		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
 		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
 		--namespace $(HELM_NAMESPACE) > "$(HELM_TEMPLATE_OUTPUT)"
-	@python3 -c "import yamllint" >/dev/null 2>&1 || python3 -m pip install --user yamllint
-	@python3 -m yamllint -d '{extends: default, rules: {line-length: {max: 120}, indentation: {spaces: 2}}}' "$(HELM_TEMPLATE_OUTPUT)" || echo "Some yamllint warnings are expected for Helm templates"
+	@"$(AGENT_PYTHON)" -m yamllint -d '{extends: default, rules: {line-length: {max: 120}, indentation: {spaces: 2}}}' "$(HELM_TEMPLATE_OUTPUT)" || echo "Some yamllint warnings are expected for Helm templates"
 	@required_resources="ServiceAccount PersistentVolumeClaim ConfigMap Deployment Service"; \
 	for resource in $$required_resources; do \
 		if grep -q "kind: $$resource" "$(HELM_TEMPLATE_OUTPUT)"; then \
@@ -171,9 +179,14 @@ helm-ci-validate: helm-ci-setup
 			exit 1; \
 		fi; \
 		done
-	@python3 tools/ci/check_backend_target_compatibility.py \
+	@"$(AGENT_PYTHON)" tools/ci/check_backend_target_compatibility.py \
 		--rendered-helm "$(HELM_BACKEND_TARGET_OUTPUT)"
 	@echo "Backend target compatibility rendering verified"
+	@helm template model-runtime-release $(HELM_CHART_PATH) \
+		-f deploy/helm/testdata/model-runtime-values.yaml \
+		> "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
+	@"$(AGENT_PYTHON)" deploy/helm/check-model-runtime.py "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
+	@echo "Model deployment and recipe binding rendering verified"
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards

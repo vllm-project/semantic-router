@@ -52,7 +52,7 @@ func initializeLegacyUnifiedClassifier(paths *ModelPaths) (*UnifiedClassifier, e
 		return nil, err
 	}
 
-	classifier := GetGlobalUnifiedClassifier()
+	classifier := &UnifiedClassifier{}
 	err = classifier.Initialize(
 		paths.ModernBertBase,
 		paths.IntentClassifier,

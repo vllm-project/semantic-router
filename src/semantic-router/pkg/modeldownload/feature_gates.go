@@ -9,6 +9,14 @@ type modelFeatureGate struct {
 
 var optionalModelFeatureGates = []modelFeatureGate{
 	{
+		enabled: func(cfg *config.RouterConfig) bool { return cfg.NeedsLocalSafetyHeadForRouting(false) },
+		paths:   func(cfg *config.RouterConfig) []string { return []string{cfg.SafetyModels.Safety.ModelID} },
+	},
+	{
+		enabled: func(cfg *config.RouterConfig) bool { return cfg.NeedsLocalSafetyHeadForRouting(true) },
+		paths:   func(cfg *config.RouterConfig) []string { return []string{cfg.SafetyModels.Hazard.ModelID} },
+	},
+	{
 		enabled: func(cfg *config.RouterConfig) bool {
 			return !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend()
 		},
@@ -97,12 +105,26 @@ var optionalModelFeatureGates = []modelFeatureGate{
 
 func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) []string {
 	disabled := make(map[string]struct{})
+	enabled := make(map[string]bool)
+	for _, rule := range cfg.ClassifierRules {
+		if rule.ModelPath != "" {
+			enabled[config.ResolveModelPath(rule.ModelPath)] = true
+		}
+	}
+	for _, gate := range optionalModelFeatureGates {
+		if gate.enabled(cfg) {
+			for _, path := range gate.paths(cfg) {
+				enabled[config.ResolveModelPath(path)] = true
+			}
+		}
+	}
 	for _, gate := range optionalModelFeatureGates {
 		if gate.enabled(cfg) {
 			continue
 		}
 		for _, path := range gate.paths(cfg) {
-			if path != "" {
+			path = config.ResolveModelPath(path)
+			if path != "" && !enabled[path] {
 				disabled[path] = struct{}{}
 			}
 		}
@@ -120,7 +142,9 @@ func filterDisabledOptionalModelPaths(cfg *config.RouterConfig, paths []string) 
 
 func isModalityClassifierEnabled(cfg *config.RouterConfig) bool {
 	md := cfg.ModalityDetector
-	if !md.Enabled || md.Classifier == nil || md.Classifier.ModelPath == "" {
+	// Match runtime ownership: inherited settings alone do not prepare a
+	// modality classifier in a recipe that declares no modality rules.
+	if len(cfg.ModalityRules) == 0 || !md.Enabled || md.Classifier == nil || md.Classifier.ModelPath == "" {
 		return false
 	}
 

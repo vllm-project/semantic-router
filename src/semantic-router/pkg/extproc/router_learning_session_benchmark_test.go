@@ -72,6 +72,7 @@ func TestRouterLearningSessionCorpusRejectsInvalidInput(t *testing.T) {
 		{"missing coverage omitted", func(c *protectionCorpus) { c.MissingCoverage = nil }},
 		{"duplicate scenario", func(c *protectionCorpus) { c.Scenarios = append(c.Scenarios, c.Scenarios[0]) }},
 		{"ineligible expectation", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Model = "unconfigured" }},
+		{"rejection with selected model", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Rejected = true }},
 		{"unknown category", func(c *protectionCorpus) { c.Scenarios[0].Steps[0].Expected.Category = "typo" }},
 	} {
 		t.Run(mutate.name, func(t *testing.T) {
@@ -80,8 +81,8 @@ func TestRouterLearningSessionCorpusRejectsInvalidInput(t *testing.T) {
 				t.Fatal(err)
 			}
 			var changed protectionCorpus
-			if err := json.Unmarshal(raw, &changed); err != nil {
-				t.Fatal(err)
+			if decodeErr := json.Unmarshal(raw, &changed); decodeErr != nil {
+				t.Fatal(decodeErr)
 			}
 			mutate.apply(&changed)
 			raw, err = json.Marshal(changed)

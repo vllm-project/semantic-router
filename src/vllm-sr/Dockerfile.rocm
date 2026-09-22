@@ -14,6 +14,38 @@ ARG GO_RUNTIME_COMPAT_IMAGE=library/golang:1.25-bookworm
 # ROCm runtime is pinned to Ubuntu 22.04 (glibc 2.35). Keep runtime-linked build
 # stages on an older libc baseline so the copied binaries and shared objects do
 # not fail to start with GLIBC_2.39+/2.41+ loader errors.
+# Shared model-production stage: its cache depends only on the pinned exporter.
+# Python/Torch and native source stay here; final images receive verified tensors.
+# Use --build-arg VELA_OMNI_VARIANTS="nano mini" to bundle Mini as well.
+# The pinned manylinux CMake binary supports the older Rust builder's glibc.
+# Copy the native executable/data, not its Python launcher, into build stages.
+FROM --platform=$BUILDPLATFORM python:3.12-slim-bookworm AS cmake-builder
+RUN pip install --no-cache-dir --only-binary=:all: cmake==3.31.10
+
+# Frozen development image prototypes; no model download or inference in this stage.
+FROM --platform=$BUILDPLATFORM python:3.12-slim-bookworm AS image-routing-assets
+WORKDIR /source
+COPY tools/calibration/image-routing/prepare_assets.py tools/calibration/image-routing/prepare_assets.py
+COPY config/assets/image-routing/manifest.json config/assets/image-routing/manifest.json
+COPY website/static/img/ website/static/img/
+COPY dashboard/frontend/public/ dashboard/frontend/public/
+RUN python tools/calibration/image-routing/prepare_assets.py --repository-root /source --output /out
+
+FROM --platform=$BUILDPLATFORM python:3.12-slim-bookworm AS vela-omni-builder
+ENV HF_HOME=/tmp/vela-hf-cache PIP_DISABLE_PIP_VERSION_CHECK=1
+WORKDIR /build/vela-omni
+COPY tools/models/vela_omni/requirements.txt ./
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0 torchaudio==2.8.0 && \
+    pip install --no-cache-dir -r requirements.txt
+COPY tools/models/vela_omni/ ./
+RUN OMP_NUM_THREADS=4 python -m unittest discover -s . -p "test_*.py"
+ARG VELA_OMNI_VARIANTS=nano
+# E2E images retain official-reference inputs/outputs for native parity checks.
+ARG VELA_OMNI_KEEP_GOLDEN=0
+RUN case "$VELA_OMNI_KEEP_GOLDEN" in 0) set -- ;; 1) set -- --keep-golden ;; *) exit 1 ;; esac && \
+    python prepare.py --variants ${VELA_OMNI_VARIANTS} "$@" --work /tmp/vela-export --output /opt/router-model-artifacts && \
+    rm -rf /tmp/vela-export /tmp/vela-hf-cache
+
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
 ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
@@ -60,7 +92,6 @@ RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false |
 
 # Copy real source and rebuild (dependencies are cached from above)
 COPY candle-binding/src/ ./src/
-COPY candle-binding/go.mod candle-binding/semantic-router.go ./
 
 # Delete stale library from dummy build so cargo relinks with real FFI symbols
 RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
@@ -204,6 +235,8 @@ ARG TARGETARCH
 ARG GIT_SSL_NO_VERIFY
 WORKDIR /build
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+COPY --from=cmake-builder /usr/local/lib/python3.12/site-packages/cmake/data/ /opt/cmake/
+ENV PATH="/opt/cmake/bin:${PATH}"
 
 RUN if [ "$TARGETARCH" != "amd64" ]; then \
       echo "ROCm vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
@@ -216,6 +249,7 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
 RUN command -v gcc >/dev/null && \
     command -v g++ >/dev/null && \
     command -v make >/dev/null && \
+    cmake --version >/dev/null && \
     command -v pkg-config >/dev/null && \
     pkg-config --exists openssl
 
@@ -224,16 +258,15 @@ COPY onnx-binding/Cargo.toml onnx-binding/Cargo.loc[k] ./
 RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
     mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
-    cargo build --release --features rocm-dynamic --target x86_64-unknown-linux-gnu && \
+    cargo build --release --lib --locked --no-default-features --features migraphx-dynamic --target x86_64-unknown-linux-gnu && \
     rm -rf src
 
 COPY onnx-binding/src/ ./src/
-COPY onnx-binding/go.mod onnx-binding/semantic-router.go ./
 
 RUN find target -name "libonnx_semantic_router.so" -delete 2>/dev/null; \
     find target -name "libonnx_semantic_router.a" -delete 2>/dev/null; \
     OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu \
-    cargo build --release --features rocm-dynamic --target x86_64-unknown-linux-gnu
+    cargo build --release --lib --locked --no-default-features --features migraphx-dynamic --target x86_64-unknown-linux-gnu
 
 RUN mkdir -p /build/out && \
     cp target/x86_64-unknown-linux-gnu/release/libonnx_semantic_router.so /build/out/ && \
@@ -241,6 +274,23 @@ RUN mkdir -p /build/out && \
     echo "=== Built onnx-binding ROCm library ===" && \
     ls -la /build/out/ && \
     file /build/out/libonnx_semantic_router.so
+
+# Build the versioned CK custom-op library from the same reviewed source.
+# CPU callback tests run in the build; GPU numerical qualification is separate.
+FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0 AS ck-builder
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        cmake ninja-build composablekernel-dev && \
+    rm -rf /var/lib/apt/lists/*
+WORKDIR /build/ort-ck-flash-attn
+COPY onnx-binding/ort-ck-flash-attn/CMakeLists.txt ./
+COPY onnx-binding/ort-ck-flash-attn/include/ include/
+COPY onnx-binding/ort-ck-flash-attn/src/ src/
+COPY onnx-binding/ort-ck-flash-attn/tests/ tests/
+RUN cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGPU_TARGETS=gfx942 \
+        -DCMAKE_INSTALL_PREFIX=/opt/ort-ck-flash-attn && \
+    cmake --build build --target ort_ck_flash_attn test_custom_op_contract --parallel 4 && \
+    ctest --test-dir build --output-on-failure -R '^custom_op_contract$' && \
+    cmake --install build
 
 # Stage 2: Build Go semantic router
 FROM --platform=$BUILDPLATFORM ${IMAGE_REGISTRY}${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
@@ -256,10 +306,12 @@ COPY --from=nlp-builder /build/out/ /usr/local/lib/
 ENV LD_LIBRARY_PATH=/usr/local/lib
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
-COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+COPY candle-binding/go.mod candle-binding/*.go /build/../candle-binding/
+COPY --from=rust-builder /build/out/ /build/../candle-binding/target/release/
 
-# Copy onnx-binding Go files (needed for go.onnx.mod replace directive)
-COPY --from=onnx-builder /build/go.mod /build/semantic-router.go /build/../onnx-binding/
+# Copy independent ORT instance Go bindings alongside Candle
+COPY onnx-binding/go.mod /build/../onnx-binding/
+COPY onnx-binding/instance/ /build/../onnx-binding/instance/
 COPY --from=onnx-builder /build/out/ /build/../onnx-binding/target/release/
 
 # Copy ml-binding Go files (needed for go.mod replace directive)
@@ -273,20 +325,27 @@ COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
 
 # Copy Go source (go.mod has local replace directives, so go mod download
 # requires candle-binding and ml-binding to be present first)
+COPY openvino-binding/go.mod openvino-binding/*.go /build/../openvino-binding/
 COPY src/semantic-router/ .
+COPY tools/docker/check-native-abi.sh /build/check-native-abi.sh
+RUN bash /build/check-native-abi.sh \
+    /usr/local/lib/libcandle_semantic_router.so \
+    /usr/local/lib/libonnx_semantic_router.so
 
-# Build ONNX router (ROCm image uses onnx-binding with dynamic ORT loading)
+
+# Build the multi-provider router with ORT as the implicit ROCm model default.
 RUN if [ "$TARGETARCH" != "amd64" ]; then \
       echo "ROCm vllm-sr image only supports TARGETARCH=amd64, got: $TARGETARCH" && exit 1; \
     fi && \
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
     CGO_CFLAGS="-I/build/../onnx-binding" \
-    CGO_LDFLAGS="-L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
-    go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd && \
+    CGO_LDFLAGS="-L/build/../candle-binding/target/release -lcandle_semantic_router -L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
+    go build -buildvcs=false -ldflags="-w -s -X github.com/vllm-project/semantic-router/src/semantic-router/pkg/config.defaultModelProvider=ort" -o router ./cmd && \
     printf 'go-builder-complete\n' > /build/.go-builder-complete
 
 # Stage 3: Final router runtime image (ROCm 7.0 + ONNX Runtime ROCm)
 FROM ${IMAGE_REGISTRY}rocm/dev-ubuntu-22.04:7.0
+
 ARG TARGETARCH
 
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv
@@ -304,7 +363,7 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
 # across ordinary router binary changes.
 COPY --from=go-builder /build/.go-builder-complete /tmp/.go-builder-complete
 
-# Install system dependencies
+# MIOpen also needs rocRAND headers to compile attention kernels at runtime.
 RUN set -eux; \
     rm -f /tmp/.go-builder-complete; \
     apt-get update; \
@@ -317,9 +376,12 @@ RUN set -eux; \
         curl \
         ca-certificates \
         hipblas \
+        migraphx=2.13.0.70000-38~22.04 \
         miopen-hip \
+        rocrand-dev \
         hipfft \
         rccl; \
+    test -r /opt/rocm/include/rocrand/rocrand_xorwow.h; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*
 
@@ -334,27 +396,41 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
     ORT_DIR="$("${VIRTUAL_ENV}/bin/python" -c 'import pathlib, onnxruntime; print(pathlib.Path(onnxruntime.__file__).resolve().parent / "capi")')" && \
     mkdir -p /opt/onnxruntime && \
     ln -sfn "$ORT_DIR" /opt/onnxruntime/capi && \
-    ln -sf /opt/onnxruntime/capi/libonnxruntime.so.* /opt/onnxruntime/capi/libonnxruntime.so
+    ln -sf /opt/onnxruntime/capi/libonnxruntime.so.* /opt/onnxruntime/capi/libonnxruntime.so && \
+    LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib/migraphx/lib ldd "$ORT_DIR/libonnxruntime_providers_migraphx.so" > /tmp/ort-provider-dependencies && \
+    ! grep -q "not found" /tmp/ort-provider-dependencies && \
+    LD_LIBRARY_PATH=/opt/rocm/lib:/opt/rocm/lib/migraphx/lib ldd "$ORT_DIR/libonnxruntime_providers_rocm.so" > /tmp/ort-rocm-provider-dependencies && \
+    ! grep -q "not found" /tmp/ort-rocm-provider-dependencies
 
 COPY --from=go-builder /build/router /usr/local/bin/router
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=onnx-builder /build/out/libonnx_semantic_router.so /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
-COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /usr/local/lib/
+COPY --from=ck-builder /opt/ort-ck-flash-attn/lib/libort_ck_flash_attn.so* /usr/local/lib/
+
+# Pin the ROCm 7.0 compiler policy before model preparation: its MLIR attention
+# fusion produces nonfinite maintained mmBERT outputs. Keep other GPU MLIR ops.
+ENV MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention
 
 ENV ORT_DYLIB_PATH=/opt/onnxruntime/capi/libonnxruntime.so \
-    LD_LIBRARY_PATH=/usr/local/lib:/opt/rocm/lib:/opt/onnxruntime/capi \
-    ORT_CK_FLASH_ATTN_LIB=/usr/local/lib/libort_ck_flash_attn.so
+    LD_LIBRARY_PATH=/usr/local/lib:/opt/rocm/lib:/opt/rocm/lib/migraphx/lib:/opt/onnxruntime/capi \
+    ORT_CK_FLASH_ATTN_LIB=/usr/local/lib/libort_ck_flash_attn.so.1
 
 WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY src/vllm-sr/cli/ /app/cli/
+COPY src/semantic-router/pkg/configschema/router-config-v0.3.schema.json /app/cli/config_schema/router-config-v0.3.schema.json
 COPY config/recipes/built-in/ /app/cli/model_assets/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh
+
+# Keep immutable artifacts outside the mounted model cache, in an independent layer.
+COPY --link --from=vela-omni-builder /opt/router-model-artifacts/ /opt/router-model-artifacts/
+COPY --link --from=image-routing-assets /out/ /app/share/image-routing/
+
 
 EXPOSE 50051 8080 9190
 
