@@ -137,6 +137,8 @@ global:
     skip_processing:
       enabled: false
     model_selection: {}
+    agentic_facts:
+      enabled: false
   services:
     api:
       batch_classification:

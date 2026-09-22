@@ -103,7 +103,6 @@ func agenticFactsBoundsFromConfig(cfg config.AgenticFactsBoundsConfig) agenticfa
 		MaxEnvelopeBytes: cfg.MaxEnvelopeBytes,
 		MaxDepth:         cfg.MaxDepth,
 		MaxCapabilities:  cfg.MaxCapabilities,
-		MaxCandidates:    cfg.MaxCandidates,
 		MaxStringLength:  cfg.MaxStringLength,
 		MaxLifetime:      lifetime,
 		ClockSkew:        skew,

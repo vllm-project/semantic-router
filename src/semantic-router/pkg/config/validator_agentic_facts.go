@@ -71,7 +71,6 @@ func validateAgenticFactsBounds(bounds AgenticFactsBoundsConfig) error {
 		{"max_envelope_bytes", bounds.MaxEnvelopeBytes},
 		{"max_depth", bounds.MaxDepth},
 		{"max_capabilities", bounds.MaxCapabilities},
-		{"max_candidates", bounds.MaxCandidates},
 		{"max_string_length", bounds.MaxStringLength},
 	}
 	for _, field := range numeric {
