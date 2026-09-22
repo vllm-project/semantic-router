@@ -31,40 +31,40 @@ import (
 )
 
 type routerComponents struct {
-	embeddings            *embedding.Set
-	serviceEmbeddings     *embedding.Set
-	cacheEmbeddings       *embedding.Set
-	modelRuntime          *native.Runtime
-	rerankers             map[config.RecipeName]modelruntime.PairScorer
-	cfg                   *config.RouterConfig
-	categoryDescriptions  []string
-	classifier            *classification.Classifier
-	recipeClassifiers     *classification.RecipeClassifiers
-	classificationSvc     *services.ClassificationService
-	semanticCache         cache.CacheBackend
-	responseCache         *cache.ResponseCacheService
-	semanticCacheIdentity string
-	toolsDatabase         *tools.ToolsDatabase
-	toolEmbedder          *cachedToolEmbedder
-	responseAPIFilter     *ResponseAPIFilter
-	replayRecorder        *routerreplay.Recorder
-	replayStoreShared     bool
-	replayRecorders       map[string]*routerreplay.Recorder
-	shadowDispatcher      *shadowDispatcher
-	modelSelector         *selection.Registry
-	recipeModelSelectors  map[config.RecipeName]*selection.Registry
-	lookupTable           lookuptable.LookupTable
-	memoryStore           memory.Store
-	memoryExtractor       *memory.MemoryExtractor
-	memoryPersistence     *memory.PersistenceRunner
-	protocolCodecs        *protocolcodec.Registry
-	looperClient          *looper.Client
-	credentialResolver    *authz.CredentialResolver
-	rateLimiter           *ratelimit.RateLimitResolver
-	lookupTableCancel     func()
-	routerSessionStore    *sessiontelemetry.RouterSessionStateStoreSlot
-	workflowStateService  *looper.WorkflowStateService
-	resources             *resourceScope
+	embeddings                 *embedding.Set
+	serviceEmbeddings          *embedding.Set
+	cacheEmbeddings            *embedding.Set
+	modelRuntime               *native.Runtime
+	rerankers                  map[config.RecipeName]modelruntime.PairScorer
+	cfg                        *config.RouterConfig
+	categoryDescriptions       []string
+	classifier                 *classification.Classifier
+	recipeClassifiers          *classification.RecipeClassifiers
+	classificationSvc          *services.ClassificationService
+	semanticCache              cache.CacheBackend
+	responseCache              *cache.ResponseCacheService
+	semanticCacheIdentity      string
+	toolsDatabase              *tools.ToolsDatabase
+	toolEmbedder               *cachedToolEmbedder
+	responseAPIFilter          *ResponseAPIFilter
+	replayRecorder             *routerreplay.Recorder
+	replayStoreShared          bool
+	replayRecorders            map[string]*routerreplay.Recorder
+	shadowDispatcher           *shadowDispatcher
+	modelSelector              *selection.Registry
+	recipeModelSelectors       map[config.RecipeName]*selection.Registry
+	lookupTable                lookuptable.LookupTable
+	memoryStore                memory.Store
+	memoryExtractor            *memory.MemoryExtractor
+	memoryPersistence          *memory.PersistenceRunner
+	protocolCodecs             *protocolcodec.Registry
+	looperClient               *looper.Client
+	credentialResolver         *authz.CredentialResolver
+	rateLimiter                *ratelimit.RateLimitResolver
+	lookupTableCancel          func()
+	routerSessionStore         *sessiontelemetry.RouterSessionStateStoreSlot
+	workflowStateService       *looper.WorkflowStateService
+	resources                  *resourceScope
 	stickyToolSelectionManager *sessiontools.Manager
 }
 
@@ -473,39 +473,39 @@ func buildToolsRuntime(cfg *config.RouterConfig, sets ...*embedding.Set) (*tools
 
 func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
-		Config:                  components.cfg,
-		Embeddings:              components.embeddings,
-		serviceEmbeddings:       components.serviceEmbeddings,
-		cacheEmbeddings:         components.cacheEmbeddings,
-		rerankers:               components.rerankers,
-		CategoryDescriptions:    components.categoryDescriptions,
-		Classifier:              components.classifier,
-		RecipeClassifiers:       components.recipeClassifiers,
-		ClassificationService:   components.classificationSvc,
-		Cache:                   components.semanticCache,
-		ResponseCache:           components.responseCache,
-		ToolsDatabase:           components.toolsDatabase,
-		toolEmbedder:            components.toolEmbedder,
-		ResponseAPIFilter:       components.responseAPIFilter,
-		ReplayRecorder:          components.replayRecorder,
-		ReplayStoreShared:       components.replayStoreShared,
-		ModelSelector:           components.modelSelector,
-		RecipeModelSelectors:    components.recipeModelSelectors,
-		LookupTable:             components.lookupTable,
-		ReplayRecorders:         components.replayRecorders,
-		ShadowDispatcher:        components.shadowDispatcher,
-		MemoryStore:             components.memoryStore,
-		MemoryExtractor:         components.memoryExtractor,
-		memoryPersistence:       components.memoryPersistence,
-		ProtocolCodecs:          components.protocolCodecs,
-		looperClient:            components.looperClient,
-		CredentialResolver:      components.credentialResolver,
-		RateLimiter:             components.rateLimiter,
-		lookupTableCancel:       components.lookupTableCancel,
-		routerSessionStateStore: components.routerSessionStore,
-		WorkflowStateService:    components.workflowStateService,
+		Config:                     components.cfg,
+		Embeddings:                 components.embeddings,
+		serviceEmbeddings:          components.serviceEmbeddings,
+		cacheEmbeddings:            components.cacheEmbeddings,
+		rerankers:                  components.rerankers,
+		CategoryDescriptions:       components.categoryDescriptions,
+		Classifier:                 components.classifier,
+		RecipeClassifiers:          components.recipeClassifiers,
+		ClassificationService:      components.classificationSvc,
+		Cache:                      components.semanticCache,
+		ResponseCache:              components.responseCache,
+		ToolsDatabase:              components.toolsDatabase,
+		toolEmbedder:               components.toolEmbedder,
+		ResponseAPIFilter:          components.responseAPIFilter,
+		ReplayRecorder:             components.replayRecorder,
+		ReplayStoreShared:          components.replayStoreShared,
+		ModelSelector:              components.modelSelector,
+		RecipeModelSelectors:       components.recipeModelSelectors,
+		LookupTable:                components.lookupTable,
+		ReplayRecorders:            components.replayRecorders,
+		ShadowDispatcher:           components.shadowDispatcher,
+		MemoryStore:                components.memoryStore,
+		MemoryExtractor:            components.memoryExtractor,
+		memoryPersistence:          components.memoryPersistence,
+		ProtocolCodecs:             components.protocolCodecs,
+		looperClient:               components.looperClient,
+		CredentialResolver:         components.credentialResolver,
+		RateLimiter:                components.rateLimiter,
+		lookupTableCancel:          components.lookupTableCancel,
+		routerSessionStateStore:    components.routerSessionStore,
+		WorkflowStateService:       components.workflowStateService,
 		stickyToolSelectionManager: components.stickyToolSelectionManager,
-		resources:               components.resources,
+		resources:                  components.resources,
 	}
 	if components.classificationSvc != nil {
 		components.classificationSvc.SetEvalModelSelector(router)
