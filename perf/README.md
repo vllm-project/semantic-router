@@ -13,8 +13,9 @@ session routing, hallucination detection, and fusion evaluations, see
 `make perf-test-unit` runs the parser, artifact identity, and regression contract
 tests without downloading models or running benchmarks. `make check` selects
 this target for performance changes. The dedicated performance CI job runs the
-model measurements; `make verify DOMAIN=performance` runs them locally through
-`perf-check`.
+model measurements and reports numerical regressions as warnings without failing
+CI. Benchmark execution, complete inventory, and matching model identities remain
+required. `make verify DOMAIN=performance` runs the strict local `perf-check`.
 
 ## Run the benchmarks
 
@@ -87,8 +88,11 @@ cd perf
 go run ./cmd/perftest --compare-baseline=testdata/baselines \
   --current=../reports/current.json --model-baseline=../reports/model-baseline.json \
   --threshold-file=config/thresholds.yaml --output=../reports/comparison.json \
-  --inventory=config/benchmark-inventory.json --fail-on-regression
+  --inventory=config/benchmark-inventory.json
 ```
+
+This is the report-only comparison used by CI. Add `--fail-on-regression` to
+request a strict local allocation check, as `make perf-check` does.
 
 The helper reuses native libraries only when their sources and build inputs are
 unchanged. Otherwise it builds the base revision's libraries. An incompatible
@@ -128,16 +132,18 @@ count, are not comparable to this protocol. Model inference is real during
 preparation; these cases measure repeated cached lookups, while classification
 benchmarks separately measure inference calls.
 
-## What is gated
+## Regression reports and required evidence
 
 Thresholds in [`config/thresholds.yaml`](config/thresholds.yaml) are matched to
 benchmark names in order; the first matching pattern wins. Unmatched names use
 the `default` thresholds.
 
-- `allocs/op` and `B/op` are blocking metrics because they are comparatively
-  stable for the same code and Go version.
-- `ns/op` is advisory because host speed and contention affect wall-clock
-  measurements.
+- CI reports `allocs/op`, `B/op`, and `ns/op` changes without failing on numerical
+  regressions. Allocation regressions appear as workflow warnings and in the job
+  summary; all comparison values remain in the uploaded artifacts.
+- The explicit local `perf-check` and `--fail-on-regression` option still fail on
+  `allocs/op` and `B/op` regressions. `ns/op` remains advisory because host speed
+  and contention affect wall-clock measurements.
 - Model benchmarks require measurements with the same artifact content and
   execution settings. Both measurements must cover the versioned inventory in
   `config/benchmark-inventory.json`; missing, extra, or duplicate workloads fail.
@@ -145,7 +151,7 @@ the `default` thresholds.
 Go allocation metrics do not include Rust/C++ allocations, process RSS, or GPU
 memory. Benchmark commands exclude ordinary unit tests, which run in their own
 checks. The former JSON/map microbenchmarks did not call production ExtProc and
-are excluded from the product performance gate.
+are excluded from the production benchmark inventory.
 Record the source revision, Go version, model artifacts, CPU, and benchmark
 command whenever wall-clock results are shared.
 
@@ -170,10 +176,11 @@ different address, run `go tool pprof` directly against the profile file.
 | Cache | `benchmarks/cache_bench_test.go` | cache sizes, search modes, concurrency, and hit-rate paths through the owned Vela Embedding provider |
 | Looper | `../src/semantic-router/pkg/looper/*_bench_test.go` | Base, Fusion, ReMoM, and Flow helpers and execution |
 
-The repository's reusable performance workflow runs these numeric regression
-checks when the performance CI domain is selected. The workflow and
-`make perf-check` use the same parser and thresholds. Model measurements also
-require a same-checkpoint baseline passed to the comparator as shown above.
+The repository's reusable performance workflow runs these numeric comparisons
+when the performance CI domain is selected. The workflow and `make perf-check`
+use the same parser and thresholds, with advisory results in CI and strict
+allocation checks in the local target. Model measurements also require a
+same-checkpoint baseline passed to the comparator as shown above.
 
 ## Directory layout
 
