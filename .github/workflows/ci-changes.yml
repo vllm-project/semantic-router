@@ -21,8 +21,16 @@ on:
         value: ${{ jobs.plan.outputs.plan }}
       dispatch:
         value: ${{ jobs.plan.outputs.dispatch }}
+      worker_labels:
+        value: ${{ jobs.plan.outputs.worker_labels }}
+      image_producers:
+        value: ${{ jobs.plan.outputs.image_producers }}
       images:
         value: ${{ jobs.plan.outputs.images }}
+      build_images:
+        value: ${{ jobs.plan.outputs.build_images }}
+      published_images:
+        value: ${{ jobs.plan.outputs.published_images }}
       publish_images:
         value: ${{ jobs.plan.outputs.publish_images }}
       build_native:
@@ -33,6 +41,8 @@ on:
         value: ${{ jobs.plan.outputs.publish_helm }}
       publish_python:
         value: ${{ jobs.plan.outputs.publish_python }}
+      component_batches:
+        value: ${{ jobs.plan.outputs.component_batches }}
       quality:
         value: ${{ jobs.plan.outputs.quality }}
       generated:
@@ -51,33 +61,44 @@ on:
         value: ${{ jobs.plan.outputs.local }}
       recipes:
         value: ${{ jobs.plan.outputs.recipes }}
-      native:
-        value: ${{ jobs.plan.outputs.native }}
+      native-shared:
+        value: ${{ jobs.plan.outputs.native-shared }}
+      native-independent:
+        value: ${{ jobs.plan.outputs.native-independent }}
       performance:
         value: ${{ jobs.plan.outputs.performance }}
       package:
         value: ${{ jobs.plan.outputs.package }}
-      component_batches:
-        value: ${{ jobs.plan.outputs.component_batches }}
-      e2e:
-        value: ${{ jobs.plan.outputs.e2e }}
+      tools:
+        value: ${{ jobs.plan.outputs.tools }}
+      e2e-router:
+        value: ${{ jobs.plan.outputs.e2e-router }}
+      e2e-fixtures:
+        value: ${{ jobs.plan.outputs.e2e-fixtures }}
+      e2e-dashboard:
+        value: ${{ jobs.plan.outputs.e2e-dashboard }}
 
 permissions:
   contents: read
 
 jobs:
   plan:
-    name: Verification Plan
+    name: Resolve Contracts
     runs-on: ubuntu-24.04
     outputs:
       plan: ${{ steps.plan.outputs.plan }}
       dispatch: ${{ steps.plan.outputs.dispatch }}
+      worker_labels: ${{ steps.plan.outputs.worker_labels }}
+      image_producers: ${{ steps.plan.outputs.image_producers }}
       images: ${{ steps.plan.outputs.images }}
+      build_images: ${{ steps.plan.outputs.build_images }}
+      published_images: ${{ steps.plan.outputs.published_images }}
       publish_images: ${{ steps.plan.outputs.publish_images }}
       build_native: ${{ steps.plan.outputs.build_native }}
       multiarch: ${{ steps.plan.outputs.multiarch }}
       publish_helm: ${{ steps.plan.outputs.publish_helm }}
       publish_python: ${{ steps.plan.outputs.publish_python }}
+      component_batches: ${{ steps.plan.outputs.component_batches }}
       quality: ${{ steps.plan.outputs.quality }}
       generated: ${{ steps.plan.outputs.generated }}
       security: ${{ steps.plan.outputs.security }}
@@ -87,11 +108,14 @@ jobs:
       operator: ${{ steps.plan.outputs.operator }}
       local: ${{ steps.plan.outputs.local }}
       recipes: ${{ steps.plan.outputs.recipes }}
-      native: ${{ steps.plan.outputs.native }}
+      native-shared: ${{ steps.plan.outputs.native-shared }}
+      native-independent: ${{ steps.plan.outputs.native-independent }}
       performance: ${{ steps.plan.outputs.performance }}
       package: ${{ steps.plan.outputs.package }}
-      component_batches: ${{ steps.plan.outputs.component_batches }}
-      e2e: ${{ steps.plan.outputs.e2e }}
+      tools: ${{ steps.plan.outputs.tools }}
+      e2e-router: ${{ steps.plan.outputs.e2e-router }}
+      e2e-fixtures: ${{ steps.plan.outputs.e2e-fixtures }}
+      e2e-dashboard: ${{ steps.plan.outputs.e2e-dashboard }}
     steps:
       - uses: actions/checkout@v4
         with:

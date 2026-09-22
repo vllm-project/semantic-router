@@ -1,4 +1,4 @@
-"""Human check names are separate from stable execution and artifact identities."""
+"""Readable check paths do not define contracts, workers, or dependencies."""
 
 from __future__ import annotations
 
@@ -14,8 +14,9 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "tools/ci"))
 import verification_catalog as catalog  # noqa: E402
-from ci_plan import EXECUTORS, github_outputs, make_plan  # noqa: E402
+from ci_plan import github_outputs, make_plan, render_plan_summary  # noqa: E402
 from domain_registry import load_domain_registry  # noqa: E402
+from execution_batches import ALL_DISPATCH_JOBS, EXECUTOR_JOBS  # noqa: E402
 
 
 def workflow(filename):
@@ -25,212 +26,152 @@ def workflow(filename):
 
 
 class DisplayNameTests(unittest.TestCase):
-    def test_component_matrix_has_distinct_human_names_and_stable_ids(self):
-        plan = make_plan([], source_sha="a" * 40, full=True)
-        rows = [row for row in plan["verifications"] if row["executor"] == "tools"]
-        labels = {row["display_name"] for row in rows}
-        self.assertEqual(len(labels), len(rows))
-        self.assertTrue(
-            {
-                "CLI Unit Tests",
-                "Fleet Simulation",
-                "Training Contracts",
-                "Provider Simulator",
-                "Routing Tools",
-                "CI Harness",
-                "E2E Framework",
-                "ONNX Artifacts",
-                "Attention Graph Rewriter",
-                "Soak Tools",
-            }
-            <= labels
-        )
-        by_id = {row["id"]: row for row in rows}
-        self.assertEqual(by_id["learning-tools"]["target"], "test-learning-tools")
-        self.assertEqual(by_id["soak-tools"]["target"], "soak-test")
-        self.assertEqual(by_id["mock-provider"]["target"], "test-provider-simulator")
-        self.assertEqual(
-            workflow("test-tools.yml")["jobs"]["tests"]["name"],
-            "${{ fromJSON(inputs.batch).display_name }}",
-        )
-
-    def test_every_selected_contract_has_a_readable_unique_name(self):
-        registry = load_domain_registry()
-        self.assertEqual(catalog.catalog_errors(registry), [])
-        records = catalog.verification_records(registry)
-        self.assertTrue(
-            all(row["display_name"][0].isupper() for row in records.values())
-        )
-        self.assertEqual(
-            len({row["display_name"] for row in records.values()}), len(records)
-        )
-        for name, profile in registry["profiles"].items():
-            self.assertEqual(
-                records["e2e." + name]["display_name"], profile["display_name"]
-            )
+    def test_categories_do_not_change_execution_or_verification_identity(self):
+        records = catalog.verification_records(load_domain_registry())
+        image = records["native.image-calibration-cpu"]
+        self.assertEqual(image["category"], "conformance")
+        self.assertEqual(image["executor"], "native")
+        self.assertEqual(image["runtime"], "ort")
+        self.assertEqual(records["recipe-conformance"]["category"], "conformance")
+        self.assertEqual(records["e2e.multimodal-routing"]["category"], "e2e")
+        self.assertEqual(catalog.catalog_errors(load_domain_registry()), [])
         modified = copy.deepcopy(catalog.load_catalog())
-        modified["verifications"]["core"].pop("display_name")
+        modified["verifications"]["core"].pop("category")
         with patch.object(catalog, "load_catalog", return_value=modified):
             self.assertTrue(
                 any(
-                    "display_name" in error
-                    for error in catalog.catalog_errors(registry)
+                    "category" in error
+                    for error in catalog.catalog_errors(load_domain_registry())
                 )
             )
 
-    def test_reusable_callers_keep_skipped_names_static_and_matrix_values_scalar(self):
-        # Job-level if runs before matrix expansion. Static caller names also
-        # need scalar axes so active jobs do not append entire contract objects.
+    def test_contract_labels_remain_readable_and_unique(self):
+        records = catalog.verification_records(load_domain_registry())
+        labels = [record["display_name"] for record in records.values()]
+        self.assertEqual(len(labels), len(set(labels)))
+        self.assertTrue(all(label and label[0].isupper() for label in labels))
+        for name, profile in load_domain_registry()["profiles"].items():
+            self.assertEqual(
+                records["e2e." + name]["display_name"], profile["display_name"]
+            )
+
+    def test_optional_callers_are_static_and_matrix_axes_only_hold_worker_labels(self):
         jobs = workflow("ci.yml")["jobs"]
-        callers = set()
+        self.assertEqual(set(jobs), {*ALL_DISPATCH_JOBS, "gate"})
         for identity, job in jobs.items():
-            matrix = job.get("strategy", {}).get("matrix", {})
-            if "uses" not in job or not matrix:
-                continue
-            callers.add(identity)
-            source = "component_batches" if identity == "tools" else identity
-            argument = "batch" if identity == "tools" else "verification"
-            with self.subTest(job=identity):
-                self.assertTrue(job["name"].strip())
-                self.assertNotIn("${{", job["name"])
+            self.assertTrue(job["name"].strip())
+            self.assertNotIn("${{", job["name"])
+            self.assertIn(
+                job["name"].split(" / ")[0],
+                {"Plan", "Quality", "Artifacts", "Tests", "Gate"},
+            )
+            if "strategy" in job:
                 self.assertEqual(
-                    matrix,
+                    job["strategy"]["matrix"],
                     {
-                        "label": "${{ fromJSON(needs.plan.outputs."
-                        + source
-                        + ").*.display_name }}"
+                        "label": "${{ fromJSON(needs.plan.outputs.worker_labels)['"
+                        + identity
+                        + "'] }}"
                     },
                 )
-                self.assertEqual(
-                    job["with"][argument],
-                    "${{ toJSON(fromJSON(needs.plan.outputs.dispatch)."
-                    + identity
-                    + "[matrix.label]) }}",
-                )
-        self.assertEqual(callers, set(EXECUTORS) - {"quality", "generated"})
+        for identity in (
+            "security",
+            "core",
+            "storage",
+            "dashboard",
+            "operator",
+            "recipes",
+            "performance",
+            "package",
+        ):
+            self.assertNotIn("strategy", jobs[identity], "one contract is not a matrix")
 
-    def test_dispatch_round_trip_preserves_full_empty_and_subset_plans(self):
-        plans = {
-            "full": make_plan([], source_sha="a" * 40, full=True),
-            "empty": make_plan([], source_sha="a" * 40, draft=True),
-            "subset": make_plan(
+    def test_dispatch_preserves_every_contract_exactly_once(self):
+        for plan in (
+            make_plan([], source_sha="a" * 40, full=True),
+            make_plan([], source_sha="a" * 40, draft=True),
+            make_plan(
                 [],
                 source_sha="a" * 40,
                 requested=(
-                    "native.candle-cpu",
-                    "e2e.envoy-ai-gateway",
-                    "ck-rewrite",
+                    "native.ort-cpu",
+                    "native.image-calibration-cpu",
+                    "local.memory",
                     "cli-unit",
+                    "e2e.vela-omni",
                 ),
             ),
-        }
-        for scenario, plan in plans.items():
+        ):
             before = copy.deepcopy(plan)
-            outputs = github_outputs(plan)
-            dispatch = json.loads(outputs["dispatch"])
-            with self.subTest(plan=scenario):
-                self.assertEqual(plan, before)
-                self.assertEqual(json.loads(outputs["plan"]), before)
-                self.assertEqual(
-                    set(dispatch), set(EXECUTORS) - {"quality", "generated"}
-                )
-                unchanged = {
-                    key: before[key]
-                    for key in (
-                        "images",
-                        "publish_images",
-                        "multiarch",
-                        "publish_helm",
-                        "publish_python",
-                    )
-                }
-                unchanged.update(plan=before, build_native=before["native"])
-                for executor in EXECUTORS:
-                    rows = (
-                        plan["component_batches"]
-                        if executor == "tools"
-                        else [
-                            row
-                            for row in plan["verifications"]
-                            if row["executor"] == executor
-                        ]
-                    )
-                    output = "component_batches" if executor == "tools" else executor
-                    unchanged[output] = rows
-                    if executor not in dispatch:
-                        continue
-                    labels = [row["display_name"] for row in rows]
-                    self.assertEqual(set(dispatch[executor]), set(labels))
-                    self.assertEqual(len(labels), len(set(labels)))
-                    self.assertEqual(
-                        [dispatch[executor][label] for label in labels], rows
-                    )
-                self.assertEqual(
-                    {
-                        key: json.loads(value)
-                        for key, value in outputs.items()
-                        if key != "dispatch"
-                    },
-                    unchanged,
-                )
+            output = {
+                key: json.loads(value) for key, value in github_outputs(plan).items()
+            }
+            self.assertEqual(plan, before)
+            self.assertEqual(output["plan"], before)
+            self.assertEqual(set(output["dispatch"]), set(EXECUTOR_JOBS))
+            actual = []
+            for job, rows in output["dispatch"].items():
+                self.assertEqual(list(rows), output["worker_labels"][job])
+                for row in rows.values():
+                    actual.extend(row.get("verifications", [row]))
+            self.assertEqual(
+                sorted(actual, key=lambda row: row["id"]),
+                sorted(plan["verifications"], key=lambda row: row["id"]),
+            )
+            self.assertEqual(output["build_images"], plan["build_images"])
+            self.assertEqual(output["publish_images"], plan["publish_images"])
+            acquired = [
+                image
+                for row in output["image_producers"].values()
+                for image in row["images"]
+            ]
+            self.assertEqual(sorted(acquired), plan["images"])
+            rebuilt = [
+                image
+                for row in output["image_producers"].values()
+                for image in row["build_images"]
+            ]
+            self.assertEqual(sorted(rebuilt), plan["build_images"])
 
-    def test_dispatch_rejects_missing_or_ambiguous_labels(self):
-        full = make_plan([], source_sha="a" * 40, full=True)
-        for family in ("native", "tools"):
-            for invalid in (None, "", " ", "duplicate"):
-                plan = copy.deepcopy(full)
-                rows = (
-                    plan["component_batches"]
-                    if family == "tools"
-                    else [
-                        row
-                        for row in plan["verifications"]
-                        if row["executor"] == family
-                    ]
-                )
-                rows[0]["display_name"] = (
-                    rows[1]["display_name"] if invalid == "duplicate" else invalid
-                )
-                with self.subTest(family=family, invalid=invalid), self.assertRaises(
-                    ValueError
-                ):
-                    github_outputs(plan)
-
-    def test_dynamic_leaf_jobs_use_display_labels(self):
-        for filename, key in (
+    def test_local_contracts_use_environment_shards_and_native_feature_is_evidence(
+        self,
+    ):
+        plan = make_plan([], source_sha="a" * 40, full=True)
+        output = {key: json.loads(value) for key, value in github_outputs(plan).items()}
+        self.assertEqual(output["worker_labels"]["local"], ["Shard 1", "Shard 2"])
+        self.assertTrue(
+            all(
+                "Image" not in label
+                for label in output["worker_labels"]["native-shared"]
+            )
+        )
+        summary = render_plan_summary(plan)
+        self.assertIn("Tests / Conformance | Image Routing Conformance", summary)
+        self.assertIn("Tests / Conformance | Recipe Preview", summary)
+        for filename, job in (
             ("test-native.yml", "inference"),
             ("test-local.yml", "integration"),
-            ("integration-test-k8s.yml", "integration-test"),
+            ("test-tools.yml", "tests"),
         ):
-            self.assertIn(".display_name", workflow(filename)["jobs"][key]["name"])
-        self.assertEqual(
-            workflow("build-native.yml")["jobs"]["build"]["name"], "CPU Libraries"
-        )
+            self.assertEqual(
+                workflow(filename)["jobs"][job]["name"], "Execute Contracts"
+            )
 
-    def test_product_workflow_leaves_do_not_fall_back_to_generic_ids(self):
-        filenames = {
-            Path(row["workflow"]).name
-            for row in catalog.verification_records(load_domain_registry()).values()
-        } | {"build-native.yml", "build-artifacts.yml", "ci-changes.yml"}
-        for filename in filenames:
-            for key, job in workflow(filename)["jobs"].items():
-                if "uses" in job:
-                    continue
-                with self.subTest(workflow=filename, job=key):
-                    self.assertTrue(
-                        job.get("name"), "leaf must name its executed contract"
-                    )
-                    self.assertNotIn(
-                        job["name"],
-                        {
-                            "tests",
-                            "test",
-                            "build",
-                            "result",
-                            "package",
-                            "integration-test",
-                        },
-                    )
+    def test_consumers_wait_only_for_actual_dependency_lanes(self):
+        jobs = workflow("ci.yml")["jobs"]
+        self.assertEqual(jobs["recipes"]["needs"], ["plan", "image-local"])
+        self.assertEqual(
+            jobs["local"]["needs"],
+            ["plan", "image-local", "image-dashboard", "image-fixtures"],
+        )
+        self.assertEqual(jobs["e2e-router"]["needs"], ["plan", "image-router"])
+        self.assertEqual(
+            jobs["e2e-fixtures"]["needs"], ["plan", "image-router", "image-fixtures"]
+        )
+        self.assertEqual(jobs["native-independent"]["needs"], ["plan"])
+        for name, job in jobs.items():
+            if name != "gate":
+                self.assertNotIn("image-distribution", job.get("needs", []))
 
 
 if __name__ == "__main__":
