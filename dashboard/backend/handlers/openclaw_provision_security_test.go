@@ -458,3 +458,75 @@ func TestContainedMkdirAllRejectsSymlinkedComponent(t *testing.T) {
 		t.Fatal("expected symlinked component to be rejected")
 	}
 }
+
+
+// Regression: configured tag values are case-sensitive too. The environment
+// parser must not lowercase administrator-provided tags.
+func TestLoadOpenClawImagePolicyPreservesTagCase(t *testing.T) {
+	t.Setenv("OPENCLAW_IMAGE_ALLOWLIST", "ghcr.io/openclaw/openclaw")
+	t.Setenv("OPENCLAW_IMAGE_ALLOWED_TAGS", "RELEASE")
+
+	policy := loadOpenClawImagePolicy()
+	if len(policy.AllowedTags) != 1 || policy.AllowedTags[0] != "RELEASE" {
+		t.Fatalf("configured tag case was not preserved: %v", policy.AllowedTags)
+	}
+	if err := validateOpenClawImage("ghcr.io/openclaw/openclaw:RELEASE", policy); err != nil {
+		t.Fatalf("expected exact-case RELEASE tag allowed, got %v", err)
+	}
+	if err := validateOpenClawImage("ghcr.io/openclaw/openclaw:release", policy); err == nil {
+		t.Fatal("expected lowercase release to be rejected against RELEASE policy")
+	}
+}
+
+// Regression for the Lstat -> os.WriteFile TOCTOU window. An attacker racing
+// a normal destination file with a symlink must never be able to redirect a
+// write outside the workspace root.
+func TestWriteContainedFileResistsSymlinkSwap(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "skills")
+	dir := filepath.Join(root, "github")
+	outside := filepath.Join(base, "outside.md")
+	target := filepath.Join(dir, "SKILL.md")
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(outside, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(target, []byte("inside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stop := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+			}
+			_ = os.Remove(target)
+			_ = os.Symlink(outside, target)
+			_ = os.Remove(target)
+			_ = os.WriteFile(target, []byte("inside"), 0o644)
+		}
+	}()
+	defer func() {
+		close(stop)
+		<-done
+	}()
+
+	for i := 0; i < 20000; i++ {
+		_ = writeContainedFile(dir, root, "SKILL.md", []byte("workspace"), 0o644)
+		data, err := os.ReadFile(outside)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != "keep" {
+			t.Fatalf("outside file modified through raced symlink: %q", data)
+		}
+	}
+}
