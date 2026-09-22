@@ -53,9 +53,9 @@ func windowedGuardFixture(t *testing.T) (*windowedJailbreakBackend, *fakeJailbre
 	}
 	model := &fakeJailbreakWindowModel{windows: []tasks.LabelDistributionWindow{
 		{Probabilities: []float32{.2, .7, .1}}, {Probabilities: []float32{.1, .3, .6}},
-	}, limits: binding.Limits{ModelTokens: 32768, TaskTokens: 32768, DeploymentTokens: 32768}}
+	}, limits: binding.Limits{ModelTokens: 32768, TaskTokens: 128, DocumentTokens: 32768, DeploymentTokens: 32768, Overflow: "window"}}
 	backend.prepare = func(ctx context.Context) (*binding.Resolved[tasks.TextWindowsRequest, tasks.WindowedLabelDistribution], error) {
-		if backend.spec.Deployment.Input.MaxTokens != 32768 || backend.spec.Deployment.Device != "cpu" {
+		if backend.spec.Deployment.Device != "cpu" {
 			t.Fatalf("incorrect typed native contract: %+v", backend.spec)
 		}
 		resource, err := binding.NewPool().Acquire(ctx, binding.ResourceIdentity{Artifact: "fixture", Provider: "candle", Device: "cpu", Precision: "fp32"}, "", nil, func(context.Context) (io.Closer, error) { return model, nil })
@@ -66,7 +66,7 @@ func windowedGuardFixture(t *testing.T) (*windowedJailbreakBackend, *fakeJailbre
 		if err != nil {
 			return nil, err
 		}
-		return task.Resolve(binding.Identity{Recipe: string(backend.spec.Recipe), Name: "prompt_guard", Deployment: "fixture", Contract: config.RemoteClassifierContractLabelDistribution, Adapter: "modernbert"}, binding.Capability{Contract: config.RemoteClassifierContractLabelDistribution, Provider: "candle", Device: "cpu", Precision: "fp32", Labels: append([]string(nil), backend.labels...), Limits: model.limits}, resource, func(_ context.Context, _ io.Closer, input tasks.TextWindowsRequest) (tasks.WindowedLabelDistribution, error) {
+		return task.Resolve(binding.Identity{Recipe: string(backend.spec.Recipe), Name: "prompt_guard", Deployment: "fixture", Contract: config.RemoteClassifierContractLabelDistribution, Adapter: "modernbert"}, binding.Capability{Contract: config.RemoteClassifierContractLabelDistribution, Provider: "candle", Device: "cpu", Precision: "fp32", Labels: append([]string(nil), backend.labels...), Limits: model.limits, Window: &binding.WindowCapability{Size: backend.window.Size, Overlap: backend.window.Overlap}}, resource, func(_ context.Context, _ io.Closer, input tasks.TextWindowsRequest) (tasks.WindowedLabelDistribution, error) {
 			return model.ClassifyWindows(input.Text, input)
 		})
 	}
@@ -188,5 +188,46 @@ func TestWindowedJailbreakDependencyUsesOneOwnedHandle(t *testing.T) {
 	classifier.Config.PromptGuard.PositiveLabels = []string{"missing"}
 	if _, _, err := buildJailbreakDependencies(classifier.Config, classifier.JailbreakMapping); err == nil {
 		t.Fatal("accepted an unknown positive label")
+	}
+}
+
+func TestWindowedJailbreakAdmitsDocumentBeyondForwardCapacity(t *testing.T) {
+	backend, model, _ := windowedGuardFixture(t)
+	if err := backend.Close(); err != nil {
+		t.Fatal(err)
+	}
+	model.closed = 0
+	model.limits = binding.Limits{ModelTokens: 32768, TaskTokens: 32768, DocumentTokens: 262144, DeploymentTokens: 262144, Overflow: "window"}
+	backend.closed, backend.handle = false, nil
+	backend.spec.Deployment.Input.MaxTokens = 262144
+	backend.window.Size, backend.window.Overlap = 32768, 16383
+	if err := backend.Init("fixture", true, 3); err != nil {
+		t.Fatal(err)
+	}
+	defer backend.Close()
+	model.usage = &tasks.InputUsage{OriginalTokens: 42000, ProcessedTokens: 42000}
+	if _, err := backend.Classify(context.Background(), "complete document"); err != nil {
+		t.Fatal(err)
+	}
+	if len(model.options) != 1 || model.options[0].Size != 32768 {
+		t.Fatal("changed prepared forward window")
+	}
+}
+
+func TestWindowedJailbreakReportsTheWindowItKept(t *testing.T) {
+	backend, model, _ := windowedGuardFixture(t)
+	model.windows = []tasks.LabelDistributionWindow{
+		{Start: 0, End: 126, Probabilities: []float32{.9, .05, .05}},
+		{Start: 63, End: 189, Probabilities: []float32{.1, .3, .6}},
+	}
+	result, err := backend.Classify(context.Background(), "request")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Window == nil {
+		t.Fatal("a score one window decided reports no window")
+	}
+	if *result.Window != (tasks.ScanWindow{Start: 63, End: 189, Count: 2}) {
+		t.Fatalf("incorrect window provenance: %+v", *result.Window)
 	}
 }

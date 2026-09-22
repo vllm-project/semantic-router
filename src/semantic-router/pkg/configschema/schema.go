@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/invopop/jsonschema"
 
@@ -113,6 +114,12 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	); err != nil {
 		return nil, fmt.Errorf("load catalog Go comments: %w", err)
 	}
+	if err := reflector.AddGoComments(
+		"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback",
+		moduleRoot+"/pkg/fallback",
+	); err != nil {
+		return nil, fmt.Errorf("load fallback Go comments: %w", err)
+	}
 
 	// Publish the steady-state Router contract. CanonicalConfigDocument also
 	// carries the Dashboard's transient setup marker, which is intentionally not
@@ -131,6 +138,9 @@ func GenerateFromSource(repositoryRoot string) ([]byte, error) {
 	// Offline consumers resolve the same named defaults as the Router without
 	// copying artifact identities or materializing them in authoring documents.
 	deployments.Default = routerconfig.DefaultCanonicalGlobal().ModelCatalog.Deployments
+	if err := setMemoryPersistenceBounds(schema); err != nil {
+		return nil, err
+	}
 
 	pluginRefs, err := addPluginDefinitions(reflector, schema)
 	if err != nil {
@@ -202,6 +212,24 @@ func schemaTypeMapper(value reflect.Type) *jsonschema.Schema {
 			OneOf: []*jsonschema.Schema{
 				{Type: "integer", Minimum: json.Number("0")},
 				{Type: "string", Const: "auto"},
+			},
+		}
+	}
+	if value == reflect.TypeOf(routerconfig.OutputTokenDefault{}) {
+		return &jsonschema.Schema{
+			Description: "A positive output default, or auto to use the selected model's available output capacity.",
+			OneOf: []*jsonschema.Schema{
+				{Type: "integer", Minimum: json.Number("1")},
+				{Type: "string", Const: "auto"},
+			},
+		}
+	}
+	if value == reflect.TypeOf(time.Duration(0)) {
+		return &jsonschema.Schema{
+			Description: "A duration string (e.g. '30s', '100ms') or nanoseconds integer.",
+			OneOf: []*jsonschema.Schema{
+				{Type: "string"},
+				{Type: "integer"},
 			},
 		}
 	}

@@ -75,6 +75,9 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	cfg := options.Config
 	if cfg.EmbeddingModel == "" {
 		cfg = DefaultMemoryConfig()
+		if options.EmbeddingConfig != nil && options.EmbeddingConfig.Provider != nil {
+			cfg.Milvus.Dimension = options.Config.Milvus.Dimension
+		}
 	}
 
 	// Initialize embedding configuration
@@ -84,6 +87,13 @@ func NewMilvusStore(options MilvusStoreOptions) (*MilvusStore, error) {
 	} else {
 		embeddingCfg = EmbeddingConfig{Model: EmbeddingModelBERT}
 	}
+
+	dimension, err := StorageDimension(cfg.Milvus.Dimension, embeddingCfg)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Milvus.Dimension = dimension
+	embeddingCfg.Dimension = dimension
 
 	store := &MilvusStore{
 		client:          options.Client,

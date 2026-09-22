@@ -2,6 +2,8 @@ package responsestore
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 )
 
@@ -115,16 +118,14 @@ func TestRedisStoreConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := NewRedisStore(tt.config)
+			err := validateRedisConfig(tt.config.Redis)
 			if tt.expectError {
 				require.Error(t, err)
 				if tt.errorMsg != "" {
 					assert.Contains(t, err.Error(), tt.errorMsg)
 				}
-			} else if err != nil {
-				// Note: This will fail if Redis is not running
-				// In a real unit test, we would mock the Redis client
-				t.Skipf("Redis not available for testing: %v", err)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
@@ -150,24 +151,7 @@ func TestRedisStoreDefaults(t *testing.T) {
 
 // TestRedisBuildKey tests key construction
 func TestRedisBuildKey(t *testing.T) {
-	cfg := StoreConfig{
-		Enabled:     true,
-		TTLSeconds:  3600,
-		BackendType: RedisStoreType,
-		Redis: RedisStoreConfig{
-			Address:   "localhost:6379",
-			DB:        0,
-			KeyPrefix: "sr:",
-		},
-	}
-
-	// Skip if Redis not available
-	store, err := NewRedisStore(cfg)
-	if err != nil {
-		t.Skipf("Redis not available: %v", err)
-		return
-	}
-	defer store.Close()
+	store := &RedisStore{keyPrefix: "sr:"}
 
 	tests := []struct {
 		suffix   string
@@ -192,20 +176,22 @@ func TestRedisBuildKey(t *testing.T) {
 }
 
 // TestRedisStoreValidation tests input validation
+// StorageIntegration: redis
 func TestRedisStoreValidation(t *testing.T) {
+	storagetest.Require(t, "redis")
 	cfg := StoreConfig{
 		Enabled:     true,
 		TTLSeconds:  3600,
 		BackendType: RedisStoreType,
 		Redis: RedisStoreConfig{
-			Address: "localhost:6379",
+			Address: storageRedisAddress(),
 			DB:      0,
 		},
 	}
 
 	store, err := NewRedisStore(cfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 		return
 	}
 	defer store.Close()
@@ -259,7 +245,9 @@ func TestRedisStoreValidation(t *testing.T) {
 }
 
 // TestRedisKeyPrefix tests custom key prefixes
+// StorageIntegration: redis
 func TestRedisKeyPrefix(t *testing.T) {
+	storagetest.Require(t, "redis")
 	tests := []struct {
 		name           string
 		configPrefix   string
@@ -289,7 +277,7 @@ func TestRedisKeyPrefix(t *testing.T) {
 				TTLSeconds:  3600,
 				BackendType: RedisStoreType,
 				Redis: RedisStoreConfig{
-					Address:   "localhost:6379",
+					Address:   storageRedisAddress(),
 					DB:        0,
 					KeyPrefix: tt.configPrefix,
 				},
@@ -297,7 +285,7 @@ func TestRedisKeyPrefix(t *testing.T) {
 
 			store, err := NewRedisStore(cfg)
 			if err != nil {
-				t.Skipf("Redis not available: %v", err)
+				storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 				return
 			}
 			defer store.Close()
@@ -308,20 +296,22 @@ func TestRedisKeyPrefix(t *testing.T) {
 }
 
 // TestRedisStoreIsEnabled tests the IsEnabled method
+// StorageIntegration: redis
 func TestRedisStoreIsEnabled(t *testing.T) {
+	storagetest.Require(t, "redis")
 	cfg := StoreConfig{
 		Enabled:     true,
 		TTLSeconds:  3600,
 		BackendType: RedisStoreType,
 		Redis: RedisStoreConfig{
-			Address: "localhost:6379",
+			Address: storageRedisAddress(),
 			DB:      0,
 		},
 	}
 
 	store, err := NewRedisStore(cfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 		return
 	}
 	defer store.Close()
@@ -330,20 +320,22 @@ func TestRedisStoreIsEnabled(t *testing.T) {
 }
 
 // TestRedisStoreCheckConnection tests connection checking
+// StorageIntegration: redis
 func TestRedisStoreCheckConnection(t *testing.T) {
+	storagetest.Require(t, "redis")
 	cfg := StoreConfig{
 		Enabled:     true,
 		TTLSeconds:  3600,
 		BackendType: RedisStoreType,
 		Redis: RedisStoreConfig{
-			Address: "localhost:6379",
+			Address: storageRedisAddress(),
 			DB:      0,
 		},
 	}
 
 	store, err := NewRedisStore(cfg)
 	if err != nil {
-		t.Skipf("Redis not available: %v", err)
+		storagetest.Unavailable(t, "redis", fmt.Sprintf("Redis not available: %v", err))
 		return
 	}
 	defer store.Close()

@@ -1,6 +1,9 @@
 package config
 
-import modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+import (
+	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+)
 
 // ConfigSource defines where to load dynamic configuration from.
 type ConfigSource string
@@ -39,19 +42,6 @@ const (
 	// PromptGuardVariantMmBERT32K runs the bundled mmBERT-32K model locally
 	// (32K context, YaRN RoPE, multilingual).
 	PromptGuardVariantMmBERT32K = "mmbert32k"
-)
-
-// PromptGuardConfig.Protocol values, selecting which remote HTTP wire
-// contract to use for an external model with role="guardrail". Mutually
-// exclusive with Variant.
-const (
-	// PromptGuardProtocolHTTPChat calls an external model through a
-	// generative chat-completion prompt (e.g. Qwen3Guard-style).
-	PromptGuardProtocolHTTPChat = "http_chat"
-	// PromptGuardProtocolHTTPClassify calls an external model through a
-	// lightweight sequence-classifier HTTP contract (text in, full
-	// label/score distribution out).
-	PromptGuardProtocolHTTPClassify = "http_classify"
 )
 
 // PromptGuardConfig.OnError values live in classifier_on_error.go as
@@ -108,6 +98,12 @@ type RouterConfig struct {
 	// SkipExternalAssetValidation is set only for untrusted read-only
 	// validation requests, which must never trigger filesystem reads.
 	SkipExternalAssetValidation bool `yaml:"-" json:"-"`
+
+	// RoutingFragmentOnly marks a config parsed from a routing-only document,
+	// which carries no provider or global state. Validation that depends on
+	// providers is skipped for these so DSL fragments stay decompilable, while
+	// complete configs still get the full contract.
+	RoutingFragmentOnly bool `yaml:"-" json:"-"`
 
 	// Static global configuration.
 	InlineModels     `yaml:",inline"`
@@ -222,6 +218,8 @@ type Listener struct {
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
 	Timeout string `yaml:"timeout,omitempty"`
+	// APIKeys are client bearer credentials enforced by the CLI-managed Envoy listener.
+	APIKeys []string `yaml:"api_keys,omitempty"`
 }
 
 type APIServer struct {
@@ -276,10 +274,11 @@ type IntelligentRouting struct {
 	DataPolicy            *RoutingDataPolicy      `yaml:"data_policy,omitempty"`
 	ModelBindings         map[string]ModelBinding `yaml:"model_bindings,omitempty"`
 	Signals               `yaml:",inline"`
-	Projections           Projections          `yaml:"projections,omitempty"`
-	Decisions             []Decision           `yaml:"decisions,omitempty"`
-	Strategy              RoutingStrategy      `yaml:"strategy,omitempty"`
-	ModelSelection        ModelSelectionConfig `yaml:"model_selection,omitempty"`
+	Projections           Projections              `yaml:"projections,omitempty"`
+	Decisions             []Decision               `yaml:"decisions,omitempty"`
+	Strategy              RoutingStrategy          `yaml:"strategy,omitempty"`
+	Fallback              *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
+	ModelSelection        ModelSelectionConfig     `yaml:"model_selection,omitempty"`
 	ReasoningConfig       `yaml:",inline"`
 }
 

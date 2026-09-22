@@ -13,12 +13,9 @@ import (
 	"strings"
 	"sync"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
-
-var knowledgeBaseMapEmbeddingFunc = candle_binding.GetEmbeddingWithModelType
 
 const kbMapProjectionName = "umap_2d"
 
@@ -150,14 +147,14 @@ func buildKnowledgeBaseMapArtifactsWithContext(
 	kb config.KnowledgeBaseConfig,
 	definition config.KnowledgeBaseDefinition,
 	modelType string,
-	providers ...embedding.Provider,
+	provider embedding.Provider,
 ) (*knowledgeBaseMapArtifacts, error) {
 	labelNames := sortedKnowledgeBaseLabelNames(definition)
 	if len(labelNames) == 0 {
 		return nil, fmt.Errorf("knowledge base %q has no labels", kb.Name)
 	}
 
-	rawPoints, err := buildKnowledgeBaseRawPointsWithContext(ctx, definition, labelNames, modelType, providers...)
+	rawPoints, err := buildKnowledgeBaseRawPointsWithContext(ctx, definition, labelNames, provider)
 	if err != nil {
 		return nil, err
 	}
@@ -211,9 +208,11 @@ func buildKnowledgeBaseRawPointsWithContext(
 	ctx context.Context,
 	definition config.KnowledgeBaseDefinition,
 	labelNames []string,
-	modelType string,
-	providers ...embedding.Provider,
+	provider embedding.Provider,
 ) ([]kbRawPoint, error) {
+	if provider == nil {
+		return nil, fmt.Errorf("knowledge base map embedding provider was not prepared")
+	}
 	rawPoints := make([]kbRawPoint, 0)
 	for labelIndex, labelName := range labelNames {
 		label := definition.Labels[labelName]
@@ -222,17 +221,7 @@ func buildKnowledgeBaseRawPointsWithContext(
 			if text == "" {
 				continue
 			}
-			var vectorValues []float32
-			var err error
-			if len(providers) > 0 && providers[0] != nil {
-				vectorValues, err = providers[0].Embed(ctx, text)
-			} else {
-				var output *candle_binding.EmbeddingOutput
-				output, err = knowledgeBaseMapEmbeddingFunc(text, modelType, 0)
-				if err == nil {
-					vectorValues = output.Embedding
-				}
-			}
+			vectorValues, err := provider.Embed(ctx, text)
 			if err != nil {
 				return nil, fmt.Errorf("embed exemplar for label %q: %w", labelName, err)
 			}

@@ -160,7 +160,11 @@ func emitRequestParamsPluginConfig(sb *strings.Builder, p *config.DecisionPlugin
 		fmt.Fprintf(sb, "    blocked_params: %s\n", formatStringArray(cfg.BlockedParams))
 	}
 	if cfg.DefaultMaxTokens != nil {
-		fmt.Fprintf(sb, "    default_max_tokens: %d\n", *cfg.DefaultMaxTokens)
+		if cfg.DefaultMaxTokens.Auto {
+			fmt.Fprintln(sb, "    default_max_tokens: \"auto\"")
+		} else {
+			fmt.Fprintf(sb, "    default_max_tokens: %d\n", cfg.DefaultMaxTokens.Value)
+		}
 	}
 	if cfg.MaxTokensLimit != nil {
 		fmt.Fprintf(sb, "    max_tokens_limit: %d\n", *cfg.MaxTokensLimit)

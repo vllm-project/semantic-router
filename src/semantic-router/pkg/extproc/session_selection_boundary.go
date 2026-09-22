@@ -30,14 +30,27 @@ func (r *OpenAIRouter) validateProtectedCandidateOwnership(selCtx *selection.Sel
 		return nil
 	}
 	current := currentLearningModel(learningCtx)
-	if current == "" || selectionContextContainsModel(learningCtx, current) {
+	if current == "" {
+		return nil
+	}
+	if owner := session.PreviousCandidate; owner != nil {
+		if modelRefInEligibility(*owner, learningCtx.CandidateModels) {
+			return nil
+		}
+	} else if selectionContextContainsModel(learningCtx, current) {
+		// Older session snapshots carry only model identity. Do not invent an
+		// effort for those records, but never downgrade a recorded exact owner.
 		return nil
 	}
 	boundary := "nonportable context"
 	if session.ActiveToolLoop {
 		boundary = "active tool loop"
 	}
-	err := fmt.Errorf("%w: %s is bound to model %q outside the admitted candidate set", selection.ErrNoEligibleCandidates, boundary, current)
+	ownerDescription := fmt.Sprintf("model %q", current)
+	if owner := session.PreviousCandidate; owner != nil {
+		ownerDescription = fmt.Sprintf("candidate %q (effort=%q, lora=%q)", owner.Model, owner.ReasoningEffort, owner.LoRAName)
+	}
+	err := fmt.Errorf("%w: %s is bound to %s outside the admitted candidate set", selection.ErrNoEligibleCandidates, boundary, ownerDescription)
 	ctx.VSRSelectionReasoning = err.Error()
 	return err
 }

@@ -91,10 +91,14 @@ func NewValkeyStore(options ValkeyStoreOptions) (*ValkeyStore, error) {
 	if metricType == "" {
 		metricType = "COSINE"
 	}
-	dimension := vc.Dimension
-	if dimension <= 0 {
-		dimension = 384
+	dimension, err := StorageDimension(vc.Dimension, embeddingCfg)
+	if err != nil {
+		return nil, err
 	}
+	copied := *vc
+	vc = &copied
+	vc.Dimension = dimension
+	embeddingCfg.Dimension = dimension
 
 	store := &ValkeyStore{
 		client:           options.Client,
@@ -201,6 +205,9 @@ func (v *ValkeyStore) hashKey(id string) string {
 // Store saves a new memory to Valkey.
 // Generates embedding for the content and inserts as a HASH key.
 func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	startTime := time.Now()
 	backend := "valkey"
 	operation := "store"
@@ -229,7 +236,7 @@ func (v *ValkeyStore) Store(ctx context.Context, memory *Memory) error {
 		embedding = memory.Embedding
 	} else {
 		var err error
-		embedding, err = GenerateEmbeddingWithContext(ctx, memory.Content, v.embeddingConfig)
+		embedding, err = embedForWrite(ctx, memory.Content, v.embeddingConfig)
 		if err != nil {
 			status = "error"
 			return fmt.Errorf("failed to generate embedding: %w", err)

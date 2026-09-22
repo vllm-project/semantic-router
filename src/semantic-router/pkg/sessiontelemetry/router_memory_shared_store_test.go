@@ -168,3 +168,34 @@ func waitForSignal(t *testing.T, signal <-chan struct{}, failure string) {
 		t.Fatal(failure)
 	}
 }
+
+func TestPeekSharedSessionSnapshotClonesProgressEvidence(t *testing.T) {
+	ResetRouterSessionMemoryForTesting()
+	now := time.Now()
+	store := &fakeRouterSessionStateStore{found: true, snapshot: RouterSessionSnapshot{
+		SessionID: "peek-progress", LastSeen: now, SwitchTimestamps: []int64{now.UnixMilli()},
+		RecentOutcomes: []TurnOutcome{{Timestamp: now.UnixMilli(), Category: TurnRegression}},
+	}}
+	SetRouterSessionStateStore(store)
+	t.Cleanup(func() { SetRouterSessionStateStore(nil); ResetRouterSessionMemoryForTesting() })
+	got, ok := PeekRouterSessionSnapshot("peek-progress", now)
+	if !ok {
+		t.Fatal("shared snapshot missing")
+	}
+	got.SwitchTimestamps[0] = 0
+	got.RecentOutcomes[0].Category = TurnMissing
+	if store.snapshot.SwitchTimestamps[0] != now.UnixMilli() || store.snapshot.RecentOutcomes[0].Category != TurnRegression {
+		t.Fatal("preview snapshot aliases shared progress state")
+	}
+	store.snapshot.SwitchTimestamps[0] = 1
+	store.snapshot.RecentOutcomes[0].Category = TurnProgress
+	if got.SwitchTimestamps[0] != 0 || got.RecentOutcomes[0].Category != TurnMissing {
+		t.Fatal("later shared updates changed captured snapshot")
+	}
+	globalRouterSessionMemory.mu.Lock()
+	hydrated := len(globalRouterSessionMemory.sessions)
+	globalRouterSessionMemory.mu.Unlock()
+	if hydrated != 0 || store.saved != 0 {
+		t.Fatal("snapshot peek mutated live/shared storage")
+	}
+}

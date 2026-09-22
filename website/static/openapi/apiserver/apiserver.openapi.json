@@ -18,7 +18,7 @@
     },
     {
       "name": "routing",
-      "description": "Preview routing behavior without invoking a generation backend."
+      "description": "Preview routing behavior without generating an answer."
     },
     {
       "name": "diagnostics",
@@ -9422,6 +9422,22 @@
                       }
                     }
                   },
+                  "preview_context": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "conversation_id": {
+                        "type": "string"
+                      },
+                      "sampling_seed": {
+                        "nullable": true,
+                        "type": "integer"
+                      },
+                      "session_id": {
+                        "type": "string"
+                      }
+                    }
+                  },
                   "response_format": {},
                   "text": {
                     "type": "string"
@@ -10838,8 +10854,8 @@
     },
     "/api/v1/diagnostics/embeddings": {
       "post": {
-        "summary": "Generate text and image embeddings",
-        "description": "Generate text and image embeddings",
+        "summary": "Generate text, image, and audio embeddings",
+        "description": "Generate text, image, and audio embeddings",
         "operationId": "post_api_v1_diagnostics_embeddings",
         "tags": [
           "diagnostics"
@@ -11244,6 +11260,13 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "audios": {
+                    "nullable": true,
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
                   "dimension": {
                     "type": "integer"
                   },
@@ -11353,8 +11376,46 @@
                             "nullable": true,
                             "type": "object",
                             "properties": {
+                              "audio": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "layout": {
+                                    "type": "string"
+                                  },
+                                  "max_channels": {
+                                    "type": "integer"
+                                  },
+                                  "max_sample_rate": {
+                                    "type": "integer"
+                                  },
+                                  "max_seconds": {
+                                    "type": "integer"
+                                  },
+                                  "sample_rates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "integer"
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "max_sample_rate",
+                                  "max_seconds",
+                                  "max_channels",
+                                  "layout"
+                                ]
+                              },
                               "dimension": {
                                 "type": "integer"
+                              },
+                              "dimensions": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "integer"
+                                }
                               },
                               "layer": {
                                 "type": "integer"
@@ -11783,8 +11844,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -12404,8 +12503,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -13069,8 +13206,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -13717,8 +13892,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -14364,8 +14577,46 @@
                           "nullable": true,
                           "type": "object",
                           "properties": {
+                            "audio": {
+                              "nullable": true,
+                              "type": "object",
+                              "properties": {
+                                "layout": {
+                                  "type": "string"
+                                },
+                                "max_channels": {
+                                  "type": "integer"
+                                },
+                                "max_sample_rate": {
+                                  "type": "integer"
+                                },
+                                "max_seconds": {
+                                  "type": "integer"
+                                },
+                                "sample_rates": {
+                                  "nullable": true,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "integer"
+                                  }
+                                }
+                              },
+                              "required": [
+                                "max_sample_rate",
+                                "max_seconds",
+                                "max_channels",
+                                "layout"
+                              ]
+                            },
                             "dimension": {
                               "type": "integer"
+                            },
+                            "dimensions": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
                             },
                             "layer": {
                               "type": "integer"
@@ -18168,6 +18419,9 @@
                   "reason": {
                     "type": "string"
                   },
+                  "record_only": {
+                    "type": "boolean"
+                  },
                   "replay_id": {
                     "type": "string"
                   },
@@ -19511,6 +19765,9 @@
                                     "type": "integer"
                                   }
                                 }
+                              },
+                              "protection_state_key": {
+                                "type": "string"
                               }
                             }
                           },
@@ -19526,6 +19783,9 @@
                             "items": {
                               "type": "object",
                               "properties": {
+                                "idempotency_key": {
+                                  "type": "string"
+                                },
                                 "metadata": {
                                   "nullable": true,
                                   "type": "object",
@@ -19974,6 +20234,48 @@
                               "decision_priority": {
                                 "type": "integer"
                               },
+                              "decision_ranking": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "candidates": {
+                                    "type": "integer"
+                                  },
+                                  "comparable": {
+                                    "type": "boolean"
+                                  },
+                                  "decided_by": {
+                                    "type": "string"
+                                  },
+                                  "fallback_reason": {
+                                    "type": "string"
+                                  },
+                                  "score_kind": {
+                                    "type": "string"
+                                  },
+                                  "strategy": {
+                                    "type": "string"
+                                  },
+                                  "tier": {
+                                    "type": "integer"
+                                  },
+                                  "tiered": {
+                                    "type": "boolean"
+                                  },
+                                  "winner": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "strategy",
+                                  "tiered",
+                                  "tier",
+                                  "comparable",
+                                  "decided_by",
+                                  "winner",
+                                  "candidates"
+                                ]
+                              },
                               "decision_reason": {
                                 "type": "string"
                               },
@@ -20012,8 +20314,17 @@
                                       ]
                                     }
                                   },
+                                  "disposition": {
+                                    "type": "string"
+                                  },
+                                  "fallback_target": {
+                                    "type": "string"
+                                  },
                                   "required_count": {
                                     "type": "integer"
+                                  },
+                                  "selected_policy": {
+                                    "type": "string"
                                   },
                                   "usable_count": {
                                     "type": "integer"
@@ -20277,6 +20588,156 @@
                               },
                               "selection_reasoning": {
                                 "type": "string"
+                              },
+                              "selection_trace": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "final_survivors": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "LoRAName": {
+                                          "type": "string"
+                                        },
+                                        "Model": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningDescription": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningEffort": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningMode": {
+                                          "type": "string"
+                                        },
+                                        "UseReasoning": {
+                                          "nullable": true,
+                                          "type": "boolean"
+                                        },
+                                        "Weight": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "Model",
+                                        "LoRAName",
+                                        "Weight",
+                                        "UseReasoning",
+                                        "ReasoningDescription",
+                                        "ReasoningMode",
+                                        "ReasoningEffort"
+                                      ]
+                                    }
+                                  },
+                                  "stages": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "action": {
+                                          "type": "string"
+                                        },
+                                        "available": {
+                                          "type": "integer"
+                                        },
+                                        "candidates": {
+                                          "nullable": true,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "object",
+                                            "properties": {
+                                              "candidate": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "LoRAName": {
+                                                    "type": "string"
+                                                  },
+                                                  "Model": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningDescription": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningEffort": {
+                                                    "type": "string"
+                                                  },
+                                                  "ReasoningMode": {
+                                                    "type": "string"
+                                                  },
+                                                  "UseReasoning": {
+                                                    "nullable": true,
+                                                    "type": "boolean"
+                                                  },
+                                                  "Weight": {
+                                                    "type": "number"
+                                                  }
+                                                },
+                                                "required": [
+                                                  "Model",
+                                                  "LoRAName",
+                                                  "Weight",
+                                                  "UseReasoning",
+                                                  "ReasoningDescription",
+                                                  "ReasoningMode",
+                                                  "ReasoningEffort"
+                                                ]
+                                              },
+                                              "elimination_reason": {
+                                                "type": "string"
+                                              },
+                                              "metric": {
+                                                "type": "string"
+                                              },
+                                              "value": {
+                                                "nullable": true,
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "candidate"
+                                            ]
+                                          }
+                                        },
+                                        "factor": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "percentile": {
+                                          "type": "integer"
+                                        },
+                                        "reason": {
+                                          "type": "string"
+                                        },
+                                        "tolerance": {
+                                          "type": "number"
+                                        },
+                                        "total": {
+                                          "type": "integer"
+                                        }
+                                      },
+                                      "required": [
+                                        "factor",
+                                        "action",
+                                        "reason",
+                                        "tolerance",
+                                        "available",
+                                        "total",
+                                        "candidates"
+                                      ]
+                                    }
+                                  }
+                                },
+                                "required": [
+                                  "stages",
+                                  "final_survivors"
+                                ]
                               },
                               "session_action": {
                                 "type": "string"
@@ -21238,6 +21699,514 @@
                     "available_recipes",
                     "available_decisions",
                     "available_models"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "replay.read",
+        "x-vllm-sr-sensitivity": "replay",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-plugin-operations": [
+          {
+            "plugin": "router_replay",
+            "mode": "read"
+          },
+          {
+            "plugin": "shadow_dispatch",
+            "mode": "read"
+          }
+        ],
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
+    "/api/v1/observability/replays/dataset": {
+      "get": {
+        "summary": "Export a shadow comparison dataset manifest built from the selected Router Replay records",
+        "description": "Export a shadow comparison dataset manifest built from the selected Router Replay records",
+        "operationId": "get_api_v1_observability_replays_dataset",
+        "tags": [
+          "observability"
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive text search across replay records.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Filter by recipe name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "Filter by decision name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by selected model.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache_status",
+            "in": "query",
+            "description": "Filter by response-cache outcome.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "cached",
+                "streamed"
+              ]
+            }
+          },
+          {
+            "name": "seed",
+            "in": "query",
+            "description": "Seed that fixes split assignment; the same records under the same seed reproduce the same manifest.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "description": "Repeatable split written as name:weight, for example train:8.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Shadow comparison dataset manifest",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "examples": {
+                          "type": "integer"
+                        },
+                        "excluded": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer"
+                          }
+                        },
+                        "records": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "records",
+                        "examples"
+                      ]
+                    },
+                    "digest": {
+                      "type": "string"
+                    },
+                    "examples": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "input_digest": {
+                            "type": "string"
+                          },
+                          "lineage": {
+                            "type": "object",
+                            "properties": {
+                              "decision": {
+                                "type": "string"
+                              },
+                              "recipe": {
+                                "type": "string"
+                              },
+                              "replay_id": {
+                                "type": "string"
+                              },
+                              "request_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "replay_id"
+                            ]
+                          },
+                          "primary": {
+                            "type": "object",
+                            "properties": {
+                              "backend": {
+                                "type": "string"
+                              },
+                              "model": {
+                                "type": "string"
+                              },
+                              "output_digest": {
+                                "type": "string"
+                              },
+                              "sample_rate": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "model",
+                              "output_digest"
+                            ]
+                          },
+                          "shadows": {
+                            "nullable": true,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "backend": {
+                                  "type": "string"
+                                },
+                                "model": {
+                                  "type": "string"
+                                },
+                                "output_digest": {
+                                  "type": "string"
+                                },
+                                "sample_rate": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "model",
+                                "output_digest"
+                              ]
+                            }
+                          },
+                          "split": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "input_digest",
+                          "split",
+                          "primary",
+                          "shadows",
+                          "lineage"
+                        ]
+                      }
+                    },
+                    "policy": {
+                      "type": "object",
+                      "properties": {
+                        "seed": {
+                          "type": "string"
+                        },
+                        "splits": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "weight": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "weight"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "seed",
+                        "splits"
+                      ]
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "digest",
+                    "policy",
+                    "counts",
+                    "examples"
                   ]
                 }
               }
@@ -22892,6 +23861,9 @@
                               "type": "integer"
                             }
                           }
+                        },
+                        "protection_state_key": {
+                          "type": "string"
                         }
                       }
                     },
@@ -22907,6 +23879,9 @@
                       "items": {
                         "type": "object",
                         "properties": {
+                          "idempotency_key": {
+                            "type": "string"
+                          },
                           "metadata": {
                             "nullable": true,
                             "type": "object",
@@ -23355,6 +24330,48 @@
                         "decision_priority": {
                           "type": "integer"
                         },
+                        "decision_ranking": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "candidates": {
+                              "type": "integer"
+                            },
+                            "comparable": {
+                              "type": "boolean"
+                            },
+                            "decided_by": {
+                              "type": "string"
+                            },
+                            "fallback_reason": {
+                              "type": "string"
+                            },
+                            "score_kind": {
+                              "type": "string"
+                            },
+                            "strategy": {
+                              "type": "string"
+                            },
+                            "tier": {
+                              "type": "integer"
+                            },
+                            "tiered": {
+                              "type": "boolean"
+                            },
+                            "winner": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "strategy",
+                            "tiered",
+                            "tier",
+                            "comparable",
+                            "decided_by",
+                            "winner",
+                            "candidates"
+                          ]
+                        },
                         "decision_reason": {
                           "type": "string"
                         },
@@ -23393,8 +24410,17 @@
                                 ]
                               }
                             },
+                            "disposition": {
+                              "type": "string"
+                            },
+                            "fallback_target": {
+                              "type": "string"
+                            },
                             "required_count": {
                               "type": "integer"
+                            },
+                            "selected_policy": {
+                              "type": "string"
                             },
                             "usable_count": {
                               "type": "integer"
@@ -23658,6 +24684,156 @@
                         },
                         "selection_reasoning": {
                           "type": "string"
+                        },
+                        "selection_trace": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "final_survivors": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "LoRAName": {
+                                    "type": "string"
+                                  },
+                                  "Model": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningDescription": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningEffort": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningMode": {
+                                    "type": "string"
+                                  },
+                                  "UseReasoning": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "Weight": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "Model",
+                                  "LoRAName",
+                                  "Weight",
+                                  "UseReasoning",
+                                  "ReasoningDescription",
+                                  "ReasoningMode",
+                                  "ReasoningEffort"
+                                ]
+                              }
+                            },
+                            "stages": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "type": "string"
+                                  },
+                                  "available": {
+                                    "type": "integer"
+                                  },
+                                  "candidates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "candidate": {
+                                          "type": "object",
+                                          "properties": {
+                                            "LoRAName": {
+                                              "type": "string"
+                                            },
+                                            "Model": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningDescription": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningEffort": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningMode": {
+                                              "type": "string"
+                                            },
+                                            "UseReasoning": {
+                                              "nullable": true,
+                                              "type": "boolean"
+                                            },
+                                            "Weight": {
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "Model",
+                                            "LoRAName",
+                                            "Weight",
+                                            "UseReasoning",
+                                            "ReasoningDescription",
+                                            "ReasoningMode",
+                                            "ReasoningEffort"
+                                          ]
+                                        },
+                                        "elimination_reason": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "candidate"
+                                      ]
+                                    }
+                                  },
+                                  "factor": {
+                                    "type": "string"
+                                  },
+                                  "metric": {
+                                    "type": "string"
+                                  },
+                                  "percentile": {
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "factor",
+                                  "action",
+                                  "reason",
+                                  "tolerance",
+                                  "available",
+                                  "total",
+                                  "candidates"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "stages",
+                            "final_survivors"
+                          ]
                         },
                         "session_action": {
                           "type": "string"
@@ -27746,8 +28922,19 @@
                         }
                       },
                       "default_max_tokens": {
-                        "nullable": true,
-                        "type": "integer"
+                        "oneOf": [
+                          {
+                            "minimum": 1,
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string",
+                            "enum": [
+                              "auto"
+                            ]
+                          }
+                        ],
+                        "nullable": true
                       },
                       "max_n": {
                         "nullable": true,
@@ -30607,8 +31794,8 @@
     },
     "/api/v1/routing/preview": {
       "post": {
-        "summary": "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
-        "description": "Preview all configured signals and the resulting route without invoking a generation backend. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+        "summary": "Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
+        "description": "Preview configured signals and model selection without generating an answer. Supported native-output requests use backend render APIs to resolve per-candidate capacity; paths requiring execution remain unresolved. Learning uses read-only captured state with selection_provenance; preview_context supplies session identity and an optional preview-only sampling seed. A state-dependent or sampled result does not guarantee a later live selection. global.services.api.routing_preview controls the request deadline and concurrent worker bound.",
         "operationId": "post_api_v1_routing_preview",
         "tags": [
           "routing"
@@ -30620,6 +31807,14 @@
             "description": "Include per-decision routing trace trees.",
             "schema": {
               "type": "boolean"
+            }
+          },
+          {
+            "name": "x-sr-bench-expected-config-hash",
+            "in": "header",
+            "description": "Optional lowercase SHA-256 of the active runtime document. Rejects a mismatched generation before evaluating signals.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -30644,8 +31839,53 @@
                         "type": "string"
                       }
                     },
+                    "config_hash": {
+                      "type": "string"
+                    },
                     "decision_error": {
                       "type": "string"
+                    },
+                    "decision_ranking": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "candidates": {
+                          "type": "integer"
+                        },
+                        "comparable": {
+                          "type": "boolean"
+                        },
+                        "decided_by": {
+                          "type": "string"
+                        },
+                        "fallback_reason": {
+                          "type": "string"
+                        },
+                        "score_kind": {
+                          "type": "string"
+                        },
+                        "strategy": {
+                          "type": "string"
+                        },
+                        "tier": {
+                          "type": "integer"
+                        },
+                        "tiered": {
+                          "type": "boolean"
+                        },
+                        "winner": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "strategy",
+                        "tiered",
+                        "tier",
+                        "comparable",
+                        "decided_by",
+                        "winner",
+                        "candidates"
+                      ]
                     },
                     "decision_result": {
                       "nullable": true,
@@ -33353,11 +34593,198 @@
                     "selection_method": {
                       "type": "string"
                     },
+                    "selection_provenance": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "captured_at": {
+                          "type": "string"
+                        },
+                        "caveat": {
+                          "type": "string"
+                        },
+                        "config_hash": {
+                          "type": "string"
+                        },
+                        "mode": {
+                          "type": "string"
+                        },
+                        "sampled": {
+                          "type": "boolean"
+                        },
+                        "sampling_seed": {
+                          "nullable": true,
+                          "type": "integer"
+                        },
+                        "state_dependent": {
+                          "type": "boolean"
+                        },
+                        "state_hash": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "mode",
+                        "config_hash",
+                        "state_dependent",
+                        "sampled"
+                      ]
+                    },
                     "selection_reason": {
                       "type": "string"
                     },
                     "selection_status": {
                       "type": "string"
+                    },
+                    "selection_trace": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "final_survivors": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "LoRAName": {
+                                "type": "string"
+                              },
+                              "Model": {
+                                "type": "string"
+                              },
+                              "ReasoningDescription": {
+                                "type": "string"
+                              },
+                              "ReasoningEffort": {
+                                "type": "string"
+                              },
+                              "ReasoningMode": {
+                                "type": "string"
+                              },
+                              "UseReasoning": {
+                                "nullable": true,
+                                "type": "boolean"
+                              },
+                              "Weight": {
+                                "type": "number"
+                              }
+                            },
+                            "required": [
+                              "Model",
+                              "LoRAName",
+                              "Weight",
+                              "UseReasoning",
+                              "ReasoningDescription",
+                              "ReasoningMode",
+                              "ReasoningEffort"
+                            ]
+                          }
+                        },
+                        "stages": {
+                          "nullable": true,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "action": {
+                                "type": "string"
+                              },
+                              "available": {
+                                "type": "integer"
+                              },
+                              "candidates": {
+                                "nullable": true,
+                                "type": "array",
+                                "items": {
+                                  "type": "object",
+                                  "properties": {
+                                    "candidate": {
+                                      "type": "object",
+                                      "properties": {
+                                        "LoRAName": {
+                                          "type": "string"
+                                        },
+                                        "Model": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningDescription": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningEffort": {
+                                          "type": "string"
+                                        },
+                                        "ReasoningMode": {
+                                          "type": "string"
+                                        },
+                                        "UseReasoning": {
+                                          "nullable": true,
+                                          "type": "boolean"
+                                        },
+                                        "Weight": {
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "Model",
+                                        "LoRAName",
+                                        "Weight",
+                                        "UseReasoning",
+                                        "ReasoningDescription",
+                                        "ReasoningMode",
+                                        "ReasoningEffort"
+                                      ]
+                                    },
+                                    "elimination_reason": {
+                                      "type": "string"
+                                    },
+                                    "metric": {
+                                      "type": "string"
+                                    },
+                                    "value": {
+                                      "nullable": true,
+                                      "type": "number"
+                                    }
+                                  },
+                                  "required": [
+                                    "candidate"
+                                  ]
+                                }
+                              },
+                              "factor": {
+                                "type": "string"
+                              },
+                              "metric": {
+                                "type": "string"
+                              },
+                              "percentile": {
+                                "type": "integer"
+                              },
+                              "reason": {
+                                "type": "string"
+                              },
+                              "tolerance": {
+                                "type": "number"
+                              },
+                              "total": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "factor",
+                              "action",
+                              "reason",
+                              "tolerance",
+                              "available",
+                              "total",
+                              "candidates"
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "stages",
+                        "final_survivors"
+                      ]
                     },
                     "signal_confidences": {
                       "nullable": true,
@@ -33398,6 +34825,12 @@
             "headers": {
               "X-Request-Id": {
                 "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "x-vsr-config-hash": {
+                "description": "SHA-256 of the actual runtime generation used by this Preview.",
                 "schema": {
                   "type": "string"
                 }
@@ -33494,6 +34927,50 @@
           },
           "403": {
             "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -33684,8 +35161,53 @@
                             "type": "string"
                           }
                         },
+                        "config_hash": {
+                          "type": "string"
+                        },
                         "decision_error": {
                           "type": "string"
+                        },
+                        "decision_ranking": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "candidates": {
+                              "type": "integer"
+                            },
+                            "comparable": {
+                              "type": "boolean"
+                            },
+                            "decided_by": {
+                              "type": "string"
+                            },
+                            "fallback_reason": {
+                              "type": "string"
+                            },
+                            "score_kind": {
+                              "type": "string"
+                            },
+                            "strategy": {
+                              "type": "string"
+                            },
+                            "tier": {
+                              "type": "integer"
+                            },
+                            "tiered": {
+                              "type": "boolean"
+                            },
+                            "winner": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "strategy",
+                            "tiered",
+                            "tier",
+                            "comparable",
+                            "decided_by",
+                            "winner",
+                            "candidates"
+                          ]
                         },
                         "decision_result": {
                           "nullable": true,
@@ -36393,11 +37915,198 @@
                         "selection_method": {
                           "type": "string"
                         },
+                        "selection_provenance": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "captured_at": {
+                              "type": "string"
+                            },
+                            "caveat": {
+                              "type": "string"
+                            },
+                            "config_hash": {
+                              "type": "string"
+                            },
+                            "mode": {
+                              "type": "string"
+                            },
+                            "sampled": {
+                              "type": "boolean"
+                            },
+                            "sampling_seed": {
+                              "nullable": true,
+                              "type": "integer"
+                            },
+                            "state_dependent": {
+                              "type": "boolean"
+                            },
+                            "state_hash": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "mode",
+                            "config_hash",
+                            "state_dependent",
+                            "sampled"
+                          ]
+                        },
                         "selection_reason": {
                           "type": "string"
                         },
                         "selection_status": {
                           "type": "string"
+                        },
+                        "selection_trace": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "final_survivors": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "LoRAName": {
+                                    "type": "string"
+                                  },
+                                  "Model": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningDescription": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningEffort": {
+                                    "type": "string"
+                                  },
+                                  "ReasoningMode": {
+                                    "type": "string"
+                                  },
+                                  "UseReasoning": {
+                                    "nullable": true,
+                                    "type": "boolean"
+                                  },
+                                  "Weight": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "Model",
+                                  "LoRAName",
+                                  "Weight",
+                                  "UseReasoning",
+                                  "ReasoningDescription",
+                                  "ReasoningMode",
+                                  "ReasoningEffort"
+                                ]
+                              }
+                            },
+                            "stages": {
+                              "nullable": true,
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "action": {
+                                    "type": "string"
+                                  },
+                                  "available": {
+                                    "type": "integer"
+                                  },
+                                  "candidates": {
+                                    "nullable": true,
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "candidate": {
+                                          "type": "object",
+                                          "properties": {
+                                            "LoRAName": {
+                                              "type": "string"
+                                            },
+                                            "Model": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningDescription": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningEffort": {
+                                              "type": "string"
+                                            },
+                                            "ReasoningMode": {
+                                              "type": "string"
+                                            },
+                                            "UseReasoning": {
+                                              "nullable": true,
+                                              "type": "boolean"
+                                            },
+                                            "Weight": {
+                                              "type": "number"
+                                            }
+                                          },
+                                          "required": [
+                                            "Model",
+                                            "LoRAName",
+                                            "Weight",
+                                            "UseReasoning",
+                                            "ReasoningDescription",
+                                            "ReasoningMode",
+                                            "ReasoningEffort"
+                                          ]
+                                        },
+                                        "elimination_reason": {
+                                          "type": "string"
+                                        },
+                                        "metric": {
+                                          "type": "string"
+                                        },
+                                        "value": {
+                                          "nullable": true,
+                                          "type": "number"
+                                        }
+                                      },
+                                      "required": [
+                                        "candidate"
+                                      ]
+                                    }
+                                  },
+                                  "factor": {
+                                    "type": "string"
+                                  },
+                                  "metric": {
+                                    "type": "string"
+                                  },
+                                  "percentile": {
+                                    "type": "integer"
+                                  },
+                                  "reason": {
+                                    "type": "string"
+                                  },
+                                  "tolerance": {
+                                    "type": "number"
+                                  },
+                                  "total": {
+                                    "type": "integer"
+                                  }
+                                },
+                                "required": [
+                                  "factor",
+                                  "action",
+                                  "reason",
+                                  "tolerance",
+                                  "available",
+                                  "total",
+                                  "candidates"
+                                ]
+                              }
+                            }
+                          },
+                          "required": [
+                            "stages",
+                            "final_survivors"
+                          ]
                         },
                         "signal_confidences": {
                           "nullable": true,
@@ -36593,6 +38302,23 @@
                       },
                       "trace": {
                         "type": "boolean"
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "preview_context": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "conversation_id": {
+                        "type": "string"
+                      },
+                      "sampling_seed": {
+                        "nullable": true,
+                        "type": "integer"
+                      },
+                      "session_id": {
+                        "type": "string"
                       }
                     },
                     "additionalProperties": false
@@ -50848,6 +52574,10 @@
                                 "nullable": true,
                                 "type": "object"
                               },
+                              "minimum": {
+                                "nullable": true,
+                                "type": "integer"
+                              },
                               "nullable": {
                                 "type": "boolean"
                               },
@@ -50988,6 +52718,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51059,6 +52793,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -51140,6 +52878,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -51207,6 +52949,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -51385,6 +53131,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51456,6 +53206,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -51537,6 +53291,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -51604,6 +53362,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -51782,6 +53544,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -51853,6 +53619,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -51934,6 +53704,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -52001,6 +53775,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -52179,6 +53957,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -52250,6 +54032,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -52331,6 +54117,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -52398,6 +54188,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"
@@ -52576,6 +54370,10 @@
                                           "nullable": true,
                                           "type": "object"
                                         },
+                                        "minimum": {
+                                          "nullable": true,
+                                          "type": "integer"
+                                        },
                                         "nullable": {
                                           "type": "boolean"
                                         },
@@ -52647,6 +54445,10 @@
                                             "items": {
                                               "nullable": true,
                                               "type": "object"
+                                            },
+                                            "minimum": {
+                                              "nullable": true,
+                                              "type": "integer"
                                             },
                                             "nullable": {
                                               "type": "boolean"
@@ -52728,6 +54530,10 @@
                                                 "nullable": true,
                                                 "type": "object"
                                               },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
+                                              },
                                               "nullable": {
                                                 "type": "boolean"
                                               },
@@ -52795,6 +54601,10 @@
                                               "items": {
                                                 "nullable": true,
                                                 "type": "object"
+                                              },
+                                              "minimum": {
+                                                "nullable": true,
+                                                "type": "integer"
                                               },
                                               "nullable": {
                                                 "type": "boolean"

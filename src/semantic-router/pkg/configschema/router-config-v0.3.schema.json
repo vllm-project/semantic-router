@@ -949,9 +949,6 @@
         "variant": {
           "type": "string"
         },
-        "protocol": {
-          "type": "string"
-        },
         "on_error": {
           "type": "string"
         },
@@ -1120,6 +1117,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1164,6 +1164,9 @@
         },
         "learning": {
           "$ref": "#/$defs/RouterLearningConfig"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1207,6 +1210,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1468,6 +1474,28 @@
             "$ref": "#/$defs/ModelScore"
           },
           "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CircuitBreakerConfig": {
+      "properties": {
+        "consecutive_failures": {
+          "type": "integer"
+        },
+        "cooldown_period": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "half_open_probes": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -2445,6 +2473,24 @@
           },
           "type": "array"
         },
+        "image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "aggregation_method": {
           "type": "string"
         },
@@ -2538,6 +2584,9 @@
         "temperature": {
           "type": "number"
         },
+        "reasoning": {
+          "$ref": "#/$defs/ExternalModelReasoningConfig"
+        },
         "max_request_bytes": {
           "type": "integer"
         },
@@ -2548,6 +2597,25 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ExternalModelReasoningConfig": {
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "use_reasoning": {
+          "type": "boolean"
+        },
+        "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "family",
+        "use_reasoning"
+      ]
+    },
     "FactCheckRule": {
       "properties": {
         "name": {
@@ -2555,6 +2623,50 @@
         },
         "description": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FallbackPolicy": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "circuit_breaker": {
+          "$ref": "#/$defs/CircuitBreakerConfig"
         }
       },
       "additionalProperties": false,
@@ -2623,6 +2735,12 @@
           "type": "boolean"
         },
         "on_error": {
+          "type": "string"
+        },
+        "quorum_failure_policy": {
+          "type": "string"
+        },
+        "quorum_fallback_target": {
           "type": "string"
         },
         "analysis_template": {
@@ -3193,6 +3311,12 @@
         },
         "timeout": {
           "type": "string"
+        },
+        "api_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -3496,6 +3620,9 @@
         },
         "reflection": {
           "$ref": "#/$defs/MemoryReflectionConfig"
+        },
+        "persistence": {
+          "$ref": "#/$defs/MemoryPersistenceConfig"
         }
       },
       "additionalProperties": false,
@@ -3514,6 +3641,32 @@
         },
         "num_partitions": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryPersistenceConfig": {
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer",
+          "maximum": 9223372036,
+          "minimum": 0
+        },
+        "concurrency": {
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 0
+        },
+        "queue": {
+          "type": "integer",
+          "maximum": 1024,
+          "minimum": 0
+        },
+        "shutdown_grace_seconds": {
+          "type": "integer",
+          "maximum": 9223372036,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -4190,6 +4343,10 @@
         "quality": {
           "$ref": "#/$defs/QualityEvidenceConfig"
         },
+        "expected_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
         "latency_percentile": {
           "type": "integer"
         },
@@ -4536,6 +4693,56 @@
         },
         "bind": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProgressGateTuning": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "observe",
+            "enforce"
+          ]
+        },
+        "calibration_id": {
+          "type": "string"
+        },
+        "window_size": {
+          "type": "integer",
+          "maximum": 256,
+          "minimum": 1
+        },
+        "window_ttl_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 1
+        },
+        "min_window_outcomes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_consecutive_regressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_consecutive_recoveries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cooldown_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_switches_per_window": {
+          "type": "integer",
+          "maximum": 256,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -5253,8 +5460,16 @@
     "RequestParamsPluginConfig": {
       "properties": {
         "default_max_tokens": {
-          "type": "integer",
-          "minimum": 1
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ]
         },
         "blocked_params": {
           "items": {
@@ -5681,6 +5896,9 @@
         "stability_weight": {
           "type": "number",
           "minimum": 0
+        },
+        "progress_gate": {
+          "$ref": "#/$defs/ProgressGateTuning"
         }
       },
       "additionalProperties": false,
@@ -6809,9 +7027,6 @@
         },
         "update_interval": {
           "type": "string"
-        },
-        "queue_depth_estimation": {
-          "type": "boolean"
         },
         "max_models": {
           "type": "integer"

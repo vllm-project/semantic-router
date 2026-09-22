@@ -11,12 +11,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
 // EnhancedHallucinationSpan represents a hallucinated span with NLI explanation.
@@ -55,6 +59,10 @@ type EnhancedHallucinationInfo struct {
 
 // RequestContext holds the context for processing a request.
 type RequestContext struct {
+	learningPreview           *routerLearningPreviewSnapshot // Request-local, read-only selection state; never used by generation.
+	AutomaticCandidateDemands map[string]selection.CandidateDemand
+	BenchmarkModelUsage       string // Router-owned bounded accounting receipt; never copied from client or cache.
+
 	RAGRerankLatency    time.Duration
 	RAGRerankScores     []float32
 	RAGRerankerIdentity string
@@ -111,6 +119,11 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// ResponseHeadersContinued indicates whether response headers were forwarded
+	// downstream to the client. Once true, response headers are committed and no
+	// subsequent replacement or fallback response may be attempted.
+	ResponseHeadersContinued bool
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
@@ -152,6 +165,7 @@ type RequestContext struct {
 	VSRSelectedModel                    string                                      // The model selected by VSR
 	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
+	VSRSelectionTrace                   *selectiontrace.MultiFactorObjective        // Base objective evidence, before Router Learning
 	VSRFusionQuorum                     *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRLooperDiagnostics                *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
 	VSRPromptHelperModel                string                                      // Concrete prompt-selector helper model
@@ -164,8 +178,11 @@ type RequestContext struct {
 	VSRLearningProtectionPreflight      *routerreplay.LearningProtectionDiagnostics // Protection preflight trace for replay
 	VSRLearningSessionID                string                                      // Router Learning memory key used for this request
 	VSRLearningConversationID           string                                      // Client-declared conversation identity used by Router Learning
-	VSRCacheHit                         bool                                        // Whether this request hit the cache
-	VSRCacheSimilarity                  float32                                     // Similarity score from last cache lookup (0 = no lookup performed)
+	VSRProgressGateConfig               *config.ProgressGateConfig
+	VSRProgressOutcomeRecorded          bool
+	VSRProgressGateError                error
+	VSRCacheHit                         bool    // Whether this request hit the cache
+	VSRCacheSimilarity                  float32 // Similarity score from last cache lookup (0 = no lookup performed)
 	VSRCacheHitKind                     string
 	VSRCacheSource                      string
 	VSRCacheEntryAgeSeconds             float64
@@ -179,6 +196,17 @@ type RequestContext struct {
 	// VSRPolicyEligibleModelRefs is a selector's hard eligibility envelope.
 	// Unlike context-only filtering, it also constrains tier/global learning.
 	VSRPolicyEligibleModelRefs []config.ModelRef
+
+	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
+	// Never recover its reasoning settings by searching model names again.
+	VSRSelectedCandidate *config.ModelRef
+
+	// FallbackRecord tracks bounded cross-candidate execution attempts and token accounting.
+	FallbackRecord        *fallback.ExecutionRecord
+	FallbackAuditRecorded bool
+
+	// Selection stages ownership; only a validated provider continuation commits it.
+	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
 
 	// ResponsePath records how the final response was produced, surfaced as the
 	// v0.4 keystone x-vsr-response-path header (one of the headers.ResponsePath*
@@ -254,6 +282,7 @@ type RequestContext struct {
 	HasToolsForFactCheck        bool     // Request has tools that provide context for fact-checking
 	ToolResultsContext          string   // Aggregated tool results for hallucination check
 	UserContent                 string   // Stored user content for hallucination detection
+	RequestAudio                string   // First inline user audio, never a remote URL or local path
 	RequestImageURL             string   // First image URL from user messages (for Tier 1 complexity classification)
 	HallucinationDetected       bool     // Result of hallucination detection
 	HallucinationSpans          []string // Unsupported spans found in answer (basic mode)
@@ -283,8 +312,12 @@ type RequestContext struct {
 	PIIBlocked  bool     // True if request was blocked due to PII policy violation
 
 	// Tracing context
-	TraceContext context.Context // OpenTelemetry trace context for span propagation
-	UpstreamSpan trace.Span      // Span for tracking upstream vLLM request duration
+	TraceContext      context.Context // OpenTelemetry trace context for span propagation
+	RequestSpan       trace.Span      // Spans the complete ext_proc request, including streaming
+	UpstreamSpan      trace.Span      // Spans provider dispatch through final response body
+	TraceReceiveError error           // Receive cancellation may be consumed by Process
+	TraceStatusCode   int             // Final client status, including local immediate responses
+	TraceTrafficKind  string          // Bounded HTTP route family; never a caller path or query
 
 	// ResponseObjectState is present only when optional Responses object
 	// persistence participates in this request. Generation never depends on it.
@@ -306,17 +339,30 @@ type RequestContext struct {
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.
-	SourceFormat             llmprotocol.WireFormat
-	TargetFormat             llmprotocol.WireFormat
-	SemanticRequest          *llmprotocol.Request
+	SourceFormat    llmprotocol.WireFormat
+	TargetFormat    llmprotocol.WireFormat
+	SemanticRequest *llmprotocol.Request
+	// FallbackRequest is an immutable, protocol-neutral snapshot taken after all
+	// request plugins and final capability checks. Every provider retry clones
+	// this snapshot instead of replaying mutations made for the primary backend.
+	FallbackRequest          *llmprotocol.Request
 	OriginalContextHistory   *contextcompression.HistorySnapshot
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
 	SemanticResponse         *llmprotocol.Response
+	// PrimaryOutputDigest hashes the answer the selected model produced, taken
+	// before any response-stage plugin rewrites it. A body warning prepends
+	// router text to SemanticResponse in place, so hashing that later would
+	// attribute the warning to the model and stop the digest comparing with a
+	// shadow arm's.
+	PrimaryOutputDigest      string
+	PrimaryOutputChars       int
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics
+	ResponseVendor           llmprotocol.ResponseVendor
+	ResponseVendorExtensions bool // Upstream response carried vendor decorations that were dropped on decode
 	ImmediateProtocolError   *llmprotocol.ProtocolError
 	ImmediateResponseEncoded bool
 
@@ -337,6 +383,10 @@ type RequestContext struct {
 	MemoryFailOpen       bool
 	MemoryResultCount    int
 	MemoryMessageIndexes map[int]struct{}
+
+	// RequestAutoStore snapshots the client's memory persistence override before
+	// provider preparation removes router controls. Nil uses configured defaults.
+	RequestAutoStore *bool
 
 	ContextCompressionTargetTokens *int
 	ContextCompressionRecoveryKeys []string

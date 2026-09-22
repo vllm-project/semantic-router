@@ -13,6 +13,34 @@ import (
 
 const testRule = "rule"
 
+func TestStructuredThresholdAssertionsMatchTheGate(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		diff         float64
+		changeMatrix bool
+		passed       bool
+	}{
+		{"equal", 0, false, true},
+		{"serialization_tolerance", 0.00004, false, true},
+		{"threshold_drift", 0.00006, false, false},
+		{"confusion_drift", 0, true, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rule := ruleReport{Name: testRule, Shipped: thresholdResult{Threshold: 0.5, TP: 2}, Selected: thresholdResult{Threshold: 0.5 + tc.diff, TP: 2}}
+			if tc.changeMatrix {
+				rule.Selected.FP = 1
+			}
+			checks := thresholdAssertions([]ruleReport{rule})
+			if len(checks) != 1 || checks[0].ID != "threshold/"+testRule || checks[0].Passed != tc.passed {
+				t.Fatalf("wrong structured threshold evidence: %+v", checks)
+			}
+			if passed := checkShippedThresholds(calibrationReport{Rules: []ruleReport{rule}}, "pin", "pin", true) == 0; passed != checks[0].Passed {
+				t.Fatal("JSON assertion and executable gate disagree")
+			}
+		})
+	}
+}
+
 // scoredFixtures builds one fixture per score; the positive set is by path.
 func scoredFixtures(scores map[string]float64, positives ...string) ([]fixtureReport, map[string]bool) {
 	fixtures := make([]fixtureReport, 0, len(scores))
@@ -432,8 +460,8 @@ func TestResolveInput_ResolvesSymlinksBeforeCleaning(t *testing.T) {
 // resolved config, so the report cannot describe a blend the run did not use.
 func TestClassifierConfig_IsTheReportedScoringSource(t *testing.T) {
 	hnsw := classifierConfig()
-	if hnsw.ModelType != "multimodal" || hnsw.TargetDimension != 384 || !hnsw.PreloadEmbeddings {
-		t.Fatalf("classifier config = %+v, want multimodal/384/preload", hnsw)
+	if hnsw.ModelType != "multimodal" || hnsw.TargetDimension != 0 || !hnsw.PreloadEmbeddings {
+		t.Fatalf("classifier config = %+v, want multimodal/full-dimension/preload", hnsw)
 	}
 	// 0 selects the encoder's final layer, which is what the report records;
 	// a deployment that pins another layer shifts every score.
@@ -441,11 +469,48 @@ func TestClassifierConfig_IsTheReportedScoringSource(t *testing.T) {
 		t.Fatalf("target layer = %d, want 0 (final layer)", hnsw.TargetLayer)
 	}
 	// Enabled is a pointer, so compare the resolved values field by field.
-	want := (config.PrototypeScoringConfig{}).WithDefaults()
+	want := (config.EmbeddingRule{QueryModality: config.QueryModalityImage}).EffectivePrototypeScoring(config.PrototypeScoringConfig{})
 	got := hnsw.PrototypeScoring
-	if !got.IsEnabled() || got.BestWeight != want.BestWeight || got.TopM != want.TopM ||
+	if got.IsEnabled() || got.BestWeight != want.BestWeight || got.TopM != want.TopM ||
 		got.MaxPrototypes != want.MaxPrototypes || got.ClusterSimilarityThreshold != want.ClusterSimilarityThreshold ||
 		got.MarginThreshold != want.MarginThreshold {
 		t.Fatalf("prototype scoring = %+v, want the resolved defaults %+v the classifier applies", got, want)
+	}
+}
+
+func TestPrototypePolicyPreservesCandidatesAndRecordsActualScoring(t *testing.T) {
+	for _, policy := range []string{"cluster", "raw-max"} {
+		t.Run(policy, func(t *testing.T) {
+			rules := []config.EmbeddingRule{{Name: "image", Candidates: []string{"first", "second"}}}
+			hnsw := classifierConfig()
+			if err := applyPrototypePolicy(rules, &hnsw, policy); err != nil {
+				t.Fatal(err)
+			}
+			if len(rules[0].Candidates) != 2 || rules[0].Candidates[0] != "first" || rules[0].Candidates[1] != "second" {
+				t.Fatal("policy changed candidates")
+			}
+			got := rules[0].PrototypeScoring.Resolve(hnsw.PrototypeScoring)
+			if got.IsEnabled() != hnsw.PrototypeScoring.IsEnabled() || got.BestWeight != hnsw.PrototypeScoring.BestWeight || got.TopM != hnsw.PrototypeScoring.TopM {
+				t.Fatal("reported policy differs from actual rule override")
+			}
+			if policy == "raw-max" && (got.IsEnabled() || got.BestWeight != 1 || got.TopM != 1) {
+				t.Fatal("raw-max policy must retain every candidate and score its raw maximum")
+			}
+		})
+	}
+	hnsw := classifierConfig()
+	if err := applyPrototypePolicy(nil, &hnsw, "unknown"); err == nil {
+		t.Fatal("unknown scoring policy accepted")
+	}
+}
+
+func TestPrototypeQualityGateDoesNotAcceptWeakBestF1(t *testing.T) {
+	for _, result := range []thresholdResult{{TP: 6, FP: 1}, {TP: 5, FN: 1}, {TN: 30}} {
+		if prototypeValidationPasses(&result) {
+			t.Fatalf("incomplete held-out quality passed: %+v", result)
+		}
+	}
+	if !prototypeValidationPasses(&thresholdResult{TP: 6, TN: 30}) {
+		t.Fatal("perfect fixed holdout rejected")
 	}
 }

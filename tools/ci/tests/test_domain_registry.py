@@ -7,7 +7,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
-from classify_pr_changes import select_profiles  # noqa: E402
+from classify_pr_changes import classify, select_profiles  # noqa: E402
 from domain_registry import (  # noqa: E402
     commands_for_domains,
     domain_records,
@@ -50,6 +50,24 @@ class DomainRegistryTests(unittest.TestCase):
             ("router-core", "maintained-recipes"),
         )
 
+    def test_memory_implementation_and_split_suite_select_live_integration(
+        self,
+    ) -> None:
+        for path in (
+            "src/semantic-router/pkg/memory/store.go",
+            "src/semantic-router/pkg/memory/retrieval/store.go",
+            "e2e/testing/memory_tests/test_retrieval.py",
+            "e2e/testing/memory_tests/helpers/client.py",
+            "e2e/testing/run_memory_integration.sh",
+            "tools/make/milvus.mk",
+        ):
+            with self.subTest(path=path):
+                self.assertIn("memory", matching_domains((path,)))
+                self.assertIn(
+                    "local.memory",
+                    classify((path,)).selected_jobs,
+                )
+
     def test_domain_commands_are_deduplicated_in_registry_order(self) -> None:
         commands = commands_for_domains(
             ("router-core", "dashboard", "maintained-recipes"), "checks"
@@ -76,13 +94,75 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn(
                     "make check-modelcompat", commands_for_domains(domains, "checks")
                 )
-                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
+                self.assertIn("core", commands_for_domains(domains, "verifications"))
 
     def test_every_domain_job_is_declared_once(self) -> None:
         jobs = job_records()
         for name, domain in domain_records().items():
             with self.subTest(domain=name):
-                self.assertTrue(set(domain["ci_jobs"]).issubset(jobs))
+                self.assertTrue(set(domain["verifications"]).issubset(jobs))
+
+    def test_performance_checks_do_not_repeat_the_integration_gate(self) -> None:
+        for path in (
+            "perf/pkg/benchmark/model_identity.go",
+            "perf/benchmarks/cache_bench_test.go",
+            "tools/make/performance.mk",
+            "tools/make/models.mk",
+            "src/semantic-router/tools/model-test-assets/main.go",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                checks = commands_for_domains(result.domains, "checks")
+                self.assertIn("make perf-test-unit", checks)
+                self.assertNotIn("make perf-check", checks)
+                self.assertIn(
+                    "make perf-check",
+                    commands_for_domains(result.domains, "verify"),
+                )
+                self.assertIn("performance", result.selected_jobs)
+
+    def test_shared_model_inputs_select_every_artifact_consumer(self) -> None:
+        for path in (
+            "src/semantic-router/pkg/config/registry.go",
+            "src/semantic-router/pkg/config/canonical_defaults.go",
+            "src/semantic-router/pkg/config/canonical_global.go",
+            "src/semantic-router/pkg/modeldownload/downloader.go",
+            "src/semantic-router/pkg/modeldownload/revision_receipt.go",
+            "src/semantic-router/pkg/modeldownload/validator.go",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertIn("model-artifacts", result.domains)
+                self.assertTrue(
+                    {
+                        "native.candle-cpu",
+                        "native.ort-cpu",
+                        "native.openvino-cpu",
+                        "performance",
+                    }
+                    <= set(result.selected_jobs)
+                )
+                self.assertNotIn(
+                    "make perf-check", commands_for_domains(result.domains, "checks")
+                )
+
+    def test_shared_model_inputs_do_not_expand_unrelated_or_unit_only_changes(
+        self,
+    ) -> None:
+        for path in (
+            "src/semantic-router/pkg/config/tool_selection_plugin.go",
+            "src/semantic-router/pkg/config/vela_defaults_test.go",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(
+                    {
+                        "native.candle-cpu",
+                        "native.ort-cpu",
+                        "native.openvino-cpu",
+                        "performance",
+                    }
+                    & set(classify([path]).selected_jobs)
+                )
 
     def test_generated_contract_sources_and_outputs_select_the_drift_gate(self) -> None:
         for path in (
@@ -105,7 +185,10 @@ class DomainRegistryTests(unittest.TestCase):
                     "make generated-contract-check",
                     commands_for_domains(domains, "checks"),
                 )
-                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
+                self.assertIn(
+                    "generated-contracts",
+                    commands_for_domains(domains, "verifications"),
+                )
 
     def test_skill_only_changes_keep_the_lightweight_gate(self) -> None:
         domains = matching_domains(
@@ -126,13 +209,19 @@ class DomainRegistryTests(unittest.TestCase):
             "tools/calibration/image-routing/main.go": "make go-tools-test",
             "bench/grounded_fusion/fusioneval/main.go": "make go-tools-test",
             "tools/calibration/tuning/engine.py": "make test-calibration",
-            "tools/test/services/mock-vllm/app.py": "make test-provider-simulator",
+            "tools/test/services/provider-mocker/provider_mocker/app.py": "make test-provider-mocker",
         }
         for path, command in cases.items():
             with self.subTest(path=path):
                 domains = matching_domains((path,))
                 self.assertIn(command, commands_for_domains(domains, "checks"))
-                self.assertIn("core-tests", commands_for_domains(domains, "ci_jobs"))
+                verification = {
+                    "make test-calibration": "learning-tools",
+                    "make test-provider-mocker": "mock-provider",
+                }.get(command, "core")
+                self.assertIn(
+                    verification, commands_for_domains(domains, "verifications")
+                )
 
     def test_reference_sources_select_checks_without_editing_outputs(self) -> None:
         cases = {

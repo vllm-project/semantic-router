@@ -5,7 +5,13 @@ import (
 )
 
 // handleResponseHeaders processes the response headers.
-func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
+func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (response *ext_proc.ProcessingResponse, err error) {
+	defer func() { bindAutomaticOutputResponseHeaders(response, ctx) }()
+	// Preserve the provider's actual HTTP status even on the skip-processing
+	// path, without invoking routing, plugins or additional metrics there.
+	if ctx != nil && v != nil {
+		ctx.UpstreamStatusCode = getStatusFromHeaders(v.ResponseHeaders.GetHeaders())
+	}
 	if skipResp := r.handleSkipProcessingResponseHeaders(v, ctx); skipResp != nil {
 		return skipResp, nil
 	}
@@ -19,10 +25,25 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 		// path can avoid caching non-2xx error bodies (cache poisoning).
 		ctx.UpstreamStatusCode = outcome.statusCode
 	}
-	finishUpstreamResponseSpan(ctx, outcome)
+	annotateUpstreamResponseSpan(ctx, outcome)
 	maybeRecordResponseHeaderTTFT(ctx)
 	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx != nil && ctx.IsStreamingResponse)
 	r.observeRouterLearningProviderStatus(ctx, outcome.statusCode)
+
+	if outcome.isSuccessful {
+		r.recordPrimarySuccess(ctx)
+	} else if r.shouldAttemptFallback(ctx) {
+		if fallbackResp := r.maybeExecuteFallback(nil, ctx); fallbackResp != nil {
+			return fallbackResp, nil
+		}
+	}
+	// Once response headers are continued to Envoy, Envoy's response_header_mode: SEND
+	// sends the headers downstream to the client, committing the response.
+	// ResponseHeadersContinued must be true to prevent subsequent body-stage
+	// processing from attempting fallback and emitting an invalid ImmediateResponse.
+	if ctx != nil {
+		ctx.ResponseHeadersContinued = true
+	}
 
 	headerMutation := buildResponseHeaderMutation(ctx, outcome.isSuccessful)
 	headerMutation = mergeHeaderMutations(headerMutation, buildResponseStreamingMutation(ctx, outcome))

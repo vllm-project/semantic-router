@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
@@ -14,6 +15,16 @@ type preparedBindingInventory interface {
 }
 
 func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
+	return preparedModelsInfoMatching(service, nil)
+}
+
+func preparedEmbeddingModelsInfo(service classificationService) ([]ModelInfo, bool) {
+	return preparedModelsInfoMatching(service, func(capability binding.Capability) bool {
+		return capability.Embedding != nil
+	})
+}
+
+func preparedModelsInfoMatching(service classificationService, include func(binding.Capability) bool) ([]ModelInfo, bool) {
 	inventory, ok := service.(preparedBindingInventory)
 	if !ok {
 		return nil, false
@@ -25,6 +36,9 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 	models := make([]ModelInfo, 0, len(entries))
 	for _, entry := range entries {
 		id, capability := entry.Identity, entry.Capability
+		if include != nil && !include(capability) {
+			continue
+		}
 		name, modelType := preparedModelNameAndType(id)
 		model := ModelInfo{
 			Name: name, Recipe: id.Recipe, Type: modelType, Loaded: true,
@@ -42,6 +56,7 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 		if capability.Device == "external" {
 			model.Metadata["lifecycle"] = "external"
 		}
+		addPreparedInputLimits(model.Metadata, capability)
 		if capability.Embedding != nil {
 			embedding := capability.Embedding
 			model.Metadata["default_dimension"] = fmt.Sprint(embedding.Dimension)
@@ -50,9 +65,42 @@ func preparedModelsInfo(service classificationService) ([]ModelInfo, bool) {
 			model.Metadata["normalization"] = embedding.Normalization
 			model.Metadata["modalities"] = strings.Join(embedding.Modalities, ",")
 		}
-		models = append(models, enrichModelInfo(model, nil))
+		model = enrichModelInfo(model, nil)
+		// Native resource revisions retain the operator's source revision before
+		// the actual artifact fingerprint. Use that declaration, never a guessed
+		// name from a derived CK/export/cache directory.
+		if sourceRevision, fingerprint, ok := strings.Cut(entry.Revision, ":"); ok && fingerprint != "" && capability.Device != "external" {
+			if sourceRevision != "" {
+				model.Metadata["source_revision"] = sourceRevision
+			}
+			if model.Registry == nil {
+				model.Registry = config.GetModelRegistryInfoByRevision(sourceRevision)
+				if model.Registry != nil {
+					model.Metadata["registry_match"] = "source_revision"
+				}
+			}
+		}
+		models = append(models, model)
 	}
 	return models, true
+}
+
+// Keep the historical max_sequence_length field compatible, while exposing
+// physical forward capacity separately from whole-document admission budgets.
+func addPreparedInputLimits(metadata map[string]string, capability binding.Capability) {
+	if limit := capability.Limits.ForwardTokens(); limit > 0 {
+		metadata["forward_max_tokens"] = fmt.Sprint(limit)
+	}
+	if limit := capability.Limits.EffectiveTokens(); limit > 0 {
+		metadata["input_max_tokens"] = fmt.Sprint(limit)
+		if capability.Limits.Overflow == "window" {
+			metadata["document_max_tokens"] = fmt.Sprint(limit)
+		}
+	}
+	if capability.Window != nil {
+		metadata["window_size"] = fmt.Sprint(capability.Window.Size)
+		metadata["window_overlap"] = fmt.Sprint(capability.Window.Overlap)
+	}
 }
 
 // Keep the established API names for existing consumers; new typed tasks are

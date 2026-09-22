@@ -113,3 +113,14 @@ func buildCommandArgs(opts BuildOptions) []string {
 
 	return args
 }
+
+// LoadPrebuilt consumes an already verified local artifact without invoking a build.
+func (b *Builder) LoadPrebuilt(ctx context.Context, clusterName, source, target string) error {
+	if err := exec.CommandContext(ctx, "docker", "image", "inspect", source).Run(); err != nil {
+		return fmt.Errorf("required prebuilt image %s is unavailable: %w", source, err)
+	}
+	if err := exec.CommandContext(ctx, "docker", "tag", source, target).Run(); err != nil {
+		return fmt.Errorf("tag prebuilt image: %w", err)
+	}
+	return b.LoadToKind(ctx, clusterName, target)
+}

@@ -14,6 +14,7 @@ from router_calibration_probe import (
     SELECTION_STATUSES,
     Probe,
     ProbeImageFixture,
+    generated_text_pattern,
     message_content_text_bytes,
 )
 from router_calibration_signal_values import compare_signal_values
@@ -611,10 +612,11 @@ def materialize_probe_messages(
     messages = copy.deepcopy(list(probe.messages))
     plan = _generated_text_plan(probe, messages)
     if plan is not None:
-        content, content_index, character, generated_bytes = plan
+        content, content_index, pattern, generated_bytes = plan
+        repeats, remainder = divmod(generated_bytes, len(pattern))
         content.insert(
             content_index,
-            {"type": "text", "text": character * generated_bytes},
+            {"type": "text", "text": pattern * repeats + pattern[:remainder]},
         )
     _materialize_image_fixtures(probe, messages)
     return messages
@@ -649,9 +651,12 @@ def _validate_materialized_message_size(probe: Probe, max_json_bytes: int) -> No
     generated_extra = 0
     plan = _generated_text_plan(probe, messages)
     if plan is not None:
-        content, content_index, character, generated_bytes = plan
+        content, content_index, pattern, generated_bytes = plan
         content.insert(content_index, {"type": "text", "text": ""})
-        generated_extra = _json_string_content_bytes(character) * generated_bytes
+        repeats, remainder = divmod(generated_bytes, len(pattern))
+        generated_extra = _json_string_content_bytes(
+            pattern
+        ) * repeats + _json_string_content_bytes(pattern[:remainder])
     total = len(json.dumps(messages, ensure_ascii=False).encode("utf-8"))
     total = _bounded_message_size_add(
         probe.probe_id, total, generated_extra, max_json_bytes
@@ -719,9 +724,7 @@ def _generated_text_plan(
         raise ValueError(f"{label} requires the selected message content to be a list")
     if generated.content_index < 0 or generated.content_index > len(content):
         raise ValueError(f"{label}.content_index is out of range")
-    character = generated.character
-    if len(character) != 1 or not character.isascii() or not character.isprintable():
-        raise ValueError(f"{label}.character must be one printable ASCII character")
+    pattern = generated_text_pattern(generated.character, generated.text, label)
     if (
         generated.target_text_bytes < 1
         or generated.target_text_bytes > MAX_GENERATED_TEXT_BYTES
@@ -737,7 +740,7 @@ def _generated_text_plan(
             f"{label}.target_text_bytes must exceed the selected message's "
             f"{current_text_bytes} explicit text bytes"
         )
-    return content, generated.content_index, character, generated_bytes
+    return content, generated.content_index, pattern, generated_bytes
 
 
 def _materialize_image_fixtures(probe: Probe, messages: list[dict[str, Any]]) -> None:
@@ -790,12 +793,16 @@ def probe_generated_text_metadata(probe: Probe) -> dict[str, Any] | None:
     generated = probe.generated_text
     if generated is None:
         return None
-    return {
+    metadata = {
         "message_index": generated.message_index,
         "content_index": generated.content_index,
         "target_text_bytes": generated.target_text_bytes,
-        "character": generated.character,
     }
+    if generated.text is None:
+        metadata["character"] = generated.character
+    else:
+        metadata["text"] = generated.text
+    return metadata
 
 
 def probe_materialized_messages_metadata(probe: Probe) -> dict[str, Any] | None:

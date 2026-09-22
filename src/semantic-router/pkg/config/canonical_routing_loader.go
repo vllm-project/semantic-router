@@ -5,6 +5,8 @@ import (
 	"reflect"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 type routingFragmentDocument struct {
@@ -29,6 +31,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	for field, target := range map[string]reflect.Type{
 		"candidate_requirements": reflect.TypeOf(CandidateRequirements{}),
 		"data_policy":            reflect.TypeOf(RoutingDataPolicy{}),
+		"fallback":               reflect.TypeOf(fallback.FallbackPolicy{}),
 	} {
 		if err := validateKnownFields(nestedStringMap(routing[field]), target); err != nil {
 			return nil, fmt.Errorf("routing.%s: %w", field, err)
@@ -43,9 +46,18 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	if err := doc.Routing.CandidateRequirements.Validate(); err != nil {
 		return nil, err
 	}
+	if doc.Routing.Fallback != nil {
+		if err := doc.Routing.Fallback.Validate(); err != nil {
+			return nil, fmt.Errorf("routing.fallback: %w", err)
+		}
+	}
 	cfg := DefaultGlobalConfig()
+	cfg.RoutingFragmentOnly = true
 	cfg.CandidateRequirements = doc.Routing.CandidateRequirements.Clone()
 	cfg.DataPolicy = doc.Routing.DataPolicy.Clone()
+	if doc.Routing.Fallback != nil {
+		cfg.Fallback = doc.Routing.Fallback.Clone()
+	}
 	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
 	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.Decisions)

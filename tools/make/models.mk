@@ -5,14 +5,16 @@
 ##@ Models
 
 test-model-selection-parity: ## Compare Python-trained selectors with the current Rust C ABI
+ifneq ($(PREBUILT_NATIVE_LIBS),1)
 	@cargo test --locked --manifest-path ml-binding/Cargo.toml
+endif
 	@python3 -m pytest -q src/training/model_selection/ml_model_selection/tests/test_native_parity.py
 
 .PHONY: test-model-selection-parity
 
 .PHONY: onnx-artifact-test
 onnx-artifact-test: ck-rewrite-deps ## Verify external ONNX weight packing with real CPU inference
-	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/tests -p 'test_pack_shared_weights.py'
+	@"$(AGENT_PYTHON)" -m unittest discover -s onnx-binding/scripts/artifact_tests -p 'test_*.py'
 
 test-training-contracts: harness-venv-install ## Run dependency-light model training contract tests
 	@"$(AGENT_PYTHON)" -m unittest discover -s src/training/tests -p 'test_*.py'
@@ -125,16 +127,18 @@ download-models-lora: ## Download models for LoRA and advanced embedding tests
 download-eval-models: ## Download Vela native eval models, including attack-only Guard (legacy is explicit)
 	@python3 -m src.training.model_eval.download_models --output $(MODELS_DIR)
 
-.PHONY: qualify-candle-cpu check-candle-qualification-source test-modelcompat check-modelcompat
+.PHONY: qualify-candle-cpu check-candle-qualification-source test-modelcompat-native check-modelcompat
 
-# Like the schema tools, modelcompat reuses the Router's Go module.
-test-modelcompat: rust-ci ## Test the offline compatibility tool (set CANDLE_MODEL_PATH for native qualification)
-	@cd src/semantic-router && $(NATIVE_ENV) CGO_ENABLED=1 go test -race -count=1 -v ../../tools/modelcompat/*.go
+# Offline command tests are owned by the shared Go-tool registry. Native
+# qualification stays explicit and never downloads a checkpoint by default.
+test-modelcompat-native: ## Test the native receipt round-trip against an explicitly supplied pinned fixture
+	@test -n "$(CANDLE_MODEL_PATH)" || (echo "CANDLE_MODEL_PATH is required" && exit 1)
+	@$(MAKE) rust-ci
+	@cd src/semantic-router && $(NATIVE_ENV) CGO_ENABLED=1 CANDLE_MODEL_PATH="$(abspath $(CANDLE_MODEL_PATH))" \
+		go test -race -count=1 -v -run '^TestNativeCandleCPUCommandRoundTrip$$' ../../tools/modelcompat/*.go
 
 check-modelcompat: test-modelcompat harness-go-bootstrap ## Test and lint the offline compatibility tool
 	@cd src/semantic-router && $(NATIVE_ENV) "$$(go env GOPATH)/bin/golangci-lint" run --config ../../tools/linter/go/.golangci.yml ../../tools/modelcompat/*.go
-
-test: test-modelcompat
 
 # Do not attribute a working-tree build to HEAD. Local planning artifacts outside
 # the compiled source trees do not affect this source check.
@@ -159,32 +163,64 @@ qualify-candle-cpu: check-candle-qualification-source ## Generate a local CPU Ca
 			--output "$(abspath $(CANDLE_COMPAT_OUTPUT))"
 	@echo "Candle CPU compatibility receipt: $(CANDLE_COMPAT_OUTPUT)"
 
-# Minimal model set for perf/benchmarks (CI performance tests).
-# The component benchmarks initialize classifiers/embeddings directly instead
-# of going through the router's startup download, so these must be
-# pre-downloaded:
-# - classification benchmarks auto-discover the intent+pii+jailbreak merged
-#   classifiers (see src/semantic-router/pkg/classification/model_discovery_scan.go)
-# - cache benchmarks need the Qwen3 embedding model at models/mom-embedding-pro
-#   (see perf/benchmarks/cache_bench_test.go and config/registry.go)
-# The onnx/ subdirs are excluded to keep CI download and cache size small.
-PERF_BENCH_CLASSIFIER_MODELS := \
-	mmbert32k-intent-classifier-merged \
-	mmbert32k-pii-detector-merged \
-	mmbert32k-jailbreak-detector-merged
+# Test artifacts use the runtime registry's pinned releases, independent of the
+# example config's on-demand model graph. No Hugging Face IDs are duplicated here.
+MODEL_TEST_PROVIDER ?= candle
+MODEL_TEST_DEVICE ?= cpu
+MODEL_TEST_REPORT_DIR ?= $(CURDIR)/.agent-harness/model-tests/$(MODEL_TEST_PROVIDER)-cpu
+MODEL_TEST_MODELS_DIR ?= $(CURDIR)/$(MODELS_DIR)
+MODEL_TEST_MANIFEST ?= $(MODEL_TEST_REPORT_DIR)/models.json
+MULTIMODAL_TEST_REPORT_DIR ?= $(MODEL_TEST_REPORT_DIR)/multimodal
+MULTIMODAL_TEST_MANIFEST ?= $(MULTIMODAL_TEST_REPORT_DIR)/models.json
+PERF_MODEL_MANIFEST ?= $(CURDIR)/reports/models.json
 
-download-models-perf: ## Download the minimal model set for performance benchmarks
-	@echo "📦 Downloading perf benchmark models..."
-	@mkdir -p $(MODELS_DIR)
-	@for model in $(PERF_BENCH_CLASSIFIER_MODELS); do \
-		echo ""; \
-		echo "⬇️  Downloading $$model..."; \
-		hf download $(HF_ORG)/$$model --exclude "onnx/*" --local-dir $(MODELS_DIR)/$$model; \
-	done
-	@echo ""
-	@$(MAKE) download-qwen3-embedding
-	@echo ""
-	@echo "Perf benchmark models downloaded to $(MODELS_DIR)/"
+download-models-test: ## Provision every supported runtime model at its registered revision
+	@if [ "$(MODEL_TEST_PROVIDER)" = ort ]; then \
+		CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" python3 tools/ci/prepare_model_test_assets.py \
+			--variants nano mini --output "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts"; \
+	fi
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--provider "$(MODEL_TEST_PROVIDER)" --suite runtime \
+		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MODEL_TEST_MANIFEST)" --download
+
+test-models: rust-ci download-models-test ## Require actual published-model CPU inference (MODEL_TEST_PROVIDER=candle|ort)
+	@export $(NATIVE_ENV) && python3 tools/ci/run_model_tests.py \
+		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)" \
+		--device "$(MODEL_TEST_DEVICE)"
+	@if [ "$(MODEL_TEST_PROVIDER)" = candle ]; then \
+		$(MAKE) test-multimodal-models; \
+	fi
+
+download-models-multimodal-test: ## Provision the pinned multimodal compatibility checkpoint
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--provider candle --suite multimodal \
+		--output "$(MODEL_TEST_MODELS_DIR)" --manifest "$(MULTIMODAL_TEST_MANIFEST)" --download
+
+test-multimodal-models: rust-ci download-models-multimodal-test ## Require existing text/image compatibility contracts on Candle CPU
+	@export $(NATIVE_ENV) && python3 tools/ci/run_model_tests.py --suite multimodal \
+		--manifest "$(MULTIMODAL_TEST_MANIFEST)" --output "$(MULTIMODAL_TEST_REPORT_DIR)" \
+		--device "$(MODEL_TEST_DEVICE)"
+
+download-models-image-calibration: ## Prepare the pinned Nano ONNX artifact and attest its manifest
+	@CONTAINER_RUNTIME="$(CONTAINER_RUNTIME)" python3 tools/ci/prepare_model_test_assets.py \
+		--variants nano --output "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts"
+	@python3 tools/ci/image_calibration.py --prepare-manifest \
+		--artifact "$(MODEL_TEST_MODELS_DIR)/vela-omni-artifacts/vela-1.0-omni-nano" \
+		--manifest "$(MODEL_TEST_MANIFEST)"
+
+verify-image-routing-calibration: rust-ci download-models-image-calibration ## Verify shipped image thresholds and the multimodal profile against source-bound fixtures
+	@export $(NATIVE_ENV) && python3 tools/ci/image_calibration.py \
+		--manifest "$(MODEL_TEST_MANIFEST)" --output "$(MODEL_TEST_REPORT_DIR)"
+
+.PHONY: download-models-image-calibration verify-image-routing-calibration
+
+download-models-perf: ## Provision the canonical Vela classifier and embedding benchmark artifacts
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--provider candle --suite perf --output "$(CURDIR)/$(MODELS_DIR)" \
+		--manifest "$(PERF_MODEL_MANIFEST)" --download
+
+.PHONY: download-models-test test-models download-models-perf \
+	download-models-multimodal-test test-multimodal-models
 
 download-mmbert: ## Download all mmBERT merged models for Rust inference
 	@echo "📦 Downloading mmBERT merged models from Hugging Face..."
@@ -673,56 +709,15 @@ check-gpu: ## Check GPU availability in Docker container
 		$(ROCM_IMAGE) \
 		python3 -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'ROCm: {torch.cuda.is_available()}'); print(f'GPUs: {torch.cuda.device_count()}'); [print(f'  GPU {i}: {torch.cuda.get_device_name(i)} ({torch.cuda.get_device_properties(i).total_memory/1024**3:.0f}GB)') for i in range(torch.cuda.device_count())]"
 
-# Convert models to OpenVINO format for openvino-binding tests
-convert-openvino-test-models: ## Convert models to OpenVINO IR format for openvino-binding tests
-	@echo "Converting models to OpenVINO IR format for tests..."
-	@echo "==============================================================="
-	@echo "This will convert required benchmark/test models to OpenVINO"
-	@echo "==============================================================="
-	@mkdir -p openvino-binding/test_models
-	@mkdir -p openvino-binding/test_models/all-MiniLM-L6-v2
-	@mkdir -p openvino-binding/test_models/category_classifier_modernbert
-	
-	@echo "\n[1/3] Converting all-MiniLM-L6-v2 embedding model..."
-	@if [ ! -f "openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml" ]; then \
-	echo "  -> Exporting with optimum-cli"; \
-	optimum-cli export openvino \
-	--model sentence-transformers/all-MiniLM-L6-v2 \
-	--task feature-extraction \
-	openvino-binding/test_models/all-MiniLM-L6-v2 \
-	--weight-format fp32; \
-	else \
-	echo "  -> Already exists: openvino-binding/test_models/all-MiniLM-L6-v2/openvino_model.xml"; \
-	fi
-	
-	@echo "\n[2/3] Converting category_classifier_modernbert model..."
-	@if [ ! -f "openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml" ]; then \
-	echo "  -> Exporting with optimum-cli"; \
-	optimum-cli export openvino \
-	--model llm-semantic-router/mmbert32k-intent-classifier-merged \
-	--task text-classification \
-	openvino-binding/test_models/category_classifier_modernbert \
-	--weight-format fp32; \
-	else \
-	echo "  -> Already exists: openvino-binding/test_models/category_classifier_modernbert/openvino_model.xml"; \
-	fi
-	
-	@echo "\n[3/3] Converting tokenizers to native OpenVINO format..."
-	@if [ "$$SKIP_TOKENIZER_CONVERSION" = "1" ]; then \
-	echo "  -> SKIP_TOKENIZER_CONVERSION=1 set, skipping tokenizer conversion"; \
-	else \
-	command -v python3 >/dev/null 2>&1 && PYTHON_CMD=python3 || PYTHON_CMD=python; \
-	$$PYTHON_CMD openvino-binding/scripts/convert_test_tokenizers.py || { \
-	echo ""; \
-	echo "Tokenizer conversion failed; models are still usable with fallback tokenization."; \
-	echo "To skip tokenizer conversion explicitly:"; \
-	echo "  export SKIP_TOKENIZER_CONVERSION=1"; \
-	echo "  make convert-openvino-test-models"; \
-	}; \
-	fi
-	
-	@echo "\n==============================================================="
-	@echo "OpenVINO test models are ready"
-	@echo "  - openvino-binding/test_models/all-MiniLM-L6-v2"
-	@echo "  - openvino-binding/test_models/category_classifier_modernbert"
-	@echo "==============================================================="
+# Convert only the immutable registered Vela graphs; tokenizer failure is fatal.
+convert-openvino-test-models: ## Convert pinned Vela Domain and Embedding ONNX graphs to OpenVINO IR
+	@mkdir -p "$(OPENVINO_TEST_REPORT_DIR)"
+	@rm -f "$(OPENVINO_TEST_REPORT_DIR)/models.json" "$(OPENVINO_TEST_REPORT_DIR)/inference.json"
+	@$(OPENVINO_PYTHON) -m unittest discover -s openvino-binding/scripts -p convert_published_models_test.py
+	@cd src/semantic-router && go run ./tools/model-test-assets \
+		--suite openvino --provider ort --output "$(OPENVINO_TEST_SOURCE_DIR)" \
+		--manifest "$(OPENVINO_TEST_REPORT_DIR)/sources.json" --download
+	@$(OPENVINO_PYTHON) openvino-binding/scripts/convert_published_models.py \
+		--sources "$(OPENVINO_TEST_REPORT_DIR)/sources.json" \
+		--output "$(OPENVINO_TEST_MODEL_DIR)" \
+		--manifest "$(OPENVINO_TEST_REPORT_DIR)/models.json"

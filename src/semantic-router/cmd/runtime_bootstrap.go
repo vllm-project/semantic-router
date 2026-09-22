@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apiserver"
@@ -54,7 +55,7 @@ func parseRuntimeOptions() runtimeOptions {
 		secure                 = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
 		certPath               = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
 		kubeconfig             = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
-		namespace              = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
+		namespace              = flag.String("namespace", kubernetesNamespaceDefault(), "Kubernetes namespace to watch for CRDs")
 		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 		finalizeResponseIndex  = flag.Bool("finalize-response-index", false, "Run the one-shot Response API conversation-index finalization sweep against the configured Redis store, print stats, and exit. Administrative and irreversible: only run once every index-unaware writer has been drained")
 	)
@@ -495,8 +496,8 @@ func registerVectorStoreShutdownHook(
 	})
 }
 
-func warmupRouterRuntime(ctx context.Context, server *extproc.Server, embeddingState modelruntime.EmbeddingRuntimeState) error {
-	return server.WarmupRouter(ctx, embeddingState, modelruntime.WarmupRouterOptions{
+func warmupRouterRuntime(ctx context.Context, server *extproc.Server) error {
+	return server.WarmupRouter(ctx, modelruntime.WarmupRouterOptions{
 		Component:      "router",
 		MaxParallelism: 2,
 		OnEvent:        logRuntimeLifecycleEvent,
@@ -536,7 +537,7 @@ func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *start
 	writeStartupState(writer, startupstatus.State{
 		Phase:             "ready",
 		Ready:             true,
-		Message:           "Router models are ready. Starting router services...",
+		Message:           "Router configuration is active and the listener is accepting requests.",
 		EmbeddingProvider: embeddingProvider,
 	}, "Failed to write ready startup status")
 }
@@ -546,8 +547,19 @@ func startExtProcServer(
 	server *extproc.Server,
 	writer startupstatus.StatusWriter,
 ) error {
-	if err := server.StartContext(ctx); err != nil {
+	if err := server.StartContextWithReady(ctx, func() {
+		if server.CurrentConfig().ConfigSource != config.ConfigSourceKubernetes {
+			markRouterReady(writer, startupEmbeddingProviderStatus(server.EmbeddingRuntimeState()))
+		}
+	}); err != nil {
 		return recordStartupError(writer, "serve ExtProc", err)
 	}
 	return nil
+}
+
+func kubernetesNamespaceDefault() string {
+	if namespace := strings.TrimSpace(os.Getenv("POD_NAMESPACE")); namespace != "" {
+		return namespace
+	}
+	return "default"
 }

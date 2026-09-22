@@ -1,6 +1,7 @@
 #include "../../include/classifiers/text_classifier.h"
 #include "../../include/core/model_manager.h"
 #include "../../include/utils/math_utils.h"
+#include "../../include/utils/preprocessing.h"
 #include <iostream>
 #include <algorithm>
 #include <cstring>
@@ -151,18 +152,17 @@ core::ClassificationResult TextClassifier::classify(const std::string& text) {
     
     try {
         // Tokenize input
-        std::vector<int> token_ids = tokenizer_.tokenize(text, 8192);
+        auto tokens = tokenizer_.tokenizeFull(text, 8192);
+        const auto& token_ids = tokens.input_ids;
         
-        if (token_ids.empty()) {
+        if (!tokens.success || token_ids.empty() || tokens.attention_mask.size() != token_ids.size()) {
             std::cerr << "Tokenization failed or returned empty" << std::endl;
             return result;
         }
         
-        // Use this artifact's padding token for its attention mask.
-        std::vector<int64_t> attention_mask(token_ids.size());
-        for (size_t i = 0; i < token_ids.size(); ++i) {
-            attention_mask[i] = (token_ids[i] != pad_token_id_) ? 1 : 0;
-        }
+        // The published tokenizer owns padding; Vela and older BERT models
+        // do not share a padding token ID.
+        const auto& attention_mask = tokens.attention_mask;
         
         // Convert to i64 for ModernBERT
         std::vector<int64_t> token_ids_i64(token_ids.begin(), token_ids.end());
@@ -187,6 +187,7 @@ core::ClassificationResult TextClassifier::classify(const std::string& text) {
         // Set tensors and run inference
         slot->request.set_tensor("input_ids", input_ids_tensor);
         slot->request.set_tensor(attention_mask_name_, attention_mask_tensor);
+        utils::setPositionIds(slot->request, *model_->compiled_model, token_ids.size());
         slot->request.start_async();
         slot->request.wait();
         
@@ -263,6 +264,7 @@ core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(co
         // Set tensors and run inference
         slot->request.set_tensor("input_ids", input_ids_tensor);
         slot->request.set_tensor(attention_mask_name_, attention_mask_tensor);
+        utils::setPositionIds(slot->request, *model_->compiled_model, token_ids.size());
         slot->request.start_async();
         slot->request.wait();
         
@@ -292,4 +294,3 @@ core::ClassificationResultWithProbs TextClassifier::classifyWithProbabilities(co
 
 } // namespace classifiers
 } // namespace openvino_sr
-

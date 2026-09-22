@@ -668,7 +668,7 @@ fn main() {
                 std::process::exit(1);
             }
         },
-        "both" | _ => {
+        _ => {
             // CPU
             run_benchmarks("CPU", &Device::Cpu, &model_path, quick, skip_concurrent);
 
