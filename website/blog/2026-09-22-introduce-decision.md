@@ -1,12 +1,12 @@
 ---
 slug: decision-models
 title: "Introducing Decision 1.0: Open Decision Foundation Models"
-description: "Six open models. Three answer types. Your next move. Decision 1.0 turns context into choices, judgments, and scores, from interactive agents to whole queues of decisions."
+description: "Meet Decision 1.0: six Open Decision Foundation Models for routing, policy, agent actions, and batch decisions, with a path to native vLLM-SR integration."
 authors:
   - name: "vLLM Semantic Router Team"
     url: "https://github.com/vllm-project/semantic-router"
 tags: [release, decision, mixture-of-models, semantic-router]
-image: /img/blog/decision-1-0/launch-poster.png
+image: /img/blog/decision-1-0/social-card.png
 ---
 
 import { ArticleFigure, ArticleVideo } from '@site/src/components/ArticleMedia';
@@ -20,27 +20,27 @@ import { ArticleFigure, ArticleVideo } from '@site/src/components/ArticleMedia';
   From the next move to a whole queue of decisions. Meet Decision 1.0. Sound on.
 </ArticleVideo>
 
-**Introducing Decision 1.0: Open Decision Foundation Models. Six models that turn context into choices, judgments, and scores.**
+[Jev's launch](https://typesafe.ai/blog/introducing-system-one-models-and-jev) has put decision models in the spotlight. The question is simple: **how do we give AI systems a faster way to decide what happens next?**
 
-An agent needs its next action. A support queue needs the right destination. A thousand records need the same rubric. Small decisions determine what an entire system does next.
+For **vLLM Semantic Router**, that means choosing the right model, applying the right policy, and moving each request forward.
 
-Decision gives them a dedicated model family. Supply the evidence, ask your questions, and define the possible answers at runtime. Get structured decisions and probability distributions that your software can act on immediately. **Your questions define the task.**
-
-From Kai's compact encoder to Lux's larger hybrid backbone, the family gives builders a choice of model sizes behind the same decision format. Open weights, inference code, and fine-tuning tools put the decision layer in your hands.
+Meet **Decision 1.0: Open Decision Foundation Models**. Six open models that turn context into decisions—built for the next action, from a single request to a whole queue of work.
 
 [**Explore the six models →**](https://huggingface.co/collections/llm-semantic-router/decision-10) · [**Try Decision Studio →**](https://huggingface.co/spaces/llm-semantic-router/decision-studio)
 
 <!-- truncate -->
 
-## Intelligence at the point of action
+## Why the decision layer matters
 
-We build [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) for systems that bring different models together. Those systems make decisions continuously: select a specialist, check a policy, assess an answer, or escalate a request. Decision turns that recurring work into a reusable interface:
+A useful decision layer has to keep up with the application. Available models change. Policies evolve. A fast answer may be the right outcome for one request, while another deserves more computation. The application needs a way to express those differences and evaluate the available choices.
+
+Decision turns that work into a small interface:
 
 **State + questions + criteria → answers.**
 
-The state carries the evidence. Questions specify what matters. Criteria define the available actions, labels, or rubric levels. Change those criteria and the model has a new decision to make, without replacing a fixed classification head or parsing a generated explanation.
+The state carries the evidence. Questions specify what matters. Criteria describe the candidate models, actions, labels, or rubric levels. Change the criteria and the model has a new decision to make, without replacing a fixed classification head or parsing a generated explanation.
 
-The film puts that loop in motion with Doom and chess: the environment supplies structured game state and available actions, the model decides, and the environment advances. The clips come from earlier checkpoints; the Sol–Nox chess game ended in a draw. The same loop applies to tools, workflows, and the next step of an agent.
+For routing, the application can supply task requirements, model capabilities, and measured operating signals as evidence. For agents, it can provide the current state and available actions. For evaluation, it can supply a completed trace and the standards it should meet. The format stays the same while the decisions change.
 
 ## Built to decide
 
@@ -130,7 +130,7 @@ The published comparison spans **3,766 scored decisions across a selected 54-tas
   Lux leads the displayed open-model references on this suite. The hosted Jev reference remains higher overall at 81.05.
 </ArticleFigure>
 
-The capability matrix shows where each model stands. Lux reaches **84.10** on Decisions and **91.46** on Inference. Nox has the family's highest Composition score. Use the panels to find a starting point for the work you want to build, then evaluate on your own examples.
+The capability matrix shows where each model stands. Lux reaches **84.10** on Decisions and **91.46** on Inference. Nox leads the displayed Decision models in Composition. Use the panels to find a starting point for the work you want to build, then evaluate on your own examples.
 
 <ArticleFigure
   src="/img/blog/decision-1-0/decision-matrix.png"
@@ -139,8 +139,6 @@ The capability matrix shows where each model stands. Lux reaches **84.10** on De
 >
   One family, different strengths. Results use the release's selected tasks and weighted overall metric.
 </ArticleFigure>
-
-[Explore the tasks and evaluation methods](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/ec7001aa04b2fe2a682e02aed9572e047bd68993/EVALUATION.md). Lex is evaluated separately on operational workflows, reaching **78.15% across 2,000 decisions**; that specialist test is not part of the matrix. [Lex results](https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/blob/7983c480803fd003a3b79c4c8dafeb2131e1f94e/README.md).
 
 ## Bring your System One workflow
 
@@ -208,6 +206,14 @@ curl -X POST 'https://your-decision-endpoint.example/v1/systemone' \
 ```
 
 To try Kai, configure its `Decision-1.0-Kai-0.6B` deployment alias and keep the same request structure. Its [SDK and curl guide](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/USAGE.md) walks through delivery routing and urgency. Add questions to inspect another dimension of the state, or reuse the questions with new contexts.
+
+## Next: an open decision runtime
+
+Our next step is **native Decision integration in vLLM Semantic Router**. We want vLLM-SR to become a runtime for decision models, with support for an **Open Decision API** that brings model execution and application decisions together.
+
+For routing, that means using request context, candidate capabilities, and measured operating signals to make better model choices under quality, cost, and latency constraints. Alongside that native path, we plan to retain a **System One-compatible general decision API**, so the same family can serve agent actions, policy checks, and evaluation workflows beyond routing.
+
+This is the roadmap ahead. Today's release provides the models and local inference interfaces; native vLLM-SR integration and Open Decision API support are planned next.
 
 ## Build your next move
 
