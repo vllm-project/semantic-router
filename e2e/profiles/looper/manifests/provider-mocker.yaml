@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: looper-provider-mocker
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: looper-provider-mocker
+  template:
+    metadata:
+      labels:
+        app: looper-provider-mocker
+    spec:
+      containers:
+        - name: backend
+          image: semantic-router-ci/provider-mocker:e2e-test
+          imagePullPolicy: Never
+          env:
+            - name: PROVIDER_MOCKER_SCENARIO
+              value: looper
+          ports:
+            - name: http
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 10m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: looper-provider-mocker
+  namespace: default
+spec:
+  selector:
+    app: looper-provider-mocker
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
