@@ -19,7 +19,8 @@ presentation:
   monogram: G
   monochrome: true
 conformance:
-  status: unverified
+  status: live_verified
+  verified_at: 2026-09-22
 models:
 - catalog: openai/gpt-oss-120b
   relationship: managed_cloud
@@ -32,7 +33,7 @@ models:
     completion_per_1m: 0.60
   lifecycle: active
   verification:
-    status: claimed
+    status: reproduced
     verified_at: 2026-09-22
     source: https://console.groq.com/docs/models
 - catalog: openai/gpt-oss-20b
@@ -46,7 +47,7 @@ models:
     completion_per_1m: 0.30
   lifecycle: active
   verification:
-    status: claimed
+    status: reproduced
     verified_at: 2026-09-22
     source: https://console.groq.com/docs/models
 - catalog: qwen/qwen3.8-27b
@@ -60,6 +61,6 @@ models:
     completion_per_1m: 4.00
   lifecycle: experimental
   verification:
-    status: claimed
+    status: reproduced
     verified_at: 2026-09-22
     source: https://console.groq.com/docs/models

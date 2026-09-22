@@ -1143,7 +1143,8 @@ providers:
     monogram: G
     monochrome: true
   conformance:
-    status: unverified
+    status: live_verified
+    verified_at: '2026-09-22'
   models:
   - catalog: openai/gpt-oss-120b
     relationship: managed_cloud
@@ -1156,7 +1157,7 @@ providers:
       completion_per_1m: 0.6
     lifecycle: active
     verification:
-      status: claimed
+      status: reproduced
       verified_at: '2026-09-22'
       source: https://console.groq.com/docs/models
   - catalog: openai/gpt-oss-20b
@@ -1170,7 +1171,7 @@ providers:
       completion_per_1m: 0.3
     lifecycle: active
     verification:
-      status: claimed
+      status: reproduced
       verified_at: '2026-09-22'
       source: https://console.groq.com/docs/models
   - catalog: qwen/qwen3.8-27b
@@ -1184,7 +1185,7 @@ providers:
       completion_per_1m: 4.0
     lifecycle: experimental
     verification:
-      status: claimed
+      status: reproduced
       verified_at: '2026-09-22'
       source: https://console.groq.com/docs/models
 - id: hugging-face

@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:7f17e2ca86cd2cd988754b89abeeda028444663c3f00e4143b85bfb6a585d692"
+const builtInCatalogDigest = "sha256:18b175b6102d3a22d7745b34af73b61615bb3221d7decb3eae101f99e6966d18"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -94693,7 +94693,8 @@ const builtInCatalogJSON = `{
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-22"
       },
       "default_base_url": "https://api.groq.com/openai/v1",
       "default_protocol": "openai/chat-completions@1",
@@ -94716,7 +94717,7 @@ const builtInCatalogJSON = `{
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://console.groq.com/docs/models",
-            "status": "claimed",
+            "status": "reproduced",
             "verified_at": "2026-09-22"
           }
         },
@@ -94735,7 +94736,7 @@ const builtInCatalogJSON = `{
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://console.groq.com/docs/models",
-            "status": "claimed",
+            "status": "reproduced",
             "verified_at": "2026-09-22"
           }
         },
@@ -94754,7 +94755,7 @@ const builtInCatalogJSON = `{
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://console.groq.com/docs/models",
-            "status": "claimed",
+            "status": "reproduced",
             "verified_at": "2026-09-22"
           }
         }

@@ -37,6 +37,9 @@ class GroqProviderMappingsTests(unittest.TestCase):
         provider = yaml.safe_load(PROVIDER_PATH.read_text())
         mappings = provider["models"]
 
+        self.assertEqual(provider["conformance"]["status"], "live_verified")
+        self.assertEqual(str(provider["conformance"]["verified_at"]), OBSERVED_AT)
+
         self.assertEqual(len(mappings), len(EXPECTED_MAPPINGS))
         self.assertEqual(
             {mapping["catalog"] for mapping in mappings}, set(EXPECTED_MAPPINGS)
@@ -61,7 +64,7 @@ class GroqProviderMappingsTests(unittest.TestCase):
                     mapping["pricing"]["completion_per_1m"],
                     expected["completion_per_1m"],
                 )
-                self.assertEqual(mapping["verification"]["status"], "claimed")
+                self.assertEqual(mapping["verification"]["status"], "reproduced")
                 self.assertEqual(
                     str(mapping["verification"]["verified_at"]), OBSERVED_AT
                 )
