@@ -1,0 +1,146 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  pullPolicy: Never
+  tag: e2e-test
+service:
+  type: ClusterIP
+  port: 8080
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      model: MoM
+    models:
+      - name: MoM
+        # The selected backend accepts Anthropic Messages. Keep this explicit:
+        # the Router owns semantic mutation and emits the backend-native wire
+        # contract, while the gateway owns transport and transparent delivery.
+        api_format: anthropic
+        backend_refs:
+          - name: provider-mocker
+            endpoint: provider-mocker.provider-protocols-system.svc.cluster.local:8000
+            weight: 1
+            provider: anthropic
+  evaluation:
+    records:
+      - model: MoM
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.5
+  routing:
+    decisions:
+      - name: sticky_provider_prefix_decision
+        description: Preserve a cache-marked Anthropic tool prefix while admitting one new tool
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+            - type: conversation
+              name: sticky_provider_prefix
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: filter
+              relevance_threshold: 0.9
+              preserve_count: 1
+              sticky:
+                enabled: true
+                max_tools: 2
+                max_new_tools_per_turn: 1
+                pin_called_tools: true
+      - name: route_to_anthropic_provider
+        description: Route all requests to the native Anthropic provider fixture
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: all_requests
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+    signals:
+      keywords:
+        - name: all_requests
+          operator: OR
+          keywords:
+            # Catch-all routing; the AIGatewayRoute also has a bare fallback
+            # rule in gwapi-resources.yaml. Both are intentional — the router
+            # needs a signal match to route, and the gateway provides a
+            # safety-net in case the router produces no match.
+            - ""
+      conversation:
+        - name: sticky_provider_prefix
+          description: Select the isolated two-tool sticky provider-prefix E2E route
+          feature:
+            type: count
+            source:
+              type: tool_definition
+          predicate:
+            gte: 2
+            lte: 2
+    modelCards:
+      - name: MoM
+        description: Deterministic Anthropic Messages provider fixture
+        capabilities:
+          - chat
+  global:
+    model_catalog:
+      kbs: []
+    router:
+      clear_route_cache: true
+      strategy: priority
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
+      observability:
+        metrics:
+          enabled: true
+        tracing:
+          enabled: false
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+    stores:
+      response_cache:
+        enabled: false
+        embedding_model: mmbert
+      tool_sessions:
+        backend: local
+        ttl_seconds: 300
+        max_sessions: 32
+        max_sessions_per_identity: 4
+        max_state_bytes: 4096
+        timeout_ms: 50
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations: {}
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi
+
+extraEnv:
+  - name: USER_SCOPE_NAMESPACE_SECRET
+    value: e2e-sticky-provider-prefix-secret

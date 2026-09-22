@@ -25,6 +25,7 @@ verifications:
     activity: quality
     boundary: []
     executor: quality
+    category: quality
     workflow: .github/workflows/pre-commit.yml
     always: true
     inventory: changed-source-format-lint-v1
@@ -33,6 +34,7 @@ verifications:
     activity: quality
     boundary: []
     executor: generated
+    category: quality
     workflow: .github/workflows/check-generated.yml
     native: true
     inventory: canonical-generated-contracts-v1
@@ -41,6 +43,7 @@ verifications:
     activity: quality
     boundary: []
     executor: security
+    category: quality
     workflow: .github/workflows/security-scan.yml
     inventory: trusted-ast-and-rendered-iac-v1
   soak-tools:
@@ -48,6 +51,7 @@ verifications:
     activity: test
     boundary: [unit, integration]
     executor: tools
+    category: components
     worker: router
     workflow: .github/workflows/test-tools.yml
     target: soak-test
@@ -57,6 +61,7 @@ verifications:
     activity: test
     boundary: [unit, integration]
     executor: core
+    category: components
     workflow: .github/workflows/test-and-build.yml
     native: true
     inventory: go-core-native-abi-and-selector-parity
@@ -65,6 +70,7 @@ verifications:
     activity: test
     boundary: [integration]
     executor: storage
+    category: integration
     workflow: .github/workflows/test-storage.yml
     native: true
     services: [milvus, redis, qdrant, valkey, postgres]
@@ -74,6 +80,7 @@ verifications:
     activity: test
     boundary: [unit, integration]
     executor: dashboard
+    category: components
     workflow: .github/workflows/dashboard-test.yml
     native: true
     inventory: dashboard-go-vitest-and-controlled-api-browser
@@ -82,33 +89,36 @@ verifications:
     activity: test
     boundary: [unit, integration, e2e]
     executor: operator
+    category: e2e
     workflow: .github/workflows/operator-ci.yml
-    images: [operator, operator-bundle, extproc, mock-vllm]
+    images: [operator, operator-bundle, extproc, provider-mocker]
     services: [kind]
     runtime: candle
     device: cpu
     inventory: operator-unit-generated-olm-reconcile-and-routed-request
   local.cli:
-    display_name: CLI Lifecycle
+    display_name: Stack Lifecycle and Routing
     activity: test
     boundary: [e2e]
     executor: local
+    category: e2e
     workflow: .github/workflows/test-local.yml
     suite: cli
-    images: [vllm-sr, dashboard]
+    images: [vllm-sr, dashboard, provider-mocker]
     services: [docker, envoy, controlled-backend]
     runtime: candle
     device: cpu
     inventory: cli-live-lifecycle
   local.memory:
-    display_name: Memory Integration
+    display_name: Memory Contracts
     activity: test
     boundary: [e2e]
     executor: local
+    category: e2e
     workflow: .github/workflows/test-local.yml
     suite: memory
-    images: [vllm-sr, dashboard, llm-katan]
-    services: [docker, envoy, milvus, llm-katan]
+    images: [vllm-sr, dashboard, provider-mocker]
+    services: [docker, envoy, milvus, provider-mocker]
     runtime: candle
     device: cpu
     inventory: memory-15-required-cases-v1
@@ -117,6 +127,7 @@ verifications:
     activity: test
     boundary: [integration]
     executor: recipes
+    category: conformance
     workflow: .github/workflows/recipe-conformance.yml
     images: [vllm-sr]
     services: [docker, envoy, management-api]
@@ -128,6 +139,7 @@ verifications:
     activity: test
     boundary: [integration]
     executor: native
+    category: runtime
     workflow: .github/workflows/test-native.yml
     platform_id: candle-cpu
     runtime: candle
@@ -140,6 +152,7 @@ verifications:
     activity: test
     boundary: [unit, integration]
     executor: native
+    category: runtime
     workflow: .github/workflows/test-native.yml
     platform_id: candle-riscv64-qemu
     platform: linux/riscv64
@@ -157,6 +170,7 @@ verifications:
     activity: test
     boundary: [integration]
     executor: native
+    category: runtime
     workflow: .github/workflows/test-native.yml
     platform_id: ort-cpu
     runtime: ort
@@ -165,13 +179,14 @@ verifications:
     target: test-models
     inventory: published-vela-v1
   native.image-calibration-cpu:
-    display_name: Image Routing Calibration
+    display_name: Image Routing Conformance
     activity: test
     boundary: [unit, integration]
     executor: native
+    category: conformance
     workflow: .github/workflows/test-native.yml
-    platform_id: candle-cpu
-    runtime: candle
+    platform_id: ort-cpu
+    runtime: ort
     device: cpu
     native: true
     target: verify-image-routing-calibration
@@ -182,6 +197,7 @@ verifications:
     activity: test
     boundary: [unit, integration]
     executor: native
+    category: runtime
     workflow: .github/workflows/test-native.yml
     platform_id: openvino-cpu
     runtime: openvino
@@ -194,6 +210,7 @@ verifications:
     activity: performance
     boundary: [integration]
     executor: performance
+    category: performance
     workflow: .github/workflows/performance-test.yml
     native: true
     runtime: candle
@@ -204,6 +221,7 @@ verifications:
     activity: package
     boundary: [integration]
     executor: package
+    category: packages
     workflow: .github/workflows/package-check.yml
     inventory: catalog-snapshot-and-installed-wheel
   cli-unit:
@@ -211,6 +229,7 @@ verifications:
     activity: test
     boundary: [unit]
     executor: tools
+    category: components
     worker: cli
     workflow: .github/workflows/test-tools.yml
     target: vllm-sr-test
@@ -220,6 +239,7 @@ verifications:
     activity: test
     boundary: [unit]
     executor: tools
+    category: components
     worker: cli
     workflow: .github/workflows/test-tools.yml
     target: vllm-sr-sim-test
@@ -229,6 +249,7 @@ verifications:
     activity: test
     boundary: [unit, integration]
     executor: tools
+    category: components
     worker: model
     workflow: .github/workflows/test-tools.yml
     target: test-training-contracts
@@ -238,15 +259,17 @@ verifications:
     activity: test
     boundary: [unit]
     executor: tools
+    category: components
     worker: router
     workflow: .github/workflows/test-tools.yml
-    target: test-provider-simulator
-    inventory: provider-simulator-protocol-and-latency-framework-discovery
+    target: test-provider-mocker
+    inventory: provider-mocker-native-protocol-and-scenario-discovery
   learning-tools:
     display_name: Routing Tools
     activity: test
     boundary: [unit]
     executor: tools
+    category: components
     worker: router
     workflow: .github/workflows/test-tools.yml
     target: test-learning-tools
@@ -257,6 +280,7 @@ verifications:
     activity: test
     boundary: [unit, integration]
     executor: tools
+    category: components
     worker: router
     workflow: .github/workflows/test-tools.yml
     target: harness-check
@@ -266,6 +290,7 @@ verifications:
     activity: test
     boundary: [unit]
     executor: tools
+    category: components
     worker: router
     workflow: .github/workflows/test-tools.yml
     target: test-e2e-unit
@@ -275,6 +300,7 @@ verifications:
     activity: test
     boundary: [integration]
     executor: tools
+    category: components
     worker: model
     workflow: .github/workflows/test-tools.yml
     target: onnx-artifact-test
@@ -284,6 +310,7 @@ verifications:
     activity: test
     boundary: [unit]
     executor: tools
+    category: components
     worker: model
     workflow: .github/workflows/test-tools.yml
     target: ck-rewrite-test
@@ -292,7 +319,7 @@ verifications:
 # Versioned required inventory, shared by ci/full, nightly and release. A new
 # public PR-CI deployment must be mapped here, not silently treated as a rotation.
 full_cpu:
-  version: 1
+  version: 2
   required:
     - quality
     - generated-contracts
@@ -330,6 +357,9 @@ full_cpu:
     - e2e.istio
     - e2e.llm-d
     - e2e.streaming
+    - e2e.vela-omni
+    - e2e.vela-halu
+    - e2e.multimodal-routing
   support_contracts:
     Helm chart: [core]
     Local deployment: [local.cli]

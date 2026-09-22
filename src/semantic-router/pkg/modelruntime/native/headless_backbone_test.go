@@ -20,6 +20,11 @@ import (
 // ownership/assembly, not maintained checkpoint quality or GPU behavior.
 func nativeHeadlessFullFixture(t *testing.T, winner int) string {
 	t.Helper()
+	return nativeHeadlessWidthFixture(t, winner, 4)
+}
+
+func nativeHeadlessWidthFixture(t *testing.T, winner, width int) string {
+	t.Helper()
 	dir := t.TempDir()
 	writeJSON := func(name string, value any) {
 		data, err := json.Marshal(value)
@@ -31,8 +36,8 @@ func nativeHeadlessFullFixture(t *testing.T, winner int) string {
 		}
 	}
 	writeJSON("config.json", map[string]any{
-		"model_type": "modernbert", "vocab_size": 8, "hidden_size": 4, "num_hidden_layers": 1,
-		"num_attention_heads": 1, "intermediate_size": 8, "max_position_embeddings": 512,
+		"model_type": "modernbert", "vocab_size": 8, "hidden_size": width, "num_hidden_layers": 1,
+		"num_attention_heads": 1, "intermediate_size": 2 * width, "max_position_embeddings": 512,
 		"layer_norm_eps": 0.00001, "pad_token_id": 0, "global_attn_every_n_layers": 1,
 		"global_rope_theta": 10000, "local_attention": 16, "local_rope_theta": 10000,
 		"id2label": map[string]string{"0": "safe", "1": "unsafe"},
@@ -47,15 +52,15 @@ func nativeHeadlessFullFixture(t *testing.T, winner int) string {
 		name  string
 		shape []int
 	}{
-		{"model.embeddings.tok_embeddings.weight", []int{8, 4}},
-		{"model.embeddings.norm.weight", []int{4}},
-		{"model.final_norm.weight", []int{4}},
-		{"model.layers.0.attn.Wqkv.weight", []int{12, 4}},
-		{"model.layers.0.attn.Wo.weight", []int{4, 4}},
-		{"model.layers.0.mlp.Wi.weight", []int{16, 4}},
-		{"model.layers.0.mlp.Wo.weight", []int{4, 8}},
-		{"model.layers.0.mlp_norm.weight", []int{4}},
-		{"classifier.weight", []int{2, 4}},
+		{"model.embeddings.tok_embeddings.weight", []int{8, width}},
+		{"model.embeddings.norm.weight", []int{width}},
+		{"model.final_norm.weight", []int{width}},
+		{"model.layers.0.attn.Wqkv.weight", []int{3 * width, width}},
+		{"model.layers.0.attn.Wo.weight", []int{width, width}},
+		{"model.layers.0.mlp.Wi.weight", []int{4 * width, width}},
+		{"model.layers.0.mlp.Wo.weight", []int{width, 2 * width}},
+		{"model.layers.0.mlp_norm.weight", []int{width}},
+		{"classifier.weight", []int{2, width}},
 		{"classifier.bias", []int{2}},
 	}
 	header := map[string]any{}

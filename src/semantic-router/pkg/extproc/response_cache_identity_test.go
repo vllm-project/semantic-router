@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -35,7 +36,7 @@ func TestResponseCacheBindsActualLocalEmbeddingAfterInitialization(t *testing.T)
 
 func TestResponseCacheDoesNotInventIdentityForOtherProviders(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	for _, model := range []string{"bert", "gemma", "qwen3", "multimodal"} {
+	for _, model := range []string{"bert", "gemma", "qwen3"} {
 		backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, EmbeddingModel: model})
 		identity, err := responseCacheEmbeddingIdentity(cfg, backend, func(embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 			t.Fatal("unsupported provider was initialized for identity")
@@ -43,6 +44,29 @@ func TestResponseCacheDoesNotInventIdentityForOtherProviders(t *testing.T) {
 		})
 		if identity != "" || err != nil {
 			t.Fatalf("%s changed legacy behavior: %s %v", model, identity, err)
+		}
+	}
+}
+
+func TestResponseCacheBindsPreparedOmniRepresentation(t *testing.T) {
+	for _, size := range []int{384, 768} {
+		provider, err := embedding.NewFuncProvider("test", size, func(context.Context, string) ([]float32, error) {
+			t.Fatal("identity resolution ran inference")
+			return nil, nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		backend := cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: true, EmbeddingModel: "multimodal", EmbeddingProvider: provider})
+		t.Cleanup(func() { _ = backend.Close() })
+		identity, err := responseCacheEmbeddingIdentity(&config.RouterConfig{}, backend, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+			if settings.Dimension != size || settings.Layer != 0 || settings.ModelType != "multimodal" {
+				t.Fatalf("wrong Omni representation: %+v", settings)
+			}
+			return embedding.ContentIdentity{Fingerprint: "prepared-artifact", Descriptor: embedding.RuntimeDescriptor{Dimension: size}}, nil
+		})
+		if err != nil || identity != "prepared-artifact" {
+			t.Fatalf("identity=%s err=%v", identity, err)
 		}
 	}
 }

@@ -1,6 +1,7 @@
-# Split deployment: Each vLLM model in separate pod, semantic-router + envoy together
+# CPU provider-mocker deployment. The deployment script supplies a qualified image digest.
+# Use with: PROVIDER_MOCKER_IMAGE=<repository>@sha256:<digest> ./deploy-to-openshift.sh
 ---
-# Deployment 1: Model-A (vLLM)
+# Deployment 1: Model-A (provider-mocker simulator)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -23,39 +24,16 @@ spec:
     spec:
       containers:
       - name: model-a
-        image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/llm-katan:latest
+        image: semantic-router-ci/provider-mocker:e2e-test
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PROVIDER_MOCKER_MODEL
+          value: Model-A
         ports:
         - containerPort: 8000
           name: http
           protocol: TCP
-        command: ["llm-katan"]
-        args:
-        - "--model"
-        - "Qwen/Qwen3-0.6B"
-        - "--port"
-        - "8000"
-        - "--served-model-name"
-        - "Model-A"
-        - "--max-tokens"
-        - "512"
-        - "--temperature"
-        - "0.7"
-        - "--log-level"
-        - "INFO"
-        - "--device"
-        - "cuda"
-        env:
-        - name: HF_HUB_CACHE
-          value: "/app/cache/hf"
-        - name: TRANSFORMERS_CACHE
-          value: "/app/cache/transformers"
-        - name: HF_HOME
-          value: "/app/cache/hf"
-        - name: HOME
-          value: "/tmp/home"
-        volumeMounts:
-        - name: cache-volume
-          mountPath: /app/cache
+        # provider-mocker serves native protocols on port 8000
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -65,35 +43,29 @@ spec:
             type: RuntimeDefault
         livenessProbe:
           httpGet:
-            path: /
+            path: /health
             port: 8000
-          initialDelaySeconds: 90
-          periodSeconds: 30
-          timeoutSeconds: 10
-          failureThreshold: 5
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /
+            path: /health
             port: 8000
-          initialDelaySeconds: 60
-          periodSeconds: 15
-          timeoutSeconds: 10
-          failureThreshold: 5
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           requests:
-            memory: "4Gi"
-            cpu: "1"
-            nvidia.com/gpu: 1
+            memory: "128Mi"
+            cpu: "50m"
           limits:
-            memory: "8Gi"
-            cpu: "2"
-            nvidia.com/gpu: 1
-      volumes:
-      - name: cache-volume
-        persistentVolumeClaim:
-          claimName: vllm-model-a-cache
+            memory: "256Mi"
+            cpu: "200m"
 ---
-# Deployment 2: Model-B (vLLM)
+# Deployment 2: Model-B (provider-mocker simulator)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -116,39 +88,16 @@ spec:
     spec:
       containers:
       - name: model-b
-        image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/llm-katan:latest
+        image: semantic-router-ci/provider-mocker:e2e-test
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: PROVIDER_MOCKER_MODEL
+          value: Model-B
         ports:
-        - containerPort: 8001
+        - containerPort: 8000
           name: http
           protocol: TCP
-        command: ["llm-katan"]
-        args:
-        - "--model"
-        - "Qwen/Qwen3-0.6B"
-        - "--port"
-        - "8001"
-        - "--served-model-name"
-        - "Model-B"
-        - "--max-tokens"
-        - "512"
-        - "--temperature"
-        - "0.7"
-        - "--log-level"
-        - "INFO"
-        - "--device"
-        - "cuda"
-        env:
-        - name: HF_HUB_CACHE
-          value: "/app/cache/hf"
-        - name: TRANSFORMERS_CACHE
-          value: "/app/cache/transformers"
-        - name: HF_HOME
-          value: "/app/cache/hf"
-        - name: HOME
-          value: "/tmp/home"
-        volumeMounts:
-        - name: cache-volume
-          mountPath: /app/cache
+        # provider-mocker serves native protocols on port 8000
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -158,35 +107,29 @@ spec:
             type: RuntimeDefault
         livenessProbe:
           httpGet:
-            path: /
-            port: 8001
-          initialDelaySeconds: 90
-          periodSeconds: 30
-          timeoutSeconds: 10
-          failureThreshold: 5
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /
-            port: 8001
-          initialDelaySeconds: 60
-          periodSeconds: 15
-          timeoutSeconds: 10
-          failureThreshold: 5
+            path: /health
+            port: 8000
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
         resources:
           requests:
-            memory: "4Gi"
-            cpu: "1"
-            nvidia.com/gpu: 1
+            memory: "128Mi"
+            cpu: "50m"
           limits:
-            memory: "8Gi"
-            cpu: "2"
-            nvidia.com/gpu: 1
-      volumes:
-      - name: cache-volume
-        persistentVolumeClaim:
-          claimName: vllm-model-b-cache
+            memory: "256Mi"
+            cpu: "200m"
 ---
-# Deployment 3: Semantic Router + Envoy Proxy
+# Deployment 3: Semantic Router + Envoy Proxy (same as standard deployment)
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -464,8 +407,8 @@ metadata:
 spec:
   ports:
   - name: http
-    port: 8001
-    targetPort: 8001
+    port: 8001        # Intentional: vSR config expects model-b on 8001
+    targetPort: 8000  # Container port: provider-mocker always runs on 8000
   selector:
     app: vllm-model
     model: model-b

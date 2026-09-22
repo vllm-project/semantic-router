@@ -173,7 +173,7 @@ func (state *chatMessageEncodingState) appendContent(content llmprotocol.Content
 	case llmprotocol.ContentImage:
 		return state.appendImage(content)
 	case llmprotocol.ContentAudio:
-		state.parts = append(state.parts, chatContentWire{Type: "input_audio", InputAudio: &chatInputAudioWire{Data: content.Data, Format: content.MediaType}, CacheControl: encodeAnthropicCacheControl(content.Cache)})
+		return state.appendAudio(content)
 	case llmprotocol.ContentFile:
 		return state.appendFile(content)
 	case llmprotocol.ContentToolCall:

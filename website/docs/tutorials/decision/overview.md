@@ -98,37 +98,50 @@ true becomes a candidate, and ranking then picks one of them.
 
 `decision.tier` is the hard precedence boundary: a lower tier wins, and a
 decision that omits `tier` is tier 0, so it ranks ahead of every decision that
-sets one. Tiered ranking activates per request, as soon as one matched decision
-carries a tier above 0. Otherwise `routing.strategy` decides.
+sets one. Tier is compared first whenever one matched decision carries a tier
+above 0. `routing.strategy` then decides how the decisions inside that tier are
+ordered, and it means the same thing where no decision sets a tier at all.
 
-| Case | Keys, in order |
+| `routing.strategy` | Keys, in order |
 | --- | --- |
-| a matched decision sets `tier` | tier ascending, catch-all last, confidence descending, priority descending, name ascending |
-| no tier, `strategy: confidence` | catch-all last, confidence descending, priority descending, name ascending |
-| no tier, `strategy: priority` | priority descending, confidence descending, name ascending |
+| `priority` (the default) | tier ascending, catch-all last, priority descending, confidence descending, name ascending |
+| `confidence` | tier ascending, catch-all last, confidence descending, priority descending, name ascending |
 
 Confidence ranks a comparable pool only. A pool is one tier under tiered
-ranking and the whole candidate set otherwise, and it falls back to priority
-as soon as one member that is not a catch-all reported no score. Keyword
-rules, `NOT` guards, and predicate leaves report the structural constant 1.0
-instead of a measurement, so a decision whose match rests on one of them drops
-its pool to priority ordering. Inside an `OR`, a branch that reported a score
-outranks one that did not, so an extra matching gate adds support without
-removing evidence the decision already reported. A matched `conversation` rule
-instead reports 1.0 as a score, so a boolean condition ranks as maximal
-evidence and keeps its pool comparable. Name ascending is the final tie-break,
-so ranking never depends on map or file order.
+ranking and the whole candidate set otherwise. Every leaf is either policy or
+evidence. Keyword rules, `NOT` guards, predicates, conversation and metadata
+rules, and projection outputs restate policy the operator already wrote, so
+they decide whether a decision matches and carry no weight in its confidence.
+Only a signal that reports a measurement is evidence, and selection ranks on
+it only where the quantity it reports is established.
 
-Two consequences are easy to miss:
+| Evidence signal | Score kind |
+| --- | --- |
+| `domain`, `classifier`, `safety`, `preference` | classifier probability |
+| `embedding`, `reask`, `kb` | vector similarity |
+| `complexity`, `jailbreak` | depends on the configured backend |
 
-- The tiered case never reads `routing.strategy`. A profile that mixes tiered
-  and untiered decisions therefore ranks its untiered pool by confidence
-  whenever a tiered decision happens to match as well.
-- The `strategy: priority` case has no catch-all rule, unlike the other two, so
-  a catch-all with a high priority can outrank a real match there.
+A decision is comparable when exactly one evidence leaf produced its score,
+since a mean over several leaves falls as a decision gains evidence. A pool
+ranks by confidence when every member that is not a catch-all is comparable
+and all of those scores are the same kind. Otherwise the pool ranks by
+priority, and the router warns at startup about a pool that mixes kinds. Three
+cases are never comparable: a score whose kind depends on the backend that
+produced it, a tree that reports one kind or another depending on which branch
+of an `OR` matched, and a match an `on_error` policy manufactured. Inside an
+`OR`, a branch that reported a score outranks one that did not, so an extra
+matching gate adds support without removing evidence. Name ascending is the
+final tie-break, so ranking never depends on map or file order.
 
-The [Decision Ranking Semantics](../../proposals/decision-ranking-semantics)
-proposal tracks the contract that replaces both.
+The eval API reports how one request was ranked under `decision_ranking`: the
+strategy that ran, the tier the winner came from, whether that pool was
+comparable and which decision made it incomparable, and the key that separated
+the winner from the decision behind it.
+
+A catch-all ranks after every real match under either strategy, whatever
+priority it carries, so an unconditional fallback stays a fallback. The
+[Decision Ranking Semantics](../../proposals/decision-ranking-semantics)
+proposal records how this contract was settled.
 
 ## Operational Boundaries
 

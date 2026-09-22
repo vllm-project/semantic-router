@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -115,6 +116,42 @@ func TestStatusIsReplicaLocalAndReturnsIndependentSnapshots(t *testing.T) {
 	}
 	if strings.Contains(string(payload), state.Message) {
 		t.Fatalf("status contains startup diagnostics: %s", payload)
+	}
+}
+
+func TestStartupStateOwnsMutableFields(t *testing.T) {
+	registry := NewRegistry(nil)
+	if registry.StartupState() != nil {
+		t.Fatal("unobserved startup has a state")
+	}
+	healthy, keySet := true, true
+	state := startupstatus.State{
+		Phase: "loading", PendingModels: []string{"original-model"},
+		EmbeddingProvider: &startupstatus.EmbeddingProviderStatus{
+			Model: "original-provider", Healthy: &healthy, APIKeyEnvSet: &keySet,
+		},
+	}
+	writer := registry.StartupStatusWriter(startupstatus.NewFileWriter(filepath.Join(t.TempDir(), "router.yaml")))
+	if err := writer.Write(state); err != nil {
+		t.Fatal(err)
+	}
+	state.PendingModels[0] = "changed-model"
+	state.EmbeddingProvider.Model = "changed-provider"
+	healthy, keySet = false, false
+	for range 2 {
+		snapshot := registry.StartupState()
+		if snapshot.PendingModels[0] != "original-model" ||
+			snapshot.EmbeddingProvider.Model != "original-provider" ||
+			!*snapshot.EmbeddingProvider.Healthy || !*snapshot.EmbeddingProvider.APIKeyEnvSet {
+			t.Fatalf("mutable startup state escaped: %+v", snapshot)
+		}
+		if _, err := time.Parse(time.RFC3339, snapshot.UpdatedAt); err != nil {
+			t.Fatal(err)
+		}
+		snapshot.PendingModels[0] = "changed-snapshot"
+		snapshot.EmbeddingProvider.Model = "changed-snapshot-provider"
+		*snapshot.EmbeddingProvider.Healthy = false
+		*snapshot.EmbeddingProvider.APIKeyEnvSet = false
 	}
 }
 

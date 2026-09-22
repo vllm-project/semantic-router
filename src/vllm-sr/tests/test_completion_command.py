@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+from click.shell_completion import BashComplete
 from click.testing import CliRunner
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -18,7 +19,9 @@ completion_mod = importlib.import_module("cli.commands.completion")
 # ---------------------------------------------------------------------------
 
 
-def test_completion_show_bash_outputs_script():
+def test_completion_show_bash_outputs_script(monkeypatch):
+    # Script generation is independent of the host's installed Bash version.
+    monkeypatch.setattr(BashComplete, "_check_version", staticmethod(lambda: None))
     runner = CliRunner()
 
     result = runner.invoke(main, ["completion", "show", "bash"])

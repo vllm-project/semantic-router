@@ -475,6 +475,8 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	router := &OpenAIRouter{
 		Config:                  components.cfg,
 		Embeddings:              components.embeddings,
+		serviceEmbeddings:       components.serviceEmbeddings,
+		cacheEmbeddings:         components.cacheEmbeddings,
 		rerankers:               components.rerankers,
 		CategoryDescriptions:    components.categoryDescriptions,
 		Classifier:              components.classifier,

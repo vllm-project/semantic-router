@@ -45,7 +45,11 @@ func newResponseJailbreakRouter(t *testing.T, server *httptest.Server, threshold
 
 	cfg := &config.RouterConfig{}
 	cfg.PromptGuard.Enabled = true
-	cfg.PromptGuard.Protocol = config.PromptGuardProtocolHTTPClassify
+	cfg.PromptGuard.Backend = &config.RemoteClassifierBackend{
+		Protocol: config.RemoteClassifierProtocolHTTPClassify,
+		Contract: config.RemoteClassifierContractLabelDistribution,
+		Model:    "test-guardrail",
+	}
 	cfg.PromptGuard.JailbreakMappingPath = "response-jailbreak-test-mapping"
 	cfg.PromptGuard.PositiveLabels = []string{"jailbreak"}
 	// Not the decision's threshold, so a filter thresholding the global value
@@ -134,7 +138,6 @@ func TestResponseJailbreakCategoricalGuardRetainsVerdictWithoutScore(t *testing.
 	router, ctx := newResponseJailbreakRouter(t, server, .999)
 	_ = router.Classifier.Close()
 	cfg := router.Config
-	cfg.PromptGuard.Protocol = ""
 	cfg.PromptGuard.Backend = &config.RemoteClassifierBackend{Protocol: config.RemoteClassifierProtocolHTTPChat, Contract: config.RemoteClassifierContractLabelDecision, Model: "test-guardrail"}
 	classifier, err := classification.NewClassifier(cfg, nil, nil, &classification.JailbreakMapping{LabelToIdx: map[string]int{"jailbreak": 0, "benign": 1}, IdxToLabel: map[string]string{"0": "jailbreak", "1": "benign"}})
 	if err != nil {

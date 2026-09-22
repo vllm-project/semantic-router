@@ -133,7 +133,7 @@ def test_selection_skips_unrelated_profile_case_files_and_bounds_selected_bytes(
     )
     smoke_size = Path(smoke["path"]).stat().st_size
     assert Path(standard["path"]).stat().st_size > smoke_size
-    monkeypatch.setattr(datasets, "MAX_DATA_BYTES", smoke_size)
+    monkeypatch.setattr(datasets, "MAX_ROW_BYTES", smoke_size)
     reader = DatasetReader(tmp_path)
     assert next(
         b for b in reader.selection("smoke")["benchmarks"] if b["id"] == "mmlu-pro"
@@ -150,7 +150,7 @@ def test_oversized_source_blocks_its_family_even_with_valid_duplicate(
     _prepared(tmp_path, metadata={"extra": "x" * 4000})
     _prepared(tmp_path)
     _prepared(tmp_path, benchmark="gpqa-diamond")
-    monkeypatch.setattr(datasets, "MAX_DATA_BYTES", 1000)
+    monkeypatch.setattr(datasets, "MAX_ROW_BYTES", 1000)
     result = {
         b["id"]: b for b in DatasetReader(tmp_path).selection("smoke")["benchmarks"]
     }
@@ -182,7 +182,7 @@ def test_oversized_source_without_trustworthy_scope_fails_globally(
     manifest = _prepared(tmp_path, metadata={"extra": "x" * 4000})
     manifest["benchmarks"] = declared
     Path(manifest["path"]).with_name("manifest.json").write_text(json.dumps(manifest))
-    monkeypatch.setattr(datasets, "MAX_DATA_BYTES", 1000)
+    monkeypatch.setattr(datasets, "MAX_ROW_BYTES", 1000)
     with pytest.raises(ValueError, match="valid benchmark scope"):
         DatasetReader(tmp_path).selection("smoke")
 

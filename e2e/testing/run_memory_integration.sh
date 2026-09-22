@@ -28,7 +28,7 @@ values = {
     "MILVUS_CONTAINER_NAME": layout.milvus_container_name,
     "MILVUS_HOST_PORT": layout.milvus_port,
     "MILVUS_HEALTH_PORT": layout.host_port(9091, name="milvus_health_port"),
-    "LLM_KATAN_HOST_PORT": layout.host_port(8000, name="llm_katan_port"),
+    "PROVIDER_MOCKER_HOST_PORT": layout.host_port(8000, name="provider_mocker_port"),
     "ROUTER_API_HEALTH_URL": f"http://localhost:{layout.api_port}/ready",
     "ROUTER_ENDPOINT": f"http://localhost:{layout.host_port(8888, name='memory_listener_port')}",
     "STACK_CONTAINERS": " ".join((*layout.runtime_container_names,
@@ -41,7 +41,7 @@ PY_LAYOUT
 )"
 eval "${layout_variables}"
 export VLLM_SR_STACK_NAME VLLM_SR_PORT_OFFSET
-LLM_KATAN_CONTAINER="${VLLM_SR_STACK_NAME}-llm-katan"
+PROVIDER_MOCKER_CONTAINER="${VLLM_SR_STACK_NAME}-provider-mocker"
 TEST_DIR="${MEMORY_TEST_DIR:-$(mktemp -d -t vsr-memory-test-XXXXXX)}"
 mkdir -p "${TEST_DIR}"
 TEST_DIR="$(cd "${TEST_DIR}" && pwd)"
@@ -67,12 +67,12 @@ export MILVUS_BIND_ADDRESS=127.0.0.1
 VLLM_SR_PID=""
 STACK_STARTED=0
 MILVUS_STARTED=0
-KATAN_STARTED=0
+PROVIDER_STARTED=0
 NETWORK_CREATED=0
 
 # A named collision belongs to another invocation. Never adopt it, stop it, or
 # collect its logs; CLI stop removes every resource with this stack identity.
-for container in ${STACK_CONTAINERS} "${LLM_KATAN_CONTAINER}"; do
+for container in ${STACK_CONTAINERS} "${PROVIDER_MOCKER_CONTAINER}"; do
     if "${CONTAINER_RUNTIME}" inspect "${container}" >/dev/null 2>&1; then
         echo "Refusing to reuse existing memory-test container: ${container}" >&2
         exit 1
@@ -124,8 +124,8 @@ cleanup() {
             "${CONTAINER_RUNTIME}" logs "${container}" >"${ARTIFACT_DIR}/${container}.predump.log" 2>&1 || true
         done
     fi
-    if [[ "${KATAN_STARTED}" == "1" ]]; then
-        "${CONTAINER_RUNTIME}" logs "${LLM_KATAN_CONTAINER}" >"${ARTIFACT_DIR}/${LLM_KATAN_CONTAINER}.predump.log" 2>&1 || true
+    if [[ "${PROVIDER_STARTED}" == "1" ]]; then
+        "${CONTAINER_RUNTIME}" logs "${PROVIDER_MOCKER_CONTAINER}" >"${ARTIFACT_DIR}/${PROVIDER_MOCKER_CONTAINER}.predump.log" 2>&1 || true
     fi
     if [[ "${MILVUS_STARTED}" == "1" ]]; then
         "${CONTAINER_RUNTIME}" logs "${MILVUS_CONTAINER_NAME}" >"${ARTIFACT_DIR}/${MILVUS_CONTAINER_NAME}.predump.log" 2>&1 || true
@@ -137,9 +137,9 @@ cleanup() {
         kill "${VLLM_SR_PID}" 2>/dev/null || true
         wait "${VLLM_SR_PID}" 2>/dev/null || true
     fi
-    if [[ "${KATAN_STARTED}" == "1" ]]; then
-        "${CONTAINER_RUNTIME}" stop "${LLM_KATAN_CONTAINER}" >/dev/null 2>&1 || true
-        "${CONTAINER_RUNTIME}" rm "${LLM_KATAN_CONTAINER}" >/dev/null 2>&1 || true
+    if [[ "${PROVIDER_STARTED}" == "1" ]]; then
+        "${CONTAINER_RUNTIME}" stop "${PROVIDER_MOCKER_CONTAINER}" >/dev/null 2>&1 || true
+        "${CONTAINER_RUNTIME}" rm "${PROVIDER_MOCKER_CONTAINER}" >/dev/null 2>&1 || true
     fi
     if [[ "${MILVUS_STARTED}" == "1" ]]; then
         make -C "${REPO_ROOT}" stop-milvus >/dev/null 2>&1 || true
@@ -211,7 +211,7 @@ except Exception as e:
 done
 
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
-python3 - "${CONFIG_FILE}" "${LLM_KATAN_CONTAINER}" "${MILVUS_CONTAINER_NAME}" <<'PY_CONFIG'
+python3 - "${CONFIG_FILE}" "${PROVIDER_MOCKER_CONTAINER}" "${MILVUS_CONTAINER_NAME}" <<'PY_CONFIG'
 from pathlib import Path
 import sys
 path = Path(sys.argv[1])
@@ -225,31 +225,32 @@ NETWORK_CREATED=1
 "${CONTAINER_RUNTIME}" network connect "${VLLM_SR_NETWORK}" "${MILVUS_CONTAINER_NAME}"
 echo "Milvus connected to ${VLLM_SR_NETWORK} as ${MILVUS_CONTAINER_NAME}"
 
-"${CONTAINER_RUNTIME}" run -d --name "${LLM_KATAN_CONTAINER}" \
+"${CONTAINER_RUNTIME}" run -d --name "${PROVIDER_MOCKER_CONTAINER}" \
     --network "${VLLM_SR_NETWORK}" \
-    -p "127.0.0.1:${LLM_KATAN_HOST_PORT}:8000" \
-    "${LLM_KATAN_IMAGE:-${DOCKER_REGISTRY}/llm-katan:${DOCKER_TAG}}" \
-    llm-katan --model dummy --host 0.0.0.0 --port 8000 --served-model-name qwen3 --backend echo >/dev/null
-KATAN_STARTED=1
+    -p "127.0.0.1:${PROVIDER_MOCKER_HOST_PORT}:8000" \
+    -e PROVIDER_MOCKER_SCENARIO=memory \
+    -e PROVIDER_MOCKER_MODEL=qwen3 \
+    "${PROVIDER_MOCKER_IMAGE:-semantic-router-ci/provider-mocker:e2e-test}" >/dev/null
+PROVIDER_STARTED=1
 
 for _ in $(seq 1 30); do
-    if curl -s "http://localhost:${LLM_KATAN_HOST_PORT}/health" >/dev/null 2>&1; then
-        echo "llm-katan ready"
+    if curl -s "http://localhost:${PROVIDER_MOCKER_HOST_PORT}/health" >/dev/null 2>&1; then
+        echo "provider-mocker ready"
         break
     fi
 
-    if ! "${CONTAINER_RUNTIME}" ps --filter "name=^${LLM_KATAN_CONTAINER}$" --format '{{.Names}}' | grep -Fxq "${LLM_KATAN_CONTAINER}"; then
-        echo "llm-katan container exited unexpectedly"
-        "${CONTAINER_RUNTIME}" logs "${LLM_KATAN_CONTAINER}" || true
+    if ! "${CONTAINER_RUNTIME}" ps --filter "name=^${PROVIDER_MOCKER_CONTAINER}$" --format '{{.Names}}' | grep -Fxq "${PROVIDER_MOCKER_CONTAINER}"; then
+        echo "provider-mocker container exited unexpectedly"
+        "${CONTAINER_RUNTIME}" logs "${PROVIDER_MOCKER_CONTAINER}" || true
         exit 1
     fi
 
     sleep 1
 done
 
-if ! curl -s "http://localhost:${LLM_KATAN_HOST_PORT}/health" >/dev/null 2>&1; then
-    echo "llm-katan did not become healthy"
-    "${CONTAINER_RUNTIME}" logs "${LLM_KATAN_CONTAINER}" || true
+if ! curl -s "http://localhost:${PROVIDER_MOCKER_HOST_PORT}/health" >/dev/null 2>&1; then
+    echo "provider-mocker did not become healthy"
+    "${CONTAINER_RUNTIME}" logs "${PROVIDER_MOCKER_CONTAINER}" || true
     exit 1
 fi
 

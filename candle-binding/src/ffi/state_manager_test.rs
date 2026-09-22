@@ -76,20 +76,26 @@ fn test_system_state_enum() {
 fn test_is_any_initialized() {
     let manager = GlobalStateManager::instance();
 
-    // This will be true or false depending on what's initialized
-    let any_init = manager.is_any_initialized();
-
-    // Just verify it returns a boolean
-    assert!(any_init || !any_init, "Should return boolean");
+    let stats = manager.get_stats();
+    assert_eq!(
+        manager.is_any_initialized(),
+        stats.unified_classifier_initialized
+            || stats.parallel_lora_engine_initialized
+            || stats.bert_similarity_initialized
+            || stats.legacy_classifiers_count > 0,
+        "Aggregate initialization must agree with the component snapshot"
+    );
 }
 
 #[rstest]
 fn test_is_ready() {
     let manager = GlobalStateManager::instance();
 
-    // Just verify the method works
-    let ready = manager.is_ready();
-    assert!(ready || !ready, "Should return boolean");
+    assert_eq!(
+        manager.is_ready(),
+        matches!(manager.get_system_state(), SystemState::Ready),
+        "Readiness must reflect the current system state"
+    );
 }
 
 // ============================================================================
@@ -102,8 +108,11 @@ fn test_is_unified_classifier_initialized() {
 
     let is_init = manager.is_unified_classifier_initialized();
 
-    // Should return a boolean
-    assert!(is_init || !is_init, "Should return boolean");
+    assert_eq!(
+        is_init,
+        manager.get_unified_classifier().is_some(),
+        "Initialization must agree with classifier availability"
+    );
 
     // If initialized, should be able to get it
     if is_init {
@@ -237,23 +246,21 @@ fn test_get_stats() {
     // Get statistics
     let stats = manager.get_stats();
 
-    // Verify structure (based on actual implementation)
-    // Note: You may need to adjust these assertions based on actual struct fields
-    assert!(
-        stats.unified_classifier_initialized || !stats.unified_classifier_initialized,
-        "Should have unified_classifier_initialized field"
+    assert_eq!(
+        stats.unified_classifier_initialized,
+        manager.get_unified_classifier().is_some()
     );
-    assert!(
-        stats.parallel_lora_engine_initialized || !stats.parallel_lora_engine_initialized,
-        "Should have parallel_lora_engine_initialized field"
+    assert_eq!(
+        stats.parallel_lora_engine_initialized,
+        manager.get_parallel_lora_engine().is_some()
     );
-    assert!(
-        stats.lora_token_classifier_initialized || !stats.lora_token_classifier_initialized,
-        "Should have lora_token_classifier_initialized field"
+    assert_eq!(
+        stats.lora_token_classifier_initialized,
+        manager.get_lora_token_classifier().is_some()
     );
-    assert!(
-        stats.bert_similarity_initialized || !stats.bert_similarity_initialized,
-        "Should have bert_similarity_initialized field"
+    assert_eq!(
+        stats.bert_similarity_initialized,
+        manager.get_bert_similarity().is_some()
     );
 }
 

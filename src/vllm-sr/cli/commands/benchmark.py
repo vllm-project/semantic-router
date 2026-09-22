@@ -143,13 +143,34 @@ def dataset():
 @click.option("--revision")
 @click.option("--seed", default=20260918, type=int)
 @click.option(
+    "--source-partition",
+    help="Frozen upstream partition for native task identity; never an evaluation split.",
+)
+@click.option("--exclusion-snapshot", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--evaluation-role",
+    type=click.Choice(["holdout", "retest"]),
+    help="Explicit family role; retest is never selected automatically.",
+)
+@click.option(
     "--limit",
     type=int,
     help="Custom case cap; cannot be represented as an upstream full benchmark.",
 )
 @click.pass_obj
 @guarded
-def dataset_prepare(client, benchmark_id, profile, source_path, revision, seed, limit):
+def dataset_prepare(
+    client,
+    benchmark_id,
+    profile,
+    source_path,
+    revision,
+    seed,
+    limit,
+    source_partition,
+    exclusion_snapshot,
+    evaluation_role,
+):
     """Download or read a pinned source and freeze a reusable dataset."""
     kwargs = {
         "benchmark": benchmark_id,
@@ -161,7 +182,39 @@ def dataset_prepare(client, benchmark_id, profile, source_path, revision, seed, 
     }
     if limit is not None:
         kwargs["limit"] = limit
+    for key, value in {
+        "source_partition": source_partition,
+        "exclusion_snapshot": exclusion_snapshot,
+        "evaluation_role": evaluation_role,
+    }.items():
+        if value is not None:
+            kwargs[key] = value
     output(sources.prepare_dataset(**kwargs))
+
+
+@dataset.command("exclusions")
+@click.option(
+    "--dataset",
+    "dataset_ids",
+    multiple=True,
+    help="Named prepared dataset whose entire membership is reserved.",
+)
+@click.option(
+    "--run",
+    "run_ids",
+    multiple=True,
+    help="Named frozen run whose entire planned membership is reserved.",
+)
+@click.option("--output", "destination", required=True, type=click.Path(path_type=Path))
+@click.pass_obj
+@guarded
+def dataset_exclusions(client, dataset_ids, run_ids, destination):
+    """Freeze finite named history without inspecting outcomes or running models."""
+    from cli.sr_bench.history_exclusions import compile_snapshot  # noqa: PLC0415
+    from cli.sr_bench.history_snapshot import save_snapshot  # noqa: PLC0415
+
+    snapshot = compile_snapshot(client.store, dataset_ids=dataset_ids, run_ids=run_ids)
+    output(save_snapshot(snapshot, destination))
 
 
 @dataset.command("combine")
@@ -272,6 +325,9 @@ def runs_command(client):
 @click.argument("run_id")
 @click.option("--results", is_flag=True)
 @click.option("--calls", is_flag=True)
+@click.option(
+    "--active", is_flag=True, help="Read only in-progress calls; requires --calls."
+)
 @click.option("--events", is_flag=True)
 @click.option(
     "--after",
@@ -290,15 +346,19 @@ def runs_command(client):
 )
 @click.pass_obj
 @guarded
-def show_command(client, run_id, results, calls, events, after, limit, call_id):
+def show_command(client, run_id, results, calls, active, events, after, limit, call_id):
     """Read a run, bounded evidence page, or one complete saved call."""
     if sum((results, calls, events, bool(call_id))) > 1:
         raise ValueError("Choose one evidence view")
+    if active and not calls:
+        raise ValueError("--active requires --calls")
     path = "/runs/" + run_id
     if call_id:
         path += "/calls/" + call_id
     elif results or calls:
         path += ("/results" if results else "/calls") + f"?after={after}&limit={limit}"
+        if active:
+            path += "&active=true"
     elif events:
         path += f"/events?after={after}"
     output(client.request("GET", path))

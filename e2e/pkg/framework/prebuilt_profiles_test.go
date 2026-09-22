@@ -13,10 +13,8 @@ import (
 )
 
 var fixtureEnvironments = map[string]string{
-	"mock-vllm":      "E2E_PREBUILT_MOCK_VLLM_IMAGE",
-	"dashboard":      "VLLM_SR_DASHBOARD_IMAGE",
-	"llm-katan":      "E2E_PREBUILT_LLM_KATAN_IMAGE",
-	"anthropic-shim": "E2E_PREBUILT_ANTHROPIC_SHIM_IMAGE",
+	"provider-mocker": "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE",
+	"dashboard":       "VLLM_SR_DASHBOARD_IMAGE",
 }
 
 func sameLocalImageFixture(a, b framework.LocalImageBuild) bool {
@@ -40,13 +38,6 @@ func registeredFixtureImages(t *testing.T) map[string]framework.LocalImageBuild 
 				t.Fatalf("profiles disagree on fixture %s: %+v and %+v", id, previous, image)
 			}
 			images[id] = image
-		}
-	}
-	// The loader also supports this maintained service outside registered profiles.
-	if _, registered := images["llm-katan"]; !registered {
-		images["llm-katan"] = framework.LocalImageBuild{
-			Dockerfile: "e2e/testing/llm-katan/Dockerfile", Tag: "fixture/llm-katan:test",
-			BuildContext: "e2e/testing/llm-katan",
 		}
 	}
 	if len(images) != len(fixtureEnvironments) {
@@ -116,6 +107,48 @@ func TestPrebuiltImagesConsumeRegisteredProfileFixturesWithoutBuild(t *testing.T
 	}
 }
 
+func TestPublishedModelProfilesPrepareRegisteredBackends(t *testing.T) {
+	for _, profile := range []string{"vela-omni", "vela-halu"} {
+		for _, available := range []bool{true, false} {
+			scenario := "available"
+			if !available {
+				scenario = "missing"
+			}
+			t.Run(profile+"/"+scenario, func(t *testing.T) {
+				registration, ok := framework.LookupProfileRegistration(profile)
+				if !ok {
+					t.Fatalf("profile %s is not registered", profile)
+				}
+				commands := prebuiltCommands(t)
+				if !available {
+					t.Setenv("E2E_PREBUILT_PROVIDER_MOCKER_IMAGE", "")
+				}
+				err := framework.BuildPrebuiltFixturesForTest(context.Background(), registration.Capabilities.LocalImages)
+				want := []string{
+					"docker image inspect verified:extproc",
+					"docker tag verified:extproc ghcr.io/vllm-project/semantic-router/extproc:test",
+					"kind load docker-image ghcr.io/vllm-project/semantic-router/extproc:test --name fixture-test",
+				}
+				if available {
+					if err != nil {
+						t.Fatal(err)
+					}
+					want = append(want,
+						"docker image inspect verified:provider-mocker",
+						"docker tag verified:provider-mocker semantic-router-ci/provider-mocker:e2e-test",
+						"kind load docker-image semantic-router-ci/provider-mocker:e2e-test --name fixture-test",
+					)
+				} else if err == nil || !strings.Contains(err.Error(), "required prebuilt fixture missing") {
+					t.Fatalf("missing backend image was not rejected: %v", err)
+				}
+				if got := commands(); !slices.Equal(got, want) {
+					t.Fatalf("profile %s image preparation = %q, want %q", profile, got, want)
+				}
+			})
+		}
+	}
+}
+
 func TestPrebuiltImagesRefuseMissingInputsWithoutBuildFallback(t *testing.T) {
 	images := registeredFixtureImages(t)
 	for id, image := range images {
@@ -131,7 +164,7 @@ func TestPrebuiltImagesRefuseMissingInputsWithoutBuildFallback(t *testing.T) {
 	for _, scenario := range []string{"unknown-dockerfile", "missing-extproc", "missing-artifact"} {
 		t.Run(scenario, func(t *testing.T) {
 			commands := prebuiltCommands(t)
-			image := images["mock-vllm"]
+			image := images["provider-mocker"]
 			wantCommands := 3
 			switch scenario {
 			case "unknown-dockerfile":
@@ -140,7 +173,7 @@ func TestPrebuiltImagesRefuseMissingInputsWithoutBuildFallback(t *testing.T) {
 				t.Setenv("E2E_PREBUILT_EXT_PROC_IMAGE", "")
 				wantCommands = 0
 			case "missing-artifact":
-				t.Setenv("UNAVAILABLE_IMAGE", "verified:mock-vllm")
+				t.Setenv("UNAVAILABLE_IMAGE", "verified:provider-mocker")
 				wantCommands = 4
 			}
 			err := framework.BuildPrebuiltFixturesForTest(context.Background(), []framework.LocalImageBuild{image})

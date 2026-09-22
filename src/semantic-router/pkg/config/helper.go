@@ -373,14 +373,6 @@ func (c *RouterConfig) IsPromptGuardEnabled() bool {
 		_, err := ResolveRemoteClassifierBackend(c, backend, ModelRoleGuardrail, contract)
 		return err == nil
 	}
-	// Check configuration based on the selected backend
-	if c.PromptGuard.Protocol != "" {
-		// For remote backends: need external model with role="guardrail"
-		externalCfg := c.FindExternalModelByRole(ModelRoleGuardrail)
-		return externalCfg != nil &&
-			externalCfg.ModelEndpoint.Address != "" &&
-			externalCfg.ModelName != ""
-	}
 
 	// For Candle: need model ID
 	return c.PromptGuard.ModelID != ""

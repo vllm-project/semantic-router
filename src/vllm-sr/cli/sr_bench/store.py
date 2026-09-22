@@ -12,6 +12,7 @@ from pathlib import Path
 
 from .contracts import canonical, planned_cells
 from .experiments import bind_created_run, run_roles
+from .preparation import summary as preparation_summary
 
 MAX_PAGE_SIZE = 500
 
@@ -66,6 +67,8 @@ def run_summary(run):
             )
             if key in dataset
         }
+        if dataset.get("preparation"):
+            manifest["dataset"]["preparation_summary"] = preparation_summary(dataset)
     if recovery := source.get("recovery"):
         manifest["recovery"] = {
             key: recovery[key]
@@ -388,6 +391,24 @@ class Store:
                 (status, canonical({**old, **data, "finished_at": now()}), call_id),
             )
 
+    def update_call_activity(self, call_id, activity):
+        """Checkpoint transport observations without events or billing changes."""
+        with self.lock, self.db:
+            row = self.db.execute(
+                "SELECT data FROM calls WHERE id=? AND status='sent'", (call_id,)
+            ).fetchone()
+            if row is None:
+                return
+            data = json.loads(row[0])
+            previous = data.get("activity", {})
+            if activity["received_bytes"] < previous.get("received_bytes", 0):
+                return
+            data["activity"] = activity
+            self.db.execute(
+                "UPDATE calls SET data=? WHERE id=? AND status='sent'",
+                (canonical(data), call_id),
+            )
+
     def cached_call(self, run_id, case_id, target_id, data):
         call_id = "cached-" + uuid.uuid4().hex
         with self.lock, self.db:
@@ -445,9 +466,10 @@ class Store:
                 raise KeyError("call not found")
             return self._call_record(row)
 
-    def page(self, run_id, kind, after=0, limit=100):
+    def page(self, run_id, kind, after=0, limit=100, *, active=False):
         if (
             kind not in {"calls", "results"}
+            or (active and kind != "calls")
             or not after >= 0
             or not 1 <= limit <= MAX_PAGE_SIZE
         ):
@@ -455,15 +477,16 @@ class Store:
                 "Evidence pages require after>=0 and limit between 1 and 500"
             )
         with self.lock:
+            condition = "run_id=?" + (" AND status='sent'" if active else "")
             total = self.db.execute(
-                f"SELECT count(*) FROM {kind} WHERE run_id=?", (run_id,)
+                f"SELECT count(*) FROM {kind} WHERE {condition}", (run_id,)
             ).fetchone()[0]
             if kind == "calls":
                 selection = "id,case_id,target_id,role,status,json_remove(data,'$.request','$.final','$.reasoning','$.raw_usage','$.tool_calls')"
             else:
                 selection = "json_remove(data,'$.partial')"
             rows = self.db.execute(
-                f"SELECT rowid,{selection} FROM {kind} WHERE run_id=? AND rowid>? ORDER BY rowid LIMIT ?",
+                f"SELECT rowid,{selection} FROM {kind} WHERE {condition} AND rowid>? ORDER BY rowid LIMIT ?",
                 (run_id, after, limit + 1),
             ).fetchall()
             values = [
