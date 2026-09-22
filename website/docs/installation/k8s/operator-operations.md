@@ -22,6 +22,10 @@ Use `metadata.generation`, `status.observedGeneration`, status conditions, and
 ready replicas together. A running controller does not mean the latest custom
 resource generation has been applied successfully.
 
+Each condition refreshed by reconciliation records the custom-resource generation
+in its own `observedGeneration`. This identifies the generation evaluated by that
+condition; check the Deployment rollout and ready replicas separately.
+
 Inspect the owned workload when reconciliation stalls:
 
 ```bash
