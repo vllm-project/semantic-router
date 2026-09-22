@@ -95293,7 +95293,8 @@ const builtInCatalogJSON = `{
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-22"
       },
       "default_base_url": "https://api.groq.com/openai/v1",
       "default_protocol": "openai/chat-completions@1",
@@ -95316,7 +95317,7 @@ const builtInCatalogJSON = `{
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://console.groq.com/docs/models",
-            "status": "claimed",
+            "status": "reproduced",
             "verified_at": "2026-09-22"
           }
         },
@@ -95335,7 +95336,7 @@ const builtInCatalogJSON = `{
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://console.groq.com/docs/models",
-            "status": "claimed",
+            "status": "reproduced",
             "verified_at": "2026-09-22"
           }
         },
@@ -95354,7 +95355,7 @@ const builtInCatalogJSON = `{
           "relationship": "managed_cloud",
           "verification": {
             "source": "https://console.groq.com/docs/models",
-            "status": "claimed",
+            "status": "reproduced",
             "verified_at": "2026-09-22"
           }
         }
