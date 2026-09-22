@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
@@ -219,6 +220,54 @@ func TestBuildModelsInfoResponseIncludesRuntimeSummaryAndRegistryMetadata(t *tes
 	}
 	if categoryModel.Registry.LocalPath != "models/mmbert32k-intent-classifier-merged" {
 		t.Fatalf("expected canonical local path, got %+v", categoryModel.Registry)
+	}
+}
+
+func TestLoadModelsRuntimeStateUsesReplicaLocalSnapshot(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "router-config.yaml")
+	cfg := &config.RouterConfig{StartupStatus: config.StartupStatusConfig{StoreBackend: "file"}}
+	local := routerruntime.NewRegistry(cfg)
+	other := routerruntime.NewRegistry(cfg)
+	localWriter := local.StartupStatusWriter(startupstatus.NewFileWriter(configPath))
+	otherWriter := other.StartupStatusWriter(startupstatus.NewFileWriter(configPath))
+
+	localState := startupstatus.State{
+		Phase:         "initializing_models",
+		PendingModels: []string{"local-model"},
+		TotalModels:   2,
+		ReadyModels:   1,
+	}
+	if err := localWriter.Write(localState); err != nil {
+		t.Fatalf("write local runtime state: %v", err)
+	}
+	if err := otherWriter.Write(startupstatus.State{
+		Phase:       "ready",
+		Ready:       true,
+		TotalModels: 99,
+		ReadyModels: 99,
+	}); err != nil {
+		t.Fatalf("write shared runtime state: %v", err)
+	}
+
+	apiServer := &ClassificationAPIServer{
+		configPath:      configPath,
+		runtimeRegistry: local,
+	}
+	state := apiServer.loadModelsRuntimeState()
+	if state == nil {
+		t.Fatal("expected replica-local runtime state")
+	}
+	if state.Phase != localState.Phase || state.Ready != localState.Ready ||
+		state.ReadyModels != localState.ReadyModels || state.TotalModels != localState.TotalModels {
+		t.Fatalf("loaded another replica's runtime state: %+v", state)
+	}
+
+	unobserved := &ClassificationAPIServer{
+		configPath:      configPath,
+		runtimeRegistry: routerruntime.NewRegistry(cfg),
+	}
+	if state := unobserved.loadModelsRuntimeState(); state != nil {
+		t.Fatalf("unobserved replica loaded shared runtime state: %+v", state)
 	}
 }
 
