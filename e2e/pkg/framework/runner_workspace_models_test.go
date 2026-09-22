@@ -91,8 +91,8 @@ func TestResolveWorkspaceModelsDirPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatal(err)
+	if chdirErr := os.Chdir(tmpDir); chdirErr != nil {
+		t.Fatal(chdirErr)
 	}
 	defer func() { _ = os.Chdir(origDir) }()
 
@@ -112,7 +112,7 @@ func TestResolveWorkspaceModelsDirPermissions(t *testing.T) {
 }
 
 func TestWorkspaceModelsValuesFileHelmDeduplication(t *testing.T) {
-	if _, err := exec.LookPath("helm"); err != nil {
+	if _, lookErr := exec.LookPath("helm"); lookErr != nil {
 		t.Skip("helm executable not found in PATH")
 	}
 
@@ -124,13 +124,13 @@ func TestWorkspaceModelsValuesFileHelmDeduplication(t *testing.T) {
 
 	// Locate chart directory relative to e2e/pkg/framework
 	chartDir := filepath.Join("..", "..", "..", "deploy", "helm", "semantic-router")
-	if _, err := os.Stat(chartDir); err != nil {
-		t.Fatalf("chart directory not found at %s: %v", chartDir, err)
+	if _, statErr := os.Stat(chartDir); statErr != nil {
+		t.Fatalf("chart directory not found at %s: %v", chartDir, statErr)
 	}
 
 	tmpChartDir := filepath.Join(t.TempDir(), "semantic-router")
-	if err := copyDirWithoutDependencies(chartDir, tmpChartDir); err != nil {
-		t.Fatalf("prepare temporary chart: %v", err)
+	if copyErr := copyDirWithoutDependencies(chartDir, tmpChartDir); copyErr != nil {
+		t.Fatalf("prepare temporary chart: %v", copyErr)
 	}
 
 	cmd := exec.Command("helm", "template", "dedup-test", tmpChartDir, "-f", valuesFile, "-s", "templates/deployment.yaml")
@@ -152,46 +152,31 @@ func TestWorkspaceModelsValuesFileHelmDeduplication(t *testing.T) {
 }
 
 func copyDirWithoutDependencies(src, dst string) error {
-	return filepath.Walk(src, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
+	if err := os.CopyFS(dst, os.DirFS(src)); err != nil {
+		return err
+	}
+	chartYaml := filepath.Join(dst, "Chart.yaml")
+	data, err := os.ReadFile(chartYaml)
+	if err != nil {
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	var filtered []string
+	inDep := false
+	for _, line := range lines {
+		if strings.HasPrefix(line, "dependencies:") {
+			inDep = true
+			continue
 		}
-		rel, err := filepath.Rel(src, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(dst, rel)
-		if info.IsDir() {
-			if info.Name() == "charts" {
-				return filepath.SkipDir
+		if inDep {
+			if strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "\t") {
+				continue
 			}
-			return os.MkdirAll(target, info.Mode())
+			inDep = false
 		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		if rel == "Chart.yaml" {
-			lines := strings.Split(string(data), "\n")
-			var filtered []string
-			inDep := false
-			for _, line := range lines {
-				if strings.HasPrefix(line, "dependencies:") {
-					inDep = true
-					continue
-				}
-				if inDep {
-					if strings.HasPrefix(line, "  ") || strings.HasPrefix(line, "\t") {
-						continue
-					}
-					inDep = false
-				}
-				filtered = append(filtered, line)
-			}
-			data = []byte(strings.Join(filtered, "\n"))
-		}
-		return os.WriteFile(target, data, info.Mode())
-	})
+		filtered = append(filtered, line)
+	}
+	return os.WriteFile(chartYaml, []byte(strings.Join(filtered, "\n")), 0o600)
 }
 
 func TestSetupProfileRegistersTeardownCleanupByDefault(t *testing.T) {
