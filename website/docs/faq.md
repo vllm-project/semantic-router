@@ -8,7 +8,7 @@ description: What vLLM Semantic Router is, how it differs from llm-d and AI gate
 
 Short answers to the questions that come up most often when evaluating vLLM Semantic Router. Each answer links to the page that carries the detail, so this page stays short as those pages grow.
 
-## What is vLLM Semantic Router? Is it an AI gateway, or something else?
+## Is it an AI gateway, or something else?
 
 It is a **content- and policy-aware control plane** for Mixture-of-Models serving. It reads the request — signals, projections and declared evidence — decides *what* should run, and applies the decision through Envoy as an ExtProc filter.
 
@@ -27,7 +27,7 @@ The repository's answer is **sr-bench**: freeze the cases, grader versions, requ
 
 [sr-bench 1.0](benchmarking/sr-bench) defines the full measurement protocol, from freezing cases to reading the outcome.
 
-## If llm-d already does multi-model routing, why Semantic Router?
+## Why Semantic Router and not just llm-d?
 
 Because the two systems answer different questions.
 
@@ -41,7 +41,7 @@ llm-d should not decide business policy, and Semantic Router is not meant to cho
 
 The [llm-d integration guide](installation/k8s/llm-d) states this boundary in its deployment context.
 
-## How do Semantic Router and the llm-d Endpoint Picker avoid conflicts?
+## How do we avoid conflicts with llm-d?
 
 They avoid them by **not overlapping** rather than by arbitration. Semantic Router resolves the pool first; llm-d then picks a replica inside it. Because the two decisions live at different layers, a disagreement between "the best model for this request" and "the best replica for cache locality" resolves itself — the first decision constrains the second.
 
