@@ -60,36 +60,54 @@ func loadOpenClawImagePolicy() openClawImagePolicy {
 	return policy
 }
 
+// splitImageReference splits an image reference into repository, tag, and
+// digest, applying the runtime's implicit ":latest" tag to untagged
+// references. Case is preserved for tags (registries treat them as
+// case-sensitive distinctions); the repository is compared case-insensitively
+// as Docker does.
+func splitImageReference(image string) (ref string, tag string, digest string) {
+	reference := strings.TrimSpace(image)
+	if reference == "" {
+		return "", "", ""
+	}
+	if idx := strings.Index(reference, "@"); idx >= 0 {
+		digest = reference[idx+1:]
+		reference = reference[:idx]
+	} else if idx := strings.LastIndex(reference, ":"); idx >= 0 && !strings.Contains(reference[idx:], "/") {
+		tag = reference[idx+1:]
+		reference = reference[:idx]
+	} else {
+		// The runtime pulls ":latest" for untagged references; validate the
+		// effective reference rather than the empty tag.
+		tag = "latest"
+	}
+	return reference, tag, digest
+}
+
 // validateOpenClawImage enforces the administrator policy against the final
-// (already resolved) image reference. It returns a descriptive error naming
-// the policy, never the server filesystem.
+// (already resolved) image reference. The effective tag (with the implicit
+// ":latest" applied) is validated so an untagged request cannot bypass the
+// tag allowlist. It returns a descriptive error naming the policy, never
+// the server filesystem.
 func validateOpenClawImage(image string, policy openClawImagePolicy) error {
-	image = strings.ToLower(strings.TrimSpace(image))
-	if image == "" {
+	raw := strings.TrimSpace(image)
+	if raw == "" {
 		return fmt.Errorf("OpenClaw image is empty")
 	}
 
-	// Split tag/digest while keeping the repository part intact.
-	ref := image
-	tag := ""
-	digest := ""
-	if idx := strings.Index(ref, "@"); idx >= 0 {
-		digest = ref[idx+1:]
-		ref = ref[:idx]
-	} else if idx := strings.LastIndex(ref, ":"); idx >= 0 && !strings.Contains(ref[idx:], "/") {
-		tag = ref[idx+1:]
-		ref = ref[:idx]
-	}
+	ref, tag, digest := splitImageReference(raw)
 
 	if policy.AllowDigestsOnly && digest == "" {
-		return fmt.Errorf("image policy requires digest-pinned references (image@sha256:...); got %q", image)
+		return fmt.Errorf("image policy requires digest-pinned references (image@sha256:...); got %q", raw)
 	}
 	if digest != "" && !strings.HasPrefix(digest, "sha256:") {
-		return fmt.Errorf("image policy only accepts sha256 digests; got %q", image)
+		return fmt.Errorf("image policy only accepts sha256 digests; got %q", raw)
 	}
-	if policy.AllowedTags != nil && tag != "" {
+	if len(policy.AllowedTags) > 0 && tag != "" {
 		allowed := false
 		for _, t := range policy.AllowedTags {
+			// Tags are case-sensitive: ":RELEASE" must not satisfy an
+			// allowlist entry of ":release".
 			if t == tag {
 				allowed = true
 				break
@@ -108,15 +126,17 @@ func validateOpenClawImage(image string, policy openClawImagePolicy) error {
 	}
 
 	for _, allowed := range policy.Allowed {
-		if allowed == ref || allowed == image {
+		// Repository comparison is case-insensitive, matching the runtime's
+		// reference normalization; tag/digest case is preserved above.
+		if strings.EqualFold(allowed, ref) || strings.EqualFold(allowed, raw) {
 			return nil
 		}
 		// Prefix match: "ghcr.io/openclaw/" allows every repository under it.
-		if strings.HasSuffix(allowed, "/") && strings.HasPrefix(ref, allowed) {
+		if strings.HasSuffix(allowed, "/") && strings.HasPrefix(strings.ToLower(ref), strings.ToLower(allowed)) {
 			return nil
 		}
 	}
-	return fmt.Errorf("image %q is not in the image allowlist", image)
+	return fmt.Errorf("image %q is not in the image allowlist", raw)
 }
 
 // securityOpts and runtime flags for least-privilege provisioning.
@@ -130,17 +150,6 @@ func openClawLeastPrivilegeArgs(containerName string) []string {
 	}
 }
 
-// openClawStateVolumeArgs returns the volume and tmpfs arguments that keep
-// the container's writable state inside the administrator-managed named
-// volume instead of the image filesystem.
-func openClawStateVolumeArgs(absCDir, volumeName string) []string {
-	return []string{
-		"-v", absCDir + "/workspace:/workspace",
-		"-v", absCDir + "/openclaw.json:/config/openclaw.json:ro",
-		"-v", volumeName + ":/state",
-	}
-}
-
 // validateProvisionPaths proves that the per-container data directory and
 // the workspace stay inside the handler's dataDir after symlink-aware
 // resolution. It is defense in depth against a container name that later
@@ -150,37 +159,62 @@ func validateProvisionPaths(dataDir, containerName string) (cDir string, wsDir s
 		return "", "", fmt.Errorf("container name is empty")
 	}
 
-	dataDirAbs, err := filepath.Abs(dataDir)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to resolve data dir: %w", err)
+	dataDirAbs, absErr := filepath.Abs(dataDir)
+	if absErr != nil {
+		return "", "", fmt.Errorf("failed to resolve data dir: %w", absErr)
 	}
-	dataDirEval, err := filepath.EvalSymlinks(dataDirAbs)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to resolve data dir: %w", err)
-	}
-
-	cDir = filepath.Join(dataDirEval, "containers", containerName)
-	cDirEval, err := filepath.EvalSymlinks(cDir)
-	if err == nil {
-		// The directory already exists (reprovision): ensure it did not
-		// become a symlink pointing outside dataDir.
-		if !pathWithinDir(cDirEval, dataDirEval) {
-			return "", "", fmt.Errorf("container data dir resolves outside the data directory")
-		}
-		cDir = cDirEval
-	} else if !os.IsNotExist(err) {
-		return "", "", fmt.Errorf("failed to resolve container data dir: %w", err)
+	dataDirEval, evalErr := filepath.EvalSymlinks(dataDirAbs)
+	if evalErr != nil {
+		return "", "", fmt.Errorf("failed to resolve data dir: %w", evalErr)
 	}
 
-	wsDir = filepath.Join(cDir, "workspace")
-	wsDirEval, err := filepath.EvalSymlinks(wsDir)
-	if err == nil {
-		if !pathWithinDir(wsDirEval, dataDirEval) {
-			return "", "", fmt.Errorf("workspace resolves outside the data directory")
-		}
-		wsDir = wsDirEval
-	} else if !os.IsNotExist(err) {
-		return "", "", fmt.Errorf("failed to resolve workspace: %w", err)
+	// Resolve the deepest existing ancestor of the container directory and
+	// prove it stays inside dataDir before accepting any missing tail.
+	// Without this, dataDir/containers could be a symlink outside dataDir
+	// while the container directory itself does not exist yet, and the
+	// ENOENT branch below would accept the unresolved path.
+	containersDir, ancErr := resolveExistingWithin(filepath.Join(dataDirEval, "containers"), dataDirEval)
+	if ancErr != nil {
+		return "", "", fmt.Errorf("invalid containers dir: %w", ancErr)
+	}
+
+	cDir, cErr := resolveExistingWithin(filepath.Join(containersDir, containerName), dataDirEval)
+	if cErr != nil {
+		return "", "", fmt.Errorf("invalid container data dir: %w", cErr)
+	}
+
+	wsDir, wsErr := resolveExistingWithin(filepath.Join(cDir, "workspace"), dataDirEval)
+	if wsErr != nil {
+		return "", "", fmt.Errorf("invalid workspace: %w", wsErr)
 	}
 	return cDir, wsDir, nil
+}
+
+// resolveExistingWithin resolves the deepest existing ancestor of path
+// symlink-aware and returns path with its existing prefix replaced by the
+// resolved ancestor. It fails when the resolved ancestor escapes root.
+func resolveExistingWithin(path, root string) (string, error) {
+	missing := path
+	var tail []string
+	for {
+		eval, err := filepath.EvalSymlinks(missing)
+		if err == nil {
+			if !pathWithinDir(eval, root) {
+				return "", fmt.Errorf("resolves outside the data directory")
+			}
+			if len(tail) == 0 {
+				return eval, nil
+			}
+			return filepath.Join(append([]string{eval}, tail...)...), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		parent := filepath.Dir(missing)
+		if parent == missing {
+			return "", fmt.Errorf("resolves outside the data directory")
+		}
+		tail = append([]string{filepath.Base(missing)}, tail...)
+		missing = parent
+	}
 }

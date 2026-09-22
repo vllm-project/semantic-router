@@ -306,3 +306,155 @@ func TestGenerateComposeYAMLIncludesLeastPrivilege(t *testing.T) {
 		t.Fatalf("compose yaml must not force root user:\n%s", yamlOut)
 	}
 }
+
+// --- Round 2: review findings ---
+
+// P1: destination symlink inside the workspace must not be followed.
+func TestCopyOpenClawSkillPackRejectsEscapingDestinationSymlink(t *testing.T) {
+	writeSkillPackRoot(t)
+
+	wsSkills := filepath.Join(t.TempDir(), "workspace", "skills")
+	if err := os.MkdirAll(wsSkills, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// skills/github -> outside
+	outside := filepath.Join(t.TempDir(), "escaped")
+	if err := os.MkdirAll(outside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(wsSkills, "github")); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyOpenClawSkillPack("github", wsSkills); err == nil {
+		t.Fatal("expected destination dir symlink escape to be rejected")
+	}
+	// The outside directory must not have received any SKILL.md.
+	if _, err := os.Stat(filepath.Join(outside, "SKILL.md")); err == nil {
+		t.Fatal("escaped write detected outside the workspace")
+	}
+}
+
+func TestCopyOpenClawSkillPackRejectsEscapingDestinationFileSymlink(t *testing.T) {
+	writeSkillPackRoot(t)
+
+	wsSkills := filepath.Join(t.TempDir(), "workspace", "skills")
+	if err := os.MkdirAll(filepath.Join(wsSkills, "github"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outsideFile := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outsideFile, []byte("original"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// skills/github/SKILL.md -> outside file
+	if err := os.Symlink(outsideFile, filepath.Join(wsSkills, "github", "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := copyOpenClawSkillPack("github", wsSkills); err == nil {
+		t.Fatal("expected destination file symlink to be rejected")
+	}
+	data, err := os.ReadFile(outsideFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "original" {
+		t.Fatalf("outside file was overwritten through symlink: %q", data)
+	}
+}
+
+// P1: untagged reference implies :latest and must not bypass the tag policy.
+func TestValidateOpenClawImageUntaggedImpliesLatest(t *testing.T) {
+	policy := openClawImagePolicy{
+		Allowed:     []string{"ghcr.io/openclaw/openclaw"},
+		AllowedTags: []string{"v1"},
+	}
+	if err := validateOpenClawImage("ghcr.io/openclaw/openclaw", policy); err == nil {
+		t.Fatal("expected untagged reference (implicit :latest) to be rejected")
+	}
+	if err := validateOpenClawImage("ghcr.io/openclaw/openclaw:v1", policy); err != nil {
+		t.Fatalf("expected v1 allowed, got %v", err)
+	}
+}
+
+// P1: tag case is preserved; :RELEASE must not satisfy an allowlist of :release.
+func TestValidateOpenClawImageTagCasePreserved(t *testing.T) {
+	policy := openClawImagePolicy{
+		Allowed:     []string{"ghcr.io/openclaw/openclaw"},
+		AllowedTags: []string{"release"},
+	}
+	if err := validateOpenClawImage("ghcr.io/openclaw/openclaw:RELEASE", policy); err == nil {
+		t.Fatal("expected :RELEASE to be rejected against allowlist entry :release")
+	}
+	if err := validateOpenClawImage("ghcr.io/openclaw/openclaw:release", policy); err != nil {
+		t.Fatalf("expected :release allowed, got %v", err)
+	}
+	// Repository matching stays case-insensitive.
+	allowedRepo := openClawImagePolicy{Allowed: []string{"ghcr.io/OpenClaw/openclaw"}}
+	if err := validateOpenClawImage("ghcr.io/openclaw/openclaw:v3", allowedRepo); err != nil {
+		t.Fatalf("expected case-insensitive repository match, got %v", err)
+	}
+}
+
+// P2: containers dir symlinked outside dataDir with a brand-new container
+// name must be rejected (the ENOENT path used to accept it).
+func TestValidateProvisionPathsRejectsContainersSymlinkWithNewContainer(t *testing.T) {
+	outside := t.TempDir()
+	dataDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dataDir, "real-containers"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dataDir, "containers")); err != nil {
+		t.Fatal(err)
+	}
+
+	// "brand-new-worker" does not exist anywhere: the old code accepted this.
+	if _, _, err := validateProvisionPaths(dataDir, "brand-new-worker"); err == nil {
+		t.Fatal("expected symlinked containers dir with new container to be rejected")
+	}
+}
+
+func TestValidateProvisionPathsAcceptsDeepNewContainer(t *testing.T) {
+	// containers dir does not exist at all yet: creating the first container
+	// must still succeed.
+	dataDir := t.TempDir()
+	cDir, wsDir, err := validateProvisionPaths(dataDir, "first-worker")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantC := filepath.Join(dataDir, "containers", "first-worker")
+	if filepath.Clean(cDir) != filepath.Clean(wantC) {
+		t.Fatalf("cDir = %q, want %q", cDir, wantC)
+	}
+	if filepath.Clean(wsDir) != filepath.Clean(filepath.Join(wantC, "workspace")) {
+		t.Fatalf("wsDir = %q", wsDir)
+	}
+}
+
+// The provisioning fallback writes must use the same contained helpers.
+func TestWriteContainedFileRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeContainedFile(dir, dir, "SKILL.md", []byte("evil"), 0o644); err == nil {
+		t.Fatal("expected symlink write to be rejected")
+	}
+	data, _ := os.ReadFile(outside)
+	if string(data) != "keep" {
+		t.Fatalf("outside file modified: %q", data)
+	}
+}
+
+func TestContainedMkdirAllRejectsSymlinkedComponent(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "esc")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := containedMkdirAll(root, []string{"esc", "sub"}, root); err == nil {
+		t.Fatal("expected symlinked component to be rejected")
+	}
+}

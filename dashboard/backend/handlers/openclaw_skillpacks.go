@@ -38,8 +38,8 @@ func validateOpenClawSkillPackID(skillID string) error {
 // and its SKILL.md stay inside the skill-pack root. It rejects unknown IDs,
 // aliases, and any symlink that escapes the root.
 func resolveOpenClawSkillPack(skillID string) (packDir string, skillFile string, err error) {
-	if err := validateOpenClawSkillPackID(skillID); err != nil {
-		return "", "", err
+	if invalid := validateOpenClawSkillPackID(skillID); invalid != nil {
+		return "", "", invalid
 	}
 
 	root := openClawSkillPackDir()
@@ -89,19 +89,17 @@ func pathWithinDir(target, dir string) bool {
 }
 
 // copyOpenClawSkillPack copies the server-owned skill pack into the given
-// workspace skills directory under the pack's strict ID. Existing files are
-// overwritten; destination paths are always derived from the server catalog
-// ID and contained inside skillsRoot after symlink-aware resolution.
+// workspace skills directory under the pack's strict ID. Every destination
+// component (the skills root, the per-skill directory, and each written
+// file) is resolved symlink-aware and proven contained inside the trusted
+// workspace skills root before any write; pre-existing symlinks pointing
+// outside the workspace are rejected instead of followed.
 func copyOpenClawSkillPack(skillID, skillsRoot string) error {
-	if err := validateOpenClawSkillPackID(skillID); err != nil {
-		return err
+	if invalid := validateOpenClawSkillPackID(skillID); invalid != nil {
+		return invalid
 	}
 
-	rootAbs, err := filepath.Abs(skillsRoot)
-	if err != nil {
-		return fmt.Errorf("failed to resolve workspace skills dir: %w", err)
-	}
-	rootEval, err := filepath.EvalSymlinks(rootAbs)
+	rootEval, err := resolveExistingDir(skillsRoot)
 	if err != nil {
 		return fmt.Errorf("failed to resolve workspace skills dir: %w", err)
 	}
@@ -111,15 +109,106 @@ func copyOpenClawSkillPack(skillID, skillsRoot string) error {
 		return err
 	}
 
-	destDir := filepath.Join(rootEval, skillID)
-	if !pathWithinDir(destDir, rootEval) {
-		return fmt.Errorf("refusing skill destination outside workspace")
-	}
-	if err := os.MkdirAll(destDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create skill dir: %w", err)
+	destDir, err := containedMkdirAll(rootEval, []string{skillID}, rootEval)
+	if err != nil {
+		return err
 	}
 
 	return copyDirWithinRoot(packDir, destDir, rootEval)
+}
+
+// resolveExistingDir returns the symlink-resolved absolute path of an
+// existing directory, or an error when it is missing or not a directory.
+func resolveExistingDir(dir string) (string, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	eval, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(eval)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("%s is not a directory", dir)
+	}
+	return eval, nil
+}
+
+// containedMkdirAll creates the missing components under root and returns
+// the fully resolved path. Each component that already exists must resolve
+// (symlink-aware) inside root; components created here are fresh
+// non-symlink directories. The final component is never created through a
+// symlink.
+func containedMkdirAll(root string, components []string, trustedRoot string) (string, error) {
+	current := root
+	for _, component := range components {
+		next := filepath.Join(current, component)
+
+		if info, err := os.Lstat(next); err == nil {
+			// Component exists. It must be a real directory (not a symlink)
+			// and must resolve inside the trusted root.
+			if info.Mode()&os.ModeSymlink != 0 {
+				eval, evalErr := filepath.EvalSymlinks(next)
+				if evalErr != nil {
+					return "", fmt.Errorf("refusing symlinked path %s: %w", component, evalErr)
+				}
+				if !pathWithinDir(eval, trustedRoot) {
+					return "", fmt.Errorf("refusing symlinked path %s: resolves outside the workspace", component)
+				}
+				evalInfo, evalErr := os.Stat(eval)
+				if evalErr != nil || !evalInfo.IsDir() {
+					return "", fmt.Errorf("refusing symlinked path %s: not a directory", component)
+				}
+				current = eval
+				continue
+			}
+			if !info.IsDir() {
+				return "", fmt.Errorf("%s exists and is not a directory", component)
+			}
+			current = next
+			continue
+		} else if !os.IsNotExist(err) {
+			return "", err
+		}
+
+		// Component does not exist: create it as a real directory. O_NOFOLLOW
+		// is implicit because Mkdir fails if a file (or symlink) appears
+		// between the Lstat and the Mkdir; on race the loop re-checks.
+		if err := os.Mkdir(next, 0o755); err != nil {
+			if os.IsExist(err) {
+				continue
+			}
+			return "", fmt.Errorf("failed to create dir %s: %w", component, err)
+		}
+		current = next
+	}
+	return current, nil
+}
+
+// writeContainedFile writes data to name inside dirRef only when the target
+// does not exist or is a regular file whose resolved path stays inside the
+// trusted root. A symlink at the destination is rejected, never followed.
+func writeContainedFile(dirRef, trustedRoot, name string, data []byte, perm os.FileMode) error {
+	target := filepath.Join(dirRef, name)
+	info, err := os.Lstat(target)
+	switch {
+	case err == nil:
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("refusing to write through symlink %s", name)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("refusing to overwrite non-regular file %s", name)
+		}
+	case os.IsNotExist(err):
+		// new file below
+	default:
+		return err
+	}
+	return os.WriteFile(target, data, perm)
 }
 
 // copyDirWithinRoot recursively copies src into dst, refusing any entry
@@ -139,9 +228,15 @@ func copyDirWithinRoot(src, dst, root string) error {
 
 	for _, name := range names {
 		entryPath := filepath.Join(src, name)
-		entryEval, err := filepath.EvalSymlinks(entryPath)
-		if err != nil {
-			return fmt.Errorf("failed to resolve %s: %w", name, err)
+		info, statErr := os.Lstat(entryPath)
+		if statErr != nil {
+			return fmt.Errorf("failed to stat %s: %w", name, statErr)
+		}
+
+		entryEval, evalErr := filepath.EvalSymlinks(entryPath)
+		if evalErr != nil {
+			// Dangling symlink or unreadable entry: skip, never copy.
+			continue
 		}
 		if !pathWithinDir(entryEval, root) && !pathWithinDir(entryEval, src) {
 			// Symlinked pack content may legitimately point elsewhere inside
@@ -149,31 +244,26 @@ func copyDirWithinRoot(src, dst, root string) error {
 			return fmt.Errorf("skill pack entry %q resolves outside the skill pack root", name)
 		}
 
-		info, err := os.Lstat(entryPath)
-		if err != nil {
-			return fmt.Errorf("failed to stat %s: %w", name, err)
-		}
-
-		targetPath := filepath.Join(dst, name)
 		switch {
 		case info.IsDir():
-			if err := os.MkdirAll(targetPath, 0o755); err != nil {
-				return fmt.Errorf("failed to create dir %s: %w", name, err)
+			subDir, mkdirErr := containedMkdirAll(dst, []string{name}, root)
+			if mkdirErr != nil {
+				return fmt.Errorf("failed to create dir %s: %w", name, mkdirErr)
 			}
-			if err := copyDirWithinRoot(entryEval, targetPath, root); err != nil {
-				return err
+			if copyErr := copyDirWithinRoot(entryEval, subDir, root); copyErr != nil {
+				return copyErr
 			}
 		case info.Mode().IsRegular():
-			data, err := os.ReadFile(entryEval)
-			if err != nil {
-				return fmt.Errorf("failed to read %s: %w", name, err)
+			data, readErr := os.ReadFile(entryEval)
+			if readErr != nil {
+				return fmt.Errorf("failed to read %s: %w", name, readErr)
 			}
-			if err := os.WriteFile(targetPath, data, 0o644); err != nil {
-				return fmt.Errorf("failed to write %s: %w", name, err)
+			if writeErr := writeContainedFile(dst, root, name, data, 0o644); writeErr != nil {
+				return fmt.Errorf("failed to write %s: %w", name, writeErr)
 			}
 		default:
-			// Skip sockets, devices, and dangling symlinks: never copy them
-			// into a provisioned workspace.
+			// Skip sockets, devices, and symlinks: never copy them into a
+			// provisioned workspace.
 		}
 	}
 	return nil

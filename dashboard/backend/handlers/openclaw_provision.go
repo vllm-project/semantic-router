@@ -225,26 +225,33 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 			return
 		}
 
+		skillsRoot := filepath.Join(wsDir, "skills")
 		for _, skillID := range req.Skills {
 			// Materialize skills exclusively from the server-owned skill pack
 			// directory; never extract content from the selected image.
-			if err := copyOpenClawSkillPack(skillID, filepath.Join(wsDir, "skills")); err == nil {
+			if copyErr := copyOpenClawSkillPack(skillID, skillsRoot); copyErr == nil {
 				continue
-			} else if !os.IsNotExist(err) && !strings.Contains(err.Error(), "unknown skill ID") {
-				log.Printf("openclaw: failed to copy skill pack %s: %v", skillID, err)
+			} else if !os.IsNotExist(copyErr) && !strings.Contains(copyErr.Error(), "unknown skill ID") {
+				log.Printf("openclaw: failed to copy skill pack %s: %v", skillID, copyErr)
 			}
-			// Fallback stub for catalog entries without a server-side pack.
+			// Fallback stub for catalog entries without a server-side pack,
+			// using the same symlink-safe contained creation as the packs.
 			content := h.fetchSkillContent(skillID)
 			if content == "" {
 				continue
 			}
-			skillDir := filepath.Join(wsDir, "skills", skillID)
-			if err := os.MkdirAll(skillDir, 0o755); err != nil {
-				log.Printf("openclaw: failed to create skill dir %s: %v", skillID, err)
+			skillsRootEval, rootErr := resolveExistingDir(skillsRoot)
+			if rootErr != nil {
+				log.Printf("openclaw: failed to resolve skills dir: %v", rootErr)
 				continue
 			}
-			if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
-				log.Printf("openclaw: failed to write skill %s: %v", skillID, err)
+			skillDir, dirErr := containedMkdirAll(skillsRootEval, []string{skillID}, skillsRootEval)
+			if dirErr != nil {
+				log.Printf("openclaw: failed to create skill dir %s: %v", skillID, dirErr)
+				continue
+			}
+			if writeErr := writeContainedFile(skillDir, skillsRootEval, "SKILL.md", []byte(content), 0o644); writeErr != nil {
+				log.Printf("openclaw: failed to write skill %s: %v", skillID, writeErr)
 			}
 		}
 
