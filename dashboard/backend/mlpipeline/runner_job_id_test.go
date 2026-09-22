@@ -87,8 +87,8 @@ func TestGenerateConfigConcurrentJobsRemainDistinct(t *testing.T) {
 			t.Fatal(err)
 		}
 		var config yamlConfig
-		if err := yaml.Unmarshal(data, &config); err != nil {
-			t.Fatal(err)
+		if parseErr := yaml.Unmarshal(data, &config); parseErr != nil {
+			t.Fatal(parseErr)
 		}
 		if want := fmt.Sprintf("models-%d", i); config.Config.ModelSelection.ML.ModelsPath != want {
 			t.Fatalf("job %q models path = %q, want %q",
