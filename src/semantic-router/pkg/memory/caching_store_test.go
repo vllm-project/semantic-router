@@ -232,8 +232,10 @@ func TestNewCachingStore_BackendLabel(t *testing.T) {
 // shutdown can cancel it. That write is durable, so the cache must not keep
 // serving the pre-write answer.
 type ctxIgnoringStore struct {
-	writeErr error
-	mem      *Memory
+	writeErr    error
+	mem         *Memory
+	lookupDelay time.Duration
+	deleted     bool
 }
 
 func (s *ctxIgnoringStore) Store(context.Context, *Memory) error { return s.writeErr }
@@ -246,10 +248,22 @@ func (s *ctxIgnoringStore) Get(ctx context.Context, _ string) (*Memory, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if s.lookupDelay > 0 {
+		timer := time.NewTimer(s.lookupDelay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 	return s.mem, nil
 }
 
-func (s *ctxIgnoringStore) Forget(context.Context, string) error { return s.writeErr }
+func (s *ctxIgnoringStore) Forget(context.Context, string) error {
+	s.deleted = s.writeErr == nil
+	return s.writeErr
+}
 
 func (s *ctxIgnoringStore) ForgetByScope(context.Context, MemoryScope) error { return s.writeErr }
 
@@ -331,6 +345,24 @@ func TestCachingStoreInvalidatesAfterCommittedWriteOnDeadContext(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestCachingStoreForgetInvalidatesAfterSlowOwnerLookup(t *testing.T) {
+	mem := &Memory{ID: "slow-owner", UserID: "u-slow-owner", Content: "likes tea"}
+	opts := RetrieveOptions{Query: "tea", UserID: mem.UserID, Limit: 5}
+	backing := &ctxIgnoringStore{mem: mem, lookupDelay: 1100 * time.Millisecond}
+	wrapped, cache := newInvalidationFixture(t, backing)
+	cache.Set(context.Background(), opts, []*RetrieveResult{{Memory: mem}})
+	_, cached := cache.Get(context.Background(), opts)
+	require.True(t, cached)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	require.NoError(t, wrapped.Forget(ctx, mem.ID))
+	require.NoError(t, ctx.Err(), "the caller still has time to commit the deletion")
+	require.True(t, backing.deleted)
+	_, cached = cache.Get(context.Background(), opts)
+	require.False(t, cached, "a slow owner query must not leave a deleted memory cached")
 }
 
 func TestCachingStoreKeepsCacheWhenWriteFails(t *testing.T) {
