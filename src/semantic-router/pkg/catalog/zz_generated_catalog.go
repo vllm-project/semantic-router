@@ -95342,7 +95342,7 @@ const builtInCatalogJSON = `{
         {
           "catalog": "qwen/qwen3.8-27b",
           "id": "qwen/qwen3.8-27b",
-          "lifecycle": "active",
+          "lifecycle": "experimental",
           "pricing": {
             "completion_per_1m": 4.0,
             "currency": "USD",

@@ -58,7 +58,7 @@ models:
     currency: USD
     prompt_per_1m: 0.80
     completion_per_1m: 4.00
-  lifecycle: active
+  lifecycle: experimental
   verification:
     status: claimed
     verified_at: 2026-09-22
