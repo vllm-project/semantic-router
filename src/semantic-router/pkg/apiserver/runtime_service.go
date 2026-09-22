@@ -4,6 +4,7 @@ package apiserver
 
 import (
 	"context"
+	"reflect"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
@@ -79,7 +80,7 @@ func newLiveClassificationService(
 // classifier cannot be closed underneath an in-flight API call.
 func (s *liveClassificationService) acquire() (classificationService, func()) {
 	if s != nil && s.acquirer != nil {
-		if svc, release, ok := s.acquirer(); ok && svc != nil {
+		if svc, release, ok := s.acquirer(); ok && !isNilClassificationService(svc) {
 			return svc, release
 		}
 		if s.fallback != nil {
@@ -95,7 +96,7 @@ func (s *ClassificationAPIServer) acquireClassificationService() (classification
 		if live, ok := s.classificationSvc.(*liveClassificationService); ok {
 			return live.acquire()
 		}
-		if s.classificationSvc != nil {
+		if !isNilClassificationService(s.classificationSvc) {
 			return s.classificationSvc, func() {}
 		}
 	}
@@ -116,9 +117,22 @@ func (s *ClassificationAPIServer) acquireClassificationRuntime() (
 	return s.currentConfig(), service, release
 }
 
+// isNilClassificationService reports whether a service value is nil,
+// including a typed nil pointer held in a non-nil interface. A resolver
+// that constructs its service conditionally can return such a typed nil
+// when construction fails; treating it as present panics on the nil
+// receiver at the first field access (the nil check itself dereferences).
+func isNilClassificationService(svc classificationService) bool {
+	if svc == nil {
+		return true
+	}
+	value := reflect.ValueOf(svc)
+	return value.Kind() == reflect.Pointer && value.IsNil()
+}
+
 func (s *liveClassificationService) current() classificationService {
 	if s != nil && s.resolver != nil {
-		if svc := s.resolver(); svc != nil {
+		if svc := s.resolver(); !isNilClassificationService(svc) {
 			return svc
 		}
 	}
