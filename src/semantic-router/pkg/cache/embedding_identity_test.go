@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testutil/storagetest"
 )
 
 type persistedSemanticRecord struct {
@@ -109,7 +111,7 @@ func TestCacheEmbeddingSettingsReflectActualBackend(t *testing.T) {
 	if !ok || settings.Layer != 6 || settings.Dimension != 256 {
 		t.Fatalf("inmemory actual settings: %#v %v", settings, ok)
 	}
-	persistent := &QdrantCache{embeddingModel: "mmbert"}
+	persistent := &QdrantCache{embeddingModel: "mmbert", embeddingProvider: storagetest.Vectors{Size: 768}}
 	settings, ok = LocalEmbeddingSettings(persistent)
 	if !ok || settings.Layer != 0 || settings.Dimension != 768 {
 		t.Fatalf("persistent actual settings: %#v %v", settings, ok)

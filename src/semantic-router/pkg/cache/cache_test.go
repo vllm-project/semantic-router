@@ -169,7 +169,7 @@ development:
 					Expect(err).NotTo(HaveOccurred())
 
 					config := CacheConfig{
-						EmbeddingProvider:   storagetest.Vectors{Size: 384},
+						EmbeddingProvider:   storagetest.Vectors{Size: 512},
 						BackendType:         MilvusCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.85,
@@ -255,7 +255,7 @@ development:
 
 				It("should create Milvus cache backend successfully with valid config", func() {
 					config := CacheConfig{
-						EmbeddingProvider:   storagetest.Vectors{Size: 384},
+						EmbeddingProvider:   storagetest.Vectors{Size: 512},
 						BackendType:         MilvusCacheType,
 						Enabled:             true,
 						SimilarityThreshold: 0.85,
@@ -1825,24 +1825,20 @@ func TestMilvusCacheOptionsFromHybridOptionsPreservesEmbeddingModel(t *testing.T
 }
 
 func TestSemanticCacheEmbeddingDimensionUsesConfiguredValue(t *testing.T) {
-	if got := semanticCacheEmbeddingDimension(512, "mmbert"); got != 512 {
+	if got := semanticCacheEmbeddingDimension(512, nil); got != 512 {
 		t.Fatalf("expected configured dimension 512, got %d", got)
 	}
 }
 
-func TestSemanticCacheEmbeddingDimensionDefaultsByModel(t *testing.T) {
-	tests := map[string]int{
-		"":           384,
-		"bert":       384,
-		"qwen3":      1024,
-		"gemma":      768,
-		"mmbert":     768,
-		"multimodal": 384,
-	}
-	for model, want := range tests {
-		if got := semanticCacheEmbeddingDimension(0, model); got != want {
-			t.Fatalf("model %q: expected dimension %d, got %d", model, want, got)
+func TestSemanticCacheEmbeddingDimensionUsesPreparedProvider(t *testing.T) {
+	for _, want := range []int{256, 384, 768, 1024} {
+		provider := storagetest.Vectors{Size: want}
+		if got := semanticCacheEmbeddingDimension(0, provider); got != want {
+			t.Fatalf("provider dimension: got %d, want %d", got, want)
 		}
+	}
+	if got := semanticCacheEmbeddingDimension(0, nil); got != 0 {
+		t.Fatalf("missing provider guessed dimension %d", got)
 	}
 }
 

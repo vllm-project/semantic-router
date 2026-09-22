@@ -56,6 +56,8 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 		return r.handleRouterReplayAggregateAPI(method, rawQuery)
 	case normalizedPath == routerReplayTrajectoryPath:
 		return r.handleRouterReplayTrajectoryAPI(method, rawQuery)
+	case normalizedPath == routerReplayDatasetPath:
+		return r.handleRouterReplayDatasetAPI(method, rawQuery)
 	case strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/"):
 		replayID := strings.TrimPrefix(normalizedPath, routerReplayAPIBasePath+"/")
 		return r.handleRouterReplayRecordAPI(method, replayID)

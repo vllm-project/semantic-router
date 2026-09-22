@@ -55,14 +55,15 @@ type UsageCost struct {
 
 // Outcome captures typed post-route feedback linked to a replay record.
 type Outcome struct {
-	Timestamp time.Time         `json:"timestamp,omitempty"`
-	Source    string            `json:"source"`
-	Target    string            `json:"target"`
-	TargetRef string            `json:"target_ref,omitempty"`
-	Verdict   string            `json:"verdict"`
-	Reason    string            `json:"reason,omitempty"`
-	Score     float64           `json:"score,omitempty"`
-	Metadata  map[string]string `json:"metadata,omitempty"`
+	Timestamp      time.Time         `json:"timestamp,omitempty"`
+	Source         string            `json:"source"`
+	Target         string            `json:"target"`
+	TargetRef      string            `json:"target_ref,omitempty"`
+	Verdict        string            `json:"verdict"`
+	Reason         string            `json:"reason,omitempty"`
+	Score          float64           `json:"score,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
+	IdempotencyKey string            `json:"idempotency_key,omitempty"`
 }
 
 const (
@@ -235,6 +236,21 @@ type RouteDiagnostics struct {
 	Annotations                    map[string]interface{}               `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies         map[string]string                    `json:"applied_unknown_policies,omitempty"`
+	DecisionRanking                *DecisionRanking                     `json:"decision_ranking,omitempty"`
+}
+
+// DecisionRanking records how selection ordered the matched decisions,
+// mirroring decision.RankingTrace for replay persistence.
+type DecisionRanking struct {
+	Strategy   string `json:"strategy"`
+	Tiered     bool   `json:"tiered"`
+	Tier       int    `json:"tier"`
+	Comparable bool   `json:"comparable"`
+	Fallback   string `json:"fallback_reason,omitempty"`
+	ScoreKind  string `json:"score_kind,omitempty"`
+	DecidedBy  string `json:"decided_by"`
+	Winner     string `json:"winner"`
+	Candidates int    `json:"candidates"`
 }
 
 // ContextDedupDiagnostics is the bounded receipt of the context_dedup step.
@@ -664,6 +680,10 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)
+	if value.DecisionRanking != nil {
+		ranking := *value.DecisionRanking
+		cloned.DecisionRanking = &ranking
+	}
 	return &cloned
 }
 

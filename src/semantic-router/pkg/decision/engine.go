@@ -133,6 +133,8 @@ type nodeEvaluation struct {
 
 type EvaluationDiagnostics struct {
 	AppliedUnknownPolicies map[string]string `json:"applied_unknown_policies,omitempty"`
+	// Ranking explains how the winner was ordered against the rest.
+	Ranking *RankingTrace `json:"ranking,omitempty"`
 }
 
 type decisionEvaluations struct {
@@ -291,7 +293,7 @@ func (e *DecisionEngine) evaluateDecisions(
 		return output
 	}
 
-	output.result = e.selectBestDecision(results)
+	output.result, output.diagnostics.Ranking = e.selectBestDecision(results)
 	return output
 }
 

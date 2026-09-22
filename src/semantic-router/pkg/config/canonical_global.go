@@ -192,6 +192,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err != nil {
 		return CanonicalGlobal{}, err
 	}
+	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
 	if err := normalizeSparseCanonicalCategoryOverride(&resolved, rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
@@ -199,6 +200,27 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return CanonicalGlobal{}, err
 	}
 	return resolved, nil
+}
+
+// Representation defaults belong to the default mmBERT model. Selecting a
+// different family must not silently request mmBERT's layer 22 from that owner.
+func normalizeSparseCanonicalEmbeddingOverride(resolved *CanonicalGlobal, raw *StructuredPayload) {
+	if raw == nil {
+		return
+	}
+	global, err := raw.AsStringMap()
+	if err != nil {
+		return
+	}
+	catalog := nestedStringMap(global["model_catalog"])
+	embeddings := nestedStringMap(catalog["embeddings"])
+	semantic := nestedStringMap(embeddings["semantic"])
+	settings := nestedStringMap(semantic["embedding_config"])
+	if model, ok := settings["model_type"].(string); ok && strings.TrimSpace(model) != "" && strings.ToLower(strings.TrimSpace(model)) != "mmbert" {
+		if !hasRawKey(settings, "target_layer") {
+			resolved.ModelCatalog.Embeddings.Semantic.EmbeddingConfig.TargetLayer = 0
+		}
+	}
 }
 
 func mergeCanonicalGlobalOverride(

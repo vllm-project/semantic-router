@@ -284,6 +284,11 @@ routing:
       # multimodal example.
       - name: clinical_query_intent
         query_modality: text
+        # Positive image references can complement or replace text candidates.
+        # Negative candidates subtract their aggregated cosine score.
+        image_candidates: []
+        negative_candidates: []
+        negative_image_candidates: []
         threshold: 0.72
         aggregation_method: max
         candidates:
@@ -2344,7 +2349,7 @@ global:
         qwen3_model_path: models/mom-embedding-pro
         gemma_model_path: models/mom-embedding-flash
         mmbert_model_path: models/Vela-1.0-Encoder-307M-Embedding
-        multimodal_model_path: models/mom-embedding-multimodal
+        multimodal_model_path: models/vela-1.0-omni-nano
         bert_model_path: models/mom-embedding-light
         use_cpu: true
         embedding_config:
@@ -2352,7 +2357,7 @@ global:
           backend: candle
           model_type: mmbert
           preload_embeddings: true
-          target_dimension: 768
+          target_dimension: 0
           target_layer: 22
           enable_soft_matching: false
           top_k: 0
@@ -2379,7 +2384,7 @@ global:
       domain_classifier: models/Vela-1.0-Encoder-307M-Domain
       pii_classifier: models/Vela-1.0-Encoder-307M-PII
       fact_check_classifier: models/Vela-1.0-Encoder-307M-FactCheck
-      hallucination_detector: models/mom-halugate-detector
+      hallucination_detector: models/Vela-1.0-Encoder-307M-Halu
       hallucination_explainer: models/mom-halugate-explainer
       feedback_detector: models/Vela-1.0-Encoder-307M-Feedback
     # admission bounds concurrent inference per system model deployment.
@@ -2680,13 +2685,13 @@ global:
           endpoint: ""
           include_explanation: false
           model_ref: hallucination_detector
-          model_id: models/mom-halugate-detector
-          threshold: 0.82
+          model_id: models/Vela-1.0-Encoder-307M-Halu
+          threshold: 0.5
           use_cpu: true
-          min_span_length: 2
-          min_span_confidence: 0.6
+          min_span_length: 1
+          min_span_confidence: 0.0
           context_window_size: 50
-          enable_nli_filtering: true
+          enable_nli_filtering: false
           nli_entailment_threshold: 0.75
         explainer:
           model_ref: hallucination_explainer
