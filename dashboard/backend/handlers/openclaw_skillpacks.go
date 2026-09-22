@@ -144,71 +144,90 @@ func resolveExistingDir(dir string) (string, error) {
 // non-symlink directories. The final component is never created through a
 // symlink.
 func containedMkdirAll(root string, components []string, trustedRoot string) (string, error) {
-	current := root
-	for _, component := range components {
-		next := filepath.Join(current, component)
-
-		if info, err := os.Lstat(next); err == nil {
-			// Component exists. It must be a real directory (not a symlink)
-			// and must resolve inside the trusted root.
-			if info.Mode()&os.ModeSymlink != 0 {
-				eval, evalErr := filepath.EvalSymlinks(next)
-				if evalErr != nil {
-					return "", fmt.Errorf("refusing symlinked path %s: %w", component, evalErr)
-				}
-				if !pathWithinDir(eval, trustedRoot) {
-					return "", fmt.Errorf("refusing symlinked path %s: resolves outside the workspace", component)
-				}
-				evalInfo, evalErr := os.Stat(eval)
-				if evalErr != nil || !evalInfo.IsDir() {
-					return "", fmt.Errorf("refusing symlinked path %s: not a directory", component)
-				}
-				current = eval
-				continue
-			}
-			if !info.IsDir() {
-				return "", fmt.Errorf("%s exists and is not a directory", component)
-			}
-			current = next
-			continue
-		} else if !os.IsNotExist(err) {
-			return "", err
-		}
-
-		// Component does not exist: create it as a real directory. O_NOFOLLOW
-		// is implicit because Mkdir fails if a file (or symlink) appears
-		// between the Lstat and the Mkdir; on race the loop re-checks.
-		if err := os.Mkdir(next, 0o755); err != nil {
-			if os.IsExist(err) {
-				continue
-			}
-			return "", fmt.Errorf("failed to create dir %s: %w", component, err)
-		}
-		current = next
+	trustedRootEval, err := resolveExistingDir(trustedRoot)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve trusted root: %w", err)
 	}
-	return current, nil
+	rootEval, err := resolveExistingDir(root)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve destination root: %w", err)
+	}
+	if !pathWithinDir(rootEval, trustedRootEval) {
+		return "", fmt.Errorf("destination root resolves outside the workspace")
+	}
+
+	target := filepath.Join(append([]string{rootEval}, components...)...)
+	rel, err := filepath.Rel(trustedRootEval, target)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("destination resolves outside the workspace")
+	}
+
+	rootFS, err := os.OpenRoot(trustedRootEval)
+	if err != nil {
+		return "", fmt.Errorf("failed to open trusted root: %w", err)
+	}
+	defer rootFS.Close()
+
+	// Root.MkdirAll resolves every path component relative to an opened root
+	// and refuses symbolic links that escape it, closing the Lstat/Mkdir
+	// TOCTOU window present in path-based creation.
+	if err := rootFS.MkdirAll(rel, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create contained dir: %w", err)
+	}
+
+	resolved, err := filepath.EvalSymlinks(filepath.Join(trustedRootEval, rel))
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve contained dir: %w", err)
+	}
+	if !pathWithinDir(resolved, trustedRootEval) {
+		return "", fmt.Errorf("contained dir resolves outside the workspace")
+	}
+	return resolved, nil
 }
 
 // writeContainedFile writes data to name inside dirRef only when the target
 // does not exist or is a regular file whose resolved path stays inside the
 // trusted root. A symlink at the destination is rejected, never followed.
 func writeContainedFile(dirRef, trustedRoot, name string, data []byte, perm os.FileMode) error {
-	target := filepath.Join(dirRef, name)
-	info, err := os.Lstat(target)
-	switch {
-	case err == nil:
+	trustedRootEval, err := resolveExistingDir(trustedRoot)
+	if err != nil {
+		return fmt.Errorf("failed to resolve trusted root: %w", err)
+	}
+	dirEval, err := resolveExistingDir(dirRef)
+	if err != nil {
+		return fmt.Errorf("failed to resolve destination dir: %w", err)
+	}
+	if !pathWithinDir(dirEval, trustedRootEval) {
+		return fmt.Errorf("destination dir resolves outside the workspace")
+	}
+
+	relDir, err := filepath.Rel(trustedRootEval, dirEval)
+	if err != nil || relDir == ".." || strings.HasPrefix(relDir, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("destination dir resolves outside the workspace")
+	}
+	relTarget := filepath.Join(relDir, name)
+
+	rootFS, err := os.OpenRoot(trustedRootEval)
+	if err != nil {
+		return fmt.Errorf("failed to open trusted root: %w", err)
+	}
+	defer rootFS.Close()
+
+	// Preserve the deterministic rejection of an already-present destination
+	// symlink. Root.WriteFile below provides the race-safe boundary: even if
+	// the path is swapped after this check, it cannot resolve outside root.
+	if info, statErr := rootFS.Lstat(relTarget); statErr == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("refusing to write through symlink %s", name)
 		}
 		if !info.Mode().IsRegular() {
 			return fmt.Errorf("refusing to overwrite non-regular file %s", name)
 		}
-	case os.IsNotExist(err):
-		// new file below
-	default:
-		return err
+	} else if !os.IsNotExist(statErr) {
+		return statErr
 	}
-	return os.WriteFile(target, data, perm)
+
+	return rootFS.WriteFile(relTarget, data, perm)
 }
 
 // copyDirWithinRoot recursively copies src into dst, refusing any entry
