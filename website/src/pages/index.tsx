@@ -289,7 +289,7 @@ const alternativeComparison = [
     }),
     llmd: translate({
       id: 'homepage.alternatives.runs.llmd',
-      message: 'an endpoint picker',
+      message: 'the llm-d Endpoint Picker',
     }),
   },
   {
