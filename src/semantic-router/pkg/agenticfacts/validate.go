@@ -51,7 +51,6 @@ func Validate(raw []byte, bounds Bounds, now time.Time) Result {
 	v.checkRole(envelope)
 	v.checkBudget(envelope)
 	v.checkCapabilities(envelope)
-	v.checkCandidates(envelope)
 	v.checkTrustBoundary(envelope)
 
 	sortRejections(v.result.Rejections)
@@ -160,8 +159,7 @@ func (v *validator) checkRole(envelope Envelope) {
 	}
 }
 
-// checkBudget accepts only non-negative counters and requires a cost to name
-// the currency it is denominated in.
+// checkBudget accepts only non-negative counters.
 func (v *validator) checkBudget(envelope Envelope) {
 	if envelope.Budget == nil {
 		return
@@ -193,16 +191,6 @@ func (v *validator) checkBudget(envelope Envelope) {
 			v.accepted.RemainingCostKnown = true
 		}
 	}
-
-	currency := strings.ToUpper(v.boundedString("budget.currency", envelope.Budget.Currency))
-	switch {
-	case envelope.Budget.RemainingCost != nil && currency == "":
-		v.result.reject("budget.currency", ReasonMissing)
-	case envelope.Budget.RemainingCost == nil && currency != "":
-		v.result.reject("budget.currency", ReasonConflicting)
-	default:
-		v.accepted.Currency = currency
-	}
 }
 
 // checkCapabilities bounds the capability list and normalizes entries to lower
@@ -228,30 +216,6 @@ func (v *validator) checkCapabilities(envelope Envelope) {
 	}
 
 	v.accepted.RequiredCapabilities = dedupSorted(values)
-}
-
-// checkCandidates bounds the candidate list. Entries are model names, which are
-// case-sensitive identifiers, so they are trimmed but never lower-cased.
-func (v *validator) checkCandidates(envelope Envelope) {
-	if len(envelope.AllowedCandidates) > v.bounds.MaxCandidates {
-		v.result.reject("allowed_candidates", ReasonTooMany)
-		return
-	}
-
-	values := make([]string, 0, len(envelope.AllowedCandidates))
-	for _, entry := range envelope.AllowedCandidates {
-		value := strings.TrimSpace(entry)
-		switch {
-		case value == "":
-			v.result.reject("allowed_candidates", ReasonMalformed)
-		case len(value) > v.bounds.MaxStringLength:
-			v.result.reject("allowed_candidates", ReasonTooLong)
-		default:
-			values = append(values, value)
-		}
-	}
-
-	v.accepted.AllowedCandidates = dedupSorted(values)
 }
 
 // checkTrustBoundary bounds the tenant, residency, and label identifiers.

@@ -47,7 +47,6 @@ type AgenticFactsBoundsConfig struct {
 	MaxEnvelopeBytes int    `yaml:"max_envelope_bytes,omitempty"`
 	MaxDepth         int    `yaml:"max_depth,omitempty"`
 	MaxCapabilities  int    `yaml:"max_capabilities,omitempty"`
-	MaxCandidates    int    `yaml:"max_candidates,omitempty"`
 	MaxStringLength  int    `yaml:"max_string_length,omitempty"`
 	MaxLifetime      string `yaml:"max_lifetime,omitempty"`
 	ClockSkew        string `yaml:"clock_skew,omitempty"`

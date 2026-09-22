@@ -53,7 +53,6 @@ type Envelope struct {
 	TaskPhase            string         `json:"task_phase,omitempty"`
 	Budget               *Budget        `json:"budget,omitempty"`
 	RequiredCapabilities []string       `json:"required_capabilities,omitempty"`
-	AllowedCandidates    []string       `json:"allowed_candidates,omitempty"`
 	ContextPortability   string         `json:"context_portability,omitempty"`
 	TrustBoundary        *TrustBoundary `json:"trust_boundary,omitempty"`
 	ExpiresAt            string         `json:"expires_at,omitempty"`
@@ -73,14 +72,13 @@ type Lineage struct {
 // remaining_tokens of zero is a real, spent budget and must not read as "no
 // budget declared".
 //
-// Only remaining_tokens is evidenced by the merged proposal. The time and cost
-// counters, and their units, are extrapolated here and recorded as open in
-// PL-0042.
+// The proposal names "remaining token, time, or cost counters", so all three
+// concepts are evidenced. The exact field names and the millisecond unit are
+// chosen here and recorded as open in PL-0042.
 type Budget struct {
 	RemainingTokens *int64   `json:"remaining_tokens,omitempty"`
 	RemainingTimeMs *int64   `json:"remaining_time_ms,omitempty"`
 	RemainingCost   *float64 `json:"remaining_cost,omitempty"`
-	Currency        string   `json:"currency,omitempty"`
 }
 
 // TrustBoundary carries tenant scope, data residency, and a trust label. These
