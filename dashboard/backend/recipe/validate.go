@@ -219,7 +219,7 @@ func selectionMethodFailures(algorithm, method string) []string {
 		return []string{"selection_method is missing"}
 	}
 	if method != algorithm &&
-		!(method == "single" && algorithmAllowsSingleCandidateShortcut(algorithm)) {
+		(method != "single" || !algorithmAllowsSingleCandidateShortcut(algorithm)) {
 		return []string{fmt.Sprintf(
 			"selection_method=%q, want %q",
 			method,
