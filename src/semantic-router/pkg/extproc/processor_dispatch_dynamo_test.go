@@ -9,7 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestFinalDynamoDispatchAfterCapabilityReroute(t *testing.T) {
+func TestFinalDynamoDispatchUsesSelectedModel(t *testing.T) {
 	for _, backendType := range []string{"vllm", "dynamo"} {
 		for _, source := range []string{"nvext", "header"} {
 			t.Run(backendType+"/"+source, func(t *testing.T) {
@@ -18,12 +18,13 @@ func TestFinalDynamoDispatchAfterCapabilityReroute(t *testing.T) {
 				params.Capabilities = []string{"image_input"}
 				router.Config.ModelConfig[primary] = params
 				router.Config.VLLMEndpoints[0].Type = "dynamo"
-				fallback := "fallback-responses"
+				selected := "selected-responses"
 				endpoint := router.Config.VLLMEndpoints[0]
-				endpoint.Name, endpoint.Type = "fallback", backendType
+				endpoint.Name, endpoint.Type = "selected", backendType
 				router.Config.VLLMEndpoints = append(router.Config.VLLMEndpoints, endpoint)
-				router.Config.ModelConfig[fallback] = config.ModelParams{
-					PreferredEndpoints: []string{"fallback"}, APIFormat: config.APIFormatResponses,
+				router.Config.ModelConfig[selected] = config.ModelParams{
+					PreferredEndpoints: []string{"selected"}, APIFormat: config.APIFormatResponses,
+					Capabilities: []string{"image_generation"},
 				}
 				request := testNeutralRequest(primary, "draw a cat")
 				request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}
@@ -35,16 +36,19 @@ func TestFinalDynamoDispatchAfterCapabilityReroute(t *testing.T) {
 				case "header":
 					ctx.Headers[headers.DynamoDPRank] = "1"
 				}
-				ctx.VSRSelectedDecision = &config.Decision{Name: "reroute", ModelRefs: []config.ModelRef{{Model: primary}, {Model: fallback}}}
+				ctx.VSRSelectedDecision = &config.Decision{Name: "selection", ModelRefs: []config.ModelRef{{Model: primary}, {Model: selected}}}
 				if err := validateDynamoBackendPool(router.Config, primary, ctx, ctx.ProtocolEnvelope); err != nil {
 					t.Fatalf("initial Dynamo target rejected: %v", err)
 				}
-				dispatch, err := router.prepareProviderDispatch(request, primary, "reroute", false, ctx)
+				// Capability selection happens before dispatch. Pass its selected
+				// model explicitly; finalization must validate that backend,
+				// even though the earlier Dynamo target check succeeded.
+				dispatch, err := router.prepareProviderDispatch(request, selected, "selection", false, ctx)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if dispatch.logicalModel != fallback {
-					t.Fatalf("expected actual reroute, got %s", dispatch.logicalModel)
+				if dispatch.logicalModel != selected {
+					t.Fatalf("expected selected dispatch model, got %s", dispatch.logicalModel)
 				}
 				wantCode := ""
 				if backendType != "dynamo" {

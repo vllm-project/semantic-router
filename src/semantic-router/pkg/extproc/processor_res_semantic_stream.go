@@ -85,10 +85,7 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 	}
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
-		var boundaryErr error
-		if err == nil {
-			boundaryErr = validateDynamoResponseEvents(ctx, events)
-		}
+		boundaryErr := validateDynamoResponseEvents(ctx, events)
 		if err == nil && boundaryErr == nil {
 			observeProtocolStream(ctx, events, diagnostics)
 		} else {
@@ -106,10 +103,7 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
-		var boundaryErr error
-		if err == nil {
-			boundaryErr = validateDynamoResponseEvents(ctx, events)
-		}
+		boundaryErr := validateDynamoResponseEvents(ctx, events)
 		if err == nil && boundaryErr == nil {
 			observeProtocolStream(ctx, events, diagnostics)
 		} else {
