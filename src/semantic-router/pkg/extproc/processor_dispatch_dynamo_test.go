@@ -125,3 +125,19 @@ func assertFinalDynamoDispatch(t *testing.T, router *OpenAIRouter, dispatch *pro
 		t.Fatal("expected HTTP 400")
 	}
 }
+
+func TestFinalDispatchAllowsTopLevelCacheSaltOnNonDynamoBackend(t *testing.T) {
+	router, model := routingTestRouterForFormat(llmprotocol.OpenAIChatV1)
+	request := testNeutralRequest(model, "hello")
+	salt := "tenant-a"
+	request.CacheSalt = &salt
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	if hasDynamoRequestExtension(ctx, ctx.ProtocolEnvelope) {
+		t.Fatal("ordinary cache salt classified as Dynamo state")
+	}
+	dispatch, err := router.prepareProviderDispatch(request, model, "", false, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertFinalDynamoDispatch(t, router, dispatch, ctx, "")
+}

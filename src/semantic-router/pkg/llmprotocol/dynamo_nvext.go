@@ -9,9 +9,8 @@ import (
 // decode-mutate-encode lifecycle. RequestNVExt and ResponseNVExt are populated
 // by their respective codec directions and are not neutral model semantics.
 type DynamoEnvelope struct {
-	RequestNVExt             *DynamoRequestNVExt
-	RequestTopLevelCacheSalt *string
-	ResponseNVExt            *DynamoResponseNVExt
+	RequestNVExt  *DynamoRequestNVExt
+	ResponseNVExt *DynamoResponseNVExt
 }
 
 // DynamoRequestNVExt models the documented nvext request object accepted by

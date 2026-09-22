@@ -69,15 +69,6 @@ func applyDynamoChatRequestEnvelope(wire *chatRequestWire, envelope *llmprotocol
 	if envelope == nil {
 		return nil
 	}
-	if envelope.RequestTopLevelCacheSalt != nil {
-		if policy.Limits.DynamoNVExtStringBytes > 0 && len(*envelope.RequestTopLevelCacheSalt) > policy.Limits.DynamoNVExtStringBytes {
-			return llmprotocol.NewError(
-				llmprotocol.ErrorInvalidRequest, "dynamo_nvext_string_limit",
-				"Dynamo top-level cache_salt exceeds the configured limit", nil,
-			)
-		}
-		wire.CacheSalt = envelope.RequestTopLevelCacheSalt
-	}
 	if envelope.RequestNVExt == nil {
 		return nil
 	}

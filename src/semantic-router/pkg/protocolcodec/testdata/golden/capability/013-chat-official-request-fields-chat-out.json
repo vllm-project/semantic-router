@@ -93,22 +93,6 @@
       }
     },
     {
-      "name": "cache_salt",
-      "outcome": {
-        "status": "ok",
-        "body": {
-          "cache_salt": "legacy-tenant-a",
-          "messages": [
-            {
-              "content": "hello",
-              "role": "user"
-            }
-          ],
-          "model": "routed-model"
-        }
-      }
-    },
-    {
       "name": "frequency_penalty",
       "outcome": {
         "status": "ok",

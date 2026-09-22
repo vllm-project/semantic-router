@@ -45,7 +45,7 @@ func TestShadowDispatchSkipsDynamoState(t *testing.T) {
 						ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{RequestNVExt: ext}
 					case "cache_salt":
 						salt := "tenant-a"
-						ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{RequestTopLevelCacheSalt: &salt}
+						ctx.ProtocolEnvelope.Dynamo = &llmprotocol.DynamoEnvelope{RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: salt}}
 					case "header":
 						ctx.Headers[headers.DynamoDPRank] = "7"
 					case "decision":
@@ -76,8 +76,8 @@ func TestShadowDispatchSkipsDynamoState(t *testing.T) {
 						t.Fatal("shadow skip removed primary nvext")
 					}
 				}
-				if source == "cache_salt" && string(primary["cache_salt"]) != `"tenant-a"` {
-					t.Fatal("shadow skip changed primary cache_salt")
+				if source == "cache_salt" && len(primary["nvext"]) == 0 {
+					t.Fatal("shadow skip removed primary nvext.cache_salt")
 				}
 			})
 		}
@@ -91,6 +91,22 @@ func TestShadowDispatchAllowsOrdinaryRequestToDynamo(t *testing.T) {
 		router.Config.VLLMEndpoints[i].Type = "dynamo"
 	}
 	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), nil)
+	waitForShadow(t, router)
+	if backend.requestCount() != 1 {
+		t.Fatalf("requests = %d, want 1", backend.requestCount())
+	}
+	if outcome := singleShadowOutcome(t, run); outcome.Verdict != shadowVerdictCompleted {
+		t.Fatalf("outcome = %+v", outcome)
+	}
+}
+
+func TestShadowDispatchAllowsTopLevelCacheSalt(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	run := runShadowRequest(t, router, primaryModel, shadowTestPluginConfig(), func(ctx *RequestContext) {
+		salt := "tenant-a"
+		ctx.SemanticRequest.CacheSalt = &salt
+	})
 	waitForShadow(t, router)
 	if backend.requestCount() != 1 {
 		t.Fatalf("requests = %d, want 1", backend.requestCount())

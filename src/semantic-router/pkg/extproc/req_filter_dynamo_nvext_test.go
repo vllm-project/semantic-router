@@ -169,9 +169,9 @@ func TestDynamoExtensionRequestsRejectLooperBeforeFanout(t *testing.T) {
 			headers: map[string]string{headers.DynamoDPRank: "1"},
 		},
 		{
-			name: "top-level cache salt",
+			name: "nvext cache salt",
 			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
-				RequestTopLevelCacheSalt: &salt,
+				RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: salt},
 			}},
 		},
 		{
@@ -253,9 +253,9 @@ func TestDynamoRequestExtensionsBypassResponseCacheReadsAndWrites(t *testing.T) 
 			}},
 		},
 		{
-			name: "top-level cache salt",
+			name: "nvext cache salt",
 			envelope: llmprotocol.Envelope{Dynamo: &llmprotocol.DynamoEnvelope{
-				RequestTopLevelCacheSalt: &salt,
+				RequestNVExt: &llmprotocol.DynamoRequestNVExt{CacheSalt: salt},
 			}},
 		},
 		{

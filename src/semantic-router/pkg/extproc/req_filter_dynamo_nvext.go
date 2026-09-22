@@ -107,8 +107,7 @@ func validateDynamoBackendPool(
 }
 
 func hasDynamoRequestExtension(ctx *RequestContext, envelope llmprotocol.Envelope) bool {
-	if envelope.Dynamo != nil &&
-		(envelope.Dynamo.RequestNVExt != nil || envelope.Dynamo.RequestTopLevelCacheSalt != nil) {
+	if envelope.Dynamo != nil && envelope.Dynamo.RequestNVExt != nil {
 		return true
 	}
 	return hasDynamoRoutingHeader(ctx)
