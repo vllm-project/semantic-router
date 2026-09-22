@@ -153,6 +153,8 @@ type chatToolCallWire struct {
 	Type     string               `json:"type"`
 	Function chatFunctionCallWire `json:"function"`
 	Custom   json.RawMessage      `json:"custom,omitempty"`
+	// Ollama sends the stream-only index on buffered tool calls too.
+	Index *int `json:"index,omitempty"`
 }
 
 type chatFunctionCallWire struct {
