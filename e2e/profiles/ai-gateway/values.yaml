@@ -123,7 +123,8 @@ config:
             on_error: skip
             escalation_order: small_to_large
       # Sticky tool selection contract.
-      - name: sticky_tool_selection_decision
+      - &sticky_tool_selection_decision
+        name: sticky_tool_selection_decision
         description: Contract route for trusted-session sticky tool selection and provider-prefix retention
         priority: 505
         rules:
@@ -839,7 +840,8 @@ config:
           keywords:
             - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
           case_sensitive: false
-        - name: sticky_tool_selection
+        - &sticky_tool_selection
+          name: sticky_tool_selection
           operator: OR
           keywords:
             - __STICKY_TOOL_SELECTION__
@@ -1067,6 +1069,7 @@ config:
             - *tool_selection_filter_threshold
             - *tool_selection_add_topk_one
             - *tool_selection_with_system_prompt
+            - *sticky_tool_selection
         decisions:
           - *plugin_request_mutations_decision
           - *tools_passthrough_decision
@@ -1078,6 +1081,7 @@ config:
           - *tool_selection_filter_threshold_decision
           - *tool_selection_add_topk_one_decision
           - *tool_selection_with_system_prompt_decision
+          - *sticky_tool_selection_decision
     - name: e2e-cache
       description: Cache hit, paraphrase, and contradiction probes independent of domain routing.
       routing:

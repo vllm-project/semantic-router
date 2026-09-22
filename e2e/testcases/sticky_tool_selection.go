@@ -18,6 +18,7 @@ import (
 const (
 	stickyToolSelectionDecision = "sticky_tool_selection_decision"
 	stickyToolSelectionMaxTools = 2
+	stickyToolSelectionModel    = "e2e-plugins"
 )
 
 func init() {
@@ -166,7 +167,7 @@ func runStickyCalledToolPin(
 	tools []fixtures.ChatTool,
 ) (stickyToolSnapshot, error) {
 	body := map[string]any{
-		"model": "MoM",
+		"model": stickyToolSelectionModel,
 		"messages": []any{
 			map[string]any{
 				"role":    "assistant",
@@ -351,7 +352,7 @@ func runStickyUntrustedComparison(
 	}
 
 	request := map[string]any{
-		"model": "MoM",
+		"model": stickyToolSelectionModel,
 		"messages": []fixtures.ChatMessage{{
 			Role:    "user",
 			Content: "__STICKY_TOOL_SELECTION__ Search recent weather reports.",
@@ -393,7 +394,7 @@ func runStickyUntrustedComparison(
 
 func stickyNormalRequest(prompt string, tools []fixtures.ChatTool) fixtures.ChatCompletionsRequest {
 	return fixtures.ChatCompletionsRequest{
-		Model: "MoM",
+		Model: stickyToolSelectionModel,
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: prompt},
 		},
