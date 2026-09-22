@@ -7,6 +7,13 @@ import (
 
 const defaultCacheBackendLabel = "milvus" // fallback label when none is provided
 
+// cacheInvalidateTimeout bounds one post-write invalidation. Invalidation
+// ignores caller cancellation by design, so a retiring runner can overrun its
+// drain grace by one budget per in-flight write. That costs a
+// persistence_shutdown_deadline warning, never correctness, but the grace is
+// configurable down to a second: keep this small enough to stay in that range.
+const cacheInvalidateTimeout = time.Second
+
 // CachingStore wraps a Store and adds a Redis hot cache for Retrieve.
 // Retrieve: check cache first; on miss, call underlying store and populate cache.
 // Store/Update/Forget/ForgetByScope: call underlying then invalidate cache for affected user(s).
@@ -26,12 +33,36 @@ func NewCachingStore(store Store, cache *RedisCache, backendLabel string) Store 
 	return &CachingStore{store: store, cache: cache, backendLabel: backendLabel}
 }
 
+// label returns the metrics label for this cache's backing store.
+func (c *CachingStore) label() string {
+	if c.backendLabel == "" {
+		return defaultCacheBackendLabel
+	}
+	return c.backendLabel
+}
+
+// invalidate drops the user's cached retrievals after a committed write.
+// The caller's context may already be done - a write that used up its whole job
+// deadline, or one that raced shutdown - and on that context invalidation is
+// skipped exactly when it matters, leaving stale entries readable until TTL. So
+// drop the cancellation chain (keeping trace values) and use our own budget.
+func (c *CachingStore) invalidate(ctx context.Context, userID string) {
+	if c.cache == nil || userID == "" {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), cacheInvalidateTimeout)
+	defer cancel()
+	start := time.Now()
+	if err := c.cache.InvalidateByUser(ctx, userID); err != nil {
+		RecordMemoryStoreOperation(c.label(), "cache_invalidate", "failed", time.Since(start).Seconds())
+		return
+	}
+	RecordMemoryStoreOperation(c.label(), "cache_invalidate", "success", time.Since(start).Seconds())
+}
+
 // Retrieve implements Store. It checks the cache first; on miss, calls the underlying store and caches the result.
 func (c *CachingStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*RetrieveResult, error) {
-	label := c.backendLabel
-	if label == "" {
-		label = defaultCacheBackendLabel
-	}
+	label := c.label()
 	if c.cache != nil {
 		start := time.Now()
 		results, ok := c.cache.Get(ctx, opts)
@@ -55,8 +86,8 @@ func (c *CachingStore) Retrieve(ctx context.Context, opts RetrieveOptions) ([]*R
 // Store implements Store; delegates then invalidates cache for the memory's user.
 func (c *CachingStore) Store(ctx context.Context, memory *Memory) error {
 	err := c.store.Store(ctx, memory)
-	if err == nil && c.cache != nil && memory != nil && memory.UserID != "" {
-		c.cache.InvalidateByUser(ctx, memory.UserID)
+	if err == nil && memory != nil {
+		c.invalidate(ctx, memory.UserID)
 	}
 	return err
 }
@@ -69,8 +100,8 @@ func (c *CachingStore) Get(ctx context.Context, id string) (*Memory, error) {
 // Update implements Store; delegates then invalidates cache for the memory's user.
 func (c *CachingStore) Update(ctx context.Context, id string, memory *Memory) error {
 	err := c.store.Update(ctx, id, memory)
-	if err == nil && c.cache != nil && memory != nil && memory.UserID != "" {
-		c.cache.InvalidateByUser(ctx, memory.UserID)
+	if err == nil && memory != nil {
+		c.invalidate(ctx, memory.UserID)
 	}
 	return err
 }
@@ -80,26 +111,35 @@ func (c *CachingStore) List(ctx context.Context, opts ListOptions) (*ListResult,
 	return c.store.List(ctx, opts)
 }
 
-// Forget implements Store; delegates then invalidates cache. We don't have userID from id alone, so invalidate is best-effort:
-// we could skip invalidation here and rely on TTL, or we could Get(id) to get userID then invalidate. For simplicity we don't
-// invalidate on Forget(id) unless we fetch the memory (extra round-trip). Alternatively we could invalidate all users for this
-// cache - too broad. So we only invalidate on Store/Update/ForgetByScope where we have userID. On Forget(id) we skip cache invalidation
-// (stale cache until TTL or next write for that user). To do it right we'd need to Get the memory to get UserID.
+// Forget implements Store. The id alone carries no userID, so pay one Get to
+// learn the owner before deleting. That lookup runs on the same detached budget
+// as the invalidation it feeds: on the caller's context a dead deadline would
+// lose the owner, and the deleted memory would stay readable until TTL. If the
+// lookup fails anyway the owner is unknown and their entries keep that fate.
 func (c *CachingStore) Forget(ctx context.Context, id string) error {
+	var owner string
 	if c.cache != nil {
-		mem, err := c.store.Get(ctx, id)
-		if err == nil && mem != nil && mem.UserID != "" {
-			defer func() { c.cache.InvalidateByUser(ctx, mem.UserID) }()
+		lookup, cancel := context.WithTimeout(
+			context.WithoutCancel(ctx), cacheInvalidateTimeout,
+		)
+		mem, err := c.store.Get(lookup, id)
+		cancel()
+		if err == nil && mem != nil {
+			owner = mem.UserID
 		}
 	}
-	return c.store.Forget(ctx, id)
+	err := c.store.Forget(ctx, id)
+	if err == nil {
+		c.invalidate(ctx, owner)
+	}
+	return err
 }
 
 // ForgetByScope implements Store; delegates then invalidates cache for the scope's user.
 func (c *CachingStore) ForgetByScope(ctx context.Context, scope MemoryScope) error {
 	err := c.store.ForgetByScope(ctx, scope)
-	if err == nil && c.cache != nil && scope.UserID != "" {
-		c.cache.InvalidateByUser(ctx, scope.UserID)
+	if err == nil {
+		c.invalidate(ctx, scope.UserID)
 	}
 	return err
 }

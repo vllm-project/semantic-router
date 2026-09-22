@@ -2,10 +2,14 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/alicebob/miniredis/v2"
+	"github.com/alicebob/miniredis/v2/server"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -220,5 +224,179 @@ func TestNewCachingStore_BackendLabel(t *testing.T) {
 			require.True(t, ok, "expected *CachingStore wrapper")
 			assert.Equal(t, label, cs.backendLabel)
 		})
+	}
+}
+
+// ctxIgnoringStore models a backing store whose write commits even though the
+// caller's context is already done - the job context can expire mid-write, or
+// shutdown can cancel it. That write is durable, so the cache must not keep
+// serving the pre-write answer.
+type ctxIgnoringStore struct {
+	writeErr error
+	mem      *Memory
+}
+
+func (s *ctxIgnoringStore) Store(context.Context, *Memory) error { return s.writeErr }
+
+func (s *ctxIgnoringStore) Update(context.Context, string, *Memory) error { return s.writeErr }
+
+// Get, unlike the writes, honours the context: a real store's read fails on a
+// dead one, and Forget has to resolve an owner through it before deleting.
+func (s *ctxIgnoringStore) Get(ctx context.Context, _ string) (*Memory, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return s.mem, nil
+}
+
+func (s *ctxIgnoringStore) Forget(context.Context, string) error { return s.writeErr }
+
+func (s *ctxIgnoringStore) ForgetByScope(context.Context, MemoryScope) error { return s.writeErr }
+
+func (s *ctxIgnoringStore) Retrieve(context.Context, RetrieveOptions) ([]*RetrieveResult, error) {
+	return nil, nil
+}
+
+func (s *ctxIgnoringStore) List(context.Context, ListOptions) (*ListResult, error) {
+	return &ListResult{}, nil
+}
+
+func (s *ctxIgnoringStore) IsEnabled() bool { return true }
+
+func (s *ctxIgnoringStore) CheckConnection(context.Context) error { return nil }
+
+func (s *ctxIgnoringStore) Close() error { return nil }
+
+var _ Store = (*ctxIgnoringStore)(nil)
+
+func newInvalidationFixture(t *testing.T, backing Store) (*CachingStore, *RedisCache) {
+	t.Helper()
+	mr, err := miniredis.Run()
+	require.NoError(t, err)
+	t.Cleanup(mr.Close)
+
+	cache, err := NewRedisCache(context.Background(), &RedisCacheConfig{
+		Address: mr.Addr(), KeyPrefix: t.Name() + ":", TTLSeconds: 300,
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cache.Close() })
+
+	return &CachingStore{store: backing, cache: cache, backendLabel: "valkey"}, cache
+}
+
+// deadCtxs covers both ways a persistence job context dies: its own deadline,
+// and the runner's shutdown cancellation.
+func deadCtxs() map[string]func() context.Context {
+	return map[string]func() context.Context{
+		"deadline_exceeded": func() context.Context {
+			ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+			cancel()
+			return ctx
+		},
+		"cancelled": func() context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		},
+	}
+}
+
+func TestCachingStoreInvalidatesAfterCommittedWriteOnDeadContext(t *testing.T) {
+	const userID = "u-invalidate"
+	opts := RetrieveOptions{Query: "coffee", UserID: userID, Limit: 5, Threshold: 0.5}
+	mem := &Memory{ID: "m1", UserID: userID, Content: "likes coffee"}
+
+	writes := map[string]func(*CachingStore, context.Context) error{
+		"Store":  func(c *CachingStore, ctx context.Context) error { return c.Store(ctx, mem) },
+		"Update": func(c *CachingStore, ctx context.Context) error { return c.Update(ctx, mem.ID, mem) },
+		"Forget": func(c *CachingStore, ctx context.Context) error { return c.Forget(ctx, mem.ID) },
+		"ForgetByScope": func(c *CachingStore, ctx context.Context) error {
+			return c.ForgetByScope(ctx, MemoryScope{UserID: userID})
+		},
+	}
+
+	for writeName, write := range writes {
+		for ctxName, newCtx := range deadCtxs() {
+			t.Run(writeName+"/"+ctxName, func(t *testing.T) {
+				wrapped, cache := newInvalidationFixture(t, &ctxIgnoringStore{mem: mem})
+
+				cache.Set(context.Background(), opts, []*RetrieveResult{{Memory: mem}})
+				_, cached := cache.Get(context.Background(), opts)
+				require.True(t, cached, "precondition: entry is cached before the write")
+
+				require.NoError(t, write(wrapped, newCtx()))
+
+				_, cached = cache.Get(context.Background(), opts)
+				require.False(t, cached, "committed write must invalidate even though the caller's context was already done")
+			})
+		}
+	}
+}
+
+func TestCachingStoreKeepsCacheWhenWriteFails(t *testing.T) {
+	const userID = "u-failed-write"
+	opts := RetrieveOptions{Query: "tea", UserID: userID, Limit: 5}
+	mem := &Memory{ID: "m2", UserID: userID, Content: "likes tea"}
+	writeErr := errors.New("backend rejected the write")
+
+	writes := map[string]func(*CachingStore, context.Context) error{
+		"Store":  func(c *CachingStore, ctx context.Context) error { return c.Store(ctx, mem) },
+		"Update": func(c *CachingStore, ctx context.Context) error { return c.Update(ctx, mem.ID, mem) },
+		"Forget": func(c *CachingStore, ctx context.Context) error { return c.Forget(ctx, mem.ID) },
+		"ForgetByScope": func(c *CachingStore, ctx context.Context) error {
+			return c.ForgetByScope(ctx, MemoryScope{UserID: userID})
+		},
+	}
+
+	for name, write := range writes {
+		t.Run(name, func(t *testing.T) {
+			wrapped, cache := newInvalidationFixture(
+				t, &ctxIgnoringStore{mem: mem, writeErr: writeErr},
+			)
+			cache.Set(context.Background(), opts, []*RetrieveResult{{Memory: mem}})
+			require.ErrorIs(t, write(wrapped, context.Background()), writeErr)
+
+			_, cached := cache.Get(context.Background(), opts)
+			require.True(t, cached, "a rejected write leaves the cached answer correct; do not evict it")
+		})
+	}
+}
+
+func TestCachingStoreInvalidationIsBoundedIndependentlyOfCaller(t *testing.T) {
+	mr := miniredis.RunT(t)
+	cache, err := NewRedisCache(context.Background(), &RedisCacheConfig{Address: mr.Addr()})
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cache.Close() })
+
+	// Hold the actual socket response beyond the detached invalidation budget.
+	// A context deadline alone does not bound go-redis I/O unless its client
+	// enables ContextTimeoutEnabled.
+	entered, release := make(chan struct{}, 1), make(chan struct{})
+	defer close(release)
+	mr.Server().SetPreHook(func(_ *server.Peer, cmd string, _ ...string) bool {
+		if strings.EqualFold(cmd, "SMEMBERS") {
+			select {
+			case entered <- struct{}{}:
+			default:
+			}
+			<-release
+		}
+		return false
+	})
+	wrapped := NewCachingStore(&ctxIgnoringStore{}, cache, "milvus")
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	done := make(chan error, 1)
+	go func() { done <- wrapped.Store(ctx, &Memory{UserID: "bounded-invalidation"}) }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("invalidation never reached Redis")
+	}
+	select {
+	case err := <-done:
+		require.NoError(t, err, "a cache timeout must not fail a committed write")
+	case <-time.After(cacheInvalidateTimeout + 500*time.Millisecond):
+		t.Fatal("Redis I/O outlived the invalidation budget")
 	}
 }
