@@ -70,17 +70,9 @@
     },
     {
       "file": "launch-poster.png",
-      "sha256": "940be0c1845fb0f48ef32225084af8b10cc92f4834a1c33e8210434be322953d",
+      "sha256": "e0ea26fe7739ad5728b1a3c176b56d0f05c3b3abb9741bac72cb3a88ab25d69c",
       "source_urls": [],
-      "origin": "Frame 70.5 of the original launch film"
-    },
-    {
-      "file": "question-scaling.png",
-      "sha256": "98c4c6fcd941c35c53637c34c9d8449e158a0f675c5532a0d3789f2f46e296f6",
-      "source_urls": [
-        "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/resolve/c22a05deaf2c4c492465f7e7048ed80f0d342e81/assets/decision-question-scaling.png"
-      ],
-      "origin": "Official model repository asset"
+      "origin": "Frame 2.0 of the original 58-second launch film"
     },
     {
       "file": "readout.png",
@@ -95,21 +87,55 @@
   ],
   "video": {
     "path": "/videos/decision-1-0/decision-1-0-launch.mp4",
-    "sha256": "55d330c51f04ac8ef0df6498c435141e4aad8059523d54a3553d0adcd449713f",
-    "bytes": 15020472,
-    "duration_seconds": 72,
+    "sha256": "e09f3c24a41a54c593ea8aa023646b36189551f00007f59c3a597ef8fc1d6db9",
+    "bytes": 10958498,
+    "duration_seconds": 58,
     "width": 1920,
     "height": 1080,
     "fps": 30,
-    "master_sha256": "50c4618b12512776b89a36dec213c56746fdead2cf5a86031396c68deaf7458f",
+    "master_sha256": "fd83bc9fd8a6fcb7282c47e1e1b4e820340e7b32bfbc045985a34c349194f765",
     "audio": "Original 120 BPM electronic score; normal playback speed",
     "footage": "Original-speed excerpts from earlier Kai/Nox Doom and Sol-white/Nox-black chess recordings. The chess game ended in a repetition draw. These do not benchmark current releases.",
     "examples": "Published model-card outputs; illustrative motion, no fresh inference.",
-    "batch": "128 contexts × 4 questions illustrates Kai/Lex SDK submission capacity, not simultaneous forwards or measured throughput."
+    "batch": "128 contexts × 4 questions illustrates Kai/Lex SDK submission capacity, not simultaneous forwards or measured throughput.",
+    "edit": "Original rotating die first; Doom 4 seconds total, ranking 6 seconds and matrix 4 seconds; ONE CALL batch scene has a sparse original music arrangement."
   },
   "benchmark": {
     "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/resolve/c22a05deaf2c4c492465f7e7048ed80f0d342e81/metrics/benchmark.json",
     "sha256": "f25b1a00871e9a75143ae19ef420a80ee18983e07bd5cbafe690c8d61ff95e56",
     "scope": "54 tasks, 3766 scored decisions, selected roster, product weights selected after observing earlier results. Hosted Jev reference scores 81.05; Lux scores 76.94. Lex has a separate specialist evaluation."
-  }
+  },
+  "sdk_documentation_sources": [
+    {
+      "repo": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+      "revision": "52c81702356711b43b1a68e4aca8c98c84230155",
+      "source_url": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/resolve/52c81702356711b43b1a68e4aca8c98c84230155/README.md",
+      "sha256": "8475ca2bd1a7835fb8aab5ad32243a8d8f4e4e113aa71b1d387faa1cadba8c6b"
+    },
+    {
+      "repo": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+      "revision": "52c81702356711b43b1a68e4aca8c98c84230155",
+      "source_url": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/resolve/52c81702356711b43b1a68e4aca8c98c84230155/SYSTEM_ONE.md",
+      "sha256": "414e12680a6ec2dbbbc660d1f6ba0d601fa941388476a62696b7f5e8a3e11ef9"
+    },
+    {
+      "repo": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+      "revision": "52c81702356711b43b1a68e4aca8c98c84230155",
+      "source_url": "https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/resolve/52c81702356711b43b1a68e4aca8c98c84230155/USAGE.md",
+      "sha256": "223ecfad7484a63f15ce200213b0f1aadb542f940cb5ef6a055ee55a57c9c222"
+    },
+    {
+      "repo": "llm-semantic-router/Decision-1.0-Lux-9B",
+      "revision": "ec7001aa04b2fe2a682e02aed9572e047bd68993",
+      "source_url": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/resolve/ec7001aa04b2fe2a682e02aed9572e047bd68993/README.md",
+      "sha256": "a29ad1834ef2871721def1e25eb0c0c94f37471eb306e086cff905079fc48afb"
+    },
+    {
+      "repo": "llm-semantic-router/Decision-1.0-Lux-9B",
+      "revision": "ec7001aa04b2fe2a682e02aed9572e047bd68993",
+      "source_url": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/resolve/ec7001aa04b2fe2a682e02aed9572e047bd68993/USAGE.md",
+      "sha256": "d0ac11f49a455955b151f53bed2aaa054968f42e31b31eb200a276c3edaa0b72"
+    }
+  ],
+  "source_scope": "Model revisions and benchmark data refer to the frozen visual/benchmark snapshot. SDK documentation sources were refreshed independently for the article; historical gameplay does not benchmark either snapshot."
 }
