@@ -14,6 +14,10 @@ const defaultCacheBackendLabel = "milvus" // fallback label when none is provide
 // configurable down to a second: keep this small enough to stay in that range.
 const cacheInvalidateTimeout = time.Second
 
+// cacheOwnerLookupTimeout gives the backing store time for a query and retries.
+// Resolving an owner before deletion is separate from the Redis I/O budget.
+const cacheOwnerLookupTimeout = 30 * time.Second
+
 // CachingStore wraps a Store and adds a Redis hot cache for Retrieve.
 // Retrieve: check cache first; on miss, call underlying store and populate cache.
 // Store/Update/Forget/ForgetByScope: call underlying then invalidate cache for affected user(s).
@@ -112,15 +116,15 @@ func (c *CachingStore) List(ctx context.Context, opts ListOptions) (*ListResult,
 }
 
 // Forget implements Store. The id alone carries no userID, so pay one Get to
-// learn the owner before deleting. That lookup runs on the same detached budget
-// as the invalidation it feeds: on the caller's context a dead deadline would
-// lose the owner, and the deleted memory would stay readable until TTL. If the
-// lookup fails anyway the owner is unknown and their entries keep that fate.
+// learn the owner before deleting. The lookup has its own detached backend
+// budget: caller cancellation or a short Redis budget must not lose the owner
+// before a successful delete. If the lookup fails anyway, cached entries may
+// remain readable until TTL.
 func (c *CachingStore) Forget(ctx context.Context, id string) error {
 	var owner string
 	if c.cache != nil {
 		lookup, cancel := context.WithTimeout(
-			context.WithoutCancel(ctx), cacheInvalidateTimeout,
+			context.WithoutCancel(ctx), cacheOwnerLookupTimeout,
 		)
 		mem, err := c.store.Get(lookup, id)
 		cancel()
