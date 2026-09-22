@@ -70,7 +70,7 @@ def commands(target: str, output: Path) -> list[list[str]]:
         "onnx-artifact-test",
         "ck-rewrite-test",
         "test-training-contracts",
-        "test-provider-simulator",
+        "test-provider-mocker",
     }:
         return [["make", target]]
     raise ValueError(f"unknown component target: {target}")

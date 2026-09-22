@@ -13,10 +13,9 @@ in a shared environment.
 
 | Command option | Backend |
 | --- | --- |
-| `--simulator` | CPU mock backends for a quick routing check. |
 | `--kserve --simulator` | KServe simulator resources. |
 | `--kserve` | A real KServe model; requires its GPU and model-serving prerequisites. |
-| no backend flag | LLM Katan development backends. |
+| no backend flag | CPU provider-mocker backends from a qualified image digest. |
 
 `--classifier-gpu` moves the Router classifier to a GPU independently of the
 backend choice. `--no-observability` skips Dashboard, Grafana, Prometheus, and
@@ -31,12 +30,12 @@ oc whoami
 deploy/openshift/deploy-to-openshift.sh --help
 ```
 
-For a CPU-only disposable project:
+For a CPU-only disposable project, supply the published fixture digest:
 
 ```bash
+export PROVIDER_MOCKER_IMAGE="ghcr.io/vllm-project/semantic-router/provider-mocker@sha256:<qualified-digest>"
 deploy/openshift/deploy-to-openshift.sh \
-  --namespace vllm-semantic-router-system \
-  --simulator
+  --namespace vllm-semantic-router-system
 ```
 
 For the core path without the optional observability UIs:
@@ -44,9 +43,11 @@ For the core path without the optional observability UIs:
 ```bash
 deploy/openshift/deploy-to-openshift.sh \
   --namespace vllm-semantic-router-system \
-  --simulator \
   --no-observability
 ```
+
+The default fixture does not perform model inference. For a local real-model
+check, use the optional [Qwen3-0.6B runner](../../tools/test/services/tiny-model/README.md).
 
 The KServe modes call the helpers in [`../kserve/`](../kserve/). Install and
 validate KServe before using a real model. Do not install cluster operators

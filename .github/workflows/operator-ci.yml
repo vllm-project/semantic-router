@@ -6,9 +6,6 @@ on:
       verification:
         type: string
         default: '{}'
-      prebuilt-images:
-        type: boolean
-        default: false
       run_integration:
         description: Run operator Kind integration coverage.
         required: false
@@ -34,7 +31,7 @@ env:
 
 jobs:
   checks:
-    name: Operator Checks
+    name: Source Contracts
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -136,80 +133,6 @@ jobs:
             exit 1
           fi
 
-  docker-build:
-    name: Operator Smoke Images
-    if: inputs.run_integration && !inputs.prebuilt-images
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Set local tags for integration tests
-        id: local-tags
-        run: |
-          echo "operator=semantic-router-operator:test" >> $GITHUB_OUTPUT
-          echo "bundle=semantic-router-operator-bundle:test" >> $GITHUB_OUTPUT
-          echo "extproc=semantic-router-extproc:test" >> $GITHUB_OUTPUT
-
-      - name: Build operator image (local for tests)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./deploy/operator/Dockerfile
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: ${{ steps.local-tags.outputs.operator }}
-          cache-from: type=gha,scope=operator
-          cache-to: type=gha,mode=max,scope=operator,ignore-error=true
-
-      - name: Build extproc image (local for tests)
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ./tools/docker/Dockerfile.extproc
-          platforms: linux/amd64
-          push: false
-          load: true
-          tags: ${{ steps.local-tags.outputs.extproc }}
-          cache-from: type=gha,scope=extproc
-          cache-to: type=gha,mode=max,scope=extproc,ignore-error=true
-
-      - name: Build request-observing backend fixture
-        run: |
-          docker build -t semantic-router-operator-mock:test tools/test/services/mock-vllm
-          docker save -o /tmp/operator-mock-image.tar semantic-router-operator-mock:test
-      - uses: actions/upload-artifact@v4
-        with:
-          name: operator-mock-image
-          path: /tmp/operator-mock-image.tar
-          retention-days: 1
-
-      - name: Save operator image for integration tests
-        run: docker save -o /tmp/operator-image.tar ${{ steps.local-tags.outputs.operator }}
-
-      - name: Save extproc image for integration tests
-        run: docker save -o /tmp/extproc-image.tar ${{ steps.local-tags.outputs.extproc }}
-
-      - name: Upload operator image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: operator-image
-          path: /tmp/operator-image.tar
-          retention-days: 1
-
-      - name: Upload extproc image artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: extproc-image
-          path: /tmp/extproc-image.tar
-          retention-days: 1
-
   bundle-validate:
     name: OLM Bundle
     runs-on: ubuntu-24.04
@@ -243,21 +166,13 @@ jobs:
           fi
 
       - name: Load validated bundle image
-        if: inputs.prebuilt-images
         uses: ./.github/actions/load-ci-images
         with:
           images: '["operator-bundle"]'
       - name: Inspect shared bundle image
-        if: inputs.prebuilt-images
         run: docker image inspect "$E2E_PREBUILT_OPERATOR_BUNDLE_IMAGE"
-      - name: Build standalone bundle image
-        if: ${{ !inputs.prebuilt-images }}
-        run: docker build -f bundle/Dockerfile -t semantic-router-operator-bundle:test .
       - name: Preserve consumed bundle identity
-        env:
-          PREBUILT: ${{ inputs.prebuilt-images }}
-        run: |
-          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
+        run: cp "$CI_IMAGE_RECEIPTS" artifacts.json
       - uses: actions/upload-artifact@v4
         with:
           name: operator-bundle
@@ -265,16 +180,16 @@ jobs:
           if-no-files-found: error
 
   integration-test:
-    name: Routed Requests (${{ matrix.cache-backend }})
-    if: ${{ !cancelled() && inputs.run_integration && (inputs.prebuilt-images || needs.docker-build.result == 'success') }}
+    name: Routed Requests
+    if: ${{ !cancelled() && inputs.run_integration && needs.checks.result == 'success' && needs.bundle-validate.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    needs: [docker-build]
+    needs: [checks, bundle-validate]
     strategy:
       fail-fast: false
       max-parallel: 2
       matrix:
-        include: ${{ fromJSON(inputs.integration_matrix) }}
+        cache-backend: ${{ fromJSON(inputs.integration_matrix).*.cache-backend }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -312,7 +227,7 @@ jobs:
           kubectl wait --for condition=established --timeout=60s crd/httproutes.gateway.networking.k8s.io
 
       - name: Deploy Redis
-        if: matrix.deploy-redis == true
+        if: matrix.cache-backend == 'redis'
         run: |
           echo "Deploying Redis..."
           kubectl create namespace cache-backends || true
@@ -373,7 +288,7 @@ jobs:
           echo "Redis deployed successfully"
 
       - name: Deploy Milvus
-        if: matrix.deploy-milvus == true
+        if: (matrix.cache-backend == 'milvus' || matrix.cache-backend == 'hybrid')
         run: |
           echo "Deploying Milvus Standalone..."
           kubectl create namespace cache-backends || true
@@ -441,7 +356,7 @@ jobs:
           sleep 10
 
       - name: Deploy Qdrant
-        if: matrix.deploy-qdrant == true
+        if: matrix.cache-backend == 'qdrant'
         run: |
           echo "Deploying Qdrant..."
           kubectl create namespace cache-backends || true
@@ -499,41 +414,31 @@ jobs:
           echo "Qdrant deployed successfully"
 
       - name: Create cache credentials secrets
-        if: matrix.deploy-redis == true || matrix.deploy-milvus == true
+        if: matrix.cache-backend == 'redis' || (matrix.cache-backend == 'milvus' || matrix.cache-backend == 'hybrid')
         run: |
           kubectl create namespace semantic-router-test || true
 
-          if [ "${{ matrix.deploy-redis }}" == "true" ]; then
+          if [ "${{ matrix.cache-backend == 'redis' }}" == "true" ]; then
             kubectl create secret generic redis-credentials \
               --from-literal=password=testpassword \
               -n semantic-router-test
           fi
 
-          if [ "${{ matrix.deploy-milvus }}" == "true" ]; then
+          if [ "${{ matrix.cache-backend == 'milvus' || matrix.cache-backend == 'hybrid' }}" == "true" ]; then
             kubectl create secret generic milvus-credentials \
               --from-literal=password=Milvus \
               -n semantic-router-test
           fi
 
       - name: Load verified operator and request-path images
-        if: inputs.prebuilt-images
         uses: ./.github/actions/load-ci-images
         with:
-          images: '["operator","extproc","mock-vllm"]'
+          images: '["operator","extproc","provider-mocker"]'
       - name: Assign verified local tags
-        if: inputs.prebuilt-images
         run: |
           docker tag "$E2E_PREBUILT_OPERATOR_IMAGE" semantic-router-operator:test
           docker tag "$E2E_PREBUILT_EXT_PROC_IMAGE" semantic-router-extproc:test
-          docker tag "$E2E_PREBUILT_MOCK_VLLM_IMAGE" semantic-router-operator-mock:test
-      - uses: actions/download-artifact@v4
-        if: ${{ !inputs.prebuilt-images }}
-        with:
-          name: operator-mock-image
-          path: /tmp
-      - name: Load standalone request backend fixture
-        if: ${{ !inputs.prebuilt-images }}
-        run: docker load --input /tmp/operator-mock-image.tar
+          docker tag "$E2E_PREBUILT_PROVIDER_MOCKER_IMAGE" semantic-router-operator-mock:test
       - name: Deploy request-observing backend
         run: |
           kind load docker-image semantic-router-operator-mock:test --name operator-test-${{ matrix.cache-backend }}
@@ -542,17 +447,6 @@ jobs:
           kubectl -n semantic-router-test patch deployment operator-mock -p '{"spec":{"template":{"spec":{"containers":[{"name":"semantic-router-operator-mock","imagePullPolicy":"Never"}]}}}}'
           kubectl -n semantic-router-test expose deployment operator-mock --port=8000 --target-port=8000 --dry-run=client -o yaml | kubectl apply -f -
           kubectl -n semantic-router-test rollout status deployment/operator-mock --timeout=120s
-
-      - name: Download operator image artifact
-        if: ${{ !inputs.prebuilt-images }}
-        uses: actions/download-artifact@v4
-        with:
-          name: operator-image
-          path: /tmp
-
-      - name: Load operator image into Docker
-        if: ${{ !inputs.prebuilt-images }}
-        run: docker load --input /tmp/operator-image.tar
 
       - name: Verify operator image loaded
         run: |
@@ -576,17 +470,6 @@ jobs:
             docker exec operator-test-${{ matrix.cache-backend }}-control-plane crictl images
             exit 1
           }
-
-      - name: Download extproc image artifact
-        if: ${{ !inputs.prebuilt-images }}
-        uses: actions/download-artifact@v4
-        with:
-          name: extproc-image
-          path: /tmp
-
-      - name: Load extproc image into Docker
-        if: ${{ !inputs.prebuilt-images }}
-        run: docker load --input /tmp/extproc-image.tar
 
       - name: Verify extproc image loaded
         run: |
@@ -884,7 +767,7 @@ jobs:
           apiVersion: vllm.ai/v1alpha1
           kind: SemanticRouter
           metadata:
-            name: ${{ matrix.router-name }}
+            name: test-router-${{ matrix.cache-backend }}
             namespace: semantic-router-test
           spec:
             replicas: 1
@@ -962,7 +845,7 @@ jobs:
         run: |
           echo "Waiting for deployment to be created..."
           for i in {1..30}; do
-            if kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test 2>/dev/null; then
+            if kubectl get deployment test-router-${{ matrix.cache-backend }} -n semantic-router-test 2>/dev/null; then
               echo "Deployment found!"
               break
             fi
@@ -973,10 +856,10 @@ jobs:
       - name: Verify resources created
         run: |
           echo "=== Checking Deployment ==="
-          kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test -o yaml || true
+          kubectl get deployment test-router-${{ matrix.cache-backend }} -n semantic-router-test -o yaml || true
 
           echo "=== Checking Service ==="
-          kubectl get service ${{ matrix.router-name }} -n semantic-router-test || true
+          kubectl get service test-router-${{ matrix.cache-backend }} -n semantic-router-test || true
 
           echo "=== Checking ConfigMap ==="
           kubectl get configmap -n semantic-router-test || true
@@ -991,7 +874,7 @@ jobs:
         run: |
           echo "Waiting for pod to be created..."
           for i in {1..60}; do
-            POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+            POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
             if [ -n "$POD_NAME" ]; then
               echo "Pod $POD_NAME found!"
               break
@@ -1004,7 +887,7 @@ jobs:
         run: |
           echo "Waiting for pod to be ready (downloading models may take several minutes)..."
           kubectl wait --for=condition=ready pod \
-            -l app.kubernetes.io/instance=${{ matrix.router-name }} \
+            -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} \
             -n semantic-router-test \
             --timeout=300s || {
               echo "Pod failed to become ready within 5 minutes"
@@ -1013,7 +896,7 @@ jobs:
               echo "=== Pod Events ==="
               kubectl get events -n semantic-router-test --sort-by='.lastTimestamp'
               echo "=== Pod Logs ==="
-              POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+              POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
               if [ -n "$POD_NAME" ]; then
                 kubectl logs $POD_NAME -n semantic-router-test --all-containers --tail=100 || true
               fi
@@ -1032,7 +915,7 @@ jobs:
       - name: Get semantic router logs
         if: always()
         run: |
-          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
           if [ -n "$POD_NAME" ]; then
             echo "=== Semantic Router Pod Logs ==="
             kubectl logs $POD_NAME -n semantic-router-test --all-containers --tail=200 || true
@@ -1043,10 +926,10 @@ jobs:
       - name: Verify deployment reconciliation
         run: |
           echo "=== Checking SemanticRouter Status ==="
-          kubectl get semanticrouter ${{ matrix.router-name }} -n semantic-router-test -o yaml || true
+          kubectl get semanticrouter test-router-${{ matrix.cache-backend }} -n semantic-router-test -o yaml || true
 
           echo "=== Verifying Deployment Exists ==="
-          if kubectl get deployment ${{ matrix.router-name }} -n semantic-router-test; then
+          if kubectl get deployment test-router-${{ matrix.cache-backend }} -n semantic-router-test; then
             echo "✓ Deployment successfully created by operator"
           else
             echo "✗ Deployment not found"
@@ -1054,7 +937,7 @@ jobs:
           fi
 
           echo "=== Verifying Service Exists ==="
-          if kubectl get service ${{ matrix.router-name }} -n semantic-router-test; then
+          if kubectl get service test-router-${{ matrix.cache-backend }} -n semantic-router-test; then
             echo "✓ Service successfully created by operator"
           else
             echo "✗ Service not found"
@@ -1063,7 +946,7 @@ jobs:
 
       - name: Verify a routed request through reconciled Envoy and backend
         env:
-          ROUTER_NAME: ${{ matrix.router-name }}
+          ROUTER_NAME: test-router-${{ matrix.cache-backend }}
         run: |
           kubectl -n semantic-router-test port-forward "service/$ROUTER_NAME" 18801:8801 > /tmp/operator-port-forward.log 2>&1 &
           forward_pid=$!
@@ -1071,10 +954,7 @@ jobs:
           python3 tools/ci/check_operator_request.py --url http://127.0.0.1:18801 --model operator-ci-model --output operator-request.json
       - name: Preserve consumed request-path image identities
         if: always()
-        env:
-          PREBUILT: ${{ inputs.prebuilt-images }}
-        run: |
-          if [ "$PREBUILT" = true ]; then cp "$CI_IMAGE_RECEIPTS" artifacts.json; else printf '[]\n' > artifacts.json; fi
+        run: cp "$CI_IMAGE_RECEIPTS" artifacts.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -1099,7 +979,7 @@ jobs:
               --all-containers > /tmp/operator-logs/operator.log || true
           fi
 
-          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=${{ matrix.router-name }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
+          POD_NAME=$(kubectl get pods -n semantic-router-test -l app.kubernetes.io/instance=test-router-${{ matrix.cache-backend }} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || echo "")
           if [ -n "$POD_NAME" ]; then
             kubectl logs $POD_NAME -n semantic-router-test --all-containers > /tmp/operator-logs/semantic-router.log || true
           fi
@@ -1120,7 +1000,7 @@ jobs:
           kind delete cluster --name operator-test-${{ matrix.cache-backend }} || true
 
   result:
-    name: Operator Results
+    name: Results
     if: always() && inputs.verification != '{}'
     needs: [checks, bundle-validate, integration-test]
     runs-on: ubuntu-24.04
