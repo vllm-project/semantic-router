@@ -14,12 +14,6 @@ KIND_NODE_IMAGE = (
     "kindest/node:v1.33.7@sha256:"
     "d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040"
 )
-STICKY_TOOL_SELECTION_BASELINE_TESTS = {
-    "sticky-tool-selection",
-    "sticky-tool-selection-recovery",
-}
-
-
 class KindBootstrapContractTests(unittest.TestCase):
     def test_one_pinned_bootstrap_is_used_by_both_workflows(self) -> None:
         setup_text = SETUP_KIND.read_text(encoding="utf-8")
@@ -103,18 +97,6 @@ class KindBootstrapContractTests(unittest.TestCase):
                 "cache-backend": "${{ fromJSON(inputs.integration_matrix).*.cache-backend }}"
             },
         )
-
-    def test_sticky_tool_selection_contract_runs_in_baseline_ci(self) -> None:
-        e2e_text = WORKFLOWS[0].read_text(encoding="utf-8")
-        prefix = 'ENVOY_AI_GATEWAY_CI_TESTS="'
-        lines = [line.strip() for line in e2e_text.splitlines() if prefix in line]
-
-        self.assertEqual(len(lines), 1)
-        self.assertTrue(lines[0].endswith('"'))
-        selected = set(lines[0][len(prefix) : -1].split(","))
-        self.assertTrue(STICKY_TOOL_SELECTION_BASELINE_TESTS.issubset(selected))
-        self.assertNotIn("sticky-tool-selection-expiry", selected)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -84,17 +84,17 @@ func TestStickyToolSelectionRedisContractIsRegistered(t *testing.T) {
 	}
 }
 
-// TestStickyProviderPrefixContractIsRegistered keeps the Anthropic-specific
+// TestStickyProviderPrefixContractIsRegistered keeps the provider-specific
 // prefix case attached to the profile that provides its backend fixture.
 func TestStickyProviderPrefixContractIsRegistered(t *testing.T) {
-	profile, err := framework.NewProfileByName("anthropic-shim")
+	profile, err := framework.NewProfileByName("provider-protocols")
 	if err != nil {
-		t.Fatalf("anthropic-shim profile failed: %v", err)
+		t.Fatalf("provider-protocols profile failed: %v", err)
 	}
 
 	const required = "sticky-tool-selection-provider-prefix"
 	if !profileHasTestCase(profile.GetTestCases(), required) {
-		t.Fatalf("anthropic-shim profile is missing sticky testcase %q: %v", required, profile.GetTestCases())
+		t.Fatalf("provider-protocols profile is missing sticky testcase %q: %v", required, profile.GetTestCases())
 	}
 
 	testCase, ok := pkgtestcases.Get(required)
