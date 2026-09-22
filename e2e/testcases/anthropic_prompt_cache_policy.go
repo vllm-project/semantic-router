@@ -39,13 +39,7 @@ func testAnthropicPromptCachePolicy(
 	}
 	defer session.Close()
 
-	backendOpts := opts
-	backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
-		Namespace:   "anthropic-backend-system",
-		Name:        "anthropic-backend-qwen",
-		ServicePort: "8080",
-	}
-	backendSession, err := fixtures.OpenServiceSession(ctx, client, backendOpts)
+	backendSession, err := openProtocolCodecProviderSession(ctx, client, opts, "anthropic.messages.v1")
 	if err != nil {
 		return err
 	}
