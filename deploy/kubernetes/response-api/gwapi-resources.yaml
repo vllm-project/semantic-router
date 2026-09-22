@@ -172,9 +172,9 @@ spec:
           - endpoint:
               address:
                 socket_address:
-                  address: mock-vllm.default.svc.cluster.local
+                  address: provider-mocker.default.svc.cluster.local
                   port_value: 8000
-              hostname: mock-vllm.default.svc.cluster.local
+              hostname: provider-mocker.default.svc.cluster.local
             metadata:
               filter_metadata:
                 semantic-router:

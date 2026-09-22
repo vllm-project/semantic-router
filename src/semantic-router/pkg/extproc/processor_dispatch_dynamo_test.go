@@ -28,6 +28,7 @@ func TestFinalDynamoDispatchUsesSelectedModel(t *testing.T) {
 				}
 				request := testNeutralRequest(primary, "draw a cat")
 				request.ToolChoice = llmprotocol.ToolChoice{Mode: llmprotocol.ToolChoiceImageGeneration}
+				request.ImageGeneration = &llmprotocol.ImageGenerationOptions{}
 				ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, request)
 				ctx.ProtocolEnvelope.Format = llmprotocol.OpenAIResponsesV1
 				switch source {
