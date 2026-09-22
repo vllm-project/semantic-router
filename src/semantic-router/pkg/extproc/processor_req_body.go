@@ -31,6 +31,10 @@ func (r *OpenAIRouter) handleRequestBody(
 ) (*ext_proc.ProcessingResponse, error) {
 	ctx.ProcessingStartTime = time.Now()
 	requestBody := v.RequestBody.GetBody()
+	// Capture reasoning_content from assistant messages before the protocol
+	// codec round-trip silently drops the DeepSeek extension field.
+	ctx.ReasoningContentPassthrough = extractReasoningContentFromMessages(requestBody)
+
 	request, earlyResponse := r.prepareProtocolRequest(requestBody, ctx)
 	if earlyResponse != nil {
 		return earlyResponse, nil
