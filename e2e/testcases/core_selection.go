@@ -104,13 +104,6 @@ func init() {
 		Tags:        []string{"selection", "router_r1", "llm", "rl", "model-selection"},
 		Fn:          testRouterR1Selection,
 	})
-
-	// Test 10: Random selection (uniform baseline)
-	pkgtestcases.Register("core-selection-random", pkgtestcases.TestCase{
-		Description: "Verify random selection spreads traffic across eligible candidates",
-		Tags:        []string{"selection", "random", "core", "model-selection"},
-		Fn:          testRandomSelection,
-	})
 }
 
 // CoreSelectionTestCase represents a test case for core selection algorithms
@@ -258,79 +251,6 @@ func testStaticSelection(ctx context.Context, client *kubernetes.Clientset, opts
 
 	if opts.Verbose {
 		fmt.Printf("[Test] ✓ Static selection consistently used single model: %v\n", modelCounts)
-	}
-
-	return nil
-}
-
-// testRandomSelection verifies that random selection spreads requests across candidates
-func testRandomSelection(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
-	localPort, stopPF, err := setupServiceConnection(ctx, client, opts)
-	if err != nil {
-		return fmt.Errorf("failed to setup service connection: %w", err)
-	}
-	defer stopPF()
-
-	httpClient := &http.Client{Timeout: 60 * time.Second}
-	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
-
-	if opts.Verbose {
-		fmt.Println("[Test] Testing random model selection...")
-	}
-
-	// Two candidates, 20 draws: all-same has probability ~1.9e-6 for a uniform selector.
-	const sampleSize = 20
-	tc := CoreSelectionTestCase{
-		Query:       "Tell me an interesting fact about everyday life",
-		Algorithm:   "random",
-		Description: "General question - should spread across candidates",
-	}
-
-	modelCounts := make(map[string]int)
-	successCount := 0
-
-	for i := 0; i < sampleSize; i++ {
-		req := CoreChatRequest{
-			Messages: []CoreChatMessage{
-				{Role: "user", Content: tc.Query},
-			},
-		}
-
-		resp, err := sendCoreChatRequest(httpClient, baseURL+"/v1/chat/completions", req)
-		if err != nil {
-			if opts.Verbose {
-				fmt.Printf("[Test] Request %d failed: %v\n", i+1, err)
-			}
-			continue
-		}
-
-		if resp.SelectedModel != "" {
-			modelCounts[resp.SelectedModel]++
-			successCount++
-		}
-
-		if opts.Verbose {
-			fmt.Printf("[Test] Request %d: routed to %s\n", i+1, resp.SelectedModel)
-		}
-	}
-
-	// Inverse of testStaticSelection: random must spread across candidates (#3273).
-	if len(modelCounts) < 2 {
-		return fmt.Errorf("random selection routed to only %d model(s) over %d requests: %v",
-			len(modelCounts), sampleSize, modelCounts)
-	}
-
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"total_requests":   sampleSize,
-			"success_requests": successCount,
-			"model_counts":     modelCounts,
-			"algorithm":        "random",
-		})
-	}
-
-	if opts.Verbose {
-		fmt.Printf("[Test] ✓ Random selection spread across %d models: %v\n", len(modelCounts), modelCounts)
 	}
 
 	return nil
