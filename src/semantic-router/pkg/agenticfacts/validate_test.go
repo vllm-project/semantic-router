@@ -82,10 +82,8 @@ func TestValidateAcceptsCompleteEnvelope(t *testing.T) {
 			"remaining_tokens":  12000,
 			"remaining_time_ms": 30000,
 			"remaining_cost":    1.5,
-			"currency":          "usd",
 		},
 		"required_capabilities": []string{"Tools", "VISION", "tools"},
-		"allowed_candidates":    []string{"GPT-4", "claude-3", "GPT-4"},
 		"context_portability":   "STICKY",
 		"trust_boundary": map[string]any{
 			"tenant":    "acme",
@@ -115,9 +113,6 @@ func TestValidateAcceptsCompleteEnvelope(t *testing.T) {
 	}
 	if !accepted.RemainingCostKnown || accepted.RemainingCost != 1.5 {
 		t.Fatalf("remaining cost not carried: %#v", accepted.acceptedScalars)
-	}
-	if accepted.Currency != "USD" {
-		t.Fatalf("want currency USD, got %q", accepted.Currency)
 	}
 
 	if accepted.ContextPortability != ContextPortabilitySticky {
@@ -365,16 +360,10 @@ func TestValidateBudget(t *testing.T) {
 			reason: ReasonMalformed,
 		},
 		{
-			name:   "cost without currency",
-			budget: map[string]any{"remaining_cost": 1.5},
-			field:  "budget.currency",
-			reason: ReasonMissing,
-		},
-		{
-			name:   "currency without cost",
-			budget: map[string]any{"currency": "USD"},
-			field:  "budget.currency",
-			reason: ReasonConflicting,
+			name:   "negative cost",
+			budget: map[string]any{"remaining_cost": -0.5},
+			field:  "budget.remaining_cost",
+			reason: ReasonMalformed,
 		},
 	}
 
@@ -424,13 +413,6 @@ func TestValidateRejectsOverCapListsRatherThanTruncating(t *testing.T) {
 			t.Fatalf("want 16 capabilities, got %#v", accepted.RequiredCapabilities)
 		}
 	})
-
-	t.Run("candidates over cap", func(t *testing.T) {
-		envelope := validEnvelope()
-		envelope["allowed_candidates"] = namedCapabilities(33)
-		requireRejection(t, Validate(encode(t, envelope), DefaultBounds(), fixedNow),
-			"allowed_candidates", ReasonTooMany)
-	})
 }
 
 func TestValidateListEntries(t *testing.T) {
@@ -442,8 +424,6 @@ func TestValidateListEntries(t *testing.T) {
 	}{
 		{"empty capability", "required_capabilities", []string{"vision", ""}, ReasonMalformed},
 		{"over-long capability", "required_capabilities", []string{strings.Repeat("a", 200)}, ReasonTooLong},
-		{"empty candidate", "allowed_candidates", []string{"gpt-4", "  "}, ReasonMalformed},
-		{"over-long candidate", "allowed_candidates", []string{strings.Repeat("a", 200)}, ReasonTooLong},
 	}
 
 	for _, test := range tests {
@@ -456,25 +436,18 @@ func TestValidateListEntries(t *testing.T) {
 	}
 }
 
-// TestValidateNormalizesLists pins the deliberate asymmetry: capabilities are
-// symbolic tokens matched against model card metadata and fold to lower case,
-// while candidates are model names and stay byte-exact.
+// TestValidateNormalizesLists pins capability normalization: capabilities are
+// symbolic tokens matched against model card metadata, so they fold to lower
+// case, are trimmed, deduplicated, and sorted.
 func TestValidateNormalizesLists(t *testing.T) {
 	envelope := validEnvelope()
 	envelope["required_capabilities"] = []string{"Tools", "VISION", "tools", " vision "}
-	envelope["allowed_candidates"] = []string{"GPT-4", "claude-3", "GPT-4"}
 
 	accepted := requireAccepted(t, Validate(encode(t, envelope), DefaultBounds(), fixedNow))
 
 	wantCapabilities := []string{"tools", "vision"}
 	if !reflect.DeepEqual(accepted.RequiredCapabilities, wantCapabilities) {
 		t.Fatalf("want %#v, got %#v", wantCapabilities, accepted.RequiredCapabilities)
-	}
-
-	// Byte-wise ordering: 'G' (0x47) sorts before 'c' (0x63).
-	wantCandidates := []string{"GPT-4", "claude-3"}
-	if !reflect.DeepEqual(accepted.AllowedCandidates, wantCandidates) {
-		t.Fatalf("want %#v, got %#v", wantCandidates, accepted.AllowedCandidates)
 	}
 }
 

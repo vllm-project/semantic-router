@@ -2102,7 +2102,6 @@ global:
         max_envelope_bytes: 8192
         max_depth: 16
         max_capabilities: 16
-        max_candidates: 32
         max_string_length: 128
         max_lifetime: 5m
         clock_skew: 5s

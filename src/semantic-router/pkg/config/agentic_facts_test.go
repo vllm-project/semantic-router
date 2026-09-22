@@ -33,7 +33,6 @@ func TestValidateAgenticFactsConfigAcceptsReferenceValues(t *testing.T) {
 			MaxEnvelopeBytes: 8192,
 			MaxDepth:         16,
 			MaxCapabilities:  16,
-			MaxCandidates:    32,
 			MaxStringLength:  128,
 			MaxLifetime:      "5m",
 			ClockSkew:        "5s",
@@ -117,7 +116,6 @@ func TestValidateAgenticFactsRejectsNegativeBounds(t *testing.T) {
 		"max_envelope_bytes": {MaxEnvelopeBytes: -1},
 		"max_depth":          {MaxDepth: -1},
 		"max_capabilities":   {MaxCapabilities: -1},
-		"max_candidates":     {MaxCandidates: -1},
 		"max_string_length":  {MaxStringLength: -1},
 	}
 

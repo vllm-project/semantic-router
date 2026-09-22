@@ -15,7 +15,6 @@ type Bounds struct {
 	MaxEnvelopeBytes int
 	MaxDepth         int
 	MaxCapabilities  int
-	MaxCandidates    int
 	MaxStringLength  int
 	MaxLifetime      time.Duration
 	ClockSkew        time.Duration
@@ -29,7 +28,6 @@ func DefaultBounds() Bounds {
 		MaxEnvelopeBytes: 8192,
 		MaxDepth:         16,
 		MaxCapabilities:  16,
-		MaxCandidates:    32,
 		MaxStringLength:  128,
 		MaxLifetime:      5 * time.Minute,
 		ClockSkew:        5 * time.Second,
@@ -48,9 +46,6 @@ func (b Bounds) withDefaults() Bounds {
 	}
 	if b.MaxCapabilities <= 0 {
 		b.MaxCapabilities = defaults.MaxCapabilities
-	}
-	if b.MaxCandidates <= 0 {
-		b.MaxCandidates = defaults.MaxCandidates
 	}
 	if b.MaxStringLength <= 0 {
 		b.MaxStringLength = defaults.MaxStringLength

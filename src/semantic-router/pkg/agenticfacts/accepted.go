@@ -8,7 +8,7 @@ import (
 // acceptedScalars holds every validated scalar fact. It is split out from
 // Accepted so that it stays a comparable struct: Go allows == on a struct only
 // when all its fields are comparable, and slices are not. That lets IsEmpty
-// test all seventeen scalars with one comparison against the zero value instead
+// test all sixteen scalars with one comparison against the zero value instead
 // of a chain that would need editing every time a field is added.
 //
 // Each optional numeric fact carries an XxxKnown companion rather than being a
@@ -26,7 +26,6 @@ type acceptedScalars struct {
 	RemainingTimeMsKnown bool
 	RemainingCost        float64
 	RemainingCostKnown   bool
-	Currency             string
 	ContextPortability   string
 	Tenant               string
 	Residency            string
@@ -39,13 +38,12 @@ type acceptedScalars struct {
 // shape the rest of the Router consumes: reaching for an Envelope instead would
 // bypass the trust boundary this package exists to enforce.
 //
-// Both lists are deduplicated and sorted so that equivalent envelopes produce
-// byte-identical Replay records regardless of the order the caller listed
-// entries in.
+// RequiredCapabilities is deduplicated and sorted so that equivalent envelopes
+// produce byte-identical Replay records regardless of the order the caller
+// listed entries in.
 type Accepted struct {
 	acceptedScalars
 	RequiredCapabilities []string
-	AllowedCandidates    []string
 }
 
 // IsEmpty reports whether these facts can influence selection at all. A nil
@@ -56,8 +54,7 @@ func (a *Accepted) IsEmpty() bool {
 		return true
 	}
 	return a.acceptedScalars == acceptedScalars{} &&
-		len(a.RequiredCapabilities) == 0 &&
-		len(a.AllowedCandidates) == 0
+		len(a.RequiredCapabilities) == 0
 }
 
 // dedupSorted returns values with duplicates removed and the remainder sorted,
