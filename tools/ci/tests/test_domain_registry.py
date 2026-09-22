@@ -209,7 +209,7 @@ class DomainRegistryTests(unittest.TestCase):
             "tools/calibration/image-routing/main.go": "make go-tools-test",
             "bench/grounded_fusion/fusioneval/main.go": "make go-tools-test",
             "tools/calibration/tuning/engine.py": "make test-calibration",
-            "tools/test/services/mock-vllm/app.py": "make test-provider-simulator",
+            "tools/test/services/provider-mocker/provider_mocker/app.py": "make test-provider-mocker",
         }
         for path, command in cases.items():
             with self.subTest(path=path):
@@ -217,7 +217,7 @@ class DomainRegistryTests(unittest.TestCase):
                 self.assertIn(command, commands_for_domains(domains, "checks"))
                 verification = {
                     "make test-calibration": "learning-tools",
-                    "make test-provider-simulator": "mock-provider",
+                    "make test-provider-mocker": "mock-provider",
                 }.get(command, "core")
                 self.assertIn(
                     verification, commands_for_domains(domains, "verifications")

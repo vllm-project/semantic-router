@@ -79,16 +79,18 @@ if args[0] == 'exec':
         ):
             with self.subTest(mode=mode):
                 result, calls = self.run_target(
-                    "docker-test-llm-katan",
+                    "docker-test-provider-mocker",
                     mode=mode,
-                    LLM_KATAN_IMAGE="local/katan:check",
+                    PROVIDER_MOCKER_IMAGE="local/provider-mocker:check",
                 )
                 self.assertEqual(
                     result.returncode == 0, success, result.stdout + result.stderr
                 )
-                self.assertEqual(calls[0], ["image", "inspect", "local/katan:check"])
+                self.assertEqual(
+                    calls[0], ["image", "inspect", "local/provider-mocker:check"]
+                )
                 launch = next(call for call in calls if call[0] == "run")
-                self.assertIn("echo", launch)
+                self.assertIn("PROVIDER_MOCKER_MODEL=smoke-test", launch)
                 self.assertIn("none", launch)
                 self.assertNotIn("-p", launch)
                 self.assertTrue(
