@@ -73,6 +73,38 @@ def test_failure_is_a_disqualification_not_a_quality_trade():
     assert SelectorObjective().best(snapshot)[0] == "worked"
 
 
+@pytest.mark.parametrize(
+    "weights",
+    [
+        {"quality_weight": 1.0, "latency_weight": 1.0},
+        {"quality_weight": 1.0, "latency_weight": 1.0, "cost_weight": 1.0},
+        {"quality_weight": 0.0, "latency_weight": 5.0},
+        {"quality_weight": 10.0, "latency_weight": 0.0},
+        {"quality_weight": 0.9, "latency_weight": 0.1},
+    ],
+)
+def test_success_outranks_failure_under_every_accepted_weighting(weights):
+    """A fixed penalty only disqualified failures for small weights: with
+    quality_weight=latency_weight=1.0 a failed candidate scored 0.99 against a
+    successful 0.45 and won (review on #4022)."""
+    snapshot = _snapshot(
+        _outcome("broke", quality=1.0, latency_ms=FAST_MS, success=False),
+        _outcome("worked", quality=0.20, latency_ms=SLOW_MS, success=True),
+    )
+    objective = SelectorObjective(**weights)
+    assert objective.best(snapshot)[0] == "worked"
+    assert [name for name, _ in objective.rank(snapshot)] == ["worked", "broke"]
+
+
+def test_failures_still_order_among_themselves():
+    """Every candidate failed, so the query still needs a deterministic winner."""
+    snapshot = _snapshot(
+        _outcome("bad", quality=0.10, success=False),
+        _outcome("less-bad", quality=0.80, success=False),
+    )
+    assert SelectorObjective().best(snapshot)[0] == "less-bad"
+
+
 def test_scoring_is_independent_of_the_other_candidates():
     """Label generation scaled latency by the slowest peer, so a candidate's score
     moved when an unrelated model joined the group and could not be reproduced at
@@ -115,7 +147,6 @@ def test_labels_are_keyed_by_query_identity():
     "kwargs",
     [
         {"quality_weight": -0.1},
-        {"failure_penalty": -1.0},
         {"latency_scale_ms": 0.0},
         {"cost_scale": -1.0},
         {"quality_weight": 0.0, "latency_weight": 0.0, "cost_weight": 0.0},

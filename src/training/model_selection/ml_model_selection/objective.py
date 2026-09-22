@@ -36,20 +36,12 @@ class SelectorObjective:
     quality_weight: float = 0.9
     latency_weight: float = 0.1
     cost_weight: float = 0.0
-    # Subtracted outright from a failed candidate, so failure is never a
-    # quality trade rather than a disqualification.
-    failure_penalty: float = 1.0
     latency_scale_ms: float = DEFAULT_LATENCY_SCALE_MS
     cost_scale: float = DEFAULT_COST_SCALE
     version: int = OBJECTIVE_VERSION
 
     def __post_init__(self) -> None:
-        for name in (
-            "quality_weight",
-            "latency_weight",
-            "cost_weight",
-            "failure_penalty",
-        ):
+        for name in ("quality_weight", "latency_weight", "cost_weight"):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must be non-negative")
         if self.latency_scale_ms <= 0 or self.cost_scale <= 0:
@@ -67,7 +59,6 @@ class SelectorObjective:
             f"q{self.quality_weight!r}",
             f"l{self.latency_weight!r}",
             f"c{self.cost_weight!r}",
-            f"f{self.failure_penalty!r}",
             f"ls{self.latency_scale_ms!r}",
             f"cs{self.cost_scale!r}",
         )
@@ -75,7 +66,11 @@ class SelectorObjective:
         return digest.hexdigest()[:_DIGEST_CHARS]
 
     def score(self, outcome) -> float:
-        """Score one CandidateOutcome on its own, with no reference to its peers."""
+        """Weighted utility of one CandidateOutcome, with no reference to its peers.
+
+        Utility alone does not decide a winner: success is enforced separately in
+        sort_key, because no fixed penalty can outrank an unbounded weighted sum.
+        """
         speed = 1.0 / (
             1.0 + max(0.0, float(outcome.latency_ms)) / self.latency_scale_ms
         )
@@ -85,14 +80,22 @@ class SelectorObjective:
             + self.latency_weight * speed
             + self.cost_weight * thrift
         )
-        if not outcome.success:
-            total -= self.failure_penalty
         return total
+
+    def sort_key(self, outcome) -> tuple[int, float, str]:
+        """Eligibility first, then utility, then model_ref.
+
+        A failed candidate is a tier below every successful one whatever the
+        weights say, so the disqualification cannot be bought back by a high
+        recorded quality. Failures still order among themselves, for the query
+        where every candidate failed.
+        """
+        return (0 if outcome.success else 1, -self.score(outcome), outcome.model_ref)
 
     def rank(self, snapshot) -> list[tuple[str, float]]:
         """Candidates best first, ties broken by model_ref so the order is reproducible."""
-        scored = [(o.model_ref, self.score(o)) for o in snapshot.outcomes]
-        return sorted(scored, key=lambda pair: (-pair[1], pair[0]))
+        ordered = sorted(snapshot.outcomes, key=self.sort_key)
+        return [(o.model_ref, self.score(o)) for o in ordered]
 
     def best(self, snapshot) -> tuple[str, float]:
         """The winning candidate for one query."""
