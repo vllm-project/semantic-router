@@ -161,12 +161,12 @@ func init() {
 	register(
 		"sticky-tool-selection-expiry",
 		func() framework.Profile { return stickytoolselectionexpiry.NewProfile() },
-		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register(
 		"sticky-tool-selection-redis",
 		func() framework.Profile { return stickytoolselectionredis.NewProfile() },
-		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
+		framework.ProfileCapabilities{LocalImages: providerMockerLocalImages},
 	)
 	register("streaming", func() framework.Profile { return streaming.NewProfile() }, framework.ProfileCapabilities{})
 	register(
