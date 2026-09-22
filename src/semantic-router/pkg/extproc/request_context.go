@@ -119,6 +119,13 @@ type RequestContext struct {
 	// resolved context with no recipe represents concrete-model passthrough.
 	Routing RequestRoutingContext
 
+	// ReasoningContentPassthrough stores reasoning_content values captured
+	// from assistant messages before the protocol codec round-trip strips them.
+	// Populated by handleRequestBody (pre-codec), consumed when encoding the
+	// final outgoing wire body. Nil means no reasoning_content was present —
+	// the restore call is a zero-cost no-op in that path.
+	ReasoningContentPassthrough map[int]json.RawMessage
+
 	// VSR decision tracking
 	VSRSelectedCategory             string                                      // The category from domain classification (MMLU category)
 	VSRSelectedDecisionName         string                                      // The decision name from DecisionEngine evaluation
