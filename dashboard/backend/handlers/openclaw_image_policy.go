@@ -38,10 +38,13 @@ func (p openClawImagePolicy) configured() bool {
 //	OPENCLAW_IMAGE_ALLOWED_TAGS  comma-separated allowed tag values
 //	OPENCLAW_IMAGE_DIGESTS_ONLY  "1"/"true" to require digest pinning
 func loadOpenClawImagePolicy() openClawImagePolicy {
-	splitList := func(raw string) []string {
+	splitList := func(raw string, lower bool) []string {
 		var out []string
 		for _, item := range strings.Split(raw, ",") {
-			item = strings.ToLower(strings.TrimSpace(item))
+			item = strings.TrimSpace(item)
+			if lower {
+				item = strings.ToLower(item)
+			}
 			if item != "" {
 				out = append(out, item)
 			}
@@ -50,8 +53,8 @@ func loadOpenClawImagePolicy() openClawImagePolicy {
 	}
 
 	policy := openClawImagePolicy{
-		Allowed:     splitList(os.Getenv("OPENCLAW_IMAGE_ALLOWLIST")),
-		AllowedTags: splitList(os.Getenv("OPENCLAW_IMAGE_ALLOWED_TAGS")),
+		Allowed:     splitList(os.Getenv("OPENCLAW_IMAGE_ALLOWLIST"), true),
+		AllowedTags: splitList(os.Getenv("OPENCLAW_IMAGE_ALLOWED_TAGS"), false),
 	}
 	switch strings.ToLower(strings.TrimSpace(os.Getenv("OPENCLAW_IMAGE_DIGESTS_ONLY"))) {
 	case "1", "true", "yes", "on":
