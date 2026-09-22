@@ -22,6 +22,9 @@ func newCASSessionStateStore() *casSessionStateStore {
 	return &casSessionStateStore{stored: map[string][]byte{}}
 }
 
+// Load and Save go through the store codec and Merge through the same fold the
+// Redis store runs, so this double cannot pass on a payload shape the store
+// itself could not read back.
 func (s *casSessionStateStore) Load(sessionID string) (RouterSessionSnapshot, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -29,17 +32,13 @@ func (s *casSessionStateStore) Load(sessionID string) (RouterSessionSnapshot, bo
 	if !ok {
 		return RouterSessionSnapshot{}, false, nil
 	}
-	var snapshot RouterSessionSnapshot
-	if err := json.Unmarshal(payload, &snapshot); err != nil {
-		return RouterSessionSnapshot{}, false, err
-	}
-	return snapshot, true, nil
+	return decodeRedisRouterSessionSnapshot(payload, sessionID)
 }
 
 func (s *casSessionStateStore) Save(snapshot RouterSessionSnapshot, _ time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	payload, err := json.Marshal(snapshot)
+	payload, err := encodeRedisRouterSessionSnapshot(snapshot)
 	if err != nil {
 		return err
 	}
@@ -53,13 +52,12 @@ func (s *casSessionStateStore) Merge(local RouterSessionSnapshot, _ time.Duratio
 	defer s.mu.Unlock()
 	merged := local
 	if payload, ok := s.stored[local.SessionID]; ok {
-		var remote RouterSessionSnapshot
-		if err := json.Unmarshal(payload, &remote); err != nil {
+		var err error
+		if merged, err = mergeStoredSnapshot(payload, local); err != nil {
 			return err
 		}
-		merged = mergeRouterSessionSnapshots(remote, local)
 	}
-	payload, err := json.Marshal(merged)
+	payload, err := encodeRedisRouterSessionSnapshot(merged)
 	if err != nil {
 		return err
 	}
