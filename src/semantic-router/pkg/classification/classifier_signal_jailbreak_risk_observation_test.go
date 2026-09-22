@@ -200,3 +200,39 @@ func TestGuardRiskObservationMatchesSecurityAPI(t *testing.T) {
 		}
 	}
 }
+
+func TestGuardRiskObservationCarriesTheScanWindow(t *testing.T) {
+	rules := []config.JailbreakRule{{Name: "limit", Threshold: .7}}
+	scanned := observationDistribution(.8)
+	scanned.result.Window = &tasks.ScanWindow{Start: 255, End: 765, Count: 2}
+	c := observationClassifier(rules, observationBackend{"sample": scanned}, "allow")
+	out := observationResults()
+
+	c.evaluateJailbreakSignalPieces(context.Background(), out, &sync.Mutex{}, []string{"sample"}, nil)
+
+	for key, want := range map[string]float64{
+		"jailbreak:limit":              .8,
+		"jailbreak:limit:window_start": 255,
+		"jailbreak:limit:window_end":   765,
+		"jailbreak:limit:windows":      2,
+	} {
+		got, ok := out.SignalValues[key]
+		if !ok || math.Abs(got-want) > 1e-6 {
+			t.Fatalf("%s available=%v value=%v want=%v", key, ok, got, want)
+		}
+	}
+}
+
+func TestGuardRiskObservationOmitsAWindowItDoesNotHave(t *testing.T) {
+	rules := []config.JailbreakRule{{Name: "limit", Threshold: .7}}
+	c := observationClassifier(rules, observationBackend{"sample": observationDistribution(.8)}, "allow")
+	out := observationResults()
+
+	c.evaluateJailbreakSignalPieces(context.Background(), out, &sync.Mutex{}, []string{"sample"}, nil)
+
+	for _, key := range []string{"jailbreak:limit:window_start", "jailbreak:limit:window_end", "jailbreak:limit:windows"} {
+		if _, ok := out.SignalValues[key]; ok {
+			t.Fatalf("a scan that reported no window published %s: %v", key, out.SignalValues)
+		}
+	}
+}

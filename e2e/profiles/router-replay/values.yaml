@@ -144,7 +144,7 @@ config:
                 configuration:
                   enabled: true
                   max_records: 1000
-                  capture_request_body: false
+                  capture_request_body: true
                   capture_response_body: true
                   max_body_bytes: 65536
               - type: shadow_dispatch
