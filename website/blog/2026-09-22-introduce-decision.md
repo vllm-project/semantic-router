@@ -1,7 +1,7 @@
 ---
 slug: decision-models
 title: "Introducing Decision 1.0: Open Decision Foundation Models"
-description: "Six open models for choosing actions, judging conditions, and applying rubrics. Meet Decision 1.0: runtime-defined questions, native probabilities, and batch decisions for the systems you build."
+description: "Six open models. Three answer types. Your next move. Decision 1.0 turns context into choices, judgments, and scores, from interactive agents to whole queues of decisions."
 authors:
   - name: "vLLM Semantic Router Team"
     url: "https://github.com/vllm-project/semantic-router"
@@ -20,11 +20,13 @@ import { ArticleFigure, ArticleVideo } from '@site/src/components/ArticleMedia';
   From the next move to a whole queue of decisions. Meet Decision 1.0. Sound on.
 </ArticleVideo>
 
-**Introducing Decision 1.0: six Open Decision Foundation Models that turn context into choices, judgments, and scores.**
+**Introducing Decision 1.0: Open Decision Foundation Models. Six models that turn context into choices, judgments, and scores.**
 
-An agent needs its next action. A support queue needs the right destination. An invoice needs a policy check. A thousand records need the same rubric. These are small decisions that determine what an entire system does next.
+An agent needs its next action. A support queue needs the right destination. A thousand records need the same rubric. Small decisions determine what an entire system does next.
 
-Decision gives them a dedicated model family. Supply the evidence, ask your questions, and define the possible answers at runtime. Receive structured decisions and probability distributions, ready for your application to use. **Your questions define the task.**
+Decision gives them a dedicated model family. Supply the evidence, ask your questions, and define the possible answers at runtime. Get structured decisions and probability distributions that your software can act on immediately. **Your questions define the task.**
+
+From Kai's compact encoder to Lux's larger hybrid backbone, the family gives builders a choice of model sizes behind the same decision format. Open weights, inference code, and fine-tuning tools put the decision layer in your hands.
 
 [**Explore the six models →**](https://huggingface.co/collections/llm-semantic-router/decision-10) · [**Try Decision Studio →**](https://huggingface.co/spaces/llm-semantic-router/decision-studio)
 
@@ -32,27 +34,29 @@ Decision gives them a dedicated model family. Supply the evidence, ask your ques
 
 ## Intelligence at the point of action
 
-We build [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) for systems that bring different models together. Those systems make decisions continuously: select a specialist, assess a condition, rank an option, or decide whether to escalate.
+We build [vLLM Semantic Router](https://github.com/vllm-project/semantic-router) for systems that bring different models together. Those systems make decisions continuously: select a specialist, check a policy, assess an answer, or escalate a request. Decision turns that recurring work into a reusable interface:
 
-Decision turns that pattern into a reusable interface: **state + questions + criteria → answers**. Candidate descriptions travel with each request, so a new queue, action set, or scoring rubric does not require a new fixed classification head. The model scores the supplied candidates directly, without generating an explanation that an application must parse.
+**State + questions + criteria → answers.**
 
-The launch film shows the same idea in motion: game state becomes an action, then the environment advances. Doom and chess use structured state and available actions supplied by their adapters. These are recordings from earlier checkpoints, illustrating the decision loop rather than measuring the latest releases; the shown Sol–Nox chess game ended in a draw.
+The state carries the evidence. Questions specify what matters. Criteria define the available actions, labels, or rubric levels. Change those criteria and the model has a new decision to make, without replacing a fixed classification head or parsing a generated explanation.
+
+The film puts that loop in motion with Doom and chess: the environment supplies structured game state and available actions, the model decides, and the environment advances. The clips come from earlier checkpoints; the Sol–Nox chess game ended in a draw. The same loop applies to tools, workflows, and the next step of an agent.
 
 ## Built to decide
 
-Decision has two architectural branches with the same three answer types.
+Decision scores the candidates you provide directly. Each candidate is evaluated in the context of the evidence and the question, so an option can be a short label or a description of what an action means.
 
-**Kai and Lex** use three bidirectional encoder paths built on Vela. They share input embeddings, while Choice, Noul, and Score have separate interaction layers and candidate readouts. **Eos, Sol, Nox, and Lux** adapt Qwen3.5 text backbones, combining Gated DeltaNet with full attention. Their shared candidate head reads contextual candidate endpoints against a final query representation.
+Two architectural branches make this possible. **Kai and Lex** use three bidirectional encoder paths built on Vela, with separate interaction layers and readouts for Choice, Noul, and Score. **Eos, Sol, Nox, and Lux** adapt Qwen3.5 text backbones, combining Gated DeltaNet with full attention and a shared candidate head.
 
 <ArticleFigure
   src="/img/blog/decision-1-0/architecture.png"
   width={3000} height={3620}
-  alt="Lux architecture: complete state, question and candidates enter a 32-layer causal text backbone with Gated DeltaNet and full attention; a shared candidate head produces typed probabilities."
+  alt="Lux architecture: state, question and candidates enter a 32-layer causal text backbone with Gated DeltaNet and full attention; a shared candidate head produces typed probabilities."
 >
-  Inside Lux-9B. All supplied candidates are scored in one forward pass per question; independent questions are grouped into physical batches. The released model contains the text backbone and decision head.
+  Inside Lux-9B. All candidates for one question are scored in a single forward pass. Independent questions are processed in batches.
 </ArticleFigure>
 
-This makes the output space explicit. The application names the alternatives, the model evaluates them against the supplied evidence, and the application chooses how to act on the result.
+The result is a model designed around the decision itself: compare the alternatives, return their probabilities, and let the application take the next step.
 
 <details>
 <summary>Explore the encoder branch and candidate readout</summary>
@@ -79,119 +83,135 @@ This makes the output space explicit. The application names the alternatives, th
 
 ## Six models, one decision interface
 
-Choose a starting point for your workload, then evaluate it with your own states, options, and rubrics.
+Start with the model that fits your workload. Keep the questions, options, and rubrics as you explore the family.
 
-| Model | Starting point | Deployed parameters | Complete-input limit |
-| --- | --- | ---: | ---: |
-| [**Decision-1.0-Kai-0.6B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B) | Compact, general typed decisions with an encoder architecture. | 572M | 1,024 tokens |
-| [**Decision-1.0-Lex-0.6B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B) | A Kai-derived specialist for customer service, invoices, security incidents, and agent traces. | 572M | 1,024 tokens |
-| [**Decision-1.0-Eos-0.8B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B) | The smallest hybrid decoder in the family, with room for longer evidence. | 753M | 16,384 tokens |
-| [**Decision-1.0-Sol-2B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B) | A larger hybrid decoder for decisions over extended context. | 1.884B | 16,384 tokens |
-| [**Decision-1.0-Nox-4B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B) | A stronger decision model on the released suite, including action selection and rule application. | 4.208B | 16,384 tokens |
-| [**Decision-1.0-Lux-9B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) | Our largest decision model and highest-scoring family member on that suite. | 7.941B | 16,384 tokens |
+| Model | Built for | Input budget |
+| --- | --- | ---: |
+| [**Decision-1.0-Kai-0.6B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B) | A compact, general-purpose starting point for routing, conditions, and action selection. | 1,024 tokens |
+| [**Decision-1.0-Lex-0.6B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B) | Operational decisions: customer service, invoices, security incidents, and agent traces. | 1,024 tokens |
+| [**Decision-1.0-Eos-0.8B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B) | The smallest hybrid decoder, bringing longer evidence into a compact model tier. | 16,384 tokens |
+| [**Decision-1.0-Sol-2B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B) | The next step in capacity for decisions over extended context. | 16,384 tokens |
+| [**Decision-1.0-Nox-4B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B) | More capacity for combining conditions, applying rules, and choosing actions. | 16,384 tokens |
+| [**Decision-1.0-Lux-9B**](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B) | Our largest model and strongest overall result on the released decision suite. | 16,384 tokens |
 
-Size suffixes identify model tiers; deployed counts above describe the released decision networks. For example, Lux adapts a 9B foundation while retaining a 7.941B text backbone and decision head. Input limits include the state, question, candidates, and formatting; oversized inputs are rejected.
+Input budgets cover the complete state, question, and candidate descriptions. The model cards document each release's architecture and runtime requirements.
 
 ## Three answers your software can use
 
-A single state can support several independent questions. Consider this structured record:
+**Choice** picks an option. **Noul** judges a condition. **Score** applies an ordered rubric. Together, they cover the decisions inside a much larger workflow.
 
-```json
-{"owner": "Lee", "status": "active", "severity": "medium"}
-```
+Consider a customer who reports a damaged parcel and requests a replacement today:
 
-| Type | Question and criteria | Published Lux response |
+| Type | Ask the model | Use the answer |
 | --- | --- | --- |
-| **Choice** | “Choose the owner.” Candidates: `lee`, `sam`. | `lee`, with probability **99.57%**. |
-| **Noul** | “Is the status active?” | **P(true) = 99.57%**. |
-| **Score** | “Apply the severity scale.” Ordered levels: low, medium, high. | Expected index **1.006** on the 0–2 scale; **95.81%** probability on medium. |
+| **Choice** | Which team should handle this: delivery, billing, or technical support? | Route the request using the selected candidate ID and its distribution. |
+| **Noul** | Does the customer request action today? | Use the probability of yes to decide whether to escalate. |
+| **Score** | Rate urgency on a scale: can wait, this week, today. | Prioritize the queue using the level distribution and expected score. |
 
-These are rounded values from the release's [recorded example](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/c22a05deaf2c4c492465f7e7048ed80f0d342e81/model-card-example.json), not a new benchmark. Choice supports 2–255 candidates; the shared SystemOne interface supports 2–10 Score levels. Noul returns a probability, while Score returns a distribution and its expected ordinal index. Applications set their own thresholds and action policies; these numbers are not guarantees of correctness.
+The options are yours. A Choice can select a tool, a backend, or an available game action. A Noul can check a refund condition or whether an answer is supported by evidence. A Score can apply your review rubric to documents or completed agent runs. Score levels are ordered from zero; Noul returns a probability, with the action threshold set by your application.
 
 ## One context. Many questions. Whole batches.
 
-A support record might need a destination, a refund check, an escalation decision, and a priority score. Apply those four questions to 128 records and you have **512 decisions in one SDK batch submission**.
+A single support record can need a destination, a refund check, an escalation decision, and a priority score. Apply those four questions to 128 records and you have **512 decisions in one local SDK batch submission**.
 
-Kai and Lex's Python batch API supports up to 128 independent requests and 512 total decisions, preserving request and question order. The default physical batch is eight; an optional scheduler groups up to 32 compatible, same-type questions without increasing padding. The 512 figure is an API capacity, not 512 simultaneous model forwards or a measured throughput rate. Each state–question pair is encoded independently. [Batch API and limits](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/3ec2d25838bf50b60d56cacb03fde220ab9d638a/SYSTEM_ONE.md).
+Kai and Lex's native Python API accepts up to 128 independent requests and 512 total decisions, preserving request and question order. The runtime groups work into physical batches; 512 describes submission capacity, not simultaneous forwards or measured throughput. [Batch API](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/SYSTEM_ONE.md).
 
-This is useful beyond queues: apply a policy across invoices, assess incident records, or score agent traces with a shared rubric. The work becomes a batch of explicit questions with structured answers.
-
-We also publish question-count scaling for Lux's architecture and runtime:
-
-<ArticleFigure
-  src="/img/blog/decision-1-0/question-scaling.png"
-  width={1980} height={1056}
-  alt="Lux local request latency grows from 33.17 milliseconds for one question to 150.41 for eight and 600.74 for 32 distinct questions, with earlier weights on an idle AMD gfx942 GPU."
->
-  Architecture/runtime measurements with earlier Lux weights: 499 input tokens per distinct question, 30 requests per point across six fresh processes. Warm local Python latency includes tokenization and inference; model loading and network transport are excluded.
-</ArticleFigure>
-
-These measurements describe that fixed workload and hardware, not concurrent HTTP throughput or the latest checkpoint's measured speed. [Full latency protocol, p95, and memory](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/c22a05deaf2c4c492465f7e7048ed80f0d342e81/QUESTION-SCALING.md).
+This is where a decision model becomes useful across an entire operation: apply a policy to a stack of invoices, triage a stream of incidents, or assess thousands of agent traces in successive batches. Define the questions once, bring new contexts, and collect structured answers ready for the next stage of the workflow.
 
 ## Measured across 54 tasks
 
-The released comparison covers **3,766 scored decisions across 54 tasks**: general decisions, composition, reading, inference, and external transfer. On its weighted overall metric, **Lux reaches 76.94**, compared with **71.89 for Kev-9B**. Nox reaches **73.09**, Sol **66.32**, Eos **61.89**, and Kai **53.52**.
+The published comparison spans **3,766 scored decisions across a selected 54-task suite** covering decisions, composition, reading, inference, and transfer. **Lux reaches 76.94 overall**, ahead of the displayed open-model references, including **Kev-9B at 71.89**. Nox reaches **73.09**, followed by Sol at **66.32**, Eos at **61.89**, and Kai at **53.52**.
 
 <ArticleFigure
   src="/img/blog/decision-1-0/decision-ranking.png"
   width={2376} height={2233}
   alt="Published weighted decision benchmark ranking: hosted Jev reference 81.05, Lux-9B 76.94, Nox-4B 73.09, followed by the complete open reference and Decision roster."
 >
-  Lux leads the displayed open-model references on this selected suite. The hosted Jev snapshot remains higher overall at 81.05.
+  Lux leads the displayed open-model references on this suite. The hosted Jev reference remains higher overall at 81.05.
 </ArticleFigure>
 
-The matrix makes the differences visible. Lux scores **84.10** on Decisions and **91.46** on Inference. Nox's Composition score is slightly higher than Lux's; external references lead some other panels. The right choice depends on the work you need done.
+The capability matrix shows where each model stands. Lux reaches **84.10** on Decisions and **91.46** on Inference. Nox has the family's highest Composition score. Use the panels to find a starting point for the work you want to build, then evaluate on your own examples.
 
 <ArticleFigure
   src="/img/blog/decision-1-0/decision-matrix.png"
   width={2376} height={1782}
-  alt="Full capability matrix comparing Decisions, Composition, Reading, Inference, Transfer, and weighted overall accuracy for the 15 released benchmark rows."
+  alt="Capability matrix comparing Decisions, Composition, Reading, Inference, Transfer, and weighted overall accuracy for the 15 released benchmark rows."
 >
-  Every panel matters. An overall lead does not imply a win on every task, better probability calibration, or lower latency.
+  One family, different strengths. Results use the release's selected tasks and weighted overall metric.
 </ArticleFigure>
 
-The overall weights are **30% Decisions, 25% Composition, and 15% each for Reading, Inference, and Transfer**. They reflect product priorities chosen after observing results. This is an observed regression suite, not a fresh blind test or a universal ranking. The public release includes [all task rows](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/c22a05deaf2c4c492465f7e7048ed80f0d342e81/TASKS.md), [evaluation methods and uncertainty](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/c22a05deaf2c4c492465f7e7048ed80f0d342e81/EVALUATION.md), and [weight sensitivity](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/c22a05deaf2c4c492465f7e7048ed80f0d342e81/WEIGHTING.md).
+[Explore the tasks and evaluation methods](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/ec7001aa04b2fe2a682e02aed9572e047bd68993/EVALUATION.md). Lex is evaluated separately on operational workflows, reaching **78.15% across 2,000 decisions**; that specialist test is not part of the matrix. [Lex results](https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/blob/7983c480803fd003a3b79c4c8dafeb2131e1f94e/README.md).
 
-**Lex has a separate specialist evaluation:** 78.15% on a 2,000-decision operational test, versus 76.60% for the fine-tuned Laya Typed Decisions reference. Its observed gain has a paired 95% interval of −0.20 to +3.15 points. That test is not part of the 54-task ranking. [Lex evaluation](https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/blob/7983c480803fd003a3b79c4c8dafeb2131e1f94e/README.md).
+## Bring your System One workflow
 
-## Make your first decision
+Decision uses the upstream **System One request format**: `state`, `model`, and named `questions`. The latest model cards show how to use the **official TypeSafe Python SDK** or an equivalent HTTP request with your own SystemOne-compatible deployment.
 
-The releases provide weights and inference code. Decision's own contributions use Apache 2.0; retained upstream component terms are documented in the model repositories, including [Kai's license scope](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/3ec2d25838bf50b60d56cacb03fde220ab9d638a/LICENSING_STATUS.md).
-
-Download Lux, then follow its [qualified ROCm setup](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/c22a05deaf2c4c492465f7e7048ed80f0d342e81/RUNTIME.md). The release bundles its local Python API; runtime support is documented per model.
+Configure that deployment to serve `Decision-1.0-Lux-9B`, then replace the placeholder URL and key below. The model repositories provide weights and local inference code; an HTTP endpoint must be deployed separately.
 
 ```bash
-hf download llm-semantic-router/Decision-1.0-Lux-9B \
-  --revision c22a05deaf2c4c492465f7e7048ed80f0d342e81 \
-  --local-dir decision-model
+pip install typesafe-sdk
 ```
 
-With the downloaded repository mounted at `/model` in that environment:
+Published request example from the [Lux model card](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/ec7001aa04b2fe2a682e02aed9572e047bd68993/USAGE.md):
 
 ```python
-from decision import DecisionModel
+from typesafe_sdk import Choice, Noul, TypeSafeClient
 
-model = DecisionModel.from_pretrained("/model", local_files_only=True)
-result = model.decide(
-    state={"owner": "Lee", "status": "active", "severity": "medium"},
-    questions={
-        "owner": {
-            "type": "choice",
-            "instructions": "Choose the owner.",
-            "criteria": {"lee": "Lee", "sam": "Sam"},
+with TypeSafeClient(
+    api_key="YOUR_ENDPOINT_API_KEY",
+    base_url="https://your-decision-endpoint.example",
+    model="Decision-1.0-Lux-9B",
+) as client:
+    result = client.system_one(
+        state="Customer reports a duplicate charge and asks for a refund.",
+        questions={
+            "route": Choice(
+                instructions="Which team should handle this request?",
+                criteria={
+                    "billing": "Payments and refunds",
+                    "technical": "Product faults",
+                },
+            ),
+            "refund_requested": Noul(
+                instructions="Did the customer request a refund?"
+            ),
         },
-        "active": {"type": "noul", "instructions": "Is the status active?"},
-        "severity": {
-            "type": "score",
-            "instructions": "Apply the severity scale.",
-            "criteria": ["low", "medium", "high"],
-        },
-    },
-)
-print(result["answers"])
+    )
+    print(result.choices["route"].choice)
+    print(result.nouls["refund_requested"].noul)
 ```
 
-Start with your real states and candidate descriptions. Inspect errors and probability behavior, then choose thresholds against the outcomes your application needs. Kai and Lex also include [fine-tuning tools](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/3ec2d25838bf50b60d56cacb03fde220ab9d638a/FINETUNING.md) for adapting decisions to your own data.
+The same questions with curl:
+
+```bash
+curl -X POST 'https://your-decision-endpoint.example/v1/systemone' \
+  -H 'Authorization: Bearer YOUR_ENDPOINT_API_KEY' \
+  -H 'Content-Type: application/json' \
+  --data-raw '{
+    "model": "Decision-1.0-Lux-9B",
+    "state": "Customer reports a duplicate charge and asks for a refund.",
+    "questions": {
+      "route": {
+        "type": "choice",
+        "instructions": "Which team should handle this request?",
+        "criteria": {
+          "billing": "Payments and refunds",
+          "technical": "Product faults"
+        }
+      },
+      "refund_requested": {
+        "type": "noul",
+        "instructions": "Did the customer request a refund?"
+      }
+    }
+  }'
+```
+
+To try Kai, configure its `Decision-1.0-Kai-0.6B` deployment alias and keep the same request structure. Its [SDK and curl guide](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/USAGE.md) walks through delivery routing and urgency. Add questions to inspect another dimension of the state, or reuse the questions with new contexts.
+
+## Build your next move
+
+Start in Decision Studio, download a model, or bring the System One format into your application. Kai and Lex also include [fine-tuning tools](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/52c81702356711b43b1a68e4aca8c98c84230155/FINETUNING.md) for adapting decisions to your own data. Decision's contributions use Apache 2.0, with retained upstream terms documented in each repository.
 
 **Open models. Your questions. Your next move.**
 
