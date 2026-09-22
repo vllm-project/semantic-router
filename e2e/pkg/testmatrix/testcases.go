@@ -54,6 +54,10 @@ var BaselineRouterContract = []string{
 	"chat-completions-structured-output",
 	// A fast_response guardrail must answer without dispatching upstream (issue #3182)
 	"plugin-short-circuit-no-dispatch",
+	// Streaming dispatch always requests the usage chunk, even for
+	// byte-replay-eligible requests, and the client only sees usage it asked
+	// for (issue #3182)
+	"streaming-usage-settlement",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",
