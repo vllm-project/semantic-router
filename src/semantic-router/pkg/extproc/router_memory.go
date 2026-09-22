@@ -145,6 +145,15 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		embeddingConfig.Provider = provider
 	}
 
+	dimension, err := memory.StorageDimension(cfg.Memory.Milvus.Dimension, *embeddingConfig)
+	if err != nil {
+		return nil, err
+	}
+	copied := *cfg
+	copied.Memory.Milvus.Dimension = dimension
+	cfg = &copied
+	embeddingConfig.Dimension = dimension
+
 	logging.Infof("Memory: connecting to Milvus at %s, collection=%s, embedding=%s", milvusAddress, collectionName, embeddingConfig.Model)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -183,20 +192,6 @@ func createMilvusMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 	return store, nil
 }
 
-// normalizeValkeyDimension sets vc.Dimension to the model's default if not explicitly configured.
-func normalizeValkeyDimension(vc *config.MemoryValkeyConfig, model memory.EmbeddingModelType) {
-	if vc.Dimension > 0 {
-		return
-	}
-	switch model {
-	case memory.EmbeddingModelMMBERT:
-		vc.Dimension = 256
-	default:
-		vc.Dimension = 384
-	}
-	logging.Infof("Memory: Valkey dimension not set, defaulting to %d for model %s", vc.Dimension, model)
-}
-
 // createQdrantMemoryStore creates a QdrantStore backend.
 func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (memory.Store, error) {
 	qc := cfg.Memory.Qdrant
@@ -230,6 +225,15 @@ func createQdrantMemoryStore(cfg *config.RouterConfig, sets ...*embedding.Set) (
 		}
 		embeddingConfig.Provider = provider
 	}
+
+	dimension, err := memory.StorageDimension(qc.Dimension, *embeddingConfig)
+	if err != nil {
+		return nil, err
+	}
+	copied := *qc
+	qc = &copied
+	qc.Dimension = dimension
+	embeddingConfig.Dimension = dimension
 
 	logging.Infof("Memory: connecting to Qdrant at %s:%d, collection=%s, embedding=%s",
 		host, port, qc.Collection, embeddingModel)

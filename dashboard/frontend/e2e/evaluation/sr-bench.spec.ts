@@ -1141,7 +1141,7 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
     await route.fulfill({
       json: {
         id,
-        request: { messages: [{ content: 'Saved call prompt' }] },
+        request: { effective_body: { messages: [{ role: 'user', content: 'Saved call prompt' }] } },
         final: 'Saved final answer',
       },
     })
@@ -1213,7 +1213,7 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
   ).toBeVisible()
   await page.getByLabel('Filter loaded calls').fill('call-150')
   await page.getByRole('button', { name: 'call-150', exact: true }).click()
-  await page.getByText('Original call receipt', { exact: true }).click()
+  await page.getByText('Conversation sent with this call', { exact: true }).click()
   await expect(page.getByText('Saved call prompt', { exact: false })).toBeVisible()
   expect(detailReads).toEqual(['call-150'])
   await section(page, 'Results')

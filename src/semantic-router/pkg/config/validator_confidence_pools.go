@@ -111,9 +111,17 @@ func collectScoreKinds(node *RuleNode, kinds map[ScoreKind]struct{}) {
 
 func sortedScoreKinds(set map[ScoreKind]struct{}) []string {
 	kinds := make([]string, 0, len(set))
-	for kind := range set {
+	for _, kind := range sortedKinds(set) {
 		kinds = append(kinds, string(kind))
 	}
-	sort.Strings(kinds)
+	return kinds
+}
+
+func sortedKinds(set map[ScoreKind]struct{}) []ScoreKind {
+	kinds := make([]ScoreKind, 0, len(set))
+	for kind := range set {
+		kinds = append(kinds, kind)
+	}
+	sort.Slice(kinds, func(i, j int) bool { return kinds[i] < kinds[j] })
 	return kinds
 }

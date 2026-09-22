@@ -36,9 +36,9 @@ func TestUntieredDecisionOutranksTieredDecision(t *testing.T) {
 	}
 }
 
-// The tiered case never reads routing.strategy, so an unrelated tiered match
-// switches an untiered pool from priority ordering to confidence ordering.
-func TestMatchedTieredDecisionSwitchesUntieredPoolToConfidence(t *testing.T) {
+// routing.strategy decides inside a tier as well, so an unrelated tiered
+// match no longer switches an untiered pool to confidence ordering.
+func TestMatchedTieredDecisionKeepsConfiguredOrdering(t *testing.T) {
 	highPriority := config.Decision{Name: "high_priority", Priority: 160, Rules: config.RuleNode{Type: "domain", Name: "law"}}
 	highConfidence := config.Decision{Name: "high_confidence", Priority: 135, Rules: config.RuleNode{Type: "domain", Name: "health"}}
 	tiered := config.Decision{Name: "tiered_fallback", Priority: 200, Tier: 2, Rules: config.RuleNode{Type: "keyword", Name: "marker"}}
@@ -58,20 +58,25 @@ func TestMatchedTieredDecisionSwitchesUntieredPoolToConfidence(t *testing.T) {
 	}
 
 	withTiered := rankedWinner(t, []config.Decision{highPriority, highConfidence, tiered}, config.RoutingStrategyPriority, signals)
-	if withTiered.Decision.Name != "high_confidence" {
-		t.Fatalf("winner = %s, want high_confidence (the tiered case ignores strategy: priority)", withTiered.Decision.Name)
+	if withTiered.Decision.Name != "high_priority" {
+		t.Fatalf("winner = %s, want high_priority (a tiered match must not change the ordering rule)", withTiered.Decision.Name)
+	}
+
+	underConfidence := rankedWinner(t, []config.Decision{highPriority, highConfidence, tiered}, config.RoutingStrategyConfidence, signals)
+	if underConfidence.Decision.Name != "high_confidence" {
+		t.Fatalf("winner = %s, want high_confidence (strategy: confidence applies inside the tier)", underConfidence.Decision.Name)
 	}
 }
 
-// A catch-all ranks last everywhere except under strategy: priority.
-func TestCatchAllOutranksRealMatchUnderPriorityStrategy(t *testing.T) {
+// A catch-all ranks last under either strategy, however high its priority.
+func TestCatchAllRanksLastUnderEitherStrategy(t *testing.T) {
 	catchAll := config.Decision{Name: "catch_all", Priority: 500, Rules: config.RuleNode{Operator: "AND"}}
 	match := config.Decision{Name: "real_match", Priority: 100, Rules: config.RuleNode{Type: "domain", Name: "law"}}
 	signals := &SignalMatches{DomainRules: []string{"law"}, SignalConfidences: map[string]float64{"domain:law": 0.90}}
 
 	underPriority := rankedWinner(t, []config.Decision{catchAll, match}, config.RoutingStrategyPriority, signals)
-	if underPriority.Decision.Name != "catch_all" {
-		t.Fatalf("winner = %s, want catch_all (strategy: priority has no catch-all rule)", underPriority.Decision.Name)
+	if underPriority.Decision.Name != "real_match" {
+		t.Fatalf("winner = %s, want real_match (a catch-all ranks after a real match)", underPriority.Decision.Name)
 	}
 
 	underConfidence := rankedWinner(t, []config.Decision{catchAll, match}, config.RoutingStrategyConfidence, signals)
@@ -94,14 +99,14 @@ func TestExtraKeywordMatchKeepsReportedEvidence(t *testing.T) {
 	decisions := []config.Decision{mixed, scored}
 	confidences := map[string]float64{"embedding:semantic": 0.95, "embedding:support": 0.80}
 
-	withoutKeyword := rankedWinner(t, decisions, config.RoutingStrategyPriority, &SignalMatches{
+	withoutKeyword := rankedWinner(t, decisions, config.RoutingStrategyConfidence, &SignalMatches{
 		EmbeddingRules: []string{"semantic", "support"}, SignalConfidences: confidences,
 	})
 	if withoutKeyword.Decision.Name != "mixed_or" {
 		t.Fatalf("winner = %s, want mixed_or (both members reported scores)", withoutKeyword.Decision.Name)
 	}
 
-	withKeyword := rankedWinner(t, decisions, config.RoutingStrategyPriority, &SignalMatches{
+	withKeyword := rankedWinner(t, decisions, config.RoutingStrategyConfidence, &SignalMatches{
 		EmbeddingRules: []string{"semantic", "support"}, KeywordRules: []string{"marker"}, SignalConfidences: confidences,
 	})
 	if withKeyword.Decision.Name != "mixed_or" {
@@ -162,5 +167,83 @@ func TestPolicyLeavesLeavePriorityInCharge(t *testing.T) {
 		if winner.Decision.Name != "policy_route" {
 			t.Fatalf("strategy %s: winner = %s, want policy_route (priority 900 against 250)", strategy, winner.Decision.Name)
 		}
+	}
+}
+
+// A KB rule reports the similarity of the matched label, so it cannot be
+// ranked against a classifier probability and priority decides.
+func TestKnowledgeBaseSimilarityDoesNotOutrankProbability(t *testing.T) {
+	kb := config.Decision{Name: "kb_route", Priority: 10, Tier: 1, Rules: config.RuleNode{Type: "kb", Name: "handbook"}}
+	domain := config.Decision{Name: "domain_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "domain", Name: "law"}}
+
+	winner := rankedWinner(t, []config.Decision{kb, domain}, config.RoutingStrategyPriority, &SignalMatches{
+		KBRules:           []string{"handbook"},
+		DomainRules:       []string{"law"},
+		SignalConfidences: map[string]float64{"kb:handbook": 0.95, "domain:law": 0.80},
+	})
+	if winner.Decision.Name != "domain_route" {
+		t.Fatalf("winner = %s, want domain_route (a similarity does not rank against a probability)", winner.Decision.Name)
+	}
+}
+
+// A complexity rule reports a calibrated probability on one backend and the
+// magnitude of a prototype margin on another, so its score is not comparable.
+func TestComplexityScoreIsNotComparable(t *testing.T) {
+	complexity := config.Decision{Name: "complexity_route", Priority: 10, Tier: 1, Rules: config.RuleNode{Type: "complexity", Name: "reasoning:hard"}}
+	domain := config.Decision{Name: "domain_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "domain", Name: "law"}}
+
+	winner := rankedWinner(t, []config.Decision{complexity, domain}, config.RoutingStrategyPriority, &SignalMatches{
+		ComplexityRules:   []string{"reasoning:hard"},
+		DomainRules:       []string{"law"},
+		SignalConfidences: map[string]float64{"complexity:reasoning:hard": 0.95, "domain:law": 0.80},
+	})
+	if winner.Decision.Name != "domain_route" {
+		t.Fatalf("winner = %s, want domain_route (the complexity quantity depends on its backend)", winner.Decision.Name)
+	}
+}
+
+// An OR that can report either kind must not become comparable through the
+// branch that happened to match.
+func TestMixedKindORIsNotComparable(t *testing.T) {
+	mixed := config.Decision{Name: "mixed_or", Priority: 10, Tier: 1, Rules: config.RuleNode{
+		Operator: "OR",
+		Conditions: []config.RuleNode{
+			{Type: "domain", Name: "law"},
+			{Type: "embedding", Name: "legal_analysis"},
+		},
+	}}
+	embedding := config.Decision{Name: "embedding_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "embedding", Name: "support"}}
+
+	winner := rankedWinner(t, []config.Decision{mixed, embedding}, config.RoutingStrategyPriority, &SignalMatches{
+		DomainRules:    []string{"law"},
+		EmbeddingRules: []string{"legal_analysis", "support"},
+		SignalConfidences: map[string]float64{
+			"domain:law": 0.80, "embedding:legal_analysis": 0.95, "embedding:support": 0.90,
+		},
+	})
+	if winner.Decision.Name != "embedding_route" {
+		t.Fatalf("winner = %s, want embedding_route (the OR reports either kind, so priority decides)", winner.Decision.Name)
+	}
+}
+
+// A classifier that failed and matched through on_error keeps its decision out
+// of confidence ranking, the way it did before evidence roles existed.
+func TestErrorPolicyMatchIsNotComparable(t *testing.T) {
+	guarded := config.Decision{Name: "guarded_route", Priority: 10, Tier: 1, Rules: config.RuleNode{
+		Operator: "AND",
+		Conditions: []config.RuleNode{
+			{Type: "domain", Name: "law"},
+			{Type: "classifier", Name: "guard", Label: "safe", OnError: "match"},
+		},
+	}}
+	domain := config.Decision{Name: "domain_route", Priority: 100, Tier: 1, Rules: config.RuleNode{Type: "domain", Name: "health"}}
+
+	winner := rankedWinner(t, []config.Decision{guarded, domain}, config.RoutingStrategyPriority, &SignalMatches{
+		DomainRules:       []string{"law", "health"},
+		SignalConfidences: map[string]float64{"domain:law": 0.95, "domain:health": 0.90},
+		SignalErrors:      map[string]string{"classifier:guard": "classify_failed"},
+	})
+	if winner.Decision.Name != "domain_route" {
+		t.Fatalf("winner = %s, want domain_route (an error-policy match is not evidence)", winner.Decision.Name)
 	}
 }
