@@ -559,6 +559,10 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_sr_bench_bridge.py \
 		src/vllm-sr/tests/test_sr_bench_native_output.py \
 		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
+		src/vllm-sr/tests/test_sr_bench_preparation_cli.py \
+		src/vllm-sr/tests/test_sr_bench_preparation_collections.py \
+		src/vllm-sr/tests/test_sr_bench_preparation_sources.py \
+		src/vllm-sr/tests/test_sr_bench_preparations.py \
 		src/vllm-sr/tests/test_sr_bench_recovery.py \
 		src/vllm-sr/tests/test_sr_bench_replay.py \
 		src/vllm-sr/tests/test_sr_bench_reporting.py \
