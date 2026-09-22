@@ -140,7 +140,7 @@ func contextCompressionChatRequest(toolOutput string) map[string]any {
 					"type": "function",
 					"function": map[string]any{
 						"name":      "diagnostics",
-						"arguments": `{"service":"auth"}`,
+						"arguments": `{"query":"authentication token validator failed"}`,
 					},
 				}},
 			},
@@ -252,7 +252,7 @@ func validateContextCompressionMessageEnvelope(messages []contextCompressionProv
 		call.ToolCalls[0].ID != "call_context_compression" ||
 		call.ToolCalls[0].Type != "function" ||
 		call.ToolCalls[0].Function.Name != "diagnostics" ||
-		call.ToolCalls[0].Function.Arguments != `{"service":"auth"}` {
+		call.ToolCalls[0].Function.Arguments != `{"query":"authentication token validator failed"}` {
 		return fmt.Errorf("assistant tool call changed: %#v", call.ToolCalls)
 	}
 	if messages[2].ToolCallID != "call_context_compression" {
