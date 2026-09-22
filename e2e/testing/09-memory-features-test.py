@@ -24,8 +24,8 @@ Prerequisites:
   - Semantic Router running with memory enabled
   - LLM backend with ECHO mode for reliable verification
 
-To start llm-katan with echo backend:
-    LLM_KATAN_BACKEND=echo ./start-llm-katan.sh
+To start the deterministic memory fixture:
+    PROVIDER_MOCKER_SCENARIO=memory python -m provider_mocker --port 8000
 
 Usage:
     python e2e/testing/09-memory-features-test.py

@@ -9,7 +9,6 @@ from pathlib import Path
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from image_calibration import OWNED_OMNI_TESTS
 from run_core_tests import (
     collected_go_inventory,
     execute_owned,
@@ -22,6 +21,7 @@ from run_core_tests import (
     terminal_cases,
     unit_groups,
 )
+from run_model_tests import OWNED_OMNI_TESTS
 from workflow_evidence import go_cases, junit_cases
 
 
@@ -279,12 +279,14 @@ class RequiredInventoryTests(unittest.TestCase):
             for name in tests:
                 key = "./pkg/" + package
                 self.assertIn(name, excluded[key])
-                self.assertEqual(
-                    indexed[key, name]["profile"], "native.image-calibration-cpu"
-                )
+                self.assertEqual(indexed[key, name]["profile"], "native.ort-cpu")
         self.assertEqual(
             indexed["./pkg/modelruntime/native", "TestPublishedVelaHalu"]["profile"],
-            "explicit-vela-halu-reference",
+            "native.candle-cpu",
+        )
+        self.assertEqual(
+            indexed["./pkg/modelruntime/native", "TestPublishedOmniModels"]["profile"],
+            "native.ort-cpu",
         )
 
     def test_race_and_ordinary_partitions_execute_each_selected_case_once(self) -> None:

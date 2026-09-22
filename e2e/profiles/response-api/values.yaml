@@ -14,20 +14,20 @@ config:
         backend_refs:
           - name: test-endpoint
             provider: dynamo
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: mock/native-responses
         api_format: responses
         backend_refs:
           - name: test-endpoint
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       - name: mock/vision
         backend_refs:
           - name: test-endpoint
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       # The hosted image_generation operation is expressible on the Responses
       # wire only, so this card names a Responses-capable backend. The chat-wire
@@ -38,7 +38,7 @@ config:
         backend_refs:
           - name: test-endpoint
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
       # Built-in catalog coverage: the card supplies the provider-native model ID,
       # reasoning family, pricing, limits, capabilities, and presentation.
@@ -47,7 +47,7 @@ config:
         backend_refs:
           - name: mock-openai
             provider: openai
-            base_url: http://mock-vllm.default.svc.cluster.local:8000/v1
+            base_url: http://provider-mocker.default.svc.cluster.local:8000/v1
             api_key_env: VSR_E2E_OPENAI_API_KEY
       - name: astra-responses
         catalog: openai/gpt-6-astra
@@ -55,7 +55,7 @@ config:
         backend_refs:
           - name: mock-openai
             provider: openai
-            base_url: http://mock-vllm.default.svc.cluster.local:8000/v1
+            base_url: http://provider-mocker.default.svc.cluster.local:8000/v1
             api_key_env: VSR_E2E_OPENAI_API_KEY
   routing:
     decisions:

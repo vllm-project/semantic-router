@@ -1,7 +1,7 @@
 # Local soak baseline harness
 
 `run-soak-local.sh` runs long-running load with a memory timeseries against a
-full local stack: `tools/test/services/mock-vllm` on `:8010` behind the
+full local stack: `tools/test/services/provider-mocker` on `:8010` behind the
 `bench/openai_fault_proxy.py` latency injector on `:8000`, the router with
 metrics on `:9190` and pprof on `:6060`, and Envoy on `:8801`.
 
