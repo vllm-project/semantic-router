@@ -284,6 +284,7 @@ def test_simpleqa_csv_native_ids_survive_cli_history_without_changing_case_ids(
     prefix = ["--store", str(native["store"]), "--no-autostart", "dataset"]
     prepare = [
         "prepare",
+        "--local",
         "--benchmark",
         "simpleqa-verified",
         "--source-path",
@@ -395,6 +396,7 @@ def test_cli_freeze_prepare_round_trip(native, tmp_path, monkeypatch):
             "--no-autostart",
             "dataset",
             "prepare",
+            "--local",
             "--benchmark",
             "mmlu-pro",
             "--profile",
