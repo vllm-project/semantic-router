@@ -76,6 +76,29 @@ must be confirmed with maintainers before the PR that depends on it merges.
   Default: this plan applies capability narrowing through one shared eligibility
   function and records the remaining TD-054 surface as still open, rather than
   adding a second parallel filter.
+
+  Eval is deliberately left fact-free. `SelectModelForEval` has no request
+  context, and the eval API never reads the carrier header, so no envelope
+  reaches it and there are no facts to apply. The subset rule still holds at
+  this seam: Eval calls the same shared function, which only removes
+  candidates, so a preview can never report a wider set than the operator
+  configured. What Eval loses is accuracy, not safety: it previews every
+  request as if no agent facts were presented, so an operator cannot preview
+  the effect of capability rules.
+
+  Closing that gap means letting the eval API accept an envelope in the request
+  body, the way `IntentRequest.Metadata` already lets operators test metadata
+  rules. That was not done here for two reasons. The bounds converter the
+  validator needs is unexported inside `pkg/extproc` and would have to move
+  somewhere `pkg/services` can reach. More importantly, facts are trusted in
+  production only because a gateway sets the trust marker, and an eval request
+  has no gateway, so accepting facts there creates a surface where any caller
+  of the eval API supplies facts with no trust check. That is a deliberate
+  decision a maintainer should make, and it belongs in its own task rather than
+  inside an eligibility-narrowing step. The alternative considered and rejected
+  was adding an `AgenticFacts` field to `EvalModelSelectionInput` that nothing
+  populates, which would be dead plumbing of the kind that got `currency` and
+  `allowed_candidates` removed.
 - [ ] `CONFIRM-07` Which provenance fields are safe on user-facing responses versus
   operator-only Replay. Default: Replay-only, with any response header gated behind
   the existing debug trigger.
@@ -111,11 +134,26 @@ must be confirmed with maintainers before the PR that depends on it merges.
   posture. Classification if revived: `trust_boundary.*`, `budget.*`, `version`,
   envelope-level `malformed` and `expired`, and `lineage.depth` over `MaxDepth`
   constraining; `delegated_role`, `task_phase`, and the lineage identifiers
-  evidential; `required_capabilities` and `allowed_candidates` undecided.
+  evidential; `required_capabilities` undecided.
 
-- [ ] `CONFIRM-09` Three schema choices the merged proposal does not settle,
-  decided in the validator and listed here so review can overturn any of them
-  without rereading the code.
+- [ ] `CONFIRM-09` Schema choices the merged proposal does not settle, decided
+  in the validator and listed here so review can overturn any of them without
+  rereading the code.
+
+  `allowed_candidates` was **removed** in `TASK-06`, along with its
+  `max_candidates` bound. It was never in the merged proposal: the proposal's
+  envelope example lists `required_capabilities` and no candidate list, and
+  states only the principle that facts "may narrow eligibility." The field was
+  added during `TASK-02` without a recorded reason.
+
+  It was dropped rather than kept because it required the calling agent to know
+  the operator's exact model names, which couples an external system to router
+  configuration. Renaming a model would silently break every caller that named
+  it, with the caller's constraint then matching nothing. `required_capabilities`
+  has no such coupling: it uses symbolic tokens, and the operator maps them to
+  models in the model cards. Capability narrowing alone is what the proposal
+  actually asked for. Revisit only if a concrete use case appears that
+  capabilities cannot express.
 
   `expires_at` is **required**. An envelope without an expiry has an unbounded
   lifetime, and bounding lifetime is one of the proposal's stated validation
@@ -132,13 +170,31 @@ must be confirmed with maintainers before the PR that depends on it merges.
   selection, per its own task description, so the hard-lock wiring belongs with
   the rest of eligibility narrowing.
 
-  A currency with no cost is `conflicting`, and a cost with no currency is
-  `missing`. Neither is interpretable alone, and an uninterpretable budget must
-  not silently contribute nothing while the rest of the envelope is applied.
+  `budget.currency` was **removed** in `TASK-06`, together with the paired rule
+  that made a cost without a currency `missing` and a currency without a cost
+  `conflicting`. That rule existed only to keep the field coherent, so deleting
+  the field deletes the rule.
 
-  Also recorded from `TASK-02`: only `remaining_tokens` is evidenced by the
-  proposal. The names and units of `remaining_time_ms` and `remaining_cost`, and
-  the presence of `currency`, are extrapolated to match `modelpricing.Rates`.
+  The reason is the same one that removed `allowed_candidates`: the proposal
+  never mentions a currency. It was added in `TASK-02`, no code ever read it,
+  and nothing in this plan was going to.
+
+  An earlier version of this entry claimed that "only `remaining_tokens` is
+  evidenced by the proposal." That was wrong, and the correction matters because
+  it changes which fields are actually ours. The proposal's field table names
+  "remaining **token, time, or cost** counters", so all three concepts are
+  evidenced; only the field names `remaining_time_ms` and `remaining_cost`, and
+  the choice of milliseconds, are decided here.
+
+  Audit performed while removing these two fields, so review can see the whole
+  surface at once. Every remaining envelope field maps to a proposal field
+  group: lineage identifiers and depth, delegated role, task phase, the three
+  budget counters, capability requirements, context portability, and the
+  tenant, residency, and label of the trust boundary. `version` and
+  `expires_at` are the only required fields. Ten fields are carried but read by
+  no code yet, which is expected: the proposal assigns them uses that later
+  phases cover, and this plan implements only what `TASK-05` and `TASK-06`
+  need.
 
 ## Exit Criteria
 
@@ -187,8 +243,41 @@ must be confirmed with maintainers before the PR that depends on it merges.
   now takes the request context and counts accepted facts, so a request with no
   prompt text but a valid envelope still reaches decision evaluation, matching
   the behavior request metadata already had.
-- [ ] `TASK-06` Narrow hard eligibility from accepted facts at every seam that
-  produces candidates, with a subset property test and explicit empty-set behavior.
+- [x] `TASK-06` Narrow hard eligibility from accepted facts at every seam that
+  produces candidates, with a subset property test and explicit empty-set
+  behavior. Landed in `pkg/extproc`, pending review.
+
+  `filterEligibleModelRefs` is the single function every candidate-producing
+  seam routes through, per `CONFIRM-06`. It only copies entries out of its
+  input, so the subset rule holds by construction rather than by assertion, and
+  `eligibilityExclusions` carries per-reason counts that are content-free by
+  design so `TASK-07` can record them with nothing to strip.
+
+  Applied at three seams: the live decision path, the route-action fallback,
+  and the learning candidate pool. Learning mattered most: two of its candidate
+  sets draw from a wider pool than the matched decision, up to every model in
+  the deployment, so it was the only place those models met the request's
+  contracts at all. Eval is deliberately excluded, recorded under `CONFIRM-06`.
+
+  A route action's destination is exempt on purpose. It is the operator naming
+  one model, so a caller-declared capability must not be able to disqualify it;
+  otherwise a caller could escape a safety route by requiring something the
+  chosen model lacks. Its fallback list is ordinary candidate production and is
+  narrowed normally. A test pins this, and a mutation that added capability
+  checking to the destination failed that test and only that test.
+
+  `context_portability: sticky` now reaches `nonPortableContextBinding` with
+  its own reason, `agentic_facts_sticky`, so Replay can tell an agent's
+  declaration apart from real provider-side state. The lock is bounded twice
+  over: the operator must enable `ContextPortabilityHardLock`, and
+  `SessionAwareSelector.Select` refuses to lock when the previous model is not
+  in the candidate list, so sticky cannot reach a model outside the configured
+  set.
+
+  Also in this task, two envelope fields were removed after checking them
+  against the merged proposal: `allowed_candidates` and `budget.currency`.
+  Both are recorded in `CONFIRM-09`, along with a correction to an earlier
+  claim about which budget counters the proposal evidences.
 - [ ] `TASK-07` Emit content-minimized Replay provenance for accepted and rejected
   facts and for eligibility narrowing.
 - [ ] `TASK-08` Add maintained E2E coverage for authenticated, untrusted, malformed,
@@ -196,17 +285,18 @@ must be confirmed with maintainers before the PR that depends on it merges.
 
 ## Next Action
 
-Start `TASK-06` on `feat/3379-agentic-facts-schema`. `CONFIRM-02`, `CONFIRM-03`,
-`CONFIRM-08`, and `CONFIRM-09` are implemented and externally visible in
-`pkg/extproc`, and `CONFIRM-04` is now externally visible as the `agentic_facts`
-signal family and its rule vocabulary, so raise all five for maintainer ruling
-before the branch is complete rather than after.
+Start `TASK-07` on `feat/3379-agentic-facts-schema`, then `TASK-08`.
 
-`TASK-06` carries the plan's hardest invariant: narrowing must be a pure
-intersection with the candidate set each seam already computed, never a superset
-of it, at every one of the seams that produce candidates. The `CONFIRM-05`
-fail-closed case applies only once facts are valid and the narrowed set is
-empty; it is not a validation behavior.
+Every `CONFIRM` item except `CONFIRM-01` is now implemented and externally
+visible in code rather than recorded as a default, so all of them need a
+maintainer ruling before the branch is complete. Two carry more weight than the
+rest because they were decided here rather than by the proposal: `CONFIRM-06`,
+which exempts a route action's destination from caller-declared capability
+filtering, and `CONFIRM-09`, which removed two envelope fields.
+
+`TASK-07` has a head start: `eligibilityExclusions` already carries per-reason
+counts and holds no model names or caller values, so recording eligibility
+narrowing in Replay needs no redaction step.
 
 ## Operating Rules
 
