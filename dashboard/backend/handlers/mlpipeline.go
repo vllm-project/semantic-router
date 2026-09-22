@@ -146,8 +146,8 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 		}
 
 		// Save uploaded files to job dir
-		tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("ml-bench-%d", time.Now().UnixMilli()))
-		if err := os.MkdirAll(tempDir, 0o755); err != nil {
+		tempDir, err := os.MkdirTemp("", "ml-bench-")
+		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
 			return
 		}
@@ -216,8 +216,8 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 			}
 
 			// Save the uploaded training data file
-			tempDir := filepath.Join(os.TempDir(), fmt.Sprintf("ml-train-upload-%d", time.Now().UnixMilli()))
-			if err := os.MkdirAll(tempDir, 0o755); err != nil {
+			tempDir, err := os.MkdirTemp("", "ml-train-upload-")
+			if err != nil {
 				http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
 				return
 			}
@@ -481,8 +481,7 @@ func saveUploadedFile(r *http.Request, fieldName, targetDir string) (string, err
 	}
 	defer file.Close()
 
-	destPath := filepath.Join(targetDir, header.Filename)
-	out, err := os.Create(destPath)
+	out, err := os.CreateTemp(targetDir, fieldName+"-*"+filepath.Ext(header.Filename))
 	if err != nil {
 		return "", fmt.Errorf("failed to create file: %w", err)
 	}
@@ -492,5 +491,5 @@ func saveUploadedFile(r *http.Request, fieldName, targetDir string) (string, err
 		return "", fmt.Errorf("failed to write file: %w", err)
 	}
 
-	return destPath, nil
+	return out.Name(), nil
 }
