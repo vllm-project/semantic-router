@@ -93,13 +93,13 @@ func (r *Runner) initializeReport() {
 func (r *Runner) finalizeReport(state *runState) {
 	r.reporter.Finalize(state.exitCode)
 
-	if err := r.reporter.WriteJSON("test-report.json"); err != nil {
+	if err := r.reporter.WriteJSON(reportPath("test-report.json")); err != nil {
 		r.log("Warning: failed to write JSON report: %v", err)
 	} else {
 		r.log("Test report written to: test-report.json")
 	}
 
-	if err := r.reporter.WriteMarkdown("test-report.md"); err != nil {
+	if err := r.reporter.WriteMarkdown(reportPath("test-report.md")); err != nil {
 		r.log("Warning: failed to write Markdown report: %v", err)
 	} else {
 		r.log("Test report written to: test-report.md")

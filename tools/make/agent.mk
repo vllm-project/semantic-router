@@ -57,7 +57,7 @@ ci-full: ## Reproduce the complete baseline PR checks locally
 	@$(MAKE) precommit-local BASE_REF="$(BASE_REF)"
 	@$(MAKE) test-and-build-local
 
-harness-check: $(HARNESS_BOOTSTRAP_DEPS) ## Validate the domain registry, workflows, and harness tests
+harness-check: $(HARNESS_BOOTSTRAP_DEPS) test-tiny-model ## Validate the domain registry, workflows, and harness tests
 	@$(LOG_TARGET)
 	@"$(AGENT_PYTHON)" tools/agent/scripts/harness.py validate
 	@"$(AGENT_PYTHON)" tools/agent/scripts/sync_public_skill.py --check

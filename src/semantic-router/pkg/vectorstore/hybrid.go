@@ -393,10 +393,15 @@ func fuseWeighted(all map[string]*FusedChunk, config *HybridSearchConfig) {
 
 	for _, fc := range all {
 		normBM25 := 0.0
-		if bm25Range > 0 {
-			normBM25 = (fc.BM25Score - bm25Min) / bm25Range
-		} else if fc.BM25Score > 0 {
-			normBM25 = 1.0
+		// A zero BM25 score means this candidate had no lexical match. Keep
+		// that missing signal at zero instead of applying the min-max formula
+		// to it, which would make it negative when bm25Min is positive.
+		if fc.BM25Score > 0 {
+			if bm25Range > 0 {
+				normBM25 = (fc.BM25Score - bm25Min) / bm25Range
+			} else {
+				normBM25 = 1.0
+			}
 		}
 		fc.FinalScore = wV*fc.VectorScore + wB*normBM25 + wN*fc.NgramScore
 	}

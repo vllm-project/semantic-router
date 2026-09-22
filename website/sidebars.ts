@@ -27,6 +27,7 @@ const sidebars: SidebarsConfig = {
         'overview/mom-model-family',
       ],
     },
+    'faq',
     {
       type: 'category',
       label: 'Getting Started',
