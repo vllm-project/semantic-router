@@ -156,6 +156,9 @@ const (
 	// Example: "adaptation=sampled_win,protection=switch_allowed"
 	VSRLearningReasons = "x-vsr-learning-reasons"
 
+	// VSRFallbackAttempts indicates the number of candidate attempts during execution fallback.
+	VSRFallbackAttempts = "x-vsr-fallback-attempts"
+
 	// VSRInjectedSystemPrompt indicates whether a system prompt was injected into the request.
 	// Values: "true" or "false"
 	VSRInjectedSystemPrompt = "x-vsr-injected-system-prompt"
@@ -183,6 +186,7 @@ const (
 	ResponsePathBlocked         = "blocked"          // rejected by a guardrail (e.g. jailbreak/PII)
 	ResponsePathRateLimited     = "rate_limited"     // rejected by rate limiting
 	ResponsePathError           = "error"            // router-side error response
+	ResponsePathFallback        = "fallback"         // produced by upstream error fallback
 
 	// SchemaVersionValue is the current response-header contract revision
 	// emitted in VSRSchemaVersion. v0.4 is contract revision "2".

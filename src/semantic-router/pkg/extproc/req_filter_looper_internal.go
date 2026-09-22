@@ -21,11 +21,7 @@ func (r *OpenAIRouter) getReasoningInfoFromDecision(
 		return false, ""
 	}
 	for _, ref := range decision.ModelRefs {
-		matchesModel := ref.Model == modelName
-		if r.Config != nil {
-			matchesModel = r.Config.ModelNameMatches(ref.Model, modelName)
-		}
-		if matchesModel || ref.LoRAName == modelName {
+		if r.modelRefMatchesCandidate(ref, modelName) {
 			if ref.UseReasoning == nil {
 				break
 			}

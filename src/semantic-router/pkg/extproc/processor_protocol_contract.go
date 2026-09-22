@@ -101,8 +101,8 @@ func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine,
 	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
 }
 
-// protocolEngineForBackend permits extensions only for live provider responses.
-func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
+// protocolEngineForVendor creates an engine with the specified response vendor policy.
+func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor) (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
@@ -111,10 +111,17 @@ func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolc
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
 	policy := llmprotocol.DefaultPolicy()
-	if ctx != nil {
-		policy.ResponseVendor = ctx.ResponseVendor
-	}
+	policy.ResponseVendor = vendor
 	return protocolcodec.NewEngine(registry, policy)
+}
+
+// protocolEngineForBackend permits extensions only for live provider responses.
+func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
+	var vendor llmprotocol.ResponseVendor
+	if ctx != nil {
+		vendor = ctx.ResponseVendor
+	}
+	return r.protocolEngineForVendor(vendor)
 }
 
 // prepareProtocolRequest decodes every public wire format exactly once. The

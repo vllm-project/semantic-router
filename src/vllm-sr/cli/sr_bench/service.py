@@ -24,6 +24,12 @@ from .datasets import DatasetReader
 from .engine import Engine, EngineClosedError, ReviewedPlanChangedError
 from .experiments import ActiveExperimentError, ExperimentDeletedError, Experiments
 from .offline import export_training, regrade, replay
+from .preparations import (
+    PreparationBusyError,
+    Preparations,
+    PreparationUnavailableError,
+    preparation_options,
+)
 from .recovery import RecoveryPlanError, recover, recovery_plan
 from .replay_validation import ReplayEligibilityError
 from .report import compare, make_report
@@ -74,6 +80,7 @@ class Server(ThreadingHTTPServer):
         self.engine = Engine(store)
         self.experiments = Experiments(store)
         self.datasets = DatasetReader(store.root)
+        self.preparations = Preparations(store.root)
         self.token = token
         self.store_identity = (
             store_identity or hashlib.sha256(str(store.root).encode()).hexdigest()
@@ -81,6 +88,7 @@ class Server(ThreadingHTTPServer):
         super().__init__(address, Handler)
 
     def shutdown(self):
+        self.preparations.close()
         self.engine.close()
         super().shutdown()
 
@@ -343,6 +351,22 @@ class Handler(BaseHTTPRequestHandler):
                         )
             if route == ["catalog"] and method == "GET":
                 return self._send(200, catalog())
+            if route == ["dataset-preparations", "options"] and method == "GET":
+                return self._send(200, preparation_options())
+            if route == ["dataset-preparations"]:
+                if method == "GET":
+                    return self._send(200, self.server.preparations.list())
+                if method == "POST":
+                    job = self.server.preparations.submit(self._body())
+                    return self._send(202, {"preparation": job})
+            if (
+                route[0] == "dataset-preparations"
+                and len(route) == RUN_ROUTE_PARTS
+                and method == "GET"
+            ):
+                return self._send(
+                    200, {"preparation": self.server.preparations.get(route[1])}
+                )
             if route == ["datasets"] and method == "GET":
                 return self._send(200, {"datasets": datasets(self.server.store)})
             if route == ["datasets", "selection"] and method == "GET":
@@ -594,6 +618,17 @@ class Handler(BaseHTTPRequestHandler):
                     "active_run_count": exc.active_run_count,
                 },
             )
+        except PreparationBusyError as exc:
+            self._send(409, {"error": str(exc), "code": "preparation_busy"})
+        except PreparationUnavailableError as exc:
+            self._send(
+                503,
+                {
+                    "error": str(exc),
+                    "code": "preparation_unavailable",
+                    "model_requests": 0,
+                },
+            )
         except PermissionError as exc:
             self._send(403, {"error": str(exc)})
         except KeyError:
@@ -617,6 +652,11 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
         raise ValueError("store-identity must be a SHA256 digest")
     root = Path(store).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # This process owns both preparation and source-backed dataset reads. Keep
+    # their default task cache together under the persistent service store.
+    os.environ.setdefault(
+        "SR_BENCH_HOME", str(root / "preparation-runtime" / "sources")
+    )
     lock = (root / "service.lock").open("a+")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -637,6 +677,7 @@ def serve(store=DEFAULT_STORE, host="127.0.0.1", port=8090, store_identity=None)
     try:
         server.serve_forever(poll_interval=0.2)
     finally:
+        server.preparations.close()
         server.engine.close()
         server.server_close()
         for thread in list(server.engine.threads.values()):
