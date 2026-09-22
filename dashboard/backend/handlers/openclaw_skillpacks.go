@@ -171,8 +171,8 @@ func containedMkdirAll(root string, components []string, trustedRoot string) (st
 	// Root.MkdirAll resolves every path component relative to an opened root
 	// and refuses symbolic links that escape it, closing the Lstat/Mkdir
 	// TOCTOU window present in path-based creation.
-	if err := rootFS.MkdirAll(rel, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create contained dir: %w", err)
+	if mkdirErr := rootFS.MkdirAll(rel, 0o755); mkdirErr != nil {
+		return "", fmt.Errorf("failed to create contained dir: %w", mkdirErr)
 	}
 
 	resolved, err := filepath.EvalSymlinks(filepath.Join(trustedRootEval, rel))
