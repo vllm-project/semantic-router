@@ -3,7 +3,7 @@ package config
 import "testing"
 
 func float32Ptr(v float32) *float32 { return &v }
-func intPtr(v int) *int             { return &v }
+func stickyIntPtr(v int) *int       { return &v }
 
 func TestToolSelectionPluginValidate_FilterModeNilThresholdOK(t *testing.T) {
 	c := ToolSelectionPluginConfig{
@@ -79,7 +79,7 @@ func TestToolSelectionPluginValidate_StickyMaxToolsOutOfRange_Err(t *testing.T) 
 		c := ToolSelectionPluginConfig{
 			Enabled: true,
 			Mode:    ToolSelectionModeAdd,
-			Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxTools: intPtr(maxTools)},
+			Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxTools: stickyIntPtr(maxTools)},
 		}
 		if err := c.Validate(); err == nil {
 			t.Fatalf("max_tools=%d: expected error", maxTools)
@@ -96,7 +96,7 @@ func TestToolSelectionPluginValidate_StickyMaxToolsExplicitZero_Err(t *testing.T
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
-		Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxTools: intPtr(0)},
+		Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxTools: stickyIntPtr(0)},
 	}
 	err := c.Validate()
 	if err == nil {
@@ -115,7 +115,7 @@ func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnZero_PreservesExpli
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
-		Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxNewToolsPerTurn: intPtr(0)},
+		Sticky:  &StickyToolSelectionConfig{Enabled: true, MaxNewToolsPerTurn: stickyIntPtr(0)},
 	}
 
 	if err := c.Validate(); err != nil {
@@ -132,8 +132,8 @@ func TestToolSelectionPluginValidate_StickyMaxNewToolsPerTurnExceedsMaxTools_Err
 		Mode:    ToolSelectionModeAdd,
 		Sticky: &StickyToolSelectionConfig{
 			Enabled:            true,
-			MaxTools:           intPtr(4),
-			MaxNewToolsPerTurn: intPtr(5),
+			MaxTools:           stickyIntPtr(4),
+			MaxNewToolsPerTurn: stickyIntPtr(5),
 		},
 	}
 	if err := c.Validate(); err == nil {
@@ -169,8 +169,8 @@ func TestToolSelectionPluginValidate_StickyDisabledWithValidBounds_OK(t *testing
 		Mode:    ToolSelectionModeAdd,
 		Sticky: &StickyToolSelectionConfig{
 			Enabled:            false,
-			MaxTools:           intPtr(16),
-			MaxNewToolsPerTurn: intPtr(2),
+			MaxTools:           stickyIntPtr(16),
+			MaxNewToolsPerTurn: stickyIntPtr(2),
 			PinCalledTools:     boolPtr(true),
 		},
 	}
@@ -183,7 +183,7 @@ func TestToolSelectionPluginValidate_StickyDisabledInvalidBounds_Err(t *testing.
 	c := ToolSelectionPluginConfig{
 		Enabled: true,
 		Mode:    ToolSelectionModeAdd,
-		Sticky:  &StickyToolSelectionConfig{Enabled: false, MaxTools: intPtr(999)},
+		Sticky:  &StickyToolSelectionConfig{Enabled: false, MaxTools: stickyIntPtr(999)},
 	}
 	if err := c.Validate(); err == nil {
 		t.Fatal("expected error: sticky.max_tools should be validated when the sticky block is present")
