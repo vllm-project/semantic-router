@@ -23,12 +23,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
@@ -37,11 +39,13 @@ import (
 func TestStatusConditionsReportReconciledGeneration(t *testing.T) {
 	tests := []struct {
 		name      string
+		initial   bool
 		missing   bool
 		ready     int32
 		phase     string
 		condition string
 	}{
+		{name: "initial", initial: true, condition: typeProgressingSemanticRouter},
 		{name: "missing", missing: true, phase: "Pending", condition: typeAvailableSemanticRouter},
 		{name: "pending", phase: "Pending", condition: typeAvailableSemanticRouter},
 		{name: "progressing", ready: 1, phase: "Progressing", condition: typeProgressingSemanticRouter},
@@ -65,6 +69,12 @@ func TestStatusConditionsReportReconciledGeneration(t *testing.T) {
 				w.Header().Set("Content-Type", "application/json")
 				var response runtime.Object
 				switch {
+				case r.Method == http.MethodGet && r.URL.Path == "/apis/vllm.ai/v1alpha1/namespaces/default/semanticrouters/router":
+					current := base.DeepCopy()
+					current.APIVersion = vllmv1alpha1.GroupVersion.String()
+					current.Kind = "SemanticRouter"
+					current.Generation++
+					response = current
 				case r.Method == http.MethodGet && r.URL.Path == "/apis/apps/v1/namespaces/default/deployments/router":
 					if test.missing {
 						w.WriteHeader(http.StatusNotFound)
@@ -81,7 +91,7 @@ func TestStatusConditionsReportReconciledGeneration(t *testing.T) {
 							Status:     appsv1.DeploymentStatus{Replicas: 2, ReadyReplicas: test.ready},
 						}
 					}
-				case r.Method == http.MethodPatch && r.URL.Path == "/apis/vllm.ai/v1alpha1/namespaces/default/semanticrouters/router/status":
+				case (r.Method == http.MethodPatch || r.Method == http.MethodPut) && r.URL.Path == "/apis/vllm.ai/v1alpha1/namespaces/default/semanticrouters/router/status":
 					var patch struct {
 						Status vllmv1alpha1.SemanticRouterStatus `json:"status"`
 					}
@@ -93,6 +103,9 @@ func TestStatusConditionsReportReconciledGeneration(t *testing.T) {
 					updated := base.DeepCopy()
 					updated.APIVersion = vllmv1alpha1.GroupVersion.String()
 					updated.Kind = "SemanticRouter"
+					if test.initial {
+						updated.Generation++
+					}
 					updated.Status = patch.Status
 					response = updated
 				default:
@@ -113,8 +126,25 @@ func TestStatusConditionsReportReconciledGeneration(t *testing.T) {
 				t.Fatal(err)
 			}
 			reconciler := &SemanticRouterReconciler{Client: api, Scheme: scheme}
-			if err := reconciler.updateStatus(t.Context(), sr, base); err != nil {
-				t.Fatal(err)
+			wantConditionGeneration := sr.Generation
+			wantStatusGeneration := sr.Generation
+			if test.initial {
+				requeue, initialErr := reconciler.ensureInitialProgressingStatus(
+					t.Context(), ctrl.Request{NamespacedName: client.ObjectKeyFromObject(sr)}, sr, logr.Discard(),
+				)
+				if initialErr != nil || !requeue {
+					t.Fatalf("initial status: requeue=%t error=%v", requeue, initialErr)
+				}
+				local := meta.FindStatusCondition(sr.Status.Conditions, typeProgressingSemanticRouter)
+				if local == nil || local.ObservedGeneration != sr.Generation {
+					t.Fatalf("initial local condition does not match generation %d: %+v", sr.Generation, local)
+				}
+				wantConditionGeneration++
+				wantStatusGeneration = 0
+			} else {
+				if statusErr := reconciler.updateStatus(t.Context(), sr, base); statusErr != nil {
+					t.Fatal(statusErr)
+				}
 			}
 
 			select {
@@ -125,11 +155,11 @@ func TestStatusConditionsReportReconciledGeneration(t *testing.T) {
 				}
 				t.Logf("phase=%s status_generation=%d condition=%s condition_generation=%d",
 					status.Phase, status.ObservedGeneration, condition.Type, condition.ObservedGeneration)
-				if status.Phase != test.phase || status.ObservedGeneration != sr.Generation {
+				if status.Phase != test.phase || status.ObservedGeneration != wantStatusGeneration {
 					t.Errorf("status changed unexpectedly: %+v", status)
 				}
-				if condition.ObservedGeneration != sr.Generation {
-					t.Errorf("condition generation = %d, want %d", condition.ObservedGeneration, sr.Generation)
+				if condition.ObservedGeneration != wantConditionGeneration {
+					t.Errorf("condition generation = %d, want %d", condition.ObservedGeneration, wantConditionGeneration)
 				}
 			default:
 				t.Fatal("the actual Kubernetes client did not submit a status patch")
