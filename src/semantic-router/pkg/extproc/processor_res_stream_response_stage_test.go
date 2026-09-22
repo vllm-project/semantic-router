@@ -171,3 +171,22 @@ func TestAbortedStreamIsNotCheckedForHallucination(t *testing.T) {
 		}
 	}
 }
+
+func TestAbortedTerminalStreamSkipsResponseStageAndReplay(t *testing.T) {
+	server, calls := newHallucinationEndpointServer(t, []string{"450 meters"}, false)
+	router, ctx := newHallucinationSignalRouter(t, server, "header")
+	recorder := startResponseStageReplay(t, router, ctx)
+	// A prior chunk failed. Later valid terminal events must not recover the
+	// request or trigger persistence through response-stage/replay processing.
+	ctx.StreamingAborted = true
+	streamResponseStageAnswer(t, router, ctx, hallucinationAnswer)
+	if !ctx.StreamingAborted || !ctx.StreamingComplete {
+		t.Fatal("request-wide abort was not retained through finalization")
+	}
+	if calls.Load() != 0 {
+		t.Fatal("aborted response reached response-stage processing")
+	}
+	if outcomes := replayOutcomes(t, recorder, ctx.RouterReplayID); len(outcomes) != 0 {
+		t.Fatalf("aborted response produced replay outcomes: %+v", outcomes)
+	}
+}

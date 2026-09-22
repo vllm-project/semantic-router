@@ -520,3 +520,24 @@ func dynamoBoundaryTestRouter(backendType string) *OpenAIRouter {
 		VLLMEndpoints: []config.VLLMEndpoint{{Name: "backend", Type: backendType}},
 	}}}
 }
+
+func TestSemanticStreamRejectedTerminalEventIsNotObserved(t *testing.T) {
+	router := dynamoBoundaryTestRouter("vllm")
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIChatV1, TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "model-a", UpstreamBackendType: "vllm",
+		TraceContext: context.Background(), SemanticRequest: &llmprotocol.Request{},
+	}
+	body := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"rejected\"},\"finish_reason\":\"stop\"}],\"nvext\":{\"token_ids\":[1]}}\n\n")
+	router.handleSemanticStreamingResponseBody(body, false, ctx)
+	if !ctx.StreamingAborted {
+		t.Fatal("missing request-wide abort")
+	}
+	if ctx.SemanticStreamState.terminal || len(ctx.SemanticStreamState.items) != 0 {
+		t.Fatal("rejected terminal event entered accumulated response state")
+	}
+	router.handleSemanticStreamingResponseBody([]byte("data: [DONE]\n\n"), true, ctx)
+	if !ctx.StreamingAborted || !ctx.StreamingComplete {
+		t.Fatal("finalization lost request-wide abort or failed to complete cleanup")
+	}
+}

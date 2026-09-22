@@ -85,10 +85,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 	}
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Push(responseBody)
-		observeProtocolStream(ctx, events, diagnostics)
 		var boundaryErr error
 		if err == nil {
 			boundaryErr = validateDynamoResponseEvents(ctx, events)
+		}
+		if err == nil && boundaryErr == nil {
+			observeProtocolStream(ctx, events, diagnostics)
+		} else {
+			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 		}
 		if boundaryErr == nil {
 			buffers.translated = appendProtocolFrames(buffers.translated, frames)
@@ -102,10 +106,14 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
-		observeProtocolStream(ctx, events, diagnostics)
 		var boundaryErr error
 		if err == nil {
 			boundaryErr = validateDynamoResponseEvents(ctx, events)
+		}
+		if err == nil && boundaryErr == nil {
+			observeProtocolStream(ctx, events, diagnostics)
+		} else {
+			ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostics...)
 		}
 		if boundaryErr == nil {
 			buffers.translated = appendProtocolFrames(buffers.translated, frames)
@@ -399,6 +407,12 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 			"error":      responseErr.Error(),
 		})
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
+		return
+	}
+	// StreamingAborted is request-scoped: a later successful chunk or terminal
+	// reconstruction must never make an aborted response eligible for storage.
+	// Keep cleanup and usage accounting above this gate.
+	if ctx.StreamingAborted {
 		return
 	}
 	recordPrimaryOutputDigest(ctx, semanticResponse)
