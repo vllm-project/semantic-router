@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -17,7 +18,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("tool-selection", pkgtestcases.TestCase{
-		Description: "Decision plugin tool_selection: add, filter, threshold, config variants, and PII precedence",
+		Description: "Decision plugins tools and tool_selection: provider-bound mutations, config variants, and PII precedence",
 		Tags:        []string{"kubernetes", "plugin", "tool-selection"},
 		Fn:          testToolSelectionE2E,
 	})
@@ -33,6 +34,9 @@ type toolSelectionE2ECase struct {
 	ExpectToolsStrategy     string
 	ExpectConfidenceGT      float64
 	ExpectInjectedSysPrompt *bool
+	ExpectProviderTools     []string
+	ExpectNoProviderTools   bool
+	ExpectToolChoiceAbsent  bool
 }
 
 func defaultContractTools(minObjectParams json.RawMessage) []fixtures.ChatTool {
@@ -43,26 +47,63 @@ func defaultContractTools(minObjectParams json.RawMessage) []fixtures.ChatTool {
 	}
 }
 
+func contractToolsExcept(tools []fixtures.ChatTool, omittedName string) []fixtures.ChatTool {
+	filtered := make([]fixtures.ChatTool, 0, len(tools)-1)
+	for _, tool := range tools {
+		if tool.Function.Name != omittedName {
+			filtered = append(filtered, tool)
+		}
+	}
+	return filtered
+}
+
 func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelectionE2ECase {
 	contractTools := defaultContractTools(minObjectParams)
 	cases := []toolSelectionE2ECase{
 		{
+			Name:                "tools_passthrough_preserves_request_tools",
+			Model:               "e2e-plugins",
+			Prompt:              "__TOOLS_PASSTHROUGH__ What is the weather forecast for Boston tomorrow?",
+			Tools:               contractTools,
+			ExpectDecision:      "tools_passthrough_decision",
+			ExpectProviderTools: []string{"calculate", "get_weather", "search_web"},
+		},
+		{
+			Name:                "tools_filtered_applies_allow_list",
+			Model:               "e2e-plugins",
+			Prompt:              "__TOOLS_FILTERED__ keep only the weather tool",
+			Tools:               contractTools,
+			ExpectDecision:      "tools_filtered_decision",
+			ExpectProviderTools: []string{"get_weather"},
+		},
+		{
+			Name:                   "tools_none_removes_tools_and_choice",
+			Model:                  "e2e-plugins",
+			Prompt:                 "__TOOLS_NONE__ What is the weather forecast for Boston tomorrow?",
+			Tools:                  contractTools,
+			ExpectDecision:         "tools_none_decision",
+			ExpectNoProviderTools:  true,
+			ExpectToolChoiceAbsent: true,
+		},
+		{
 			Name:                "add_mode_weather_query",
 			Model:               "e2e-plugins",
 			Prompt:              "__TOOL_SELECTION_ADD_WEATHER__ What is the weather forecast for Boston tomorrow?",
-			Tools:               contractTools,
+			Tools:               contractToolsExcept(contractTools, "get_weather"),
 			ExpectDecision:      "tool_selection_add_weather_decision",
 			ExpectToolsStrategy: "default",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"calculate", "get_weather", "search_web"},
 		},
 		{
 			Name:                "add_mode_math_query",
 			Model:               "e2e-plugins",
 			Prompt:              "__TOOL_SELECTION_ADD_CALC__ Compute 17 * 23 using the calculator tool.",
-			Tools:               contractTools,
+			Tools:               contractToolsExcept(contractTools, "calculate"),
 			ExpectDecision:      "tool_selection_add_calc_decision",
 			ExpectToolsStrategy: "default",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"calculate", "get_weather", "search_web"},
 		},
 		{
 			Name:                "filter_mode_drops_irrelevant_tools",
@@ -71,10 +112,11 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 			ExpectDecision:      "tool_selection_filter_decision",
 			ExpectToolsStrategy: "filter",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"get_forecast", "get_weather"},
 			Tools: []fixtures.ChatTool{
 				{Type: "function", Function: fixtures.ChatToolFunc{Name: "get_weather", Description: "Get current weather information for a location", Parameters: minObjectParams}},
+				{Type: "function", Function: fixtures.ChatToolFunc{Name: "get_forecast", Description: "Get a weather forecast for a location", Parameters: minObjectParams}},
 				{Type: "function", Function: fixtures.ChatToolFunc{Name: "contract_noise_alpha", Description: "Unrelated tool for cataloguing antique spoons", Parameters: minObjectParams}},
-				{Type: "function", Function: fixtures.ChatToolFunc{Name: "contract_noise_beta", Description: "Metadata about underground subway tile patterns", Parameters: minObjectParams}},
 			},
 		},
 		{
@@ -84,6 +126,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 			ExpectDecision:      "tool_selection_filter_threshold_decision",
 			ExpectToolsStrategy: "filter",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"get_weather"},
 			Tools: []fixtures.ChatTool{
 				{Type: "function", Function: fixtures.ChatToolFunc{Name: "get_weather", Description: "Get current weather information for a location", Parameters: minObjectParams}},
 				{Type: "function", Function: fixtures.ChatToolFunc{Name: "calculate", Description: "Perform mathematical calculations", Parameters: minObjectParams}},
@@ -94,20 +137,22 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 			Name:                "add_mode_alternate_top_k",
 			Model:               "e2e-plugins",
 			Prompt:              "__TOOL_SELECTION_ADD_TOPK_ONE__ Summarize how search_web could help research climate papers.",
-			Tools:               contractTools,
+			Tools:               contractToolsExcept(contractTools, "search_web"),
 			ExpectDecision:      "tool_selection_add_topk_one_decision",
 			ExpectToolsStrategy: "default",
 			ExpectConfidenceGT:  0.01,
+			ExpectProviderTools: []string{"search_web"},
 		},
 		{
 			Name:                    "stacked_system_prompt_and_tool_selection",
 			Model:                   "e2e-plugins",
-			Prompt:                  "__TOOL_SELECTION_WITH_SYSTEM_PROMPT__ Plan a short hiking trip; check weather for Mount Rainier.",
-			Tools:                   contractTools,
+			Prompt:                  "__TOOL_SELECTION_WITH_SYSTEM_PROMPT__ Search web resources for recent Mount Rainier trail information and get current weather for that location.",
+			Tools:                   contractToolsExcept(contractTools, "get_weather"),
 			ExpectDecision:          "tool_selection_with_system_prompt_decision",
 			ExpectToolsStrategy:     "default",
 			ExpectConfidenceGT:      0.01,
 			ExpectInjectedSysPrompt: boolPtr(true),
+			ExpectProviderTools:     []string{"get_weather", "search_web"},
 		},
 	}
 	frTrue := true
@@ -123,7 +168,7 @@ func toolSelectionContractCases(minObjectParams json.RawMessage) []toolSelection
 
 func testToolSelectionE2E(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] tool_selection contract (add / filter / threshold / stacked plugins / PII precedence)")
+		fmt.Println("[Test] tools and tool_selection provider-boundary contract")
 	}
 
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
@@ -132,6 +177,18 @@ func testToolSelectionE2E(ctx context.Context, client *kubernetes.Clientset, opt
 	}
 	defer session.Close()
 
+	backendOpts := opts
+	backendOpts.ServiceConfig = pkgtestcases.ServiceConfig{
+		Namespace:   "default",
+		Name:        "vllm-llama3-8b-instruct",
+		ServicePort: "8000",
+	}
+	backendSession, err := fixtures.OpenServiceSession(ctx, client, backendOpts)
+	if err != nil {
+		return err
+	}
+	defer backendSession.Close()
+
 	chat := fixtures.NewChatCompletionsClient(session, 45*time.Second)
 	minObjectParams := json.RawMessage(`{"type":"object","properties":{}}`)
 	cases := toolSelectionContractCases(minObjectParams)
@@ -139,7 +196,7 @@ func testToolSelectionE2E(ctx context.Context, client *kubernetes.Clientset, opt
 	var failed int
 	var firstErr error
 	for _, tc := range cases {
-		if err := runToolSelectionCase(ctx, chat, tc, opts.Verbose); err != nil {
+		if err := runToolSelectionCase(ctx, chat, backendSession, tc, opts.Verbose); err != nil {
 			failed++
 			if firstErr == nil {
 				firstErr = fmt.Errorf("%s: %w", tc.Name, err)
@@ -154,9 +211,11 @@ func testToolSelectionE2E(ctx context.Context, client *kubernetes.Clientset, opt
 
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"cases_total":  len(cases),
-			"cases_failed": failed,
-			"cases_passed": len(cases) - failed,
+			"cases_total":                len(cases),
+			"cases_failed":               failed,
+			"cases_passed":               len(cases) - failed,
+			"plugins_verified":           []string{"tool_selection", "tools"},
+			"provider_boundary_verified": true,
 		})
 	}
 
@@ -174,13 +233,18 @@ func boolPtr(v bool) *bool { return &v }
 func runToolSelectionCase(
 	ctx context.Context,
 	chat *fixtures.ChatCompletionsClient,
+	backend *fixtures.ServiceSession,
 	tc toolSelectionE2ECase,
 	verbose bool,
 ) error {
 	req := buildToolSelectionChatRequest(tc)
+	sessionID := fmt.Sprintf("tool-plugin-%s-%d", tc.Name, time.Now().UnixNano())
 	// v0.4 demotes the x-vsr-tools-* observability and injected-system-prompt
-	// headers behind x-vsr-debug (#2205); opt in so the assertions can read them.
-	resp, err := chat.Create(ctx, req, map[string]string{"x-vsr-debug": "true"})
+	// headers behind x-vsr-debug (#2205); validate them when the gateway emits them.
+	resp, err := chat.Create(ctx, req, map[string]string{
+		"x-vsr-debug":           "true",
+		"x-vsr-test-session-id": sessionID,
+	})
 	if err != nil {
 		return err
 	}
@@ -195,19 +259,101 @@ func runToolSelectionCase(
 	if err := assertToolSelectionFastResponse(tc, resp.Headers); err != nil {
 		return err
 	}
-	if err := assertToolSelectionStrategy(tc, decision, resp.Headers); err != nil {
+	if err := assertToolSelectionStrategy(tc, resp.Headers); err != nil {
 		return err
 	}
-	if err := assertToolSelectionConfidence(tc, decision, resp.Headers); err != nil {
+	if err := assertToolSelectionConfidence(tc, resp.Headers); err != nil {
 		return err
 	}
 	if err := assertInjectedSystemPrompt(tc, resp.Headers); err != nil {
+		return err
+	}
+	if err := assertProviderToolContract(ctx, backend, tc, sessionID); err != nil {
 		return err
 	}
 	if verbose {
 		logToolSelectionHeaders(decision, resp.Headers)
 	}
 	return nil
+}
+
+func assertProviderToolContract(
+	ctx context.Context,
+	backend *fixtures.ServiceSession,
+	tc toolSelectionE2ECase,
+	sessionID string,
+) error {
+	if tc.ExpectFastResponse != nil && *tc.ExpectFastResponse {
+		observed, model, err := lookupShortCircuitDispatch(ctx, backend, sessionID)
+		if err != nil {
+			return err
+		}
+		if observed {
+			return fmt.Errorf("fast_response request reached provider model %q", model)
+		}
+		return nil
+	}
+	if tc.ExpectProviderTools == nil && !tc.ExpectNoProviderTools && !tc.ExpectToolChoiceAbsent {
+		return fmt.Errorf("case has no provider-boundary tool expectation")
+	}
+
+	observed, err := lastProviderSimulatorRequest(ctx, backend, sessionID)
+	if err != nil {
+		return err
+	}
+	var request struct {
+		Body map[string]any `json:"body"`
+	}
+	if decodeErr := json.Unmarshal(observed, &request); decodeErr != nil {
+		return fmt.Errorf("decode provider-bound tool request: %w", decodeErr)
+	}
+
+	actualTools, toolsPresent, err := providerToolNames(request.Body)
+	if err != nil {
+		return err
+	}
+	if tc.ExpectNoProviderTools {
+		if toolsPresent && len(actualTools) > 0 {
+			return fmt.Errorf("provider request retained tools in mode=none: %v", actualTools)
+		}
+	} else if strings.Join(actualTools, ",") != strings.Join(tc.ExpectProviderTools, ",") {
+		return fmt.Errorf("provider tools = %v, want %v", actualTools, tc.ExpectProviderTools)
+	}
+	if tc.ExpectToolChoiceAbsent {
+		if _, exists := request.Body["tool_choice"]; exists {
+			return fmt.Errorf("provider request retained tool_choice without tools: %s", truncateString(string(observed), 800))
+		}
+	}
+	return nil
+}
+
+func providerToolNames(body map[string]any) ([]string, bool, error) {
+	rawTools, exists := body["tools"]
+	if !exists {
+		return nil, false, nil
+	}
+	tools, ok := rawTools.([]any)
+	if !ok {
+		return nil, true, fmt.Errorf("provider tools field is not an array: %#v", rawTools)
+	}
+	names := make([]string, 0, len(tools))
+	for index, rawTool := range tools {
+		tool, ok := rawTool.(map[string]any)
+		if !ok {
+			return nil, true, fmt.Errorf("provider tool %d is not an object: %#v", index, rawTool)
+		}
+		function, ok := tool["function"].(map[string]any)
+		if !ok {
+			return nil, true, fmt.Errorf("provider tool %d has no function object: %#v", index, rawTool)
+		}
+		name, ok := function["name"].(string)
+		if !ok || name == "" {
+			return nil, true, fmt.Errorf("provider tool %d has no function name: %#v", index, rawTool)
+		}
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names, true, nil
 }
 
 func buildToolSelectionChatRequest(tc toolSelectionE2ECase) fixtures.ChatCompletionsRequest {
@@ -242,7 +388,7 @@ func assertToolSelectionFastResponse(tc toolSelectionE2ECase, h http.Header) err
 	return fmt.Errorf("x-vsr-fast-response: want %v got %v", *tc.ExpectFastResponse, fr)
 }
 
-func assertToolSelectionStrategy(tc toolSelectionE2ECase, decision string, h http.Header) error {
+func assertToolSelectionStrategy(tc toolSelectionE2ECase, h http.Header) error {
 	if tc.ExpectToolsStrategy == "" {
 		return nil
 	}
@@ -262,7 +408,7 @@ func assertToolSelectionStrategy(tc toolSelectionE2ECase, decision string, h htt
 	return fmt.Errorf("x-vsr-tools-strategy: want %q got %q", tc.ExpectToolsStrategy, strategy)
 }
 
-func assertToolSelectionConfidence(tc toolSelectionE2ECase, decision string, h http.Header) error {
+func assertToolSelectionConfidence(tc toolSelectionE2ECase, h http.Header) error {
 	if tc.ExpectConfidenceGT <= 0 || tc.ExpectFastResponse != nil {
 		return nil
 	}
@@ -311,7 +457,7 @@ func summarizeToolHeaders(h http.Header) string {
 		"x-vsr-tools-latency-ms",
 		"x-vsr-injected-system-prompt",
 	} {
-		b.WriteString(fmt.Sprintf("%s=%q ", k, h.Get(k)))
+		fmt.Fprintf(&b, "%s=%q ", k, h.Get(k))
 	}
 	return strings.TrimSpace(b.String())
 }

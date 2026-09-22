@@ -8,7 +8,11 @@ for adapters, dataset preparation, manifests and accounting details.
 ## Choose the scope
 
 **Profile controls the questions:** Smoke checks the pipeline cheaply; Quick/dev
-supports tuning; Standard is a disjoint holdout for a frozen candidate. Select
+supports tuning; reserve Standard for a frozen candidate. Reconcile prior case IDs
+with source provenance before calling it an unseen holdout; a profile name or
+new seed does not remove prior exposure. For repeat holdouts, discover
+`benchmark dataset exclusions --help` and the product guide; disclose unresolved
+history and freeze retest roles explicitly. Select
 benchmarks relevant to the capability change and inspect the planned case count
 and limits. A slice is not a full benchmark score. Whole agent tasks may consume
 many generation, simulator and judge calls.
@@ -27,8 +31,8 @@ targets and datasets before preparing duplicates; credentials stay server-side.
 ## Run one improvement cycle
 
 1. Create an experiment to group the work. Define the capability objective, allowed
-   quality loss, cost basis and time/call/output budgets. Use Smoke preview and
-   bounded live Smoke to verify routing, final-answer grading and accounting.
+   quality loss, cost basis and execution policy. Use Smoke preview and live
+   Smoke to verify routing, final-answer grading and accounting.
 2. Freeze a Quick/dev dataset and run the relevant single-model baselines plus
    the current MoM. Link those runs to the experiment. Reuse compatible saved
    baselines in later iterations rather than regenerate them.
@@ -41,7 +45,7 @@ targets and datasets before preparing duplicates; credentials stay server-side.
    the exact baseline cases and request protocol; select Preview or Live and
    attach the experiment. Its output wraps the manifest; extract `.manifest`
    before passing it to `run` or `preview`. Preview the candidate first. If useful, discover replay
-   combinations with `replay-options`; otherwise proceed to bounded live work.
+   combinations with `replay-options`; otherwise proceed to live evaluation.
 5. Compare the live candidate with the strongest observed single on the same
    cases using `comparison-options` and `compare`. Keep or revert according to the
    stated objective. Repeat on dev when warranted; freeze the chosen recipe
@@ -76,9 +80,12 @@ removes its grouping, not run evidence; active runs must be resolved first.
 
 ## Run reliability
 
-Inspect the plan before dispatch; use bounded deadlines, call/output limits and
-cost policy. Before scaling, inspect effective native reasoning effort,
-final-answer presence, finish reasons, and truncation/timeout rates. Changes to
+Inspect the plan before dispatch. Choose output capacity for the objective: use
+verified native capacity and highest reasoning for capability exploration, or an
+explicit fixed budget for constrained comparisons. Align single-model and MoM
+profiles and allow time and evidence storage for that capacity. Before scaling,
+inspect effective reasoning effort, final-answer presence, finish reasons, and
+truncation/timeout rates. Changes to
 budgets or request profiles require new compatible baselines; never grade hidden
 reasoning as a final answer. Submit with a stable idempotency key. After a lost
 acknowledgement, look up that run before acting; do not substitute a new key or
@@ -100,9 +107,10 @@ latency and elapsed time. Unknown usage is not zero. `capability_only` permits
 unpriced evaluation but cannot support savings claims. With cache effects, report
 observed cost and the separate cache-neutral estimate; neither is a GPU invoice.
 
-Savings are `100 × (1 − candidate subject cost / baseline subject cost)`, with
-complete compatible accounting. The baseline is the best observed single over
-the same aggregate, not a per-question oracle; quality ties use the lowest known
-cost. Show signed quality/cost changes, uncertainty and benchmark coverage.
+Total savings include subject and judge/simulator calls; subject savings are
+reported separately. Compare `100 × (1 − candidate cost / baseline cost)` using
+the same declared scope and complete accounting. The baseline is the best
+observed single over the same aggregate, not a per-question oracle; quality ties
+use the lowest known total cost. Show signed changes, uncertainty and coverage.
 A small dev win or zero observed difference does not establish equivalence.
 Keep essential limitations with the result and detailed evidence accessible.

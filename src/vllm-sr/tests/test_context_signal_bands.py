@@ -422,7 +422,7 @@ def _minimal_config_with_context_band(min_tokens: str, max_tokens: str) -> str:
         "listeners:\n"
         "  - {name: http-8899, address: 0.0.0.0, port: 8899}\n"
         "providers:\n"
-        "  defaults: {default_model: demo-model}\n"
+        "  defaults: {model: demo-model}\n"
         "  models:\n"
         "    - name: demo-model\n"
         "      backend_refs: [{endpoint: 127.0.0.1:8000}]\n"

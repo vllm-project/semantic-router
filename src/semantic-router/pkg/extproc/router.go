@@ -36,6 +36,8 @@ import (
 type OpenAIRouter struct {
 	rerankers            map[config.RecipeName]modelruntime.PairScorer
 	Embeddings           *embedding.Set
+	serviceEmbeddings    *embedding.Set
+	cacheEmbeddings      *embedding.Set
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier

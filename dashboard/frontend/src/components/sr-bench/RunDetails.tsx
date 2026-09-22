@@ -3,7 +3,16 @@ import ProductIcon from '../ProductIcon'
 import ProductLoadingState from '../ProductLoadingState'
 import { QualityCostChart, RoutingBars } from './EvaluationCharts'
 import { benchApi, SR_BENCH_API } from './api'
-import { active, reportDistribution, money, number, percent, seconds, tokenTotal } from './model'
+import {
+  active,
+  hasScoredOutcomes,
+  reportDistribution,
+  money,
+  number,
+  percent,
+  seconds,
+  tokenTotal,
+} from './model'
 import type { CaseResult, Manifest, Run, TargetMetrics } from './types'
 import { targetName } from './targetPresentation'
 import { canReuseBaseline } from './baselineReuse'
@@ -13,10 +22,14 @@ import CallEvidence from './CallEvidence'
 import RunEvents from './RunEvents'
 import BenchPagination from './BenchPagination'
 import AccountingCorrection from './AccountingCorrection'
+import OutputDiagnostics from './OutputDiagnostics'
 import PreviewEvidence from './PreviewEvidence'
 import RunRecovery from './RunRecovery'
 import RunLineage from './RunLineage'
+import RunElapsed from './RunElapsed'
+import RunActivity from './RunActivity'
 import RecipeEvidence from './RecipeEvidence'
+import DatasetExposure from './DatasetExposure'
 import { RunStatus } from './RunList'
 import styles from './SrBench.module.css'
 import controls from './BenchControls.module.css'
@@ -25,11 +38,13 @@ function MetricsTable({
   targets,
   manifest,
   preview,
+  running,
   summary = false,
 }: {
   targets: TargetMetrics[]
   manifest: Manifest
   preview: boolean
+  running: boolean
   summary?: boolean
 }) {
   return (
@@ -40,6 +55,7 @@ function MetricsTable({
             <th>Target</th>
             <th>{summary ? 'Macro accuracy' : 'Accuracy'}</th>
             <th>Correct / denominator</th>
+            <th>Scored / planned</th>
             <th>Failures</th>
             <th>Observed model cost</th>
             <th>Tokens</th>
@@ -53,14 +69,22 @@ function MetricsTable({
               <td>
                 {preview
                   ? 'Preview only'
-                  : percent(summary ? target.macro_accuracy : target.accuracy)}
-                {!preview && !summary && Array.isArray(target.accuracy_ci95) && (
-                  <small>
-                    95% CI {target.accuracy_ci95.map((value) => percent(value)).join(' – ')}
-                  </small>
-                )}
+                  : hasScoredOutcomes(target)
+                    ? percent(summary ? target.macro_accuracy : target.accuracy)
+                    : running
+                      ? 'Pending'
+                      : 'Incomplete'}
+                {!preview &&
+                  !summary &&
+                  hasScoredOutcomes(target) &&
+                  Array.isArray(target.accuracy_ci95) && (
+                    <small>
+                      95% CI {target.accuracy_ci95.map((value) => percent(value)).join(' – ')}
+                    </small>
+                  )}
               </td>
               <td>{preview ? '—' : `${number(target.correct)} / ${number(target.total)}`}</td>
+              <td>{preview ? '—' : `${number(target.scored)} / ${number(target.total)}`}</td>
               <td>{number(target.failed)}</td>
               <td>{money(target.cost_usd)}</td>
               <td>{number(tokenTotal(target.tokens))}</td>
@@ -174,7 +198,9 @@ export default function RunDetails({
   const chartPoints =
     run?.status === 'completed' && run.manifest.mode === 'live'
       ? metrics.flatMap((target) =>
-          typeof target.macro_accuracy === 'number' && typeof target.cost_usd === 'number'
+          hasScoredOutcomes(target) &&
+          typeof target.macro_accuracy === 'number' &&
+          typeof target.cost_usd === 'number'
             ? [
                 {
                   name: targetName(run.manifest, target.id),
@@ -266,11 +292,10 @@ export default function RunDetails({
               <strong>{number(totalTokens)}</strong>
               <small>All four usage buckets</small>
             </div>
-            <div>
-              <span>Elapsed wall time</span>
-              <strong>{seconds(report?.summary.wall_time_s ?? run.summary?.wall_time_s)}</strong>
-              <small>Saved run duration</small>
-            </div>
+            <RunElapsed
+              run={run}
+              savedSeconds={report?.summary.wall_time_s ?? run.summary?.wall_time_s}
+            />
           </div>
           <progress
             className={styles.progress}
@@ -283,6 +308,7 @@ export default function RunDetails({
             <time dateTime={run.updated_at}>{new Date(run.updated_at).toLocaleString()}</time>.
             Closing this page does not stop the worker.
           </p>
+          <RunActivity run={run} revision={revision} />
           <nav className={styles.detailNav} role="tablist" aria-label="Run sections">
             {(
               [
@@ -353,6 +379,14 @@ export default function RunDetails({
             aria-labelledby="run-tab-results"
             hidden={section !== 'results'}
           >
+            <DatasetExposure
+              benchmarks={
+                report?.provenance.dataset?.benchmarks ?? run.manifest.dataset?.benchmarks
+              }
+              preparation={
+                report?.provenance.dataset?.preparation ?? run.manifest.dataset?.preparation
+              }
+            />
             {run.manifest.mode === 'preview' && (
               <p className={styles.notice}>
                 Route preview only. This run provides routing diagnostics, not a capability score.
@@ -393,7 +427,9 @@ export default function RunDetails({
             {section === 'results' &&
               report &&
               run.status === 'completed' &&
-              run.manifest.mode === 'live' && <QualityCostChart points={chartPoints} />}
+              run.manifest.mode === 'live' && (
+                <QualityCostChart points={chartPoints} costBasis="subject" />
+              )}
             <h3 id="run-targets">Target comparison</h3>
             <p className={styles.muted}>
               Costs apply frozen per-token prices to recorded usage; they are not invoice or
@@ -404,6 +440,7 @@ export default function RunDetails({
                 manifest={run.manifest}
                 targets={metrics}
                 preview={run.manifest.mode === 'preview'}
+                running={active(run.status)}
                 summary
               />
             ) : reportRead.loading ? (
@@ -416,8 +453,12 @@ export default function RunDetails({
               <p className={styles.muted}>Summary metrics will appear as results are persisted.</p>
             )}
             <p className={styles.muted}>
-              Unknown usage and cost remain “—”; incomplete evidence cannot establish a cost saving.
+              Scores wait for every planned outcome; failures count as incorrect. Unknown usage and
+              cost remain “—”; incomplete evidence cannot establish a cost saving.
             </p>
+            {run.manifest.mode === 'live' && report && (
+              <OutputDiagnostics targets={report.summary.targets} manifest={run.manifest} />
+            )}
             <details className={styles.details}>
               <summary>Cost and timing interpretation</summary>
               <p className={styles.muted}>
@@ -446,6 +487,7 @@ export default function RunDetails({
                           ) as TargetMetrics[]
                         }
                         preview={run.manifest.mode === 'preview'}
+                        running={active(run.status)}
                       />
                     </div>
                   ))}
@@ -613,8 +655,31 @@ export default function RunDetails({
                   <PreviewEvidence routing={selected.details?.routing} />
                 ) : (
                   <>
-                    <h4>Final answer</h4>
-                    <pre>{selected.answer || 'No final answer recorded.'}</pre>
+                    <h4>
+                      {['mmlu-pro', 'gpqa-diamond'].includes(selected.benchmark)
+                        ? 'Parsed answer'
+                        : 'Recorded answer'}
+                    </h4>
+                    <pre>
+                      {selected.answer == null || selected.answer === ''
+                        ? ['mmlu-pro', 'gpqa-diamond'].includes(selected.benchmark)
+                          ? 'No answer parsed.'
+                          : 'No answer recorded for this case.'
+                        : typeof selected.answer === 'string'
+                          ? selected.answer
+                          : JSON.stringify(selected.answer, null, 2)}
+                    </pre>
+                    {selected.details?.quality_failure === 'output_limit' ? (
+                      <p className={styles.notice}>
+                        The output limit was reached. This case counts as incorrect under the frozen
+                        protocol.
+                      </p>
+                    ) : selected.details?.strict_format === false ? (
+                      <p className={styles.notice}>
+                        The final text did not match the required answer format. Inspect the
+                        original call for the full response.
+                      </p>
+                    ) : null}
                   </>
                 )}
                 <details>

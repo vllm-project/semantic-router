@@ -42,6 +42,9 @@ func (r *Runtime) candleTaskResource(ctx context.Context, spec config.ResolvedMo
 
 func (r *Runtime) Grounded(ctx context.Context, spec config.ResolvedModelBinding, threshold float32) (_ *binding.Resolved[tasks.GroundedTextRequest, tasks.TokenClassificationResult], callErr error) {
 	defer func() { observePreparationFailure(spec, callErr) }()
+	if spec.Deployment.Provider == "ort" {
+		return r.ortGrounded(ctx, spec)
+	}
 	resource, err := r.candleTaskResource(ctx, spec, "grounded", func(options candle.InstanceOptions) (io.Closer, error) {
 		return candle.LoadHallucinationDetector(options)
 	})

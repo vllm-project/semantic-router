@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
@@ -86,12 +87,9 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 		return candidateCfg, nil
 	}
 	ensureReloadConfigModels = func(*config.RouterConfig) error { return nil }
-	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		close(reloadStarted)
 		<-releaseReloadCh
-		return modelruntime.EmbeddingRuntimeState{}, nil
-	}
-	buildReloadRouter = func(cfg *config.RouterConfig, _ ...*binding.Pool) (*OpenAIRouter, error) {
 		resources := newResourceScope()
 		resources.add(func() error {
 			close(candidateResourcesClosed)
@@ -99,7 +97,7 @@ func startScheduledReloadShutdownFixture(t *testing.T) *scheduledReloadShutdownF
 		})
 		return (&routerComponents{cfg: cfg, resources: resources}).buildRouter(), nil
 	}
-	warmupReloadRouter = func(*OpenAIRouter, modelruntime.EmbeddingRuntimeState) error {
+	warmupReloadRouter = func(*OpenAIRouter) error {
 		return nil
 	}
 	configPath := filepath.Join(t.TempDir(), "router.yaml")
@@ -202,8 +200,9 @@ func TestServerShutdownDoesNotCloseResourcesUnderCanceledStartupWarmup(t *testin
 				ToolsDBPath: toolsPath,
 			},
 		}},
-		resources:     resources,
-		toolsDatabase: toolsDatabase,
+		resources:         resources,
+		toolsDatabase:     toolsDatabase,
+		serviceEmbeddings: embedding.NewSet(map[string]embedding.Provider{"test": provider}, "test"),
 	}).buildRouter()
 	server := &Server{service: NewRouterService(router)}
 
@@ -212,7 +211,6 @@ func TestServerShutdownDoesNotCloseResourcesUnderCanceledStartupWarmup(t *testin
 	go func() {
 		warmupDone <- server.WarmupRouter(
 			warmupCtx,
-			modelruntime.EmbeddingRuntimeState{ToolsReady: true},
 			modelruntime.WarmupRouterOptions{MaxParallelism: 1},
 		)
 	}()

@@ -5,7 +5,6 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import os
-import re
 import threading
 import time
 from http import HTTPStatus
@@ -14,70 +13,24 @@ import requests
 
 from cli.routing_preview import build_preview_request, case_request_fields
 
+from .activity import CallActivity
 from .adapters import get_adapter
 from .contracts import digest, plan, planned_cells
 from .failures import failure_reason, failure_summary
+from .native_output import capacity as native_capacity
+from .native_output import validate_recipes as validate_native_recipes
 from .provenance import capture_runner
 from .report import BUCKETS, make_report
 from .store import TERMINAL, now
 from .transport import CallFailure, chat, effective_request
-
-ARC_MAX_COLOR = 9
 
 
 class ReviewedPlanChangedError(ValueError):
     """A new submission differs from its reviewed hash before any dispatch."""
 
 
-def basic_grade(case, final):
-    expected = case["answer"]
-    if case["benchmark"] in {"mmlu-pro", "gpqa-diamond"}:
-        text = final.strip()
-        match = re.fullmatch(r"(?:ANSWER\s*:\s*)?\(?([A-J])\)?[.]?", text, re.I)
-        answer = match.group(1).upper() if match else None
-        return {
-            "answer": answer,
-            "correct": answer is not None and answer == str(expected).upper(),
-            "score": float(answer is not None and answer == str(expected).upper()),
-            "details": {"strict_format": match is not None},
-        }
-    if case["benchmark"] == "arc-agi-2":
-        try:
-            answer = json.loads(final)
-
-            def valid_grid(grid):
-                return (
-                    isinstance(grid, list)
-                    and bool(grid)
-                    and bool(grid[0])
-                    and all(
-                        isinstance(row, list)
-                        and len(row) == len(grid[0])
-                        and all(type(x) is int and 0 <= x <= ARC_MAX_COLOR for x in row)
-                        for row in grid
-                    )
-                )
-
-            valid = (
-                (
-                    isinstance(answer, list)
-                    and bool(answer)
-                    and all(valid_grid(grid) for grid in answer)
-                )
-                if case.get("metadata", {}).get("output_format") == "grids"
-                else valid_grid(answer)
-            )
-        except (ValueError, TypeError):
-            answer = None
-            valid = False
-        correct = valid and answer == expected
-        return {
-            "answer": answer,
-            "correct": correct,
-            "score": float(correct),
-            "details": {"valid_grid": valid},
-        }
-    raise ValueError("No basic grader for benchmark")
+class EngineClosedError(RuntimeError):
+    """Shutdown rejected a new attempt before persistence or dispatch."""
 
 
 class Context:
@@ -155,7 +108,12 @@ class Context:
                         max(p["input"], p["cached_input"], p["cache_write"])
                         for p in prices
                     )
-                    + request_body["max_tokens"] * max(p["output"] for p in prices)
+                    + (
+                        native_capacity(selected)
+                        if self.manifest["output_policy"] == "native"
+                        else request_body["max_tokens"]
+                    )
+                    * max(p["output"] for p in prices)
                 )
                 / 1_000_000
             )
@@ -183,6 +141,9 @@ class Context:
                 max(0.1, self.deadline - time.monotonic()),
             ),
         }
+        activity = CallActivity(
+            lambda value: self.store.update_call_activity(call_id, value)
+        )
         call_id = self.store.start_call(
             self.run_id,
             self.case["id"],
@@ -190,6 +151,7 @@ class Context:
             role,
             {
                 "model": selected["model"],
+                "activity": activity.snapshot(),
                 "request": {
                     "messages": messages,
                     "sampling": self.manifest["sampling"],
@@ -210,6 +172,12 @@ class Context:
                 self.cancelled,
                 extra_body,
                 self.artifact_dir / (call_id + ".sse"),
+                activity=activity,
+                **(
+                    {"output_policy": "native"}
+                    if self.manifest["output_policy"] == "native"
+                    else {}
+                ),
             )
             if (
                 self.manifest["cost_policy"] == "require_priced"
@@ -261,6 +229,8 @@ class Engine:
     def __init__(self, store):
         self.store = store
         self.lock = threading.RLock()
+        self._admission = threading.Lock()
+        self._closed = False
         self.cancels = {}
         self.threads = {}
         self.spent = {}
@@ -268,6 +238,24 @@ class Engine:
         self.user_cancelled = set()
         self.first_failures = {}
         self.store.recover()
+
+    def close(self):
+        """Close admission and cancel every admitted worker without joining it."""
+        with self._admission:
+            self._closed = True
+            with self.lock:
+                for cancel in self.cancels.values():
+                    cancel.set()
+
+    def _admit(self, frozen, owner, request_key):
+        """Under the admission lock, reconcile an existing run or allow creation."""
+        if request_key and (existing := self.store.request(owner, request_key)):
+            if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
+                raise ValueError("idempotency key is already bound to a different plan")
+            return existing
+        if self._closed:
+            raise EngineClosedError("Evaluation service is shutting down")
+        return None
 
     def start(
         self,
@@ -277,39 +265,45 @@ class Engine:
         recovery=False,
         *,
         actor_role="local",
+        manifest_policy=None,
     ):
+        if not isinstance(manifest, dict):
+            raise ValueError("manifest must be an object")
         if manifest.get("recovery") and not recovery:
             raise ValueError("Recovery lineage requires the explicit recovery endpoint")
-        frozen = plan(manifest)
-        with self.store.lock:
-            if request_key and (existing := self.store.request(owner, request_key)):
-                if existing["manifest"]["plan_sha256"] != frozen["plan_sha256"]:
-                    raise ValueError(
-                        "idempotency key is already bound to a different plan"
-                    )
+        frozen = plan(manifest, policy=manifest_policy)
+        with self._admission:
+            if existing := self._admit(frozen, owner, request_key):
                 return existing
-            if (
-                "plan_sha256" in manifest
-                and manifest["plan_sha256"] != frozen["plan_sha256"]
-            ):
-                raise ReviewedPlanChangedError(
-                    "Reviewed plan changed; review a new frozen plan before starting"
-                )
+        if (
+            "plan_sha256" in manifest
+            and manifest["plan_sha256"] != frozen["plan_sha256"]
+        ):
+            raise ReviewedPlanChangedError(
+                "Reviewed plan changed; review a new frozen plan before starting"
+            )
+        provenance = capture_runner(frozen)
+        validate_native_recipes(frozen, provenance)
+        # Shutdown cannot miss a persisted run awaiting worker registration.
+        # Store.create releases its lock before we take the accounting lock.
+        with self._admission:
+            if existing := self._admit(frozen, owner, request_key):
+                return existing
             run, created = self.store.create(
                 frozen,
                 owner,
                 request_key,
-                provenance=capture_runner(frozen),
+                provenance=provenance,
                 actor_role=actor_role,
             )
-        if created:
-            cancel = threading.Event()
-            with self.lock:
-                self.cancels[run["id"]] = cancel
+            if created:
+                cancel = threading.Event()
                 worker = threading.Thread(
                     target=self._run, args=(run["id"], frozen, cancel), daemon=True
                 )
-                self.threads[run["id"]] = worker
+                with self.lock:
+                    self.cancels[run["id"]] = cancel
+                    self.threads[run["id"]] = worker
                 worker.start()
         return self.store.get(run["id"])
 
@@ -364,8 +358,14 @@ class Engine:
                         "messages": case["messages"],
                         **case_request_fields(case),
                         "model": target["model"],
-                        "max_tokens": target.get("request_params", {}).get(
-                            "max_tokens", manifest["sampling"]["max_tokens"]
+                        **(
+                            {
+                                "max_tokens": target.get("request_params", {}).get(
+                                    "max_tokens", manifest["sampling"]["max_tokens"]
+                                )
+                            }
+                            if manifest["output_policy"] == "bounded"
+                            else {}
                         ),
                         "options": {"trace": True},
                         "preview_context": manifest["preview_context"],

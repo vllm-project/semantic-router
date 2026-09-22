@@ -12,9 +12,9 @@ config:
     models:
       - name: openai/gpt-oss-20b
         backend_refs:
-          - name: mock-vllm
+          - name: provider-mocker
             provider: vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
+            endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
   routing:
     decisions:

@@ -53,6 +53,7 @@ pub mod fixtures {
     ///
     /// Note: Embedding models (Qwen3, etc.) are NOT loaded here.
     /// Use dedicated fixtures like `qwen3_model_only()` for embedding tests.
+    #[derive(Default)]
     pub struct ModelCache {
         // LoRA Models
         pub intent_classifier: Option<Arc<IntentLoRAClassifier>>,
@@ -68,15 +69,7 @@ pub mod fixtures {
 
     impl ModelCache {
         pub fn new() -> Self {
-            Self {
-                intent_classifier: None,
-                pii_classifier: None,
-                security_classifier: None,
-                traditional_intent_classifier: None,
-                traditional_pii_classifier: None,
-                traditional_pii_token_classifier: None,
-                traditional_security_classifier: None,
-            }
+            Self::default()
         }
 
         /// Load all models into cache (called once at test suite start)
@@ -843,7 +836,7 @@ pub mod test_utils {
         expected_min_confidence: f32,
         max_classes: usize,
     ) -> Result<(), String> {
-        if confidence < 0.0 || confidence > 1.0 {
+        if !(0.0..=1.0).contains(&confidence) {
             return Err(format!("Invalid confidence: {}", confidence));
         }
 

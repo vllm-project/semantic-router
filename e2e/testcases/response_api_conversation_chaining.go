@@ -21,7 +21,7 @@ func init() {
 	})
 }
 
-type mockVLLMEcho struct {
+type providerMockerEcho struct {
 	Mock          string   `json:"mock"`
 	Model         string   `json:"model"`
 	Roles         []string `json:"roles"`
@@ -106,7 +106,7 @@ func executeConversationTurn(
 	expectedHistory []string,
 	expectedInstructions string,
 	forbiddenInstructions string,
-) (*fixtures.ResponseAPIResponse, *mockVLLMEcho, error) {
+) (*fixtures.ResponseAPIResponse, *providerMockerEcho, error) {
 	response, raw, err := apiClient.Create(ctx, request)
 	if err != nil {
 		return nil, nil, err
@@ -132,19 +132,19 @@ func executeConversationTurn(
 	return response, echo, nil
 }
 
-func parseMockEcho(apiResp *fixtures.ResponseAPIResponse, rawBody []byte) (*mockVLLMEcho, error) {
+func parseMockEcho(apiResp *fixtures.ResponseAPIResponse, rawBody []byte) (*providerMockerEcho, error) {
 	if apiResp == nil {
 		return nil, fmt.Errorf("nil api response")
 	}
 	if apiResp.OutputText == "" {
 		return nil, fmt.Errorf("missing output_text in response: %s", truncateString(string(rawBody), 500))
 	}
-	var echo mockVLLMEcho
+	var echo providerMockerEcho
 	if err := json.Unmarshal([]byte(apiResp.OutputText), &echo); err != nil {
-		return nil, fmt.Errorf("output_text is not valid mock-vllm JSON echo: %w (output_text=%q)", err, truncateString(apiResp.OutputText, 200))
+		return nil, fmt.Errorf("output_text is not valid provider-mocker JSON echo: %w (output_text=%q)", err, truncateString(apiResp.OutputText, 200))
 	}
-	if echo.Mock != "mock-vllm" {
-		return nil, fmt.Errorf("unexpected mock backend marker: got %q, want %q", echo.Mock, "mock-vllm")
+	if echo.Mock != "provider-mocker" {
+		return nil, fmt.Errorf("unexpected mock backend marker: got %q, want %q", echo.Mock, "provider-mocker")
 	}
 	return &echo, nil
 }
