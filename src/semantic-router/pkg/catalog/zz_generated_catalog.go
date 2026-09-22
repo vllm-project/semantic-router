@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:4c0cf8ff60118137bcf645b9d37a40ba8610bb9a1fa6875d7a6510419f97d3fa"
+const builtInCatalogDigest = "sha256:24f97edd33905d0ea264ebfeb7124a90f3e9a8996cff70929ecd963e74213fb2"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -94700,6 +94700,65 @@ const builtInCatalogJSON = `{
       "description": "Low-latency hosted inference.",
       "display_name": "Groq",
       "id": "groq",
+      "models": [
+        {
+          "catalog": "openai/gpt-oss-120b",
+          "id": "openai/gpt-oss-120b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.6,
+            "currency": "USD",
+            "prompt_per_1m": 0.15
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "claimed",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "openai/gpt-oss-20b",
+          "id": "openai/gpt-oss-20b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.3,
+            "currency": "USD",
+            "prompt_per_1m": 0.075
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "claimed",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.8-27b",
+          "id": "qwen/qwen3.8-27b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 4.0,
+            "currency": "USD",
+            "prompt_per_1m": 0.8
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "claimed",
+            "verified_at": "2026-09-22"
+          }
+        }
+      ],
       "presentation": {
         "logo": "package:groq",
         "monochrome": true,

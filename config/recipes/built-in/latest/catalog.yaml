@@ -1144,6 +1144,49 @@ providers:
     monochrome: true
   conformance:
     status: unverified
+  models:
+  - catalog: openai/gpt-oss-120b
+    relationship: managed_cloud
+    id: openai/gpt-oss-120b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.15
+      completion_per_1m: 0.6
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
+  - catalog: openai/gpt-oss-20b
+    relationship: managed_cloud
+    id: openai/gpt-oss-20b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.075
+      completion_per_1m: 0.3
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
+  - catalog: qwen/qwen3.8-27b
+    relationship: managed_cloud
+    id: qwen/qwen3.8-27b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.8
+      completion_per_1m: 4.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-22'
+      source: https://console.groq.com/docs/models
 - id: hugging-face
   display_name: Hugging Face
   description: Models served through the Hugging Face router.
