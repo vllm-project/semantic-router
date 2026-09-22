@@ -1182,7 +1182,7 @@ providers:
       currency: USD
       prompt_per_1m: 0.8
       completion_per_1m: 4.0
-    lifecycle: active
+    lifecycle: experimental
     verification:
       status: claimed
       verified_at: '2026-09-22'

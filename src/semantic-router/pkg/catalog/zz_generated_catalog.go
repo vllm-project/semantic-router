@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:24f97edd33905d0ea264ebfeb7124a90f3e9a8996cff70929ecd963e74213fb2"
+const builtInCatalogDigest = "sha256:7f17e2ca86cd2cd988754b89abeeda028444663c3f00e4143b85bfb6a585d692"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -94742,7 +94742,7 @@ const builtInCatalogJSON = `{
         {
           "catalog": "qwen/qwen3.8-27b",
           "id": "qwen/qwen3.8-27b",
-          "lifecycle": "active",
+          "lifecycle": "experimental",
           "pricing": {
             "completion_per_1m": 4.0,
             "currency": "USD",
