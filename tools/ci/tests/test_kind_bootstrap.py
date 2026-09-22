@@ -14,6 +14,8 @@ KIND_NODE_IMAGE = (
     "kindest/node:v1.33.7@sha256:"
     "d26ef333bdb2cbe9862a0f7c3803ecc7b4303d8cea8e814b481b09949d353040"
 )
+
+
 class KindBootstrapContractTests(unittest.TestCase):
     def test_one_pinned_bootstrap_is_used_by_both_workflows(self) -> None:
         setup_text = SETUP_KIND.read_text(encoding="utf-8")
@@ -97,6 +99,7 @@ class KindBootstrapContractTests(unittest.TestCase):
                 "cache-backend": "${{ fromJSON(inputs.integration_matrix).*.cache-backend }}"
             },
         )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -539,7 +539,9 @@ class SelectionTests(unittest.TestCase):
                     ),
                 )
 
-    def test_sticky_provider_generation_seams_select_provider_protocols_profile(self) -> None:
+    def test_sticky_provider_generation_seams_select_provider_protocols_profile(
+        self,
+    ) -> None:
         paths = (
             "src/semantic-router/pkg/extproc/req_filter_tools.go",
             "src/semantic-router/pkg/extproc/req_filter_tools_generation.go",
