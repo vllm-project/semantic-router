@@ -1,6 +1,10 @@
 package config
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
+)
 
 func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface{}) {
 	assertMapCoversStructFields(t, root, reflect.TypeOf(CanonicalConfig{}), "config")
@@ -56,6 +60,8 @@ func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{
 		profiles = append(profiles, profile)
 	}
 	assertSliceUnionCoversStructFields(t, profiles, reflect.TypeOf(CanonicalRouting{}), "routing profiles")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "fallback", "routing profiles"), reflect.TypeOf(fallback.FallbackPolicy{}), "routing.fallback")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, collectChildMapsFromSlice(t, profiles, "fallback", "routing profiles"), "circuit_breaker", "routing profiles"), reflect.TypeOf(fallback.CircuitBreakerConfig{}), "routing.fallback.circuit_breaker")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "candidate_requirements", "routing profiles"), reflect.TypeOf(CandidateRequirements{}), "routing.candidate_requirements")
 	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, profiles, "data_policy", "routing profiles"), reflect.TypeOf(RoutingDataPolicy{}), "routing.data_policy")
 	assertSliceUnionCoversStructFields(

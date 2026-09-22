@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"bytes"
 	"errors"
 	"strconv"
 	"strings"
@@ -50,35 +51,133 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
+	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
+	if blocked != nil {
+		return blocked
+	}
+
+	response := buildResponseBodyContinueResponse(nil, nil)
+	if len(headerOptions) > 0 {
+		response.GetResponseBody().GetResponse().HeaderMutation = &ext_proc.HeaderMutation{
+			SetHeaders: headerOptions,
+		}
+	}
+	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+		setResponseBodyMutation(response, finalBody)
+	}
+	return response
+}
+
+// finalizeResponsePolicy runs the shared response-stage processing across normal and fallback paths:
+// scoring response signals, evaluating guardrail plugins (jailbreak, hallucination) for blocking or warning,
+// executing memory suppression decisions, applying warnings and cost headers,
+// persisting Responses objects, and updating replay audit records.
+func (r *OpenAIRouter) finalizeResponsePolicy(
+	ctx *RequestContext,
+	semanticResponse *llmprotocol.Response,
+	clientBody []byte,
+) (*ext_proc.ProcessingResponse, []byte, []*core.HeaderValueOption) {
+	plan := r.prepareResponsePolicy(ctx, semanticResponse, clientBody)
+	plan.commit()
+	return plan.blocked, plan.finalBody, plan.headerOptions()
+}
+
+// responsePolicyPlan separates response-policy evaluation and body mutation
+// from irreversible persistence. Fallback can therefore validate the final
+// public wire before committing memory, Responses, and replay side effects.
+type responsePolicyPlan struct {
+	blocked    *ext_proc.ProcessingResponse
+	finalBody  []byte
+	response   *ext_proc.ProcessingResponse
+	commitFunc func()
+}
+
+func (p *responsePolicyPlan) commit() {
+	if p == nil || p.commitFunc == nil {
+		return
+	}
+	commit := p.commitFunc
+	p.commitFunc = nil
+	commit()
+}
+
+func (p *responsePolicyPlan) headerOptions() []*core.HeaderValueOption {
+	if p == nil || p.response == nil {
+		return nil
+	}
+	bodyResp := p.response.GetResponseBody()
+	if bodyResp == nil || bodyResp.GetResponse() == nil || bodyResp.GetResponse().GetHeaderMutation() == nil {
+		return nil
+	}
+	return bodyResp.GetResponse().GetHeaderMutation().GetSetHeaders()
+}
+
+func (r *OpenAIRouter) prepareResponsePolicy(
+	ctx *RequestContext,
+	semanticResponse *llmprotocol.Response,
+	clientBody []byte,
+) *responsePolicyPlan {
+	if r == nil || ctx == nil || semanticResponse == nil {
+		return &responsePolicyPlan{finalBody: clientBody}
+	}
+
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
 	// decision carries a plugin; the plugins below then consume it. Recorded
 	// before a block returns, so a blocked response leaves the same evidence in
 	// Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
-	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
+	assistantContent := semanticAssistantContent(semanticResponse)
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+	commitSignalOutcomes := func() {
+		r.recordRouterReplayResponseJailbreak(ctx)
+		r.recordRouterReplayHallucination(ctx)
+	}
 
 	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
-		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
-		return jailbreakResponse
+		return &responsePolicyPlan{
+			blocked: jailbreakResponse,
+			commitFunc: func() {
+				commitSignalOutcomes()
+				r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
+			},
+		}
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
-		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
-		return hallucinationResponse
+		return &responsePolicyPlan{
+			blocked: hallucinationResponse,
+			commitFunc: func() {
+				commitSignalOutcomes()
+				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
+			},
+		}
 	}
 
-	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 	r.markUnverifiedFactualResponse(ctx)
+	memoryResponse := semanticResponse
+	if cloned, err := cloneSemanticResponseForCommit(semanticResponse); err == nil {
+		memoryResponse = cloned
+	} else {
+		logging.ComponentErrorEvent("extproc", "response_policy_commit_snapshot_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"error":      err.Error(),
+		})
+	}
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
-	addResponseCostHeaders(ctx, response)
-	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
-		setResponseBodyMutation(response, clientBody)
+	return &responsePolicyPlan{
+		finalBody: finalBody,
+		response:  response,
+		commitFunc: func() {
+			commitSignalOutcomes()
+			r.scheduleSemanticResponseMemoryStore(ctx, memoryResponse)
+			addResponseCostHeaders(ctx, response)
+			r.persistResponseObject(ctx)
+			r.updateRouterReplayHallucinationStatus(ctx)
+			r.attachRouterReplayResponse(ctx, finalBody, true)
+		},
 	}
-	r.persistResponseObject(ctx)
-	r.updateRouterReplayHallucinationStatus(ctx)
-	r.attachRouterReplayResponse(ctx, finalBody, true)
-	return response
 }
 
 // observeResponseStageSignals scores the response-stage rules against the
