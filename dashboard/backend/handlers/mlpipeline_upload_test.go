@@ -60,8 +60,8 @@ func TestMLPipelineUploadsArePrivateAndDistinct(t *testing.T) {
 			received := make(chan inputPaths, 1)
 			sidecar := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				var paths inputPaths
-				if err := json.NewDecoder(r.Body).Decode(&paths); err != nil {
-					http.Error(w, err.Error(), http.StatusBadRequest)
+				if decodeErr := json.NewDecoder(r.Body).Decode(&paths); decodeErr != nil {
+					http.Error(w, decodeErr.Error(), http.StatusBadRequest)
 					return
 				}
 				received <- paths
@@ -88,10 +88,10 @@ func TestMLPipelineUploadsArePrivateAndDistinct(t *testing.T) {
 			var body bytes.Buffer
 			writer := multipart.NewWriter(&body)
 			for field, content := range test.fields {
-				part, err := writer.CreateFormFile(field, "inputs.json")
-				require.NoError(t, err)
-				_, err = io.WriteString(part, content)
-				require.NoError(t, err)
+				part, partErr := writer.CreateFormFile(field, "inputs.json")
+				require.NoError(t, partErr)
+				_, writeErr := io.WriteString(part, content)
+				require.NoError(t, writeErr)
 			}
 			require.NoError(t, writer.Close())
 			request, err := http.NewRequest(http.MethodPost, server.URL, &body)
