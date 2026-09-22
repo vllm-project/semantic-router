@@ -60,11 +60,14 @@ if [[ "${MODEL_DIR}" != /* ]]; then
 fi
 MODEL_MOUNT_DIR="${TEST_DIR}/models"
 USE_DETERMINISTIC_MEMORY_EMBEDDINGS="${USE_DETERMINISTIC_MEMORY_EMBEDDINGS:-0}"
-export MILVUS_CONTAINER_NAME MILVUS_HOST_PORT MILVUS_HEALTH_PORT
+# ROUTER_CONTAINER lets the shutdown phase stop the router and read the
+# receipts it logs on its way out; no endpoint survives to report them.
+export MILVUS_CONTAINER_NAME MILVUS_HOST_PORT MILVUS_HEALTH_PORT ROUTER_CONTAINER
 export MILVUS_DATA_DIR="${TEST_DIR}/milvus-data"
 export MILVUS_BIND_ADDRESS=127.0.0.1
 
 VLLM_SR_PID=""
+FAULT_PROXY_PID=""
 STACK_STARTED=0
 MILVUS_STARTED=0
 PROVIDER_STARTED=0
@@ -132,10 +135,15 @@ cleanup() {
     fi
     [[ ! -f "${SERVE_LOG}" ]] || cp "${SERVE_LOG}" "${ARTIFACT_DIR}/serve.log" || true
     [[ ! -f "${TEST_DIR}/router-startup.log" ]] || cp "${TEST_DIR}/router-startup.log" "${ARTIFACT_DIR}/router-startup.log" || true
+    [[ ! -f "${TEST_DIR}/fault-proxy.log" ]] || cp "${TEST_DIR}/fault-proxy.log" "${ARTIFACT_DIR}/fault-proxy.log" || true
 
     if [[ -n "${VLLM_SR_PID}" ]] && kill -0 "${VLLM_SR_PID}" 2>/dev/null; then
         kill "${VLLM_SR_PID}" 2>/dev/null || true
         wait "${VLLM_SR_PID}" 2>/dev/null || true
+    fi
+    if [[ -n "${FAULT_PROXY_PID}" ]] && kill -0 "${FAULT_PROXY_PID}" 2>/dev/null; then
+        kill "${FAULT_PROXY_PID}" 2>/dev/null || true
+        wait "${FAULT_PROXY_PID}" 2>/dev/null || true
     fi
     if [[ "${PROVIDER_STARTED}" == "1" ]]; then
         "${CONTAINER_RUNTIME}" stop "${PROVIDER_MOCKER_CONTAINER}" >/dev/null 2>&1 || true
@@ -165,7 +173,7 @@ trap 'exit 143' TERM
 
 echo "Using memory integration temp dir: ${TEST_DIR}"
 
-python3 -m pip install -U requests pymilvus
+python3 -m pip install -U requests pymilvus grpcio
 
 prepare_model_dir() {
     mkdir -p "${MODEL_DIR}"
@@ -210,13 +218,37 @@ except Exception as e:
     sleep 2
 done
 
+# The test controls only write RPCs; retrieval and generation initialization
+# still reach real Milvus. The ephemeral port avoids collisions between stacks.
+python3 "${SCRIPT_DIR}/memory_tests/milvus_fault_proxy.py" \
+    --upstream "127.0.0.1:${MILVUS_HOST_PORT}" --listen-host 0.0.0.0 \
+    --ready-file "${TEST_DIR}/fault-proxy.json" >"${TEST_DIR}/fault-proxy.log" 2>&1 &
+FAULT_PROXY_PID=$!
+for _ in $(seq 1 50); do
+    [[ ! -s "${TEST_DIR}/fault-proxy.json" ]] || break
+    if ! kill -0 "${FAULT_PROXY_PID}" 2>/dev/null; then
+        cat "${TEST_DIR}/fault-proxy.log" >&2
+        exit 1
+    fi
+    sleep 0.1
+done
+if [[ ! -s "${TEST_DIR}/fault-proxy.json" ]]; then
+    echo "ERROR: Milvus fault proxy did not become ready after 50 attempts" >&2
+    cat "${TEST_DIR}/fault-proxy.log" >&2
+    exit 1
+fi
+MEMORY_FAULT_CONTROL_URL="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["control_url"])' "${TEST_DIR}/fault-proxy.json")"
+export MEMORY_FAULT_CONTROL_URL
+
 cp "${REPO_ROOT}/e2e/config/config.memory-user.yaml" "${CONFIG_FILE}"
-python3 - "${CONFIG_FILE}" "${PROVIDER_MOCKER_CONTAINER}" "${MILVUS_CONTAINER_NAME}" <<'PY_CONFIG'
+python3 - "${CONFIG_FILE}" "${PROVIDER_MOCKER_CONTAINER}" "${TEST_DIR}/fault-proxy.json" <<'PY_CONFIG'
 from pathlib import Path
+import json
 import sys
 path = Path(sys.argv[1])
 text = path.read_text().replace("host.docker.internal:8000", f"{sys.argv[2]}:8000")
-text = text.replace("host.docker.internal:19530", f"{sys.argv[3]}:19530")
+port = json.loads(Path(sys.argv[3]).read_text())["port"]
+text = text.replace("host.docker.internal:19530", f"host.docker.internal:{port}")
 path.write_text(text)
 PY_CONFIG
 
@@ -326,6 +358,24 @@ PY
 
 cd "${REPO_ROOT}/e2e/testing"
 PYTHONUNBUFFERED=1 \
+ROUTER_ENDPOINT="${ROUTER_ENDPOINT}" \
+ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
+MILVUS_ADDRESS="localhost:${MILVUS_HOST_PORT}" \
+MILVUS_COLLECTION="${memory_collection}" \
+python3 09-memory-features-test.py
+
+# Shutdown receipts can only be read from the router's own log, because
+# stopping it takes the metrics endpoint and the Replay API with it. Run that
+# scenario last, against the stack the main suite leaves behind, so no other
+# test depends on a router this phase is about to end.
+# Derive the phase report from the main one so CI evidence collection picks it
+# up from the same directory instead of leaving it loose in the checkout.
+main_report="${MEMORY_TEST_REPORT_PATH:-memory-test-report.json}"
+shutdown_report="${MEMORY_TEST_SHUTDOWN_REPORT_PATH:-${main_report%.json}-shutdown.json}"
+
+PYTHONUNBUFFERED=1 \
+MEMORY_TEST_PHASE=shutdown \
+MEMORY_TEST_REPORT_PATH="${shutdown_report}" \
 ROUTER_ENDPOINT="${ROUTER_ENDPOINT}" \
 ROUTER_HEALTH_ENDPOINT="${ROUTER_API_HEALTH_URL}" \
 MILVUS_ADDRESS="localhost:${MILVUS_HOST_PORT}" \
