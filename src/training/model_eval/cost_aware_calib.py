@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Cost-Aware Calibration Script
 =============================
@@ -11,7 +10,7 @@ recommendation block picks the λ with the best cost reduction while keeping
 accuracy within a tolerance of the λ=0 baseline.
 
 Score formula (per bucket b, per model m):
-    score_m(b) = acc_m(b) − λ · norm_cost_m(b)
+    score_m(b) = acc_m(b) - λ · norm_cost_m(b)
     norm_cost_m(b) = cost_m(b) / max_over_models(cost_m(b))   (in [0, 1])
 
 λ semantics: how many units of normalized cost we are willing to pay for
@@ -44,7 +43,7 @@ How to read the output
 
 Terminal output (stdout) is the primary readout. Focus on:
 
-  1. Scan table (one per bucket×cost combination). Example:
+  1. Scan table (one per bucketxcost combination). Example:
 
        === bucket=dataset cost=tokens (B1=qwen3.5-4b=78.42% / B2=dsv4-flash=85.13%) ===
        lambda  acc%     cost/task   dsv4-fla  qwen3.5-
@@ -109,7 +108,7 @@ def mean(vals):
 
 def load(path):
     with open(path, encoding="utf-8") as f:
-        return [json.loads(l) for l in f]
+        return [json.loads(line) for line in f]
 
 
 def buckets_of(rows, key):
@@ -174,7 +173,7 @@ def scan(models_data, key, basis, lambdas):
     for lam in lambdas:
         acc_hits = cost_sum = 0
         n_total = 0
-        share = {m: 0 for m in all_models}
+        share = dict.fromkeys(all_models, 0)
         for b in buckets:
             # Compute score per model, pick max
             costs = {m: b["models"][m]["cost"] or 0.0 for m in all_models}

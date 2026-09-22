@@ -28,15 +28,14 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 
-def load_records(path: str) -> Dict[str, dict]:
+def load_records(path: str) -> dict[str, dict]:
     """Load JSONL per-question records, keyed by question_id."""
     records = {}
     with open(path) as f:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            line = raw_line.strip()
             if not line:
                 continue
             item = json.loads(line)
@@ -58,7 +57,7 @@ def classify_pair(a_correct: bool, b_correct: bool) -> str:
 
 
 def check_differentiation(
-    small: Dict, large: Dict, saturation_threshold: float = 0.95
+    small: dict, large: dict, saturation_threshold: float = 0.95
 ) -> dict:
     """Run differentiation and saturation checks."""
     common_ids = set(small.keys()) & set(large.keys())

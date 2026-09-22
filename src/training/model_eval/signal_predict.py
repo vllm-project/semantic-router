@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Signal Prediction Script
 ========================
@@ -176,7 +175,7 @@ def predict_batch_sequence_cls(
             out = model(**inputs)
             probs = torch.softmax(out.logits, dim=-1)
             confs, preds = torch.max(probs, dim=-1)
-        for p, c in zip(preds.cpu().tolist(), confs.cpu().tolist()):
+        for p, c in zip(preds.cpu().tolist(), confs.cpu().tolist(), strict=False):
             label = id2label.get(p, str(p))
             results.append((label, c))
     return results
@@ -213,17 +212,18 @@ def predict_batch_token_cls(texts, model, tokenizer, id2label, device, batch_siz
             # Keep only real-token positions (attention_mask == 1) so
             # padding does not influence the aggregated label.
             mask = attn[idx]
-            real_ids = [p for p, m in zip(pred_ids[idx], mask) if m == 1]
-            real_probs = [p for p, m in zip(probs[idx].cpu().tolist(), mask) if m == 1]
+            real_ids = [p for p, m in zip(pred_ids[idx], mask, strict=False) if m == 1]
+            real_probs = [
+                p
+                for p, m in zip(probs[idx].cpu().tolist(), mask, strict=False)
+                if m == 1
+            ]
             if not real_ids:
                 results.append(("O", 0.0))
                 continue
             counts = Counter(id2label.get(p, str(p)) for p in real_ids)
             non_o = {k: v for k, v in counts.items() if k not in ("O", "0")}
-            if non_o:
-                label = max(non_o, key=non_o.get)
-            else:
-                label = counts.most_common(1)[0][0]
+            label = max(non_o, key=non_o.get) if non_o else counts.most_common(1)[0][0]
             conf = sum(max(p) for p in real_probs) / max(len(real_probs), 1)
             results.append((label, round(conf, 4)))
     return results
@@ -271,7 +271,7 @@ def main():
     )
 
     with open(args.tasks, encoding="utf-8") as f:
-        tasks = [json.loads(l) for l in f]
+        tasks = [json.loads(line) for line in f]
     texts = [t["prompt_user"] for t in tasks]
     logger.info(f"{len(tasks)} tasks -> classifier")
 
@@ -298,7 +298,7 @@ def main():
     per_q = elapsed * 1000 / max(len(tasks), 1)
 
     sigs = {}
-    for t, (label, conf) in zip(tasks, preds):
+    for t, (label, conf) in zip(tasks, preds, strict=False):
         sigs[t["task_id"]] = {
             args.label_field: label,
             "confidence": round(conf, 4) if isinstance(conf, float) else conf,

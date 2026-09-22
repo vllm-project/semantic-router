@@ -11,7 +11,7 @@ answers, and outputs:
 Pure stdlib — no external dependencies required.
 
 Answer extraction protocol:
-  1. Last "Answer: X" / "answer: X" / "答案：X" occurrence in the text;
+  1. Last "Answer: X" / "answer: X" / "答案:X" occurrence in the text;
   2. Fallback: last standalone "(X)" or "X" line;
   3. Failure -> no_answer (counted as wrong, tracked separately).
 
@@ -29,7 +29,7 @@ import re
 import statistics
 from collections import defaultdict
 
-ANSWER_RE = re.compile(r"(?:[Aa]nswer|ANSWER|答案)\s*[:：]\s*\(?([A-J])\)?")
+ANSWER_RE = re.compile(r"(?:[Aa]nswer|ANSWER|答案)\s*[::]\s*\(?([A-J])\)?")
 STANDALONE_RE = re.compile(r"^\(?([A-J])\)?$")
 
 
@@ -76,9 +76,9 @@ def main():
     args = ap.parse_args()
 
     with open(args.tasks, encoding="utf-8") as f:
-        tasks = {json.loads(l)["task_id"]: json.loads(l) for l in f}
+        tasks = {json.loads(line)["task_id"]: json.loads(line) for line in f}
     with open(args.records, encoding="utf-8") as f:
-        records = [json.loads(l) for l in f]
+        records = [json.loads(line) for line in f]
 
     judged = []
     for rec in records:

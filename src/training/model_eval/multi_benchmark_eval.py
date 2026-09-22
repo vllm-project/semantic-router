@@ -49,14 +49,14 @@ def gen_one(task, client, model, params, chat_template_kwargs, request_timeout):
         messages.append({"role": "system", "content": task["prompt_system"]})
     messages.append({"role": "user", "content": task["prompt_user"]})
 
-    kwargs = dict(
-        model=model,
-        messages=messages,
-        temperature=params["temperature"],
-        max_tokens=params["max_tokens"],
-        stream=True,
-        stream_options={"include_usage": True},
-    )
+    kwargs = {
+        "model": model,
+        "messages": messages,
+        "temperature": params["temperature"],
+        "max_tokens": params["max_tokens"],
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
     if params["top_p"] is not None:
         kwargs["top_p"] = params["top_p"]
     # CLI --chat-template-kwargs overrides params file
@@ -84,7 +84,7 @@ def gen_one(task, client, model, params, chat_template_kwargs, request_timeout):
                             finish = ch.finish_reason
             err = None
             break
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             err = repr(e)
             time.sleep(5 * (attempt + 1))
 
@@ -142,7 +142,7 @@ def main():
     )
 
     with open(args.split, encoding="utf-8") as f:
-        tasks = [json.loads(l) for l in f]
+        tasks = [json.loads(line) for line in f]
 
     # Resumable: skip already completed task_ids (unless --force).
     # Only successful records (error is None) are skipped — failed records
@@ -166,9 +166,10 @@ def main():
                     pass
         # Rewrite file with only successful records, dropping failed ones
         # so retried tasks don't accumulate duplicates.
-        if len(kept_lines) < sum(1 for _ in open(args.out, encoding="utf-8")):
-            with open(args.out, "w", encoding="utf-8") as f:
-                f.write("\n".join(kept_lines) + ("\n" if kept_lines else ""))
+        with open(args.out, encoding="utf-8") as f_count:
+            if len(kept_lines) < sum(1 for _ in f_count):
+                with open(args.out, "w", encoding="utf-8") as f:
+                    f.write("\n".join(kept_lines) + ("\n" if kept_lines else ""))
             print(f"[gen] pruned failed records from {args.out}", flush=True)
     todo = [t for t in tasks if t["task_id"] not in done]
     print(f"[gen] total={len(tasks)} done={len(done)} todo={len(todo)}", flush=True)

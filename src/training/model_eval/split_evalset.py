@@ -25,16 +25,15 @@ import hashlib
 import json
 import random
 import sys
-from pathlib import Path
-from typing import Dict, List, Tuple
 from collections import defaultdict
+from pathlib import Path
 
 
-def load_jsonl(path: str) -> List[dict]:
+def load_jsonl(path: str) -> list[dict]:
     records = []
     with open(path) as f:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            line = raw_line.strip()
             if not line:
                 continue
             records.append(json.loads(line))
@@ -54,8 +53,8 @@ def sha256_bytes(data: bytes) -> str:
 
 
 def stratified_split(
-    records: List[dict], key: str, ratio: float, seed: int
-) -> Tuple[List, List]:
+    records: list[dict], key: str, ratio: float, seed: int
+) -> tuple[list, list]:
     """Split records preserving stratum proportions."""
     by_stratum = defaultdict(list)
     for r in records:
@@ -63,7 +62,7 @@ def stratified_split(
 
     train, eval_ = [], []
     rng = random.Random(seed)
-    for stratum, items in by_stratum.items():
+    for _stratum, items in by_stratum.items():
         rng.shuffle(items)
         n = len(items)
         split_idx = int(n * ratio)
@@ -72,7 +71,7 @@ def stratified_split(
     return train, eval_
 
 
-def random_split(records: List[dict], ratio: float, seed: int) -> Tuple[List, List]:
+def random_split(records: list[dict], ratio: float, seed: int) -> tuple[list, list]:
     rng = random.Random(seed)
     shuffled = list(records)
     rng.shuffle(shuffled)

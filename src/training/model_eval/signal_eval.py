@@ -723,8 +723,8 @@ def load_custom_ground_truth(jsonl_path, max_samples=None):
     """
     records = []
     with open(jsonl_path) as f:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            line = raw_line.strip()
             if not line:
                 continue
             item = json.loads(line)
@@ -865,7 +865,7 @@ def main():
         logging.info(f"Results saved to: {output_path}")
 
         print("\n" + "=" * 60)
-        print(f"Signal Evaluation Summary - Custom Ground Truth")
+        print("Signal Evaluation Summary - Custom Ground Truth")
         print(f"Dimension: {dimension}")
         print("=" * 60)
         print(f"Total samples: {results['total_samples']}")
