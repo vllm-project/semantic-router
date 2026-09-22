@@ -19,7 +19,7 @@ env:
 
 jobs:
   test-and-build:
-    name: Core Tests
+    name: Router Contracts
     runs-on: ubuntu-24.04
     steps:
       - name: Check out the repo
