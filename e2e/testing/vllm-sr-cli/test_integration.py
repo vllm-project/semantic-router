@@ -10,22 +10,19 @@ They are slower than unit tests and should be run with --integration flag.
 import json
 import os
 import shutil
-import subprocess
 import time
 import unittest
 from contextlib import contextmanager
 from pathlib import Path
-from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from cli_test_base import CLITestBase
 from serve_session import ServeSessionMixin
 
-DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
-MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_TEST_UPSTREAM_IMAGE"
-MOCK_OPENAI_SERVER_PORT = 18080
-MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
+DEFAULT_PROVIDER_MOCKER_IMAGE = "semantic-router-ci/provider-mocker:e2e-test"
+PROVIDER_MOCKER_IMAGE_ENV = "E2E_PREBUILT_PROVIDER_MOCKER_IMAGE"
+PROVIDER_MOCKER_PORT = 18080
 PULL_POLICY_PROBE_IMAGE = "example.invalid/vllm-sr-cli/pull-policy-probe:always"
 
 
@@ -71,50 +68,16 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
             pull_log,
         )
 
-    def test_wait_for_serve_success_does_not_terminate_a_successful_process(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.return_value = ("ready", "")
-        process.returncode = 0
-
-        self._wait_for_serve_success(process)
-
-        process.communicate.assert_called_once_with(timeout=self.HEALTH_CHECK_TIMEOUT)
-        process.terminate.assert_not_called()
-        process.kill.assert_not_called()
-
-    def test_wait_for_serve_success_rejects_a_failed_process(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.return_value = ("", "startup failed")
-        process.returncode = 1
-
-        with self.assertRaisesRegex(AssertionError, "startup failed"):
-            self._wait_for_serve_success(process)
-
-        process.terminate.assert_not_called()
-        process.kill.assert_not_called()
-
-    def test_wait_for_serve_success_terminates_and_drains_a_timeout(self):
-        process = mock.Mock(spec=subprocess.Popen)
-        process.communicate.side_effect = [
-            subprocess.TimeoutExpired("vllm-sr serve", self.HEALTH_CHECK_TIMEOUT),
-            ("", "stopped after timeout"),
-        ]
-
-        with self.assertRaisesRegex(AssertionError, "before the timeout"):
-            self._wait_for_serve_success(process)
-
-        process.terminate.assert_called_once_with()
-        process.kill.assert_not_called()
-        self.assertEqual(process.communicate.call_count, 2)
-
     @contextmanager
     def _running_mock_upstream(
         self, container_name: str, *, expected_authorization: str | None = None
     ):
         """Run the mock OpenAI upstream on the active stack network."""
-        image = os.getenv(MOCK_OPENAI_IMAGE_ENV, DEFAULT_MOCK_OPENAI_IMAGE)
+        image = os.getenv(PROVIDER_MOCKER_IMAGE_ENV) or os.getenv(
+            "PROVIDER_MOCKER_IMAGE", DEFAULT_PROVIDER_MOCKER_IMAGE
+        )
         expected_authorization_env = (
-            ["-e", f"MOCK_EXPECT_AUTHORIZATION={expected_authorization}"]
+            ["-e", f"PROVIDER_MOCKER_EXPECT_AUTHORIZATION={expected_authorization}"]
             if expected_authorization is not None
             else []
         )
@@ -127,14 +90,17 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
                 container_name,
                 "--network",
                 self.runtime_stack.network_name,
-                "-v",
-                f"{MOCK_OPENAI_SERVER_PATH}:/mock_openai_upstream.py:ro",
+                "-e",
+                "PROVIDER_MOCKER_SCENARIO=cli",
                 *expected_authorization_env,
                 "--entrypoint",
                 "python3",
                 image,
                 "-u",
-                "/mock_openai_upstream.py",
+                "-m",
+                "provider_mocker",
+                "--port",
+                str(PROVIDER_MOCKER_PORT),
             ],
             timeout=30,
         )
@@ -255,7 +221,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
     ) -> set[str]:
         """Route one chat request to a path-recording OpenAI mock upstream."""
         mock_container = f"{self.runtime_stack.stack_name}-{container_suffix}"
-        upstream = f"{mock_container}:{MOCK_OPENAI_SERVER_PORT}{base_path}"
+        upstream = f"{mock_container}:{PROVIDER_MOCKER_PORT}{base_path}"
         serve_kwargs = (
             {"endpoint": upstream}
             if direct_endpoint
@@ -563,7 +529,7 @@ exec "$VLLM_SR_TEST_REAL_RUNTIME" "$@"
             env={"PROVIDER_KEY_CANARY": canary},
             base_url=(
                 f"http://{self.runtime_stack.stack_name}-envoy-log-upstream:"
-                f"{MOCK_OPENAI_SERVER_PORT}"
+                f"{PROVIDER_MOCKER_PORT}"
             ),
             provider="openai",
             api_key_env="PROVIDER_KEY_CANARY",

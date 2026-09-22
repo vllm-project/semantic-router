@@ -2211,6 +2211,18 @@
   "visionPaper.heroDescription": {
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
+  "decisionPaper.title": {
+    "message": "Decision 论文"
+  },
+  "decisionPaper.socialTitle": {
+    "message": "Decision 1.0：迈向开放的决策基础模型 — vLLM Semantic Router"
+  },
+  "decisionPaper.metaDescription": {
+    "message": "Decision 1.0：迈向开放的决策基础模型"
+  },
+  "decisionPaper.heroDescription": {
+    "message": "Decision 1.0：迈向开放的决策基础模型。这份技术报告介绍 Decision 系列的模型、数据与训练方法。"
+  },
   "homepage.meta.description": {
     "message": "Mixture-of-Models 是面向异构 LLM 推理的服务架构。vLLM Semantic Router 让它能够实际部署。"
   },
@@ -2965,5 +2977,47 @@
   },
   "homepage.useCases.title": {
     "message": "一个路由器，三种用法"
+  },
+  "team.members.guan404ming.role": {
+    "message": "软件工程实习生"
+  },
+  "team.members.guan404ming.bio": {
+    "message": "Quid 软件工程实习生、台湾大学研究生，专注于机器学习系统，同时担任 Apache Airflow 和 Apache TVM Committer，以及 PyTorch Collaborator。"
+  },
+  "team.members.abhinav-m22.role": {
+    "message": "软件工程师"
+  },
+  "team.members.abhinav-m22.bio": {
+    "message": "Barclays 软件工程师，负责构建可靠的后端服务，并参与大语言模型与 AI 智能体基础设施的开源开发，关注系统设计和生产环境可靠性。"
+  },
+  "team.members.subin9.role": {
+    "message": "前沿部署工程师"
+  },
+  "team.members.subin9.bio": {
+    "message": "Rebellions 前沿部署工程师，结合机器学习工程与解决方案架构，推动大语言模型在 NPU 上的推理部署。"
+  },
+  "team.members.TwilightTechie.role": {
+    "message": "技术团队成员"
+  },
+  "team.members.TwilightTechie.bio": {
+    "message": "Nutanix 软件工程师，从事分布式存储开发，关注大模型推理、模型服务和智能请求路由。"
+  },
+  "team.members.yaojiejia.role": {
+    "message": "软件与数据工程师"
+  },
+  "team.members.yaojiejia.bio": {
+    "message": "在纽约大学就读的软件与数据工程师，关注可扩展系统和数据流水线。参与 Apache Hudi 开源贡献，并曾通过 Google Summer of Code 参与 SQLancer 开发。"
+  },
+  "team.members.adaamko.role": {
+    "message": "联合创始人兼首席技术官"
+  },
+  "team.members.adaamko.bio": {
+    "message": "KR Labs 联合创始人兼首席技术官，开发开源自然语言处理工具，推动透明、可信的 AI。拥有学术研究和生产环境自然语言处理系统的实践经验。"
+  },
+  "team.members.FAUST-BENCHOU.role": {
+    "message": "云原生开源贡献者"
+  },
+  "team.members.FAUST-BENCHOU.bio": {
+    "message": "云原生开源贡献者，参与 Karmada、Volcano 和 Kthena 的 Kubernetes 编排与大模型服务工作，并担任 Kthena 的 LFX 导师。"
   }
 }

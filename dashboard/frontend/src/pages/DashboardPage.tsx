@@ -129,7 +129,6 @@ const DashboardPage: React.FC = () => {
   const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
   const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
   const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
-  const previewModelLimit = 6
 
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
@@ -448,7 +447,6 @@ const DashboardPage: React.FC = () => {
         </div>
         <RouterModelInventory
           mode="preview"
-          previewLimit={previewModelLimit > 0 ? previewModelLimit : undefined}
           modelsInfo={status?.models}
           emptyMessage="Learned routing models will appear here when the router loads them."
           onSelectModel={setSelectedRuntimeModel}

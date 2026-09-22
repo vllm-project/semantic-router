@@ -21,6 +21,9 @@ type CacheEntry struct {
 	HitCount     int64     // Access count
 	TTLSeconds   int       // Per-entry TTL in seconds (0 = not cached, -1 = use cache default, >0 = specific TTL)
 	ExpiresAt    time.Time // Calculated expiration time based on TTL
+
+	// Immutable in-memory lookup metadata; not part of the stored/public entry.
+	polarityTokens []string
 }
 
 // LookupResult carries the request-owned outcome of one lookup. A hit includes

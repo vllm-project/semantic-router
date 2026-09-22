@@ -47,7 +47,7 @@ func TestOwnedTokenWindowsExecuteGloballyDecodedSpan(t *testing.T) {
 			if err = json.Unmarshal(raw, &metadata); err != nil {
 				t.Fatal(err)
 			}
-			metadata["max_position_embeddings"] = 1024
+			metadata["max_position_embeddings"] = 512
 			metadata["id2label"] = map[string]string{"0": "O", "1": "I-SECRET"}
 			metadata["label2id"] = map[string]int{"O": 0, "I-SECRET": 1}
 			raw, err = json.Marshal(metadata)
@@ -64,6 +64,10 @@ func TestOwnedTokenWindowsExecuteGloballyDecodedSpan(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer task.Close()
+			limits := task.Capability().Limits
+			if limits.ModelTokens != 512 || limits.ForwardTokens() > 512 || limits.DocumentTokens != 1024 || limits.EffectiveTokens() != 1024 {
+				t.Fatalf("window changed native physical capacity: %+v", limits)
+			}
 			out, err := task.Call(context.Background(), "one", window)
 			if err != nil {
 				t.Fatal(err)

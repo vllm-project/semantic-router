@@ -41,19 +41,6 @@ const (
 	PromptGuardVariantMmBERT32K = "mmbert32k"
 )
 
-// PromptGuardConfig.Protocol values, selecting which remote HTTP wire
-// contract to use for an external model with role="guardrail". Mutually
-// exclusive with Variant.
-const (
-	// PromptGuardProtocolHTTPChat calls an external model through a
-	// generative chat-completion prompt (e.g. Qwen3Guard-style).
-	PromptGuardProtocolHTTPChat = "http_chat"
-	// PromptGuardProtocolHTTPClassify calls an external model through a
-	// lightweight sequence-classifier HTTP contract (text in, full
-	// label/score distribution out).
-	PromptGuardProtocolHTTPClassify = "http_classify"
-)
-
 // PromptGuardConfig.OnError values live in classifier_on_error.go as
 // OnErrorAllow/OnErrorBlock - shared with every other pluggable classifier
 // backend (CategoryModel, PIIModel, ClassifierSignalRule), not just prompt
@@ -108,6 +95,12 @@ type RouterConfig struct {
 	// SkipExternalAssetValidation is set only for untrusted read-only
 	// validation requests, which must never trigger filesystem reads.
 	SkipExternalAssetValidation bool `yaml:"-" json:"-"`
+
+	// RoutingFragmentOnly marks a config parsed from a routing-only document,
+	// which carries no provider or global state. Validation that depends on
+	// providers is skipped for these so DSL fragments stay decompilable, while
+	// complete configs still get the full contract.
+	RoutingFragmentOnly bool `yaml:"-" json:"-"`
 
 	// Static global configuration.
 	InlineModels     `yaml:",inline"`
@@ -222,6 +215,8 @@ type Listener struct {
 	Address string `yaml:"address"`
 	Port    int    `yaml:"port"`
 	Timeout string `yaml:"timeout,omitempty"`
+	// APIKeys are client bearer credentials enforced by the CLI-managed Envoy listener.
+	APIKeys []string `yaml:"api_keys,omitempty"`
 }
 
 type APIServer struct {

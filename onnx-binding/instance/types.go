@@ -10,6 +10,7 @@ type Options struct {
 	DeviceID                int    `json:"device_id,omitempty"`
 	Precision               string `json:"precision,omitempty"` // native (default) or MIGraphX fp16 conversion
 	MaxInputTokens          int    `json:"max_input_tokens,omitempty"`
+	DocumentMaxInputTokens  int    `json:"document_max_input_tokens,omitempty"` // typed window tasks only
 	ExecutionMaxInputTokens int    `json:"execution_max_input_tokens,omitempty"`
 	CompilationCacheDir     string `json:"compilation_cache_dir,omitempty"`
 	Overflow                string `json:"overflow,omitempty"` // reject (default) or truncate_right
@@ -71,12 +72,15 @@ type EmbeddingResult struct {
 
 // SessionEvidence describes loaded execution policy. Successful registration is
 // not an inference claim; CompletedInferences and the ORT profile prove execution.
+// InputSchema records actual loaded session declarations for every provider;
+// dynamic dimensions are -1 and fixed dimensions remain explicit.
 type SessionEvidence struct {
 	RuntimeBuild            string                    `json:"runtime_build"`
 	CompilerFlags           map[string]string         `json:"compiler_flags"`
 	Artifacts               []ArtifactDigest          `json:"artifacts"`
 	ExecutionMaxInputTokens int                       `json:"execution_max_input_tokens,omitempty"`
 	ExecutionInputs         []ExecutionInput          `json:"execution_inputs"`
+	InputSchema             []ExecutionInput          `json:"input_schema"`
 	CompilationCache        *CompilationCacheEvidence `json:"compilation_cache,omitempty"`
 	Graph                   string                    `json:"graph"`
 	Provider                string                    `json:"provider"`
@@ -95,8 +99,10 @@ type ArtifactDigest struct {
 	SHA256 string `json:"sha256"`
 }
 
-// ExecutionInput records fixed shapes only when the provider requires them.
-// CPU dynamic sessions report their capacity separately and leave this empty.
+// ExecutionInput describes one named tensor input. In SessionEvidence.InputSchema,
+// its shape preserves the loaded graph's declared dimensions, including -1 for
+// dynamic axes. ExecutionInputs separately records an explicitly fixed contract;
+// an empty ExecutionInputs slice does not imply a dynamic graph.
 type ExecutionInput struct {
 	Name  string  `json:"name"`
 	Dtype string  `json:"dtype"`
@@ -110,18 +116,32 @@ type CompilationCacheEvidence struct {
 	CompiledFileReads []string          `json:"compiled_file_reads"`
 }
 
+type AudioCapability struct {
+	SampleRates   []int  `json:"sample_rates"`
+	MaxSampleRate int    `json:"max_sample_rate"`
+	MaxSeconds    int    `json:"max_seconds"`
+	MaxChannels   int    `json:"max_channels"`
+	Layout        string `json:"layout"`
+}
+
 type Info struct {
-	PairScorer          *PairScorerSelection `json:"pair_scorer,omitempty"`
-	Task                string               `json:"task"`
-	ModelLimit          int                  `json:"model_limit"`
-	TaskLimit           int                  `json:"task_limit"`
-	EffectiveLimit      int                  `json:"effective_limit"`
-	Overflow            string               `json:"overflow"`
-	Labels              []string             `json:"labels"`
-	Dimension           int                  `json:"dimension"`
-	AvailableLayers     []int                `json:"available_layers"`
-	Sessions            []SessionEvidence    `json:"sessions"`
-	CompletedInferences uint64               `json:"completed_inferences"`
+	Modalities             []string             `json:"modalities,omitempty"`
+	Pooling                string               `json:"pooling,omitempty"`
+	Normalization          string               `json:"normalization,omitempty"`
+	AvailableDimensions    []int                `json:"available_dimensions,omitempty"`
+	Audio                  *AudioCapability     `json:"audio,omitempty"`
+	PairScorer             *PairScorerSelection `json:"pair_scorer,omitempty"`
+	Task                   string               `json:"task"`
+	ModelLimit             int                  `json:"model_limit"`
+	TaskLimit              int                  `json:"task_limit"`
+	EffectiveLimit         int                  `json:"effective_limit"`
+	DocumentMaxInputTokens int                  `json:"document_max_input_tokens"`
+	Overflow               string               `json:"overflow"`
+	Labels                 []string             `json:"labels"`
+	Dimension              int                  `json:"dimension"`
+	AvailableLayers        []int                `json:"available_layers"`
+	Sessions               []SessionEvidence    `json:"sessions"`
+	CompletedInferences    uint64               `json:"completed_inferences"`
 }
 
 // TextWindow is a UTF-8 byte range in the original input (End exclusive).

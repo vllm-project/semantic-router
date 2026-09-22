@@ -31,7 +31,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "tool_choice", "tools", "top_logprobs", "top_p", "user",
 				"verbosity", "web_search_options",
 			),
-			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens"),
+			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
 		},
 		{
 			name: "OpenAI Responses",
@@ -90,7 +90,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"prediction", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),
-			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens"),
+			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
 			transport:  fields("stream_options"),
 		},
 		{
@@ -199,7 +199,7 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			),
 			// xAI and Groq accounting fields on their OpenAI-compatible endpoints.
 			extensions: fields(
-				"completion_time", "cost_in_usd_ticks", "num_sources_used", "prompt_time", "queue_time", "total_time",
+				"completion_time", "cost_in_usd_ticks", "num_sources_used", "prompt_time", "queue_time", "service_tier", "total_time",
 			),
 		},
 		{

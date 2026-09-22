@@ -60,7 +60,7 @@ type RepresentationProvider interface {
 }
 
 func ResolveProviderIdentity(provider Provider, settings ConsumerSettings) (ContentIdentity, error) {
-	if strings.ToLower(strings.TrimSpace(settings.ModelType)) != "mmbert" {
+	if strings.TrimSpace(settings.ModelType) == "" {
 		return ContentIdentity{}, fmt.Errorf("%w: %s", ErrIdentityUnsupported, settings.ModelType)
 	}
 	if settings.Layer < 0 || settings.Dimension < 0 || settings.Layer > math.MaxInt32 || settings.Dimension > math.MaxInt32 {
@@ -88,7 +88,7 @@ func IdentityFromDescriptor(raw []byte, inputPolicy string) (ContentIdentity, er
 	if err := json.Unmarshal(raw, &descriptor); err != nil {
 		return ContentIdentity{}, fmt.Errorf("decode embedding descriptor: %w", err)
 	}
-	if descriptor.Version != 1 || descriptor.ModelType != "mmbert" || descriptor.Runtime == "" || descriptor.PoolingContract == "" || descriptor.Layer <= 0 || descriptor.Dimension <= 0 || descriptor.MaxSequenceLength <= 0 || inputPolicy == "" {
+	if descriptor.Version != 1 || strings.TrimSpace(descriptor.ModelType) == "" || descriptor.Runtime == "" || descriptor.PoolingContract == "" || descriptor.Layer < 0 || descriptor.Dimension <= 0 || descriptor.MaxSequenceLength <= 0 || inputPolicy == "" {
 		return ContentIdentity{}, fmt.Errorf("incomplete or unsupported embedding runtime descriptor")
 	}
 	validDigest := func(value string) bool {

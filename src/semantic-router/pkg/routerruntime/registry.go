@@ -1,6 +1,7 @@
 package routerruntime
 
 import (
+	"crypto/rand"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
@@ -33,6 +34,8 @@ type Registry struct {
 	compressionRecovery   contextcompression.RecoveryStore
 	plugins               pluginruntime.Capabilities
 	configActivation      ConfigActivation
+	instanceID            string
+	startupStatus         *localStartupSnapshot
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as
@@ -143,7 +146,7 @@ type LearningRuntime interface {
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
-	return &Registry{config: cfg, modelPool: binding.NewPool()}
+	return &Registry{config: cfg, modelPool: binding.NewPool(), instanceID: rand.Text()}
 }
 
 func (r *Registry) CurrentConfig() *config.RouterConfig {

@@ -54,6 +54,7 @@ type (
 	LooperAttempt                 = store.LooperAttempt
 	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
+	DecisionRanking               = store.DecisionRanking
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace
 	ToolTraceStep                 = store.ToolTraceStep
@@ -61,7 +62,10 @@ type (
 )
 
 type Recorder struct {
-	storage store.Storage
+	storage   store.Storage
+	outcomes  *outcomeQueue
+	closeOnce sync.Once
+	closeErr  error
 	// operationTimeout bounds audit-store I/O independently from the client
 	// request. It is immutable after construction in production; tests may
 	// shorten it before issuing operations to exercise stalled backends.
@@ -88,6 +92,7 @@ type lifecycleTransition struct {
 func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
 		storage:              storage,
+		outcomes:             newOutcomeQueue(DefaultOutcomeQueueCapacity, outcomeShutdownGrace),
 		operationTimeout:     DefaultOperationTimeout,
 		lifecycleTransitions: make(map[string]*lifecycleTransition),
 		maxBodyBytes:         DefaultMaxBodyBytes,
@@ -348,7 +353,13 @@ func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 }
 
 func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
-	ctx, cancel := r.replayOperationContext()
+	return r.AppendOutcomeContext(context.Background(), id, outcome)
+}
+
+// AppendOutcomeContext lets background dispatchers cancel outstanding receipt
+// I/O at shutdown. The recorder's operation timeout still bounds each write.
+func (r *Recorder) AppendOutcomeContext(parent context.Context, id string, outcome Outcome) error {
+	ctx, cancel := r.replayOperationContextFrom(parent)
 	defer cancel()
 	return r.storage.AppendOutcome(ctx, id, outcome)
 }
@@ -403,19 +414,18 @@ func (r *Recorder) getRecord(id string) (RoutingRecord, bool, error) {
 	return rec, found, err
 }
 
-func (r *Recorder) ListAllRecords() []RoutingRecord {
+func (r *Recorder) ListRecords() ([]RoutingRecord, error) {
 	ctx, cancel := r.replayOperationContext()
 	defer cancel()
-	records, err := r.storage.List(ctx)
+	return r.storage.List(ctx)
+}
+
+func (r *Recorder) ListAllRecords() []RoutingRecord {
+	records, err := r.ListRecords()
 	if err != nil {
 		return []RoutingRecord{}
 	}
 	return records
-}
-
-// Releases resources held by the storage backend.
-func (r *Recorder) Close() error {
-	return r.storage.Close()
 }
 
 // replayOperationContext is intentionally independent from a client request:
@@ -424,11 +434,17 @@ func (r *Recorder) Close() error {
 // config reload, or shutdown indefinitely. Store mutations acknowledge queued
 // persistence before returning, so callers can release the timer immediately.
 func (r *Recorder) replayOperationContext() (context.Context, context.CancelFunc) {
+	return r.replayOperationContextFrom(context.Background())
+}
+
+// replayOperationContextFrom bounds an operation whose caller owns cancellation,
+// such as the background outcome writer at shutdown.
+func (r *Recorder) replayOperationContextFrom(parent context.Context) (context.Context, context.CancelFunc) {
 	timeout := r.operationTimeout
 	if timeout <= 0 {
 		timeout = DefaultOperationTimeout
 	}
-	return context.WithTimeout(context.Background(), timeout)
+	return context.WithTimeout(parent, timeout)
 }
 
 // applyBodyCapturePolicy enforces one capture switch on one body field. The

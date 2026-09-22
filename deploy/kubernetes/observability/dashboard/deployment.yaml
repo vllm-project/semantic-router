@@ -66,7 +66,7 @@ spec:
               value: /app/data/recipe-store
             # ML service sidecar: connect to localhost since it's in the same pod
             - name: ML_SERVICE_URL
-              value: "http://localhost:8686"
+              value: "http://127.0.0.1:8686"
             - name: ML_PIPELINE_ENABLED
               value: "true"
           ports:
@@ -89,13 +89,13 @@ spec:
           image: ghcr.io/vllm-project/semantic-router/ml-training-service:latest
           imagePullPolicy: IfNotPresent
           env:
+            # This unauthenticated API is only for the co-located dashboard.
+            - name: ML_SERVICE_HOST
+              value: "127.0.0.1"
             - name: ML_SERVICE_PORT
               value: "8686"
             - name: PYTHONUNBUFFERED
               value: "1"
-          ports:
-            - name: ml-http
-              containerPort: 8686
           volumeMounts:
             - name: ml-data
               mountPath: /app/data
@@ -107,15 +107,27 @@ spec:
               memory: "4Gi"
               cpu: "2"
           readinessProbe:
-            httpGet:
-              path: /api/health
-              port: 8686
+            exec:
+              command:
+                - curl
+                - --fail
+                - --silent
+                - --max-time
+                - "5"
+                - http://127.0.0.1:8686/api/health
+            timeoutSeconds: 6
             initialDelaySeconds: 10
             periodSeconds: 10
           livenessProbe:
-            httpGet:
-              path: /api/health
-              port: 8686
+            exec:
+              command:
+                - curl
+                - --fail
+                - --silent
+                - --max-time
+                - "5"
+                - http://127.0.0.1:8686/api/health
+            timeoutSeconds: 6
             initialDelaySeconds: 30
             periodSeconds: 30
 

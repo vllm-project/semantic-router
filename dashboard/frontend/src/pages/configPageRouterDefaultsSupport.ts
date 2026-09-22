@@ -846,7 +846,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'hallucination_detector',
           label: 'Hallucination Detector Binding',
           type: 'text',
-          placeholder: 'models/mom-halugate-detector',
+          placeholder: 'models/Vela-1.0-Encoder-307M-Halu',
         },
         {
           name: 'hallucination_explainer',

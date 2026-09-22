@@ -178,16 +178,8 @@ func (r *OpenAIRouter) applyHybridModelCosts(selector *selection.HybridSelector)
 }
 
 func selectedModelRefFromResult(selCtx *selection.SelectionContext, result *selection.SelectionResult) *config.ModelRef {
-	for i := range selCtx.CandidateModels {
-		if selCtx.CandidateModels[i].Model == result.SelectedModel {
-			return &selCtx.CandidateModels[i]
-		}
-		if result.Method != selection.MethodPrompt &&
-			selCtx.CandidateModels[i].LoRAName == result.SelectedModel {
-			return &selCtx.CandidateModels[i]
-		}
-	}
-	return nil
+	candidate, _ := selection.ResolveSelectionCandidate(selCtx, result)
+	return candidate
 }
 
 func logSelectionResult(method selection.SelectionMethod, result *selection.SelectionResult, selected *config.ModelRef, learningApplied bool) {
@@ -301,7 +293,14 @@ func (r *OpenAIRouter) buildAgenticSessionContextForKey(
 		return nil
 	}
 	now := time.Now()
-	snapshot, hasMemory := sessiontelemetry.GetRouterSessionSnapshot(stateKey, now)
+	var snapshot sessiontelemetry.RouterSessionSnapshot
+	var hasMemory bool
+	if reqCtx.learningPreview != nil {
+		now = reqCtx.learningPreview.CapturedAt
+		snapshot, hasMemory = reqCtx.learningPreview.session(stateKey)
+	} else {
+		snapshot, hasMemory = sessiontelemetry.GetRouterSessionSnapshot(stateKey, now)
+	}
 	previousModel := reqCtx.PreviousModel
 	if previousModel == "" && hasMemory {
 		previousModel = snapshot.CurrentModel
@@ -328,6 +327,7 @@ func (r *OpenAIRouter) buildAgenticSessionContextForKey(
 		UserID:                      userID,
 		TurnIndex:                   reqCtx.TurnIndex,
 		PreviousModel:               previousModel,
+		PreviousCandidate:           snapshot.CurrentCandidate,
 		PreviousResponseID:          reqCtx.PreviousResponseID,
 		MemoryPresent:               hasMemory,
 		MemoryTurnCount:             snapshot.TurnCount,
@@ -392,7 +392,14 @@ func (r *OpenAIRouter) agenticCacheWarmth(
 ) (float64, bool) {
 	cacheWarmth := reqCtx.CacheWarmthEstimate
 	cacheWarmthOK := cacheWarmth > 0
-	if ambient, ok := estimateGateCacheWarmth(previousModel, now); ok {
+	var ambient float64
+	var ambientOK bool
+	if reqCtx.learningPreview != nil {
+		ambient, ambientOK = reqCtx.learningPreview.warmth(previousModel)
+	} else {
+		ambient, ambientOK = estimateGateCacheWarmth(previousModel, now)
+	}
+	if ambientOK {
 		cacheWarmth = ambient
 		cacheWarmthOK = true
 	}

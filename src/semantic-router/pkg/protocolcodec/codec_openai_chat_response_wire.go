@@ -140,7 +140,26 @@ type chatTopTokenLogprobWire struct {
 	Bytes   []int64 `json:"bytes,omitempty"`
 }
 
+// Mistral puts the served tier inside usage, separately from OpenAI's
+// top-level service_tier. Keep this provider extension typed and closed.
+type chatUsageServiceTierWire string
+
+func (tier *chatUsageServiceTierWire) UnmarshalJSON(raw []byte) error {
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	switch value {
+	case "standard", "priority":
+		*tier = chatUsageServiceTierWire(value)
+		return nil
+	default:
+		return fmt.Errorf("unsupported chat usage service tier")
+	}
+}
+
 type chatUsageWire struct {
+	ServiceTier             *chatUsageServiceTierWire        `json:"service_tier,omitempty"`
 	PromptTokens            int64                            `json:"prompt_tokens"`
 	CompletionTokens        int64                            `json:"completion_tokens"`
 	TotalTokens             int64                            `json:"total_tokens"`
@@ -158,11 +177,14 @@ type chatUsageWire struct {
 }
 
 type chatPromptTokensDetailsWire struct {
-	CachedTokens     int64 `json:"cached_tokens"`
-	CacheWriteTokens int64 `json:"cache_write_tokens,omitempty"`
-	AudioTokens      int64 `json:"audio_tokens,omitempty"`
-	TextTokens       int64 `json:"text_tokens,omitempty"`
-	ImageTokens      int64 `json:"image_tokens,omitempty"`
+	CachedTokens        *int64           `json:"cached_tokens,omitempty"`
+	CacheWriteTokens    *int64           `json:"cache_write_tokens,omitempty"`
+	CreatedCacheTokens  *int64           `json:"created_cache_tokens,omitempty"`
+	CacheCreationTokens *int64           `json:"cache_creation_tokens,omitempty"`
+	MultimodalTokens    map[string]int64 `json:"multimodal_tokens,omitempty"`
+	AudioTokens         int64            `json:"audio_tokens,omitempty"`
+	TextTokens          int64            `json:"text_tokens,omitempty"`
+	ImageTokens         int64            `json:"image_tokens,omitempty"`
 }
 
 type chatCompletionTokensDetailsWire struct {

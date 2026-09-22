@@ -56,6 +56,8 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 		return r.handleRouterReplayAggregateAPI(method, rawQuery)
 	case normalizedPath == routerReplayTrajectoryPath:
 		return r.handleRouterReplayTrajectoryAPI(method, rawQuery)
+	case normalizedPath == routerReplayDatasetPath:
+		return r.handleRouterReplayDatasetAPI(method, rawQuery)
 	case strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/"):
 		replayID := strings.TrimPrefix(normalizedPath, routerReplayAPIBasePath+"/")
 		return r.handleRouterReplayRecordAPI(method, replayID)
@@ -96,25 +98,11 @@ func (r *OpenAIRouter) handleRouterReplayListAPI(method string, rawQuery string)
 		return r.createErrorResponse(400, err.Error())
 	}
 
-	records := filterRouterReplayRecords(r.collectRouterReplayRecords(), query.filters)
-	payload := buildRouterReplayListPayload(records, query)
+	payload, err := r.queryRouterReplayPage(query)
+	if err != nil {
+		return r.createErrorResponse(500, "router replay storage query failed")
+	}
 	return r.createRouterReplayJSONResponse(200, payload)
-}
-
-func (r *OpenAIRouter) collectRouterReplayRecords() []routerreplay.RoutingRecord {
-	if r.ReplayStoreShared && r.ReplayRecorder != nil {
-		return sortRouterReplayRecords(r.ReplayRecorder.ListAllRecords())
-	}
-
-	var records []routerreplay.RoutingRecord
-	for _, recorder := range r.ReplayRecorders {
-		records = append(records, recorder.ListAllRecords()...)
-	}
-	if len(records) == 0 && r.ReplayRecorder != nil {
-		records = r.ReplayRecorder.ListAllRecords()
-	}
-
-	return sortRouterReplayRecords(records)
 }
 
 func sortRouterReplayRecords(records []routerreplay.RoutingRecord) []routerreplay.RoutingRecord {

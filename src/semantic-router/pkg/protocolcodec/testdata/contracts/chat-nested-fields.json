@@ -26,7 +26,7 @@
     {"wire": "chat_token_logprob", "official": ["bytes", "logprob", "token", "top_logprobs"], "fixtures": ["capability/038-chat-nested-response-fields-in.json"]},
     {"wire": "chat_top_token_logprob", "official": ["bytes", "logprob", "token"], "fixtures": ["capability/038-chat-nested-response-fields-in.json"]},
     {"wire": "chat_error", "official": ["code", "message", "param", "type"], "fixtures": ["error/001-chat-rate-limit-in.json", "stream/010-chat-midstream-error-in.json"]},
-    {"wire": "chat_prompt_usage_details", "official": ["audio_tokens", "cache_write_tokens", "cached_tokens", "image_tokens", "text_tokens"], "fixtures": ["response/005-chat-detailed-usage-in.json"]},
+    {"wire": "chat_prompt_usage_details", "official": ["audio_tokens", "cache_write_tokens", "cached_tokens", "image_tokens", "text_tokens"], "extensions": ["cache_creation_tokens", "created_cache_tokens", "multimodal_tokens"], "fixtures": ["response/005-chat-detailed-usage-in.json"]},
     {"wire": "chat_completion_usage_details", "official": ["accepted_prediction_tokens", "audio_tokens", "reasoning_tokens", "rejected_prediction_tokens", "text_tokens"], "fixtures": ["response/005-chat-detailed-usage-in.json"]},
     {"wire": "openai_transport_error", "official": ["error"], "fixtures": ["error/001-chat-rate-limit-in.json", "error/002-responses-authentication-in.json"]},
     {"wire": "openai_transport_error_detail", "official": ["code", "message", "param", "type"], "fixtures": ["error/001-chat-rate-limit-in.json", "error/002-responses-authentication-in.json"]}

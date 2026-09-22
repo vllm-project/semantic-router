@@ -24,8 +24,9 @@ type ModelDeployment struct {
 }
 
 // ModelInputBudget is a deployment restriction, not an advertised model
-// capability. The provider additionally enforces its actual task/tokenizer
-// limit. An explicit larger budget requires a checkpoint with that capacity.
+// capability. With window overflow, MaxTokens admits the complete document;
+// the consumer's window must fit the provider's actual task/tokenizer limit.
+// Other overflow policies require the budget to fit that single-forward limit.
 type ModelInputBudget struct {
 	MaxTokens int    `yaml:"max_tokens,omitempty" json:"max_tokens,omitempty"`
 	Overflow  string `yaml:"overflow,omitempty" json:"overflow,omitempty"`
@@ -323,7 +324,15 @@ func validateTaskModelBinding(name string, decl ModelBinding, deployment ModelDe
 			return fmt.Errorf("hallucination detector requires http_chat or http_classify adapter")
 		}
 	}
-	if deployment.Provider == "ort" && (name == "hallucination_detector" || name == "hallucination_explainer") {
+	if decl.Adapter == "vela_halu" {
+		if name != "hallucination_detector" || (deployment.Provider != "candle" && deployment.Provider != "ort") {
+			return fmt.Errorf("vela_halu requires a local hallucination_detector binding")
+		}
+		if deployment.Input.MaxTokens > 8192 {
+			return fmt.Errorf("vela_halu task input budget cannot exceed 8192 tokens")
+		}
+	}
+	if deployment.Provider == "ort" && (name == "hallucination_explainer" || (name == "hallucination_detector" && decl.Adapter != "vela_halu")) {
 		return fmt.Errorf("%s has no ORT task adapter", name)
 	}
 	if deployment.Provider == "openvino" {

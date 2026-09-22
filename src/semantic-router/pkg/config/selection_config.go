@@ -213,6 +213,9 @@ type MultiFactorSelectionConfig struct {
 	SLO       *MultiFactorSLOConfig       `yaml:"slo,omitempty"`
 	Quality   *QualityEvidenceConfig      `yaml:"quality,omitempty"`
 
+	// ExpectedOutputTokens is a cost forecast, not a generation limit.
+	ExpectedOutputTokens *int `yaml:"expected_output_tokens,omitempty" jsonschema:"minimum=1"`
+
 	// LatencyPercentile selects which percentile (e.g. 95) is read from
 	// pkg/latency when computing the latency signal. Defaults to 95.
 	LatencyPercentile int `yaml:"latency_percentile,omitempty"`

@@ -535,7 +535,6 @@ export interface ObservabilityConfig {
       enabled?: boolean
       time_windows?: string[]
       update_interval?: string
-      queue_depth_estimation?: boolean
       max_models?: number
     }
   }
@@ -1073,7 +1072,10 @@ export interface KeywordSignal {
 export interface EmbeddingSignal {
   name: string
   threshold: number
-  candidates: string[]
+  candidates?: string[]
+  image_candidates?: string[]
+  negative_candidates?: string[]
+  negative_image_candidates?: string[]
   aggregation_method?: string
   query_modality?: 'text' | 'image' | 'audio'
 }
@@ -1097,6 +1099,7 @@ export interface ClassifierSignal {
   model_path?: string
   labels: string[]
   instructions?: string
+  disable_rationale?: boolean
   use_cpu?: boolean
 }
 

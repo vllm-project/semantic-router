@@ -29,7 +29,7 @@ or runtime behavior that differs from the built-in defaults.
 | Section | Owns |
 | --- | --- |
 | `version` | Canonical schema version. Use `v0.3`. |
-| `listeners` | Public Router listeners and timeouts. |
+| `listeners` | Public Router listeners, timeouts, and optional bearer credentials for CLI-managed Envoy listeners. |
 | `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
 | `evaluation` | Optional operator-owned benchmark definitions, versioned index DAGs, and model-linked records. |
 | `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
@@ -369,7 +369,8 @@ data_policy:
 request's task, including tools and image input, as well as a compatible provider
 protocol. `context: known_limits` checks estimated input demand plus the effective
 output reserve against declared model limits. The request must supply an output
-bound, or its decision must configure a positive `request_params.default_max_tokens`.
+bound, or its decision must configure `request_params.default_max_tokens` as a
+positive integer or `auto` (see below).
 That default applies only when the caller omits the bound; `max_tokens_limit` then
 caps it as usual. A model's maximum output capacity is not a request default.
 Missing required model facts or an effective output bound make a candidate ineligible. Input accounting remains estimated, especially for
@@ -385,6 +386,46 @@ plugins:
       default_max_tokens: 4096
       max_tokens_limit: 8192
 ```
+
+To use each model's available output capacity when the caller omits a limit:
+
+```yaml
+algorithm:
+  type: multi_factor
+  multi_factor:
+    expected_output_tokens: 4096
+plugins:
+  - type: request_params
+    configuration:
+      default_max_tokens: auto
+```
+
+`auto` requires an explicit `vllm` provider, one backend per model, the OpenAI
+Chat format, and declared context and output limits. Enable the backend's
+`/v1/chat/completions/render` API with `vllm serve --enable-scale-out` on a vLLM
+version that supports it. The Router preprocesses each candidate's complete
+provider request without generating an answer, then repeats that check after
+final request changes. It uses the actual templated input length to allocate
+`min(max_output_tokens, context_window - input_tokens)`. A smaller backend limit
+than declared is a configuration error; align the deployment and model card.
+Explicit caller limits keep their existing behavior and need no render call.
+`max_tokens_limit` still caps the resulting output budget.
+
+`expected_output_tokens` is a positive cost forecast, **not an output limit**.
+It is required for `multi_factor` with `auto`, and is bounded by the caller's
+limit or each candidate's available capacity. Different maximum context windows
+do not by themselves make a model's forecast more expensive. Without this field,
+non-automatic requests retain their existing cost calculation.
+
+A request that fits a candidate is not truncated based on a text-length estimate.
+If every compatible candidate reports input overflow, the Router applies the
+configured context compression policy once and verifies the result with the
+backend. Compression can be conservative; final capacity checking is exact.
+Without a suitable compression policy, overflow remains an error. An unavailable
+or invalid render API fails clearly and never triggers compression. Preview
+reports `execution_required` because it does not have the complete provider
+request. Automatic budgets currently support text and tool requests, excluding
+multimodal input, provider truncation, LoRA, Looper, and shadow dispatch.
 
 A recipe's `replay: false` prevents router replay capture even if a decision tries
 to enable it, including requests rejected before a decision is available. Absent

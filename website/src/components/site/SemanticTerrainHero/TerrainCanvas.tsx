@@ -13,6 +13,11 @@ const FONT_STACK
 const FONT = `${FONT_SIZE}px ${FONT_STACK}`
 const MIN_SEGMENT_WIDTH = 22
 
+type TerrainPalette = {
+  background: string
+  contours: string[]
+}
+
 type ViewState = {
   panX: number
   panY: number
@@ -27,12 +32,13 @@ function drawTerrain(
   width: number,
   height: number,
   view: ViewState,
+  palette: TerrainPalette,
 ): void {
   const lineHeight = width <= 640 ? 13 : 14
   const scanStep = width >= 1800 ? 6 : width <= 640 ? 5 : 4
   const cursors = TERRAIN_CONTOURS.map(() => 0)
 
-  context.fillStyle = '#030303'
+  context.fillStyle = palette.background
   context.fillRect(0, 0, width, height)
   context.font = FONT
   context.textBaseline = 'top'
@@ -56,7 +62,7 @@ function drawTerrain(
       characterCount,
     )
     cursors[contourIndex] = next.cursor
-    context.fillStyle = contour.color
+    context.fillStyle = palette.contours[contourIndex]
     context.fillText(next.text, x, y, availableWidth)
   }
 
@@ -111,6 +117,19 @@ export default function TerrainCanvas(): JSX.Element {
     const context = canvas.getContext('2d', { alpha: false })
     if (!context) return undefined
 
+    // Resolve CSS tokens once per theme change, never in the animation loop.
+    // Redrawing in place also preserves the user's pan and zoom when toggling.
+    const readPalette = (): TerrainPalette => {
+      const computed = window.getComputedStyle(root)
+      return {
+        background: computed.getPropertyValue('--site-bg').trim(),
+        contours: TERRAIN_CONTOURS.map(contour =>
+          computed.getPropertyValue(contour.colorToken).trim(),
+        ),
+      }
+    }
+    let palette = readPalette()
+
     const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
     const view: ViewState = {
       panX: 0,
@@ -159,7 +178,7 @@ export default function TerrainCanvas(): JSX.Element {
         view.zoom += (view.targetZoom - view.zoom) * 0.15
       }
 
-      drawTerrain(context, width, height, view)
+      drawTerrain(context, width, height, view, palette)
       updateHud()
 
       const stillMoving
@@ -247,6 +266,10 @@ export default function TerrainCanvas(): JSX.Element {
       if (document.visibilityState === 'visible') requestPaint()
     }
 
+    const themeObserver = new MutationObserver(() => {
+      palette = readPalette()
+      requestPaint()
+    })
     const resizeObserver = new ResizeObserver(resize)
     const intersectionObserver = new IntersectionObserver((entries) => {
       isVisible = entries[0]?.isIntersecting ?? true
@@ -257,6 +280,10 @@ export default function TerrainCanvas(): JSX.Element {
       }
     })
 
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    })
     resizeObserver.observe(root)
     intersectionObserver.observe(root)
     canvas.addEventListener('pointerdown', onPointerDown)
@@ -271,6 +298,7 @@ export default function TerrainCanvas(): JSX.Element {
 
     return () => {
       if (frame) window.cancelAnimationFrame(frame)
+      themeObserver.disconnect()
       resizeObserver.disconnect()
       intersectionObserver.disconnect()
       canvas.removeEventListener('pointerdown', onPointerDown)
@@ -308,8 +336,8 @@ export default function TerrainCanvas(): JSX.Element {
       <div className={styles.terrainLegend}>
         {TERRAIN_CONTOURS.map(contour => (
           <div key={contour.label} className={styles.terrainLegendItem}>
-            <span style={{ background: contour.color }} />
-            <strong style={{ color: contour.color }}>{contour.label}</strong>
+            <span style={{ background: `var(${contour.colorToken})` }} />
+            <strong>{contour.label}</strong>
           </div>
         ))}
       </div>
