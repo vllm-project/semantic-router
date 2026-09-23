@@ -11,6 +11,7 @@ import RunComparison from '../components/sr-bench/RunComparison'
 import ReplayComposer from '../components/sr-bench/ReplayComposer'
 import RunList, { type RunFilters } from '../components/sr-bench/RunList'
 import DatasetInventory from '../components/sr-bench/DatasetInventory'
+import DatasetPreparationPanel from '../components/sr-bench/DatasetPreparationPanel'
 import ExperimentWorkspace from '../components/sr-bench/ExperimentWorkspace'
 import type {
   Catalog,
@@ -26,9 +27,23 @@ import ProductLoadingState from '../components/ProductLoadingState'
 type Inventory = 'catalog' | 'datasets' | 'targets' | 'runs'
 
 export default function EvaluationPage() {
-  const { user } = useAuth()
-  const { serverReadonly, isLoading: settingsLoading } = useReadonly()
-  const canWrite = !settingsLoading && !serverReadonly && canWriteEvaluation(user)
+  const { user, refreshSession } = useAuth()
+  const {
+    serverReadonly,
+    isLoading: settingsLoading,
+    settingsError,
+    refreshSettings,
+  } = useReadonly()
+  const writeDisabledReason = settingsLoading
+    ? 'Checking preparation access…'
+    : settingsError
+      ? settingsError
+      : serverReadonly
+        ? 'Preparation is disabled in read-only mode.'
+        : !canWriteEvaluation(user)
+          ? 'View only. Ask an administrator for dataset preparation access.'
+          : null
+  const canWrite = writeDisabledReason === null
   const canRun = canWrite && canRunEvaluation(user)
   const [search, setSearch] = useSearchParams()
   const pendingSearch = useRef(search)
@@ -349,12 +364,33 @@ export default function EvaluationPage() {
           )}
         </>
       )}
+      {view === 'datasets' && search.get('prepare') === '1' && (
+        <DatasetPreparationPanel
+          key={user?.id ?? ''}
+          disabledReason={writeDisabledReason}
+          accessRefreshing={settingsLoading}
+          onRefreshAccess={() => {
+            refreshSettings()
+            void refreshSession()
+          }}
+          onCompleted={refresh}
+          onOpenDataset={(dataset) =>
+            setSearch({ view: 'datasets', dataset: dataset.id, ...experimentRoute })
+          }
+          onClose={() => setSearch({ view: 'datasets', ...experimentRoute })}
+        />
+      )}
       {view === 'datasets' && loaded.datasets && (
         <DatasetInventory
           datasets={datasets}
           runs={runs}
           runsLoaded={!!loaded.runs}
           canRun={canRun}
+          onPrepare={
+            search.get('prepare') === '1'
+              ? undefined
+              : () => setSearch({ view: 'datasets', prepare: '1', ...experimentRoute })
+          }
           selectedDatasetId={search.get('dataset') ?? ''}
           onSelectDataset={(id) => setSearch({ view: 'datasets', dataset: id, ...experimentRoute })}
           onBackToDatasets={() => setSearch({ view: 'datasets', ...experimentRoute })}
