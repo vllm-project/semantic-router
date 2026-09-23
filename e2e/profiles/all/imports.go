@@ -8,6 +8,7 @@ import (
 	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
 	categoryremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/category-remote-backend"
 	complexityremotebackend "github.com/vllm-project/semantic-router/e2e/profiles/complexity-remote-backend"
+	conversationrouting "github.com/vllm-project/semantic-router/e2e/profiles/conversation-routing"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
 	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
@@ -85,6 +86,7 @@ func init() {
 	register("pii-remote-backend", func() framework.Profile { return piiremotebackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("local-classifier-backend", func() framework.Profile { return localclassifierbackend.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register("structure-routing", func() framework.Profile { return structurerouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
+	register("conversation-routing", func() framework.Profile { return conversationrouting.NewProfile() }, framework.ProfileCapabilities{LocalImages: providerMockerLocalImages})
 	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },
