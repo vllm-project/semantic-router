@@ -282,7 +282,9 @@ def test_only_pinned_qwen_guard_python_is_selected_as_inert_data() -> None:
                 artifact=replace(selected.profile.artifact, files=(other,)),
             ),
         )
-        with pytest.raises(ArtifactManifestError, match="may not select repository code"):
+        with pytest.raises(
+            ArtifactManifestError, match="may not select repository code"
+        ):
             _select_profile_files(
                 unsafe,
                 {other: replace(item, manifest_path=other, repository_path=other)},
