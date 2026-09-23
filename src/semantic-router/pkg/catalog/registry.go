@@ -65,6 +65,14 @@ func registryFromSnapshot(document snapshot, digest string) (*Registry, error) {
 		registry.protocols[definition.ID] = definition
 	}
 	for _, definition := range document.Providers {
+		for _, operation := range sortedKeys(definition.OperationOverrides) {
+			if _, exists := definition.PathOverrides[operation]; exists {
+				return nil, fmt.Errorf(
+					"provider %q declares %q in both path_overrides and operation_overrides",
+					definition.ID, operation,
+				)
+			}
+		}
 		registry.providers[definition.ID] = definition
 	}
 	for _, definition := range document.ReasoningFamilies {
@@ -269,6 +277,7 @@ func cloneProvider(value ProviderDefinition) ProviderDefinition {
 	value.Protocols = append([]string(nil), value.Protocols...)
 	value.SupportedOperations = append([]string(nil), value.SupportedOperations...)
 	value.PathOverrides = cloneMap(value.PathOverrides)
+	value.OperationOverrides = cloneMap(value.OperationOverrides)
 	value.DefaultHeaders = cloneMap(value.DefaultHeaders)
 	value.Models = append([]CatalogModelBinding(nil), value.Models...)
 	for index := range value.Models {
