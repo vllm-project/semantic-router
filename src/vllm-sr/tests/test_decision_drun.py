@@ -413,7 +413,7 @@ def test_drun_run_help_exposes_required_model_and_lifecycle_options():
         "--detach",
     ):
         assert option in result.output
-    assert "[auto|rocm|cuda]" in result.output
+    assert "[auto|rocm|cuda|cpu]" in result.output
     assert "mlx" not in result.output.lower()
 
 
