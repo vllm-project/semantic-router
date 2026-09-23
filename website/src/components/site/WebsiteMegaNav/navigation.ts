@@ -19,7 +19,7 @@ export const WEBSITE_PRIMARY_NAV_ITEMS: WebsitePrimaryNavItem[] = [
     label: 'Research',
     translateId: 'nav.primary.research',
     to: '/publications',
-    activePrefixes: ['/publications', '/white-paper', '/vision-paper'],
+    activePrefixes: ['/publications', '/white-paper', '/vision-paper', '/decision-paper'],
   },
   {
     key: 'blog',

@@ -121,7 +121,7 @@ class ComponentBatchTests(unittest.TestCase):
         stages = {
             "learning-tools": ["test-learning-tools", "test-calibration"],
             "soak-tools": ["soak-test", "proxy-tests"],
-            "mock-provider": ["test-provider-simulator"],
+            "mock-provider": ["test-provider-mocker"],
             "e2e-unit": ["test-e2e-unit"],
             "training": ["torch", "training-deps", "test-training-contracts"],
         }
@@ -182,7 +182,7 @@ class ComponentBatchTests(unittest.TestCase):
     ):
         data = yaml.safe_load((ROOT / ".github/workflows/test-tools.yml").read_text())
         job = data["jobs"]["tests"]
-        self.assertEqual(job["name"], "${{ fromJSON(inputs.batch).display_name }}")
+        self.assertEqual(job["name"], "Execute Contracts")
         go = next(
             step for step in job["steps"] if step.get("uses") == "actions/setup-go@v5"
         )
@@ -197,7 +197,7 @@ class ComponentBatchTests(unittest.TestCase):
         parent = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())["jobs"]
         self.assertEqual(
             parent["tools"]["strategy"]["matrix"]["label"],
-            "${{ fromJSON(needs.plan.outputs.component_batches).*.display_name }}",
+            "${{ fromJSON(needs.plan.outputs.worker_labels)['tools'] }}",
         )
         self.assertEqual(parent["gate"]["if"], "always()")
         self.assertIn("tools", parent["gate"]["needs"])

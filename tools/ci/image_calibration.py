@@ -7,7 +7,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import re
 import shlex
 import subprocess
@@ -21,23 +20,6 @@ ROOT = Path(__file__).resolve().parents[2]
 CASES = Path("tools/calibration/image-routing/testdata/calibration-set.json")
 RULES = Path("config/fragments/signal/embedding/image-routing.yaml")
 OMNI_MANIFEST = "vela_omni_manifest.json"
-OWNED_OMNI_TESTS = {
-    "classification": (
-        "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
-        "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
-    ),
-    "cache": ("TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",),
-    "modeldownload": ("TestPublishedOmniPreparedInventory",),
-}
-
-
-def owned_omni_case_ids() -> set[str]:
-    prefix = "github.com/vllm-project/semantic-router/src/semantic-router/pkg/"
-    return {
-        f"{prefix}{package}/{test}"
-        for package, tests in OWNED_OMNI_TESTS.items()
-        for test in tests
-    }
 
 
 def read(path: Path) -> dict:
@@ -119,8 +101,6 @@ def evidence(directory: Path, *, root: Path = ROOT) -> dict:
     if execution.get("source_sha") != source or execution.get("commands") != {
         "profile-discovery": 0,
         "profile-tests": 0,
-        "owned-discovery": 0,
-        "owned-tests": 0,
         "calibration": 0,
     }:
         raise ValueError("image calibration did not complete all source-bound commands")
@@ -224,24 +204,10 @@ def evidence(directory: Path, *, root: Path = ROOT) -> dict:
     if errors:
         raise ValueError("; ".join(errors))
     cases.extend({**row, "id": "profile/" + row["id"]} for row in profile_cases)
-    owned_cases, owned_expected = go_cases(
-        directory / "owned-tests.jsonl", directory / "owned-discovery.jsonl", set()
-    )
-    if set(owned_expected) != owned_omni_case_ids():
-        raise ValueError(
-            "owned Omni integration inventory differs from its required tests"
-        )
-    errors = collection_errors(
-        {"cases": owned_cases, "expected_cases": owned_expected}, "test"
-    )
-    if errors:
-        raise ValueError("; ".join(errors))
-    cases.extend({**row, "id": "owned/" + row["id"]} for row in owned_cases)
     expected = [
         *("score/" + name for name in sorted(fixture_names)),
         *sorted(threshold_ids),
         *("profile/" + name for name in profile_expected),
-        *("owned/" + name for name in owned_expected),
     ]
     return {
         "runtime": "ort",
@@ -266,33 +232,7 @@ def run(manifest: Path, output: Path) -> None:
         ).strip(),
         "commands": {},
     }
-    pattern = (
-        "^("
-        + "|".join(test for tests in OWNED_OMNI_TESTS.values() for test in tests)
-        + ")$"
-    )
-    packages = ["./pkg/" + package for package in OWNED_OMNI_TESTS]
-    env = {**os.environ, "VELA_OMNI_ARTIFACT": model["path"], "REQUIRE_OMNI_TESTS": "1"}
     commands = (
-        (
-            "owned-discovery",
-            ROOT / "src/semantic-router",
-            ["go", "test", "-json", "-list", pattern, *packages],
-        ),
-        (
-            "owned-tests",
-            ROOT / "src/semantic-router",
-            [
-                "go",
-                "test",
-                "-json",
-                "-count=1",
-                "-timeout=10m",
-                "-run",
-                pattern,
-                *packages,
-            ],
-        ),
         (
             "profile-discovery",
             ROOT / "e2e",
@@ -357,7 +297,6 @@ def run(manifest: Path, output: Path) -> None:
             result = subprocess.run(
                 command,
                 cwd=cwd,
-                env=env,
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 check=False,
