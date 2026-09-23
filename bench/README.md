@@ -23,6 +23,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does grounding-aware fusion help on DRACO? | [`grounded_fusion/`](grounded_fusion/README.md) |
 | How do hallucination detectors compare? | [`hallucination/`](hallucination/README.md) |
 | What is the signal latency across CPU, GPU, attention, and body modes? | [`cpu-vs-gpu/`](cpu-vs-gpu/README.md) |
+| How do old and integrated Decision SystemOne services compare per model? | [`decision_runtime/`](decision_runtime/README.md) |
 
 Start with the smallest dataset or `--dry-run` mode supported by the selected
 runner. Run `python <script> --help` or the installed command's `--help` before
