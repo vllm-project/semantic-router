@@ -15,28 +15,6 @@ type stickyToolDefinitionKey struct {
 	fingerprint string
 }
 
-func (r *OpenAIRouter) applyStickyToolSelection(
-	request *llmprotocol.Request,
-	authorizedTools []llmprotocol.Tool,
-	selectedTools []llmprotocol.Tool,
-	selectionConfig *config.ToolSelectionPluginConfig,
-	toolsConfig *config.ToolsPluginConfig,
-	strategyID string,
-	ctx *RequestContext,
-) []llmprotocol.Tool {
-	selected, _ := r.applyStickyToolSelectionWithStatusAndRetrieval(
-		request,
-		authorizedTools,
-		selectedTools,
-		selectionConfig,
-		toolsConfig,
-		strategyID,
-		ctx,
-		"",
-	)
-	return selected
-}
-
 // applyStickyToolSelectionWithStatus applies the bounded session merge and
 // reports whether the resulting identity set was committed and projected
 // back to the current request definitions. Callers that are handling an empty

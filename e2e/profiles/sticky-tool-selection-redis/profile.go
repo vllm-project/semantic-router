@@ -8,7 +8,6 @@ import (
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 

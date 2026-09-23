@@ -257,8 +257,8 @@ func TestMemoryStore_StaleRevisionRejectedAfterExpiryAndReadmission(t *testing.T
 	clock.Advance(time.Minute + time.Second)
 	stateB := newTestState(0)
 	stateB.PolicyFingerprint = "writer-b"
-	if applied, err := store.CompareAndSwap(ctx, "session", 0, stateB, time.Minute, quota); err != nil || !applied {
-		t.Fatalf("writer B create: applied=%v err=%v", applied, err)
+	if applied, createErr := store.CompareAndSwap(ctx, "session", 0, stateB, time.Minute, quota); createErr != nil || !applied {
+		t.Fatalf("writer B create: applied=%v err=%v", applied, createErr)
 	}
 
 	stale := newTestState(0)
@@ -291,8 +291,8 @@ func TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission(t *te
 	}
 	stateA := newTestState(0)
 	stateA.PolicyFingerprint = "writer-a-updated"
-	if applied, err := store.CompareAndSwap(ctx, "session", created.State.Revision, stateA, time.Minute, quota); err != nil || !applied {
-		t.Fatalf("writer A update: applied=%v err=%v", applied, err)
+	if applied, updateErr := store.CompareAndSwap(ctx, "session", created.State.Revision, stateA, time.Minute, quota); updateErr != nil || !applied {
+		t.Fatalf("writer A update: applied=%v err=%v", applied, updateErr)
 	}
 	updated, err := store.Load(ctx, "session")
 	if err != nil || !updated.Found {
@@ -302,8 +302,8 @@ func TestMemoryStore_StaleUpdatedRevisionRejectedAfterExpiryAndReadmission(t *te
 	clock.Advance(time.Minute + time.Second)
 	stateB := newTestState(0)
 	stateB.PolicyFingerprint = "writer-b"
-	if applied, err := store.CompareAndSwap(ctx, "session", 0, stateB, time.Minute, quota); err != nil || !applied {
-		t.Fatalf("writer B create: applied=%v err=%v", applied, err)
+	if applied, createErr := store.CompareAndSwap(ctx, "session", 0, stateB, time.Minute, quota); createErr != nil || !applied {
+		t.Fatalf("writer B create: applied=%v err=%v", applied, createErr)
 	}
 
 	stale := newTestState(0)
@@ -355,8 +355,8 @@ func TestMemoryStore_DeleteIfTokenDoesNotDeleteNewerState(t *testing.T) {
 		t.Fatalf("load: found=%v err=%v", loaded.Found, err)
 	}
 	clock.Advance(time.Second)
-	if _, err := store.CompareAndSwap(ctx, "session", loaded.State.Revision, newTestState(0), time.Minute, quota); err != nil {
-		t.Fatal(err)
+	if _, updateErr := store.CompareAndSwap(ctx, "session", loaded.State.Revision, newTestState(0), time.Minute, quota); updateErr != nil {
+		t.Fatal(updateErr)
 	}
 
 	deleted, err := store.DeleteIfToken(ctx, "session", StateToken{
@@ -388,11 +388,11 @@ func TestMemoryStore_DeleteIfTokenDoesNotDeleteRecreatedState(t *testing.T) {
 	if err != nil || oldMetadata.ObservedGeneration == 0 {
 		t.Fatalf("initial metadata = %+v, err=%v", oldMetadata, err)
 	}
-	if err := store.Delete(ctx, "session"); err != nil {
-		t.Fatal(err)
+	if deleteErr := store.Delete(ctx, "session"); deleteErr != nil {
+		t.Fatal(deleteErr)
 	}
-	if _, err := store.CompareAndSwap(ctx, "session", 0, newTestState(0), time.Minute, quota); err != nil {
-		t.Fatal(err)
+	if _, createErr := store.CompareAndSwap(ctx, "session", 0, newTestState(0), time.Minute, quota); createErr != nil {
+		t.Fatal(createErr)
 	}
 
 	deleted, err := store.DeleteIfToken(ctx, "session", StateToken{

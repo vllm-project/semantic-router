@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 const (
@@ -43,11 +44,11 @@ func testStickyToolSelectionRedisRecovery(
 		return err
 	}
 
-	if err := restartStickySemanticRouterContainer(ctx, client, opts); err != nil {
-		return err
+	if restartErr := restartStickySemanticRouterContainer(ctx, client, opts); restartErr != nil {
+		return restartErr
 	}
-	if err := waitForSemanticRouterReady(ctx, client, opts); err != nil {
-		return err
+	if readinessErr := waitForSemanticRouterReady(ctx, client, opts); readinessErr != nil {
+		return readinessErr
 	}
 
 	sessions, err := openStickySessionPair(ctx, client, opts)
@@ -124,7 +125,7 @@ func seedStickyRedisState(
 	}
 	if len(retained.Tools) != stickyToolSelectionMaxTools {
 		return "", nil, nil, stickyToolSnapshot{}, fmt.Errorf(
-			"Redis restart precondition retained %d tools, want %d",
+			"redis restart precondition retained %d tools, want %d",
 			len(retained.Tools),
 			stickyToolSelectionMaxTools,
 		)
@@ -145,8 +146,8 @@ func verifyStickyRedisRestartReuse(
 	if err != nil {
 		return stickyToolSnapshot{}, stickyToolSnapshot{}, err
 	}
-	if err := assertStickySnapshotsEqual(afterRestart, retained); err != nil {
-		return stickyToolSnapshot{}, stickyToolSnapshot{}, fmt.Errorf("Redis-backed sticky state did not survive router restart: %w", err)
+	if comparisonErr := assertStickySnapshotsEqual(afterRestart, retained); comparisonErr != nil {
+		return stickyToolSnapshot{}, stickyToolSnapshot{}, fmt.Errorf("redis-backed sticky state did not survive router restart: %w", comparisonErr)
 	}
 
 	restartBaselineID := sessionID + "-baseline"
@@ -190,7 +191,7 @@ func runStickyRedisUnavailableFallback(
 	}
 	originalReplicas := scale.Spec.Replicas
 	if originalReplicas < 1 {
-		return fallback, baseline, fmt.Errorf("Redis deployment has %d replicas before unavailable-store test", originalReplicas)
+		return fallback, baseline, fmt.Errorf("redis deployment has %d replicas before unavailable-store test", originalReplicas)
 	}
 
 	defer func() {
@@ -202,8 +203,8 @@ func runStickyRedisUnavailableFallback(
 		}
 	}()
 
-	if err := setStickyRedisReplicas(ctx, client, 0, opts.Verbose); err != nil {
-		return fallback, baseline, fmt.Errorf("make Redis unavailable: %w", err)
+	if scaleErr := setStickyRedisReplicas(ctx, client, 0, opts.Verbose); scaleErr != nil {
+		return fallback, baseline, fmt.Errorf("make Redis unavailable: %w", scaleErr)
 	}
 
 	request := stickyNormalRequest("__STICKY_TOOL_SELECTION__ Search recent weather reports.", tools)
@@ -285,7 +286,7 @@ func waitForStickyRedisReplicas(
 			return errors.Join(ctx.Err(), fmt.Errorf("last Redis deployment state: %s", lastState))
 		case <-timer.C:
 			return fmt.Errorf(
-				"Redis deployment and endpoints did not reach %d replicas after %s: %s",
+				"redis deployment and endpoints did not reach %d replicas after %s: %s",
 				replicas,
 				stickyRedisScaleTimeout,
 				lastState,

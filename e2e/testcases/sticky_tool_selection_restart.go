@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 const stickySemanticRouterContainer = "semantic-router"

@@ -10,9 +10,10 @@ import (
 	"sync"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -79,8 +80,8 @@ func testStickyToolSelection(
 	if err != nil {
 		return err
 	}
-	if err := assertStickyReplacement(secondTools, calledTools); err != nil {
-		return err
+	if replacementErr := assertStickyReplacement(secondTools, calledTools); replacementErr != nil {
+		return replacementErr
 	}
 	invalidationSnapshot, err := runStickyInvalidation(ctx, sessions, sessionID, trustedHeaders, calledTools)
 	if err != nil {
@@ -244,7 +245,6 @@ func runStickyConcurrentTurns(
 	errs := make(chan error, len(requests))
 	var wait sync.WaitGroup
 	for _, request := range requests {
-		request := request
 		wait.Add(1)
 		go func() {
 			defer wait.Done()
@@ -274,8 +274,8 @@ func runStickyConcurrentTurns(
 	if err != nil {
 		return stickyToolSnapshot{}, err
 	}
-	if err := assertStickySnapshotsEqual(final, repeated); err != nil {
-		return stickyToolSnapshot{}, fmt.Errorf("concurrent state was not deterministic: %w", err)
+	if comparisonErr := assertStickySnapshotsEqual(final, repeated); comparisonErr != nil {
+		return stickyToolSnapshot{}, fmt.Errorf("concurrent state was not deterministic: %w", comparisonErr)
 	}
 	if len(final.Tools) != stickyToolSelectionMaxTools {
 		return stickyToolSnapshot{}, fmt.Errorf("concurrent state retained %d tools, want %d", len(final.Tools), stickyToolSelectionMaxTools)
@@ -415,8 +415,8 @@ func runStickyTurn(
 	if err != nil {
 		return stickyToolSnapshot{}, fmt.Errorf("%s: %w", label, err)
 	}
-	if err := assertStickyResponse(response); err != nil {
-		return stickyToolSnapshot{}, fmt.Errorf("%s: %w", label, err)
+	if responseErr := assertStickyResponse(response); responseErr != nil {
+		return stickyToolSnapshot{}, fmt.Errorf("%s: %w", label, responseErr)
 	}
 	providerBody, err := lastProviderSimulatorRequest(ctx, sessions.backend, sessionID)
 	if err != nil {

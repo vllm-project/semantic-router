@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 const stickyToolSelectionLocalTTL = 30 * time.Second
@@ -46,8 +47,8 @@ func testStickyToolSelectionExpiry(
 		return fmt.Errorf("TTL expiry precondition retained %d tools, want %d", len(retained.Tools), stickyToolSelectionMaxTools)
 	}
 
-	if err := waitForStickyToolSelectionExpiry(ctx); err != nil {
-		return err
+	if expiryErr := waitForStickyToolSelectionExpiry(ctx); expiryErr != nil {
+		return expiryErr
 	}
 
 	request := stickyNormalRequest("__STICKY_TOOL_SELECTION__ Search recent weather reports.", tools)

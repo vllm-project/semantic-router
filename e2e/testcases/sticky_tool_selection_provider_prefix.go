@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 func init() {
@@ -174,8 +175,8 @@ func runStickyProviderPrefixTurn(
 		return anthropicCacheUsage{}, stickyToolSnapshot{}, err
 	}
 	var response anthropicCacheResponse
-	if err := json.Unmarshal(body, &response); err != nil {
-		return anthropicCacheUsage{}, stickyToolSnapshot{}, fmt.Errorf("decode response: %w", err)
+	if decodeErr := json.Unmarshal(body, &response); decodeErr != nil {
+		return anthropicCacheUsage{}, stickyToolSnapshot{}, fmt.Errorf("decode response: %w", decodeErr)
 	}
 	providerBody, err := lastProviderSimulatorRequest(ctx, sessions.backend, sessionID)
 	if err != nil {

@@ -16,15 +16,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-const (
-	redisStatePayloadField     = "payload"
-	redisStateRevisionField    = "revision"
-	redisStateGenerationField  = "generation"
-	redisStateExpiresField     = "expires_at_ms"
-	redisStateQuotaLRUField    = "quota_lru"
-	redisStateQuotaExpiryField = "quota_expiry"
-)
-
 // RedisStore is the shared Store implementation for session-scoped sticky
 // tool-set selection. It currently targets a standalone Redis endpoint: each
 // atomic admission script touches the state, global indexes, quota indexes,
@@ -204,8 +195,8 @@ func (s *RedisStore) decodeLoadedState(
 	}
 
 	var state State
-	if err := json.Unmarshal([]byte(payload), &state); err != nil {
-		return s.corruptedLoad(ctx, stateKey, values, fmt.Errorf("invalid state JSON: %w", err))
+	if unmarshalErr := json.Unmarshal([]byte(payload), &state); unmarshalErr != nil {
+		return s.corruptedLoad(ctx, stateKey, values, fmt.Errorf("invalid state JSON: %w", unmarshalErr))
 	}
 	if state.Revision != 0 && state.Revision != metadata.ObservedRevision {
 		return s.corruptedLoad(ctx, stateKey, values, fmt.Errorf(
@@ -266,7 +257,7 @@ func (s *RedisStore) corruptedLoad(
 			_ = s.deleteRawIfCurrent(ctx, stateKey, payload, revision, generation)
 		}
 	}
-	return VersionedState{}, LoadMetadata{}, fmt.Errorf("%w: %v", ErrStateCorrupted, cause)
+	return VersionedState{}, LoadMetadata{}, fmt.Errorf("%w: %w", ErrStateCorrupted, cause)
 }
 
 // CompareAndSwap implements Store. Admission, exact global and per-identity
@@ -359,8 +350,11 @@ func (s *RedisStore) CompareAndSwapWithRevision(
 			return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap omitted the committed revision")
 		}
 		revision, revisionErr := redisReplyUint64(values[1])
-		if revisionErr != nil || revision == 0 {
-			return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap returned an invalid revision: %v", revisionErr)
+		if revisionErr != nil {
+			return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap returned an invalid revision: %w", revisionErr)
+		}
+		if revision == 0 {
+			return 0, false, fmt.Errorf("sessiontools: Redis compare-and-swap returned a zero revision")
 		}
 		return revision, true, nil
 	}

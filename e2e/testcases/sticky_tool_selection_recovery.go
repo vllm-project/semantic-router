@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
 
 const stickyToolSelectionRecoveryDecision = "sticky_tool_selection_decision"
@@ -46,11 +47,11 @@ func testStickyToolSelectionRecovery(
 		return fmt.Errorf("restart recovery precondition retained %d tools, want %d", len(retained.Tools), stickyToolSelectionMaxTools)
 	}
 
-	if err := restartStickySemanticRouterContainer(ctx, client, opts); err != nil {
-		return err
+	if restartErr := restartStickySemanticRouterContainer(ctx, client, opts); restartErr != nil {
+		return restartErr
 	}
-	if err := waitForSemanticRouterReady(ctx, client, opts); err != nil {
-		return err
+	if readinessErr := waitForSemanticRouterReady(ctx, client, opts); readinessErr != nil {
+		return readinessErr
 	}
 
 	sessions, err = openStickySessionPair(ctx, client, opts)

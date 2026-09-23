@@ -18,6 +18,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
+const (
+	redisStatePayloadField     = "payload"
+	redisStateRevisionField    = "revision"
+	redisStateGenerationField  = "generation"
+	redisStateExpiresField     = "expires_at_ms"
+	redisStateQuotaLRUField    = "quota_lru"
+	redisStateQuotaExpiryField = "quota_expiry"
+)
+
 func newRedisIntegrationStore(
 	t *testing.T,
 	maxSessions int,
