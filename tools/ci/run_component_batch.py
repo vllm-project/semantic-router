@@ -47,6 +47,11 @@ def validate_batch(batch: dict) -> None:
 def commands(target: str, output: Path) -> list[list[str]]:
     """Keep the maintained Make entrypoints as the owners of discovery."""
     python = str(ROOT / ".venv-agent/bin/python")
+    if target == "vllm-sr-test":
+        return [
+            ["make", "vllm-sr-test"],
+            ["make", "vllm-sr-decision-runtime-test"],
+        ]
     if target == "test-learning-tools":
         return [["make", target], ["make", "test-calibration"]]
     if target == "soak-test":
@@ -64,7 +69,6 @@ def commands(target: str, output: Path) -> list[list[str]]:
     if target == "test-e2e-unit":
         return [["make", target, f"E2E_UNIT_REPORT_DIR={output}"]]
     if target in {
-        "vllm-sr-test",
         "vllm-sr-sim-test",
         "harness-check",
         "onnx-artifact-test",

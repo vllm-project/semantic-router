@@ -22,40 +22,36 @@ python -m venv .venv
 pip install -e .
 ```
 
-## Run the Decision SystemOne contract server
+## Serve a Decision 1.0 model
 
-The optional Decision runtime package defines a backend-neutral inference
-boundary and a strict single-state `POST /v1/systemone` API. Install its HTTP
-dependencies separately from the base CLI:
+`vllm-sr drun run MODEL` starts one catalog model as a standalone SystemOne
+service. It requires a supported backend and an immutable runtime image; until
+a released image inventory is packaged, pass a digest-qualified `--image` or
+an exact local Docker image ID with `--image-pull-policy never`. The image
+installs the optional `vllm-sr[decision-runtime]` HTTP dependencies. The
+lower-level `vllm-sr-decision-runtime` entry point requires the verified model
+and artifact arguments supplied by `drun`; it has no default model or fake
+inference mode.
+See the [Decision runtime guide](../../website/docs/api/decision-runtime.md) for
+launch and API examples.
 
-```bash
-pip install 'vllm-sr[decision-runtime]'
-vllm-sr-decision-runtime
-```
-
-The default process uses a deterministic fake backend for contract development;
-it does not run a Decision model. Production CUDA, ROCm, and Apple MLX adapters
-can implement the same async backend protocol without importing their inference
-frameworks into CLI paths. Generic CPU execution is limited to contract tests;
-it is not a supported production target.
-
-Production model identity comes only from the packaged catalog: each canonical
-Hugging Face repository ID resolves to an immutable revision, which selects an
-internal revision-keyed runtime profile. The profile pins a repository artifact
-manifest and the exact data files consumed by vLLM-SR-owned runtime code.
-Artifacts are SHA-256 and size verified into a read-only, content-addressed
+Production model identity comes from the packaged catalog: each canonical
+Hugging Face repository ID resolves to an immutable revision and a stable
+runtime profile for its model family. The selected revision's own manifest
+provides the hashes and sizes of inference files consumed by vLLM-SR-owned
+runtime code. Those files are verified into a read-only, content-addressed
 local view; model-repository Python and `trust_remote_code` are never used.
 
 | Runtime family | ROCm `gfx942` | CUDA | Linux CPU | Apple MLX |
 | --- | --- | --- | --- | --- |
-| Vela (Kai, Lex) | Qualified profile | Evidence gated | Implementation in progress | Deferred |
-| Qwen3.5 (Eos) | Qualified profile | Evidence gated | Implementation in progress | Deferred |
-| Qwen3.5 (Sol, Nox, Lux) | Qualified profile | Evidence gated | Not supported | Deferred |
+| Vela (Kai, Lex) | Implemented | Not qualified | Implemented; validation pending | Deferred |
+| Qwen3.5 (Eos) | Implemented | Not qualified | Implemented; validation pending | Deferred |
+| Qwen3.5 (Sol, Nox, Lux) | Implemented | Not qualified | Not supported | Deferred |
 
-The initial physical microbatch is 8 for every profile. CUDA, CPU, and MLX
-remain fail-closed for each model/revision until their owned backend
-implementations pass parity, correctness, and performance qualification;
-catalog presence alone does not enable them.
+The initial physical microbatch is 8 for every profile. ROCm execution targets
+`gfx942`; Linux CPU execution is limited to Kai, Lex, and Eos. Publish CPU
+quality or performance claims only after model-backed validation. CUDA and MLX
+remain unavailable; catalog presence alone does not enable a backend.
 
 The HTTP contract requires an explicit `model`, one string/object/array `state`,
 and at least one named question. Instructions are required and non-null. Choice
@@ -82,19 +78,16 @@ before atomic queue admission, and only rows with the same executor-defined
 batch key share a model forward. A complete input over the model profile's token
 limit must raise `BackendInputTooLargeError`; the API returns HTTP 413 without
 admitting any part of that request or affecting concurrent callers. Admission
-allows eight concurrent calls per model and queues eight by default, so the
-physical backend can observe concurrent callers; the development server
-overrides these bounds with
-`VLLM_SR_DECISION_CONCURRENCY` and `VLLM_SR_DECISION_QUEUE`. There is no
-sequential single-request fallback. Production model adapters must additionally
-enforce the profile's complete-input token limit without truncation and qualify
-each physical batch override on the target hardware. These resource policies do
-not add fields to either inference response.
+allows eight concurrent calls per model and queues eight by default; `drun`
+exposes `--max-concurrency` and `--max-queue` to adjust these bounds. There is
+no sequential single-request fallback. Family adapters enforce complete-input
+token limits without truncation. A ROCm model with a strict kernel profile
+requires batch overrides to fit its verified envelope. These resource policies
+do not add fields to either inference response.
 
-`create_app` deliberately does not own backend lifecycle. A future production
-runtime factory must await `PhysicalBatchBackend.aclose()` from its shutdown
-lifespan; the fake `create_default_app` remains only a contract-development
-entry point.
+`create_app` leaves backend lifecycle with its caller. The production
+`create_runtime_app` closes the resident backend from its shutdown lifespan;
+the deterministic fake backend remains a contract-test fixture.
 
 Choice and Score answers use Decision-owned, type-aware confidence statistics
 computed from the calibrated, unrounded probability distribution:
@@ -108,14 +101,13 @@ Noul returns P(true) without a separate confidence field. These are not
 calibrated probabilities of correctness and do not claim numeric equivalence
 to TypeSafe/Jev confidence, whose formula is not public.
 
-The development server also exposes `GET /v1/models`, `/health`, `/ready`,
-`/api/status`, and `/metrics`. The status and metrics routes are control-plane
-surfaces and must not be exposed by a public Gateway. Configure its fake model
-names with `VLLM_SR_DECISION_MODELS`; no model is selected implicitly by the
-SystemOne request contract. Production requests accept only the exact canonical
-IDs returned by `/v1/models`; this runtime does not define compatibility aliases,
-and the response repeats the exact requested model ID. Readiness is the exact
-HTTP 200 JSON document `{"ready": true}`; redirects, empty bodies, and string
+The runtime also exposes `GET /v1/models`, `/health`, `/ready`, `/api/status`,
+and `/metrics`. The status and metrics routes are control-plane surfaces and
+must not be exposed by a public Gateway. No model is selected implicitly by
+the SystemOne request contract. Requests accept only the exact canonical ID
+returned by `/v1/models`; the runtime does not define compatibility aliases,
+and the response repeats the requested model ID. Readiness is the exact HTTP
+200 JSON document `{"ready": true}`; redirects, empty bodies, and string
 lookalikes are not readiness success.
 
 Local `serve` requires Docker or Podman on Linux, macOS, or WSL2. A native

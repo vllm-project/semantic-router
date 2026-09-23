@@ -535,6 +535,8 @@ vllm-sr-test: vllm-sr-install-cli
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
 		src/vllm-sr/tests/test_container_images.py \
 		src/vllm-sr/tests/test_container_log_spool.py \
+		src/vllm-sr/tests/test_decision_drun.py \
+		src/vllm-sr/tests/test_decision_drun_catalog_adapter.py \
 		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
 		src/vllm-sr/tests/test_embedding_api_config.py \
 		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
@@ -606,6 +608,9 @@ vllm-sr-decision-runtime-test: harness-venv-install
 		src/vllm-sr/tests/test_decision_qwen35_torch_contract.py \
 		src/vllm-sr/tests/test_decision_qwen35_rocm_binder.py \
 		src/vllm-sr/tests/test_decision_runtime_server.py
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		bench/decision_runtime/test_harness.py \
+		bench/decision_runtime/test_semantic.py
 
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker

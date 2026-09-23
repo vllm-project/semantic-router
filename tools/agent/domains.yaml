@@ -389,6 +389,7 @@ domains:
   decision-runtime:
     owner: vllm-sr-cli
     paths:
+      - bench/decision_runtime/**
       - src/vllm-sr/decision_runtime/**
       - src/vllm-sr/tests/test_decision_runtime_*.py
       - src/vllm-sr/tests/test_decision_physical_batching.py
