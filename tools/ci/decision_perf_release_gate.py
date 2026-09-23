@@ -19,8 +19,9 @@ from pathlib import Path
 from typing import Any
 
 from decision_rocm_promotion import MODEL_IDS, validate_receipt
+from decision_timed_semantics import validate_timed_semantics
 
-SCHEMA = "decision-paired-release-v3"
+SCHEMA = "decision-paired-release-v4"
 RAW_SCHEMA = "decision-semantic-workload-v2"
 ARRIVAL_POLICY = (
     "the same ordered logical workflows are submitted per arm and round; "
@@ -145,7 +146,10 @@ def _evidence(root: Path, relative: Any, digest: Any, label: str) -> Path:
         or not name.parts
         or name.parts[0] != "raw"
         or ".." in name.parts
-        or name.suffix not in (".json", ".jsonl")
+        or (
+            name.suffix not in (".json", ".jsonl")
+            and not name.name.endswith(".jsonl.gz")
+        )
     ):
         raise ValueError(f"{label} path must stay under raw/")
     try:
@@ -156,7 +160,11 @@ def _evidence(root: Path, relative: Any, digest: Any, label: str) -> Path:
         raise ValueError(f"{label} escapes the evidence directory")
     if path.stat().st_size > MAX_JSON_BYTES:
         raise ValueError(f"{label} is too large")
-    if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+    with path.open("rb") as handle:
+        content = handle.read(MAX_JSON_BYTES + 1)
+    if len(content) > MAX_JSON_BYTES:
+        raise ValueError(f"{label} is too large")
+    if hashlib.sha256(content).hexdigest() != digest:
         raise ValueError(f"{label} content changed")
     return path
 
@@ -731,7 +739,7 @@ def _validate_samples(
     requests: dict[str, tuple[tuple[str, ...], str]],
     q: int,
     s: int,
-) -> None:
+) -> list[dict[str, Any]]:
     samples = _jsonl(path, "samples")
     intervals: dict[tuple[Any, ...], list[tuple[float, int]]] = defaultdict(list)
     for sample in samples:
@@ -927,6 +935,7 @@ def _validate_samples(
                     summary.get("http_latency"),
                     arm + " " + phase + " HTTP latency",
                 )
+    return samples
 
 
 def _validate_metrics(
@@ -1307,7 +1316,7 @@ def _validate_shape(
         label + " workflows",
     )
     other_evidence = {}
-    for name in ("preflight_audit", "audit", "samples", "metrics"):
+    for name in ("preflight_audit", "audit", "samples", "metrics", "timed_semantic"):
         other_evidence[name] = _evidence(
             root,
             shape.get(f"raw_{name}_path"),
@@ -1354,6 +1363,7 @@ def _validate_shape(
         ("seed", 17),
         ("warmup_workflows_per_arm", 2),
         ("latency_workflows_per_arm", 16),
+        ("timed_semantic_evidence", True),
     ):
         _same(settings.get(field), expected, label + " " + field)
     if (
@@ -1449,8 +1459,17 @@ def _validate_shape(
         label + " preflight probability max",
     )
     workflows_rows = _validate_workflows(workflows, rows, q, s, case_ids, settings)
-    _validate_samples(
+    sample_rows = _validate_samples(
         other_evidence["samples"], workflows_rows, rows, formal_requests, q, s
+    )
+    validate_timed_semantics(
+        other_evidence["timed_semantic"],
+        sample_rows,
+        _jsonl(other_evidence["audit"], label + " formal audit"),
+        q=q,
+        s=s,
+        model_id=model["model_id"],
+        rounds=ROUNDS,
     )
     _validate_metrics(
         other_evidence["metrics"],

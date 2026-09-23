@@ -3,15 +3,20 @@
 from __future__ import annotations
 
 import hashlib
+import base64
+import copy
+import gzip
 import json
 import math
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import decision_perf_release_gate as gate
+import decision_timed_semantics as timed_semantics
 
 SOURCE = "a" * 40
 OLD_CORE = "b" * 64
@@ -123,11 +128,69 @@ def _compact_arm(raw: dict) -> dict:
     }
 
 
-def _request_hash(case_id: str, arm: str, state: int | None = None) -> str:
-    return hashlib.sha256(f"{case_id}:{arm}:{state}".encode()).hexdigest()
+def _request_body(
+    case_id: str,
+    arm: str,
+    q: int,
+    s: int,
+    model_id: str,
+    state: int | None = None,
+) -> bytes:
+    body = timed_semantics.canonical_request_bodies(model_id, q, s)[case_id]
+    if arm == "new":
+        return body
+    payload = json.loads(body)
+    payload["model"] = "old-decision-model"
+    if s > 1:
+        payload["state"] = payload.pop("states")[state]["state"]
+    return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
 
 
-def _audit_record(case_id: str, q: int, s: int) -> dict:
+def _request_hash(
+    case_id: str,
+    arm: str,
+    q: int,
+    s: int,
+    model_id: str,
+    state: int | None = None,
+) -> str:
+    return hashlib.sha256(
+        _request_body(case_id, arm, q, s, model_id, state)
+    ).hexdigest()
+
+
+def _audit_record(case_id: str, q: int, s: int, model_id: str) -> dict:
+    questions = json.loads(_request_body(case_id, "new", q, s, model_id))["questions"]
+
+    def answer(question_id: str, question: dict) -> dict:
+        kind = question["type"]
+        if kind == "noul":
+            return {
+                "question_id": question_id,
+                "type": kind,
+                "old_probability": 0.5,
+                "new_probability": 0.501,
+                "absolute_probability_delta": 0.001,
+            }
+        keys = (
+            list(question["criteria"])
+            if kind == "choice"
+            else [str(i) for i in range(len(question["criteria"]))]
+        )
+        probabilities = dict.fromkeys(keys, 1 / len(keys))
+        row = {
+            "question_id": question_id,
+            "type": kind,
+            "old_probabilities": probabilities,
+            "new_probabilities": probabilities,
+            "absolute_probability_deltas": dict.fromkeys(keys, 0.0),
+        }
+        if kind == "choice":
+            row.update(old_outcome=keys[0], new_outcome=keys[0])
+        else:
+            row.update(old_score=1.0, new_score=1.0)
+        return row
+
     return {
         "case_id": case_id,
         "question_count": q,
@@ -137,7 +200,7 @@ def _audit_record(case_id: str, q: int, s: int) -> dict:
         "mismatches": [],
         "old_http": [
             {
-                "request_sha256": _request_hash(case_id, "old", index),
+                "request_sha256": _request_hash(case_id, "old", q, s, model_id, index),
                 "response_sha256": "7" * 64,
                 "status_code": 200,
                 "error_code": None,
@@ -145,35 +208,103 @@ def _audit_record(case_id: str, q: int, s: int) -> dict:
             for index in range(s)
         ],
         "new_http": {
-            "request_sha256": _request_hash(case_id, "new"),
+            "request_sha256": _request_hash(case_id, "new", q, s, model_id),
             "response_sha256": "8" * 64,
             "status_code": 200,
             "error_code": None,
         },
         "states": [
             {
+                "state_id": f"s{index:04d}",
                 "old_input_tokens": 10,
                 "new_input_tokens": 10,
                 "input_token_delta": 0,
+                "new_output_tokens": 0,
                 "answers": [
-                    {
-                        "type": "noul",
-                        "old_probability": 0.5,
-                        "new_probability": 0.501,
-                        "absolute_probability_delta": 0.001,
-                    }
-                    for _ in range(q)
+                    answer(question_id, question)
+                    for question_id, question in questions.items()
                 ],
             }
-            for _ in range(s)
+            for index in range(s)
         ],
     }
+
+
+def _timed_response(model_id: str, q: int, s: int, case_id: str) -> bytes:
+    questions = json.loads(_request_body(case_id, "new", q, s, model_id))["questions"]
+
+    def answer(question: dict) -> dict:
+        kind = question["type"]
+        if kind == "noul":
+            return {"type": kind, "noul": 0.501}
+        keys = (
+            list(question["criteria"])
+            if kind == "choice"
+            else [str(index) for index in range(len(question["criteria"]))]
+        )
+        probabilities = dict.fromkeys(keys, 1 / len(keys))
+        if kind == "choice":
+            return {
+                "type": kind,
+                "choice": keys[0],
+                "confidence": 0.0,
+                "probabilities": probabilities,
+            }
+        return {
+            "type": kind,
+            "score": 1.0,
+            "confidence": 0.0,
+            "legend": {
+                str(index): criterion
+                for index, criterion in enumerate(question["criteria"])
+            },
+            "probabilities": probabilities,
+        }
+
+    answers = {
+        question_id: answer(question) for question_id, question in questions.items()
+    }
+    if s == 1:
+        body = {
+            "model": model_id,
+            "answers": answers,
+            "usage": {"input_tokens": 10, "output_tokens": 0},
+        }
+    else:
+        body = {
+            "model": model_id,
+            "results": [
+                {
+                    "id": f"s{index:04d}",
+                    "answers": answers,
+                    "usage": {"input_tokens": 10, "output_tokens": 0},
+                }
+                for index in range(s)
+            ],
+            "usage": {"input_tokens": 10 * s, "output_tokens": 0},
+        }
+    return json.dumps(body, sort_keys=True, separators=(",", ":")).encode()
+
+
+def _probability_count(model_id: str, q: int, s: int) -> int:
+    count = 0
+    for body in timed_semantics.canonical_request_bodies(model_id, q, s).values():
+        questions = json.loads(body)["questions"]
+        count += (
+            sum(
+                1 if question["type"] == "noul" else len(question["criteria"])
+                for question in questions.values()
+            )
+            * s
+        )
+    return count
 
 
 def _sample_records(
     workflow: dict,
     q: int,
     s: int,
+    model_id: str,
     case_ids: list[str],
     intervals: list[tuple[float, float]],
 ) -> list[dict]:
@@ -210,10 +341,15 @@ def _sample_records(
                     "concurrency",
                 )
             },
-            "state_id": f"state-{index}" if arm == "old" else None,
+            "state_id": f"s{index:04d}" if arm == "old" else None,
             "request_kind": "single" if arm == "old" or s == 1 else "batch",
             "request_sha256": _request_hash(
-                workflow["case_id"], arm, index if arm == "old" else None
+                workflow["case_id"],
+                arm,
+                q,
+                s,
+                model_id,
+                index if arm == "old" else None,
             ),
             "response_sha256": "9" * 64,
             "request_bytes": 100,
@@ -379,7 +515,8 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
         slug = model_id.rsplit("/", 1)[-1].lower()
         for q, s in gate.SHAPES:
             directory = root / "raw" / f"{slug}-q{q}s{s}"
-            case_ids = [f"case-{index}" for index in range(4)]
+            case_ids = list(timed_semantics.canonical_request_bodies(model_id, q, s))
+            probability_count = _probability_count(model_id, q, s)
             workflows: list[dict] = []
             samples: list[dict] = []
             metrics: list[dict] = []
@@ -446,7 +583,9 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
                             }
                             workflows.append(workflow)
                             samples.extend(
-                                _sample_records(workflow, q, s, case_ids, intervals)
+                                _sample_records(
+                                    workflow, q, s, model_id, case_ids, intervals
+                                )
                             )
                             offset_ms += 10
                 for round_number in range(gate.ROUNDS):
@@ -489,7 +628,9 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
                             }
                             workflows.append(workflow)
                             samples.extend(
-                                _sample_records(workflow, q, s, case_ids, intervals)
+                                _sample_records(
+                                    workflow, q, s, model_id, case_ids, intervals
+                                )
                             )
                         offset_ms += seconds * 1000
                     metrics.append(
@@ -575,7 +716,10 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
                     "cases": len(case_ids),
                     "passed_cases": len(case_ids),
                     "failed_cases": 0,
-                    "absolute_probability_delta": {"count": 4 * q * s, "max": 0.001},
+                    "absolute_probability_delta": {
+                        "count": probability_count,
+                        "max": 0.001,
+                    },
                     "probability_tolerance_absolute": 0.01,
                 },
                 "adapter": {
@@ -595,6 +739,7 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
                     "warmup_workflows_per_arm": 2,
                     "latency_workflows_per_arm": 16,
                     "parity_policy": "require",
+                    "timed_semantic_evidence": True,
                     "arrival_policy": gate.ARRIVAL_POLICY,
                     "metrics_collection": {"old": False, "new": True},
                 },
@@ -620,14 +765,58 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
                 "cases": len(case_ids),
                 "passed_cases": len(case_ids),
                 "failed_cases": 0,
-                "absolute_probability_delta": {"count": 4 * q * s, "max": 0.001},
+                "absolute_probability_delta": {
+                    "count": probability_count,
+                    "max": 0.001,
+                },
                 "probability_tolerance_absolute": 0.01,
             }
             raw_receipt = directory / "receipt.json"
             raw_preflight = directory / "preflight-summary.json"
             raw_workflows = directory / "workflows.jsonl"
             extra = {}
-            audit_rows = [_audit_record(case_id, q, s) for case_id in case_ids]
+            audit_rows = [
+                _audit_record(case_id, q, s, model_id) for case_id in case_ids
+            ]
+            timed_records = []
+            for sample in samples:
+                if (
+                    sample["arm"] == "new"
+                    and sample["phase"] == "throughput"
+                    and sample["concurrency"] in (8, 32)
+                ):
+                    timed_body = _timed_response(model_id, q, s, sample["case_id"])
+                    sample["response_sha256"] = hashlib.sha256(timed_body).hexdigest()
+                    timed_records.append(
+                        {
+                            field: sample[field]
+                            for field in (
+                                "case_id",
+                                "concurrency",
+                                "round",
+                                "sequence",
+                                "request_sha256",
+                                "response_sha256",
+                            )
+                        }
+                        | {
+                            "request_base64": base64.b64encode(
+                                _request_body(sample["case_id"], "new", q, s, model_id)
+                            ).decode("ascii"),
+                            "response_base64": base64.b64encode(timed_body).decode(
+                                "ascii"
+                            ),
+                        }
+                    )
+            timed_path = directory / "timed-semantic.jsonl.gz"
+            timed_path.parent.mkdir(parents=True, exist_ok=True)
+            with gzip.open(timed_path, "wt", encoding="utf-8") as handle:
+                for record in timed_records:
+                    handle.write(json.dumps(record, sort_keys=True) + "\n")
+            extra["raw_timed_semantic_path"] = str(timed_path.relative_to(root))
+            extra["raw_timed_semantic_sha256"] = hashlib.sha256(
+                timed_path.read_bytes()
+            ).hexdigest()
             for name, rows in (
                 ("preflight_audit", audit_rows),
                 ("audit", audit_rows),
@@ -690,6 +879,63 @@ class DecisionPerformanceGateTests(unittest.TestCase):
     def write_report(self) -> None:
         _save(self.path, self.report)
 
+    def timed_records(self, shape: dict) -> list[dict]:
+        with gzip.open(self.root / shape["raw_timed_semantic_path"], "rt") as handle:
+            return [json.loads(line) for line in handle]
+
+    def write_timed_records(self, shape: dict, rows: list[dict]) -> None:
+        path = self.root / shape["raw_timed_semantic_path"]
+        with gzip.open(path, "wt", encoding="utf-8") as handle:
+            for row in rows:
+                handle.write(json.dumps(row, sort_keys=True) + "\n")
+        shape["raw_timed_semantic_sha256"] = hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
+        self.write_report()
+
+    def rewrite_case_request(self, shape: dict, *, field: str) -> None:
+        """Keep archive, samples and both audits mutually hash-consistent."""
+
+        records = self.timed_records(shape)
+        case_id = records[0]["case_id"]
+        request = json.loads(base64.b64decode(records[0]["request_base64"]))
+        if field == "state":
+            request["state"]["message"] = "A substituted but valid message"
+        else:
+            request["questions"]["q0001"]["criteria"][
+                "billing"
+            ] = "A substituted but valid criterion"
+        body = json.dumps(request, sort_keys=True, separators=(",", ":")).encode()
+        digest = hashlib.sha256(body).hexdigest()
+        for record in records:
+            if record["case_id"] == case_id:
+                record["request_base64"] = base64.b64encode(body).decode("ascii")
+                record["request_sha256"] = digest
+        sample_path = self.root / shape["raw_samples_path"]
+        samples = [json.loads(line) for line in sample_path.read_text().splitlines()]
+        for sample in samples:
+            if sample["arm"] == "new" and sample["case_id"] == case_id:
+                sample["request_sha256"] = digest
+                sample["request_bytes"] = len(body)
+        sample_path.write_text("\n".join(json.dumps(row) for row in samples) + "\n")
+        shape["raw_samples_sha256"] = hashlib.sha256(
+            sample_path.read_bytes()
+        ).hexdigest()
+        for name in ("raw_preflight_audit_path", "raw_audit_path"):
+            audit_path = self.root / shape[name]
+            audit_rows = [
+                json.loads(line) for line in audit_path.read_text().splitlines()
+            ]
+            target = next(row for row in audit_rows if row["case_id"] == case_id)
+            target["new_http"]["request_sha256"] = digest
+            audit_path.write_text(
+                "\n".join(json.dumps(row) for row in audit_rows) + "\n"
+            )
+            shape[name.replace("_path", "_sha256")] = hashlib.sha256(
+                audit_path.read_bytes()
+            ).hexdigest()
+        self.write_timed_records(shape, records)
+
     def validate(self, **kwargs: object) -> dict:
         return gate.validate_report(
             self.path,
@@ -703,6 +949,183 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         result = self.validate(run_id="42", run_attempt="1")
         self.assertEqual(set(result["models"]), gate.MODEL_IDS)
         self.assertEqual(result["source_sha"], SOURCE)
+
+    def test_timed_concurrent_evidence_cannot_omit_or_duplicate_a_workflow(
+        self,
+    ) -> None:
+        shape = self.report["models"][0]["shapes"][2]
+        records = self.timed_records(shape)
+        self.assertEqual(len(records), 2 * gate.ROUNDS * gate.MIN_WORKFLOWS_PER_ROUND)
+        for changed in (records[:-1], [*records, records[0]]):
+            with self.subTest(records=len(changed)):
+                self.write_timed_records(shape, changed)
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "timed semantic .*incomplete|timed semantic record is missing or duplicated",
+                ):
+                    self.validate()
+
+    def test_timed_response_hash_must_bind_the_actual_body(self) -> None:
+        shape = self.report["models"][0]["shapes"][2]
+        records = self.timed_records(shape)
+        body = json.loads(base64.b64decode(records[0]["response_base64"]))
+        body["results"][0]["answers"]["q0000"]["noul"] = 0.75
+        records[0]["response_base64"] = base64.b64encode(
+            json.dumps(body).encode()
+        ).decode()
+        self.write_timed_records(shape, records)
+        with self.assertRaisesRegex(ValueError, "timed semantic response hash"):
+            self.validate()
+
+    def test_timed_request_hash_must_bind_the_formal_case(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        records = self.timed_records(shape)
+        request = json.loads(base64.b64decode(records[0]["request_base64"]))
+        request["state"] = "a different logical state"
+        records[0]["request_base64"] = base64.b64encode(
+            json.dumps(request).encode()
+        ).decode()
+        self.write_timed_records(shape, records)
+        with self.assertRaisesRegex(ValueError, "timed semantic request hash"):
+            self.validate()
+
+    def test_coherently_rehashed_state_cannot_replace_canonical_case(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        self.rewrite_case_request(shape, field="state")
+        with self.assertRaisesRegex(
+            ValueError, "timed semantic request differs from canonical case"
+        ):
+            self.validate()
+
+    def test_coherently_rehashed_criteria_cannot_replace_canonical_case(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        self.rewrite_case_request(shape, field="criteria")
+        with self.assertRaisesRegex(
+            ValueError, "timed semantic request differs from canonical case"
+        ):
+            self.validate()
+
+    def test_timed_probability_drift_fails_even_with_rehashed_evidence(self) -> None:
+        shape = self.report["models"][0]["shapes"][2]
+        records = self.timed_records(shape)
+        record = next(
+            row for row in records if row["concurrency"] == 32 and row["round"] == 2
+        )
+        body = json.loads(base64.b64decode(record["response_base64"]))
+        body["results"][0]["answers"]["q0000"]["noul"] = 0.75
+        wire = json.dumps(body).encode()
+        record["response_base64"] = base64.b64encode(wire).decode()
+        record["response_sha256"] = hashlib.sha256(wire).hexdigest()
+        sample_path = self.root / shape["raw_samples_path"]
+        samples = [json.loads(line) for line in sample_path.read_text().splitlines()]
+        target = next(
+            row
+            for row in samples
+            if row["arm"] == "new"
+            and row["phase"] == "throughput"
+            and row["round"] == record["round"]
+            and row["concurrency"] == record["concurrency"]
+            and row["sequence"] == record["sequence"]
+        )
+        target["response_sha256"] = record["response_sha256"]
+        sample_path.write_text("\n".join(json.dumps(row) for row in samples) + "\n")
+        shape["raw_samples_sha256"] = hashlib.sha256(
+            sample_path.read_bytes()
+        ).hexdigest()
+        self.write_timed_records(shape, records)
+        with self.assertRaisesRegex(ValueError, "timed semantic probability tolerance"):
+            self.validate()
+
+    def test_timed_response_token_usage_must_match_sealed_audit(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        records = self.timed_records(shape)
+        body = json.loads(base64.b64decode(records[0]["response_base64"]))
+        body["usage"]["input_tokens"] += 1
+        wire = json.dumps(body).encode()
+        records[0]["response_base64"] = base64.b64encode(wire).decode()
+        records[0]["response_sha256"] = hashlib.sha256(wire).hexdigest()
+        sample_path = self.root / shape["raw_samples_path"]
+        samples = [json.loads(line) for line in sample_path.read_text().splitlines()]
+        target = next(
+            row
+            for row in samples
+            if row["arm"] == "new"
+            and row["phase"] == "throughput"
+            and row["concurrency"] == records[0]["concurrency"]
+            and row["round"] == records[0]["round"]
+            and row["sequence"] == records[0]["sequence"]
+        )
+        target["response_sha256"] = records[0]["response_sha256"]
+        sample_path.write_text("\n".join(json.dumps(row) for row in samples) + "\n")
+        shape["raw_samples_sha256"] = hashlib.sha256(
+            sample_path.read_bytes()
+        ).hexdigest()
+        self.write_timed_records(shape, records)
+        with self.assertRaisesRegex(ValueError, "timed semantic input token usage"):
+            self.validate()
+
+    def test_compressed_timed_archive_has_a_decompression_limit(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        path = self.root / shape["raw_timed_semantic_path"]
+        with gzip.open(path, "wb") as handle:
+            for _ in range(81):
+                handle.write(b"x" * (1024 * 1024))
+        shape["raw_timed_semantic_sha256"] = hashlib.sha256(
+            path.read_bytes()
+        ).hexdigest()
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "timed semantic archive is too large"):
+            self.validate()
+
+    def test_compressed_timed_archive_has_an_input_limit(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        path = self.root / shape["raw_timed_semantic_path"]
+        path.write_bytes(b"x" * (timed_semantics.MAX_COMPRESSED_ARCHIVE_BYTES + 1))
+        with self.assertRaisesRegex(ValueError, "is too large"):
+            gate._evidence(
+                self.root,
+                shape["raw_timed_semantic_path"],
+                hashlib.sha256(path.read_bytes()).hexdigest(),
+                "timed archive",
+            )
+        with self.assertRaisesRegex(ValueError, "compressed archive is too large"):
+            timed_semantics._read_archive(path)
+
+        class StaleStatPath:
+            def stat(self):
+                return SimpleNamespace(st_size=0)
+
+            def open(self, *args):
+                return path.open(*args)
+
+        with self.assertRaisesRegex(ValueError, "compressed archive is too large"):
+            timed_semantics._read_archive(StaleStatPath())
+
+    def test_timed_archive_rejects_a_trailing_member_or_garbage(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        path = self.root / shape["raw_timed_semantic_path"]
+        original = path.read_bytes()
+        for suffix in (gzip.compress(b""), b"trailing-garbage"):
+            with self.subTest(suffix=suffix[:8]):
+                path.write_bytes(original + suffix)
+                shape["raw_timed_semantic_sha256"] = hashlib.sha256(
+                    path.read_bytes()
+                ).hexdigest()
+                self.write_report()
+                with self.assertRaisesRegex(ValueError, "trailing or incomplete data"):
+                    self.validate()
+
+    def test_timed_response_body_has_a_per_request_limit(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        records = self.timed_records(shape)
+        records[0]["response_base64"] = base64.b64encode(
+            b"x" * (timed_semantics.MAX_RESPONSE_BYTES + 1)
+        ).decode()
+        self.write_timed_records(shape, records)
+        with self.assertRaisesRegex(
+            ValueError, "timed semantic response body is too large"
+        ):
+            self.validate()
 
     def test_an_older_attempt_cannot_qualify_the_current_run(self) -> None:
         with self.assertRaisesRegex(ValueError, "protected run attempt"):
@@ -755,7 +1178,7 @@ class DecisionPerformanceGateTests(unittest.TestCase):
                 and row["round"] == 0
                 and row["sequence"] == 0
             ):
-                row["case_id"] = "case-1"
+                row["case_id"] = "q0032_s0001_v001"
                 break
         path.write_text("\n".join(json.dumps(row) for row in rows) + "\n")
         shape["raw_workflows_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -1196,6 +1619,95 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         self.write_report()
         with self.assertRaisesRegex(ValueError, "alternating waves"):
             self.validate()
+
+
+class TimedAnswerPolicyTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.questions = {
+            "n": {"type": "noul", "instructions": "Is action needed?"},
+            "c": {
+                "type": "choice",
+                "instructions": "Choose a queue.",
+                "criteria": {"billing": "Billing", "service": "Service"},
+            },
+            "s": {
+                "type": "score",
+                "instructions": "Rate urgency.",
+                "criteria": ["Routine", "Same day", "Immediate"],
+            },
+        }
+        self.audited = [
+            {"question_id": "n", "type": "noul", "old_probability": 0.5},
+            {
+                "question_id": "c",
+                "type": "choice",
+                "old_outcome": "billing",
+                "old_probabilities": {"billing": 0.501, "service": 0.499},
+            },
+            {
+                "question_id": "s",
+                "type": "score",
+                "old_score": 1.0,
+                "old_probabilities": {"0": 0.25, "1": 0.5, "2": 0.25},
+            },
+        ]
+        self.actual = {
+            "n": {"type": "noul", "noul": 0.501},
+            "c": {
+                "type": "choice",
+                "choice": "billing",
+                "confidence": 0.004,
+                "probabilities": {"billing": 0.502, "service": 0.498},
+            },
+            "s": {
+                "type": "score",
+                "score": 1.01,
+                "confidence": 0.25015,
+                "legend": {"0": "Routine", "1": "Same day", "2": "Immediate"},
+                "probabilities": {"0": 0.245, "1": 0.5, "2": 0.255},
+            },
+        }
+
+    def test_mixed_answers_preserve_formal_audit_tolerances(self) -> None:
+        timed_semantics._compare_answers(self.actual, self.audited, self.questions)
+        self.actual["c"]["choice"] = "service"
+        self.actual["c"]["probabilities"] = {"billing": 0.499, "service": 0.501}
+        self.actual["c"]["confidence"] = 0.002
+        with self.assertRaisesRegex(ValueError, "Choice outcome"):
+            timed_semantics._compare_answers(self.actual, self.audited, self.questions)
+        self.actual["c"]["choice"] = "billing"
+        self.actual["c"]["probabilities"] = {"billing": 0.502, "service": 0.498}
+        self.actual["c"]["confidence"] = 0.004
+        self.actual["s"]["score"] = 1.03
+        with self.assertRaisesRegex(ValueError, "Score weighted mean"):
+            timed_semantics._compare_answers(self.actual, self.audited, self.questions)
+
+    def test_duplicate_keys_and_nonfinite_values_are_rejected(self) -> None:
+        for payload in (b'{"model":"a","model":"b"}', b'{"value":NaN}'):
+            with self.subTest(payload=payload), self.assertRaises(ValueError):
+                timed_semantics._json(payload)
+
+    def test_independent_response_contract_rejects_invalid_math_and_fields(
+        self,
+    ) -> None:
+        edits = (
+            (
+                "probability distribution",
+                lambda row: row["c"]["probabilities"].update(service=0.4),
+            ),
+            ("Choice winner", lambda row: row["c"].update(choice="service")),
+            ("confidence", lambda row: row["c"].update(confidence=0.8)),
+            ("Score legend", lambda row: row["s"]["legend"].update({"1": "Wrong"})),
+            ("response shape", lambda row: row["n"].update(extra=True)),
+        )
+        for message, edit in edits:
+            with self.subTest(message=message):
+                actual = copy.deepcopy(self.actual)
+                edit(actual)
+                with self.assertRaisesRegex(ValueError, message):
+                    timed_semantics._compare_answers(
+                        actual, self.audited, self.questions
+                    )
 
 
 if __name__ == "__main__":

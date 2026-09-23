@@ -72,6 +72,7 @@ RAW_FILES = (
     "samples.jsonl",
     "workflows.jsonl",
     "metrics.jsonl",
+    "timed-semantic.jsonl.gz",
 )
 
 
@@ -908,6 +909,7 @@ def _measure(
         "require",
         "--probability-tolerance",
         "0.01",
+        "--timed-semantic-evidence",
         "--output-dir",
         str(directory / "measured"),
     ]
@@ -1009,7 +1011,12 @@ def _shape(
         "preflight_audit": directory / "preflight-audit.jsonl",
     }
     sources.update(
-        {name.split(".", 1)[0]: directory / "measured" / name for name in RAW_FILES[1:]}
+        {
+            name.split(".", 1)[0].replace("timed-semantic", "timed_semantic"): directory
+            / "measured"
+            / name
+            for name in RAW_FILES[1:]
+        }
     )
     evidence = {}
     for label, source in sources.items():

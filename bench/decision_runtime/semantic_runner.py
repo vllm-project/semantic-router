@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import gzip
 import hashlib
 import json
 import math
@@ -11,6 +13,7 @@ import random
 import re
 import subprocess
 import time
+from contextlib import nullcontext
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
@@ -59,6 +62,9 @@ SOURCE_LABEL = re.compile(r"(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})\Z")
 MODEL_REVISION = re.compile(r"[0-9a-f]{40}\Z")
 HARDWARE_LABEL = re.compile(r"[A-Za-z0-9 ._+()-]{1,128}\Z")
 MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}\Z")
+MAX_TIMED_SEMANTIC_EVIDENCE_BYTES = 80 * 1024 * 1024
+MAX_TIMED_SEMANTIC_COMPRESSED_BYTES = 16 * 1024 * 1024
+MAX_TIMED_SEMANTIC_REQUEST_BYTES = 1024 * 1024
 
 
 def _positive_int(value: str) -> int:
@@ -186,6 +192,7 @@ def _run_wave(
     new_batch: Endpoint,
     concurrency: int,
     timeout: float,
+    capture_timed_semantics: bool = False,
 ) -> tuple[list[HttpSample], list[WorkflowSample]]:
     jobs = []
     for sequence, case in enumerate(selected):
@@ -206,6 +213,12 @@ def _run_wave(
                 round_number=round_number,
                 sequence=sequence,
                 timeout_seconds=timeout,
+                capture_response=(
+                    capture_timed_semantics
+                    and arm == "new"
+                    and phase == "throughput"
+                    and concurrency in (8, 32)
+                ),
             )
             for sequence, case_id, endpoint, spec in jobs
         ]
@@ -235,7 +248,14 @@ def _logical_schedule_sha256(
 
 
 def _record_wave(
-    samples_handle, workflows_handle, samples, workflows, selected, origin_ns
+    samples_handle,
+    workflows_handle,
+    samples,
+    workflows,
+    selected,
+    origin_ns,
+    timed_handle=None,
+    timed_bytes=None,
 ):
     schedule_sha256 = _logical_schedule_sha256(
         selected,
@@ -247,6 +267,31 @@ def _record_wave(
         record = sample.public_record(origin_ns)
         record["logical_schedule_sha256"] = schedule_sha256
         samples_handle.write(json.dumps(record, sort_keys=True) + "\n")
+        if sample.response_body is not None:
+            if timed_handle is None or timed_bytes is None:
+                raise ValueError("timed semantic response has no evidence writer")
+            if (
+                sample.request_body is None
+                or len(sample.request_body) > MAX_TIMED_SEMANTIC_REQUEST_BYTES
+            ):
+                raise ValueError("timed semantic request exceeds the bounded archive")
+            evidence = {
+                "case_id": sample.case_id,
+                "concurrency": sample.concurrency,
+                "round": sample.round,
+                "sequence": sample.sequence,
+                "request_sha256": sample.request_sha256,
+                "request_base64": base64.b64encode(sample.request_body).decode("ascii"),
+                "response_sha256": sample.response_sha256,
+                "response_base64": base64.b64encode(sample.response_body).decode(
+                    "ascii"
+                ),
+            }
+            line = json.dumps(evidence, sort_keys=True, separators=(",", ":")) + "\n"
+            timed_bytes[0] += len(line.encode("utf-8"))
+            if timed_bytes[0] > MAX_TIMED_SEMANTIC_EVIDENCE_BYTES:
+                raise ValueError("timed semantic evidence exceeds the bounded archive")
+            timed_handle.write(line)
     for workflow in workflows:
         workflows_handle.write(
             json.dumps(workflow.public_record(origin_ns), sort_keys=True) + "\n"
@@ -298,6 +343,7 @@ def run_semantic(args: argparse.Namespace) -> int:
         "throughput_rounds": args.rounds,
         "timeout_seconds": args.timeout,
         "parity_policy": args.parity_policy,
+        "timed_semantic_evidence": args.timed_semantic_evidence,
         "probability_tolerance_absolute": args.probability_tolerance,
         "concurrency_unit": "maximum in-flight HTTP requests per arm",
         "arrival_policy": (
@@ -407,6 +453,12 @@ def run_semantic(args: argparse.Namespace) -> int:
     shape_rows = []
     total_errors = 0
     total_metric_errors = 0
+    timed_context = (
+        gzip.open(args.output_dir / "timed-semantic.jsonl.gz", "wt", encoding="utf-8")
+        if args.timed_semantic_evidence
+        else nullcontext(None)
+    )
+    timed_bytes = [0]
     with (
         (args.output_dir / "samples.jsonl").open(
             "w", encoding="utf-8"
@@ -417,6 +469,7 @@ def run_semantic(args: argparse.Namespace) -> int:
         (args.output_dir / "metrics.jsonl").open(
             "w", encoding="utf-8"
         ) as metrics_handle,
+        timed_context as timed_handle,
     ):
         for (questions, states), cases in cohorts.items():
             for concurrency in args.concurrencies:
@@ -439,6 +492,7 @@ def run_semantic(args: argparse.Namespace) -> int:
                                 new_batch=new_batch,
                                 concurrency=concurrency,
                                 timeout=args.timeout,
+                                capture_timed_semantics=args.timed_semantic_evidence,
                             )
                             samples.extend(wave_samples)
                             workflows.extend(wave_workflows)
@@ -449,6 +503,8 @@ def run_semantic(args: argparse.Namespace) -> int:
                                 wave_workflows,
                                 [case],
                                 origin_ns,
+                                timed_handle,
+                                timed_bytes,
                             )
                 for round_number in range(args.rounds):
                     selected = _schedule(
@@ -481,6 +537,7 @@ def run_semantic(args: argparse.Namespace) -> int:
                             new_batch=new_batch,
                             concurrency=concurrency,
                             timeout=args.timeout,
+                            capture_timed_semantics=args.timed_semantic_evidence,
                         )
                         if metrics_url is not None:
                             after = None
@@ -518,6 +575,8 @@ def run_semantic(args: argparse.Namespace) -> int:
                             wave_workflows,
                             selected,
                             origin_ns,
+                            timed_handle,
+                            timed_bytes,
                         )
                 summary = summarize_shape(
                     workflows,
@@ -576,6 +635,12 @@ def run_semantic(args: argparse.Namespace) -> int:
                         "summary": summary,
                     }
                 )
+    if (
+        args.timed_semantic_evidence
+        and (args.output_dir / "timed-semantic.jsonl.gz").stat().st_size
+        > MAX_TIMED_SEMANTIC_COMPRESSED_BYTES
+    ):
+        raise ValueError("timed semantic compressed archive exceeds 16 MiB")
     receipt = {
         **receipt_base,
         "measured_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -667,6 +732,11 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
         type=_nonnegative_float,
         default=0.01,
         help="Absolute old/new probability tolerance; default 0.01.",
+    )
+    run.add_argument(
+        "--timed-semantic-evidence",
+        action="store_true",
+        help="Retain bounded exact request/response bytes from every new c8/c32 throughput wave.",
     )
     run.add_argument("--output-dir", required=True, type=Path)
     run.set_defaults(handler=run_semantic)

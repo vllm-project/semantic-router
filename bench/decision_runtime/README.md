@@ -125,8 +125,23 @@ and attempted decisions per second. Percentiles use nearest rank over complete
 conforming workflows. Throughput divides complete-workflow decisions by the
 sum of each wave's first-send to last-completion window; partial old fan-out
 does not earn successful decisions. Parsing and strict response validation are
-outside the HTTP timing interval. The files contain no URLs, credentials, request
-bodies, response bodies, or answer text. Review all metadata before publication.
+outside the HTTP timing interval. The default files contain no URLs,
+credentials, request bodies, response bodies, or answer text. Review all
+metadata before publication.
+
+Protected paired release runs additionally pass `--timed-semantic-evidence`.
+This writes `timed-semantic.jsonl.gz` with the exact new-arm HTTP request and
+response bodies from every throughput wave at concurrency 8 and 32, linked to
+each timed sample by case, round, sequence, request hash, and response hash.
+The release gate recomputes both body hashes, validates the response against
+the request criteria, and compares every answer with the sealed old-arm audit
+at the same probability, Choice, Score, and input-token policy. New-arm
+output-token counts must remain equal to its formal audit; the old preview's
+different output-token accounting is not treated as parity. The archive has an
+80 MiB decompressed limit, a 16 MiB compressed limit, a 1 MiB per-request limit,
+and a 2 MiB per-response limit. These are synthetic cases, but the optional
+archive does contain request and response bodies and should be reviewed before
+publication.
 
 Optional `--old-metrics-url` and `--new-metrics-url` accept each service's
 `GET /metrics` address. For every throughput wave, the runner takes a snapshot

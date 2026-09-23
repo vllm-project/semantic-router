@@ -6,7 +6,7 @@ import json
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import ValidationError
@@ -53,6 +53,9 @@ class HttpSample:
     status_code: int | None
     error_code: str | None
     response_sha256: str | None
+    # Only protected high-concurrency waves retain the exact timed wire body.
+    response_body: bytes | None = field(default=None, repr=False)
+    request_body: bytes | None = field(default=None, repr=False)
 
     @property
     def success(self) -> bool:
@@ -95,6 +98,7 @@ def measure_http(
     round_number: int,
     sequence: int,
     timeout_seconds: float,
+    capture_response: bool = False,
 ) -> HttpSample:
     """Time only HTTP send through complete body read, including HTTP failures."""
 
@@ -173,4 +177,6 @@ def measure_http(
         status_code=status_code,
         error_code=error_code,
         response_sha256=response_sha256,
+        response_body=content if capture_response and error_code is None else None,
+        request_body=spec.body if capture_response and error_code is None else None,
     )

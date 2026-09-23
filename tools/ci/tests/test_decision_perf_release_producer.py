@@ -74,6 +74,7 @@ class DecisionPairedProducerTests(unittest.TestCase):
                 "samples",
                 "workflows",
                 "metrics",
+                "timed_semantic",
             ):
                 path = output / shape[f"raw_{name}_path"]
                 self.assertTrue(path.is_file())

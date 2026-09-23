@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import base64
+import gzip
+import hashlib
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -26,6 +29,7 @@ from .__main__ import main
 from .legacy_projection import project_legacy_preview
 from .semantic_cases import generate_cases
 from .semantic_report import build_semantic_matrix
+from tools.ci.decision_timed_semantics import canonical_request_bodies
 
 
 def _answer(question, *, probability_shift=0.0, choice_flip=False):
@@ -193,6 +197,80 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class SemanticTests(TestCase):
+    def test_timed_gate_canonical_requests_match_benchmark_generator(self):
+        for model in MODELS:
+            for questions, states in ((32, 1), (8, 8), (32, 32)):
+                with self.subTest(model=model, questions=questions, states=states):
+                    cases = generate_cases(
+                        model,
+                        "old-decision-model",
+                        question_count=questions,
+                        state_count=states,
+                        variants=4,
+                        seed=17,
+                    )
+                    self.assertEqual(
+                        {case.id: case.new_request.body for case in cases},
+                        canonical_request_bodies(model, questions, states),
+                    )
+
+    def test_timed_high_concurrency_archive_contains_exact_http_bodies(self):
+        servers, threads = self._servers()
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(
+                    servers,
+                    output,
+                    "--concurrencies",
+                    "1,8,32",
+                    "--timed-semantic-evidence",
+                )
+                self.assertEqual(main(args), 0)
+                with gzip.open(output / "timed-semantic.jsonl.gz", "rt") as handle:
+                    rows = [json.loads(line) for line in handle]
+                self.assertEqual(len(rows), 4 * 2 * 2 * 2)
+                self.assertEqual({row["concurrency"] for row in rows}, {8, 32})
+                samples = [
+                    json.loads(line)
+                    for line in (output / "samples.jsonl").read_text().splitlines()
+                ]
+                for row in rows:
+                    request_wire = base64.b64decode(
+                        row["request_base64"], validate=True
+                    )
+                    self.assertEqual(
+                        hashlib.sha256(request_wire).hexdigest(), row["request_sha256"]
+                    )
+                    wire = base64.b64decode(row["response_base64"], validate=True)
+                    self.assertEqual(
+                        hashlib.sha256(wire).hexdigest(), row["response_sha256"]
+                    )
+                    matched = [
+                        sample
+                        for sample in samples
+                        if sample["arm"] == "new"
+                        and sample["phase"] == "throughput"
+                        and all(
+                            sample[field] == row[field]
+                            for field in (
+                                "case_id",
+                                "concurrency",
+                                "round",
+                                "sequence",
+                                "request_sha256",
+                                "response_sha256",
+                            )
+                        )
+                    ]
+                    self.assertEqual(len(matched), 1)
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
     def test_legacy_preview_projection_checks_old_statistic_and_distribution(self):
         request = SystemOneRequest.model_validate(
             {
