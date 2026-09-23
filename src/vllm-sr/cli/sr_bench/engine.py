@@ -7,10 +7,10 @@ import json
 import os
 import threading
 import time
+from contextlib import contextmanager
 from http import HTTPStatus
 
 import requests
-from contextlib import contextmanager
 
 from cli.routing_preview import build_preview_request, case_request_fields
 
