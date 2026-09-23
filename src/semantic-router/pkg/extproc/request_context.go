@@ -151,11 +151,11 @@ type RequestContext struct {
 
 	// AgenticFacts holds the outcome of validating the caller-presented
 	// selection-facts envelope. Its zero value (no Accepted, no Rejections)
-	// means no envelope was processed — either the contract is disabled, no
-	// carrier header was sent, or the request arrived without the configured
-	// trust marker. AgenticFacts.Accepted is nil whenever AgenticFacts.Rejected()
-	// is true: a presented envelope that failed validation contributes nothing
-	// to selection, by construction.
+	// means no envelope was presented or the contract is disabled. An envelope
+	// that arrives without the configured trust marker is not zero: it carries
+	// one ReasonUntrusted rejection and is never parsed. AgenticFacts.Accepted
+	// is nil whenever AgenticFacts.Rejected() is true: a presented envelope that
+	// failed validation contributes nothing to selection, by construction.
 	AgenticFacts agenticfacts.Result
 
 	StreamingComplete      bool // True after neutral stream finalization runs once.
