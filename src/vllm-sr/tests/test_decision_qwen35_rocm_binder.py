@@ -239,13 +239,14 @@ def test_verified_warm_key_avoids_profile_hash_and_fla_config_lookup(
     for _ in range(48):
         assert kernel.run(key=legal) == "launched"
     assert calls == [legal] * 48
-    assert hash_calls == []
+    assert hash_calls == [profile.kernel_config_path] * 48
     assert kernel.cache_lookups == 2  # first exact check and install only
     assert kernel.cache_installs == 1
 
     with pytest.raises(binder.QwenRocmBindingError, match="unprofiled.*key"):
         kernel.run(key=(128, 3, *legal[2:]))
     assert calls == [legal] * 48
+    assert hash_calls == [profile.kernel_config_path] * 49
     assert kernel.cache_lookups == 2
 
 

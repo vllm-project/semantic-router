@@ -341,17 +341,20 @@ class _StrictRunGuard:
             raise QwenRocmBindingError(
                 "FLA strict configuration changed during inference"
             )
+        # A stat tuple is only a hint: some filesystems do not advance their
+        # timestamp for a same-size in-place rewrite. The config is small, and
+        # an exact digest check on every dispatch is required to fail closed
+        # before either a cached or newly loaded FLA key can run.
         identity = _file_identity(self.profile.kernel_config_path)
-        if identity != self.config_file_identity:
-            if (
-                _sha256_file(self.profile.kernel_config_path)
-                != self.profile.kernel_config_sha256
-                or _file_identity(self.profile.kernel_config_path) != identity
-            ):
-                raise QwenRocmBindingError(
-                    "FLA strict configuration changed during inference"
-                )
-            self.config_file_identity = identity
+        if (
+            _sha256_file(self.profile.kernel_config_path)
+            != self.profile.kernel_config_sha256
+            or _file_identity(self.profile.kernel_config_path) != identity
+        ):
+            raise QwenRocmBindingError(
+                "FLA strict configuration changed during inference"
+            )
+        self.config_file_identity = identity
 
         key = cache.AutotuneKey.build(
             self.kernel.arg_names, self.kernel.keys, args, kwargs
