@@ -36,6 +36,10 @@ from cli.decision_runtime.catalog import (
     DecisionRuntimeRequest,
     ResolvedDecisionRuntime,
 )
+from cli.decision_runtime.image_lock import (
+    DecisionImageLockError,
+    load_decision_image_lock,
+)
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
     validate_decision_image_reference,
@@ -53,11 +57,6 @@ _FAMILY_PYTHON = MappingProxyType(
     }
 )
 
-# Release automation replaces this fail-closed inventory with digest-qualified
-# references after both vendor images pass their hardware and supply-chain gates.
-# An explicit ``--image`` remains available for local image validation.
-PACKAGED_DECISION_RUNTIME_IMAGES: Mapping[str, str] = MappingProxyType({})
-
 
 class DecisionArtifactMaterializer(Protocol):
     """Host-side seam for resolving one immutable data-only artifact tree."""
@@ -71,12 +70,12 @@ class IntegratedDecisionCatalogResolver:
     """Resolve one public ``drun`` request into an immutable OCI launch."""
 
     artifacts: DecisionArtifactMaterializer
-    images: Mapping[str, str] = field(
-        default_factory=lambda: PACKAGED_DECISION_RUNTIME_IMAGES
-    )
+    images: Mapping[str, str] | None = None
     detect_backend: Callable[[], str] = field(default=lambda: detect_backend)
 
     def __post_init__(self) -> None:
+        if self.images is None:
+            return
         try:
             images = dict(self.images.items())
         except (AttributeError, TypeError, ValueError) as error:
@@ -114,7 +113,17 @@ class IntegratedDecisionCatalogResolver:
             raise DecisionCatalogError(
                 f"revision {model.catalog.revision} requires backbone dtype {dtype!r}"
             )
-        image = request.image or self.images.get(backend)
+        image = request.image
+        if image is None:
+            try:
+                inventory = (
+                    self.images
+                    if self.images is not None
+                    else load_decision_image_lock().images
+                )
+            except DecisionImageLockError as error:
+                raise DecisionCatalogError(str(error)) from error
+            image = inventory.get(backend)
         if image is None:
             raise DecisionCatalogError(
                 f"no released Decision runtime image is installed for {backend!r}; "

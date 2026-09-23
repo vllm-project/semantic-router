@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from cli.decision_runtime import image_lock
 from cli.decision_runtime.catalog import DecisionCatalogError, DecisionRuntimeRequest
 from cli.decision_runtime.catalog_adapter import (
     IntegratedDecisionCatalogResolver,
@@ -64,6 +66,19 @@ def resolver(tmp_path: Path, **overrides: object) -> IntegratedDecisionCatalogRe
     }
     values.update(overrides)
     return IntegratedDecisionCatalogResolver(**values)  # type: ignore[arg-type]
+
+
+def isolate_image_lock_resource(
+    monkeypatch: pytest.MonkeyPatch, directory: Path
+) -> None:
+    original_files = image_lock.resources.files
+    monkeypatch.setattr(
+        image_lock.resources,
+        "files",
+        lambda package: (
+            directory if package == "cli.decision_runtime" else original_files(package)
+        ),
+    )
 
 
 def test_bridge_materializes_exact_model_and_builds_read_only_launch(
@@ -169,6 +184,42 @@ def test_missing_released_image_fails_before_artifact_download(tmp_path: Path) -
         bridge.resolve(request())
 
     assert bridge.artifacts.calls == []  # type: ignore[attr-defined]
+
+
+def test_default_resolution_uses_release_injected_image_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / image_lock.IMAGE_LOCK_RESOURCE).write_text(
+        json.dumps(
+            {"schema_version": 1, "source_sha": "a" * 40, "images": {"rocm": IMAGE}}
+        ),
+        encoding="utf-8",
+    )
+    isolate_image_lock_resource(monkeypatch, tmp_path)
+    bridge = resolver(tmp_path, images=None)
+
+    assert bridge.resolve(request()).image == IMAGE
+
+
+def test_missing_release_lock_fails_before_artifact_download(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    isolate_image_lock_resource(monkeypatch, tmp_path)
+    bridge = resolver(tmp_path, images=None)
+
+    with pytest.raises(DecisionCatalogError, match="image lock is not installed"):
+        bridge.resolve(request())
+
+    assert bridge.artifacts.calls == []  # type: ignore[attr-defined]
+
+
+def test_explicit_image_bypasses_absent_release_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    isolate_image_lock_resource(monkeypatch, tmp_path)
+    bridge = resolver(tmp_path, images=None)
+
+    assert bridge.resolve(request(image=LOCAL_IMAGE_ID)).image == LOCAL_IMAGE_ID
 
 
 @pytest.mark.parametrize(

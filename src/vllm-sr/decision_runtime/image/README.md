@@ -62,9 +62,10 @@ The CLI accepts only an image reference of the form
 `registry/repository@sha256:<manifest-digest>`. A local `docker build` image ID
 is not a registry manifest digest. Publish a validated candidate through the
 release workflow, record its registry digest, then pass that digest to
-`vllm-sr drun run MODEL --backend BACKEND --image REFERENCE`. Do not populate
-`PACKAGED_DECISION_RUNTIME_IMAGES` before backend, model, and supply-chain
-qualification is complete.
+`vllm-sr drun run MODEL --backend BACKEND --image REFERENCE`. Source checkouts
+deliberately have no default image inventory. Release packaging may inject
+`cli/decision_runtime/decision-images.lock.json` only after backend, model,
+performance, and supply-chain qualification of the exact image digests.
 
 ## Publication gates
 
@@ -125,12 +126,13 @@ pending a capacity-appropriate build host, real six-model hardware and
 performance receipts, and registry write access. A standard GitHub hosted
 runner is not assumed to provide these.
 
-Once each backend has a published, tested registry digest, update
-`PACKAGED_DECISION_RUNTIME_IMAGES` in
-`src/vllm-sr/cli/decision_runtime/catalog_adapter.py` with the corresponding
-`ghcr.io/vllm-project/semantic-router/decision-runtime-{cpu,rocm}@sha256:<digest>`
-references, run the `drun` integration tests, and release that CLI build.
-Until then an explicit `--image` remains required.
+Once each backend has a published, tested registry digest, the protected
+release packager generates the image lock for the exact source commit and
+builds the wheel with that resource. The lock maps only qualified backends to
+digest-qualified OCI references. Verify the installed wheel's `drun` behavior
+and lock before publishing it. Until then an explicit `--image` remains
+required; no source-code change or second PR is needed to add a qualified
+release digest.
 
 For this rollout, CPU qualification is scoped to Kai, Lex, and Eos. CUDA image
 construction is a candidate path; model qualification remains deferred. ROCm
