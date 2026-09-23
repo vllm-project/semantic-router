@@ -1,0 +1,344 @@
+"""Launch and safely manage standalone Decision model runtimes."""
+
+from __future__ import annotations
+
+import click
+
+from cli.consts import (
+    HEALTH_CHECK_TIMEOUT,
+    IMAGE_PULL_POLICY_ALWAYS,
+    IMAGE_PULL_POLICY_IF_NOT_PRESENT,
+    IMAGE_PULL_POLICY_NEVER,
+    SUPPORTED_CONTAINER_RUNTIMES,
+)
+from cli.decision_runtime.catalog import (
+    SUPPORTED_DECISION_BACKENDS,
+    DecisionCatalogError,
+    default_catalog_resolver,
+)
+from cli.decision_runtime.container import DecisionContainerError
+from cli.decision_runtime.lifecycle import (
+    DecisionLaunchReceipt,
+    DecisionLifecycleError,
+    DrunOptions,
+    run_decision_runtime,
+)
+from cli.decision_runtime.management import (
+    DecisionDiscoveryStatus,
+    DecisionManagedStatus,
+    DecisionManagementError,
+    DecisionOrphanStatus,
+    forget_decision_instance,
+    list_decision_instances,
+    status_decision_instance,
+    stop_decision_instance,
+)
+from cli.decision_runtime.registry import DecisionRegistryError
+
+DRUN_HELP = """Launch and safely manage standalone Decision model runtimes.
+
+Launching requires the integrated Decision catalog. Recovery commands remain
+available without it. ``vllm-sr drun MODEL`` is a shortcut for
+``vllm-sr drun run MODEL``. Detached instances remain registered for the
+ownership-checked list, status, stop, and forget commands.
+
+List and status report authoritative registry lifecycle separately from observed
+container state. List does not probe service readiness; status probes the strict
+``/ready`` contract for a registered running instance. Native MLX launch support
+remains explicit integration work and is not emulated by the container driver.
+
+\b
+Examples:
+  vllm-sr drun llm-semantic-router/Decision-1.0-Kai-0.6B
+  vllm-sr drun run llm-semantic-router/Decision-1.0-Lux-9B --backend rocm --detach
+  vllm-sr drun list
+  vllm-sr drun stop lux-8000-ab12cd34
+  vllm-sr drun forget lux-8000-ab12cd34
+"""
+
+_LIFECYCLE_ERRORS = (
+    DecisionCatalogError,
+    DecisionContainerError,
+    DecisionLifecycleError,
+    DecisionManagementError,
+    DecisionRegistryError,
+    ValueError,
+)
+
+
+class _DefaultRunGroup(click.Group):
+    """Preserve ``drun MODEL`` while exposing explicit lifecycle subcommands."""
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        if not args or (
+            args[0] not in self.commands and args[0] not in {"--help", "-h"}
+        ):
+            args.insert(0, "run")
+        return super().parse_args(ctx, args)
+
+
+@click.group("drun", cls=_DefaultRunGroup, help=DRUN_HELP, no_args_is_help=False)
+def drun() -> None:
+    """Launch and safely manage standalone Decision model runtimes."""
+
+
+@drun.command("run")
+@click.argument("model", required=True)
+@click.option(
+    "--revision",
+    help="Exact model revision; the catalog revision is used when omitted.",
+)
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    show_default=True,
+    help="Host IP used to publish the SystemOne endpoint.",
+)
+@click.option(
+    "--port",
+    type=click.IntRange(min=1, max=65535),
+    default=8000,
+    show_default=True,
+    help="Host port used to publish the SystemOne endpoint.",
+)
+@click.option(
+    "--backend",
+    type=click.Choice(SUPPORTED_DECISION_BACKENDS, case_sensitive=False),
+    default="auto",
+    show_default=True,
+    help="Decision inference backend.",
+)
+@click.option(
+    "--dtype",
+    help="Runtime dtype override; the selected backend profile decides when omitted.",
+)
+@click.option(
+    "--max-batch",
+    type=click.IntRange(min=1),
+    help="Maximum physical inference batch override.",
+)
+@click.option(
+    "--max-concurrency",
+    type=click.IntRange(min=1),
+    help="Maximum concurrent request override.",
+)
+@click.option(
+    "--max-queue",
+    type=click.IntRange(min=0),
+    help="Maximum queued request override.",
+)
+@click.option(
+    "--instance-name",
+    help="Stable lowercase name for this managed Decision runtime instance.",
+)
+@click.option(
+    "--image",
+    help="Digest-qualified Decision runtime OCI image override.",
+)
+@click.option(
+    "--image-pull-policy",
+    type=click.Choice(
+        (
+            IMAGE_PULL_POLICY_ALWAYS,
+            IMAGE_PULL_POLICY_IF_NOT_PRESENT,
+            IMAGE_PULL_POLICY_NEVER,
+        ),
+        case_sensitive=False,
+    ),
+    default=IMAGE_PULL_POLICY_IF_NOT_PRESENT,
+    show_default=True,
+    help="Container image pull policy.",
+)
+@click.option(
+    "--runtime",
+    type=click.Choice(SUPPORTED_CONTAINER_RUNTIMES, case_sensitive=False),
+    help="Docker-compatible container runtime.",
+)
+@click.option(
+    "--startup-timeout",
+    type=click.IntRange(min=1),
+    default=HEALTH_CHECK_TIMEOUT,
+    show_default=True,
+    help="Seconds allowed for model loading and readiness.",
+)
+@click.option(
+    "--detach",
+    is_flag=True,
+    help="Leave the managed runtime running after readiness succeeds.",
+)
+def run(
+    model: str,
+    revision: str | None,
+    host: str,
+    port: int,
+    backend: str,
+    dtype: str | None,
+    max_batch: int | None,
+    max_concurrency: int | None,
+    max_queue: int | None,
+    instance_name: str | None,
+    image: str | None,
+    image_pull_policy: str,
+    runtime: str | None,
+    startup_timeout: int,
+    detach: bool,
+) -> None:
+    """Launch one exact MODEL as a standalone SystemOne service."""
+
+    options = DrunOptions(
+        model=model,
+        revision=revision,
+        host=host,
+        port=port,
+        backend=backend.lower(),
+        dtype=dtype,
+        max_batch=max_batch,
+        max_concurrency=max_concurrency,
+        max_queue=max_queue,
+        instance_name=instance_name,
+        image=image,
+        image_pull_policy=image_pull_policy.lower(),
+        runtime=runtime.lower() if runtime is not None else None,
+        startup_timeout=startup_timeout,
+        detach=detach,
+    )
+    try:
+        resolver = default_catalog_resolver()
+        run_decision_runtime(
+            options,
+            resolver=resolver,
+            on_ready=_show_ready_receipt,
+        )
+    except _LIFECYCLE_ERRORS as error:
+        raise click.ClickException(str(error)) from error
+
+
+@drun.command("list")
+def list_instances() -> None:
+    """List registry lifecycle, runtime state, and cross-runtime orphans."""
+
+    try:
+        statuses = list_decision_instances()
+    except _LIFECYCLE_ERRORS as error:
+        raise click.ClickException(str(error)) from error
+    if not statuses:
+        click.echo("No managed Decision runtime instances.")
+        return
+    for managed_status in statuses:
+        if isinstance(managed_status, DecisionDiscoveryStatus):
+            _show_discovery_status(managed_status)
+        elif isinstance(managed_status, DecisionOrphanStatus):
+            _show_orphan_status(managed_status)
+        else:
+            _show_managed_status(managed_status)
+
+
+@drun.command("status")
+@click.argument("instance_name", required=True)
+def status(instance_name: str) -> None:
+    """Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME."""
+
+    try:
+        _show_managed_status(status_decision_instance(instance_name))
+    except _LIFECYCLE_ERRORS as error:
+        raise click.ClickException(str(error)) from error
+
+
+@drun.command("stop")
+@click.argument("instance_name", required=True)
+def stop(instance_name: str) -> None:
+    """Stop one owned runtime or clear a proven container-missing record."""
+
+    try:
+        receipt = stop_decision_instance(instance_name)
+    except _LIFECYCLE_ERRORS as error:
+        raise click.ClickException(str(error)) from error
+    if receipt.action == "stopped":
+        click.echo(f"Stopped Decision runtime instance {receipt.instance_name}.")
+    else:
+        click.echo(f"Removed stale registry record {receipt.instance_name}.")
+    _show_registry_durability(receipt.registry_durable)
+
+
+@drun.command("forget")
+@click.argument("instance_name", required=True)
+@click.option(
+    "--force",
+    is_flag=True,
+    help=(
+        "Forget a starting reservation after independently confirming its launch "
+        "process is no longer active; no container is changed."
+    ),
+)
+def forget(instance_name: str, force: bool) -> None:
+    """Forget registry evidence without stopping any container."""
+
+    try:
+        receipt = forget_decision_instance(instance_name, force=force)
+    except _LIFECYCLE_ERRORS as error:
+        raise click.ClickException(str(error)) from error
+    click.echo(
+        f"Forgot Decision runtime registry record {receipt.instance_name}; "
+        "no container was changed."
+    )
+    _show_registry_durability(receipt.registry_durable)
+
+
+def _show_ready_receipt(receipt: DecisionLaunchReceipt) -> None:
+    click.echo("Decision runtime ready")
+    click.echo(f"  Instance: {receipt.instance_name}")
+    click.echo(f"  Model: {receipt.model}@{receipt.revision}")
+    click.echo(f"  Endpoint: {receipt.endpoint}")
+    click.echo(f"  Backend: {receipt.backend} ({receipt.dtype})")
+    click.echo(f"  Artifact: {receipt.artifact_digest}")
+    click.echo(f"  Mode: {'detached' if receipt.detached else 'foreground'}")
+
+
+def _show_managed_status(managed_status: DecisionManagedStatus) -> None:
+    record = managed_status.record
+    ownership = "verified" if managed_status.ownership_verified else "unverified"
+    click.echo(
+        f"{record.instance_name}\tregistry={record.state}\t"
+        f"runtime={managed_status.runtime_state}\t"
+        f"readiness={managed_status.readiness_state}\townership={ownership}\t"
+        f"{record.model}\t{record.endpoint}"
+    )
+    _show_registry_durability(managed_status.registry_durable)
+
+
+def _show_orphan_status(orphan_status: DecisionOrphanStatus) -> None:
+    candidate = orphan_status.candidate
+    display_name = candidate.instance_name or candidate.container_name
+    label_state = (
+        "label-owned-unregistered"
+        if candidate.label_contract_valid
+        else "invalid-managed-labels"
+    )
+    click.echo(
+        f"{display_name}\tregistry=unregistered\truntime={candidate.state}\t"
+        f"readiness=not-probed\tengine={candidate.runtime}\tlabels={label_state}\t-\t-"
+    )
+    click.echo(
+        "Warning: this container is not present in the registry; it was not "
+        "adopted or changed.",
+        err=True,
+    )
+
+
+def _show_discovery_status(discovery_status: DecisionDiscoveryStatus) -> None:
+    runtime = discovery_status.runtime or "container runtime"
+    click.echo(
+        f"Warning: {runtime} managed-label discovery is unavailable; registry "
+        "entries above remain authoritative, but unregistered containers could "
+        "not be enumerated.",
+        err=True,
+    )
+
+
+def _show_registry_durability(durable: bool) -> None:
+    if not durable:
+        click.echo(
+            "Warning: the registry update is visible, but crash durability could "
+            "not be confirmed.",
+            err=True,
+        )

@@ -7,6 +7,7 @@ import click
 from cli import __version__
 from cli.commands.benchmark import benchmark
 from cli.commands.completion import completion
+from cli.commands.drun import drun
 from cli.commands.general import config
 from cli.commands.optimize import optimize
 from cli.commands.recipe import recipe
@@ -28,6 +29,7 @@ vLLM Semantic Router - Intelligent routing for vLLM
 
 REGISTERED_COMMANDS = (
     serve,
+    drun,
     config,
     route,
     request,

@@ -71,6 +71,12 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
 | [`vllm-sr config versions`](#vllm-sr-config-versions) | List immutable configuration backup versions. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
+| [`vllm-sr drun`](#vllm-sr-drun) | Launch and safely manage standalone Decision model runtimes. |
+| [`vllm-sr drun forget`](#vllm-sr-drun-forget) | Forget registry evidence without stopping any container. |
+| [`vllm-sr drun list`](#vllm-sr-drun-list) | List registry lifecycle, runtime state, and cross-runtime orphans. |
+| [`vllm-sr drun run`](#vllm-sr-drun-run) | Launch one exact MODEL as a standalone SystemOne service. |
+| [`vllm-sr drun status`](#vllm-sr-drun-status) | Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME. |
+| [`vllm-sr drun stop`](#vllm-sr-drun-stop) | Stop one owned runtime or clear a proven container-missing record. |
 | [`vllm-sr logs`](#vllm-sr-logs) | Show logs from vLLM Semantic Router service. |
 | [`vllm-sr optimize`](#vllm-sr-optimize) | Analyze routing evidence and produce candidate recipe changes. |
 | [`vllm-sr optimize recipe-learning`](#vllm-sr-optimize-recipe-learning) | Analyze replay and outcomes to produce recipe-learning artifacts. |
@@ -950,6 +956,116 @@ vllm-sr dashboard --no-open
 | `--namespace TEXT` | Kubernetes namespace (k8s target only) |
 | `--context TEXT` | kubectl / Helm context (k8s target only) |
 | `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
+| `--help` | Show this message and exit. Default: false. |
+
+## `vllm-sr drun` {#vllm-sr-drun}
+
+```text
+Usage: vllm-sr drun [OPTIONS] COMMAND [ARGS]...
+```
+
+Launch and safely manage standalone Decision model runtimes.
+
+Launching requires the integrated Decision catalog. Recovery commands remain
+available without it. ``vllm-sr drun MODEL`` is a shortcut for
+``vllm-sr drun run MODEL``. Detached instances remain registered for the
+ownership-checked list, status, stop, and forget commands.
+
+List and status report authoritative registry lifecycle separately from observed
+container state. List does not probe service readiness; status probes the strict
+``/ready`` contract for a registered running instance. Native MLX launch support
+remains explicit integration work and is not emulated by the container driver.
+
+```text
+Examples:
+  vllm-sr drun llm-semantic-router/Decision-1.0-Kai-0.6B
+  vllm-sr drun run llm-semantic-router/Decision-1.0-Lux-9B --backend rocm --detach
+  vllm-sr drun list
+  vllm-sr drun stop lux-8000-ab12cd34
+  vllm-sr drun forget lux-8000-ab12cd34
+```
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr drun forget` {#vllm-sr-drun-forget}
+
+```text
+Usage: vllm-sr drun forget [OPTIONS] INSTANCE_NAME
+```
+
+Forget registry evidence without stopping any container.
+
+| Parameter | Description |
+| --- | --- |
+| `INSTANCE_NAME` | Required argument. Type: text. |
+| `--force` | Forget a starting reservation after independently confirming its launch process is no longer active; no container is changed. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr drun list` {#vllm-sr-drun-list}
+
+```text
+Usage: vllm-sr drun list [OPTIONS]
+```
+
+List registry lifecycle, runtime state, and cross-runtime orphans.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr drun run` {#vllm-sr-drun-run}
+
+```text
+Usage: vllm-sr drun run [OPTIONS] MODEL
+```
+
+Launch one exact MODEL as a standalone SystemOne service.
+
+| Parameter | Description |
+| --- | --- |
+| `MODEL` | Required argument. Type: text. |
+| `--revision TEXT` | Exact model revision; the catalog revision is used when omitted. |
+| `--host TEXT` | Host IP used to publish the SystemOne endpoint.  [default: 127.0.0.1] |
+| `--port INTEGER RANGE` | Host port used to publish the SystemOne endpoint.  [default: 8000; 1&lt;=x&lt;=65535] |
+| `--backend CHOICE` | Decision inference backend.  [default: auto] Choices: auto, rocm, cuda. |
+| `--dtype TEXT` | Runtime dtype override; the selected backend profile decides when omitted. |
+| `--max-batch INTEGER RANGE` | Maximum physical inference batch override.  [x&gt;=1] |
+| `--max-concurrency INTEGER RANGE` | Maximum concurrent request override.  [x&gt;=1] |
+| `--max-queue INTEGER RANGE` | Maximum queued request override.  [x&gt;=0] |
+| `--instance-name TEXT` | Stable lowercase name for this managed Decision runtime instance. |
+| `--image TEXT` | Digest-qualified Decision runtime OCI image override. |
+| `--image-pull-policy CHOICE` | Container image pull policy.  [default: ifnotpresent] Choices: always, ifnotpresent, never. |
+| `--runtime CHOICE` | Docker-compatible container runtime. Choices: docker, podman. |
+| `--startup-timeout INTEGER RANGE` | Seconds allowed for model loading and readiness.  [default: 1800; x&gt;=1] |
+| `--detach` | Leave the managed runtime running after readiness succeeds. Default: false. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr drun status` {#vllm-sr-drun-status}
+
+```text
+Usage: vllm-sr drun status [OPTIONS] INSTANCE_NAME
+```
+
+Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME.
+
+| Parameter | Description |
+| --- | --- |
+| `INSTANCE_NAME` | Required argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr drun stop` {#vllm-sr-drun-stop}
+
+```text
+Usage: vllm-sr drun stop [OPTIONS] INSTANCE_NAME
+```
+
+Stop one owned runtime or clear a proven container-missing record.
+
+| Parameter | Description |
+| --- | --- |
+| `INSTANCE_NAME` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
 ## `vllm-sr logs` {#vllm-sr-logs}
