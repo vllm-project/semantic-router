@@ -112,23 +112,41 @@ def _fake_fla_modules(package: Path, configs: dict):
             self.keys = ["D", "NB"]
             self.arg_names = ["x", "y", "rstd", "D", "NB"]
             self.cache = {}
+            self.cache_lookups = 0
+            self.cache_installs = 0
 
         def run(self, *args, **kwargs):
+            # FLA v0.5.2 loads the config only on a cache miss; without a
+            # config, its original run would enter an autotune fallback.
+            if kwargs["key"] not in self.cache:
+                self.maybe_load_cached_config(
+                    SimpleNamespace(autotune_key=kwargs["key"])
+                )
+            if kwargs["key"] not in self.cache:
+                raise RuntimeError("original run would autotune")
             calls.append(kwargs["key"])
             return "launched"
 
         def maybe_load_cached_config(self, key):
-            self.cache[key.autotune_key] = SimpleNamespace(**configs[key.autotune_key])
+            self.cache_installs += 1
+            selected = cache.load_cached_config(self.kernel_name, key)
+            if selected is not None:
+                self.cache[key.autotune_key] = SimpleNamespace(**selected)
 
     kernel = FakeKernel()
     strict = object()
+
+    def load_cached_config(name, key):
+        kernel.cache_lookups += 1
+        return configs.get(key.autotune_key)
+
     cache = SimpleNamespace(
         __file__=str(package / "ops" / "utils" / "cache.py"),
         FlaCacheMode=SimpleNamespace(STRICT=strict),
         FLA_CACHE_MODE=strict,
         CachedAutotuner=FakeKernel,
         AutotuneKey=FakeKey,
-        load_cached_config=lambda name, key: configs.get(key.autotune_key),
+        load_cached_config=load_cached_config,
     )
     l2norm = SimpleNamespace(
         __file__=str(package / "modules" / "l2norm.py"),
@@ -194,6 +212,69 @@ def test_strict_binding_guards_exact_keys_and_one_profile_per_process(
     )
     with pytest.raises(binder.QwenRocmBindingError, match=r"different.*active"):
         selected.bind(second)
+
+
+def test_verified_warm_key_avoids_profile_hash_and_fla_config_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    profile, package, configs = _profile(tmp_path)
+    modules, kernel, _, calls = _fake_fla_modules(package, configs)
+    monkeypatch.setattr(binder, "_ACTIVE", None)
+    monkeypatch.setattr(binder, "sys", SimpleNamespace(modules={}))
+    monkeypatch.setattr(binder, "_fla_package_root", lambda: package)
+    monkeypatch.setattr(binder, "_import_module", modules.__getitem__)
+    monkeypatch.delenv("FLA_CACHE_MODE", raising=False)
+    monkeypatch.delenv("FLA_CONFIG_DIR", raising=False)
+    binder.create_qwen_rocm_profile_binder().bind(profile)
+
+    original_hash = binder._sha256_file
+    hash_calls = []
+
+    def count_hash(path):
+        hash_calls.append(path)
+        return original_hash(path)
+
+    monkeypatch.setattr(binder, "_sha256_file", count_hash)
+    legal = (128, 1, "torch.bfloat16", "torch.bfloat16", "torch.float32")
+    for _ in range(48):
+        assert kernel.run(key=legal) == "launched"
+    assert calls == [legal] * 48
+    assert hash_calls == []
+    assert kernel.cache_lookups == 2  # first exact check and install only
+    assert kernel.cache_installs == 1
+
+    with pytest.raises(binder.QwenRocmBindingError, match="unprofiled.*key"):
+        kernel.run(key=(128, 3, *legal[2:]))
+    assert calls == [legal] * 48
+    assert kernel.cache_lookups == 2
+
+
+@pytest.mark.parametrize("mutation", ["in_place", "replace"])
+def test_config_file_mutation_stops_cached_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    profile, package, configs = _profile(tmp_path)
+    modules, kernel, _, calls = _fake_fla_modules(package, configs)
+    monkeypatch.setattr(binder, "_ACTIVE", None)
+    monkeypatch.setattr(binder, "sys", SimpleNamespace(modules={}))
+    monkeypatch.setattr(binder, "_fla_package_root", lambda: package)
+    monkeypatch.setattr(binder, "_import_module", modules.__getitem__)
+    monkeypatch.delenv("FLA_CACHE_MODE", raising=False)
+    monkeypatch.delenv("FLA_CONFIG_DIR", raising=False)
+    binder.create_qwen_rocm_profile_binder().bind(profile)
+
+    legal = (128, 1, "torch.bfloat16", "torch.bfloat16", "torch.float32")
+    assert kernel.run(key=legal) == "launched"
+    if mutation == "in_place":
+        original = profile.kernel_config_path.read_bytes()
+        profile.kernel_config_path.write_bytes(b"x" * len(original))
+    else:
+        alternate = tmp_path / "replacement.json"
+        alternate.write_bytes(b"x" * profile.kernel_config_path.stat().st_size)
+        alternate.replace(profile.kernel_config_path)
+    with pytest.raises(binder.QwenRocmBindingError, match="configuration changed"):
+        kernel.run(key=legal)
+    assert calls == [legal]
 
 
 def test_installed_fla_source_drift_fails_before_environment_or_import(
