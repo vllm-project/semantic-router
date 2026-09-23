@@ -32,9 +32,7 @@ def base_torch_site(backend: str) -> tuple[Path, Path]:
         raise RuntimeError("CUDA image requires a CUDA Torch wheel")
     if backend == "rocm" and not hip:
         raise RuntimeError("ROCm image requires a preinstalled HIP Torch build")
-    if backend in {"cpu", "cuda"} and not str(torch.__version__).startswith(
-        "2.12.0+"
-    ):
+    if backend in {"cpu", "cuda"} and not str(torch.__version__).startswith("2.12.0+"):
         raise RuntimeError("CPU/CUDA Torch wheel differs from the pinned build")
 
     torch_file = Path(torch.__file__).resolve(strict=True)
