@@ -166,7 +166,7 @@ func containedMkdirAll(root string, components []string, trustedRoot string) (st
 	if err != nil {
 		return "", fmt.Errorf("failed to open trusted root: %w", err)
 	}
-	defer rootFS.Close()
+	defer func() { _ = rootFS.Close() }()
 
 	// Root.MkdirAll resolves every path component relative to an opened root
 	// and refuses symbolic links that escape it, closing the Lstat/Mkdir
@@ -211,7 +211,7 @@ func writeContainedFile(dirRef, trustedRoot, name string, data []byte, perm os.F
 	if err != nil {
 		return fmt.Errorf("failed to open trusted root: %w", err)
 	}
-	defer rootFS.Close()
+	defer func() { _ = rootFS.Close() }()
 
 	// Preserve the deterministic rejection of an already-present destination
 	// symlink. Root.WriteFile below provides the race-safe boundary: even if
