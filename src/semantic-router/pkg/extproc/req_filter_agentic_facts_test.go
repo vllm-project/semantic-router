@@ -240,6 +240,39 @@ func TestIngestAgenticFactsTrustedNoCarrierIsEmptyResult(t *testing.T) {
 	}
 }
 
+// An ordinary request carries neither header. It must not be recorded as a
+// rejected envelope, or Replay would report almost every request as one.
+func TestIngestAgenticFactsUntrustedNoCarrierIsEmptyResult(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers map[string]string
+	}{
+		{
+			name:    "no headers at all",
+			headers: map[string]string{},
+		},
+		{
+			name: "trust marker with wrong value",
+			headers: map[string]string{
+				defaultTrustHeader(): "0",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			router := newRouterWithAgenticFacts(config.AgenticFactsConfig{Enabled: true})
+			ctx := &RequestContext{Headers: tt.headers}
+
+			router.ingestAgenticFacts(ctx)
+
+			if ctx.AgenticFacts.HasFacts() || ctx.AgenticFacts.Rejected() {
+				t.Fatalf("expected zero-value Result for a request with no envelope, got %+v", ctx.AgenticFacts)
+			}
+		})
+	}
+}
+
 func TestIngestAgenticFactsTrustedMalformedEnvelope(t *testing.T) {
 	router := newRouterWithAgenticFacts(config.AgenticFactsConfig{Enabled: true})
 	ctx := &RequestContext{Headers: map[string]string{
