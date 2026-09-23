@@ -32,6 +32,15 @@ def receipt(directory: Path) -> Path:
         "models": [],
     }
     for index, model_id in enumerate(sorted(rocm.MODEL_IDS)):
+        slug = model_id.rsplit("/", 1)[-1].removeprefix("Decision-1.0-").lower()
+        raw_hashes = {}
+        for filename in sorted(rocm.RAW_FILES):
+            relative = f"raw/{slug}/{filename}"
+            raw_path = directory / relative
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_bytes = f"{model_id}:{filename}".encode()
+            raw_path.write_bytes(raw_bytes)
+            raw_hashes[relative] = rocm._digest(raw_bytes)
         evidence = {
             "image_ref": CANDIDATE,
             "source_sha": REVISION,
@@ -42,6 +51,7 @@ def receipt(directory: Path) -> Path:
             "device": "rocm",
             "result": "passed",
             "checks": dict.fromkeys(rocm.REQUIRED_CHECKS, True),
+            "raw_sha256": raw_hashes,
         }
         filename = f"model-{index}.json"
         raw = json.dumps(evidence).encode()
@@ -88,6 +98,63 @@ class ROCmPromotionTests(unittest.TestCase):
             path.write_text(json.dumps(original))
             (Path(tmp) / original["models"][0]["evidence_file"]).write_text("{}")
             with self.assertRaisesRegex(ValueError, "content changed"):
+                rocm.validate_receipt(path, owner="example", revision=REVISION)
+
+    def test_raw_evidence_must_exist_match_hash_and_stay_in_receipt_directory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            path = receipt(directory)
+            record = json.loads(path.read_text())
+            first = directory / record["models"][0]["evidence_file"]
+            evidence = json.loads(first.read_text())
+            relative = next(iter(evidence["raw_sha256"]))
+            raw_path = directory / relative
+            original = raw_path.read_bytes()
+            raw_path.write_bytes(b"changed")
+            with self.assertRaisesRegex(ValueError, "raw evidence content changed"):
+                rocm.validate_receipt(path, owner="example", revision=REVISION)
+            raw_path.write_bytes(original)
+            raw_path.unlink()
+            with self.assertRaisesRegex(ValueError, "raw evidence file is missing"):
+                rocm.validate_receipt(path, owner="example", revision=REVISION)
+            raw_path.symlink_to(path)
+            with self.assertRaisesRegex(ValueError, "raw evidence content changed"):
+                rocm.validate_receipt(path, owner="example", revision=REVISION)
+
+    def test_raw_evidence_inventory_is_exact(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = Path(tmp)
+            path = receipt(directory)
+            record = json.loads(path.read_text())
+            first = directory / record["models"][0]["evidence_file"]
+            evidence = json.loads(first.read_text())
+            evidence["raw_sha256"].pop(next(iter(evidence["raw_sha256"])))
+            updated = json.dumps(evidence).encode()
+            first.write_bytes(updated)
+            record["models"][0]["evidence_sha256"] = rocm._digest(updated)
+            path.write_text(json.dumps(record))
+            with self.assertRaisesRegex(
+                ValueError, "raw evidence inventory is incomplete"
+            ):
+                rocm.validate_receipt(path, owner="example", revision=REVISION)
+
+    def test_raw_evidence_symlink_cannot_escape_receipt_directory(self):
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            tempfile.TemporaryDirectory() as external,
+        ):
+            directory = Path(tmp)
+            path = receipt(directory)
+            record = json.loads(path.read_text())
+            first = directory / record["models"][0]["evidence_file"]
+            evidence = json.loads(first.read_text())
+            relative = next(iter(evidence["raw_sha256"]))
+            raw_path = directory / relative
+            external_file = Path(external) / "copied-raw.txt"
+            external_file.write_bytes(raw_path.read_bytes())
+            raw_path.unlink()
+            raw_path.symlink_to(external_file)
+            with self.assertRaisesRegex(ValueError, "escapes the receipt directory"):
                 rocm.validate_receipt(path, owner="example", revision=REVISION)
 
     def test_registry_digest_and_source_labels_are_checked(self):

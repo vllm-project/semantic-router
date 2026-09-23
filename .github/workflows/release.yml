@@ -29,6 +29,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
+      decision_changed: ${{ steps.decision-impact.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,6 +80,27 @@ jobs:
           python3 tools/ci/ci_plan.py previous-release \
             --version "$RELEASE_VERSION" --github-output "$GITHUB_OUTPUT"
 
+      - name: Detect Decision runtime inputs since the previous release
+        id: decision-impact
+        env:
+          BASE_REF: ${{ steps.baseline.outputs.ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet "$BASE_REF" "$GITHUB_SHA" -- \
+              src/vllm-sr/decision_runtime/ \
+              src/vllm-sr/cli/decision_runtime/ \
+              src/vllm-sr/cli/commands/drun.py \
+              .github/workflows/decision-qualified-package.yml \
+              tools/ci/decision_rocm_promotion.py \
+              tools/ci/decision_rocm_qualify.py \
+              tools/ci/decision_image_lock_release.py; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            result=$?
+            test "$result" -eq 1
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
   ci:
     name: Release Candidate
     needs: validate
@@ -103,9 +125,18 @@ jobs:
         env:
           VERSION_RESULT: ${{ needs.validate.result }}
           QUALIFICATION_RESULT: ${{ needs.ci.result }}
+          DECISION_CHANGED: ${{ needs.validate.outputs.decision_changed }}
+          RELEASE_EVENT: ${{ github.event_name }}
         run: |
           test "$VERSION_RESULT" = success
           test "$QUALIFICATION_RESULT" = success
+          # A stable Decision tag needs an exact-source protected main receipt,
+          # registry digest revalidation, and a fresh tag-versioned locked dist.
+          # The current stable path has no such artifact handoff.
+          if [[ "$RELEASE_EVENT" == push && "$DECISION_CHANGED" == true ]]; then
+            echo '::error::Decision release needs a protected six-model ROCm run and a post-image wheel/sdist; the stable-tag path has no qualified artifact yet.'
+            exit 1
+          fi
 
   docker:
     name: Publish Images

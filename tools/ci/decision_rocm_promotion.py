@@ -38,6 +38,25 @@ REQUIRED_CHECKS = frozenset(
 )
 SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
+RAW_FILES = frozenset(
+    {
+        "drun-launch.txt",
+        "ready.json",
+        "status.json",
+        "metrics-before.txt",
+        "metrics-after.txt",
+    }
+    | {
+        f"{probe}-{direction}.json"
+        for probe in ("mixed-single", "two-state-batch", "wide-single", "wide-batch")
+        for direction in ("request", "response")
+    }
+    | {
+        f"concurrent-{index:02d}-{direction}.json"
+        for index in range(8)
+        for direction in ("request", "response")
+    }
+)
 
 
 def _digest(value: bytes) -> str:
@@ -52,6 +71,28 @@ def _evidence_file(root: Path, name: str) -> Path:
     if not full.is_relative_to(root.resolve(strict=True)):
         raise ValueError("qualification evidence escapes the receipt directory")
     return full
+
+
+def _validate_raw_files(root: Path, model_id: str, evidence: dict) -> None:
+    slug = model_id.rsplit("/", 1)[-1].removeprefix("Decision-1.0-").lower()
+    prefix = f"raw/{slug}/"
+    expected = {prefix + filename for filename in RAW_FILES}
+    declared = evidence.get("raw_sha256")
+    if not isinstance(declared, dict) or set(declared) != expected:
+        raise ValueError(f"ROCm raw evidence inventory is incomplete for {model_id}")
+    for name, digest in declared.items():
+        if not isinstance(digest, str) or not SHA256.fullmatch(digest):
+            raise ValueError(f"ROCm raw evidence hash is invalid for {model_id}")
+        try:
+            path = (root / name).resolve(strict=True)
+        except OSError as error:
+            raise ValueError(
+                f"ROCm raw evidence file is missing for {model_id}"
+            ) from error
+        if not path.is_relative_to(root.resolve(strict=True)):
+            raise ValueError("ROCm raw evidence escapes the receipt directory")
+        if not path.is_file() or _digest(path.read_bytes()) != digest:
+            raise ValueError(f"ROCm raw evidence content changed for {model_id}")
 
 
 def validate_receipt(path: Path, *, owner: str, revision: str) -> dict:
@@ -121,6 +162,7 @@ def validate_receipt(path: Path, *, owner: str, revision: str) -> dict:
             )
         ):
             raise ValueError(f"ROCm evidence is incomplete for {model_id}")
+        _validate_raw_files(path.parent, model_id, evidence)
     if observed != MODEL_IDS:
         raise ValueError("ROCm qualification is missing a Decision model")
     return record

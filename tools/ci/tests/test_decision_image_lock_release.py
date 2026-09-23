@@ -58,6 +58,15 @@ def _fixture(directory: Path) -> tuple[Path, Path, Path]:
     }
     for index, model_id in enumerate(sorted(rocm.MODEL_IDS)):
         revision = f"{index}" * 40
+        slug = model_id.rsplit("/", 1)[-1].removeprefix("Decision-1.0-").lower()
+        raw_hashes = {}
+        for filename in sorted(rocm.RAW_FILES):
+            relative = f"raw/{slug}/{filename}"
+            raw_path = directory / relative
+            raw_path.parent.mkdir(parents=True, exist_ok=True)
+            raw_bytes = f"{model_id}:{filename}".encode()
+            raw_path.write_bytes(raw_bytes)
+            raw_hashes[relative] = rocm._digest(raw_bytes)
         evidence = {
             "image_ref": CANDIDATE,
             "source_sha": REVISION,
@@ -68,6 +77,7 @@ def _fixture(directory: Path) -> tuple[Path, Path, Path]:
             "device": "rocm",
             "result": "passed",
             "checks": dict.fromkeys(rocm.REQUIRED_CHECKS, True),
+            "raw_sha256": raw_hashes,
         }
         filename = f"model-{index}.json"
         raw = json.dumps(evidence, sort_keys=True).encode()
