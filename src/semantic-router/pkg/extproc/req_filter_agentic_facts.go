@@ -62,6 +62,11 @@ func (r *OpenAIRouter) ingestAgenticFacts(ctx *RequestContext) {
 	removeHeaderValueCI(ctx, trustHeader)
 	removeHeaderValueCI(ctx, carrierHeader)
 
+	if raw == "" {
+		// Nothing presented, trusted or not. The zero-value Result records
+		// nothing, so an ordinary request never appears as a rejection.
+		return
+	}
 	if !trusted {
 		// An untrusted caller's envelope is never parsed, not even to report
 		// it as malformed. Presence alone reveals nothing about its content.
@@ -69,9 +74,6 @@ func (r *OpenAIRouter) ingestAgenticFacts(ctx *RequestContext) {
 			Rejections: []agenticfacts.Rejection{{Reason: agenticfacts.ReasonUntrusted}},
 		}
 		return
-	}
-	if raw == "" {
-		return // trusted, but nothing presented; zero-value Result is correct
 	}
 
 	ctx.AgenticFacts = agenticfacts.Validate(
