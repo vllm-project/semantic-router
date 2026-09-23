@@ -37,6 +37,7 @@ from cli.decision_runtime.catalog import (
 )
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
+    validate_decision_image_reference,
     validate_immutable_image_reference,
 )
 
@@ -120,7 +121,11 @@ class IntegratedDecisionCatalogResolver:
                 "pass a digest-qualified --image during release validation"
             )
         try:
-            image = validate_immutable_image_reference(image)
+            image = (
+                validate_decision_image_reference(image)
+                if request.image is not None
+                else validate_immutable_image_reference(image)
+            )
         except ImmutableImageReferenceError as error:
             raise DecisionCatalogError(
                 f"Decision runtime image for {backend!r} is invalid: {error}"

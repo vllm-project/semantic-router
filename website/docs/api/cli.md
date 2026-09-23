@@ -1036,7 +1036,7 @@ Launch one exact MODEL as a standalone SystemOne service.
 | `--max-queue INTEGER RANGE` | Maximum queued request override.  [x&gt;=0] |
 | `--cpu-threads INTEGER RANGE` | CPU-only Torch/BLAS threads; default is min(8, container CPU allowance).  [1&lt;=x&lt;=256] |
 | `--instance-name TEXT` | Stable lowercase name for this managed Decision runtime instance. |
-| `--image TEXT` | Digest-qualified Decision runtime OCI image override. |
+| `--image TEXT` | Digest-qualified image, or exact local Docker sha256 image ID with --image-pull-policy never. |
 | `--image-pull-policy CHOICE` | Container image pull policy.  [default: ifnotpresent] Choices: always, ifnotpresent, never. |
 | `--runtime CHOICE` | Docker-compatible container runtime. Choices: docker, podman. |
 | `--startup-timeout INTEGER RANGE` | Seconds allowed for model loading and readiness.  [default: 1800; x&gt;=1] |

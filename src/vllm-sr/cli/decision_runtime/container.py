@@ -19,6 +19,7 @@ from typing import Protocol
 from cli.consts import (
     CONTAINER_RUNTIME_ENV,
     DEFAULT_NOFILE_LIMIT,
+    IMAGE_PULL_POLICY_NEVER,
     SUPPORTED_CONTAINER_RUNTIMES,
 )
 from cli.container_images import _ensure_image_available
@@ -39,7 +40,8 @@ from cli.container_start_runner import run_container_specs
 from cli.decision_runtime.catalog import DecisionRuntimeMount, ResolvedDecisionRuntime
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
-    validate_immutable_image_reference,
+    is_local_docker_image_id,
+    validate_decision_image_reference,
 )
 
 MANAGED_LABEL = "ai.vllm-sr.drun.managed"
@@ -181,6 +183,9 @@ class LowLevelDecisionContainerDriver:
     """Container implementation built only from low-level CLI seams."""
 
     def ensure_image(self, launch: DecisionContainerLaunch) -> None:
+        if _validated_launch_image(launch):
+            _ensure_local_docker_image_id(launch.runtime_spec.image)
+            return
         try:
             _ensure_image_available(launch.runtime_spec.image, launch.pull_policy)
         except Exception as error:
@@ -329,8 +334,10 @@ class LowLevelDecisionContainerDriver:
             )
             if label_contract_valid:
                 try:
-                    validate_immutable_image_reference(image)
+                    validate_decision_image_reference(image)
                 except ImmutableImageReferenceError:
+                    label_contract_valid = False
+                if is_local_docker_image_id(image) and runtime != "docker":
                     label_contract_valid = False
             candidates.append(
                 DecisionContainerCandidate(
@@ -506,10 +513,7 @@ def build_decision_container_command(
     """Build one stable, inspectable container command from resolved inputs."""
 
     spec = launch.runtime_spec
-    try:
-        validate_immutable_image_reference(spec.image)
-    except ImmutableImageReferenceError as error:
-        raise DecisionContainerError(str(error)) from error
+    local_image_id = _validated_launch_image(launch)
     validate_decision_environment(spec.environment)
     command = build_base_run_command(
         launch.runtime,
@@ -542,9 +546,49 @@ def build_decision_container_command(
         append_amd_gpu_passthrough(command, "amd")
     elif spec.backend == "cuda":
         append_nvidia_gpu_passthrough(command, launch.runtime)
+    if local_image_id:
+        command.append("--pull=never")
     command.append(spec.image)
     command.extend(spec.command)
     return command
+
+
+def _validated_launch_image(launch: DecisionContainerLaunch) -> bool:
+    """Keep local IDs on Docker's no-pull path at every launch seam."""
+
+    try:
+        validate_decision_image_reference(launch.runtime_spec.image)
+    except ImmutableImageReferenceError as error:
+        raise DecisionContainerError(str(error)) from error
+    local_image_id = is_local_docker_image_id(launch.runtime_spec.image)
+    if local_image_id and (
+        launch.runtime != "docker" or launch.pull_policy != IMAGE_PULL_POLICY_NEVER
+    ):
+        raise DecisionContainerError(
+            "A local Docker image ID requires Docker and image pull policy 'never'."
+        )
+    return local_image_id
+
+
+def _ensure_local_docker_image_id(image_id: str) -> None:
+    """Inspect an exact local image ID without invoking any pull mechanism."""
+
+    try:
+        result = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image_id],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=_INSPECT_TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise DecisionContainerError(
+            f"Local Docker image ID could not be inspected: {_safe_detail(error)}"
+        ) from error
+    if result.returncode != 0 or result.stdout.strip() != image_id:
+        raise DecisionContainerError(
+            "The exact local Docker image ID is not present; no pull was attempted."
+        )
 
 
 def validate_decision_environment(environment: object) -> None:

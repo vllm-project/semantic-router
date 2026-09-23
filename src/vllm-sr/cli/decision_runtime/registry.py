@@ -18,7 +18,8 @@ from urllib.parse import urlsplit
 
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
-    validate_immutable_image_reference,
+    is_local_docker_image_id,
+    validate_decision_image_reference,
 )
 
 try:
@@ -521,11 +522,13 @@ def _validate_record(record: DecisionInstanceRecord) -> None:
     ):
         raise DecisionRegistryError("Decision runtime registry record is invalid.")
     try:
-        validate_immutable_image_reference(record.image)
+        validate_decision_image_reference(record.image)
     except ImmutableImageReferenceError as error:
         raise DecisionRegistryError(
             "Decision runtime registry record is invalid."
         ) from error
+    if is_local_docker_image_id(record.image) and record.runtime != "docker":
+        raise DecisionRegistryError("Decision runtime registry record is invalid.")
     if record.container_id is not None and (
         not isinstance(record.container_id, str)
         or not re.fullmatch(r"[0-9a-f]{64}", record.container_id)

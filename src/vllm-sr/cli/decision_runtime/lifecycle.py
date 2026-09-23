@@ -40,7 +40,8 @@ from cli.decision_runtime.container import (
 )
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
-    validate_immutable_image_reference,
+    is_local_docker_image_id,
+    validate_decision_image_reference,
 )
 from cli.decision_runtime.registry import (
     DecisionInstanceRecord,
@@ -119,6 +120,10 @@ def run_decision_runtime(
     if runtime not in SUPPORTED_CONTAINER_RUNTIMES:
         raise DecisionLifecycleError(
             "Container runtime selection returned an unsupported runtime."
+        )
+    if is_local_docker_image_id(spec.image) and runtime != "docker":
+        raise DecisionLifecycleError(
+            "A local Docker image ID requires the Docker container runtime."
         )
     host = _normalize_host(options.host)
     instance_name = options.instance_name or _default_instance_name(
@@ -276,6 +281,14 @@ def _resolve_runtime(
         )
     spec = _freeze_resolved_runtime(spec)
     _validate_resolved_runtime(request, spec)
+    if is_local_docker_image_id(spec.image) and (
+        options.image != spec.image
+        or options.image_pull_policy != IMAGE_PULL_POLICY_NEVER
+    ):
+        raise DecisionLifecycleError(
+            "A local Docker image ID requires explicit --image and "
+            "--image-pull-policy never."
+        )
     if options.cpu_threads is not None:
         if spec.backend != "cpu":
             raise DecisionLifecycleError(
@@ -424,11 +437,20 @@ def _validate_options(options: DrunOptions) -> None:
             )
     if options.image is not None:
         try:
-            validate_immutable_image_reference(options.image)
+            validate_decision_image_reference(options.image)
         except ImmutableImageReferenceError as error:
             raise DecisionLifecycleError(
                 f"Decision runtime image override is invalid: {error}."
             ) from error
+        if is_local_docker_image_id(options.image):
+            if options.image_pull_policy != IMAGE_PULL_POLICY_NEVER:
+                raise DecisionLifecycleError(
+                    "A local Docker image ID requires --image-pull-policy never."
+                )
+            if options.runtime not in (None, "docker"):
+                raise DecisionLifecycleError(
+                    "A local Docker image ID requires the Docker container runtime."
+                )
 
 
 def _validate_resolved_runtime(
@@ -450,7 +472,7 @@ def _validate_resolved_runtime(
             "Resolved Decision runtime backend must be rocm, cuda, cpu, or mlx."
         )
     try:
-        validate_immutable_image_reference(spec.image)
+        validate_decision_image_reference(spec.image)
     except ImmutableImageReferenceError as error:
         raise DecisionLifecycleError(
             f"Resolved Decision runtime image is invalid: {error}."

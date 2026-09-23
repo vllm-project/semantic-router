@@ -138,7 +138,10 @@ def drun() -> None:
 )
 @click.option(
     "--image",
-    help="Digest-qualified Decision runtime OCI image override.",
+    help=(
+        "Digest-qualified image, or exact local Docker sha256 image ID with "
+        "--image-pull-policy never."
+    ),
 )
 @click.option(
     "--image-pull-policy",

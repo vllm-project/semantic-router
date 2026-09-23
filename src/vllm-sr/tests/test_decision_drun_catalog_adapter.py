@@ -17,6 +17,7 @@ from decision_runtime.catalog_adapter import ResolvedRuntimeModel
 MODEL = "llm-semantic-router/Decision-1.0-Kai-0.6B"
 REVISION = "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
 IMAGE = f"example.test/decision-runtime-rocm@sha256:{'a' * 64}"
+LOCAL_IMAGE_ID = f"sha256:{'9' * 64}"
 
 
 @dataclass
@@ -127,6 +128,27 @@ def test_explicit_tuning_is_forwarded_without_changing_model_identity(
         "--max-queue",
         "64",
     )
+
+
+def test_explicit_local_image_id_is_forwarded_without_catalog_image_fallback(
+    tmp_path: Path,
+) -> None:
+    spec = resolver(tmp_path, images={}).resolve(request(image=LOCAL_IMAGE_ID))
+
+    assert spec.image == LOCAL_IMAGE_ID
+
+
+def test_packaged_image_inventory_still_requires_repository_digest(
+    tmp_path: Path,
+) -> None:
+    bridge = resolver(tmp_path, images={"rocm": LOCAL_IMAGE_ID})
+
+    with pytest.raises(
+        DecisionCatalogError, match="safe digest-qualified OCI reference"
+    ):
+        bridge.resolve(request())
+
+    assert bridge.artifacts.calls == []  # type: ignore[attr-defined]
 
 
 def test_auto_backend_uses_injected_detector(tmp_path: Path) -> None:

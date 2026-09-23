@@ -18,6 +18,20 @@ class ImmutableImageReferenceError(ValueError):
     """An image reference is unsafe, mutable, or not conservatively valid."""
 
 
+def is_local_docker_image_id(reference: object) -> bool:
+    """Recognize one complete, lowercase Docker image ID without abbreviations."""
+
+    return isinstance(reference, str) and _DIGEST.fullmatch(reference) is not None
+
+
+def validate_decision_image_reference(reference: object) -> str:
+    """Accept a published digest reference or an exact local Docker image ID."""
+
+    if isinstance(reference, str) and is_local_docker_image_id(reference):
+        return reference
+    return validate_immutable_image_reference(reference)
+
+
 def validate_immutable_image_reference(reference: object) -> str:
     """Return a digest-qualified OCI reference after strict validation.
 

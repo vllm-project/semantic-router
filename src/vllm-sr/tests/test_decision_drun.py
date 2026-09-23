@@ -40,6 +40,7 @@ from cli.decision_runtime.container import (  # noqa: E402
 )
 from cli.decision_runtime.image_reference import (  # noqa: E402
     ImmutableImageReferenceError,
+    validate_decision_image_reference,
     validate_immutable_image_reference,
 )
 from cli.decision_runtime.lifecycle import (  # noqa: E402
@@ -67,6 +68,7 @@ from cli.main import main  # noqa: E402
 REVISION = "a" * 40
 ARTIFACT_DIGEST = f"sha256:{'b' * 64}"
 IMAGE = f"example.test/decision-runtime@sha256:{'c' * 64}"
+LOCAL_IMAGE_ID = f"sha256:{'9' * 64}"
 MODEL = "llm-semantic-router/Decision-1.0-Kai-0.6B"
 CONTAINER_ID = "d" * 64
 
@@ -450,6 +452,36 @@ def test_drun_cli_forwards_cpu_thread_override(monkeypatch):
     assert len(options_seen) == 1
     assert options_seen[0].backend == "cpu"
     assert options_seen[0].cpu_threads == 6
+
+
+def test_drun_cli_forwards_exact_local_docker_image_id(monkeypatch):
+    options_seen: list[DrunOptions] = []
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", lambda: object())
+    monkeypatch.setattr(
+        drun_command,
+        "run_decision_runtime",
+        lambda options, **_kwargs: options_seen.append(options),
+    )
+
+    result = CliRunner().invoke(
+        drun_command.drun,
+        [
+            "run",
+            MODEL,
+            "--image",
+            LOCAL_IMAGE_ID,
+            "--image-pull-policy",
+            "never",
+            "--runtime",
+            "docker",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(options_seen) == 1
+    assert options_seen[0].image == LOCAL_IMAGE_ID
+    assert options_seen[0].image_pull_policy == "never"
+    assert options_seen[0].runtime == "docker"
 
 
 def test_drun_cli_runs_fixture_lifecycle_end_to_end(monkeypatch, tmp_path: Path):
@@ -1031,6 +1063,114 @@ def test_explicit_image_is_validated_before_catalog_resolution(tmp_path: Path):
 
 
 @pytest.mark.parametrize(
+    ("pull_policy", "runtime", "message"),
+    (
+        ("ifnotpresent", "docker", "image-pull-policy never"),
+        ("always", "docker", "image-pull-policy never"),
+        ("never", "podman", "Docker container runtime"),
+    ),
+)
+def test_local_image_id_requires_no_pull_docker_before_catalog_resolution(
+    monkeypatch,
+    pull_policy: str,
+    runtime: str,
+    message: str,
+) -> None:
+    class MustNotResolve:
+        def resolve(self, _request):
+            raise AssertionError("invalid local image request reached catalog")
+
+    monkeypatch.setattr(
+        drun_command, "default_catalog_resolver", lambda: MustNotResolve()
+    )
+    result = CliRunner().invoke(
+        drun_command.drun,
+        [
+            "run",
+            MODEL,
+            "--image",
+            LOCAL_IMAGE_ID,
+            "--image-pull-policy",
+            pull_policy,
+            "--runtime",
+            runtime,
+        ],
+    )
+
+    assert result.exit_code == 1
+    assert message in result.output
+    assert not isinstance(result.exception, AssertionError)
+
+
+def test_explicit_local_image_id_is_retained_in_launch_and_registry(tmp_path: Path):
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = FakeDriver()
+
+    run_decision_runtime(
+        DrunOptions(
+            model=MODEL,
+            image=LOCAL_IMAGE_ID,
+            image_pull_policy="never",
+            runtime="docker",
+            instance_name="local-image",
+            detach=True,
+        ),
+        resolver=FixtureResolver(),
+        registry=registry,
+        driver=driver,
+        runtime_selector=lambda _requested: "docker",
+    )
+
+    launch = next(event[1] for event in driver.events if event[0] == "start")
+    record = registry.get("local-image")
+    assert launch.runtime_spec.image == LOCAL_IMAGE_ID
+    assert record.image == LOCAL_IMAGE_ID
+    assert record.identity_digest == launch.identity_digest
+    assert record.state == "running"
+
+
+def test_local_image_id_refuses_selected_non_docker_runtime(tmp_path: Path):
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = FakeDriver()
+
+    with pytest.raises(
+        lifecycle.DecisionLifecycleError, match="Docker container runtime"
+    ):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, image=LOCAL_IMAGE_ID, image_pull_policy="never"),
+            resolver=FixtureResolver(),
+            registry=registry,
+            driver=driver,
+            runtime_selector=lambda _requested: "podman",
+        )
+
+    assert registry.records() == ()
+    assert driver.events == []
+
+
+def test_catalog_cannot_inject_local_image_id_without_explicit_override(
+    tmp_path: Path,
+) -> None:
+    class UnexpectedImageResolver(FixtureResolver):
+        def resolve(self, request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            return replace(super().resolve(request), image=LOCAL_IMAGE_ID)
+
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = FakeDriver()
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="explicit --image"):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, image_pull_policy="never"),
+            resolver=UnexpectedImageResolver(),
+            registry=registry,
+            driver=driver,
+            runtime_selector=lambda _requested: "docker",
+        )
+
+    assert registry.records() == ()
+    assert driver.events == []
+
+
+@pytest.mark.parametrize(
     "reference",
     (
         f"decision-runtime@sha256:{'a' * 64}",
@@ -1040,6 +1180,26 @@ def test_explicit_image_is_validated_before_catalog_resolution(tmp_path: Path):
 )
 def test_immutable_image_reference_accepts_conservative_valid_forms(reference: str):
     assert validate_immutable_image_reference(reference) == reference
+
+
+def test_exact_local_image_id_is_a_separate_override_form():
+    assert validate_decision_image_reference(LOCAL_IMAGE_ID) == LOCAL_IMAGE_ID
+    with pytest.raises(ImmutableImageReferenceError):
+        validate_immutable_image_reference(LOCAL_IMAGE_ID)
+
+
+@pytest.mark.parametrize(
+    "reference",
+    (
+        f"sha256:{'9' * 63}",
+        f"sha256:{'A' * 64}",
+        f"sha256:{'9' * 64}extra",
+        f" sha256:{'9' * 64}",
+    ),
+)
+def test_local_image_id_rejects_abbreviated_or_ambiguous_forms(reference: str):
+    with pytest.raises(ImmutableImageReferenceError):
+        validate_decision_image_reference(reference)
 
 
 @pytest.mark.parametrize(
@@ -1121,6 +1281,100 @@ def test_container_command_is_stable_and_contains_no_registry_secrets(monkeypatc
         "-m",
         "decision_runtime.service",
     ]
+
+
+def test_local_image_id_is_inspected_exactly_and_run_with_pull_disabled(monkeypatch):
+    launch = _launch(replace(_launch().runtime_spec, image=LOCAL_IMAGE_ID))
+    commands: list[list[str]] = []
+    monkeypatch.setattr(
+        container_module,
+        "_ensure_image_available",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("pull path reached")),
+    )
+
+    def fake_run(command, **_kwargs):
+        commands.append(command)
+        return subprocess.CompletedProcess(command, 0, stdout=f"{LOCAL_IMAGE_ID}\n")
+
+    monkeypatch.setattr(container_module.subprocess, "run", fake_run)
+
+    LowLevelDecisionContainerDriver().ensure_image(launch)
+    command = build_decision_container_command(launch)
+
+    assert commands == [
+        ["docker", "image", "inspect", "--format", "{{.Id}}", LOCAL_IMAGE_ID]
+    ]
+    assert command.index("--pull=never") < command.index(LOCAL_IMAGE_ID)
+    assert command[-4:] == [LOCAL_IMAGE_ID, "python", "-m", "decision_runtime.service"]
+
+
+@pytest.mark.parametrize(
+    ("returncode", "inspected_id"),
+    ((1, ""), (0, f"sha256:{'8' * 64}")),
+)
+def test_local_image_id_must_exist_with_exact_inspected_id(
+    monkeypatch, returncode: int, inspected_id: str
+) -> None:
+    launch = _launch(replace(_launch().runtime_spec, image=LOCAL_IMAGE_ID))
+    monkeypatch.setattr(
+        container_module,
+        "_ensure_image_available",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("pull path reached")),
+    )
+    monkeypatch.setattr(
+        container_module.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, returncode, stdout=inspected_id
+        ),
+    )
+
+    with pytest.raises(DecisionContainerError, match="no pull was attempted"):
+        LowLevelDecisionContainerDriver().ensure_image(launch)
+
+
+@pytest.mark.parametrize(
+    ("runtime", "pull_policy"),
+    (("docker", "always"), ("docker", "ifnotpresent"), ("podman", "never")),
+)
+def test_local_image_id_rejects_pull_or_non_docker_at_container_seams(
+    monkeypatch, runtime: str, pull_policy: str
+) -> None:
+    launch = replace(
+        _launch(replace(_launch().runtime_spec, image=LOCAL_IMAGE_ID)),
+        runtime=runtime,
+        pull_policy=pull_policy,
+    )
+    monkeypatch.setattr(
+        container_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("container command reached")
+        ),
+    )
+    monkeypatch.setattr(
+        container_module,
+        "_ensure_image_available",
+        lambda *_args: (_ for _ in ()).throw(AssertionError("pull path reached")),
+    )
+
+    with pytest.raises(DecisionContainerError, match="policy 'never'"):
+        LowLevelDecisionContainerDriver().ensure_image(launch)
+    with pytest.raises(DecisionContainerError, match="policy 'never'"):
+        build_decision_container_command(launch)
+
+
+def test_repository_digest_keeps_existing_image_preparation_path(monkeypatch):
+    seen: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        container_module,
+        "_ensure_image_available",
+        lambda image, policy: seen.append((image, policy)),
+    )
+
+    LowLevelDecisionContainerDriver().ensure_image(_launch())
+
+    assert seen == [(IMAGE, "never")]
 
 
 @pytest.mark.parametrize(
@@ -1219,6 +1473,31 @@ def test_image_mismatch_never_issues_a_destructive_container_command(monkeypatch
     assert [command[1] for command in commands] == ["inspect"]
 
 
+def test_local_image_id_ownership_requires_exact_inspected_image(monkeypatch):
+    launch = _launch(replace(_launch().runtime_spec, image=LOCAL_IMAGE_ID))
+    ownership = launch.identity(container_id=CONTAINER_ID)
+    monkeypatch.setattr(
+        container_module.subprocess,
+        "run",
+        lambda _command, **_kwargs: _inspect_completed_process(ownership),
+    )
+
+    observation = LowLevelDecisionContainerDriver().inspect(ownership)
+    assert observation is not None
+    assert observation.identity.image == LOCAL_IMAGE_ID
+
+    expected_other_image = replace(ownership, image=IMAGE)
+    monkeypatch.setattr(
+        container_module.subprocess,
+        "run",
+        lambda _command, **_kwargs: _inspect_completed_process(
+            expected_other_image, image=LOCAL_IMAGE_ID
+        ),
+    )
+    with pytest.raises(DecisionContainerOwnershipError, match="image does not match"):
+        LowLevelDecisionContainerDriver().inspect(expected_other_image)
+
+
 @pytest.mark.parametrize(
     "inspect_result",
     (
@@ -1297,15 +1576,16 @@ def test_verified_cleanup_uses_only_full_container_id(monkeypatch):
     assert commands[3][-1] == CONTAINER_ID
 
 
+@pytest.mark.parametrize("image", (IMAGE, LOCAL_IMAGE_ID))
 def test_managed_label_discovery_is_read_only_and_structurally_validated(
-    monkeypatch,
+    monkeypatch, image: str
 ):
     identity = DecisionContainerIdentity(
         runtime="docker",
         container_name="vllm-sr-drun-orphan",
         instance_name="orphan",
         identity_digest=f"sha256:{'f' * 64}",
-        image=IMAGE,
+        image=image,
         container_id=CONTAINER_ID,
     )
     commands: list[list[str]] = []
@@ -1334,7 +1614,7 @@ def test_managed_label_discovery_is_read_only_and_structurally_validated(
             state="running",
             instance_name="orphan",
             identity_digest=f"sha256:{'f' * 64}",
-            image=IMAGE,
+            image=image,
             label_contract_valid=True,
         ),
     )
@@ -2208,6 +2488,20 @@ def test_registry_validates_record_before_creating_state(tmp_path: Path):
 
     assert not registry.path.exists()
     assert not registry.lock_path.exists()
+
+
+def test_registry_rejects_local_docker_image_id_for_podman(tmp_path: Path):
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    invalid = replace(
+        _record("invalid", "id-invalid", 8000),
+        image=LOCAL_IMAGE_ID,
+        runtime="podman",
+    )
+
+    with pytest.raises(DecisionRegistryError, match="record is invalid"):
+        registry.reserve(invalid)
+
+    assert not registry.path.exists()
 
 
 def test_registry_atomic_replace_failure_preserves_previous_document(

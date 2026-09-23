@@ -17,6 +17,12 @@ vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
   --backend rocm --port 8001 --detach
 ```
 
+For isolated validation with an already-loaded Docker image, pass its full
+`sha256:` image ID with `--image` and set `--image-pull-policy never`. The ID
+must exist locally and is never pulled; abbreviated IDs and Podman are not
+accepted for this override. Published `repository@sha256:` image references
+retain the normal pull-policy behavior.
+
 The selected model and hardware pair must have a qualified release profile;
 `drun` refuses unsupported combinations. In particular, the presence of a
 backend option does not by itself mean every Decision model is qualified on
