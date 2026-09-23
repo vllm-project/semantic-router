@@ -3,6 +3,7 @@ package configprojection
 import (
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestRefreshFromCanonicalPersistsActiveProjection(t *testing.T) {
@@ -119,7 +120,7 @@ func TestRefreshFailureMarksStaleWithoutMutatingDeployments(t *testing.T) {
 	}
 }
 
-func TestActiveStatusReadsSQLiteSeededTimestamp(t *testing.T) {
+func TestActiveStatusReadsSeededTimestamp(t *testing.T) {
 	t.Parallel()
 
 	dir := t.TempDir()
@@ -129,24 +130,36 @@ func TestActiveStatusReadsSQLiteSeededTimestamp(t *testing.T) {
 	}
 	defer store.Close()
 
-	// The schema seeds the single active row with SQLite's datetime('now'),
-	// which leaves a space-separated timestamp rather than RFC3339. Rewrite
-	// the seed value explicitly so the assertion does not depend on the
-	// writer staying broken.
+	// The schema seed is the only row a fresh store carries, so reading the
+	// active status right after Open must succeed.
+	seeded, err := store.GetActiveProjection()
+	if err != nil {
+		t.Fatalf("GetActiveProjection on the schema seed: %v", err)
+	}
+	if seeded.Status != StatusFailed {
+		t.Fatalf("expected the seeded failed status, got %+v", seeded)
+	}
+	if seeded.UpdatedAt.IsZero() {
+		t.Fatal("expected a parsed updated_at for the schema seed, got the zero time")
+	}
+
+	// Rewrite the seed with SQLite's datetime('now') so the reader's tolerance
+	// for that layout is asserted no matter how the writer seeds it later.
+	before := time.Now().UTC().Truncate(time.Second)
 	if _, err := store.db.Exec(
 		`UPDATE config_projection_active SET updated_at = datetime('now') WHERE id = 1`,
 	); err != nil {
-		t.Fatalf("seed sqlite-layout updated_at: %v", err)
+		t.Fatalf("write sqlite-layout updated_at: %v", err)
 	}
 
-	active, err := store.GetActiveProjection()
+	reread, err := store.GetActiveProjection()
 	if err != nil {
-		t.Fatalf("GetActiveProjection: %v", err)
+		t.Fatalf("GetActiveProjection after the sqlite-layout write: %v", err)
 	}
-	if active.Status != StatusFailed {
-		t.Fatalf("expected seeded failed status, got %+v", active)
+	if reread.UpdatedAt.Before(before.Add(-time.Second)) {
+		t.Fatalf("updated_at %s predates the write at %s", reread.UpdatedAt, before)
 	}
-	if active.UpdatedAt.IsZero() {
-		t.Fatal("expected a parsed updated_at, got the zero time")
+	if reread.UpdatedAt.After(time.Now().UTC().Add(2 * time.Second)) {
+		t.Fatalf("updated_at %s is in the future", reread.UpdatedAt)
 	}
 }
