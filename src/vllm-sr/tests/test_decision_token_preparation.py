@@ -52,6 +52,7 @@ class CharacterTokenizer:
     def __init__(self) -> None:
         self.batch_calls = 0
         self.encode_calls = 0
+        self.single_calls = 0
 
     @staticmethod
     def _ids(text: str) -> list[int]:
@@ -68,6 +69,7 @@ class CharacterTokenizer:
             self.batch_calls += 1
             return {"input_ids": [self._ids(text) for text in value]}
         assert kwargs["truncation"] is False
+        self.single_calls += 1
         return {"input_ids": self._ids(value)}
 
 
@@ -167,3 +169,32 @@ def test_vela_preparation_rejects_complete_input_overflow() -> None:
     )
     with pytest.raises(ValueError, match="no room|no truncation allowed"):
         encode_vela_rows((row,), tokenizer, max_length=8)
+
+
+def test_vela_preparation_reuses_exact_spans_for_many_questions_and_states() -> None:
+    question = ChoiceQuestion.model_validate(
+        {
+            "type": "choice",
+            "instructions": "Choose.",
+            "criteria": {"left": "move left", "right": "move right"},
+        }
+    )
+    rows = tuple(
+        build_model_input(
+            question_id=f"q{index}",
+            state="shared state" if index < 3 else "other state",
+            question=question,
+            **VELA_POLICY,
+        )
+        for index in range(4)
+    )
+    cached_tokenizer = CharacterTokenizer()
+    cached = encode_vela_rows(rows, cached_tokenizer, max_length=1000)
+    uncached_tokenizer = CharacterTokenizer()
+    uncached = encode_vela_rows(
+        rows, uncached_tokenizer, max_length=1000, max_cached_characters=0
+    )
+
+    assert cached == uncached
+    assert cached_tokenizer.single_calls == 5  # question, 2 candidates, 2 states
+    assert uncached_tokenizer.single_calls == 16

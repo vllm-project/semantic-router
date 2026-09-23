@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from .model_inputs import ModelInput, vela_text_input
+from .model_inputs import ModelInput, VelaTextInput, vela_text_input
 
 
 class VelaTokenizer(Protocol):
@@ -83,8 +83,9 @@ def encode_vela_rows(
     tokenizer: VelaTokenizer,
     *,
     max_length: int,
+    max_cached_characters: int = 8_000_000,
 ) -> tuple[EncodedVelaRow, ...]:
-    """Encode complete rows before scheduling; implicit truncation is forbidden."""
+    """Encode complete rows, sharing exact repeated spans within one request."""
 
     if not rows:
         raise ValueError("at least one Vela row is required")
@@ -94,28 +95,45 @@ def encode_vela_rows(
         or max_length < 8
     ):
         raise ValueError("max_length must be an integer of at least eight")
+    if type(max_cached_characters) is not int or max_cached_characters < 0:
+        raise ValueError("max_cached_characters must be non-negative")
     special = vela_special_tokens(tokenizer)
+    rendered = tuple(vela_text_input(row) for row in rows)
+    unique: dict[str, tuple[int, ...]] = {}
+    characters = 0
+    for item in rendered:
+        for span in (item.question, *item.candidates, item.state):
+            if span not in unique:
+                unique[span] = ()
+                characters += len(span)
+    if characters <= max_cached_characters:
+        for span in unique:
+            unique[span] = _tokens(tokenizer, span)
+    else:
+        unique = {}
     return tuple(
-        _encode_one(row, tokenizer, special, max_length=max_length) for row in rows
+        _encode_one(row, item, tokenizer, special, unique, max_length=max_length)
+        for row, item in zip(rows, rendered, strict=True)
     )
 
 
 def _encode_one(
     row: ModelInput,
+    rendered: VelaTextInput,
     tokenizer: VelaTokenizer,
     special: VelaSpecialTokens,
+    cached: dict[str, tuple[int, ...]],
     *,
     max_length: int,
 ) -> EncodedVelaRow:
-    rendered = vela_text_input(row)
-    question = _tokens(tokenizer, rendered.question)
+    question = _cached_tokens(tokenizer, rendered.question, cached)
     input_ids = [special.bos, *question, special.sep]
     marker_positions = []
     for candidate in rendered.candidates:
-        description = _tokens(tokenizer, candidate)
+        description = _cached_tokens(tokenizer, candidate, cached)
         marker_positions.append(len(input_ids))
         input_ids.extend((special.marker, *description, special.sep))
-    state = _tokens(tokenizer, rendered.state)
+    state = _cached_tokens(tokenizer, rendered.state, cached)
     room = max_length - len(input_ids) - 1
     if room < 1:
         raise ValueError("complete question and candidates leave no room for state")
@@ -133,6 +151,12 @@ def _encode_one(
         candidate_ids=tuple(candidate.key for candidate in row.candidates),
         state_tokens=len(state),
     )
+
+
+def _cached_tokens(
+    tokenizer: VelaTokenizer, text: str, cached: dict[str, tuple[int, ...]]
+) -> tuple[int, ...]:
+    return cached[text] if text in cached else _tokens(tokenizer, text)
 
 
 def _tokens(tokenizer: VelaTokenizer, text: str) -> tuple[int, ...]:
