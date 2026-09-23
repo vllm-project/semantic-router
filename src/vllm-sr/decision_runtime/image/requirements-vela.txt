@@ -1,0 +1,8 @@
+# Vela's ModernBERT path is validated against this exact Transformers release.
+# Hub and tokenizers pins differ from the Qwen3.5 environment.
+transformers==4.57.6
+huggingface-hub==0.36.0
+tokenizers==0.22.1
+safetensors==0.8.0
+fastapi==0.141.1
+uvicorn==0.53.0

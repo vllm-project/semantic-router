@@ -1,0 +1,7 @@
+# Qwen3.5 uses a separate environment because Transformers 5.x requires Hub 1.x.
+transformers==5.17.0
+huggingface-hub==1.5.0
+tokenizers==0.23.1
+safetensors==0.8.0
+fastapi==0.141.1
+uvicorn==0.53.0
