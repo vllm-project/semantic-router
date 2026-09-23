@@ -13,7 +13,7 @@ from .report import percentile
 from .semantic_cases import WorkloadCase
 from .semantic_transport import HttpSample
 
-SCHEMA_VERSION = "decision-semantic-workload-v1"
+SCHEMA_VERSION = "decision-semantic-workload-v2"
 
 
 @dataclass(frozen=True)
@@ -233,6 +233,10 @@ def build_semantic_matrix(receipt_paths: list[Path]) -> dict[str, Any]:
     for receipt in receipts:
         if receipt.get("schema_version") != SCHEMA_VERSION:
             raise ValueError("unsupported semantic receipt schema")
+        if receipt.get("status") != "measured" or not receipt.get("shapes"):
+            raise ValueError("semantic matrix requires measured receipts")
+        if receipt.get("audit", {}).get("status") not in {"passed", "failed"}:
+            raise ValueError("semantic matrix requires completed parity audits")
         model = receipt.get("model")
         if model in indexed:
             raise ValueError("duplicate model receipt")
@@ -253,6 +257,7 @@ def build_semantic_matrix(receipt_paths: list[Path]) -> dict[str, Any]:
                 "old_provenance": indexed[model]["old"],
                 "new_provenance": indexed[model]["new"],
                 "cohort_sha256": indexed[model]["cohort_sha256"],
+                "audit": indexed[model]["audit"],
                 "shapes": indexed[model]["shapes"],
             }
             for model in MODELS

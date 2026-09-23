@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .cases import MODELS
 from .semantic_cases import WorkloadCase, cohort_sha256, generate_cases
+from .semantic_audit import audit_cohorts
 from .semantic_metrics import (
     MetricCapture,
     MetricsError,
@@ -44,6 +45,7 @@ SOURCE_FILES = (
     "transport.py",
     "report.py",
     "semantic_cases.py",
+    "semantic_audit.py",
     "semantic_metrics.py",
     "semantic_transport.py",
     "semantic_report.py",
@@ -86,6 +88,16 @@ def _positive_float(value: str) -> float:
         raise argparse.ArgumentTypeError("must be positive and finite") from error
     if number <= 0 or not math.isfinite(number):
         raise argparse.ArgumentTypeError("must be positive and finite")
+    return number
+
+
+def _nonnegative_float(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be nonnegative and finite") from error
+    if number < 0 or not math.isfinite(number):
+        raise argparse.ArgumentTypeError("must be nonnegative and finite")
     return number
 
 
@@ -259,6 +271,8 @@ def run_semantic(args: argparse.Namespace) -> int:
         "throughput_workflows_per_round_per_arm": args.throughput_workflows,
         "throughput_rounds": args.rounds,
         "timeout_seconds": args.timeout,
+        "parity_policy": args.parity_policy,
+        "probability_tolerance_absolute": args.probability_tolerance,
         "concurrency_unit": "maximum in-flight HTTP requests per arm",
         "connection_policy": "new HTTP connection per request",
         "latency_boundary": "first HTTP send through last complete response body in workflow",
@@ -269,7 +283,94 @@ def run_semantic(args: argparse.Namespace) -> int:
             "boundary": "before and after each throughput wave, outside HTTP timing",
         },
     }
+    cohort_digest = hashlib.sha256()
+    for cases in cohorts.values():
+        cohort_digest.update(cohort_sha256(cases).encode("ascii"))
+        cohort_digest.update(b"\x00")
+    adapter_kind = "none"
+    if old_model_id != args.model:
+        adapter_kind = "model_id_only"
+    if args.old_response_mode == "legacy_preview":
+        adapter_kind = (
+            "legacy_preview_and_model_id"
+            if old_model_id != args.model
+            else "legacy_preview"
+        )
+    receipt_base = {
+        "schema_version": SCHEMA_VERSION,
+        "scope": "synthetic Decision HTTP workflow performance and untimed semantic/token parity; no eval-quality score",
+        "model": args.model,
+        "old": old_meta,
+        "new": new_meta,
+        "adapter": {
+            "kind": adapter_kind,
+            "old_model_id": old_model_id,
+            "envelope_transform": (
+                "old_max_probability_to_decision_v1_for_validation"
+                if args.old_response_mode == "legacy_preview"
+                else "none"
+            ),
+            "applied_outside_timed_interval": True,
+        },
+        "source_commit": _source_commit(),
+        "harness_sha256": _harness_digest(),
+        "generator_sha256": hashlib.sha256(
+            Path(__file__).with_name("semantic_cases.py").read_bytes()
+        ).hexdigest(),
+        "cohort_sha256": cohort_digest.hexdigest(),
+        "case_ids": [case.id for cases in cohorts.values() for case in cases],
+        "settings": settings,
+    }
     args.output_dir.mkdir(parents=True, exist_ok=False)
+    with (args.output_dir / "audit.jsonl").open("w", encoding="utf-8") as audit_handle:
+        audit = audit_cohorts(
+            cohorts,
+            old,
+            new_single,
+            new_batch,
+            timeout=args.timeout,
+            probability_tolerance=args.probability_tolerance,
+            output_handle=audit_handle,
+        )
+    audit["policy"] = args.parity_policy
+    audit["provenance"] = {
+        "old": old_meta,
+        "new": new_meta,
+        "old_model_id": old_model_id,
+        "new_model_id": args.model,
+        "cohort_sha256": receipt_base["cohort_sha256"],
+    }
+    audit["prompt_comparison_scope"] = (
+        "identical logical state and questions except model ID and batch envelope; "
+        "server-side prompt rendering is not observable"
+    )
+    audit["quality_accuracy_claimed"] = False
+    audit["comparison_eligible"] = (
+        audit["status"] == "passed" and args.parity_policy == "require"
+    )
+    if audit["status"] != "passed" and args.parity_policy == "require":
+        receipt_path = args.output_dir / "receipt.json"
+        receipt = {
+            **receipt_base,
+            "measured_at_utc": None,
+            "status": "audit_failed",
+            "audit": audit,
+            "shapes": [],
+            "failed_workflows": 0,
+            "failed_metrics_shapes": 0,
+        }
+        receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+        print(
+            json.dumps(
+                {
+                    "receipt": str(receipt_path),
+                    "audit_status": "failed",
+                    "measured": False,
+                }
+            )
+        )
+        return 1
+
     origin_ns = time.perf_counter_ns()
     shape_rows = []
     total_errors = 0
@@ -392,6 +493,14 @@ def run_semantic(args: argparse.Namespace) -> int:
                     state_count=states,
                     same_wire_bytes=all(case.same_wire_bytes for case in cases),
                 )
+                if not audit["comparison_eligible"]:
+                    comparison = summary["comparison"]
+                    comparison["eligible"] = False
+                    comparison["reasons"].append("exploratory_parity_report_mode")
+                    if audit["status"] != "passed":
+                        comparison["reasons"].append("semantic_token_parity_failed")
+                    comparison["old_over_new_p50_workflow_latency"] = None
+                    comparison["new_over_old_successful_decisions_per_second"] = None
                 arm_telemetry = {
                     arm: summarize_captures(
                         [capture for capture in captures if capture.arm == arm],
@@ -411,6 +520,13 @@ def run_semantic(args: argparse.Namespace) -> int:
                         arm_telemetry["old"], arm_telemetry["new"]
                     ),
                 }
+                if not audit["comparison_eligible"]:
+                    summary["telemetry"]["comparison"] = {
+                        "available": False,
+                        "reason": "semantic_token_parity_not_qualified",
+                        "old_over_new_row_preparation_seconds_per_decision": None,
+                        "new_over_old_observed_rows_per_physical_batch": None,
+                    }
                 total_metric_errors += sum(
                     metrics_urls[arm] is not None
                     and arm_telemetry[arm]["status"] != "complete"
@@ -426,44 +542,11 @@ def run_semantic(args: argparse.Namespace) -> int:
                         "summary": summary,
                     }
                 )
-    cohort_digest = hashlib.sha256()
-    for cases in cohorts.values():
-        cohort_digest.update(cohort_sha256(cases).encode("ascii"))
-        cohort_digest.update(b"\x00")
-    adapter_kind = "none"
-    if old_model_id != args.model:
-        adapter_kind = "model_id_only"
-    if args.old_response_mode == "legacy_preview":
-        adapter_kind = (
-            "legacy_preview_and_model_id"
-            if old_model_id != args.model
-            else "legacy_preview"
-        )
     receipt = {
-        "schema_version": SCHEMA_VERSION,
+        **receipt_base,
         "measured_at_utc": datetime.now(timezone.utc).isoformat(),
-        "scope": "synthetic Decision HTTP workflow performance and strict response conformance; no eval-quality score",
-        "model": args.model,
-        "old": old_meta,
-        "new": new_meta,
-        "adapter": {
-            "kind": adapter_kind,
-            "old_model_id": old_model_id,
-            "envelope_transform": (
-                "old_max_probability_to_decision_v1_for_validation"
-                if args.old_response_mode == "legacy_preview"
-                else "none"
-            ),
-            "applied_outside_timed_interval": True,
-        },
-        "source_commit": _source_commit(),
-        "harness_sha256": _harness_digest(),
-        "generator_sha256": hashlib.sha256(
-            Path(__file__).with_name("semantic_cases.py").read_bytes()
-        ).hexdigest(),
-        "cohort_sha256": cohort_digest.hexdigest(),
-        "case_ids": [case.id for cases in cohorts.values() for case in cases],
-        "settings": settings,
+        "status": "measured",
+        "audit": audit,
         "shapes": shape_rows,
         "failed_workflows": total_errors,
         "failed_metrics_shapes": total_metric_errors,
@@ -476,6 +559,8 @@ def run_semantic(args: argparse.Namespace) -> int:
                 "receipt": str(receipt_path),
                 "failed_workflows": total_errors,
                 "failed_metrics_shapes": total_metric_errors,
+                "audit_status": audit["status"],
+                "comparison_eligible": audit["comparison_eligible"],
             }
         )
     )
@@ -537,6 +622,18 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     run.add_argument("--rounds", type=_positive_int, default=2)
     run.add_argument("--seed", type=int, default=17)
     run.add_argument("--timeout", type=_positive_float, default=60.0)
+    run.add_argument(
+        "--parity-policy",
+        choices=("require", "report"),
+        default="require",
+        help="Require parity before timing, or measure exploratory ineligible ratios.",
+    )
+    run.add_argument(
+        "--probability-tolerance",
+        type=_nonnegative_float,
+        default=0.01,
+        help="Absolute old/new probability tolerance; default 0.01.",
+    )
     run.add_argument("--output-dir", required=True, type=Path)
     run.set_defaults(handler=run_semantic)
 

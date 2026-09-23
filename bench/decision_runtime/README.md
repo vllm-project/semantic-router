@@ -39,8 +39,22 @@ in environment variables named by `--old-token-env` and `--new-token-env`.
 The generator constructs a deterministic cohort for every question/state
 shape. Question types cycle through Noul, Choice, and Score, and counts of at
 least three contain all three. States and wording vary by seed; these synthetic
-fixtures have no accuracy labels. Every request is validated against the
-runtime's strict contract before traffic. The batch decision limit is 1,024,
+fixtures have no accuracy labels. Before warmup or measurement, the runner
+sends **each generated case once per arm, untimed**: one old single per state
+and one new single or batch. It verifies the same logical state and question
+contents across arms (allowing only the declared model ID and batch envelope
+differences), validates each response contract, and checks per-state input-token
+totals, answer IDs/types, Noul probabilities, Choice labels, probability
+distributions, and Score expectations. Input tokens and Choice labels must
+match exactly. A Noul crossing at 0.5 is recorded as a diagnostic, not an
+eligibility gate, because callers choose the Noul action threshold. Each
+probability may differ by at most `0.01` absolute by
+default; Score may differ by at most that tolerance times the rubric range
+(`level_count - 1`). The default accommodates observed small batching drift
+without hiding the raw maximum and p50/p95/p99 probability deltas. Set
+`--probability-tolerance` explicitly for a justified different bound. Every
+request is validated against the runtime's strict contract before traffic.
+The batch decision limit is 1,024,
 so each question count multiplied by each state count must fit it. Repeat the
 same shape grid, seed, variants, phase counts, concurrency levels, timeout, and
 declared serving policy across all six models. Reconfigure the actual serving
@@ -77,7 +91,31 @@ raw hash recorded. The receipt identifies the adapter and does not claim
 identical wire bytes or confidence semantics. Other old envelopes fail closed;
 do not use this flag for a current strict `drun` service.
 
-`samples.jsonl` records every HTTP attempt with request and response hashes,
+`--parity-policy require` is the default. A contract, token, label, or numeric
+parity failure writes `audit.jsonl` and an audit-only `receipt.json`, exits 1,
+and sends no warmup or measured requests. `--parity-policy report` is an
+explicit exploratory override: it continues timing after the audit, but all
+old/new performance and telemetry ratios are null, every comparison is marked
+ineligible, and the receipt states whether the audit passed or failed. The
+old preview projector is used only to validate its contract; the audit retains
+raw old per-answer `input_tokens` and new per-state `usage.input_tokens`.
+Output-token totals are recorded but not a gate: the old preview and current
+API account for them differently. It never compares old and new numeric
+confidence because their formulas differ.
+Equal logical requests and token totals do **not** establish identical
+server-side prompt rendering, and synthetic agreement is not an accuracy or
+quality evaluation. If model-side prompts differ, report performance and
+accuracy parity separately; do not call the comparison a validated co-design
+gain.
+
+`audit.jsonl` records each untimed case's old/new request and response hashes,
+per-state input/output-token totals, old preview per-answer input-token counts
+when present,
+answer values and categorical outcomes, numeric deltas, and mismatch codes.
+The receipt's audit summary includes the source and model-revision provenance,
+cohort hash, tolerances, mismatch counts, and global delta quantiles. The
+untimed calls are excluded from all latency, throughput, and metrics windows.
+`samples.jsonl` records every timed HTTP attempt with request and response hashes,
 status, error code, decision count, and timing offsets. `workflows.jsonl`
 records each logical workflow's first-send to last-complete interval and full
 success/failure. `receipt.json` records source, harness, generator, and cohort
@@ -87,7 +125,7 @@ and attempted decisions per second. Percentiles use nearest rank over complete
 conforming workflows. Throughput divides complete-workflow decisions by the
 sum of each wave's first-send to last-completion window; partial old fan-out
 does not earn successful decisions. Parsing and strict response validation are
-outside the HTTP timing interval. The files contain no URLs, tokens, request
+outside the HTTP timing interval. The files contain no URLs, credentials, request
 bodies, response bodies, or answer text. Review all metadata before publication.
 
 Optional `--old-metrics-url` and `--new-metrics-url` accept each service's
@@ -109,14 +147,16 @@ declared physical batch capacity nor an observed histogram is a capability
 gate based on a particular model revision; record each actual deployment and
 weight snapshot in every receipt.
 
-Ratios appear only when model revision, hardware, and network-scope declarations
-match, warmup and measured responses all conform, and both arms have successful
+Ratios appear only when the required parity audit passes, model revision,
+hardware, and network-scope declarations match, warmup and measured responses
+all conform, and both arms have successful
 latency and throughput samples. Multi-state ratios are explicitly labeled
 `single_fanout_vs_batch_protocol_workflow` and do not imply equivalent HTTP
 payloads. Equal metadata alone does not prove equal deployment conditions.
 Small fake-service or smoke runs demonstrate the harness, not a ROCm speedup.
 
-The command exits 1 after writing receipts if any workflow fails. It exits 2
+The command exits 1 after writing receipts if the required audit or any
+workflow fails. It exits 2
 for invalid input or an existing output directory; it never overwrites a run.
 After all six model runs, collate their receipts with `semantic-matrix`:
 

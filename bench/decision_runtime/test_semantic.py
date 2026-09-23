@@ -27,15 +27,18 @@ from decision_runtime.contracts import (
 )
 
 
-def _answer(question):
+def _answer(question, *, probability_shift=0.0, choice_flip=False):
     if question["type"] == "noul":
-        return {"type": "noul", "noul": 0.5}
+        return {"type": "noul", "noul": 0.5 + probability_shift}
     if question["type"] == "choice":
         keys = list(question["criteria"])
         probabilities = dict.fromkeys(keys, 1 / len(keys))
+        if choice_flip:
+            probabilities[keys[0]] -= 0.002
+            probabilities[keys[1]] += 0.002
         return {
             "type": "choice",
-            "choice": keys[0],
+            "choice": keys[1] if choice_flip else keys[0],
             "confidence": choice_confidence(tuple(probabilities.values())),
             "probabilities": probabilities,
         }
@@ -91,11 +94,20 @@ class _Handler(BaseHTTPRequestHandler):
             response = {
                 "model": request["model"],
                 "answers": {
-                    key: (_legacy_answer(value) if legacy else _answer(value))
+                    key: (
+                        _legacy_answer(value)
+                        if legacy
+                        else _answer(
+                            value,
+                            probability_shift=self.server.probability_shift,
+                            choice_flip=self.server.choice_flip,
+                        )
+                    )
                     for key, value in request["questions"].items()
                 },
                 "usage": {
-                    "input_tokens": 10 * len(request["questions"]) if legacy else 10,
+                    "input_tokens": 10 * len(request["questions"])
+                    + self.server.token_delta,
                     "output_tokens": 0 if legacy else 1,
                 },
             }
@@ -110,10 +122,18 @@ class _Handler(BaseHTTPRequestHandler):
                 {
                     "id": state["id"],
                     "answers": {
-                        key: _answer(value)
+                        key: _answer(
+                            value,
+                            probability_shift=self.server.probability_shift,
+                            choice_flip=self.server.choice_flip,
+                        )
                         for key, value in request["questions"].items()
                     },
-                    "usage": {"input_tokens": 10, "output_tokens": 1},
+                    "usage": {
+                        "input_tokens": 10 * len(request["questions"])
+                        + self.server.token_delta,
+                        "output_tokens": 1,
+                    },
                 }
                 for state in request["states"]
             ]
@@ -123,7 +143,10 @@ class _Handler(BaseHTTPRequestHandler):
                 "model": request["model"],
                 "results": results,
                 "usage": {
-                    "input_tokens": 10 * len(results),
+                    "input_tokens": (
+                        10 * len(request["questions"]) + self.server.token_delta
+                    )
+                    * len(results),
                     "output_tokens": len(results),
                 },
             }
@@ -260,6 +283,9 @@ class SemanticTests(TestCase):
             server.bodies = []
             server.invalid_batch = invalid_batch
             server.legacy_preview = False
+            server.token_delta = 0
+            server.probability_shift = 0.0
+            server.choice_flip = False
             server.metrics_lock = threading.Lock()
             server.metrics = {}
         servers[0].invalid_batch = False
@@ -350,6 +376,23 @@ class SemanticTests(TestCase):
                     for line in (output / "workflows.jsonl").read_text().splitlines()
                 ]
                 self.assertEqual(len(receipt["shapes"]), 4)
+                self.assertEqual(receipt["audit"]["status"], "passed")
+                self.assertTrue(receipt["audit"]["comparison_eligible"])
+                audit_text = (output / "audit.jsonl").read_text()
+                audits = [json.loads(line) for line in audit_text.splitlines()]
+                self.assertEqual(len(audits), 4)
+                self.assertTrue(all(item["passed"] for item in audits))
+                self.assertEqual(
+                    receipt["audit"]["provenance"]["old"]["model_revision"], "c" * 40
+                )
+                self.assertTrue(audits[0]["old_http"][0]["request_sha256"])
+                self.assertTrue(audits[0]["new_http"]["response_sha256"])
+                self.assertTrue(
+                    all(
+                        item["old_input_tokens_total"] == item["new_input_tokens_total"]
+                        for item in audits
+                    )
+                )
                 self.assertEqual(len(metrics), 16)
                 self.assertTrue(all(item["error_code"] is None for item in metrics))
                 self.assertTrue(all(sample["success"] for sample in samples))
@@ -428,6 +471,8 @@ class SemanticTests(TestCase):
                         )
                 self.assertNotIn("127.0.0.1", receipt_text)
                 self.assertNotIn("http://", receipt_text)
+                self.assertNotIn("127.0.0.1", audit_text)
+                self.assertNotIn("http://", audit_text)
         finally:
             for server in servers:
                 server.shutdown()
@@ -440,7 +485,7 @@ class SemanticTests(TestCase):
         try:
             with TemporaryDirectory() as directory:
                 output = Path(directory) / "run"
-                args = self._run_args(servers, output)
+                args = self._run_args(servers, output, "--parity-policy", "report")
                 args[args.index("--state-counts") + 1] = "4"
                 args[args.index("--concurrencies") + 1] = "2"
                 args[args.index("--warmup") + 1] = "0"
@@ -457,6 +502,10 @@ class SemanticTests(TestCase):
                     {"response_contract": 4},
                 )
                 self.assertFalse(row["summary"]["comparison"]["eligible"])
+                self.assertIn(
+                    "exploratory_parity_report_mode",
+                    row["summary"]["comparison"]["reasons"],
+                )
         finally:
             for server in servers:
                 server.shutdown()
@@ -515,10 +564,155 @@ class SemanticTests(TestCase):
                     receipt["adapter"]["kind"], "legacy_preview_and_model_id"
                 )
                 self.assertTrue(receipt["adapter"]["applied_outside_timed_interval"])
+                audit = json.loads((output / "audit.jsonl").read_text().splitlines()[0])
+                self.assertEqual(audit["old_input_tokens_total"], 30)
+                self.assertEqual(audit["new_input_tokens_total"], 30)
+                self.assertEqual(
+                    audit["states"][0]["old_answer_source"], "raw_legacy_preview"
+                )
+                self.assertEqual(
+                    set(audit["states"][0]["old_question_input_tokens"].values()),
+                    {10},
+                )
                 self.assertFalse(
                     receipt["shapes"][0]["summary"]["comparison"][
                         "wire_bytes_identical"
                     ]
+                )
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_token_mismatch_blocks_timing_and_reports_separately(self):
+        servers, threads = self._servers()
+        servers[1].token_delta = 1
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(servers, output)
+                args[args.index("--state-counts") + 1] = "1"
+                args[args.index("--concurrencies") + 1] = "1"
+                self.assertEqual(main(args), 1)
+                receipt = json.loads((output / "receipt.json").read_text())
+                self.assertEqual(receipt["status"], "audit_failed")
+                self.assertEqual(receipt["shapes"], [])
+                self.assertFalse((output / "samples.jsonl").exists())
+                self.assertEqual(
+                    receipt["audit"]["mismatch_counts"], {"input_token_mismatch": 2}
+                )
+                audit = json.loads((output / "audit.jsonl").read_text().splitlines()[0])
+                self.assertEqual(audit["input_token_total_delta"], 1)
+                self.assertEqual(
+                    audit["states"][0]["answers"][0]["absolute_probability_delta"], 0
+                )
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_probability_and_categorical_mismatch_block_timing(self):
+        servers, threads = self._servers()
+        servers[1].probability_shift = 0.02
+        servers[1].choice_flip = True
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(servers, output)
+                args[args.index("--state-counts") + 1] = "1"
+                args[args.index("--concurrencies") + 1] = "1"
+                self.assertEqual(main(args), 1)
+                receipt = json.loads((output / "receipt.json").read_text())
+                counts = receipt["audit"]["mismatch_counts"]
+                self.assertGreater(counts["probability_tolerance"], 0)
+                self.assertGreater(counts["categorical_outcome_mismatch"], 0)
+                self.assertGreaterEqual(
+                    receipt["audit"]["absolute_probability_delta"]["max"], 0.02
+                )
+                self.assertFalse((output / "samples.jsonl").exists())
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_noul_threshold_crossing_is_diagnostic_only(self):
+        servers, threads = self._servers()
+        servers[1].probability_shift = -0.004
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(servers, output)
+                args[args.index("--state-counts") + 1] = "1"
+                args[args.index("--concurrencies") + 1] = "1"
+                args[args.index("--warmup") + 1] = "0"
+                args[args.index("--rounds") + 1] = "1"
+                self.assertEqual(main(args), 0)
+                receipt = json.loads((output / "receipt.json").read_text())
+                self.assertEqual(receipt["audit"]["status"], "passed")
+                self.assertGreater(
+                    receipt["audit"][
+                        "noul_threshold_0_5_disagreements_diagnostic_only"
+                    ],
+                    0,
+                )
+                audit = json.loads((output / "audit.jsonl").read_text().splitlines()[0])
+                self.assertTrue(
+                    any(
+                        answer.get("threshold_0_5_outcome_mismatch_diagnostic")
+                        for state in audit["states"]
+                        for answer in state["answers"]
+                    )
+                )
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_small_probability_drift_passes_but_report_mode_has_no_ratios(self):
+        servers, threads = self._servers()
+        servers[1].probability_shift = 0.00424
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(
+                    servers,
+                    output,
+                    "--parity-policy",
+                    "report",
+                    "--old-metrics-url",
+                    f"http://127.0.0.1:{servers[0].server_port}/metrics",
+                    "--new-metrics-url",
+                    f"http://127.0.0.1:{servers[1].server_port}/metrics",
+                )
+                args[args.index("--state-counts") + 1] = "1"
+                args[args.index("--concurrencies") + 1] = "1"
+                args[args.index("--warmup") + 1] = "0"
+                args[args.index("--rounds") + 1] = "1"
+                self.assertEqual(main(args), 0)
+                receipt = json.loads((output / "receipt.json").read_text())
+                self.assertEqual(receipt["audit"]["status"], "passed")
+                self.assertAlmostEqual(
+                    receipt["audit"]["absolute_probability_delta"]["max"], 0.00424
+                )
+                comparison = receipt["shapes"][0]["summary"]["comparison"]
+                self.assertFalse(comparison["eligible"])
+                self.assertIsNone(comparison["old_over_new_p50_workflow_latency"])
+                self.assertIsNone(
+                    comparison["new_over_old_successful_decisions_per_second"]
+                )
+                self.assertIn("exploratory_parity_report_mode", comparison["reasons"])
+                telemetry = receipt["shapes"][0]["summary"]["telemetry"]["comparison"]
+                self.assertFalse(telemetry["available"])
+                self.assertIsNone(
+                    telemetry["old_over_new_row_preparation_seconds_per_decision"]
                 )
         finally:
             for server in servers:
