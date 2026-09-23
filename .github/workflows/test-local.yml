@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   integration:
-    name: ${{ fromJSON(inputs.verification).display_name }}
+    name: Execute Contracts
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:

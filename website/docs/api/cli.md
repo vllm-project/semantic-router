@@ -26,7 +26,9 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr benchmark dataset`](#vllm-sr-benchmark-dataset) | Prepare reproducible fixed benchmark case sets. |
 | [`vllm-sr benchmark dataset combine`](#vllm-sr-benchmark-dataset-combine) | Create a reusable multi-benchmark dataset from prepared manifests. |
 | [`vllm-sr benchmark dataset exclusions`](#vllm-sr-benchmark-dataset-exclusions) | Freeze finite named history without inspecting outcomes or running models. |
-| [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download or read a pinned source and freeze a reusable dataset. |
+| [`vllm-sr benchmark dataset options`](#vllm-sr-benchmark-dataset-options) | List downloadable sources, profiles, access notes, and dependencies. |
+| [`vllm-sr benchmark dataset preparations`](#vllm-sr-benchmark-dataset-preparations) | List shared download jobs or inspect one preparation by ID. |
+| [`vllm-sr benchmark dataset prepare`](#vllm-sr-benchmark-dataset-prepare) | Download and freeze a dataset through the shared service by default. |
 | [`vllm-sr benchmark dataset show`](#vllm-sr-benchmark-dataset-show) | Inspect a frozen dataset or list datasets in the shared store. |
 | [`vllm-sr benchmark experiment`](#vllm-sr-benchmark-experiment) | Group durable baseline, routing checks, candidates and validation runs. |
 | [`vllm-sr benchmark experiment attach`](#vllm-sr-benchmark-experiment-attach) | Link existing evidence without changing or rerunning it. |
@@ -239,19 +241,46 @@ Freeze finite named history without inspecting outcomes or running models.
 | `--output PATH` | [required] |
 | `--help` | Show this message and exit. Default: false. |
 
+### `vllm-sr benchmark dataset options` {#vllm-sr-benchmark-dataset-options}
+
+```text
+Usage: vllm-sr benchmark dataset options [OPTIONS]
+```
+
+List downloadable sources, profiles, access notes, and dependencies.
+
+| Parameter | Description |
+| --- | --- |
+| `--help` | Show this message and exit. Default: false. |
+
+### `vllm-sr benchmark dataset preparations` {#vllm-sr-benchmark-dataset-preparations}
+
+```text
+Usage: vllm-sr benchmark dataset preparations [OPTIONS] [PREPARATION_ID]
+```
+
+List shared download jobs or inspect one preparation by ID.
+
+| Parameter | Description |
+| --- | --- |
+| `[PREPARATION_ID]` | Optional argument. Type: text. |
+| `--help` | Show this message and exit. Default: false. |
+
 ### `vllm-sr benchmark dataset prepare` {#vllm-sr-benchmark-dataset-prepare}
 
 ```text
 Usage: vllm-sr benchmark dataset prepare [OPTIONS]
 ```
 
-Download or read a pinned source and freeze a reusable dataset.
+Download and freeze a dataset through the shared service by default.
 
 | Parameter | Description |
 | --- | --- |
-| `--benchmark TEXT` | [required] |
+| `--benchmark TEXT` | Benchmark ID; repeat to prepare a shared collection.  [required] May be repeated. |
 | `--profile CHOICE` | Choices: smoke, quick, standard. Default: quick. |
 | `--source-path PATH` | — |
+| `--local` | Prepare on this host; required for source files and history options. Default: false. |
+| `--no-wait` | Return the shared service preparation job immediately. Default: false. |
 | `--revision TEXT` | — |
 | `--seed INTEGER` | Default: 20260918. |
 | `--source-partition TEXT` | Frozen upstream partition for native task identity; never an evaluation split. |

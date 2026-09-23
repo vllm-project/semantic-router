@@ -30,6 +30,9 @@ jobs:
     name: Publish Image (${{ matrix.image }})
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    concurrency:
+      group: publish-image-${{ matrix.image }}
+      cancel-in-progress: false
     permissions:
       contents: read
       packages: write
