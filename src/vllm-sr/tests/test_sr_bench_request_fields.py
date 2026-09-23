@@ -89,13 +89,13 @@ CASES = [
     (
         "/runs/{run}/recover",
         {"cells": [{"case_id": "one", "target_id": "single"}]},
-        "celles",
+        "cell",
         "Unsupported request fields",
     ),
     ("/runs/{run}/reconcile-usage", {}, "dry_run", "Unsupported request fields"),
     ("/runs/{run}/regrade", {}, "outputs", "Unsupported request fields"),
     ("/runs/{run}/export", {}, "formats", "Unsupported request fields"),
-    ("/runs/{run}/cancel", {}, "forse", "Unsupported request fields"),
+    ("/runs/{run}/cancel", {}, "force_cancel", "Unsupported request fields"),
 ]
 
 
