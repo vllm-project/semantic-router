@@ -63,6 +63,7 @@ class VerifiedArtifact:
     """Read-only local artifact view consumed by an owned inference backend."""
 
     root: Path
+    data_root: Path
     content_id: str
     repository_id: str
     revision: str
@@ -148,11 +149,10 @@ class ArtifactResolver:
                 _verify_materialization(destination, receipt, files)
             else:
                 self._create_materialization(model, destination, receipt, files)
-        return VerifiedArtifact(
+        return _verified_artifact(
             root=destination,
             content_id=content_id,
-            repository_id=model.repository_id,
-            revision=model.catalog.revision,
+            model=model,
             files=files,
         )
 
@@ -212,6 +212,72 @@ class ArtifactResolver:
             if temporary is not None and temporary.exists():
                 _make_writable_for_cleanup(temporary)
                 shutil.rmtree(temporary)
+
+
+def open_verified_artifact(
+    root: Path,
+    model: ResolvedRuntimeModel,
+    *,
+    expected_content_id: str,
+) -> VerifiedArtifact:
+    """Re-open and fully verify one already-materialized artifact.
+
+    Runtime containers receive a read-only content tree rather than Hub
+    credentials.  This function repeats the catalog/profile, receipt, manifest,
+    inventory, size, digest, and permission checks inside that trust boundary
+    before a model loader sees any bytes.
+    """
+
+    if (
+        not isinstance(expected_content_id, str)
+        or len(expected_content_id) != 64
+        or any(character not in "0123456789abcdef" for character in expected_content_id)
+    ):
+        raise ArtifactError("expected artifact content ID is invalid")
+    try:
+        validate_catalog_revision(model.catalog.revision)
+    except RuntimeProfileError as error:
+        raise ArtifactError(str(error)) from error
+    if (
+        model.profile.revision != model.catalog.revision
+        or model.repository_id != model.catalog.model_id
+    ):
+        raise ArtifactError(
+            "resolved artifact identity does not match the catalog model"
+        )
+
+    requested_root = Path(root)
+    if requested_root.is_symlink():
+        raise ArtifactIntegrityError("content-addressed artifact root is invalid")
+    try:
+        resolved_root = requested_root.resolve(strict=True)
+    except OSError as error:
+        raise ArtifactIntegrityError(
+            "content-addressed artifact root is unavailable"
+        ) from error
+
+    identity = model.profile.artifact.manifest
+    manifest_path = resolved_root / identity.path
+    verify_file_identity(manifest_path, identity)
+    inventory = parse_artifact_manifest(
+        manifest_path.read_bytes(), manifest_path=identity.path
+    )
+    files = _select_profile_files(model, inventory)
+    receipt = _receipt(identity, files)
+    actual_content_id = hashlib.sha256(
+        json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if actual_content_id != expected_content_id:
+        raise ArtifactIntegrityError(
+            "materialized artifact content identity does not match the launch contract"
+        )
+    _verify_materialization(resolved_root, receipt, files)
+    return _verified_artifact(
+        root=resolved_root,
+        content_id=actual_content_id,
+        model=model,
+        files=files,
+    )
 
 
 def parse_artifact_manifest(
@@ -318,6 +384,29 @@ def _select_profile_files(
         _reject_repository_code(item.repository_path)
         files.append(item)
     return tuple(files)
+
+
+def _verified_artifact(
+    *,
+    root: Path,
+    content_id: str,
+    model: ResolvedRuntimeModel,
+    files: tuple[ArtifactFile, ...],
+) -> VerifiedArtifact:
+    manifest_parent = PurePosixPath(model.profile.artifact.manifest.path).parent
+    data_root = root
+    if manifest_parent != PurePosixPath("."):
+        data_root = root.joinpath(*manifest_parent.parts)
+    if data_root.is_symlink() or not data_root.is_dir():
+        raise ArtifactIntegrityError("artifact data root is invalid")
+    return VerifiedArtifact(
+        root=root,
+        data_root=data_root,
+        content_id=content_id,
+        repository_id=model.repository_id,
+        revision=model.catalog.revision,
+        files=files,
+    )
 
 
 def _reject_repository_code(path: str) -> None:

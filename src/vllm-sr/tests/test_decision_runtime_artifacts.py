@@ -15,6 +15,7 @@ from decision_runtime.artifacts import (
     ArtifactIntegrityError,
     ArtifactManifestError,
     ArtifactResolver,
+    open_verified_artifact,
     parse_artifact_manifest,
 )
 from decision_runtime.catalog_adapter import (
@@ -102,6 +103,7 @@ def test_materialize_verifies_exact_revision_and_creates_read_only_view(
     assert artifact.repository_id == MODEL_ID
     assert artifact.revision == model.catalog.revision
     assert len(artifact.content_id) == 64
+    assert artifact.data_root == artifact.root / "artifact"
     assert (artifact.root / "artifact/config.json").read_text() == (
         '{"hidden_size": 8}\n'
     )
@@ -118,6 +120,47 @@ def test_materialize_verifies_exact_revision_and_creates_read_only_view(
     required_file_fetches = len(fetcher.calls)
     assert resolver.materialize(model).root == artifact.root
     assert len(fetcher.calls) == required_file_fetches + 1
+
+
+def test_open_verified_artifact_rechecks_mounted_content_without_fetching(
+    tmp_path: Path,
+) -> None:
+    model, fetcher = _fixture_model(tmp_path)
+    artifact = ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
+    fetch_count = len(fetcher.calls)
+
+    reopened = open_verified_artifact(
+        artifact.root,
+        model,
+        expected_content_id=artifact.content_id,
+    )
+
+    assert reopened == artifact
+    assert len(fetcher.calls) == fetch_count
+
+
+def test_open_verified_artifact_rejects_wrong_identity_and_corruption(
+    tmp_path: Path,
+) -> None:
+    model, fetcher = _fixture_model(tmp_path)
+    artifact = ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
+
+    with pytest.raises(ArtifactIntegrityError, match="launch contract"):
+        open_verified_artifact(
+            artifact.root,
+            model,
+            expected_content_id="0" * 64,
+        )
+
+    selected = artifact.root / "artifact/config.json"
+    selected.chmod(0o644)
+    selected.write_bytes(b"corrupted")
+    with pytest.raises(ArtifactIntegrityError, match="size|digest"):
+        open_verified_artifact(
+            artifact.root,
+            model,
+            expected_content_id=artifact.content_id,
+        )
 
 
 def test_concurrent_materialization_converges_on_one_complete_view(
