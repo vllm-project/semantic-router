@@ -17,6 +17,19 @@ import (
 
 const currentSchemaVersion = 1
 
+// parseProjectionTime reads a timestamp written either by this package's
+// writers (RFC3339Nano / RFC3339) or by the schema seed, which uses SQLite's
+// datetime('now') and therefore leaves a space-separated value.
+func parseProjectionTime(value string) (time.Time, error) {
+	if parsed, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return parsed, nil
+	}
+	if parsed, err := time.Parse(time.RFC3339, value); err == nil {
+		return parsed, nil
+	}
+	return time.Parse("2006-01-02 15:04:05", value)
+}
+
 // Store is a SQLite-backed deployment projection store.
 type Store struct {
 	db *sql.DB
@@ -323,12 +336,9 @@ WHERE id = 1
 		return nil, fmt.Errorf("configprojection: read active status: %w", err)
 	}
 
-	parsedAt, err := time.Parse(time.RFC3339Nano, updatedAt)
+	parsedAt, err := parseProjectionTime(updatedAt)
 	if err != nil {
-		parsedAt, err = time.Parse(time.RFC3339, updatedAt)
-		if err != nil {
-			return nil, fmt.Errorf("configprojection: parse updated_at: %w", err)
-		}
+		return nil, fmt.Errorf("configprojection: parse updated_at: %w", err)
 	}
 
 	return &ActiveProjectionStatus{
