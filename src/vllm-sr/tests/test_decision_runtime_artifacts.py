@@ -12,9 +12,11 @@ from pathlib import Path
 import pytest
 from decision_runtime.artifacts import (
     ArtifactError,
+    ArtifactFile,
     ArtifactIntegrityError,
     ArtifactManifestError,
     ArtifactResolver,
+    _select_profile_files,
     open_verified_artifact,
     parse_artifact_manifest,
 )
@@ -252,6 +254,39 @@ def test_missing_selected_file_and_repository_code_are_rejected(tmp_path: Path) 
     )
     with pytest.raises(ArtifactManifestError, match="may not select repository code"):
         ArtifactResolver(code_fetcher, tmp_path / "code-cache").materialize(code)
+
+
+def test_only_pinned_qwen_guard_python_is_selected_as_inert_data() -> None:
+    sol = resolve_decision_runtime_model("llm-semantic-router/Decision-1.0-Sol-2B")
+    guard = "code/profile_guard.py"
+    selected = replace(
+        sol,
+        profile=replace(
+            sol.profile,
+            artifact=replace(sol.profile.artifact, files=(guard,)),
+        ),
+    )
+    item = ArtifactFile(
+        manifest_path=guard,
+        repository_path=guard,
+        sha256=_sha256(b"inert guard contract"),
+        size_bytes=len(b"inert guard contract"),
+    )
+    assert _select_profile_files(selected, {guard: item}) == (item,)
+
+    for other in ("code/other.py", "runtime.py"):
+        unsafe = replace(
+            selected,
+            profile=replace(
+                selected.profile,
+                artifact=replace(selected.profile.artifact, files=(other,)),
+            ),
+        )
+        with pytest.raises(ArtifactManifestError, match="may not select repository code"):
+            _select_profile_files(
+                unsafe,
+                {other: replace(item, manifest_path=other, repository_path=other)},
+            )
 
 
 def test_manifest_identity_is_verified_before_json_is_parsed(tmp_path: Path) -> None:

@@ -15,6 +15,7 @@
       "backbone/model-00004-of-00004.safetensors",
       "backbone/model.safetensors.index.json",
       "chat_template.jinja",
+      "code/profile_guard.py",
       "decision_config.json",
       "decision_head.safetensors",
       "runtime-profile/l2norm_fwd_kernel.json",

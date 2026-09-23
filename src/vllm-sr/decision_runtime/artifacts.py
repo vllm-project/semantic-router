@@ -1,9 +1,9 @@
 """Verified, content-addressed materialization of Decision model data.
 
 Only immutable Hugging Face revisions supplied by the catalog are fetched.
-Repository Python is never selected or imported: inference implementations live
-in this distribution and consume only the verified data files listed by a
-packaged runtime profile.
+Inference implementations live in this distribution. Repository Python is
+never imported or executed. One hash-pinned Qwen guard contract is carried as
+inert data because its release metadata references its exact bytes.
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ _REPOSITORY_CODE_SUFFIXES = frozenset(
     {".py", ".pyc", ".pyo", ".so", ".dylib", ".dll", ".sh", ".bash"}
 )
 _REPOSITORY_CODE_NAMES = frozenset({"pyproject.toml", "setup.py", "requirements.txt"})
+_INERT_QWEN_GUARD = "code/profile_guard.py"
 
 
 class ArtifactError(RuntimeError):
@@ -381,7 +382,14 @@ def _select_profile_files(
             raise ArtifactManifestError(
                 f"runtime profile selects a file absent from the manifest: {path}"
             )
-        _reject_repository_code(item.repository_path)
+        _reject_repository_code(
+            item.repository_path,
+            inert_guard=(
+                model.profile.family == "qwen3.5"
+                and model.profile.artifact.manifest.path == "bundle-manifest.json"
+                and path == _INERT_QWEN_GUARD
+            ),
+        )
         files.append(item)
     return tuple(files)
 
@@ -409,7 +417,9 @@ def _verified_artifact(
     )
 
 
-def _reject_repository_code(path: str) -> None:
+def _reject_repository_code(path: str, *, inert_guard: bool = False) -> None:
+    if inert_guard and path == _INERT_QWEN_GUARD:
+        return
     name = PurePosixPath(path).name
     suffix = PurePosixPath(path).suffix.lower()
     if suffix in _REPOSITORY_CODE_SUFFIXES or name.lower() in _REPOSITORY_CODE_NAMES:
