@@ -504,7 +504,7 @@ def _validate_record(record: DecisionInstanceRecord) -> None:
         or record.max_queue < 0
     ):
         raise DecisionRegistryError("Decision runtime registry record is invalid.")
-    if record.backend not in {"rocm", "cuda", "mlx"}:
+    if record.backend not in {"rocm", "cuda", "cpu", "mlx"}:
         raise DecisionRegistryError("Decision runtime registry record is invalid.")
     if record.runtime not in {"docker", "podman"}:
         raise DecisionRegistryError("Decision runtime registry record is invalid.")

@@ -16,7 +16,7 @@ from pydantic import (
     model_validator,
 )
 
-from .confidence import normalized_top_confidence
+from .confidence import choice_confidence, score_confidence
 
 JsonContent: TypeAlias = str | dict[str, JsonValue] | list[JsonValue]
 Probability: TypeAlias = Annotated[FiniteFloat, Field(ge=0.0, le=1.0)]
@@ -284,8 +284,15 @@ def _require_confidence(
     confidence: float,
     probabilities: dict[str, float],
     path: str,
+    *,
+    kind: Literal["choice", "score"],
 ) -> None:
-    expected = normalized_top_confidence(tuple(probabilities.values()))
+    values = tuple(probabilities.values())
+    expected = (
+        choice_confidence(values)
+        if kind == "choice"
+        else score_confidence(values)
+    )
     if not math.isclose(
         confidence,
         expected,
@@ -293,7 +300,7 @@ def _require_confidence(
         abs_tol=PROBABILITY_SUM_TOLERANCE,
     ):
         raise ResponseContractError(
-            path, "confidence must match Decision normalized-top confidence"
+            path, f"confidence must match Decision {kind} confidence"
         )
 
 
@@ -334,6 +341,7 @@ def validate_response_for_request(
                 answer.confidence,
                 answer.probabilities,
                 f"{path}.confidence",
+                kind="choice",
             )
             if answer.choice not in answer.probabilities:
                 raise ResponseContractError(
@@ -359,6 +367,7 @@ def validate_response_for_request(
             answer.confidence,
             answer.probabilities,
             f"{path}.confidence",
+            kind="score",
         )
         expected_legend = {
             str(index): criterion for index, criterion in enumerate(question.criteria)

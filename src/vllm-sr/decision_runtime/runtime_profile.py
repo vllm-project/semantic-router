@@ -19,14 +19,14 @@ from types import MappingProxyType
 from typing import Any, Literal
 
 RuntimeFamily = Literal["vela", "qwen3.5"]
-RuntimeBackendName = Literal["rocm", "cuda", "mlx"]
+RuntimeBackendName = Literal["rocm", "cuda", "cpu", "mlx"]
 ChoiceNullDescriptionPolicy = Literal["render_key", "preserve_json_null"]
 
-PROFILE_SCHEMA_VERSION = 1
+PROFILE_SCHEMA_VERSION = 2
 # Initial benchmarked profile value, not a hard upper bound. A profile may tune
 # it after backend/device correctness and performance validation.
 DEFAULT_PHYSICAL_BATCH_SIZE = 8
-_BACKEND_NAMES = ("rocm", "cuda", "mlx")
+_BACKEND_NAMES = ("rocm", "cuda", "cpu", "mlx")
 _DTYPES = frozenset({"bfloat16", "float32"})
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _REVISION = re.compile(r"[0-9a-f]{40}")
@@ -63,6 +63,7 @@ class BackendQualification:
 
     qualified: bool
     targets: tuple[str, ...]
+    backbone_dtype: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -270,9 +271,12 @@ def _parse_backends(
     parsed: dict[RuntimeBackendName, BackendQualification] = {}
     for name in _BACKEND_NAMES:
         raw = _mapping(backends[name], f"backends.{name}")
-        _exact_keys(raw, {"qualified", "targets"}, f"backends.{name}")
+        _exact_keys(
+            raw, {"qualified", "targets", "backbone_dtype"}, f"backends.{name}"
+        )
         qualified = raw["qualified"]
         targets = raw["targets"]
+        dtype = raw["backbone_dtype"]
         if not isinstance(qualified, bool):
             raise RuntimeProfileError(f"backends.{name}.qualified must be a boolean")
         if (
@@ -287,9 +291,16 @@ def _parse_backends(
             raise RuntimeProfileError(
                 f"backends.{name} must list targets exactly when it is qualified"
             )
+        if dtype is not None:
+            dtype = _dtype(dtype, f"backends.{name}.backbone_dtype")
+        if qualified and dtype is None:
+            raise RuntimeProfileError(
+                f"backends.{name}.backbone_dtype is required when qualified"
+            )
         parsed[name] = BackendQualification(  # type: ignore[literal-required]
             qualified=qualified,
             targets=tuple(targets),
+            backbone_dtype=dtype,
         )
     return MappingProxyType(parsed)
 

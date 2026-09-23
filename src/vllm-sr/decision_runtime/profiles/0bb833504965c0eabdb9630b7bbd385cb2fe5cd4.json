@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "family": "qwen3.5",
   "artifact": {
     "manifest": {
@@ -33,8 +33,9 @@
   "calibration": {"temperature": 1.3231350559653137},
   "prompt_policy": {"choice_null_description": "render_key"},
   "backends": {
-    "rocm": {"qualified": true, "targets": ["gfx942"]},
-    "cuda": {"qualified": false, "targets": []},
-    "mlx": {"qualified": false, "targets": []}
+    "rocm": {"qualified": true, "targets": ["gfx942"], "backbone_dtype": "bfloat16"},
+    "cuda": {"qualified": false, "targets": [], "backbone_dtype": "bfloat16"},
+    "cpu": {"qualified": false, "targets": [], "backbone_dtype": null},
+    "mlx": {"qualified": false, "targets": [], "backbone_dtype": null}
   }
 }

@@ -42,7 +42,7 @@ from cli.decision_runtime.image_reference import (
 
 _ARTIFACT_TARGET = "/opt/vllm-sr/decision-artifact"
 _CONTAINER_PORT = 8000
-_SUPPORTED_CONTAINER_BACKENDS = frozenset({"rocm", "cuda"})
+_SUPPORTED_CONTAINER_BACKENDS = frozenset({"rocm", "cuda", "cpu"})
 _FAMILY_PYTHON = MappingProxyType(
     {
         "vela": "/opt/vllm-sr/venvs/vela/bin/python",
@@ -92,7 +92,7 @@ class IntegratedDecisionCatalogResolver:
         )
         if backend not in _SUPPORTED_CONTAINER_BACKENDS:
             raise DecisionCatalogError(
-                "Decision runtime backend must resolve to rocm or cuda; "
+                "Decision runtime backend must resolve to rocm, cuda, or cpu; "
                 "native MLX integration is not available in this build"
             )
 
@@ -105,7 +105,10 @@ class IntegratedDecisionCatalogResolver:
                 "requested revision does not match the immutable catalog revision"
             )
 
-        dtype = model.profile.backbone_dtype
+        qualification = model.profile.require_backend(backend)
+        dtype = qualification.backbone_dtype
+        if dtype is None:  # pragma: no cover - qualified profiles require a dtype
+            raise DecisionCatalogError("qualified Decision backend has no dtype")
         if request.dtype is not None and request.dtype != dtype:
             raise DecisionCatalogError(
                 f"revision {model.catalog.revision} requires backbone dtype {dtype!r}"
@@ -208,9 +211,7 @@ def detect_backend() -> str:
         return "rocm"
     if cuda:
         return "cuda"
-    raise DecisionCatalogError(
-        "no supported GPU runtime was detected; select a qualified backend explicitly"
-    )
+    return "cpu"
 
 
 def default_artifact_cache_root() -> Path:

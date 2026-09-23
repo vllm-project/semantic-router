@@ -15,8 +15,8 @@ from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Protocol
 
-SUPPORTED_DECISION_BACKENDS = ("auto", "rocm", "cuda")
-RESOLVED_DECISION_BACKENDS = frozenset({"rocm", "cuda", "mlx"})
+SUPPORTED_DECISION_BACKENDS = ("auto", "rocm", "cuda", "cpu")
+RESOLVED_DECISION_BACKENDS = frozenset({"rocm", "cuda", "cpu", "mlx"})
 CATALOG_ADAPTER_MODULE = "cli.decision_runtime.catalog_adapter"
 
 

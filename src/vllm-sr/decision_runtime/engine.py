@@ -16,7 +16,7 @@ from .backend import (
     ModelDescriptor,
     UnknownModelError,
 )
-from .confidence import normalized_top_confidence
+from .confidence import choice_confidence, score_confidence
 from .contracts import (
     PROBABILITY_SUM_TOLERANCE,
     ChoiceAnswer,
@@ -182,7 +182,7 @@ class DecisionEngine:
                 answers[prediction.question_id] = ChoiceAnswer(
                     type="choice",
                     choice=labels[winner],
-                    confidence=normalized_top_confidence(probabilities),
+                    confidence=choice_confidence(probabilities),
                     probabilities=distribution,
                 )
             else:
@@ -194,7 +194,7 @@ class DecisionEngine:
                         index * probability
                         for index, probability in enumerate(probabilities)
                     ),
-                    confidence=normalized_top_confidence(probabilities),
+                    confidence=score_confidence(probabilities),
                     legend={
                         str(index): criterion
                         for index, criterion in enumerate(question.criteria)

@@ -221,7 +221,7 @@ def test_http_validation_uses_documented_422_issue_shape():
 def test_batch_http_e2e_is_strict_ordered_and_state_specific():
     async def scenario():
         async with _client(app_for()) as client:
-            response = await client.post("/v1/systemone/batch", json=batch_payload())
+            response = await client.post("/v1/decision/batches", json=batch_payload())
         assert response.status_code == 200
         body = response.json()
         assert set(body) == {"model", "results", "usage"}
@@ -245,12 +245,21 @@ def test_batch_http_e2e_is_strict_ordered_and_state_specific():
     asyncio.run(scenario())
 
 
+def test_batch_extension_has_no_systemone_batch_alias():
+    async def scenario():
+        async with _client(app_for()) as client:
+            response = await client.post("/v1/systemone/batch", json=batch_payload())
+        assert response.status_code == 404
+
+    asyncio.run(scenario())
+
+
 def test_batch_validation_rejects_duplicate_ids_and_excess_decisions():
     async def scenario():
         async with _client(app_for()) as client:
             duplicate = batch_payload()
             duplicate["states"][1]["id"] = "first"
-            response = await client.post("/v1/systemone/batch", json=duplicate)
+            response = await client.post("/v1/decision/batches", json=duplicate)
             assert response.status_code == 422
             assert response.json()["detail"][0]["loc"] == ["body", "states"]
 
@@ -258,7 +267,7 @@ def test_batch_validation_rejects_duplicate_ids_and_excess_decisions():
             too_many["states"] = [
                 {"id": f"state-{index}", "state": "state"} for index in range(513)
             ]
-            response = await client.post("/v1/systemone/batch", json=too_many)
+            response = await client.post("/v1/decision/batches", json=too_many)
             assert response.status_code == 422
             assert "1024 decisions" in response.json()["detail"][0]["msg"]
 
@@ -307,7 +316,7 @@ def test_status_and_metrics_keep_diagnostics_outside_systemone():
             status = (await client.get("/api/status")).json()
             assert status["contracts"] == [
                 "systemone.single.v1",
-                "systemone.batch.v1",
+                "decision.batches.v1",
             ]
             assert status["confidence"]["typesafe_equivalent"] is False
             metrics = await client.get("/metrics")
@@ -319,7 +328,10 @@ def test_status_and_metrics_keep_diagnostics_outside_systemone():
 
 
 def test_openapi_preserves_strict_single_state_schema():
-    schema = app_for().openapi()["components"]["schemas"]
+    openapi = app_for().openapi()
+    assert "/v1/decision/batches" in openapi["paths"]
+    assert "/v1/systemone/batch" not in openapi["paths"]
+    schema = openapi["components"]["schemas"]
     request_schema = schema["SystemOneRequest"]
     assert request_schema["required"] == ["state", "model", "questions"]
     assert request_schema["additionalProperties"] is False
@@ -418,7 +430,7 @@ def test_backend_token_limit_maps_to_413_for_single_and_batch_requests():
         async with _client(app_for(InputTooLargeBackend([MODEL]))) as client:
             for route, body in (
                 ("/v1/systemone", payload()),
-                ("/v1/systemone/batch", batch_payload()),
+                ("/v1/decision/batches", batch_payload()),
             ):
                 response = await client.post(route, json=body)
                 assert response.status_code == 413
@@ -451,15 +463,15 @@ def test_batch_uses_same_unknown_model_and_overload_mapping():
         async with _client(app) as client:
             unknown = batch_payload()
             unknown["model"] = "unknown"
-            response = await client.post("/v1/systemone/batch", json=unknown)
+            response = await client.post("/v1/decision/batches", json=unknown)
             assert response.status_code == 422
             assert response.json()["detail"][0]["loc"] == ["body", "model"]
 
             first = asyncio.create_task(
-                client.post("/v1/systemone/batch", json=batch_payload())
+                client.post("/v1/decision/batches", json=batch_payload())
             )
             await backend.entered.wait()
-            overloaded = await client.post("/v1/systemone/batch", json=batch_payload())
+            overloaded = await client.post("/v1/decision/batches", json=batch_payload())
             assert overloaded.status_code == 529
             assert overloaded.headers["retry-after"] == "1"
             backend.release.set()
@@ -479,7 +491,7 @@ def test_batch_backend_identity_failures_use_backend_error_boundary(mutation):
 
     async def scenario():
         async with _client(app_for(InvalidBatchBackend([MODEL]))) as client:
-            response = await client.post("/v1/systemone/batch", json=batch_payload())
+            response = await client.post("/v1/decision/batches", json=batch_payload())
             assert response.status_code == 500
             assert response.json() == {
                 "detail": "Decision backend returned an invalid result"
@@ -495,7 +507,7 @@ def test_batch_backend_model_rejection_is_not_a_client_unknown_model_error():
 
     async def scenario():
         async with _client(app_for(RejectingBatchBackend([MODEL]))) as client:
-            response = await client.post("/v1/systemone/batch", json=batch_payload())
+            response = await client.post("/v1/decision/batches", json=batch_payload())
             assert response.status_code == 500
             assert response.json() == {
                 "detail": "Decision backend returned an invalid result"

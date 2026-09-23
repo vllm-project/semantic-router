@@ -1,6 +1,5 @@
 """Strict SystemOne request, response, and confidence contracts."""
 
-import json
 import math
 import sys
 from pathlib import Path
@@ -12,7 +11,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from decision_runtime.confidence import normalized_top_confidence  # noqa: E402
+from decision_runtime.confidence import (  # noqa: E402
+    choice_confidence,
+    score_confidence,
+)
 from decision_runtime.contracts import (  # noqa: E402
     MAX_BATCH_DECISIONS,
     ChoiceAnswer,
@@ -67,7 +69,7 @@ def response_for(request):
             "urgency": ScoreAnswer(
                 type="score",
                 score=1.7,
-                confidence=0.7,
+                confidence=0.385,
                 legend={"0": "Can wait", "1": "Needs attention", "2": "Immediate"},
                 probabilities={"0": 0.1, "1": 0.1, "2": 0.8},
             ),
@@ -295,25 +297,38 @@ def test_request_relative_response_validation_rejects_mismatch(mutation):
         validate_response_for_request(request, SystemOneResponse.model_validate(body))
 
 
-def test_confidence_matches_versioned_oracle_fixture_and_is_not_max_probability():
-    fixture = json.loads(
-        (
-            Path(__file__).parent / "fixtures/decision_confidence_oracle.v1.json"
-        ).read_text()
-    )
-    assert fixture["contract"] == "decision.normalized-top.v1"
-    saw_non_max = False
-    for case in fixture["cases"]:
-        probabilities = case.get("probabilities")
-        if probabilities is None:
-            remainder = (1.0 - case["top_probability"]) / (case["option_count"] - 1)
-            probabilities = [case["top_probability"]] + [remainder] * (
-                case["option_count"] - 1
-            )
-        actual = normalized_top_confidence(probabilities)
-        assert math.isclose(actual, case["expected"], abs_tol=1e-12)
-        saw_non_max |= not math.isclose(actual, max(probabilities))
-    assert saw_non_max
+@pytest.mark.parametrize(
+    ("probabilities", "expected"),
+    [
+        ([0.5, 0.5], 0.0),
+        ([1.0, 0.0], 1.0),
+        ([0.45, 0.40, 0.15], 0.05),
+        ([0.1, 0.1, 0.8], 0.7),
+    ],
+)
+def test_choice_confidence_is_top_two_margin(probabilities, expected):
+    assert math.isclose(choice_confidence(probabilities), expected, abs_tol=1e-12)
+
+
+@pytest.mark.parametrize(
+    ("probabilities", "expected"),
+    [
+        ([0.5, 0.5], 0.0),
+        ([1.0, 0.0], 1.0),
+        ([1 / 3, 1 / 3, 1 / 3], 0.0),
+        ([0.1, 0.1, 0.8], 0.385),
+        ([0.5, 0.0, 0.5], 0.0),
+    ],
+)
+def test_score_confidence_is_ordinal_concentration(probabilities, expected):
+    assert math.isclose(score_confidence(probabilities), expected, abs_tol=1e-12)
+
+
+@pytest.mark.parametrize("statistic", [choice_confidence, score_confidence])
+@pytest.mark.parametrize("probabilities", [[], [1.0], [0.3, 0.3], [float("nan"), 1.0]])
+def test_confidence_rejects_invalid_distribution(statistic, probabilities):
+    with pytest.raises(ValueError):
+        statistic(probabilities)
 
 
 def test_batch_request_is_closed_requires_model_and_unique_bounded_state_ids():

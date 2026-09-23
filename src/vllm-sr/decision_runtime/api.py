@@ -206,7 +206,7 @@ def create_app(
             lambda: engine.evaluate(payload),
         )
 
-    @app.post("/v1/systemone/batch", response_model=SystemOneBatchResponse)
+    @app.post("/v1/decision/batches", response_model=SystemOneBatchResponse)
     async def system_one_batch(
         payload: Annotated[SystemOneBatchRequest, Body(...)],
     ) -> SystemOneBatchResponse | JSONResponse:
@@ -226,9 +226,9 @@ def create_app(
         is_ready = await engine.ready()
         return {
             "status": "ready" if is_ready else "not_ready",
-            "contracts": ["systemone.single.v1", "systemone.batch.v1"],
+            "contracts": ["systemone.single.v1", "decision.batches.v1"],
             "confidence": {
-                "name": "decision_normalized_top",
+                "name": "decision_type_aware_v1",
                 "typesafe_equivalent": False,
             },
             "models": [model.name for model in engine.models],

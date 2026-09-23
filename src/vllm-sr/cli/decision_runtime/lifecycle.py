@@ -428,7 +428,7 @@ def _validate_resolved_runtime(
             )
     if spec.backend not in RESOLVED_DECISION_BACKENDS:
         raise DecisionLifecycleError(
-            "Resolved Decision runtime backend must be rocm, cuda, or mlx."
+            "Resolved Decision runtime backend must be rocm, cuda, cpu, or mlx."
         )
     try:
         validate_immutable_image_reference(spec.image)

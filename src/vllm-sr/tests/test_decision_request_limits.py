@@ -252,7 +252,7 @@ def test_batch_has_a_larger_but_still_bounded_raw_transport_limit():
             transport=transport, base_url="http://test"
         ) as client:
             response = await client.post(
-                "/v1/systemone/batch",
+                "/v1/decision/batches",
                 content=b"{" + b" " * BATCH_MAX_REQUEST_BYTES + b"}",
                 headers={"Content-Type": "application/json"},
             )

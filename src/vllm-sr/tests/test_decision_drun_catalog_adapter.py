@@ -154,7 +154,7 @@ def test_missing_released_image_fails_before_artifact_download(tmp_path: Path) -
     (
         ({"revision": "c" * 40}, "immutable catalog revision"),
         ({"dtype": "bfloat16"}, "requires backbone dtype"),
-        ({"backend": "mlx"}, "rocm or cuda"),
+        ({"backend": "mlx"}, "rocm, cuda, or cpu"),
     ),
 )
 def test_incompatible_launch_request_fails_before_artifact_download(

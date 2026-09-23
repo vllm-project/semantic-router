@@ -46,14 +46,16 @@ manifest and the exact data files consumed by vLLM-SR-owned runtime code.
 Artifacts are SHA-256 and size verified into a read-only, content-addressed
 local view; model-repository Python and `trust_remote_code` are never used.
 
-| Runtime family | ROCm `gfx942` | CUDA | Apple MLX |
-| --- | --- | --- | --- |
-| Vela (Kai, Lex) | Qualified | Evidence gated | Evidence gated |
-| Qwen3.5 (Eos, Sol, Nox, Lux) | Qualified | Evidence gated | Evidence gated |
+| Runtime family | ROCm `gfx942` | CUDA | Linux CPU | Apple MLX |
+| --- | --- | --- | --- | --- |
+| Vela (Kai, Lex) | Qualified profile | Evidence gated | Implementation in progress | Deferred |
+| Qwen3.5 (Eos) | Qualified profile | Evidence gated | Implementation in progress | Deferred |
+| Qwen3.5 (Sol, Nox, Lux) | Qualified profile | Evidence gated | Not supported | Deferred |
 
-The initial physical microbatch is 8 for every profile. CUDA and MLX remain
-fail-closed until their owned backend implementations pass parity, correctness,
-and performance qualification; catalog presence alone does not enable them.
+The initial physical microbatch is 8 for every profile. CUDA, CPU, and MLX
+remain fail-closed for each model/revision until their owned backend
+implementations pass parity, correctness, and performance qualification;
+catalog presence alone does not enable them.
 
 The HTTP contract requires an explicit `model`, one string/object/array `state`,
 and at least one named question. Instructions are required and non-null. Choice
@@ -62,7 +64,7 @@ responses contain only `model`, `answers`, and `usage`; diagnostics stay on
 `/api/status` and `/metrics`. Batch and debug request-body extensions are not
 part of `/v1/systemone`.
 
-The separate Decision extension `POST /v1/systemone/batch` applies one required
+The separate Decision extension `POST /v1/decision/batches` applies one required
 `model` and one shared `questions` map to ordered
 `states: [{"id": ..., "state": ...}]`. IDs must be unique, nonblank strings of
 at most 128 characters. A request may contain at most 1,024 states, 1,024
@@ -94,16 +96,17 @@ runtime factory must await `PhysicalBatchBackend.aclose()` from its shutdown
 lifespan; the fake `create_default_app` remains only a contract-development
 entry point.
 
-Choice and Score answers use the Decision-owned `decision_normalized_top`
-concentration statistic:
+Choice and Score answers use Decision-owned, type-aware confidence statistics
+computed from the calibrated, unrounded probability distribution:
 
 ```text
-(max(probabilities) - 1 / option_count) / (1 - 1 / option_count)
+Choice: top_probability - second_probability
+Score: clamp(1 - ordinal_variance / uniform_ordinal_variance, 0, 1)
 ```
 
-It maps a uniform distribution to zero and a one-hot distribution to one. It is
-not a calibrated probability of correctness and does not claim numeric
-equivalence to TypeSafe/Jev confidence, whose formula is not public.
+Noul returns P(true) without a separate confidence field. These are not
+calibrated probabilities of correctness and do not claim numeric equivalence
+to TypeSafe/Jev confidence, whose formula is not public.
 
 The development server also exposes `GET /v1/models`, `/health`, `/ready`,
 `/api/status`, and `/metrics`. The status and metrics routes are control-plane

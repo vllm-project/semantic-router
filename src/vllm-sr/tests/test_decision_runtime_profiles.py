@@ -154,6 +154,8 @@ def test_unqualified_backends_and_targets_are_rejected() -> None:
     with pytest.raises(UnsupportedRuntimeBackendError):
         profile.require_backend("cuda")
     with pytest.raises(UnsupportedRuntimeBackendError):
+        profile.require_backend("cpu")
+    with pytest.raises(UnsupportedRuntimeBackendError):
         profile.require_backend("mlx")
     with pytest.raises(UnsupportedRuntimeBackendError):
         profile.require_backend("rocm", target="gfx1100")
@@ -189,6 +191,33 @@ def test_physical_batch_is_a_tunable_positive_profile_value() -> None:
     profile = parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 
     assert profile.physical_batch_size == 4
+
+
+@pytest.mark.parametrize("model_id", MODELS)
+def test_cpu_is_explicit_and_unqualified_until_hardware_evidence(model_id: str) -> None:
+    revision = MODELS[model_id][0]
+    profile = load_runtime_profile(revision)
+    cpu = profile.backends["cpu"]
+    assert not cpu.qualified
+    assert cpu.targets == ()
+    if model_id.endswith(("Kai-0.6B", "Lex-0.6B", "Eos-0.8B")):
+        assert cpu.backbone_dtype == "float32"
+    else:
+        assert cpu.backbone_dtype is None
+
+
+def test_profile_rejects_qualified_backend_without_dtype() -> None:
+    revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
+    packaged = resources.files("decision_runtime.profiles").joinpath(f"{revision}.json")
+    document = json.loads(packaged.read_bytes())
+    document["backends"]["cpu"] = {
+        "qualified": True,
+        "targets": ["x86_64"],
+        "backbone_dtype": None,
+    }
+
+    with pytest.raises(RuntimeProfileError, match="dtype is required"):
+        parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 
 
 @pytest.mark.parametrize("revision", ("main", "A" * 40, "a" * 39, "a" * 41))
