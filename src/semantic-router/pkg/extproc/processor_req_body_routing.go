@@ -304,6 +304,13 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		if err := r.rejectDispatchCapabilityMismatch(ctx.SemanticRequest, dispatch, ctx); err != nil {
 			return nil, err
 		}
+		if r.shouldAttemptFallback(ctx) {
+			snapshot, err := cloneSemanticRequestForReplay(ctx.SemanticRequest)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "capture fallback request: %v", err)
+			}
+			ctx.FallbackRequest = snapshot
+		}
 	}
 	captureRequestDemand(
 		ctx,

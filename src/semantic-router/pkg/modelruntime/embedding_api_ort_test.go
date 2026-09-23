@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
@@ -55,5 +56,54 @@ func TestEmbeddingAPIAndCacheKeepSeparateConsumersOnSharedORTModel(t *testing.T)
 	}
 	if vector, callErr := provider.Embed(context.Background(), "hello"); callErr != nil || len(vector) != 3 {
 		t.Fatalf("API close retired cache model: %v / %v", vector, callErr)
+	}
+}
+
+func TestExplicitOmniGlobalBindingSupportsSharedSemanticCache(t *testing.T) {
+	if os.Getenv("ORT_DYLIB_PATH") == "" {
+		t.Skip("requires real ONNX Runtime")
+	}
+	artifact, err := filepath.Abs("../../../../onnx-binding/instance/testdata/omni")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.RouterConfig{}
+	cfg.API.Embeddings.Enabled = true
+	cfg.EmbeddingConfig = config.HNSWConfig{ModelType: "multimodal"}
+	cfg.SemanticCache.Enabled = true
+	cfg.SemanticCache.BackendType, cfg.SemanticCache.EmbeddingModel = "memory", "multimodal"
+	cfg.ModelDeployments = map[string]config.ModelDeployment{"omni": {Artifact: artifact, Provider: "ort", Device: "cpu", Input: config.ModelInputBudget{MaxTokens: 512, Overflow: "reject"}}}
+	cfg.GlobalModelBindings = map[string]config.ModelBinding{"embedding": {Deployment: "omni", Adapter: "vela_omni", Contract: "embedding.v1"}}
+	runtime := native.New(nil)
+	preparedCache, err := PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer preparedCache.Close()
+	provider, err := preparedCache.Default()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dimension, dimensionErr := embedding.ResolveDimension(provider, 0); dimensionErr != nil || dimension != 384 {
+		t.Fatalf("cache representation dimension=%d: %v", dimension, dimensionErr)
+	}
+	api, err := PrepareOwnedEmbeddingAPI(context.Background(), cfg, runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindings := runtime.PreparedBindings()
+	if len(bindings) != 2 || bindings[0].ResourceID != bindings[1].ResourceID {
+		t.Fatalf("cache/API did not share owned Omni resource: %+v", bindings)
+	}
+	if closeErr := api.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	vector, err := provider.Embed(context.Background(), "hello")
+	if err != nil || len(vector) != 384 {
+		t.Fatalf("API close invalidated cache: %d/%v", len(vector), err)
+	}
+	cfg.SemanticCache.EmbeddingModel = "mmbert"
+	if _, prepareErr := PrepareOwnedResponseCacheEmbeddings(context.Background(), cfg, runtime); prepareErr == nil {
+		t.Fatal("cache accepted a different primary catalog representation")
 	}
 }

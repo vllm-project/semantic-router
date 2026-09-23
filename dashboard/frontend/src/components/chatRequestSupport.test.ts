@@ -14,6 +14,21 @@ function responseWithHeaders(headers: Record<string, string>): Response {
 }
 
 describe('collectResponseHeaders', () => {
+  it('collects actual automatic-output limits without inventing absent evidence', () => {
+    expect(
+      collectResponseHeaders(
+        responseWithHeaders({
+          'x-vsr-effective-input-tokens': '512',
+          'x-vsr-effective-max-output-tokens': '261632',
+        }),
+      ),
+    ).toEqual({
+      'x-vsr-effective-input-tokens': '512',
+      'x-vsr-effective-max-output-tokens': '261632',
+    })
+    expect(collectResponseHeaders(responseWithHeaders({}))).toEqual({})
+  })
+
   it('collects the looper latency and token usage headers (#2694)', () => {
     const response = responseWithHeaders({
       'x-vsr-looper-latency-ms': '74',

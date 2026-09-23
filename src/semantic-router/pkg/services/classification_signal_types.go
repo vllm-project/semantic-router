@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
@@ -8,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 const (
@@ -127,12 +129,14 @@ type EvalResponse struct {
 	SelectionMethod        string                                  `json:"selection_method,omitempty"`
 	SelectionReason        string                                  `json:"selection_reason,omitempty"`
 	SelectionProvenance    *SelectionProvenance                    `json:"selection_provenance,omitempty"`
+	SelectionTrace         *selectiontrace.MultiFactorObjective    `json:"selection_trace,omitempty"`
 	RoutingDecision        string                                  `json:"routing_decision,omitempty"`
 	Metrics                *classification.SignalMetricsCollection `json:"metrics"`                      // Performance and confidence for each signal
 	SignalConfidences      map[string]float64                      `json:"signal_confidences,omitempty"` // Real ML confidence scores per signal, e.g. "domain:economics" -> 0.81
 	SignalValues           map[string]float64                      `json:"signal_values,omitempty"`      // Raw signal values per signal when exposed, e.g. "structure:many_questions" -> 4
 	SignalErrors           map[string]string                       `json:"signal_errors,omitempty"`
 	AppliedUnknownPolicies map[string]string                       `json:"applied_unknown_policies,omitempty"`
+	DecisionRanking        *decision.RankingTrace                  `json:"decision_ranking,omitempty"` // How selection ordered the matched decisions
 	DecisionError          string                                  `json:"decision_error,omitempty"`
 }
 
@@ -140,6 +144,7 @@ type EvalResponse struct {
 // facts to the live selector. Request content remains local to this call and is
 // excluded from the returned selection provenance.
 type EvalModelSelectionInput struct {
+	Context           context.Context
 	PreviewContext    *PreviewContext
 	ConversationFacts classification.ConversationFacts
 	SemanticRequest   *llmprotocol.Request
@@ -157,6 +162,7 @@ type EvalModelSelection struct {
 	Method        string
 	Reason        string
 	Provenance    *SelectionProvenance
+	MultiFactor   *selectiontrace.MultiFactorObjective
 }
 
 // EvalModelSelector performs a non-generating selection preview with the same

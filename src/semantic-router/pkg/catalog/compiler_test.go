@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -102,6 +103,25 @@ func TestRegistryRejectsInvalidIndexResultStates(t *testing.T) {
 	}
 }
 
+func TestRegistryRejectsConflictingOperationOverrides(t *testing.T) {
+	var document snapshot
+	if err := json.Unmarshal([]byte(builtInCatalogJSON), &document); err != nil {
+		t.Fatal(err)
+	}
+	for index := range document.Providers {
+		if document.Providers[index].ID != "azure-openai" {
+			continue
+		}
+		document.Providers[index].PathOverrides["openai/responses@1#create"] = "/responses"
+		_, err := registryFromSnapshot(document, "sha256:test")
+		if err == nil || !strings.Contains(err.Error(), "both path_overrides and operation_overrides") {
+			t.Fatalf("ambiguous provider operation was accepted: %v", err)
+		}
+		return
+	}
+	t.Fatal("azure-openai provider is missing")
+}
+
 func TestProviderLookupReturnsDefensiveDefaultHeaders(t *testing.T) {
 	registry, err := BuiltIn()
 	if err != nil {
@@ -153,8 +173,34 @@ func TestSnowflakeCortexProviderContractFixture(t *testing.T) {
 	if provider.Presentation.Monogram != "SF" {
 		t.Fatalf("unexpected presentation: %+v", provider.Presentation)
 	}
-	if provider.Conformance.Status != "unverified" {
-		t.Fatalf("conformance = %+v, want unverified until wire-level conformance exists", provider.Conformance)
+	// The failure envelope has an observed fixture and a vendor decode; the
+	// accepted envelope of both declared protocols is still uncovered, so this
+	// must not claim live_verified.
+	if provider.Conformance.Status != "fixture_verified" {
+		t.Fatalf("conformance = %+v, want fixture_verified until accepted-wire conformance exists", provider.Conformance)
+	}
+}
+
+func TestProviderLookupReturnsDefensiveOperationOverrides(t *testing.T) {
+	registry, err := BuiltIn()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const operation = "openai/responses@1#create"
+	provider, ok := registry.Provider("azure-openai")
+	if !ok {
+		t.Fatal("azure-openai provider is missing")
+	}
+	original, ok := provider.OperationOverrides[operation]
+	if !ok || original.Path != "/openai/v1/responses" {
+		t.Fatalf("unexpected operation override: %+v", provider.OperationOverrides)
+	}
+
+	provider.OperationOverrides[operation] = OperationOverride{Path: "/mutated"}
+
+	reloaded, _ := registry.Provider("azure-openai")
+	if got := reloaded.OperationOverrides[operation]; got != original {
+		t.Fatalf("registry operation overrides were mutated: %+v", got)
 	}
 }
 

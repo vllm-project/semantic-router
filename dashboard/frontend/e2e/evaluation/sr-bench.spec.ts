@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { expect, test, type Page } from '@playwright/test'
 import { mockAuthenticatedAppShell } from '../support/auth'
 
@@ -36,6 +37,7 @@ const report = {
         total: 2,
         completed: 2,
         failed: 0,
+        pending: 0,
         correct: 1,
         scored: 2,
         accuracy: 0.5,
@@ -207,7 +209,7 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
       body = {
         baseline_selection: 'Best observed single model on identical cases.',
         baseline_tied_best_target_ids: ['single', 'another-single'],
-        baseline_tie_policy: 'Lowest complete known subject cost, then stable target ID.',
+        baseline_tie_policy: 'Lowest complete known total cost, then stable target ID.',
         ...comparisonProtocol,
         comparisons: [
           {
@@ -217,10 +219,15 @@ async function mockBench(page: Page, settings: Record<string, unknown> = {}) {
             wins: 1,
             losses: 0,
             ties: 1,
-            baseline_cost_usd: 1,
-            candidate_cost_usd: 0.8,
+            baseline_subject_cost_usd: 1,
+            baseline_total_cost_usd: 1,
+            baseline_evaluation_cost_usd: 0,
+            candidate_subject_cost_usd: 0.8,
+            candidate_total_cost_usd: 0.8,
+            candidate_evaluation_cost_usd: 0,
             quality_delta: 0.1,
-            cost_saving_percent: 20,
+            subject_cost_saving_percent: 20,
+            total_cost_saving_percent: 20,
             quality_delta_ci95: [-0.1, 0.3],
           },
         ],
@@ -601,7 +608,7 @@ test('shows truthful metrics, routing distribution and case evidence', async ({ 
   await expect(page.getByRole('cell', { name: '$0.00000' })).toHaveCount(0)
   await section(page, 'Questions')
   await page.getByRole('button', { name: 'case-a' }).click()
-  await expect(page.getByRole('heading', { name: 'Final answer' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Parsed answer' })).toBeVisible()
   await section(page, 'Evidence')
   await expect(page.getByRole('link', { name: 'Open report JSON' })).toHaveAttribute(
     'href',
@@ -1134,7 +1141,7 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
     await route.fulfill({
       json: {
         id,
-        request: { messages: [{ content: 'Saved call prompt' }] },
+        request: { effective_body: { messages: [{ role: 'user', content: 'Saved call prompt' }] } },
         final: 'Saved final answer',
       },
     })
@@ -1206,7 +1213,7 @@ test('loads bounded evidence pages on demand and keeps full report aggregates', 
   ).toBeVisible()
   await page.getByLabel('Filter loaded calls').fill('call-150')
   await page.getByRole('button', { name: 'call-150', exact: true }).click()
-  await page.getByText('Original call receipt', { exact: true }).click()
+  await page.getByText('Conversation sent with this call', { exact: true }).click()
   await expect(page.getByText('Saved call prompt', { exact: false })).toBeVisible()
   expect(detailReads).toEqual(['call-150'])
   await section(page, 'Results')
@@ -1222,7 +1229,7 @@ test('compares complete runs using paired results', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Comparison evidence' })).toBeVisible()
   await expect(
     page.getByText(
-      'Costs apply frozen per-token prices to recorded usage; they are not invoice or hardware-cost measurements.',
+      'Total cost includes model answers and evaluation calls, priced from recorded usage at frozen rates. These are estimates, not invoices or hardware costs.',
       { exact: true },
     ),
   ).toBeVisible()
@@ -2134,9 +2141,14 @@ test('uses conservative quality uncertainty and identifies a zero-width bootstra
             quality_delta_ci95_qualification:
               'Case-independent bounded-difference interval with frozen benchmark weights; excludes strongest-baseline-selection, source contamination and tuning-selection uncertainty.',
             quality_delta_bootstrap_ci95: [0, 0],
-            baseline_cost_usd: 1,
-            candidate_cost_usd: 0.8,
-            cost_saving_percent: 20,
+            baseline_subject_cost_usd: 1,
+            baseline_total_cost_usd: 1,
+            baseline_evaluation_cost_usd: 0,
+            candidate_subject_cost_usd: 0.8,
+            candidate_total_cost_usd: 0.8,
+            candidate_evaluation_cost_usd: 0,
+            subject_cost_saving_percent: 20,
+            total_cost_saving_percent: 20,
           },
         ],
       },
@@ -2191,9 +2203,14 @@ test('separates observed savings from cache-neutral estimates and preserves unkn
             paired_cases: 2,
             quality_delta: 0,
             quality_delta_ci95: [-0.1, 0.1],
-            baseline_cost_usd: 1,
-            candidate_cost_usd: 0.8,
-            cost_saving_percent: 20,
+            baseline_subject_cost_usd: 1,
+            baseline_total_cost_usd: 1,
+            baseline_evaluation_cost_usd: 0,
+            candidate_subject_cost_usd: 0.8,
+            candidate_total_cost_usd: 0.8,
+            candidate_evaluation_cost_usd: 0,
+            subject_cost_saving_percent: 20,
+            total_cost_saving_percent: 20,
             cache_neutral_baseline_cost_usd: complete ? 2 : null,
             cache_neutral_candidate_cost_usd: complete ? 1.8 : null,
             cache_neutral_cost_saving_percent: complete ? 10 : null,
@@ -2236,6 +2253,130 @@ test('separates observed savings from cache-neutral estimates and preserves unkn
     page.getByRole('cell', { name: '— Unknown Not available Baseline —', exact: true }),
   ).toBeVisible()
   await expect(page.getByText('10% estimated saving', { exact: true })).toHaveCount(0)
+  expect(submissions).toHaveLength(0)
+})
+
+test('total-cost comparison includes evaluation overhead and withholds unknown auxiliary spend', async ({
+  page,
+}, testInfo) => {
+  const submissions = await mockBench(page)
+  let evaluationKnown = true
+  const baseline = {
+    ...report.summary.targets[0],
+    cost_usd: 1,
+    evaluation_cost_usd: 0.2,
+    total_spend_usd: 1.2,
+  }
+  await page.route('**/api/sr-bench/v1/comparisons', (route) =>
+    route.fulfill({
+      json: {
+        ...comparisonProtocol,
+        baseline_selection: 'Strongest single model, then lowest known total cost.',
+        baseline_targets: [baseline],
+        candidate_targets: [
+          {
+            ...baseline,
+            id: 'balance',
+            cost_usd: 0.4,
+            evaluation_cost_usd: evaluationKnown ? 1 : null,
+            total_spend_usd: evaluationKnown ? 1.4 : null,
+          },
+        ],
+        comparisons: [
+          {
+            baseline_target_id: 'single',
+            candidate_target_id: 'balance',
+            paired_cases: 2,
+            quality_delta: 0,
+            quality_delta_ci95: [-0.1, 0.1],
+            baseline_subject_cost_usd: 1,
+            candidate_subject_cost_usd: 0.4,
+            subject_cost_saving_percent: 60,
+            baseline_evaluation_cost_usd: 0.2,
+            candidate_evaluation_cost_usd: evaluationKnown ? 1 : null,
+            baseline_total_cost_usd: 1.2,
+            candidate_total_cost_usd: evaluationKnown ? 1.4 : null,
+            total_cost_saving_percent: evaluationKnown ? -100 / 6 : null,
+            total_cost_comparison_reason: evaluationKnown
+              ? null
+              : 'Candidate evaluation cost is incomplete.',
+          },
+        ],
+      },
+    }),
+  )
+  await page.goto('/evaluation?view=compare&baseline=run-1&candidate=run-2')
+  const card = page.getByRole('article')
+  await expect(card.getByText('Total cost saving', { exact: true })).toBeVisible()
+  const headline = card.locator('strong > [data-direction]').nth(1)
+  await expect(headline).toContainText('−16.67%')
+  await expect(headline).toHaveAttribute('data-direction', 'negative')
+  await expect(card.getByText('Subject model saving:', { exact: false })).not.toBeVisible()
+  await card.getByText('Cost breakdown', { exact: true }).click()
+  await expect(card.getByText('Subject model saving:', { exact: false })).toContainText('+60%')
+  const costs = card.getByRole('table', { name: 'Cost breakdown' })
+  await expect(
+    costs
+      .getByRole('row')
+      .filter({ has: page.getByRole('rowheader', { name: 'Subject model', exact: true }) }),
+  ).toContainText('$1.00000$0.40000')
+  await expect(
+    costs
+      .getByRole('row')
+      .filter({ has: page.getByRole('rowheader', { name: 'Evaluation', exact: true }) }),
+  ).toContainText('$0.20000$1.00000')
+  await expect(
+    costs
+      .getByRole('row')
+      .filter({ has: page.getByRole('rowheader', { name: 'Total', exact: true }) }),
+  ).toContainText('$1.20000$1.40000')
+  const chart = page.getByRole('region', { name: 'Quality and cost chart' })
+  await expect(
+    chart.getByRole('heading', { name: 'Quality and total cost', exact: true }),
+  ).toBeVisible()
+  await expect(chart.getByRole('listitem').first()).toContainText('$1.20000')
+  await expect(chart.getByRole('listitem').last()).toContainText('$1.40000')
+  const downloadEvent = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Export comparison CSV' }).click()
+  const download = await downloadEvent
+  const csv = await readFile((await download.path())!, 'utf8')
+  const cells = csv
+    .split('\n')
+    .map((line) => line.split(',').map((cell) => JSON.parse(cell) as string))
+  const exported = Object.fromEntries(cells[0].map((key, index) => [key, cells[1][index]]))
+  expect(exported).toMatchObject({
+    baseline_subject_cost_usd: '1',
+    candidate_subject_cost_usd: '0.4',
+    baseline_evaluation_cost_usd: '0.2',
+    candidate_evaluation_cost_usd: '1',
+    baseline_total_cost_usd: '1.2',
+    candidate_total_cost_usd: '1.4',
+    subject_cost_saving_percent: '60',
+    total_cost_saving_percent: String(-100 / 6),
+  })
+  expect(exported).not.toHaveProperty('cost_saving_percent')
+  expect(exported).not.toHaveProperty('model_cost_usd')
+  await card.screenshot({ path: testInfo.outputPath('total-cost-regression.png') })
+  evaluationKnown = false
+  await page.reload()
+  await expect(headline).toContainText('Unknown')
+  await expect(headline).toHaveAttribute('data-direction', 'unknown')
+  await expect(
+    card.getByText('Candidate evaluation cost is incomplete.', { exact: true }),
+  ).toBeVisible()
+  await expect(chart.getByRole('listitem')).toHaveCount(1)
+  await card.getByText('Cost breakdown', { exact: true }).click()
+  await expect(card.getByText('Subject model saving:', { exact: false })).toContainText('+60%')
+  await expect(
+    costs
+      .getByRole('row')
+      .filter({ has: page.getByRole('rowheader', { name: 'Evaluation', exact: true }) }),
+  ).toContainText('$0.20000—')
+  await expect(
+    costs
+      .getByRole('row')
+      .filter({ has: page.getByRole('rowheader', { name: 'Total', exact: true }) }),
+  ).toContainText('$1.20000—')
   expect(submissions).toHaveLength(0)
 })
 
@@ -2391,7 +2532,7 @@ test('navigates paginated runs to a dedicated detail view with persistent tabs a
     'true',
   )
   await page.getByRole('button', { name: 'case-a', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Final answer', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Parsed answer', exact: true })).toBeVisible()
   await expect(page.getByLabel('Filter loaded results')).not.toBeVisible()
   await page.getByRole('button', { name: 'Back to questions', exact: true }).click()
   await section(page, 'Results')
@@ -2431,9 +2572,14 @@ test('withholds trend charts for incompatible comparisons and never plots unknow
                   paired_cases: 2,
                   quality_delta: 0,
                   quality_delta_ci95: [-0.5, 0.5],
-                  baseline_cost_usd: null,
-                  candidate_cost_usd: null,
-                  cost_saving_percent: null,
+                  baseline_subject_cost_usd: null,
+                  baseline_total_cost_usd: null,
+                  baseline_evaluation_cost_usd: 0,
+                  candidate_subject_cost_usd: null,
+                  candidate_total_cost_usd: null,
+                  candidate_evaluation_cost_usd: 0,
+                  subject_cost_saving_percent: null,
+                  total_cost_saving_percent: null,
                 },
               ],
             },
@@ -2444,9 +2590,9 @@ test('withholds trend charts for incompatible comparisons and never plots unknow
   await expect(
     page.getByText('Complete quality and cost evidence is needed for this chart.', { exact: true }),
   ).toBeVisible()
-  await expect(page.getByRole('article').locator('[data-direction="unknown"]')).toContainText(
-    'Unknown',
-  )
+  await expect(
+    page.getByRole('article').locator('strong > [data-direction="unknown"]'),
+  ).toContainText('Unknown')
   incompatible = true
   await page.reload()
   await expect(page.getByText('A continuous trend is withheld', { exact: false })).toBeVisible()
@@ -3036,9 +3182,14 @@ test('uses authoritative failed-baseline comparisons without masking failed resu
             wins: 0,
             losses: 1,
             ties: 13,
-            baseline_cost_usd: null,
-            candidate_cost_usd: 0.5,
-            cost_saving_percent: null,
+            baseline_subject_cost_usd: null,
+            baseline_total_cost_usd: null,
+            baseline_evaluation_cost_usd: 0,
+            candidate_subject_cost_usd: 0.5,
+            candidate_total_cost_usd: 0.5,
+            candidate_evaluation_cost_usd: 0,
+            subject_cost_saving_percent: null,
+            total_cost_saving_percent: null,
           },
         ],
       },
@@ -3199,9 +3350,14 @@ test('renders signed quality and cost changes with truthful positive negative an
             paired_cases: 25,
             quality_delta: value.quality,
             quality_delta_ci95: [-0.1, 0.1],
-            baseline_cost_usd: 1,
-            candidate_cost_usd: 1 - value.saving / 100,
-            cost_saving_percent: value.saving,
+            baseline_subject_cost_usd: 1,
+            baseline_total_cost_usd: 1,
+            baseline_evaluation_cost_usd: 0,
+            candidate_subject_cost_usd: 1 - value.saving / 100,
+            candidate_total_cost_usd: 1 - value.saving / 100,
+            candidate_evaluation_cost_usd: 0,
+            subject_cost_saving_percent: value.saving,
+            total_cost_saving_percent: value.saving,
             cache_neutral_cost_saving_percent: value.saving,
           },
         ],
@@ -3212,6 +3368,11 @@ test('renders signed quality and cost changes with truthful positive negative an
     '/evaluation?view=compare&baseline=run-1&candidate=positive&candidate=negative&candidate=zero&candidate=tiny',
   )
   await expect(page.getByRole('article')).toHaveCount(4)
+  await expect(
+    page
+      .getByRole('region', { name: 'Iteration progress chart' })
+      .getByText('Total cost saving', { exact: true }),
+  ).toBeVisible()
   const colors = await page.evaluate(() => {
     const probe = document.createElement('span')
     document.body.appendChild(probe)
@@ -3241,7 +3402,7 @@ test('renders signed quality and cost changes with truthful positive negative an
     await expect(metrics.nth(1)).toContainText(cost)
     for (const metric of await metrics.all())
       await expect(metric).toHaveCSS('color', colors[direction])
-    if (id === 'zero') await expect(article.getByText('No change', { exact: true })).toHaveCount(2)
+    if (id === 'zero') await expect(metrics.getByText('No change', { exact: true })).toHaveCount(2)
   }
   expect(colors.positive).not.toBe(colors.negative)
   expect(colors.neutral).not.toBe(colors.negative)

@@ -57,8 +57,9 @@ stack port offset is not added to the override.
 When only the selected Dashboard image changes, `serve` upgrades its managed
 worker after verifying the same launch settings, store and credentials. The CLI
 briefly pauses the worker to check its durable journal before replacing it.
-Active runs block the upgrade and resume unchanged; finish or cancel them before
-retrying. Saved results remain in the same store. A stopped worker, changed
+Active runs and dataset preparations block the upgrade and resume unchanged.
+Finish or cancel runs and wait for preparations to finish before retrying.
+Saved results remain in the same store. A stopped worker, changed
 credentials or changed launch settings still require explicit reconciliation.
 The container runtime must support pausing for this image upgrade.
 
@@ -100,24 +101,133 @@ of manifests, command arguments and public artifacts.
 
 ## Prepare reusable tasks and targets
 
-Install `vllm-sr[bench]` on the preparation host for Parquet sources. Prepare data
-on the worker host or its shared store; a local client path is not uploaded to a
-remote worker.
+Open **Dashboard → Evaluation → Create evaluation** and choose benchmarks,
+an evaluation size, models or recipes, and limits. Benchmarks do not need to be
+downloaded first. **Review plan** automatically reuses verified data and prepares
+missing datasets and their supported data dependencies. The creation page shows
+progress through installation, download and freezing, then presents the frozen
+plan. **Start evaluation** begins model requests only after that review.
+
+For independent data management, **Datasets → Prepare dataset** uses the same
+shared worker. Accepted preparation jobs continue if the page closes. Completed
+datasets become available to both Dashboard and CLI.
+
+The CLI uses the same service operation by default. It waits for completion and
+writes the frozen manifest to standard output, so it can still be redirected to
+a file. `--url` selects a remote worker; downloads and frozen dataset files remain
+on that worker, not on the CLI host.
 
 ```bash
 vllm-sr benchmark --store ./data/sr-bench dataset prepare \
-  --benchmark mmlu-pro --profile quick > mmlu-quick.json
-vllm-sr benchmark --store ./data/sr-bench dataset prepare \
-  --benchmark gpqa-diamond --profile quick > gpqa-quick.json
-vllm-sr benchmark --store ./data/sr-bench dataset combine \
-  mmlu-quick.json gpqa-quick.json > quick-dataset.json
+  --benchmark mmlu-pro --benchmark gpqa-diamond \
+  --profile quick > quick-dataset.json
 ```
 
-Gated sources require the appropriate source access and environment credential.
+Repeating `--benchmark` creates one service-owned collection job. It pins eligible
+existing sources, prepares only missing benchmarks with the same seed, and
+validates the final composition. Source or seed conflicts require explicit
+resolution; they are not treated as missing data. A failed job can be retried
+explicitly and can reuse verified completed items. Single-benchmark preparation
+and explicit `dataset combine` remain available.
+
+Use `--no-wait` to return the preparation job immediately. Closing the page or
+interrupting the CLI wait does not cancel the worker's preparation. Both clients
+can inspect the same jobs and prepared datasets:
+
+```bash
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset options
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset prepare \
+  --benchmark simpleqa-verified --profile smoke --no-wait
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset preparations
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset preparations PREPARATION_ID
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset show
+```
+
+Preparation requires Evaluation write permission in Dashboard; reading options,
+progress and datasets requires read permission. Read-only Dashboard mode disables
+preparation, while benchmark and profile selection remain available for browsing.
+If access could not be checked, use **Refresh access** to retry the settings and
+account checks. Preparing data does not require model generation permission,
+start an evaluation, or make model requests. Automatic dependency installation is limited to the
+allowlisted data preparation packages. It does not install execution harnesses,
+build sandbox images, or provision model servers. Those remain explicit worker
+setup operations. Gated sources require access approval and the appropriate
+Hugging Face credential in the **worker environment**; browser or local CLI
+credentials are not uploaded. Installation and download failures remain visible
+on the preparation job and can be retried explicitly after the cause is fixed.
+
+Local file imports and advanced history options use the explicit `--local` mode.
+For this mode, install `vllm-sr[bench]` on the preparation host for Parquet sources.
+A local file is never implicitly uploaded to a remote worker, and `--local` cannot
+be combined with `--url` or `SR_BENCH_URL`:
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark mmlu-pro --profile smoke \
+  --source-path ./tasks.parquet --revision imported-v1
+```
+
 Local task imports require `--source-path` and `--revision`; their actual bytes
-are hashed. `--limit` creates a labeled custom subset. Never edit a prepared
-file in place. New questions, selection rules or source bytes create a new
-identity.
+are hashed. `--limit` creates a labeled custom subset in either mode. Never edit
+a prepared file in place. New questions, selection rules or source bytes create
+a new identity.
+
+### Reserve named evaluation history
+
+For repeated evaluations, prepare native sources with `--source-partition` to
+record their upstream partition and canonical task identity. This partition is
+the source's `test`, `dev`, or other upstream task collection; it is independent
+of sr-bench's evaluation split and seed. Use the same partition and exact source
+provenance throughout a history comparison.
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark mmlu-pro --profile quick --source-partition test > quick.json
+# Use the dataset ID returned above; --dataset and --run may be repeated.
+vllm-sr benchmark --store ./data/sr-bench dataset exclusions \
+  --dataset DATASET_ID --run RUN_ID --output history.json
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark mmlu-pro --profile standard --source-partition test \
+  --exclusion-snapshot history.json --evaluation-role holdout > standard.json
+```
+
+Snapshot compilation reads only explicitly named prepared datasets and frozen
+run manifests from the selected local store. It reserves **all memberships**,
+including planned or failed cases; membership does not establish that a model
+generated a response or a person read it. The immutable snapshot contains task
+identity hashes, reference digests, and source provenance, without question or
+answer bodies. Named-reference reads are bounded; oversized inputs fail without
+publishing a selection.
+
+Standard keeps the existing deterministic ordering and excludes the union of
+its original Quick membership and the frozen history **once**. Preparation
+either produces the exact requested count or fails before publishing a dataset.
+It never fills a shortfall with excluded tasks or changes the profile count.
+The snapshot and per-family counts become part of the new dataset identity;
+combining datasets and freezing plans preserve that provenance. Existing
+artifacts are unchanged. Preparation without the new options retains its
+original behavior and makes no additional history qualification.
+
+This first identity policy requires exact source bytes, revision, normalizer and
+upstream partition, with native task IDs (including the domain for τ³). GPQA
+uses the full hash of its native, unformatted question within that source. Older
+prepared artifacts without this identity, normalized imports, missing native
+IDs, and cross-source or cross-revision mappings fail explicitly; aliases and
+message hashes do not establish equivalence. They need separate provenance
+reconciliation before they can support an exclusion claim.
+
+Freeze `--evaluation-role retest` explicitly for a family that is being retested.
+It can be used without a history snapshot and does not claim disjointness. A
+snapshot, if supplied, still excludes its memberships; retest is never an
+automatic fallback after exhaustion. An explicitly prepared GPQA retest can
+remain in the default protocol with a retest disclosure. Its aggregate must
+remain separate from any claimed unseen aggregate. The preparation role is
+separate from the existing evaluation split label.
+
+Named-history exclusion is a finite local provenance claim. It does not certify
+complete browsing or human exposure history, or absence of upstream contamination.
+Reports retain that limitation and identify explicit retest families; these
+options do not introduce a new unseen-only scoring aggregate.
 
 Register operator-owned targets for Dashboard:
 
@@ -153,6 +263,47 @@ store. External adapters discover the pinned environments installed by
 corresponding `_ROOT` variables to override those locations. Exact source
 revisions and, for code or terminal tasks, digest-pinned sandbox images remain
 required. Preflight reports missing prerequisites before dispatch.
+
+## Native output capacity
+
+Set `output_policy: native` to explore each model's available output capacity
+without a shared generation-token cap. Register `native_limits` on every selected
+target, keyed by the physical response model, with verified `context_window` and
+`max_output_tokens` values. Keep model-specific reasoning settings in
+`request_params`. Omit `max_tokens` from both sampling and target overrides.
+
+The single-model adapter uses the vLLM Chat render API to count the actual
+prompt, then generates once with the smaller of the configured output capacity
+and remaining context. A MoM recipe must use `request_params.default_max_tokens:
+auto` on every reachable decision, without a smaller output limit. Its Router
+response records the actual selected-model input and output budget. Missing or
+inconsistent evidence stops qualification; the harness does not guess a budget
+from generated token usage. Native mode currently requires physical response
+identities to match selected model identities and one fully accounted dispatch.
+
+The plan derives its evidence token ceiling from the frozen native limits. Allow
+sufficient call/run time and output storage for that capacity; idle, cancellation
+and repetition controls remain active. Model maximum output and total context are
+different values, and normal end-of-answer stopping remains enabled. Native
+capacity does not force a model to fill its context. Compare native candidates
+against native baselines with the same model limits. Offline replay is unavailable
+when equivalent per-call native budget evidence cannot be established.
+
+## Answer grading
+
+The MMLU-Pro and GPQA adapters use `sr-bench-mcq-final-v2`. Capability scoring
+extracts an unambiguous answer from the visible final channel: a leading answer
+line, an explicit answer declaration, or a boxed choice. Markdown emphasis does
+not change the answer. Conflicting declarations and prose without an explicit
+answer remain unparsed; the grader does not guess from isolated letters or use
+hidden reasoning. This is a conservative sr-bench adaptation, not an exact
+reproduction of the upstream extraction heuristics.
+
+Strict answer-format compliance is reported separately from correctness.
+Truncated responses still count as output failures. Adapter versions are frozen
+in each plan, so different graders cannot silently share a comparison. Existing
+run scores remain unchanged. `benchmark regrade RUN_ID` returns a separate,
+versioned result from saved final answers without generating or rewriting them.
 
 ## Plan and run
 
@@ -265,6 +416,15 @@ candidates. Record the intended state conditions and treat uncontrolled live
 state differences as a comparison limitation. Non-Learning selectors that depend
 on telemetry can also return state-dependent snapshots.
 
+With automatic output budgets, supported single-backend previews call the
+provider's render API to resolve each candidate's input size and available output
+capacity. Rendering does not generate an answer. Selection uses the configured
+cost forecast, not the maximum output capacity as an expected token count.
+Requests needing dynamic enrichment or overflow compression remain unresolved;
+inspect `selection_status` and `selection_reason` before relying on a model choice.
+These checks cover the supported preview envelope and configured request policy,
+not unsupported caller-specific generation fields.
+
 For a single request, `vllm-sr route preview --request-file request.json` accepts
 the Router's supported request envelope: role/content/tool-call messages, tools,
 function selection, response format, output-budget fields, string metadata and
@@ -357,10 +517,14 @@ its subset label and is not the full score.
 Paired comparison selects the strongest observed single model by the same
 aggregate over identical cases and records that selection.
 Exact weighted-quality ties prefer the single with the lowest complete known
-subject cost, then a stable target ID. The report lists every tied-best single.
-If any tied-best single has incomplete cost, savings remain unknown. Savings are
-`100 × (1 − candidate subject cost / baseline subject cost)` with complete,
-compatible accounting. A small dev sample shows direction; a quality
+total cost, then a stable target ID. The report lists every tied-best single.
+If any tied-best single has incomplete total cost, savings remain unknown.
+Comparisons report **total cost savings** across subject and judge/simulator
+calls, with **subject cost savings** shown separately. Both use
+`100 × (1 − candidate cost / baseline cost)` with the same scope and complete,
+compatible accounting. The API names these `total_cost_saving_percent` and
+`subject_cost_saving_percent`; cache-neutral comparisons remain subject-only.
+A small dev sample shows direction; a quality
 non-inferiority claim needs a prespecified margin and a holdout confidence
 interval. Token-equivalent self-hosted prices do not establish GPU invoice savings.
 
@@ -371,16 +535,22 @@ diagnostic; a degenerate `[0, 0]` bootstrap from a small tied sample does not pr
 equivalence. Neither interval includes selection of the strongest observed
 baseline, tuning selection or dataset contamination uncertainty.
 
+Before reserving a Standard holdout, exclude previously generated, inspected or
+tuned-on cases by stable ID and input fingerprint. A different seed or a
+`holdout` split label does not establish independence. Retests remain useful,
+but report their exposure separately from unseen validation.
+
 Dashboard opens on **Runs**, with filters for name/model, status and mode. Each
 row shows the completed denominator, failures, persisted update time and target
 kind. Read-only polling reconnects after a temporary network failure and discovers
 CLI-created runs. Closing or refreshing the page does not restart a run.
 
 In **Create evaluation**, first choose **smoke**, **quick** or **standard**, then
-select one or more prepared benchmarks, or **Select all benchmarks**. These are
+select one or more benchmarks, or **Select all benchmarks**. These are
 the actual run profiles; standard uses the holdout split. Available sources must
-share a profile, seed and split. **Review plan** composes whole benchmark groups
-from those frozen sources without downloading data, resampling questions or
+share a profile, seed and split. **Review plan** reuses verified prepared groups
+and automatically downloads missing groups and supported data dependencies in
+one background preparation job. It then composes the frozen sources without
 calling a model. Selecting all benchmarks from one source reuses its original
 identity; a subset or multi-source composition creates a reusable frozen dataset.
 Conflicting selections are rejected rather than silently merged.
@@ -391,7 +561,11 @@ read-only. **Route preview** also accepts optional session and conversation
 context for inspecting session-dependent routing. Review the frozen plan before
 starting; plan review does not generate model answers.
 
-**Datasets** provides search, profile/benchmark filters and pagination. Open a
+**Datasets → Prepare dataset** is an optional management entry point that downloads
+and freezes a built-in source through
+the same service used by `benchmark dataset prepare`. Preparation progress and
+errors survive page refreshes; completion refreshes the available datasets.
+**Datasets** also provides search, profile/benchmark filters and pagination. Open a
 dataset to browse its questions, benchmark coverage and subject groups. Questions
 load in pages of 25 with benchmark/category filters and text search; opening one
 shows the task instructions and choices, including complete code/agent task
@@ -405,6 +579,14 @@ overlap, so this is not a count of unique questions or the selected run's denomi
 Run details separate **Results**, **Questions**, **Calls**, **Evidence** and
 **Recipe**. Start with the aggregate results, then inspect individual responses,
 accounting and frozen configuration as needed.
+
+While a run is active, elapsed time continues updating even when no additional
+question has finished. Active calls show their phase, elapsed time, latest
+recorded response activity and received bytes. This activity helps distinguish a
+long response from one that has stopped arriving; it does not establish answer
+quality or billable token usage. Tokens and costs require a complete usage receipt.
+Use `vllm-sr benchmark show RUN_ID --calls --active` to read the same activity
+through the CLI; `--after` and `--limit` bound each page.
 
 **Compare iterations** guides two choices: a live single-model baseline with
 compatible saved outcomes, then any number of eligible candidate runs. Baselines

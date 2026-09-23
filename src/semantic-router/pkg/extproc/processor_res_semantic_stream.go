@@ -388,6 +388,7 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 		r.recordUnscheduledResponseMemoryStore(ctx, "skipped", "stream_incomplete", true)
 		return
 	}
+	recordPrimaryOutputDigest(ctx, semanticResponse)
 	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {

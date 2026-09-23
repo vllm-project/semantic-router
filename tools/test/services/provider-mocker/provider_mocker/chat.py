@@ -1,0 +1,175 @@
+"""Native Chat Completions HTTP boundary and fixture selection."""
+
+import asyncio
+import json
+import re
+import time
+from typing import Any
+
+from fastapi import APIRouter, Request
+from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
+
+from . import workflow_chat
+from .chat_request import ChatRequest, build_chat_content
+from .chat_wire import (
+    build_chat_response,
+    build_chat_usage,
+    chat_contains,
+    chat_has_tool_result,
+    chat_requests_mock_tool,
+    generate_chat_midstream_error,
+    generate_chat_stream,
+    generate_chat_tool_stream,
+    mock_chat_tool_response,
+)
+from .provider_boundary import (
+    SESSION_HEADER,
+    invalid_request_response,
+    parse_provider_request,
+)
+from .scenarios import respond_to_scenario
+from .settings import apply_fixture_delay
+from .shadow_control import ShadowControl
+
+router = APIRouter()
+
+
+def is_hallucination_detection_request(req: ChatRequest) -> bool:
+    if not req.response_format or req.response_format.get("type") != "json_schema":
+        return False
+    schema = req.response_format.get("json_schema", {})
+    return schema.get("name") == "hallucination_detection"
+
+
+def extract_answer_under_review(req: ChatRequest) -> str:
+    for m in req.messages:
+        if (
+            m.role == "user"
+            and isinstance(m.content, str)
+            and "Answer to verify:\n" in m.content
+        ):
+            return m.content.split("Answer to verify:\n")[-1]
+    return ""
+
+
+def build_hallucination_detection_content(req: ChatRequest) -> str:
+    answer = extract_answer_under_review(req)
+    flagged_text = answer[:80] if answer else "mocked hallucination"
+    return json.dumps(
+        {
+            "hallucinated_spans": [
+                {
+                    "text": flagged_text,
+                    "category": "unsupported_addition",
+                    "subcategory": "claim",
+                }
+            ]
+        }
+    )
+
+
+_chat_control = workflow_chat.ChatControlHelpers(
+    chat_contains=chat_contains,
+    chat_has_tool_result=chat_has_tool_result,
+    chat_requests_mock_tool=chat_requests_mock_tool,
+    build_chat_usage=build_chat_usage,
+    build_chat_response=build_chat_response,
+    mock_chat_tool_response=mock_chat_tool_response,
+    generate_chat_stream=generate_chat_stream,
+    generate_chat_tool_stream=generate_chat_tool_stream,
+)
+
+
+def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
+    return workflow_chat.mock_chat_control_response(req, created_ts, _chat_control)
+
+
+def extract_mock_header_delay(req: ChatRequest) -> float:
+    for message in req.messages:
+        if isinstance(message.content, str):
+            m = re.search(r"__mock_header_delay_(\d+(?:\.\d+)?)s?__", message.content)
+            if m:
+                return float(m.group(1))
+    return 0.0
+
+
+def extract_mock_frame_stall(req: ChatRequest) -> float:
+    for message in req.messages:
+        if isinstance(message.content, str):
+            m = re.search(r"__mock_frame_stall_(\d+(?:\.\d+)?)s?__", message.content)
+            if m:
+                return float(m.group(1))
+    return 0.0
+
+
+@router.post("/v1/chat/completions")
+async def chat_completions(request: Request):
+    body, error_response = await parse_provider_request(
+        request, "openai_chat_completions"
+    )
+    if error_response is not None:
+        return error_response
+    assert body is not None
+    session_id = request.headers.get(SESSION_HEADER) or "__global__"
+    request.app.state.request_store.record(session_id, body, request.headers)
+    try:
+        req = ChatRequest.model_validate(body)
+    except ValidationError as error:
+        detail = error.errors(include_url=False)[0]
+        field = ".".join(str(part) for part in detail.get("loc", ())) or None
+        return invalid_request_response(detail["msg"], field)
+
+    await apply_fixture_delay()
+    created_ts = int(time.time())
+    delay = extract_mock_header_delay(req)
+    if delay > 0:
+        await asyncio.sleep(delay)
+    scenario_response = await respond_to_scenario(request, req, created_ts)
+    if scenario_response is not None:
+        return scenario_response
+    control_response = mock_chat_control_response(req, created_ts)
+    if control_response is not None:
+        return control_response
+
+    shadow_control: ShadowControl | None = request.app.state.shadow_control
+    if shadow_control is not None:
+        shadow_response = await shadow_control.respond(
+            model=req.model, request_id=request.headers.get("x-request-id", "")
+        )
+        if shadow_response is not None:
+            return shadow_response
+        content = f"Hello from {req.model}."
+    elif is_hallucination_detection_request(req):
+        content = build_hallucination_detection_content(req)
+    else:
+        content = build_chat_content(req)
+    usage = build_chat_usage(req, content)
+    response = build_chat_response(req, content, usage, created_ts)
+    if not req.stream:
+        return response
+
+    if chat_contains(req, "__mock_midstream_error__"):
+        return StreamingResponse(
+            generate_chat_midstream_error(req, response, created_ts),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+        )
+
+    stall_sec = extract_mock_frame_stall(req)
+    return StreamingResponse(
+        generate_chat_stream(
+            req,
+            response,
+            content,
+            usage,
+            created_ts,
+            complete=not chat_contains(req, "__mock_incomplete_stream__"),
+            stall_seconds=stall_sec,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )

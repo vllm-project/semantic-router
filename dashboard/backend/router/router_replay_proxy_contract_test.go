@@ -50,6 +50,7 @@ func TestDashboardReplayPathUsesAuthenticatedManagementProxyNotEnvoy(t *testing.
 		mux,
 		&config.Config{RouterAPIURL: routerServer.URL},
 		envoyProxy,
+		nil,
 		replayProxyCredentialProvider{token: "router-service-token"},
 	)
 	tests := []struct {

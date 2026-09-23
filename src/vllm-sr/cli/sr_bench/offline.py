@@ -6,9 +6,10 @@ import copy
 
 from . import VERSION
 from .accounting import BUCKETS, correction_metadata, effective_calls
+from .adapters import get_adapter
 from .contracts import plan_digest
-from .engine import basic_grade
 from .experiments import inherit_membership
+from .grading import FINAL_GRADER_VERSION, basic_grade
 from .provenance import capture_runner
 from .replay_validation import ReplayEligibilityError, ReplayValidator
 
@@ -62,7 +63,12 @@ def regrade(store, run_id):
         "version": VERSION,
         "source_run_id": run_id,
         "kind": "offline-regrade",
-        "grader_version": "sr-bench-final-v1",
+        "grader_version": FINAL_GRADER_VERSION,
+        "source_adapter_versions": run["manifest"].get("adapter_versions", {}),
+        "adapter_versions": {
+            case["benchmark"]: get_adapter(case["benchmark"]).version
+            for case in cases.values()
+        },
         "source_plan_sha256": run["manifest"]["plan_sha256"],
         "results": results,
         "changed_count": changed,

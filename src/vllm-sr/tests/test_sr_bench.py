@@ -12,7 +12,8 @@ import pytest
 import requests
 from cli.sr_bench import adapters
 from cli.sr_bench.contracts import catalog, digest, plan
-from cli.sr_bench.engine import Engine, basic_grade
+from cli.sr_bench.engine import Engine
+from cli.sr_bench.grading import basic_grade
 from cli.sr_bench.offline import export_training, regrade, replay
 from cli.sr_bench.report import compare, make_report
 from cli.sr_bench.service import PREFIX, Server

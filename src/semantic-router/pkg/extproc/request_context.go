@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -18,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
 )
 
@@ -119,6 +121,11 @@ type RequestContext struct {
 	UpstreamStatusCode          int
 	UpstreamErrorMetricRecorded bool
 
+	// ResponseHeadersContinued indicates whether response headers were forwarded
+	// downstream to the client. Once true, response headers are committed and no
+	// subsequent replacement or fallback response may be attempted.
+	ResponseHeadersContinued bool
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
@@ -160,6 +167,7 @@ type RequestContext struct {
 	VSRSelectedModel                    string                                      // The model selected by VSR
 	VSRSelectionMethod                  string                                      // Model selection algorithm used (e.g., "elo", "static", "router_dc")
 	VSRSelectionReasoning               string                                      // Bounded human-readable selector rationale for replay
+	VSRSelectionTrace                   *selectiontrace.MultiFactorObjective        // Base objective evidence, before Router Learning
 	VSRFusionQuorum                     *routerreplay.FusionQuorumDiagnostics       // Content-free Fusion panel quorum evidence for replay
 	VSRLooperDiagnostics                *routerreplay.LooperDiagnostics             // Content-free Looper attempt evidence for replay
 	VSRPromptHelperModel                string                                      // Concrete prompt-selector helper model
@@ -194,6 +202,10 @@ type RequestContext struct {
 	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
 	// Never recover its reasoning settings by searching model names again.
 	VSRSelectedCandidate *config.ModelRef
+
+	// FallbackRecord tracks bounded cross-candidate execution attempts and token accounting.
+	FallbackRecord        *fallback.ExecutionRecord
+	FallbackAuditRecorded bool
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
@@ -272,6 +284,7 @@ type RequestContext struct {
 	HasToolsForFactCheck        bool     // Request has tools that provide context for fact-checking
 	ToolResultsContext          string   // Aggregated tool results for hallucination check
 	UserContent                 string   // Stored user content for hallucination detection
+	RequestAudio                string   // First inline user audio, never a remote URL or local path
 	RequestImageURL             string   // First image URL from user messages (for Tier 1 complexity classification)
 	HallucinationDetected       bool     // Result of hallucination detection
 	HallucinationSpans          []string // Unsupported spans found in answer (basic mode)
@@ -328,14 +341,25 @@ type RequestContext struct {
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.
-	SourceFormat             llmprotocol.WireFormat
-	TargetFormat             llmprotocol.WireFormat
-	SemanticRequest          *llmprotocol.Request
+	SourceFormat    llmprotocol.WireFormat
+	TargetFormat    llmprotocol.WireFormat
+	SemanticRequest *llmprotocol.Request
+	// FallbackRequest is an immutable, protocol-neutral snapshot taken after all
+	// request plugins and final capability checks. Every provider retry clones
+	// this snapshot instead of replaying mutations made for the primary backend.
+	FallbackRequest          *llmprotocol.Request
 	OriginalContextHistory   *contextcompression.HistorySnapshot
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep
 	ProtectedContextMessages map[int]contextcompression.Protection
 	SemanticResponse         *llmprotocol.Response
+	// PrimaryOutputDigest hashes the answer the selected model produced, taken
+	// before any response-stage plugin rewrites it. A body warning prepends
+	// router text to SemanticResponse in place, so hashing that later would
+	// attribute the warning to the model and stop the digest comparing with a
+	// shadow arm's.
+	PrimaryOutputDigest      string
+	PrimaryOutputChars       int
 	ProtocolEnvelope         llmprotocol.Envelope
 	ResponseEnvelope         llmprotocol.Envelope
 	ProtocolDiagnostics      llmprotocol.Diagnostics

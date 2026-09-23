@@ -90,10 +90,17 @@ test('shows Format parser errors with output closed and clears them after correc
   await page.getByRole('button', { name: 'DSL', exact: true }).click()
   const editor = page.getByRole('textbox', { name: 'Editor content', exact: true })
   await expect(editor).toBeVisible()
-  await editor.focus()
-  await page.keyboard.press('ControlOrMeta+A')
-  await page.keyboard.type('hello')
-  await expect(page.locator('.monaco-editor').first()).toContainText('hello')
+  // Monaco uses the emulated browser's platform, while ControlOrMeta uses the host OS.
+  const selectAll = await page.evaluate(() =>
+    navigator.userAgent.includes('Macintosh') ? 'Meta+A' : 'Control+A',
+  )
+  async function replaceSource(source: string) {
+    await editor.focus()
+    await page.keyboard.press(selectAll)
+    await page.keyboard.type(source)
+    await expect(page.locator('.monaco-editor .view-lines').first()).toHaveText(source)
+  }
+  await replaceSource('hello')
   await page.getByTitle('Hide Output Panel').click()
   await test.info().attach('real-format-error', {
     body: await page.evaluate(() => window.signalFormat('hello')),
@@ -105,11 +112,11 @@ test('shows Format parser errors with output closed and clears them after correc
   await expect(page.getByText('0 errors', { exact: true })).toHaveCount(0)
   await page.screenshot({ path: test.info().outputPath('format-error.png') })
 
-  await editor.focus()
-  await page.keyboard.press('ControlOrMeta+A')
-  await page.keyboard.type('MODEL "repaired" {}')
+  await replaceSource('MODEL "repaired" {}')
   await page.getByRole('button', { name: 'Format', exact: true }).click()
-  await expect(error).toHaveCount(0)
+  await expect(page.getByRole('main').getByRole('alert')).toHaveCount(0)
   await expect(page.getByText('0 errors', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Show Output Panel', exact: true })).toBeVisible()
+  await expect(page.getByTitle('Hide Output Panel')).toHaveCount(0)
   await expect(page.locator('.monaco-editor').first()).toContainText('repaired')
 })

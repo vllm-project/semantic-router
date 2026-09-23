@@ -40,19 +40,12 @@ var (
 	ensureReloadConfigModels = modeldownload.EnsureModelsForConfig
 	buildReloadRouter        = buildOpenAIRouterFromConfig
 	replaceReloadConfig      = config.Replace
-	// Embeddings are prepared by buildRouterComponents with the service pool.
-	// The preparation seam stays injectable for lifecycle fault tests.
-	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.EmbeddingRuntimeState{}, nil
-	}
 
-	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
+	warmupReloadRouter = func(router *OpenAIRouter) error {
 		if router == nil {
 			return nil
 		}
-		if router.Embeddings != nil {
-			state = router.embeddingRuntimeState()
-		}
+		state := router.embeddingRuntimeState()
 		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
 			{
 				Name:       "tools_database",
@@ -62,7 +55,7 @@ var (
 			},
 			{
 				Name:       "knowledge_bases",
-				Ready:      state.AnyReady,
+				Ready:      state.KnowledgeBasesReady,
 				SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
 				Load:       router.PreloadKnowledgeBases,
 			},
@@ -130,7 +123,6 @@ func (s *Server) GetRouter() *OpenAIRouter {
 // WarmupRouter loads generation-owned runtime data before serving requests.
 func (s *Server) WarmupRouter(
 	ctx context.Context,
-	state modelruntime.EmbeddingRuntimeState,
 	options modelruntime.WarmupRouterOptions,
 ) error {
 	if s == nil || s.service == nil {
@@ -140,6 +132,7 @@ func (s *Server) WarmupRouter(
 	if generation == nil || generation.router == nil {
 		return nil
 	}
+	state := generation.router.embeddingRuntimeState()
 	_, err := modelruntime.WarmupRouter(ctx, []modelruntime.RouterWarmupTask{
 		{
 			Name:       "tools_database",
@@ -151,7 +144,7 @@ func (s *Server) WarmupRouter(
 		},
 		{
 			Name:       "knowledge_bases",
-			Ready:      state.AnyReady,
+			Ready:      state.KnowledgeBasesReady,
 			SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
 			Load: func() error {
 				return generation.withLease(generation.router.PreloadKnowledgeBases)
@@ -665,12 +658,6 @@ func (s *Server) reloadRouterFromConfigLockedContext(ctx context.Context, source
 		}
 	}
 
-	s.runtime.SetConfigActivationStage(attempt, "dependencies")
-	runtimeState, err := prepareReloadRuntime(candidateCfg)
-	if err != nil {
-		return fmt.Errorf("runtime dependency init failed: %w", err)
-	}
-
 	s.runtime.SetConfigActivationStage(attempt, "model_prepare")
 	newRouter, err := buildReloadRouter(candidateCfg, s.modelPool)
 	if err != nil {
@@ -678,7 +665,7 @@ func (s *Server) reloadRouterFromConfigLockedContext(ctx context.Context, source
 	}
 	attachRuntimeRegistry(newRouter, s.runtime)
 	s.runtime.SetConfigActivationStage(attempt, "warmup")
-	if err := warmupReloadRouter(newRouter, runtimeState); err != nil {
+	if err := warmupReloadRouter(newRouter); err != nil {
 		_ = newRouter.Close()
 		return fmt.Errorf("runtime warmup failed: %w", err)
 	}
@@ -822,5 +809,13 @@ func (s *Server) EmbeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
 }
 
 func (r *OpenAIRouter) embeddingRuntimeState() modelruntime.EmbeddingRuntimeState {
-	return modelruntime.EmbeddingState(r.Config, r.Embeddings)
+	state := modelruntime.EmbeddingState(r.Config, r.Embeddings)
+	state.AnyReady = state.AnyReady || r.serviceEmbeddings.Ready() || r.cacheEmbeddings.Ready() || r.RecipeClassifiers.HasAnyPreparedEmbeddings()
+	state.ToolsReady = r.ToolsDatabase != nil && r.ToolsDatabase.IsEnabled() && r.serviceEmbeddings.Has("")
+	if r.RecipeClassifiers != nil {
+		state.KnowledgeBasesReady = r.RecipeClassifiers.HasPreparedKnowledgeBases()
+	} else {
+		state.KnowledgeBasesReady = r.Classifier.HasPreparedKnowledgeBases()
+	}
+	return state
 }

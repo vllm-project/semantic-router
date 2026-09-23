@@ -126,16 +126,40 @@ class EmbeddingSignal(BaseModel):
     payload the embedding rule's query is computed from. It defaults to
     ``"text"`` when omitted, preserving existing behavior. ``"image"`` and
     ``"audio"`` require ``global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal``
-    in the router config so the query and candidate embeddings land in the same
-    shared space.
+    or an explicit embedding binding with those capabilities. Positive and negative
+    text/image candidates are encoded in that same prepared model space.
     """
 
     name: str
     threshold: float
-    candidates: List[str]
-    aggregation_method: str = "max"
+    candidates: List[StrictStr] = Field(default_factory=list)
+    image_candidates: List[StrictStr] = Field(default_factory=list)
+    negative_candidates: List[StrictStr] = Field(default_factory=list)
+    negative_image_candidates: List[StrictStr] = Field(default_factory=list)
+    aggregation_method: Literal["max", "mean", "any"] = "max"
     query_modality: Optional[Literal["text", "image", "audio"]] = None
     prototype_scoring: Optional["PrototypeScoringConfig"] = None
+
+    @model_validator(mode="after")
+    def validate_candidate_banks(self):
+        if not self.candidates and not self.image_candidates:
+            raise ValueError(
+                "embedding requires positive candidates or image_candidates"
+            )
+        for values in (
+            self.candidates,
+            self.image_candidates,
+            self.negative_candidates,
+            self.negative_image_candidates,
+        ):
+            if any(not value.strip() for value in values):
+                raise ValueError("embedding candidates must be non-empty strings")
+        bound = 2 if self.negative_candidates or self.negative_image_candidates else 1
+        if not math.isfinite(self.threshold) or not -bound <= self.threshold <= bound:
+            raise ValueError(
+                f"embedding threshold must be finite and within [-{bound}, {bound}]"
+            )
+        return self
 
 
 class ProjectionPartition(BaseModel):

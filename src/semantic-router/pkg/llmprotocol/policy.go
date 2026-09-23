@@ -39,6 +39,12 @@ const ResponseVendorAzure ResponseVendor = "azure"
 // own integral codes instead of the canonical OpenAI error object.
 const ResponseVendorCloudflare ResponseVendor = "cloudflare"
 
+// ResponseVendorSnowflake permits Snowflake Cortex AI response handling: its
+// failures arrive as a flat object carrying the vendor's own string code instead
+// of the canonical OpenAI error object. No accepted-response decoration has been
+// observed, so this vendor changes only how failures are decoded.
+const ResponseVendorSnowflake ResponseVendor = "snowflake"
+
 type Policy struct {
 	UnknownFields      UnknownFieldPolicy
 	LossyFeatures      LossyPolicy
