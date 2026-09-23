@@ -228,3 +228,19 @@ def test_kernel_config_hash_drift_fails_before_fla_import(
     monkeypatch.setattr(binder, "_fla_package_root", lambda: package)
     with pytest.raises(binder.QwenRocmBindingError, match="kernel config changed"):
         binder.create_qwen_rocm_profile_binder().bind(profile)
+
+
+def test_preimported_fla_refuses_profile_binding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    profile, package, _ = _profile(tmp_path)
+    monkeypatch.setattr(binder, "_ACTIVE", None)
+    monkeypatch.setattr(binder, "sys", SimpleNamespace(modules={"fla": object()}))
+    monkeypatch.setattr(binder, "_fla_package_root", lambda: package)
+    monkeypatch.delenv("FLA_CACHE_MODE", raising=False)
+    monkeypatch.delenv("FLA_CONFIG_DIR", raising=False)
+
+    with pytest.raises(binder.QwenRocmBindingError, match="imported before"):
+        binder.create_qwen_rocm_profile_binder().bind(profile)
+    assert "FLA_CACHE_MODE" not in os.environ
+    assert "FLA_CONFIG_DIR" not in os.environ

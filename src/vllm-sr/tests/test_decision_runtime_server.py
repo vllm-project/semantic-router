@@ -248,7 +248,7 @@ def test_vela_executor_preserves_question_order_and_type_batch_keys():
             "vela:choice",
             "vela:score",
         ]
-        return tuple(await executor.predict_rows((item,)) for item in prepared)
+        return tuple([await executor.predict_rows((item,)) for item in prepared])
 
     predictions = asyncio.run(scenario())
     assert [item[0].question_id for item in predictions] == list(request.questions)

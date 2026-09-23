@@ -48,6 +48,25 @@ class TorchDecisionRowExecutor:
     ) -> tuple[PreparedDecisionRow, ...]:
         if not rows:
             raise BackendContractError("a Decision request contains no rows")
+        try:
+            encoded = await asyncio.to_thread(self._encode_rows, rows)
+        except ValueError as error:
+            if "max_length" in str(error) or "no room for state" in str(error):
+                raise BackendInputTooLargeError(str(error)) from error
+            raise BackendContractError("Decision row preparation failed") from error
+        family = self._profile.family
+        return tuple(
+            PreparedDecisionRow(
+                row=row,
+                batch_key=(
+                    f"{family}:{row.question.type}" if family == "vela" else family
+                ),
+                payload=payload,
+            )
+            for row, payload in zip(rows, encoded, strict=True)
+        )
+
+    def _encode_rows(self, rows: tuple[DecisionRow, ...]):
         family = self._profile.family
         if family == "vela":
             defaults = (VELA_DEFAULT_NO, VELA_DEFAULT_YES)
@@ -69,34 +88,16 @@ class TorchDecisionRowExecutor:
             )
             for row in rows
         )
-        try:
-            if family == "vela":
-                encoded = await asyncio.to_thread(
-                    encode_vela_rows,
-                    inputs,
-                    self._runtime.tokenizer,
-                    max_length=self._profile.max_input_tokens,
-                )
-            else:
-                encoded = await asyncio.to_thread(
-                    encode_qwen_rows,
-                    inputs,
-                    self._runtime.tokenizer,
-                    max_length=self._profile.max_input_tokens,
-                )
-        except ValueError as error:
-            if "max_length" in str(error) or "no room for state" in str(error):
-                raise BackendInputTooLargeError(str(error)) from error
-            raise BackendContractError("Decision row preparation failed") from error
-        return tuple(
-            PreparedDecisionRow(
-                row=row,
-                batch_key=(
-                    f"{family}:{row.question.type}" if family == "vela" else family
-                ),
-                payload=payload,
+        if family == "vela":
+            return encode_vela_rows(
+                inputs,
+                self._runtime.tokenizer,
+                max_length=self._profile.max_input_tokens,
             )
-            for row, payload in zip(rows, encoded, strict=True)
+        return encode_qwen_rows(
+            inputs,
+            self._runtime.tokenizer,
+            max_length=self._profile.max_input_tokens,
         )
 
     async def predict_rows(

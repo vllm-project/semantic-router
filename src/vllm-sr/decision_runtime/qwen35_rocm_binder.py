@@ -55,6 +55,7 @@ class QwenRocmBindingError(RuntimeError):
 @dataclass(slots=True)
 class _ActiveBinding:
     profile: ValidatedQwenRocmProfile
+    process_id: int
     package_root: Path
     kernel: Any
     cache_module: Any
@@ -91,6 +92,10 @@ class StrictQwenRocmProfileBinder:
             ):
                 raise QwenRocmBindingError(
                     "Torch, HIP, or Triton version differs from profile"
+                )
+            if any(name == "fla" or name.startswith("fla.") for name in sys.modules):
+                raise QwenRocmBindingError(
+                    "FLA was imported before the strict Qwen profile was bound"
                 )
 
             config_dir = str(profile.kernel_config_path.parent.resolve(strict=True))
@@ -158,6 +163,7 @@ class StrictQwenRocmProfileBinder:
             receipt = _receipt(profile)
             _ACTIVE = _ActiveBinding(
                 profile=profile,
+                process_id=os.getpid(),
                 package_root=package_root,
                 kernel=kernel,
                 cache_module=cache_module,
@@ -262,7 +268,8 @@ def _set_fla_environment(config_dir: str) -> None:
 
 def _verify_active(active: _ActiveBinding, profile: ValidatedQwenRocmProfile) -> None:
     if (
-        active.profile != profile
+        active.process_id != os.getpid()
+        or active.profile != profile
         or active.kernel.run is not active.guarded_run
         or any(other.run is not reject for other, reject in active.rejected_runs)
         or active.cache_module.FLA_CACHE_MODE
@@ -311,6 +318,7 @@ class _StrictRunGuard:
         entries: dict[tuple[Any, ...], dict[str, Any]],
     ) -> None:
         self.profile = profile
+        self.process_id = os.getpid()
         self.kernel = kernel
         self.cache_module = cache_module
         self.original_run = original_run
@@ -319,7 +327,8 @@ class _StrictRunGuard:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         cache = self.cache_module
         if (
-            cache.FLA_CACHE_MODE is not cache.FlaCacheMode.STRICT
+            os.getpid() != self.process_id
+            or cache.FLA_CACHE_MODE is not cache.FlaCacheMode.STRICT
             or os.environ.get("FLA_CACHE_MODE") != "strict"
             or os.environ.get("FLA_CONFIG_DIR")
             != str(self.profile.kernel_config_path.parent.resolve(strict=True))
