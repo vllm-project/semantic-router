@@ -1,28 +1,37 @@
 package extproc
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
 
 type catalogReasoningWireCase struct {
-	name          string
-	catalog       string
-	provider      string
-	apiFormat     string
-	enabled       bool
-	mode          string
-	effort        string
-	wantTransport modelcatalog.ReasoningTransport
-	wantControls  map[string]interface{}
+	name            string
+	catalog         string
+	provider        string
+	providerModelID string
+	apiFormat       string
+	enabled         bool
+	mode            string
+	effort          string
+	wantTransport   modelcatalog.ReasoningTransport
+	wantControls    map[string]interface{}
 }
 
 // TestBuiltInCatalogReasoningWireContracts crosses the complete maintained
@@ -32,6 +41,19 @@ type catalogReasoningWireCase struct {
 // runtime adapter from drifting independently.
 func TestBuiltInCatalogReasoningWireContracts(t *testing.T) {
 	tests := []catalogReasoningWireCase{
+		{
+			name: "Azure Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
+			providerModelID: "astra-prod",
+			enabled:         true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Azure Astra Responses max effort", catalog: "openai/gpt-6-astra", provider: "azure-openai",
+			providerModelID: "astra-prod",
+			apiFormat:       config.APIFormatResponses, enabled: true, effort: "max",
+			wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
+			wantControls:  map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+		},
 		{
 			name: "OpenAI Astra Chat xhigh effort", catalog: "openai/gpt-6-astra", provider: "openai",
 			enabled: true, effort: "xhigh", wantTransport: modelcatalog.ReasoningTransportTopLevelEffort,
@@ -244,7 +266,7 @@ func runCatalogReasoningWireCases(t *testing.T, tests []catalogReasoningWireCase
 	t.Helper()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request, profile := renderCatalogReasoningWire(t, test.catalog, test.provider, test.apiFormat, test.enabled, test.mode, test.effort)
+			request, profile := renderCatalogReasoningWire(t, test)
 			transport, err := profile.ResolveReasoningTransport()
 			require.NoError(t, err)
 			assert.Equal(t, test.wantTransport, transport)
@@ -255,17 +277,22 @@ func runCatalogReasoningWireCases(t *testing.T, tests []catalogReasoningWireCase
 
 func renderCatalogReasoningWire(
 	t *testing.T,
-	catalogID string,
-	providerID string,
-	apiFormat string,
-	enabled bool,
-	mode string,
-	effort string,
+	test catalogReasoningWireCase,
 ) (map[string]interface{}, config.ProviderProfile) {
 	t.Helper()
+	catalogID := test.catalog
+	providerID := test.provider
+	apiFormat := test.apiFormat
+	enabled := test.enabled
+	mode := test.mode
+	effort := test.effort
 	apiFormatLine := ""
 	if apiFormat != "" {
 		apiFormatLine = fmt.Sprintf("      api_format: %s\n", apiFormat)
+	}
+	providerModelIDLine := ""
+	if test.providerModelID != "" {
+		providerModelIDLine = fmt.Sprintf("      provider_model_id: %s\n", test.providerModelID)
 	}
 	cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
 version: v0.3
@@ -273,13 +300,13 @@ providers:
   models:
     - name: routed
       catalog: %s
-%s      backend_refs:
+%s%s      backend_refs:
         - name: primary
           provider: %s
           endpoint: 127.0.0.1:8000
           protocol: http
 routing: {}
-`, catalogID, apiFormatLine, providerID)))
+`, catalogID, apiFormatLine, providerModelIDLine, providerID)))
 	require.NoError(t, err)
 
 	decision := config.Decision{Name: "route", ModelRefs: []config.ModelRef{{
@@ -332,4 +359,130 @@ func providerReasoningControls(request map[string]interface{}) map[string]interf
 		}
 	}
 	return controls
+}
+
+func TestAzureOpenAIProviderDispatch(t *testing.T) {
+	tests := []struct {
+		name         string
+		apiFormat    string
+		effort       string
+		request      string
+		wantPath     string
+		wantControls map[string]interface{}
+		wantTools    string
+	}{
+		{
+			name: "Chat xhigh", apiFormat: config.APIFormatOpenAI, effort: "xhigh",
+			request:      `{"model":"routed","messages":[{"role":"user","content":"hello"}]}`,
+			wantPath:     "/openai/deployments/astra-prod/chat/completions?api-version=2024-10-21",
+			wantControls: map[string]interface{}{"reasoning_effort": "xhigh"},
+		},
+		{
+			name: "Responses max with tools", apiFormat: config.APIFormatResponses, effort: "max",
+			request:      `{"model":"routed","messages":[{"role":"user","content":"weather in Paris"}],"tools":[{"type":"function","function":{"name":"lookup_weather","description":"Look up weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"],"additionalProperties":false},"strict":true}}]}`,
+			wantPath:     "/openai/v1/responses",
+			wantControls: map[string]interface{}{"reasoning": map[string]interface{}{"effort": "max"}},
+			wantTools:    `[{"type":"function","name":"lookup_weather","description":"Look up weather","parameters":{"type":"object","properties":{"city":{"type":"string"}},"required":["city"],"additionalProperties":false},"strict":true}]`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			type observation struct {
+				path          string
+				apiKey        string
+				authorization string
+				body          []byte
+			}
+			received := make(chan observation, 1)
+			fixture := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+				body, err := io.ReadAll(request.Body)
+				if err != nil {
+					http.Error(writer, err.Error(), http.StatusBadRequest)
+					return
+				}
+				received <- observation{
+					path: request.URL.RequestURI(), apiKey: request.Header.Get("api-key"),
+					authorization: request.Header.Get("Authorization"), body: body,
+				}
+				writer.WriteHeader(http.StatusOK)
+			}))
+			t.Cleanup(fixture.Close)
+
+			cfg, err := config.ParseYAMLBytes([]byte(fmt.Sprintf(`
+version: v0.3
+providers:
+  models:
+    - name: routed
+      catalog: openai/gpt-6-astra
+      api_format: %s
+      provider_model_id: astra-prod
+      backend_refs:
+        - name: primary
+          provider: azure-openai
+          endpoint: %s/openai/deployments/astra-prod
+          api_version: "2024-10-21"
+          api_key: azure-fixture-key
+routing: {}
+`, test.apiFormat, fixture.URL)))
+			require.NoError(t, err)
+			router := &OpenAIRouter{
+				Config: cfg,
+				CredentialResolver: authz.NewCredentialResolver(
+					authz.NewStaticConfigProvider(cfg),
+				),
+			}
+			decision := &config.Decision{Name: "azure", ModelRefs: []config.ModelRef{{
+				Model: "routed",
+				ModelReasoningControl: config.ModelReasoningControl{
+					UseReasoning: boolPtr(true), ReasoningEffort: test.effort,
+				},
+			}}}
+			ctx := routingTestContext(llmprotocol.OpenAIChatV1, nil)
+			ctx.VSRSelectedDecision = decision
+			request, immediate := router.prepareProtocolRequest([]byte(test.request), ctx)
+			require.Nil(t, immediate)
+			response, err := router.handleEntrypointModelRouting(
+				request, "routed", decision.Name, entropy.ReasoningDecision{UseReasoning: true}, "routed", ctx,
+			)
+			require.NoError(t, err)
+			require.Nil(t, response.GetImmediateResponse())
+			common := response.GetRequestBody().GetResponse()
+			require.NotNil(t, common)
+			emitted := headerValuesByName(common.GetHeaderMutation().GetSetHeaders())
+			dispatch, err := router.resolveProviderDispatch("routed", decision.Name, true)
+			require.NoError(t, err)
+			baseURL := providerEndpointScheme(cfg, dispatch.backendName, dispatch.profile) + "://" + dispatch.backendAddress
+			require.Equal(t, fixture.URL, baseURL)
+			outbound, err := http.NewRequest(
+				http.MethodPost, baseURL+emitted[":path"], bytes.NewReader(common.GetBodyMutation().GetBody()),
+			)
+			require.NoError(t, err)
+			for name, value := range emitted {
+				if !strings.HasPrefix(name, ":") {
+					outbound.Header.Set(name, value)
+				}
+			}
+			result, err := fixture.Client().Do(outbound)
+			require.NoError(t, err)
+			t.Cleanup(func() { require.NoError(t, result.Body.Close()) })
+			require.Equal(t, http.StatusOK, result.StatusCode)
+
+			observed := <-received
+			assert.Equal(t, test.wantPath, observed.path)
+			assert.Equal(t, "azure-fixture-key", observed.apiKey)
+			assert.Empty(t, observed.authorization)
+			wire := unmarshalReasoningRequest(t, observed.body)
+			assert.Equal(t, "astra-prod", wire["model"])
+			assert.Equal(t, test.wantControls, providerReasoningControls(wire))
+			tools, err := json.Marshal(wire["tools"])
+			require.NoError(t, err)
+			if test.wantTools == "" {
+				assert.Empty(t, wire["tools"])
+			} else {
+				assert.JSONEq(t, test.wantTools, string(tools))
+			}
+			t.Logf("path=%s api-key=%s model=%v reasoning=%v tools=%s",
+				observed.path, observed.apiKey, wire["model"], providerReasoningControls(wire), tools)
+		})
+	}
 }
