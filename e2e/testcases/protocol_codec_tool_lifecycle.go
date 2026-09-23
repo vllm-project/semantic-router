@@ -32,7 +32,7 @@ func runProtocolCodecToolLifecycle(
 	if err := runResponsesToolResultRoundtrip(ctx, session, model, tool, call); err != nil {
 		return err
 	}
-	if err := runCrossProtocolToolLifecycles(ctx, session, model); err != nil {
+	if err := runCrossProtocolToolLifecycles(ctx, session, model, backendFormat == "anthropic.messages.v1"); err != nil {
 		return err
 	}
 	if opts.SetDetails != nil {
@@ -138,11 +138,12 @@ func runCrossProtocolToolLifecycles(
 	ctx context.Context,
 	session *fixtures.ServiceSession,
 	model string,
+	expectAnthropicDirectCaller bool,
 ) error {
 	if err := runChatClientToolLifecycle(ctx, session, model); err != nil {
 		return fmt.Errorf("Chat Completions client: %w", err)
 	}
-	if err := runAnthropicClientToolLifecycle(ctx, session, model); err != nil {
+	if err := runAnthropicClientToolLifecycle(ctx, session, model, expectAnthropicDirectCaller); err != nil {
 		return fmt.Errorf("Anthropic Messages client: %w", err)
 	}
 	for _, stream := range []bool{false, true} {
