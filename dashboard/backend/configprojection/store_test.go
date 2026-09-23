@@ -118,3 +118,35 @@ func TestRefreshFailureMarksStaleWithoutMutatingDeployments(t *testing.T) {
 		t.Fatalf("expected only seeded deployment, got %+v", deployments)
 	}
 }
+
+func TestActiveStatusReadsSQLiteSeededTimestamp(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	store, err := Open(filepath.Join(dir, "projection.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	// The schema seeds the single active row with SQLite's datetime('now'),
+	// which leaves a space-separated timestamp rather than RFC3339. Rewrite
+	// the seed value explicitly so the assertion does not depend on the
+	// writer staying broken.
+	if _, err := store.db.Exec(
+		`UPDATE config_projection_active SET updated_at = datetime('now') WHERE id = 1`,
+	); err != nil {
+		t.Fatalf("seed sqlite-layout updated_at: %v", err)
+	}
+
+	active, err := store.GetActiveProjection()
+	if err != nil {
+		t.Fatalf("GetActiveProjection: %v", err)
+	}
+	if active.Status != StatusFailed {
+		t.Fatalf("expected seeded failed status, got %+v", active)
+	}
+	if active.UpdatedAt.IsZero() {
+		t.Fatal("expected a parsed updated_at, got the zero time")
+	}
+}
