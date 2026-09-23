@@ -708,11 +708,9 @@ domains:
 images:
   decision-runtime-cpu:
     pr_paths:
-      - src/vllm-sr/decision_runtime/**
-      - src/vllm-sr/cli/decision_runtime/**
-      - src/vllm-sr/cli/model_catalog.py
-      - src/vllm-sr/pyproject.toml
+      - src/vllm-sr/**
       - config/recipes/built-in/**
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
       - tools/release/stage_model_catalog_package.py
       - tools/ci/image_artifacts.py
       - tools/ci/docker-build-args.sh
