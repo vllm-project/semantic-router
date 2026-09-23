@@ -231,6 +231,16 @@
   display: none;
 }
 
+/* Alternatives comparison: same grid language, one more option column. The
+   desktop-only override keeps the mobile stack intact. */
+@media (min-width: 769px) {
+  .alternativesMatrix .matrixHeader,
+  .alternativesMatrix .matrixRow {
+    grid-template-columns: minmax(8rem, 0.16fr) minmax(0, 0.28fr)
+      minmax(0, 0.28fr) minmax(0, 0.28fr);
+  }
+}
+
 .capabilityStats {
   padding-top: 0.25rem;
 }

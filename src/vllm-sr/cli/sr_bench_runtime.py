@@ -131,6 +131,10 @@ def prepare_bench_runtime(
     os.chmod(store, 0o700)
     token = environment.get(token_ref) or _private_token(root / "service-token")
     values = {token_ref: token}
+    # The service owns gated source downloads; never send this credential to the
+    # browser or include its value in preparation requests or job receipts.
+    if environment.get("HF_TOKEN"):
+        values["HF_TOKEN"] = environment["HF_TOKEN"]
     for ref in _target_secret_refs(store):
         value = environment.get(ref)
         if not value:
@@ -294,6 +298,41 @@ def _remove_idle_bench_container(runtime: str, container_id: str, store: Path) -
         if busy:
             raise ValueError(
                 "The sr-bench service has active runs; finish or cancel them before an image upgrade"
+            )
+        # Preparation workers share this service lifecycle but have their own
+        # durable journal. Inspect it while admission and its children are frozen.
+        from cli.sr_bench.preparations import ACTIVE, JOB_ID  # noqa: PLC0415
+
+        try:
+            preparations = store / "dataset-preparations"
+            if preparations.is_symlink() or (
+                preparations.exists() and not preparations.is_dir()
+            ):
+                raise ValueError("Invalid preparation journal directory")
+            preparing = False
+            if preparations.exists():
+                for path in preparations.iterdir():
+                    if not path.name.startswith("prep-") or path.suffix != ".json":
+                        continue
+                    if path.is_symlink() or not JOB_ID.fullmatch(path.stem):
+                        raise ValueError("Invalid preparation journal file")
+                    job = json.loads(path.read_text())
+                    if (
+                        not isinstance(job, dict)
+                        or job.get("id") != path.stem
+                        or job.get("status") not in ACTIVE | {"completed", "failed"}
+                    ):
+                        raise ValueError("Invalid preparation journal record")
+                    if job["status"] in ACTIVE:
+                        preparing = True
+                        break
+        except (OSError, ValueError, TypeError) as exc:
+            raise ValueError(
+                "Cannot verify dataset preparations; leaving the sr-bench worker unchanged"
+            ) from exc
+        if preparing:
+            raise ValueError(
+                "The sr-bench service has active dataset preparations; wait for them to finish before an image upgrade"
             )
         # No benchmark can be dispatched after the idle check while frozen.
         # SQLite's durable journal survives removal; only the owned ID is removed.
