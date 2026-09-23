@@ -10,15 +10,15 @@ from pathlib import Path
 from typing import Literal
 
 from .artifacts import ArtifactError, VerifiedArtifact, open_verified_artifact
-from .backend_capabilities import require_runtime_backend
 from .backend import ModelDescriptor
+from .backend_capabilities import require_runtime_backend
 from .catalog_adapter import (
     ResolvedRuntimeModel,
     RuntimeModelResolutionError,
     resolve_decision_runtime_model,
 )
-from .physical_batching import PhysicalBatchBackend
 from .metrics import RuntimeMetrics
+from .physical_batching import PhysicalBatchBackend
 from .row_executor import TorchDecisionRowExecutor
 from .runtime_profile import RuntimeProfileError
 from .scheduler import ModelScheduler
@@ -163,7 +163,7 @@ def _load_family(
     profile = model.profile
     manifest = getattr(artifact, "manifest", None) or profile.artifact.manifest
     if profile.family == "vela":
-        from .vela_torch import VelaTorchRuntime
+        from .vela_torch import VelaTorchRuntime  # noqa: PLC0415
 
         if manifest.path != "native/MANIFEST.json":
             raise RuntimeAssemblyError("Vela release manifest layout is unsupported")
@@ -174,13 +174,15 @@ def _load_family(
             expected_manifest_sha256=manifest.sha256,
         )
     if profile.family == "qwen3.5":
-        from .qwen35_torch import Qwen35TorchRuntime
+        from .qwen35_torch import Qwen35TorchRuntime  # noqa: PLC0415
 
         if manifest.path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
             raise RuntimeAssemblyError("Qwen release manifest layout is unsupported")
         binder = None
         if backend == "rocm":
-            from .qwen35_rocm_binder import create_qwen_rocm_profile_binder
+            from .qwen35_rocm_binder import (  # noqa: PLC0415
+                create_qwen_rocm_profile_binder,
+            )
 
             binder = create_qwen_rocm_profile_binder()
         temperature = _qwen_temperature(artifact, fallback=profile.temperature)

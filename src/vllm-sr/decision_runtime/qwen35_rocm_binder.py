@@ -68,7 +68,7 @@ class StrictQwenRocmProfileBinder:
     """Install a hash-bound strict FLA launch guard before model loading."""
 
     def bind(self, profile: ValidatedQwenRocmProfile) -> QwenRocmProfileBinding:
-        global _ACTIVE
+        global _ACTIVE  # noqa: PLW0603 - one process-wide FLA profile guard
 
         with _BIND_LOCK:
             entries = _profile_entries(profile)

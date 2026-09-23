@@ -167,7 +167,7 @@ def test_vela_preparation_rejects_complete_input_overflow() -> None:
         question=question,
         **VELA_POLICY,
     )
-    with pytest.raises(ValueError, match="no room|no truncation allowed"):
+    with pytest.raises(ValueError, match=r"no room|no truncation allowed"):
         encode_vela_rows((row,), tokenizer, max_length=8)
 
 

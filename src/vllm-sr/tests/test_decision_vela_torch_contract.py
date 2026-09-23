@@ -13,6 +13,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from decision_runtime import vela_torch  # noqa: E402
+from decision_runtime.vela_inputs import EncodedVelaRow  # noqa: E402
 from decision_runtime.vela_torch import (  # noqa: E402
     EXPECTED_ARCHITECTURE,
     EXPECTED_HEAD_CONFIG,
@@ -23,7 +25,6 @@ from decision_runtime.vela_torch import (  # noqa: E402
     VelaTorchRuntime,
     _validate_device,
 )
-from decision_runtime.vela_inputs import EncodedVelaRow  # noqa: E402
 
 
 def _artifact(tmp_path: Path, **overrides) -> Path:
@@ -70,7 +71,7 @@ def test_loader_rejects_identity_drift_before_gpu_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.vela_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(VelaRuntimeError, match="architecture"):
@@ -100,7 +101,7 @@ def test_loader_rejects_invalid_profile_values_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.vela_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(VelaRuntimeError, match=message):
@@ -117,7 +118,7 @@ def test_loader_rejects_packing_contract_drift_before_gpu_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.vela_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(VelaRuntimeError, match="packing contract"):
@@ -170,7 +171,7 @@ def test_cpu_loader_requires_pinned_manifest_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.vela_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(VelaRuntimeError, match="pinned release manifest"):
@@ -182,8 +183,6 @@ def test_cpu_loader_requires_pinned_manifest_before_import(
 def test_cpu_loader_uses_cpu_device_without_rocm_guard(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from decision_runtime import vela_torch
-
     root = _artifact(tmp_path)
     calls = []
     monkeypatch.setattr(

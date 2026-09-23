@@ -6,11 +6,11 @@ optional server dependencies.
 """
 
 from .backend import (
-    BatchDecisionBackend,
     BackendBatchRequest,
     BackendBatchResult,
     BackendPrediction,
     BackendResult,
+    BatchDecisionBackend,
     DecisionBackend,
     ModelDescriptor,
 )
@@ -34,11 +34,11 @@ from .contracts import (
 from .engine import DecisionEngine
 
 __all__ = [
-    "BatchDecisionBackend",
     "BackendBatchRequest",
     "BackendBatchResult",
     "BackendPrediction",
     "BackendResult",
+    "BatchDecisionBackend",
     "BatchState",
     "ChoiceAnswer",
     "ChoiceQuestion",

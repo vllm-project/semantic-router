@@ -17,7 +17,7 @@ from types import MethodType
 from typing import Any, Literal
 
 from .release_artifacts import ReleaseArtifactError, verify_release_manifest
-from .vela_inputs import EncodedVelaRow
+from .vela_inputs import MIN_VELA_INPUT_TOKENS, EncodedVelaRow
 
 SUPPORTED_TRANSFORMERS_VERSION = "4.57.6"
 EXPECTED_ARCHITECTURE = "vela_decision_score_path_capacity_v1"
@@ -65,6 +65,7 @@ EXPECTED_STATE_LAYOUT = {
     "unique_registered_state": True,
 }
 KINDS = ("choice", "noul", "score")
+_BATCH_TENSOR_RANK = 2
 INFERENCE_FILES = (
     "INVENTORY.json",
     "STATE_LAYOUT.json",
@@ -242,9 +243,9 @@ class VelaTorchRuntime:
                 valid_logits = []
                 probabilities = []
                 for row, values in zip(rows, logits, strict=True):
-                    values = values[: len(row.marker_positions)]
-                    valid_logits.append(values)
-                    probabilities.append(values.softmax(-1))
+                    valid_values = values[: len(row.marker_positions)]
+                    valid_logits.append(valid_values)
+                    probabilities.append(valid_values.softmax(-1))
                 # Transfer raw valid logits and probabilities together. Checking
                 # each row's GPU tensor as a Python bool would synchronize once
                 # per row; the combined transfer synchronizes once per batch.
@@ -346,7 +347,7 @@ def _vela_model(torch, encoder, head_config):
             attention_mask = batch["attention_mask"]
             if (
                 kind not in KINDS
-                or input_ids.ndim != 2
+                or input_ids.ndim != _BATCH_TENSOR_RANK
                 or attention_mask.shape != input_ids.shape
                 or input_ids.shape[0] != kind_ids.numel()
             ):
@@ -513,7 +514,7 @@ def _validate_artifact(
     if (
         isinstance(max_length, bool)
         or not isinstance(max_length, int)
-        or max_length < 8
+        or max_length < MIN_VELA_INPUT_TOKENS
     ):
         raise VelaRuntimeError("Vela max input length is invalid")
     config = _read_json(root / "decision_config.json")

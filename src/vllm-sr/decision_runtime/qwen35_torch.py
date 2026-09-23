@@ -7,8 +7,8 @@ do not import a tensor framework, and model-repository Python is never executed.
 
 from __future__ import annotations
 
-import importlib
 import hashlib
+import importlib
 import inspect
 import json
 import math
@@ -26,6 +26,11 @@ SUPPORTED_TRANSFORMERS_VERSION = "5.17.0"
 RELEASED_MAX_INPUT_TOKENS = 16_384
 _ROCM_PROFILE_FORMAT = "decision-fla-l2norm-profile-v1"
 _FLA_SOURCE_FILES = ("modules/l2norm.py", "ops/utils/cache.py")
+_FLA_AUTOTUNE_KEY_FIELDS = 5
+_FLA_L2NORM_WIDTH = 128
+_FLA_MAX_NORMALIZATION_BLOCKS = 64
+_FLA_NUM_STAGES = 3
+_SHA256_HEX_LENGTH = 64
 INFERENCE_FILES = (
     "backbone/config.json",
     "backbone/model.safetensors",
@@ -286,9 +291,9 @@ class Qwen35TorchRuntime:
                 probabilities = []
                 for row, values in zip(rows, logits, strict=True):
                     candidate_count = len(row.candidate_positions)
-                    values = values[:candidate_count].float()
-                    valid_logits.append(values)
-                    probabilities.append((values / self.temperature).softmax(-1))
+                    valid_values = values[:candidate_count].float()
+                    valid_logits.append(valid_values)
+                    probabilities.append((valid_values / self.temperature).softmax(-1))
                 # The padded logits may be -inf; transfer only real candidates
                 # alongside probabilities and validate them after one batch sync.
                 host = self.torch.cat(valid_logits + probabilities).tolist()
@@ -754,17 +759,16 @@ def _validate_kernel_profile(
             raise Qwen35RuntimeError("invalid Qwen ROCm kernel-profile entry")
         key = entry.get("autotune_key")
         encoded = json.dumps(key, sort_keys=True, separators=(",", ":"))
-        actual_digest = hashlib.md5(  # noqa: S324 - upstream cache-key contract
-            encoded.encode(), usedforsecurity=False
-        ).hexdigest()
+        # The upstream cache-key contract uses MD5 only as a key identifier.
+        actual_digest = hashlib.md5(encoded.encode(), usedforsecurity=False).hexdigest()
         if (
             digest != actual_digest
             or not isinstance(key, list)
-            or len(key) != 5
-            or key[0] != 128
+            or len(key) != _FLA_AUTOTUNE_KEY_FIELDS
+            or key[0] != _FLA_L2NORM_WIDTH
             or isinstance(key[1], bool)
             or not isinstance(key[1], int)
-            or not 1 <= key[1] <= 64
+            or not 1 <= key[1] <= _FLA_MAX_NORMALIZATION_BLOCKS
             or key[2:] != ["torch.bfloat16", "torch.bfloat16", "torch.float32"]
         ):
             raise Qwen35RuntimeError("invalid Qwen ROCm kernel-profile key")
@@ -774,7 +778,7 @@ def _validate_kernel_profile(
         if (
             launch.get("kwargs") not in ({"BT": 8}, {"BT": 16}, {"BT": 32}, {"BT": 64})
             or launch.get("num_warps") not in {1, 2, 4, 8, 16}
-            or launch.get("num_stages") != 3
+            or launch.get("num_stages") != _FLA_NUM_STAGES
             or launch.get("num_ctas") != 1
             or any(
                 launch.get(field) is not None
@@ -806,7 +810,7 @@ def _safe_profile_path(root: Path, value: object) -> Path:
 def _sha256_value(value: object) -> str:
     if (
         not isinstance(value, str)
-        or len(value) != 64
+        or len(value) != _SHA256_HEX_LENGTH
         or any(character not in "0123456789abcdef" for character in value)
     ):
         raise Qwen35RuntimeError("invalid Qwen ROCm profile hash")

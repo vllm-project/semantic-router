@@ -6,12 +6,12 @@ import math
 from numbers import Real
 
 from .backend import (
-    BatchDecisionBackend,
     BackendBatchRequest,
     BackendBatchResult,
     BackendContractError,
     BackendPrediction,
     BackendResult,
+    BatchDecisionBackend,
     DecisionBackend,
     ModelDescriptor,
     UnknownModelError,

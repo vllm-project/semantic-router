@@ -174,9 +174,9 @@ def test_strict_binding_guards_exact_keys_and_one_profile_per_process(
     legal = (128, 1, "torch.bfloat16", "torch.bfloat16", "torch.float32")
     assert kernel.run(key=legal) == "launched"
     assert calls == [legal]
-    with pytest.raises(binder.QwenRocmBindingError, match="unprofiled.*key"):
+    with pytest.raises(binder.QwenRocmBindingError, match=r"unprofiled.*key"):
         kernel.run(key=(128, 3, *legal[2:]))
-    with pytest.raises(binder.QwenRocmBindingError, match="unprofiled.*kernel"):
+    with pytest.raises(binder.QwenRocmBindingError, match=r"unprofiled.*kernel"):
         l2norm.l2norm_fwd_kernel1.run()
     assert calls == [legal]
 
@@ -192,7 +192,7 @@ def test_strict_binding_guards_exact_keys_and_one_profile_per_process(
         profile_path=second_path,
         profile_sha256=_sha256(second_path.read_bytes()),
     )
-    with pytest.raises(binder.QwenRocmBindingError, match="different.*active"):
+    with pytest.raises(binder.QwenRocmBindingError, match=r"different.*active"):
         selected.bind(second)
 
 
@@ -205,7 +205,7 @@ def test_installed_fla_source_drift_fails_before_environment_or_import(
     monkeypatch.setattr(binder, "_ACTIVE", None)
     monkeypatch.setattr(binder, "sys", SimpleNamespace(modules={}))
     monkeypatch.setattr(binder, "_fla_package_root", lambda: package)
-    monkeypatch.setattr(binder, "_import_module", lambda name: imported.append(name))
+    monkeypatch.setattr(binder, "_import_module", imported.append)
     monkeypatch.delenv("FLA_CACHE_MODE", raising=False)
     monkeypatch.delenv("FLA_CONFIG_DIR", raising=False)
 

@@ -155,7 +155,7 @@ def test_predict_encoded_rejects_nonfinite_valid_candidate_logits(
         family, monkeypatch, ((0.0, 2.0, -math.inf), (3.0, invalid, 0.0))
     )
 
-    with pytest.raises(error_type, match="non-finite .* candidate logits"):
+    with pytest.raises(error_type, match=r"non-finite .* candidate logits"):
         runtime.predict_encoded(rows)
 
     assert torch.host_transfers == 1

@@ -439,12 +439,12 @@ def test_drun_rejects_invalid_cpu_thread_count_before_catalog_resolution():
 
 def test_drun_cli_forwards_cpu_thread_override(monkeypatch):
     options_seen: list[DrunOptions] = []
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", lambda: object())
-    monkeypatch.setattr(
-        drun_command,
-        "run_decision_runtime",
-        lambda options, **_kwargs: options_seen.append(options),
-    )
+
+    def record_options(options: DrunOptions, **_kwargs: object) -> None:
+        options_seen.append(options)
+
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", object)
+    monkeypatch.setattr(drun_command, "run_decision_runtime", record_options)
 
     result = CliRunner().invoke(
         drun_command.drun,
@@ -459,12 +459,12 @@ def test_drun_cli_forwards_cpu_thread_override(monkeypatch):
 
 def test_drun_cli_forwards_one_rocm_gpu_device(monkeypatch):
     options_seen: list[DrunOptions] = []
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", lambda: object())
-    monkeypatch.setattr(
-        drun_command,
-        "run_decision_runtime",
-        lambda options, **_kwargs: options_seen.append(options),
-    )
+
+    def record_options(options: DrunOptions, **_kwargs: object) -> None:
+        options_seen.append(options)
+
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", object)
+    monkeypatch.setattr(drun_command, "run_decision_runtime", record_options)
 
     result = CliRunner().invoke(
         drun_command.drun,
@@ -479,12 +479,12 @@ def test_drun_cli_forwards_one_rocm_gpu_device(monkeypatch):
 
 def test_drun_cli_forwards_exact_local_docker_image_id(monkeypatch):
     options_seen: list[DrunOptions] = []
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", lambda: object())
-    monkeypatch.setattr(
-        drun_command,
-        "run_decision_runtime",
-        lambda options, **_kwargs: options_seen.append(options),
-    )
+
+    def record_options(options: DrunOptions, **_kwargs: object) -> None:
+        options_seen.append(options)
+
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", object)
+    monkeypatch.setattr(drun_command, "run_decision_runtime", record_options)
 
     result = CliRunner().invoke(
         drun_command.drun,
@@ -1273,7 +1273,7 @@ def test_invalid_artifact_mount_target_is_rejected_before_start(
         def resolve(self, _request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
             return spec
 
-    with pytest.raises(DecisionContainerError, match="mount target|mount paths"):
+    with pytest.raises(DecisionContainerError, match=r"mount target|mount paths"):
         run_decision_runtime(
             DrunOptions(model=MODEL, detach=True),
             resolver=InvalidMountResolver(),
@@ -1447,9 +1447,7 @@ def test_local_image_id_requires_no_pull_docker_before_catalog_resolution(
         def resolve(self, _request):
             raise AssertionError("invalid local image request reached catalog")
 
-    monkeypatch.setattr(
-        drun_command, "default_catalog_resolver", lambda: MustNotResolve()
-    )
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", MustNotResolve)
     result = CliRunner().invoke(
         drun_command.drun,
         [

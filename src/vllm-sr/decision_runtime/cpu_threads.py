@@ -8,6 +8,8 @@ from pathlib import Path
 
 DEFAULT_CPU_THREAD_CAP = 8
 MAX_CPU_THREADS = 256
+_MAX_CPU_THREAD_DIGITS = len(str(MAX_CPU_THREADS))
+_CGROUP_CPU_MAX_FIELDS = 2
 CPU_THREAD_ENVIRONMENT = (
     "OMP_NUM_THREADS",
     "MKL_NUM_THREADS",
@@ -24,7 +26,10 @@ def configure_cpu_threads(*, cgroup_root: Path = Path("/sys/fs/cgroup")) -> int:
     if requested is None:
         threads = min(DEFAULT_CPU_THREAD_CAP, available_cpu_count(cgroup_root))
     else:
-        if len(requested) > 3 or _POSITIVE_DECIMAL.fullmatch(requested) is None:
+        if (
+            len(requested) > _MAX_CPU_THREAD_DIGITS
+            or _POSITIVE_DECIMAL.fullmatch(requested) is None
+        ):
             raise ValueError("DECISION_CPU_THREADS must be an integer from 1 to 256")
         threads = int(requested)
         if threads > MAX_CPU_THREADS:
@@ -49,7 +54,7 @@ def available_cpu_count(cgroup_root: Path = Path("/sys/fs/cgroup")) -> int:
         limits.append(logical_cpus)
 
     cpu_max = _read_words(cgroup_root / "cpu.max")
-    if len(cpu_max) == 2 and cpu_max[0] != "max":
+    if len(cpu_max) == _CGROUP_CPU_MAX_FIELDS and cpu_max[0] != "max":
         quota = _quota_cpu_count(cpu_max[0], cpu_max[1])
         if quota is not None:
             limits.append(quota)

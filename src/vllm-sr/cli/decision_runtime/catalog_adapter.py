@@ -22,12 +22,12 @@ from decision_runtime.artifacts import (
     HfHubArtifactFetcher,
     VerifiedArtifact,
 )
+from decision_runtime.backend_capabilities import require_runtime_backend
 from decision_runtime.catalog_adapter import (
     ResolvedRuntimeModel,
     RuntimeModelResolutionError,
     resolve_decision_runtime_model,
 )
-from decision_runtime.backend_capabilities import require_runtime_backend
 from decision_runtime.scheduler import DEFAULT_MAX_CONCURRENCY, DEFAULT_MAX_QUEUE
 
 from cli.decision_runtime.catalog import (
@@ -44,6 +44,7 @@ from cli.decision_runtime.image_reference import (
 
 _ARTIFACT_TARGET = "/opt/vllm-sr/decision-artifact"
 _CONTAINER_PORT = 8000
+_SHA256_HEX_LENGTH = 64
 _SUPPORTED_CONTAINER_BACKENDS = frozenset({"rocm", "cuda", "cpu"})
 _FAMILY_PYTHON = MappingProxyType(
     {
@@ -249,7 +250,7 @@ def get_catalog_resolver() -> IntegratedDecisionCatalogResolver:
 def _canonical_artifact_root(artifact: VerifiedArtifact) -> Path:
     if not isinstance(artifact, VerifiedArtifact):
         raise DecisionCatalogError("artifact resolver returned an invalid receipt")
-    if len(artifact.content_id) != 64 or any(
+    if len(artifact.content_id) != _SHA256_HEX_LENGTH or any(
         character not in "0123456789abcdef" for character in artifact.content_id
     ):
         raise DecisionCatalogError("artifact resolver returned an invalid content ID")

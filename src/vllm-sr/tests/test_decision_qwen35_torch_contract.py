@@ -15,12 +15,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from decision_runtime import qwen35_torch  # noqa: E402
 from decision_runtime.qwen35_torch import (  # noqa: E402
     QWEN_PROMPT_VERSION,
     RELEASED_MAX_INPUT_TOKENS,
-    QwenRocmProfileBinding,
     Qwen35RuntimeError,
     Qwen35TorchRuntime,
+    QwenRocmProfileBinding,
     _bind_rocm_profile,
     _install_cpu_reference_kernels,
     _validate_device,
@@ -54,7 +55,7 @@ def test_loader_validates_release_contract_before_gpu_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.qwen35_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
     root = _artifact(tmp_path, prompt_version="wrong")
 
@@ -90,7 +91,7 @@ def test_loader_rejects_invalid_profile_values_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.qwen35_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(Qwen35RuntimeError, match=message):
@@ -110,7 +111,7 @@ def test_loader_rejects_non_sdpa_attention_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.qwen35_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(Qwen35RuntimeError, match="SDPA"):
@@ -313,7 +314,7 @@ def test_profiled_rocm_release_requires_owned_binder_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.qwen35_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(Qwen35RuntimeError, match="owned strict ROCm profile binder"):
@@ -337,7 +338,7 @@ def test_profile_hash_mismatch_fails_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.qwen35_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(Qwen35RuntimeError, match="profile hash mismatch"):
@@ -361,10 +362,10 @@ def test_profile_path_traversal_fails_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.qwen35_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
-    with pytest.raises(Qwen35RuntimeError, match="unsafe.*profile path"):
+    with pytest.raises(Qwen35RuntimeError, match=r"unsafe.*profile path"):
         Qwen35TorchRuntime.load(
             root,
             temperature=1.0,
@@ -381,7 +382,7 @@ def test_cpu_loader_requires_pinned_manifest_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.qwen35_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(Qwen35RuntimeError, match="pinned release manifest"):
@@ -403,7 +404,7 @@ def test_cpu_loader_rejects_wrong_manifest_before_import(
     imported = []
     monkeypatch.setattr(
         "decision_runtime.qwen35_torch.importlib.import_module",
-        lambda name: imported.append(name),
+        imported.append,
     )
 
     with pytest.raises(Qwen35RuntimeError, match="manifest digest mismatch"):
@@ -421,8 +422,6 @@ def test_cpu_loader_rejects_wrong_manifest_before_import(
 def test_cpu_loader_converts_verified_body_to_fp32(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from decision_runtime import qwen35_torch
-
     root = _artifact(tmp_path)
     calls = []
     monkeypatch.setattr(
@@ -519,12 +518,13 @@ def test_cpu_reference_binding_is_instance_local() -> None:
         return "accelerator"
 
     def reference_forward(self):
+        # These names are supplied by FunctionType's globals below, as in the model.
         _ = (
-            causal_conv1d_update,
-            torch_chunk_gated_delta_rule,
-            torch_recurrent_gated_delta_rule,
+            causal_conv1d_update,  # noqa: F821
+            torch_chunk_gated_delta_rule,  # noqa: F821
+            torch_recurrent_gated_delta_rule,  # noqa: F821
         )
-        return causal_conv1d_fn()
+        return causal_conv1d_fn()  # noqa: F821
 
     reference_forward = FunctionType(
         reference_forward.__code__.replace(co_filename="modeling_qwen3_5.py"),

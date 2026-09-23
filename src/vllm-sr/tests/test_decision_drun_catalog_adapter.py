@@ -165,7 +165,7 @@ def test_auto_backend_uses_injected_detector(tmp_path: Path) -> None:
 def test_missing_released_image_fails_before_artifact_download(tmp_path: Path) -> None:
     bridge = resolver(tmp_path, images={})
 
-    with pytest.raises(DecisionCatalogError, match="no released.*image"):
+    with pytest.raises(DecisionCatalogError, match=r"no released.*image"):
         bridge.resolve(request())
 
     assert bridge.artifacts.calls == []  # type: ignore[attr-defined]

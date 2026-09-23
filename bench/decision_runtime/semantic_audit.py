@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 from collections import Counter
 from dataclasses import dataclass
+from http import HTTPStatus
 from types import SimpleNamespace
 from typing import Any
 
@@ -34,6 +35,8 @@ from decision_runtime.contracts import (
 )
 
 # isort: on
+
+NOUL_DECISION_THRESHOLD = 0.5
 
 
 @dataclass(frozen=True)
@@ -82,7 +85,7 @@ def _exchange(endpoint: Endpoint, spec: RequestSpec, timeout: float) -> AuditExc
     except (urllib.error.URLError, TimeoutError, OSError):
         error_code = "transport_error"
 
-    if error_code is None and status_code != 200:
+    if error_code is None and status_code != HTTPStatus.OK:
         error_code = f"http_{status_code}"
     elif error_code is None and content is None:
         error_code = "response_too_large"
@@ -197,10 +200,11 @@ def _compare_answer(
             old_probability=old.noul,
             new_probability=new.noul,
             absolute_probability_delta=delta,
-            old_threshold_0_5_outcome=old.noul >= 0.5,
-            new_threshold_0_5_outcome=new.noul >= 0.5,
+            old_threshold_0_5_outcome=old.noul >= NOUL_DECISION_THRESHOLD,
+            new_threshold_0_5_outcome=new.noul >= NOUL_DECISION_THRESHOLD,
             threshold_0_5_outcome_mismatch_diagnostic=(
-                (old.noul >= 0.5) != (new.noul >= 0.5)
+                (old.noul >= NOUL_DECISION_THRESHOLD)
+                != (new.noul >= NOUL_DECISION_THRESHOLD)
             ),
         )
         if delta > tolerance:

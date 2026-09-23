@@ -41,8 +41,9 @@ def create_runtime_app(config: RuntimeLaunchConfig):
 def run_server(config: RuntimeLaunchConfig) -> None:
     """Serve the already-verified app with one model-owning worker."""
 
-    import asyncio
-    import uvicorn
+    import asyncio  # noqa: PLC0415 - preserve import at server startup
+
+    import uvicorn  # noqa: PLC0415 - optional HTTP server dependency
 
     app = create_runtime_app(config)
     try:

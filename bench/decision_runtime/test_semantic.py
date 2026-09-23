@@ -16,15 +16,16 @@ from decision_runtime.confidence import choice_confidence, score_confidence
 
 # isort: on
 
-from .__main__ import main
-from .legacy_projection import project_legacy_preview
-from .semantic_cases import generate_cases
-from .semantic_report import build_semantic_matrix
 from decision_runtime.contracts import (
     SystemOneRequest,
     SystemOneResponse,
     validate_response_for_request,
 )
+
+from .__main__ import main
+from .legacy_projection import project_legacy_preview
+from .semantic_cases import generate_cases
+from .semantic_report import build_semantic_matrix
 
 
 def _answer(question, *, probability_shift=0.0, choice_flip=False):

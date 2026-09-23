@@ -11,8 +11,12 @@ from tempfile import TemporaryDirectory
 from unittest import TestCase
 from unittest.mock import patch
 
+# cases adds the source checkout to the import path before runtime imports.
+# isort: off
 from .cases import DEFAULT_CASES, MODELS, load_cases
 from decision_runtime.confidence import choice_confidence, score_confidence
+
+# isort: on
 
 from .__main__ import main
 from .report import build_matrix, percentile, summarize

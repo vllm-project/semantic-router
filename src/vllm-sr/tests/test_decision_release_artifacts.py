@@ -66,7 +66,7 @@ def test_manifest_identity_and_missing_file_fail_closed(tmp_path: Path) -> None:
             expected_sha256="0" * 64,
             required_files=("model.safetensors",),
         )
-    with pytest.raises(ReleaseArtifactError, match="missing tokenizer.json"):
+    with pytest.raises(ReleaseArtifactError, match=r"missing tokenizer\.json"):
         verify_release_manifest(
             root,
             manifest_name="MANIFEST.json",

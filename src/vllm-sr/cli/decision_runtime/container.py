@@ -66,6 +66,7 @@ _INSTANCE_NAME = re.compile(r"[a-z0-9](?:[a-z0-9_.-]{0,62}[a-z0-9])?")
 _SHA256_DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 _INSPECT_TIMEOUT_SECONDS = 10
 _READINESS_BODY_LIMIT = 4096
+_ASCII_CONTROL_LIMIT = 32
 _NO_SUCH_CONTAINER_MARKERS = (
     "no such container",
     "no such object",
@@ -677,7 +678,7 @@ def validate_decision_mount(mount: object) -> tuple[str, str]:
         or value != value.strip()
         or "\0" in value
         or "," in value
-        or any(ord(character) < 32 for character in value)
+        or any(ord(character) < _ASCII_CONTROL_LIMIT for character in value)
         for value in (mount.source, mount.target)
     ):
         raise DecisionContainerError("Decision runtime mount paths are invalid.")

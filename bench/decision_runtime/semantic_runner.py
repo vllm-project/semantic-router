@@ -16,8 +16,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .cases import MODELS
-from .semantic_cases import WorkloadCase, cohort_sha256, generate_cases
 from .semantic_audit import audit_cohorts
+from .semantic_cases import WorkloadCase, cohort_sha256, generate_cases
 from .semantic_metrics import (
     MetricCapture,
     MetricsError,

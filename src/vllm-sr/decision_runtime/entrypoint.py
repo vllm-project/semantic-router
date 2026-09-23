@@ -5,11 +5,13 @@ from __future__ import annotations
 import argparse
 import importlib
 import ipaddress
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from .cpu_threads import configure_cpu_threads
 from .runtime_factory import MAX_PENDING_ROWS, RuntimeLaunchConfig
+
+_MAX_TCP_PORT = 65535
 
 
 def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
@@ -33,7 +35,7 @@ def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
         parser.error(f"--host must be an IP address: {error}")
     if not args.artifact_root.is_absolute():
         parser.error("--artifact-root must be absolute")
-    if not 1 <= args.port <= 65535:
+    if not 1 <= args.port <= _MAX_TCP_PORT:
         parser.error("--port must be between 1 and 65535")
     if not 1 <= args.max_batch <= MAX_PENDING_ROWS:
         parser.error(f"--max-batch must be between 1 and {MAX_PENDING_ROWS}")
@@ -73,7 +75,8 @@ def main(argv: Sequence[str] | None = None) -> None:
             "`pip install 'vllm-sr[decision-runtime]'`."
         ) from exc
 
-    from .server import run_server
+    # Load the optional HTTP stack only after checking its error message.
+    from .server import run_server  # noqa: PLC0415
 
     run_server(config)
 

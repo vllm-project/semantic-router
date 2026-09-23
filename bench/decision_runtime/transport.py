@@ -4,23 +4,27 @@ from __future__ import annotations
 
 import hashlib
 import json
-import socket
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from http import HTTPStatus
 from urllib.parse import urlsplit
-
-from .cases import Case
-from .legacy_projection import project_legacy_preview
 
 from pydantic import ValidationError
 
+# cases adds the source checkout to the import path before runtime imports.
+# isort: off
+from .cases import Case
 from decision_runtime.contracts import (
     ResponseContractError,
     SystemOneResponse,
     validate_response_for_request,
 )
+
+# isort: on
+
+from .legacy_projection import project_legacy_preview
 
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
@@ -156,12 +160,12 @@ def measure(
         status_code = error.code
         with error:
             content, response_sha256 = _consume(error)
-    except (urllib.error.URLError, TimeoutError, socket.timeout, OSError):
+    except (urllib.error.URLError, TimeoutError, OSError):
         transport_error = "transport_error"
     ended_ns = time.perf_counter_ns()
 
     error_code = transport_error
-    if error_code is None and status_code != 200:
+    if error_code is None and status_code != HTTPStatus.OK:
         error_code = f"http_{status_code}"
     elif error_code is None and content is None:
         error_code = "response_too_large"

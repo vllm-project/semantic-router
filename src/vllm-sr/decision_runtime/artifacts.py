@@ -31,6 +31,7 @@ from .runtime_profile import (
 
 _RECEIPT = ".vllm-sr-artifact.json"
 _RECEIPT_SCHEMA = 2
+_SHA256_HEX_LENGTH = 64
 _QWEN_SHARD = re.compile(r"backbone/model-(\d{5})-of-(\d{5})\.safetensors")
 _REPOSITORY_CODE_SUFFIXES = frozenset(
     {".py", ".pyc", ".pyo", ".so", ".dylib", ".dll", ".sh", ".bash"}
@@ -100,7 +101,7 @@ class HfHubArtifactFetcher:
             raise ArtifactError(str(error)) from error
         # Keep the optional network client out of package import and contract-test
         # paths. The base CLI dependency provides it in real installations.
-        from huggingface_hub import hf_hub_download
+        from huggingface_hub import hf_hub_download  # noqa: PLC0415
 
         return Path(
             hf_hub_download(
@@ -237,7 +238,7 @@ def open_verified_artifact(
 
     if (
         not isinstance(expected_content_id, str)
-        or len(expected_content_id) != 64
+        or len(expected_content_id) != _SHA256_HEX_LENGTH
         or any(character not in "0123456789abcdef" for character in expected_content_id)
     ):
         raise ArtifactError("expected artifact content ID is invalid")
@@ -419,7 +420,7 @@ def _manifest_entry(
     size_bytes = value["bytes"]
     if (
         not isinstance(digest, str)
-        or len(digest) != 64
+        or len(digest) != _SHA256_HEX_LENGTH
         or any(char not in "0123456789abcdef" for char in digest)
     ):
         raise ArtifactManifestError("artifact manifest SHA-256 is invalid")
@@ -676,7 +677,7 @@ def _content_lock(path: Path):
         if not stat.S_ISREG(os.fstat(descriptor).st_mode):
             raise ArtifactError("artifact materialization lock is not a regular file")
         try:
-            import fcntl
+            import fcntl  # noqa: PLC0415 - preserve the POSIX availability check
         except ImportError as error:  # pragma: no cover - production is Linux/Darwin
             raise ArtifactError(
                 "artifact materialization requires POSIX file locking"

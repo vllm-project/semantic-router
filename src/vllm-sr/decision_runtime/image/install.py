@@ -22,7 +22,7 @@ def output(*arguments: str) -> str:
 
 
 def base_torch_site(backend: str) -> tuple[Path, Path]:
-    import torch
+    import torch  # noqa: PLC0415 - inspect Torch only in the selected image environment
 
     hip = getattr(torch.version, "hip", None)
     cuda = getattr(torch.version, "cuda", None)

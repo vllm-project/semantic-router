@@ -27,6 +27,7 @@ MODELS = (
     "llm-semantic-router/Decision-1.0-Lux-9B",
 )
 DEFAULT_CASES = Path(__file__).with_name("cases.jsonl")
+MAX_CASE_ID_LENGTH = 80
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,7 @@ def load_cases(path: Path, model: str) -> tuple[Case, ...]:
         if (
             not isinstance(case_id, str)
             or not case_id
-            or len(case_id) > 80
+            or len(case_id) > MAX_CASE_ID_LENGTH
             or any(
                 char not in "abcdefghijklmnopqrstuvwxyz0123456789_-" for char in case_id
             )

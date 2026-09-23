@@ -7,6 +7,8 @@ from typing import Protocol
 
 from .model_inputs import ModelInput, VelaTextInput, vela_text_input
 
+MIN_VELA_INPUT_TOKENS = 8
+
 
 class VelaTokenizer(Protocol):
     cls_token_id: int | None
@@ -92,7 +94,7 @@ def encode_vela_rows(
     if (
         isinstance(max_length, bool)
         or not isinstance(max_length, int)
-        or max_length < 8
+        or max_length < MIN_VELA_INPUT_TOKENS
     ):
         raise ValueError("max_length must be an integer of at least eight")
     if type(max_cached_characters) is not int or max_cached_characters < 0:
