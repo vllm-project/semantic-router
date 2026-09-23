@@ -323,6 +323,12 @@ class _StrictRunGuard:
         self.cache_module = cache_module
         self.original_run = original_run
         self.entries = entries
+        self.config_dir = str(profile.kernel_config_path.parent.resolve(strict=True))
+        self.config_file_identity = _file_identity(profile.kernel_config_path)
+        if _sha256_file(profile.kernel_config_path) != profile.kernel_config_sha256:
+            raise QwenRocmBindingError("Qwen ROCm kernel config changed before binding")
+        if _file_identity(profile.kernel_config_path) != self.config_file_identity:
+            raise QwenRocmBindingError("Qwen ROCm kernel config changed during binding")
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         cache = self.cache_module
@@ -330,14 +336,22 @@ class _StrictRunGuard:
             os.getpid() != self.process_id
             or cache.FLA_CACHE_MODE is not cache.FlaCacheMode.STRICT
             or os.environ.get("FLA_CACHE_MODE") != "strict"
-            or os.environ.get("FLA_CONFIG_DIR")
-            != str(self.profile.kernel_config_path.parent.resolve(strict=True))
-            or _sha256_file(self.profile.kernel_config_path)
-            != self.profile.kernel_config_sha256
+            or os.environ.get("FLA_CONFIG_DIR") != self.config_dir
         ):
             raise QwenRocmBindingError(
                 "FLA strict configuration changed during inference"
             )
+        identity = _file_identity(self.profile.kernel_config_path)
+        if identity != self.config_file_identity:
+            if (
+                _sha256_file(self.profile.kernel_config_path)
+                != self.profile.kernel_config_sha256
+                or _file_identity(self.profile.kernel_config_path) != identity
+            ):
+                raise QwenRocmBindingError(
+                    "FLA strict configuration changed during inference"
+                )
+            self.config_file_identity = identity
 
         key = cache.AutotuneKey.build(
             self.kernel.arg_names, self.kernel.keys, args, kwargs
@@ -345,15 +359,19 @@ class _StrictRunGuard:
         selected = self.entries.get(key.autotune_key)
         if selected is None:
             raise QwenRocmBindingError("unprofiled FLA l2norm autotune key")
-        loaded = cache.load_cached_config(self.kernel.kernel_name, key)
-        if _config_fields(loaded) != selected:
-            raise QwenRocmBindingError(
-                "FLA strict cache did not return the profiled config"
-            )
         prior = self.kernel.cache.get(key.autotune_key)
-        if prior is not None and _config_fields(prior) != selected:
+        if prior is None:
+            # In FLA 0.5.2, CachedAutotuner.run reads its config only when
+            # this key is absent from the in-process cache. Populate it once
+            # from the already verified launch table, before run can autotune.
+            loaded = cache.load_cached_config(self.kernel.kernel_name, key)
+            if _config_fields(loaded) != selected:
+                raise QwenRocmBindingError(
+                    "FLA strict cache did not return the profiled config"
+                )
+            self.kernel.maybe_load_cached_config(key)
+        elif _config_fields(prior) != selected:
             raise QwenRocmBindingError("conflicting FLA in-process autotune cache")
-        self.kernel.maybe_load_cached_config(key)
         if _config_fields(self.kernel.cache.get(key.autotune_key)) != selected:
             raise QwenRocmBindingError("FLA did not install the exact profiled config")
         result = self.original_run(*args, **kwargs)
@@ -385,3 +403,21 @@ def _sha256_file(path: Path) -> str:
         raise QwenRocmBindingError(
             "profile or FLA source file is unreadable"
         ) from error
+
+
+def _file_identity(path: Path) -> tuple[int, int, int, int, int]:
+    """Detect edits and replacements without hashing the table on every launch."""
+
+    try:
+        metadata = path.stat(follow_symlinks=False)
+    except OSError as error:
+        raise QwenRocmBindingError(
+            "profile or FLA source file is unreadable"
+        ) from error
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
