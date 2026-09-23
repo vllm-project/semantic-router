@@ -126,8 +126,9 @@ def test_assembly_reopens_artifact_before_loading(monkeypatch, tmp_path: Path):
         events.append(("verify", root, resolved, expected_content_id))
         return SimpleNamespace(data_root=root / "native")
 
-    def load(resolved, artifact, backend):
+    def load(resolved, artifact, backend, *, physical_batch_size):
         events.append(("load", resolved, artifact.data_root, backend))
+        assert physical_batch_size == 4
         return resident
 
     monkeypatch.setattr(runtime_factory, "resolve_decision_runtime_model", resolve)

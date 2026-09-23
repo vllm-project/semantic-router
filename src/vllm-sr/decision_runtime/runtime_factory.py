@@ -70,7 +70,9 @@ def assemble_runtime(
         require_runtime_backend(
             model.catalog, model.profile, config.backend, target=target
         )
-        resident = _load_family(model, artifact, config.backend)
+        resident = _load_family(
+            model, artifact, config.backend, physical_batch_size=config.max_batch
+        )
     except (RuntimeModelResolutionError, RuntimeProfileError, ArtifactError) as error:
         raise RuntimeAssemblyError(str(error)) from error
 
@@ -155,6 +157,8 @@ def _load_family(
     model: ResolvedRuntimeModel,
     artifact: VerifiedArtifact,
     backend: Literal["cpu", "rocm", "cuda"],
+    *,
+    physical_batch_size: int = 8,
 ):
     profile = model.profile
     manifest = getattr(artifact, "manifest", None) or profile.artifact.manifest
@@ -185,6 +189,7 @@ def _load_family(
             temperature=temperature,
             max_length=profile.max_input_tokens,
             backend=backend,
+            physical_batch_size=physical_batch_size,
             rocm_profile_binder=binder,
             expected_manifest_sha256=(
                 manifest.sha256 if manifest.path == "MODEL_MANIFEST.json" else None

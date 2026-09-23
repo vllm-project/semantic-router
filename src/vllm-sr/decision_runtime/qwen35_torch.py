@@ -148,6 +148,7 @@ class Qwen35TorchRuntime:
         backend: Literal["cpu", "rocm", "cuda"],
         device: str | None = None,
         attention: str = "sdpa",
+        physical_batch_size: int = 8,
         rocm_profile_binder: QwenRocmProfileBinder | None = None,
         expected_manifest_sha256: str | None = None,
     ) -> Qwen35TorchRuntime:
@@ -160,6 +161,7 @@ class Qwen35TorchRuntime:
             max_length=max_length,
             backend=backend,
             attention=attention,
+            physical_batch_size=physical_batch_size,
         )
         if backend == "cpu" and expected_manifest_sha256 is None:
             raise Qwen35RuntimeError(
@@ -474,6 +476,7 @@ def _validate_configuration(
     max_length: int,
     backend: str,
     attention: str,
+    physical_batch_size: int,
 ) -> ValidatedQwenRocmProfile | None:
     if backend not in {"cpu", "rocm", "cuda"}:
         raise Qwen35RuntimeError("Qwen Torch backend must be cpu, rocm, or cuda")
@@ -492,6 +495,12 @@ def _validate_configuration(
         or not 1 <= max_length <= RELEASED_MAX_INPUT_TOKENS
     ):
         raise Qwen35RuntimeError("Qwen max input length is invalid")
+    if (
+        isinstance(physical_batch_size, bool)
+        or not isinstance(physical_batch_size, int)
+        or physical_batch_size < 1
+    ):
+        raise Qwen35RuntimeError("Qwen physical batch size is invalid")
     metadata = _read_json(root / "decision_config.json")
     if metadata.get("prompt_version") != QWEN_PROMPT_VERSION:
         raise Qwen35RuntimeError("unsupported Qwen Decision prompt version")
@@ -505,7 +514,15 @@ def _validate_configuration(
         if not (root / relative).is_file():
             raise Qwen35RuntimeError(f"verified Qwen artifact is missing {relative}")
     if backend == "rocm":
-        return _validated_rocm_profile(root, metadata)
+        profile = _validated_rocm_profile(root, metadata)
+        if profile is not None and (
+            physical_batch_size > profile.physical_batch_size_max
+            or max_length > profile.padded_tokens_max
+        ):
+            raise Qwen35RuntimeError(
+                "Qwen launch exceeds the verified ROCm kernel envelope"
+            )
+        return profile
     return None
 
 

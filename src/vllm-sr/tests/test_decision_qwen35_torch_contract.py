@@ -224,6 +224,20 @@ def test_candidate_label_does_not_override_owned_kernel_contract(
     assert _validated_rocm_profile(root, metadata) is not None
 
 
+def test_rocm_profile_rejects_uncovered_physical_batch_before_torch_import(
+    tmp_path: Path,
+) -> None:
+    root = _profiled_artifact(tmp_path, status="diagnostic-only")
+    with pytest.raises(Qwen35RuntimeError, match="kernel envelope"):
+        Qwen35TorchRuntime.load(
+            root,
+            temperature=1.3,
+            max_length=16384,
+            backend="rocm",
+            physical_batch_size=9,
+        )
+
+
 def test_profile_validates_supported_envelope_and_fla_sources(tmp_path: Path) -> None:
     root = _profiled_artifact(tmp_path)
     profile_path = root / "runtime-profile/profile.json"

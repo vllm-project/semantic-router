@@ -45,6 +45,8 @@ and verifies the mounted files again before loading weights. Changing weights
 within a supported model family does not require a runtime rebuild. Changes to
 architecture, prompt format, or hardware kernels must still satisfy the
 runtime's structural and device checks.
+For a ROCm model with a strict kernel profile, `--max-batch` must fit that
+profile's verified physical batch envelope; startup rejects larger values.
 
 The ROCm implementation targets all six Decision 1.0 catalog models on
 `gfx942`. Linux CPU execution is scoped to the three models below 1B (Kai,
