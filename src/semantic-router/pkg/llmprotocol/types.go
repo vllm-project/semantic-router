@@ -21,6 +21,10 @@ const (
 	// to /v1/images/generations, and the generated image is decoded back into
 	// the protocol-neutral GeneratedImage output item.
 	OpenAIImagesV1 WireFormat = "openai.images.v1"
+	// OpenAISpeechV1 is the OpenAI Speech API dialect (/v1/audio/speech)
+	// exposed by text-to-speech backends (e.g. vLLM-Omni TTS servers). Clients
+	// call it directly, and the response body is raw audio rather than JSON.
+	OpenAISpeechV1 WireFormat = "openai.speech.v1"
 )
 
 type Role string

@@ -33,12 +33,14 @@ func TestCapabilitySetTaskCapabilities(t *testing.T) {
 	full := Capabilities(
 		CapabilityImageGeneration, CapabilityImageInput, CapabilityImageOutput,
 		CapabilityAudioInput, CapabilityVideoOutput, CapabilityFileOutput,
+		CapabilitySpeechGeneration,
 		CapabilityText, CapabilityTools, CapabilityStreaming, CapabilityReasoning,
 	)
 	task := full.TaskCapabilities()
 	for _, kept := range []Capability{
 		CapabilityImageGeneration, CapabilityImageInput, CapabilityImageOutput,
 		CapabilityAudioInput, CapabilityVideoOutput, CapabilityFileOutput,
+		CapabilitySpeechGeneration,
 	} {
 		if !task.Supports(kept) {
 			t.Fatalf("TaskCapabilities must keep %v, got %v", Capabilities(kept).Names(), task.Names())
