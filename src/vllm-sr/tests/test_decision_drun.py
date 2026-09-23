@@ -405,6 +405,7 @@ def test_drun_run_help_exposes_required_model_and_lifecycle_options():
         "--max-batch",
         "--max-concurrency",
         "--max-queue",
+        "--cpu-threads",
         "--instance-name",
         "--image",
         "--image-pull-policy",
@@ -422,6 +423,33 @@ def test_drun_requires_exact_positional_model():
 
     assert result.exit_code == 2
     assert "Missing argument 'MODEL'" in result.output
+
+
+def test_drun_rejects_invalid_cpu_thread_count_before_catalog_resolution():
+    result = CliRunner().invoke(drun_command.drun, ["run", MODEL, "--cpu-threads", "0"])
+
+    assert result.exit_code == 2
+    assert "--cpu-threads" in result.output
+
+
+def test_drun_cli_forwards_cpu_thread_override(monkeypatch):
+    options_seen: list[DrunOptions] = []
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", lambda: object())
+    monkeypatch.setattr(
+        drun_command,
+        "run_decision_runtime",
+        lambda options, **_kwargs: options_seen.append(options),
+    )
+
+    result = CliRunner().invoke(
+        drun_command.drun,
+        ["run", MODEL, "--backend", "cpu", "--cpu-threads", "6"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(options_seen) == 1
+    assert options_seen[0].backend == "cpu"
+    assert options_seen[0].cpu_threads == 6
 
 
 def test_drun_cli_runs_fixture_lifecycle_end_to_end(monkeypatch, tmp_path: Path):
@@ -751,6 +779,58 @@ def test_resolver_cannot_silently_change_explicit_limits(tmp_path: Path):
         )
 
 
+def test_cpu_thread_override_reaches_owned_cpu_container(tmp_path: Path):
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = FakeDriver()
+
+    run_decision_runtime(
+        DrunOptions(model=MODEL, backend="cpu", cpu_threads=6, detach=True),
+        resolver=FixtureResolver(),
+        registry=registry,
+        driver=driver,
+        runtime_selector=lambda _requested: "docker",
+    )
+
+    launch = next(event[1] for event in driver.events if event[0] == "start")
+    assert launch.runtime_spec.environment["DECISION_CPU_THREADS"] == "6"
+    assert "DECISION_CPU_THREADS=6" in build_decision_container_command(launch)
+    assert registry.records()[0].state == "running"
+
+
+@pytest.mark.parametrize("backend", ("rocm", "cuda"))
+def test_cpu_thread_override_rejects_explicit_gpu_before_catalog_resolution(
+    backend: str,
+) -> None:
+    class MustNotResolve:
+        def resolve(self, _request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            raise AssertionError("invalid CPU tuning reached the catalog")
+
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="only for the CPU"):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, backend=backend, cpu_threads=6),
+            resolver=MustNotResolve(),
+        )
+
+
+def test_cpu_thread_override_rejects_auto_gpu_before_registry_mutation(
+    tmp_path: Path,
+) -> None:
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = FakeDriver()
+
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="only for the CPU"):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, cpu_threads=6),
+            resolver=FixtureResolver(),
+            registry=registry,
+            driver=driver,
+            runtime_selector=lambda _requested: "docker",
+        )
+
+    assert registry.records() == ()
+    assert driver.events == []
+
+
 def test_resolved_runtime_detaches_from_retained_environment_mapping():
     source = {"DECISION_RUNTIME_LOG_LEVEL": "info"}
     spec = replace(
@@ -1050,6 +1130,7 @@ def test_container_command_is_stable_and_contains_no_registry_secrets(monkeypatc
         {"A_PROFILE": "apparently-innocent-but-not-public"},
         {"DECISION_RUNTIME_LOG_LEVEL": "jv_live_must_not_reach_argv"},
         {"OMP_NUM_THREADS": "12345"},
+        {"DECISION_CPU_THREADS": "257"},
     ),
 )
 def test_container_command_rejects_nonpublic_or_unbounded_environment_values(

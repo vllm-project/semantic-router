@@ -48,6 +48,9 @@ IDENTITY_LABEL = "ai.vllm-sr.drun.identity"
 IMAGE_LABEL = "ai.vllm-sr.drun.image"
 _PUBLIC_TUNING_ENVIRONMENT = {
     "DECISION_RUNTIME_LOG_LEVEL": re.compile(r"(?:critical|error|warning|info|debug)"),
+    "DECISION_CPU_THREADS": re.compile(
+        r"(?:[1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-6])"
+    ),
     "OMP_NUM_THREADS": re.compile(r"[1-9][0-9]{0,3}"),
     "TOKENIZERS_PARALLELISM": re.compile(r"(?:true|false)"),
 }

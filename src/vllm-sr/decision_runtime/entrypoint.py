@@ -8,6 +8,7 @@ import ipaddress
 from pathlib import Path
 from typing import Sequence
 
+from .cpu_threads import configure_cpu_threads
 from .runtime_factory import MAX_PENDING_ROWS, RuntimeLaunchConfig
 
 
@@ -57,6 +58,12 @@ def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
 def main(argv: Sequence[str] | None = None) -> None:
     """Start the real model server or explain the missing optional extra."""
 
+    config = parse_launch_args(argv)
+    if config.backend == "cpu":
+        try:
+            configure_cpu_threads()
+        except ValueError as error:
+            raise SystemExit(str(error)) from error
     try:
         importlib.import_module("fastapi")
         importlib.import_module("uvicorn")
@@ -66,7 +73,6 @@ def main(argv: Sequence[str] | None = None) -> None:
             "`pip install 'vllm-sr[decision-runtime]'`."
         ) from exc
 
-    config = parse_launch_args(argv)
     from .server import run_server
 
     run_server(config)

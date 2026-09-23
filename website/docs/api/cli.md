@@ -1029,11 +1029,12 @@ Launch one exact MODEL as a standalone SystemOne service.
 | `--revision TEXT` | Exact model revision; the catalog revision is used when omitted. |
 | `--host TEXT` | Host IP used to publish the SystemOne endpoint.  [default: 127.0.0.1] |
 | `--port INTEGER RANGE` | Host port used to publish the SystemOne endpoint.  [default: 8000; 1&lt;=x&lt;=65535] |
-| `--backend CHOICE` | Decision inference backend.  [default: auto] Choices: auto, rocm, cuda. |
+| `--backend CHOICE` | Decision inference backend.  [default: auto] Choices: auto, rocm, cuda, cpu. |
 | `--dtype TEXT` | Runtime dtype override; the selected backend profile decides when omitted. |
 | `--max-batch INTEGER RANGE` | Maximum physical inference batch override.  [x&gt;=1] |
 | `--max-concurrency INTEGER RANGE` | Maximum concurrent request override.  [x&gt;=1] |
 | `--max-queue INTEGER RANGE` | Maximum queued request override.  [x&gt;=0] |
+| `--cpu-threads INTEGER RANGE` | CPU-only Torch/BLAS threads; default is min(8, container CPU allowance).  [1&lt;=x&lt;=256] |
 | `--instance-name TEXT` | Stable lowercase name for this managed Decision runtime instance. |
 | `--image TEXT` | Digest-qualified Decision runtime OCI image override. |
 | `--image-pull-policy CHOICE` | Container image pull policy.  [default: ifnotpresent] Choices: always, ifnotpresent, never. |

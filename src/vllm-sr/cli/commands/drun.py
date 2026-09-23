@@ -128,6 +128,11 @@ def drun() -> None:
     help="Maximum queued request override.",
 )
 @click.option(
+    "--cpu-threads",
+    type=click.IntRange(min=1, max=256),
+    help="CPU-only Torch/BLAS threads; default is min(8, container CPU allowance).",
+)
+@click.option(
     "--instance-name",
     help="Stable lowercase name for this managed Decision runtime instance.",
 )
@@ -176,6 +181,7 @@ def run(
     max_batch: int | None,
     max_concurrency: int | None,
     max_queue: int | None,
+    cpu_threads: int | None,
     instance_name: str | None,
     image: str | None,
     image_pull_policy: str,
@@ -195,6 +201,7 @@ def run(
         max_batch=max_batch,
         max_concurrency=max_concurrency,
         max_queue=max_queue,
+        cpu_threads=cpu_threads,
         instance_name=instance_name,
         image=image,
         image_pull_policy=image_pull_policy.lower(),

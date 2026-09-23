@@ -79,6 +79,7 @@ class DrunOptions:
     max_batch: int | None = None
     max_concurrency: int | None = None
     max_queue: int | None = None
+    cpu_threads: int | None = None
     instance_name: str | None = None
     image: str | None = None
     image_pull_policy: str = IMAGE_PULL_POLICY_IF_NOT_PRESENT
@@ -275,6 +276,18 @@ def _resolve_runtime(
         )
     spec = _freeze_resolved_runtime(spec)
     _validate_resolved_runtime(request, spec)
+    if options.cpu_threads is not None:
+        if spec.backend != "cpu":
+            raise DecisionLifecycleError(
+                "--cpu-threads is supported only for the CPU Decision backend."
+            )
+        spec = replace(
+            spec,
+            environment={
+                **spec.environment,
+                "DECISION_CPU_THREADS": str(options.cpu_threads),
+            },
+        )
     if spec.backend == "mlx":
         raise DecisionLifecycleError(
             "The MLX backend requires the native Decision runtime driver, which is "
@@ -375,6 +388,12 @@ def _validate_options(options: DrunOptions) -> None:
             f"Unsupported backend {options.backend!r}; choose "
             f"{', '.join(SUPPORTED_DECISION_BACKENDS)}."
         )
+    if options.cpu_threads is not None:
+        _positive_integer("cpu threads", options.cpu_threads, maximum=256)
+        if options.backend not in ("auto", "cpu"):
+            raise DecisionLifecycleError(
+                "--cpu-threads is supported only for the CPU Decision backend."
+            )
     _validate_host(options.host)
     _positive_integer("port", options.port, maximum=65535)
     _positive_integer("startup timeout", options.startup_timeout)
@@ -492,6 +511,10 @@ def _validate_resolved_runtime(
     ):
         raise DecisionLifecycleError("Resolved Decision runtime command is invalid.")
     validate_decision_environment(spec.environment)
+    if spec.backend != "cpu" and "DECISION_CPU_THREADS" in spec.environment:
+        raise DecisionLifecycleError(
+            "DECISION_CPU_THREADS is supported only for the CPU Decision backend."
+        )
     mount_targets: set[str] = set()
     for mount in spec.mounts:
         _source, target = validate_decision_mount(mount)
