@@ -164,6 +164,14 @@ revision, verified manifest SHA-256, content SHA-256, and scheduler status;
 diagnostic routes on a protected control-plane listener or allowlist when
 placing the runtime behind a public Gateway.
 
+A successful single or batch inference from a verified resident artifact also
+sets `X-Decision-Artifact-Model`, `X-Decision-Artifact-Revision`,
+`X-Decision-Artifact-Manifest-Sha256`, and
+`X-Decision-Artifact-Content-Sha256` response headers. A direct Gateway can
+check the identity of that specific response against its deployment pins in
+one request. The strict SystemOne and batch JSON envelopes do not change;
+unavailable or rejected requests do not carry an artifact attestation.
+
 Malformed requests return `422`; oversized inputs return `413`; a saturated
 runtime returns `529` with `Retry-After`; an unavailable backend returns
 `503`. Clients should honor backpressure rather than retrying an overloaded

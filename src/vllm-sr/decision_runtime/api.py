@@ -8,7 +8,7 @@ import time
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Annotated, TypeVar
 
-from fastapi import Body, FastAPI, Request
+from fastapi import Body, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, ConfigDict
@@ -38,6 +38,12 @@ from .scheduler import ModelScheduler, SchedulerOverloadedError
 EvaluationResponseT = TypeVar(
     "EvaluationResponseT", SystemOneResponse, SystemOneBatchResponse
 )
+ARTIFACT_RESPONSE_HEADERS = {
+    "model": "X-Decision-Artifact-Model",
+    "revision": "X-Decision-Artifact-Revision",
+    "manifest_sha256": "X-Decision-Artifact-Manifest-Sha256",
+    "content_sha256": "X-Decision-Artifact-Content-Sha256",
+}
 
 
 class _ResponseModel(BaseModel):
@@ -75,6 +81,31 @@ def create_app(
     attested_artifact = (
         dict(artifact_provenance) if artifact_provenance is not None else None
     )
+    if attested_artifact is not None and (
+        len(model_names) != 1
+        or set(attested_artifact) != set(ARTIFACT_RESPONSE_HEADERS)
+        or attested_artifact["model"] != model_names[0]
+        or not isinstance(attested_artifact["model"], str)
+        or not 1 <= len(attested_artifact["model"]) <= 128
+        or any(
+            not 33 <= ord(character) <= 126 or character == ","
+            for character in attested_artifact["model"]
+        )
+        or any(
+            not isinstance(attested_artifact[key], str)
+            or len(attested_artifact[key]) != length
+            or any(
+                character not in "0123456789abcdef"
+                for character in attested_artifact[key]
+            )
+            for key, length in (
+                ("revision", 40),
+                ("manifest_sha256", 64),
+                ("content_sha256", 64),
+            )
+        )
+    ):
+        raise ValueError("Decision artifact provenance is invalid")
     app = FastAPI(
         title="vLLM Semantic Router Decision Runtime",
         version="0.1.0",
@@ -134,6 +165,7 @@ def create_app(
     async def run_evaluation(
         model: str,
         operation: Callable[[], Awaitable[EvaluationResponseT]],
+        http_response: Response,
     ) -> EvaluationResponseT | JSONResponse:
         started = time.perf_counter()
         outcome = "internal_error"
@@ -144,6 +176,11 @@ def create_app(
                 model,
                 operation,
             )
+            if attested_artifact is not None:
+                # These internal transport headers bind this successful result
+                # to the resident artifact without changing the public JSON.
+                for field, header in ARTIFACT_RESPONSE_HEADERS.items():
+                    http_response.headers[header] = attested_artifact[field]
             outcome = "success"
             return response
         except UnknownModelError:
@@ -199,6 +236,7 @@ def create_app(
     @app.post("/v1/systemone", response_model=SystemOneResponse)
     async def system_one(
         payload: Annotated[SystemOneRequest, Body(...)],
+        response: Response,
     ) -> SystemOneResponse | JSONResponse:
         if exceeds_expanded_input_limit(payload):
             return JSONResponse(
@@ -208,11 +246,13 @@ def create_app(
         return await run_evaluation(
             payload.model,
             lambda: engine.evaluate(payload),
+            response,
         )
 
     @app.post("/v1/decision/batches", response_model=SystemOneBatchResponse)
     async def system_one_batch(
         payload: Annotated[SystemOneBatchRequest, Body(...)],
+        response: Response,
     ) -> SystemOneBatchResponse | JSONResponse:
         if exceeds_expanded_input_limit(payload):
             return JSONResponse(
@@ -222,6 +262,7 @@ def create_app(
         return await run_evaluation(
             payload.model,
             lambda: engine.evaluate_batch(payload),
+            response,
         )
 
     @app.get("/api/status")

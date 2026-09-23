@@ -11,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from decision_runtime.api import create_app  # noqa: E402
+from decision_runtime.api import ARTIFACT_RESPONSE_HEADERS, create_app  # noqa: E402
 from decision_runtime.backend import (  # noqa: E402
     BackendInputTooLargeError,
     BackendOverloadedError,
@@ -327,7 +327,7 @@ def test_status_and_metrics_keep_diagnostics_outside_systemone():
     asyncio.run(scenario())
 
 
-def test_status_attests_resolved_artifact_without_changing_inference_response():
+def test_successful_inference_attests_artifact_without_changing_json_contract():
     provenance = {
         "model": MODEL.name,
         "revision": "a" * 40,
@@ -342,10 +342,56 @@ def test_status_attests_resolved_artifact_without_changing_inference_response():
     async def scenario():
         async with _client(app) as client:
             assert (await client.get("/api/status")).json()["artifact"] == provenance
-            response = (await client.post("/v1/systemone", json=payload())).json()
-            assert set(response) == {"model", "answers", "usage"}
+            for path, request, expected_fields in (
+                ("/v1/systemone", payload(), {"model", "answers", "usage"}),
+                (
+                    "/v1/decision/batches",
+                    batch_payload(),
+                    {"model", "results", "usage"},
+                ),
+            ):
+                response = await client.post(path, json=request)
+                assert response.status_code == 200
+                assert set(response.json()) == expected_fields
+                assert {
+                    field: response.headers[header]
+                    for field, header in ARTIFACT_RESPONSE_HEADERS.items()
+                } == provenance
+
+            rejected = dict(payload(), model="unknown")
+            error = await client.post("/v1/systemone", json=rejected)
+            assert error.status_code == 422
+            assert all(
+                header not in error.headers
+                for header in ARTIFACT_RESPONSE_HEADERS.values()
+            )
 
     asyncio.run(scenario())
+
+
+def test_artifact_header_source_requires_one_matching_complete_identity():
+    backend = DecisionEngine(FakeDecisionBackend([MODEL]))
+    valid = {
+        "model": MODEL.name,
+        "revision": "a" * 40,
+        "manifest_sha256": "b" * 64,
+        "content_sha256": "c" * 64,
+    }
+    for invalid in (
+        dict(valid, model="another-model"),
+        dict(valid, revision="main"),
+        {key: value for key, value in valid.items() if key != "content_sha256"},
+    ):
+        with pytest.raises(ValueError, match="artifact provenance"):
+            create_app(backend, artifact_provenance=invalid)
+
+    for unsafe_name in ("bad\nmodel", "bad,model", "modèle"):
+        unsafe_model = ModelDescriptor(unsafe_name, "Test model", "2026-09-23")
+        with pytest.raises(ValueError, match="artifact provenance"):
+            create_app(
+                DecisionEngine(FakeDecisionBackend([unsafe_model])),
+                artifact_provenance=dict(valid, model=unsafe_model.name),
+            )
 
 
 def test_openapi_preserves_strict_single_state_schema():
