@@ -118,36 +118,37 @@ func TestSharedInvalidInputs(t *testing.T) {
 		Definition string          `json:"definition"`
 		Value      json.RawMessage `json:"value"`
 	}
-	if err := json.Unmarshal(data, &cases); err != nil {
-		t.Fatal(err)
+	if unmarshalErr := json.Unmarshal(data, &cases); unmarshalErr != nil {
+		t.Fatal(unmarshalErr)
 	}
 	for _, tc := range cases {
 		t.Run(tc.Name, func(t *testing.T) {
+			var validationErr error
 			switch tc.Definition {
 			case "Profile":
 				var p Profile
-				if err := json.Unmarshal(tc.Value, &p); err != nil {
-					t.Fatal(err)
+				if unmarshalErr := json.Unmarshal(tc.Value, &p); unmarshalErr != nil {
+					t.Fatal(unmarshalErr)
 				}
-				err = ValidateProfile(p)
+				validationErr = ValidateProfile(p)
 			case "ArtifactVariantSpec":
 				var spec ArtifactVariantSpec
-				if err := json.Unmarshal(tc.Value, &spec); err != nil {
-					t.Fatal(err)
+				if unmarshalErr := json.Unmarshal(tc.Value, &spec); unmarshalErr != nil {
+					t.Fatal(unmarshalErr)
 				}
-				err = ValidateVariant(spec)
+				validationErr = ValidateVariant(spec)
 			case "SubmitRunRequest":
 				var r SubmitRunRequest
 				decoder := json.NewDecoder(bytes.NewReader(tc.Value))
 				decoder.DisallowUnknownFields()
-				err = decoder.Decode(&r)
-				if err == nil {
-					err = ValidateRun(r)
+				validationErr = decoder.Decode(&r)
+				if validationErr == nil {
+					validationErr = ValidateRun(r)
 				}
 			default:
 				t.Fatalf("unknown fixture definition %s", tc.Definition)
 			}
-			if err == nil {
+			if validationErr == nil {
 				t.Fatal("accepted invalid contract input")
 			}
 		})

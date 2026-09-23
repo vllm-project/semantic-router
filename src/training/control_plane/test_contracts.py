@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import yaml
-from jsonschema import ValidationError
+from jsonschema import Draft202012Validator, ValidationError
 
 from src.training.model_eval.provenance.manifest import ManifestError, load_manifest
 from src.training.model_eval.test_provenance import (
@@ -18,7 +18,7 @@ from src.training.model_eval.test_provenance import (
     run_manifest,
 )
 
-from .contracts import CONTRACT_ROOT, validate
+from .contracts import CONTRACT_ROOT, SCHEMA, validate
 from .provenance import validate_classifier_provenance
 
 
@@ -43,9 +43,6 @@ class ContractTests(unittest.TestCase):
                 validate(case["value"], case["definition"])
 
     def test_schema_and_openapi_references(self):
-        from jsonschema import Draft202012Validator
-        from .contracts import SCHEMA
-
         Draft202012Validator.check_schema(SCHEMA)
         api = yaml.safe_load((CONTRACT_ROOT / "training-v1.openapi.yaml").read_text())
         operation_ids = []

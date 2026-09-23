@@ -22,8 +22,8 @@ from .manifest import ManifestError, load_manifests
 __all__ = [
     "artifact_identity_digest",
     "file_digest",
-    "validate_bundle",
     "load_validated_bundle",
+    "validate_bundle",
     "verify_artifact_bytes",
 ]
 

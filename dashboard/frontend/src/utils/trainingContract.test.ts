@@ -1,6 +1,5 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import selector from '../../../../src/semantic-router/pkg/trainingcontract/testdata/selector.json'
-import neural from '../../../../src/semantic-router/pkg/trainingcontract/testdata/neural.json'
 import type {
   Artifact, ArtifactVariant, BindingProposalSpec, Evaluation, Fixture,
   Profile, Qualification, RunGraph, RunSpec, WorkerResult,
@@ -8,7 +7,14 @@ import type {
 
 // Python validates these exact JSON documents against the generated schema.
 // The Console consumes the generated types; it does not maintain another model.
-const fixtures: Fixture[] = [selector as Fixture, neural as Fixture]
+// Read fixtures at test runtime so production builds do not need test data.
+const [selector, neural] = ['selector', 'neural'].map((name): Fixture => JSON.parse(
+  readFileSync(new URL(
+    `../../../../src/semantic-router/pkg/trainingcontract/testdata/${name}.json`,
+    import.meta.url,
+  ), 'utf8'),
+))
+const fixtures: Fixture[] = [selector, neural]
 
 function outputLabels(profile: Profile): string[] {
   switch (profile.target_contract) {
