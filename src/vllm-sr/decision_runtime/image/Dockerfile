@@ -13,7 +13,7 @@ COPY config/recipes/built-in/ /source/config/recipes/built-in/
 COPY tools/release/stage_model_catalog_package.py /source/tools/release/stage_model_catalog_package.py
 RUN "${PYTHON_BIN}" -c 'import sys; assert sys.version_info[:2] == (3, 12)' && \
     "${PYTHON_BIN}" -m pip install --no-cache-dir \
-      setuptools==80.9.0 wheel==0.46.1 PyYAML==6.0.3 && \
+      setuptools==80.9.0 wheel==0.45.1 PyYAML==6.0.3 && \
     "${PYTHON_BIN}" -m pip wheel --no-deps --no-cache-dir --no-build-isolation \
       --wheel-dir /wheels /source/src/vllm-sr
 

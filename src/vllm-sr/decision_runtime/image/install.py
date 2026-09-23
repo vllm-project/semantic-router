@@ -89,7 +89,7 @@ def install_family(
         "resolve_decision_runtime_model('llm-semantic-router/Decision-1.0-Kai-0.6B'); "
         "resolve_decision_runtime_model('llm-semantic-router/Decision-1.0-Eos-0.8B'); "
         f"assert transformers.__version__ == {FAMILIES[family]!r}; "
-        f"assert pathlib.Path(torch.__file__).resolve() == {str(expected_torch)!r}; "
+        f"assert str(pathlib.Path(torch.__file__).resolve()) == {str(expected_torch)!r}; "
         "assert pathlib.Path(sys.executable).resolve().is_file()"
     )
     run(str(python), "-c", smoke)
