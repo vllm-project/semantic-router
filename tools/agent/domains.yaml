@@ -708,7 +708,13 @@ domains:
 images:
   decision-runtime-cpu:
     pr_paths:
-      - src/vllm-sr/**
+      - src/vllm-sr/decision_runtime/**
+      - src/vllm-sr/cli/**
+      - src/vllm-sr/pyproject.toml
+      - src/vllm-sr/setup.py
+      - src/vllm-sr/build_support.py
+      - src/vllm-sr/requirements.txt
+      - src/vllm-sr/MANIFEST.in
       - config/recipes/built-in/**
       - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
       - tools/release/stage_model_catalog_package.py
@@ -716,7 +722,13 @@ images:
       - tools/ci/docker-build-args.sh
       - .github/workflows/build-artifacts.yml
     publish_paths:
-      - src/vllm-sr/**
+      - src/vllm-sr/decision_runtime/**
+      - src/vllm-sr/cli/**
+      - src/vllm-sr/pyproject.toml
+      - src/vllm-sr/setup.py
+      - src/vllm-sr/build_support.py
+      - src/vllm-sr/requirements.txt
+      - src/vllm-sr/MANIFEST.in
       - config/recipes/built-in/**
       - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
       - tools/release/stage_model_catalog_package.py

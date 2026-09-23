@@ -278,13 +278,19 @@ class SelectionTests(unittest.TestCase):
         for path in (
             "src/vllm-sr/README.md",
             "src/vllm-sr/tests/test_container_start.py",
-            "src/vllm-sr/cli/evaluation/runtime_factors.py",
-            "src/vllm-sr/cli/commands/chat.py",
         ):
             with self.subTest(unrelated_path=path):
                 plan = make_plan([path], source_sha=SHA)
                 self.assertNotIn("local.cli", plan["expected_verification_ids"])
                 self.assertEqual(plan["images"], [])
+        for path in (
+            "src/vllm-sr/cli/evaluation/runtime_factors.py",
+            "src/vllm-sr/cli/commands/chat.py",
+        ):
+            with self.subTest(packaged_cli_path=path):
+                plan = make_plan([path], source_sha=SHA)
+                self.assertNotIn("local.cli", plan["expected_verification_ids"])
+                self.assertEqual(plan["images"], ["decision-runtime-cpu"])
 
     def test_operator_request_helper_selects_its_real_deployment(self):
         path = "tools/ci/check_operator_request.py"
