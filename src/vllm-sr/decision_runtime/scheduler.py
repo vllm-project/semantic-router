@@ -9,6 +9,9 @@ from typing import TypeVar
 
 ResultT = TypeVar("ResultT")
 
+DEFAULT_MAX_CONCURRENCY = 8
+DEFAULT_MAX_QUEUE = 8
+
 
 class SchedulerOverloadedError(RuntimeError):
     """A model has no running or queued capacity left."""
@@ -37,8 +40,8 @@ class ModelScheduler:
         self,
         model_names: Sequence[str],
         *,
-        max_concurrency: int = 1,
-        max_queue: int = 8,
+        max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
+        max_queue: int = DEFAULT_MAX_QUEUE,
     ) -> None:
         if max_concurrency < 1:
             raise ValueError("max_concurrency must be positive")

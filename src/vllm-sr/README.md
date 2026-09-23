@@ -71,13 +71,23 @@ only `model`, ordered `results: [{"id", "answers", "usage"}]`, and aggregate
 `usage`; one invalid backend result rejects the whole response. This endpoint is
 a Decision batching extension, not part of the official single-state API.
 
-This foundation defines the shared-question batch seam but does not claim
-physical GPU microbatching. Production adapters and the public Gateway must add
-validated raw-body and expanded-input byte limits, per-model complete-input
-token admission, implement the explicit `BatchDecisionBackend` capability, and
-add hardware-specific physical microbatch scheduling before the batch endpoint
-is exposed publicly. There is no sequential single-request fallback. Those
-resource policies must not add fields to either inference response.
+The runtime bounds a single request body at 256 KiB, a batch body at 2 MiB, and
+the logical state/question expansion at 16 MiB before inference. Its
+`PhysicalBatchBackend` coalesces question rows from concurrent callers, rotates
+fairly across requests, preserves per-state identity, and never exceeds the
+selected physical batch size. Admission allows eight concurrent calls per model
+and queues eight by default, so the physical backend can observe concurrent
+callers; the development server overrides these bounds with
+`VLLM_SR_DECISION_CONCURRENCY` and `VLLM_SR_DECISION_QUEUE`. There is no
+sequential single-request fallback. Production model adapters must additionally
+enforce the profile's complete-input token limit without truncation and qualify
+each physical batch override on the target hardware. These resource policies do
+not add fields to either inference response.
+
+`create_app` deliberately does not own backend lifecycle. A future production
+runtime factory must await `PhysicalBatchBackend.aclose()` from its shutdown
+lifespan; the fake `create_default_app` remains only a contract-development
+entry point.
 
 Choice and Score answers use the Decision-owned `decision_normalized_top`
 concentration statistic:
@@ -96,7 +106,9 @@ surfaces and must not be exposed by a public Gateway. Configure its fake model
 names with `VLLM_SR_DECISION_MODELS`; no model is selected implicitly by the
 SystemOne request contract. Production requests accept only the exact canonical
 IDs returned by `/v1/models`; this runtime does not define compatibility aliases,
-and the response repeats the exact requested model ID.
+and the response repeats the exact requested model ID. Readiness is the exact
+HTTP 200 JSON document `{"ready": true}`; redirects, empty bodies, and string
+lookalikes are not readiness success.
 
 Local `serve` requires Docker or Podman on Linux, macOS, or WSL2. A native
 Windows Python environment can run config and catalog commands, but it cannot

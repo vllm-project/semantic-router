@@ -89,5 +89,9 @@ class BackendUnavailableError(RuntimeError):
     """The backend cannot currently perform inference."""
 
 
+class BackendOverloadedError(RuntimeError):
+    """The backend's bounded physical work queue cannot admit a request."""
+
+
 class BackendContractError(RuntimeError):
     """The backend returned malformed or mismatched predictions."""

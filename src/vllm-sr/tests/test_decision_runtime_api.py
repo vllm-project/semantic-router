@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from decision_runtime.api import create_app  # noqa: E402
 from decision_runtime.backend import (  # noqa: E402
+    BackendOverloadedError,
     BackendPrediction,
     BackendResult,
     ModelDescriptor,
@@ -20,6 +21,10 @@ from decision_runtime.backend import (  # noqa: E402
 )
 from decision_runtime.engine import DecisionEngine  # noqa: E402
 from decision_runtime.fake_backend import FakeDecisionBackend  # noqa: E402
+from decision_runtime.physical_batching import (  # noqa: E402
+    DecisionRowResult,
+    PhysicalBatchBackend,
+)
 from decision_runtime.scheduler import ModelScheduler  # noqa: E402
 
 MODEL = ModelDescriptor(
@@ -78,7 +83,7 @@ def test_http_e2e_exposes_models_health_readiness_and_strict_response():
     async def scenario():
         async with _client(app_for()) as client:
             assert (await client.get("/health")).json() == {"status": "ok"}
-            assert (await client.get("/ready")).json() == {"status": "ready"}
+            assert (await client.get("/ready")).json() == {"ready": True}
             assert (await client.get("/v1/models")).json() == {
                 "models": [
                     {
@@ -95,6 +100,65 @@ def test_http_e2e_exposes_models_health_readiness_and_strict_response():
             assert set(body["answers"]["refund"]) == {"type", "noul"}
             assert "confidence" in body["answers"]["category"]
             assert "confidence" in body["answers"]["urgency"]
+
+    asyncio.run(scenario())
+
+
+def test_create_app_default_admission_allows_http_physical_coalescing():
+    class RecordingRowExecutor:
+        def __init__(self):
+            self.calls = []
+
+        async def ready(self):
+            return True
+
+        async def predict_rows(self, rows):
+            self.calls.append(rows)
+            return tuple(
+                DecisionRowResult(
+                    question_id=row.question_id,
+                    type=row.question.type,
+                    probabilities=(0.25, 0.75),
+                    input_tokens=len(str(row.state)),
+                )
+                for row in rows
+            )
+
+    async def scenario():
+        executor = RecordingRowExecutor()
+        backend = PhysicalBatchBackend(
+            MODEL,
+            executor,
+            physical_batch_size=8,
+            coalesce_seconds=0.05,
+        )
+        app = create_app(DecisionEngine(backend))
+        first_payload = payload()
+        first_payload["state"] = "first"
+        second_payload = payload()
+        second_payload["state"] = "second"
+
+        async def wait_for_selection():
+            while backend._worker is None or backend._pending_rows:
+                await asyncio.sleep(0)
+
+        try:
+            async with _client(app) as client:
+                first_response = asyncio.create_task(
+                    client.post("/v1/systemone", json=first_payload)
+                )
+                await asyncio.wait_for(wait_for_selection(), timeout=1)
+                responses = await asyncio.gather(
+                    first_response,
+                    client.post("/v1/systemone", json=second_payload),
+                )
+        finally:
+            await backend.aclose()
+
+        assert [response.status_code for response in responses] == [200, 200]
+        assert len(executor.calls) == 1
+        assert len(executor.calls[0]) == 6
+        assert {row.state for row in executor.calls[0]} == {"first", "second"}
 
     asyncio.run(scenario())
 
@@ -233,7 +297,10 @@ def test_status_and_metrics_keep_diagnostics_outside_systemone():
         async with _client(app_for()) as client:
             await client.post("/v1/systemone", json=payload())
             status = (await client.get("/api/status")).json()
-            assert status["contract"] == "systemone.single.v1"
+            assert status["contracts"] == [
+                "systemone.single.v1",
+                "systemone.batch.v1",
+            ]
             assert status["confidence"]["typesafe_equivalent"] is False
             metrics = await client.get("/metrics")
             assert metrics.status_code == 200
@@ -278,7 +345,9 @@ def test_not_ready_is_503_without_changing_health():
         backend = FakeDecisionBackend([MODEL], available=False)
         async with _client(app_for(backend)) as client:
             assert (await client.get("/health")).status_code == 200
-            assert (await client.get("/ready")).status_code == 503
+            readiness = await client.get("/ready")
+            assert readiness.status_code == 503
+            assert readiness.json() == {"ready": False}
             assert (
                 await client.post("/v1/systemone", json=payload())
             ).status_code == 503
@@ -309,6 +378,22 @@ def test_queue_overload_maps_to_official_529_with_retry_after():
             assert second.headers["retry-after"] == "1"
             backend.release.set()
             assert (await first).status_code == 200
+
+    asyncio.run(scenario())
+
+
+def test_physical_backend_overload_maps_to_official_529_with_retry_after():
+    class OverloadedBackend(FakeDecisionBackend):
+        async def infer(self, request):
+            raise BackendOverloadedError(request.model)
+
+    async def scenario():
+        async with _client(app_for(OverloadedBackend([MODEL]))) as client:
+            response = await client.post("/v1/systemone", json=payload())
+            assert response.status_code == 529
+            assert response.headers["retry-after"] == "1"
+            metrics = (await client.get("/metrics")).text
+            assert 'model="decision-test",outcome="overloaded"' in metrics
 
     asyncio.run(scenario())
 

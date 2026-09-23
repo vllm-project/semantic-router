@@ -9,7 +9,7 @@ from .api import create_app
 from .backend import ModelDescriptor
 from .engine import DecisionEngine
 from .fake_backend import FakeDecisionBackend
-from .scheduler import ModelScheduler
+from .scheduler import DEFAULT_MAX_CONCURRENCY, DEFAULT_MAX_QUEUE, ModelScheduler
 
 
 def create_default_app():
@@ -33,8 +33,10 @@ def create_default_app():
     engine = DecisionEngine(FakeDecisionBackend(models))
     scheduler = ModelScheduler(
         model_names,
-        max_concurrency=_positive_env("VLLM_SR_DECISION_CONCURRENCY", 1),
-        max_queue=_nonnegative_env("VLLM_SR_DECISION_QUEUE", 8),
+        max_concurrency=_positive_env(
+            "VLLM_SR_DECISION_CONCURRENCY", DEFAULT_MAX_CONCURRENCY
+        ),
+        max_queue=_nonnegative_env("VLLM_SR_DECISION_QUEUE", DEFAULT_MAX_QUEUE),
     )
     return create_app(engine, scheduler=scheduler)
 

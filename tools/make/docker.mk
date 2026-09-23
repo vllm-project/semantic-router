@@ -594,7 +594,9 @@ vllm-sr-decision-runtime-test: harness-venv-install
 		src/vllm-sr/tests/test_decision_runtime_engine.py \
 		src/vllm-sr/tests/test_decision_runtime_api.py \
 		src/vllm-sr/tests/test_decision_runtime_profiles.py \
-		src/vllm-sr/tests/test_decision_runtime_artifacts.py
+		src/vllm-sr/tests/test_decision_runtime_artifacts.py \
+		src/vllm-sr/tests/test_decision_physical_batching.py \
+		src/vllm-sr/tests/test_decision_request_limits.py
 
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker

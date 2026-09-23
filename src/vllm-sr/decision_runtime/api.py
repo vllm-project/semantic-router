@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .backend import (
     BackendContractError,
+    BackendOverloadedError,
     BackendUnavailableError,
     ModelDescriptor,
     UnknownModelError,
@@ -27,6 +28,10 @@ from .contracts import (
 )
 from .engine import DecisionEngine
 from .metrics import RuntimeMetrics
+from .request_limits import (
+    BoundedJSONBodyMiddleware,
+    exceeds_expanded_input_limit,
+)
 from .scheduler import ModelScheduler, SchedulerOverloadedError
 
 EvaluationResponseT = TypeVar(
@@ -54,7 +59,12 @@ def create_app(
     scheduler: ModelScheduler | None = None,
     metrics: RuntimeMetrics | None = None,
 ) -> FastAPI:
-    """Build the HTTP API without importing or selecting a model framework."""
+    """Build the HTTP API without selecting or owning a model framework.
+
+    The caller owns backend lifecycle. In particular, a runtime factory that
+    supplies a ``PhysicalBatchBackend`` must await its ``aclose`` method during
+    application shutdown.
+    """
 
     runtime_metrics = metrics or RuntimeMetrics()
     model_names = tuple(model.name for model in engine.models)
@@ -104,10 +114,10 @@ def create_app(
     @app.get("/ready")
     async def ready():
         if await engine.ready():
-            return {"status": "ready"}
+            return {"ready": True}
         return JSONResponse(
             status_code=503,
-            content={"detail": "Decision backend is not ready"},
+            content={"ready": False},
         )
 
     @app.get("/v1/models", response_model=ModelMetadataList)
@@ -145,7 +155,7 @@ def create_app(
                     ]
                 },
             )
-        except SchedulerOverloadedError:
+        except (SchedulerOverloadedError, BackendOverloadedError):
             outcome = "overloaded"
             return JSONResponse(
                 status_code=529,
@@ -179,6 +189,11 @@ def create_app(
     async def system_one(
         payload: Annotated[SystemOneRequest, Body(...)],
     ) -> SystemOneResponse | JSONResponse:
+        if exceeds_expanded_input_limit(payload):
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Expanded Decision input exceeds the runtime limit"},
+            )
         return await run_evaluation(
             payload.model,
             lambda: engine.evaluate(payload),
@@ -188,6 +203,11 @@ def create_app(
     async def system_one_batch(
         payload: Annotated[SystemOneBatchRequest, Body(...)],
     ) -> SystemOneBatchResponse | JSONResponse:
+        if exceeds_expanded_input_limit(payload):
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Expanded Decision input exceeds the runtime limit"},
+            )
         return await run_evaluation(
             payload.model,
             lambda: engine.evaluate_batch(payload),
@@ -199,7 +219,7 @@ def create_app(
         is_ready = await engine.ready()
         return {
             "status": "ready" if is_ready else "not_ready",
-            "contract": "systemone.single.v1",
+            "contracts": ["systemone.single.v1", "systemone.batch.v1"],
             "confidence": {
                 "name": "decision_normalized_top",
                 "typesafe_equivalent": False,
@@ -224,6 +244,9 @@ def create_app(
             media_type="text/plain; version=0.0.4; charset=utf-8",
         )
 
+    # Keep transport admission outside BaseHTTPMiddleware so a peer disconnect
+    # can stop the ASGI exchange without forcing an artificial response.
+    app.add_middleware(BoundedJSONBodyMiddleware)
     return app
 
 
