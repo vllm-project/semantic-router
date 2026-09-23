@@ -177,6 +177,8 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 		"invalid json":              `{`,
 		"empty inventory":           `{"schema_version":"vllm-sr/model-catalog/v2","catalogs":[],"protocols":[],"providers":[],"reasoning_families":[],"models":[],"benchmarks":[],"evaluations":[],"indices":[],"index_results":[]}`,
 		"missing protocols":         validModelCatalogPayload(","),
+		"missing model protocols":   validModelCatalogPayload(","),
+		"unknown model protocol":    validModelCatalogPayload(","),
 		"missing default base path": validModelCatalogPayload(","),
 		"missing roles":             validModelCatalogPayload(","),
 		"missing authority":         validModelCatalogPayload(","),
@@ -188,6 +190,22 @@ func TestModelCatalogHandlerRejectsMalformedCLIContract(t *testing.T) {
 			t.Parallel()
 			if name == "missing protocols" {
 				payload = strings.Replace(payload, `"protocols":["openai/chat-completions@1"]`, `"protocols":[]`, 1)
+			}
+			if name == "missing model protocols" {
+				payload = strings.Replace(
+					payload,
+					`"lifecycle":"active",`+"\n"+`    "protocols":["openai/chat-completions@1"],`,
+					`"lifecycle":"active",`,
+					1,
+				)
+			}
+			if name == "unknown model protocol" {
+				payload = strings.Replace(
+					payload,
+					`"lifecycle":"active",`+"\n"+`    "protocols":["openai/chat-completions@1"],`,
+					`"lifecycle":"active",`+"\n"+`    "protocols":["example/missing@1"],`,
+					1,
+				)
 			}
 			if name == "missing default base path" {
 				payload = strings.Replace(payload, `    "default_base_path":"/v1",
@@ -451,7 +469,7 @@ func TestGeneratedPublicModelCatalogSatisfiesDashboardContract(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(normalized, &document); unmarshalErr != nil {
 		t.Fatalf("decode normalized public catalog: %v", unmarshalErr)
 	}
-	if len(document.Models) != 104 || len(document.Providers) != 62 || len(document.Evaluations) != 1525 {
+	if len(document.Models) != 110 || len(document.Providers) != 63 || len(document.Evaluations) != 1525 {
 		t.Fatalf(
 			"unexpected generated inventory: models=%d providers=%d evaluations=%d; "+
 				"regenerate the catalog, or update these counts if the change is intended",
@@ -459,6 +477,53 @@ func TestGeneratedPublicModelCatalogSatisfiesDashboardContract(t *testing.T) {
 			len(document.Providers),
 			len(document.Evaluations),
 		)
+	}
+	const expectedVirtualProtocols = "openai/chat-completions@1,openai/responses@1,anthropic/messages@1"
+	decisionModels := map[string]struct{}{
+		"llm-semantic-router/decision-1.0-kai-0.6b": {},
+		"llm-semantic-router/decision-1.0-lex-0.6b": {},
+		"llm-semantic-router/decision-1.0-eos-0.8b": {},
+		"llm-semantic-router/decision-1.0-sol-2b":   {},
+		"llm-semantic-router/decision-1.0-nox-4b":   {},
+		"llm-semantic-router/decision-1.0-lux-9b":   {},
+	}
+	seenDecisionModels := map[string]struct{}{}
+	for _, model := range document.Models {
+		if model.Kind == "virtual" && strings.Join(model.Protocols, ",") != expectedVirtualProtocols {
+			t.Fatalf("virtual model %s has incorrectly scoped protocols: %v", model.ID, model.Protocols)
+		}
+		if model.EvaluationClass == "decision" {
+			if _, expected := decisionModels[model.ID]; !expected {
+				t.Fatalf("unexpected Decision evaluation class on %s", model.ID)
+			}
+			seenDecisionModels[model.ID] = struct{}{}
+		}
+	}
+	if len(seenDecisionModels) != len(decisionModels) {
+		t.Fatalf("Decision evaluation classes=%v want=%v", seenDecisionModels, decisionModels)
+	}
+}
+
+func TestCatalogModelEvaluationClassIsPhysicalAndExplicit(t *testing.T) {
+	t.Parallel()
+
+	for name, test := range map[string]struct {
+		model modelcatalog.ModelCard
+		valid bool
+	}{
+		"implicit general LLM": {model: modelcatalog.ModelCard{Kind: "physical"}, valid: true},
+		"explicit general LLM": {model: modelcatalog.ModelCard{Kind: "physical", EvaluationClass: "general_llm"}, valid: true},
+		"Decision":             {model: modelcatalog.ModelCard{Kind: "physical", EvaluationClass: "decision"}, valid: true},
+		"unknown physical":     {model: modelcatalog.ModelCard{Kind: "physical", EvaluationClass: "other"}, valid: false},
+		"virtual omitted":      {model: modelcatalog.ModelCard{Kind: "virtual"}, valid: true},
+		"virtual classified":   {model: modelcatalog.ModelCard{Kind: "virtual", EvaluationClass: "decision"}, valid: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			if got := validCatalogModelEvaluationClass(test.model); got != test.valid {
+				t.Fatalf("valid=%v want=%v", got, test.valid)
+			}
+		})
 	}
 }
 
@@ -623,6 +688,7 @@ func validModelCatalogPayload(extra string) string {
     "entrypoint":"vllm-sr/mom-v1-blend",
     "recipe":"balance",
     "lifecycle":"active",
+    "protocols":["openai/chat-completions@1"],
     "capabilities":["chat"],
     "modalities":{"input":["text"],"output":["text"]},
     "traits":["balanced","chat"],

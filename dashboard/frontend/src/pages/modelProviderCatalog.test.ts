@@ -40,6 +40,16 @@ describe('model provider catalog contracts', () => {
     )
   })
 
+  it('keeps specialized private runtimes out of the Router upstream picker', () => {
+    const providers = generatedCatalog.providers as CatalogProvider[]
+    const decisionRuntime = providers.find((provider) => provider.id === 'decision-runtime')
+
+    expect(decisionRuntime?.category).toBe('private_runtime')
+    expect(decisionRuntime?.default_protocol).toBe('typesafe/systemone@1')
+    expect(modelProviderCatalog.map((provider) => provider.id)).not.toContain('decision-runtime')
+    expect(modelProviderCatalog.map((provider) => provider.id)).toContain('vllm')
+  })
+
   it('derives model discovery from the provider operation contract', () => {
     expect(
       modelProviderCatalog.find((provider) => provider.id === 'openai')?.supportsModelDiscovery,
@@ -88,13 +98,23 @@ describe('model provider catalog presentation', () => {
     expect(modelProviderCatalog.some((provider) => !provider.featured)).toBe(true)
   })
 
-  it('keeps custom-only provider contracts available without claiming model mappings', () => {
+  it('keeps every Router-compatible provider available without claiming model mappings', () => {
     const providers = generatedCatalog.providers as CatalogProvider[]
     const customOnly = providers.find((provider) => !provider.models?.length)
+    const supportedProtocols = new Set([
+      'openai/chat-completions@1',
+      'openai/responses@1',
+      'anthropic/messages@1',
+    ])
+    const connectable = providers.filter((provider) =>
+      supportedProtocols.has(provider.default_protocol),
+    )
 
     expect(customOnly).toBeDefined()
     expect(modelProviderCatalog.map((provider) => provider.id)).toContain(customOnly!.id)
-    expect(modelProviderCatalog).toHaveLength(providers.length)
+    expect(modelProviderCatalog.map((provider) => provider.id)).toEqual(
+      connectable.map((provider) => provider.id),
+    )
   })
 })
 

@@ -21,6 +21,75 @@ describe('built-in model catalog API transport', () => {
 })
 
 describe('built-in model catalog API snapshot identity', () => {
+  it('keeps virtual-model protocols explicit and SystemOne provider-scoped', () => {
+    const protocols = new Set(
+      (validCatalog.protocols as Array<Record<string, unknown>>).map((protocol) => protocol.id),
+    )
+    const models = validCatalog.models as Array<Record<string, unknown>>
+    const virtualModels = models.filter((model) => model.kind === 'virtual')
+
+    expect(virtualModels.length).toBeGreaterThan(0)
+    expect(
+      virtualModels.every(
+        (model) =>
+          Array.isArray(model.protocols) &&
+          model.protocols.length > 0 &&
+          model.protocols.every(
+            (protocol) => protocol !== 'typesafe/systemone@1' && protocols.has(protocol),
+          ),
+      ),
+    ).toBe(true)
+  })
+
+  it('publishes the six Decision cards with an explicit evaluation class', () => {
+    const models = validCatalog.models as Array<Record<string, unknown>>
+    const decisionModels = models.filter((model) => model.evaluation_class === 'decision')
+
+    expect(decisionModels.map((model) => model.id).sort()).toEqual(
+      [
+        'llm-semantic-router/decision-1.0-eos-0.8b',
+        'llm-semantic-router/decision-1.0-kai-0.6b',
+        'llm-semantic-router/decision-1.0-lex-0.6b',
+        'llm-semantic-router/decision-1.0-lux-9b',
+        'llm-semantic-router/decision-1.0-nox-4b',
+        'llm-semantic-router/decision-1.0-sol-2b',
+      ].sort(),
+    )
+  })
+
+  it('rejects unknown and virtual-only evaluation classes', async () => {
+    const unknown = structuredClone(validCatalog)
+    const unknownModels = unknown.models as Array<Record<string, unknown>>
+    unknownModels.find((model) => model.kind === 'physical')!.evaluation_class = 'other'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(unknown), { status: 200 })),
+    )
+    await expect(getBuiltInModelCatalog()).rejects.toBeInstanceOf(ModelCatalogApiError)
+
+    const virtual = structuredClone(validCatalog)
+    const virtualModels = virtual.models as Array<Record<string, unknown>>
+    virtualModels.find((model) => model.kind === 'virtual')!.evaluation_class = 'decision'
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(virtual), { status: 200 })),
+    )
+    await expect(getBuiltInModelCatalog()).rejects.toBeInstanceOf(ModelCatalogApiError)
+  })
+
+  it('rejects an unregistered virtual-model protocol', async () => {
+    const malformed = structuredClone(validCatalog)
+    const models = malformed.models as Array<Record<string, unknown>>
+    const model = models.find((item) => item.kind === 'virtual')!
+    model.protocols = ['example/missing@1']
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(malformed), { status: 200 })),
+    )
+
+    await expect(getBuiltInModelCatalog()).rejects.toBeInstanceOf(ModelCatalogApiError)
+  })
+
   it.each(['physical', 'virtual'])('rejects an empty %s verification date', async (kind) => {
     const catalog = structuredClone(validCatalog)
     const models = catalog.models as Array<Record<string, unknown>>

@@ -139,6 +139,15 @@ inventory:
           - zai/glm-5.3
           - zai/glm-5.2
           - zai/glm-5.1
+      - publisher: vLLM Semantic Router
+        min_representatives: 6
+        representative_models:
+          - llm-semantic-router/decision-1.0-kai-0.6b
+          - llm-semantic-router/decision-1.0-lex-0.6b
+          - llm-semantic-router/decision-1.0-eos-0.8b
+          - llm-semantic-router/decision-1.0-sol-2b
+          - llm-semantic-router/decision-1.0-nox-4b
+          - llm-semantic-router/decision-1.0-lux-9b
       - publisher: xAI
         representative_models:
           - xai/grok-4.6
