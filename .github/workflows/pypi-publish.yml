@@ -250,11 +250,12 @@ jobs:
           printf '%s' "$GHCR_TOKEN" | skopeo login --authfile "$REGISTRY_AUTH_FILE" --username "$GITHUB_ACTOR" --password-stdin ghcr.io
           evidence=.agent-harness/decision-release-evidence
           lock="$evidence/src/vllm-sr/cli/decision_runtime/decision-images.lock.json"
+          receipt="$evidence/.agent-harness/decision-rocm/qualification.json"
           rocm_ref="$(cat "$evidence/.agent-harness/decision-release/rocm-ref.txt")"
           python tools/ci/decision_image_lock_release.py validate \
             --owner "$GITHUB_REPOSITORY_OWNER" \
             --cpu-digest-file "$evidence/.agent-harness/decision-cpu/published-digest.txt" \
-            --rocm-receipt "$evidence/.agent-harness/decision-rocm/qualification.json" \
+            --rocm-receipt "$receipt" \
             --rocm-published-ref "$rocm_ref" --lock "$lock"
           shopt -s nullglob
           wheels=(dist/*.whl)
@@ -263,9 +264,14 @@ jobs:
           test "${#sdists[@]}" -eq 1
           python tools/ci/decision_image_lock_release.py check-dist \
             --lock "$lock" --wheel "${wheels[0]}" --sdist "${sdists[0]}"
+          candidate_ref="$(python3 -c 'import json, sys; from pathlib import Path; print(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["candidate_ref"])' "$receipt")"
           python tools/ci/decision_perf_release_gate.py validate \
             --report "$evidence/.agent-harness/decision-performance/report.json" \
-            --source-sha "$GITHUB_SHA"
+            --source-sha "$GITHUB_SHA" \
+            --qualification-receipt "$receipt" \
+            --owner "$GITHUB_REPOSITORY_OWNER" \
+            --candidate-ref "$candidate_ref" \
+            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
       - run: pip install twine
 
       - name: Publish verified package

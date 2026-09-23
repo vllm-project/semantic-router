@@ -201,6 +201,20 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         self.assertIn(
             "decision_perf_release_gate.py validate", commands[validate_index]
         )
+        self.assertIn(
+            'receipt="$evidence/.agent-harness/decision-rocm/qualification.json"',
+            commands[validate_index],
+        )
+        self.assertIn('candidate_ref="$(python3 -c ', commands[validate_index])
+        self.assertIn('"$receipt")"', commands[validate_index])
+        for argument in (
+            '--qualification-receipt "$receipt"',
+            '--owner "$GITHUB_REPOSITORY_OWNER"',
+            '--candidate-ref "$candidate_ref"',
+            '--run-id "$GITHUB_RUN_ID"',
+            '--run-attempt "$GITHUB_RUN_ATTEMPT"',
+        ):
+            self.assertIn(argument, commands[validate_index])
         self.assertEqual(steps[validate_index]["if"], "inputs.qualified-decision")
         self.assertIn("twine upload dist/*.whl dist/*.tar.gz\n", commands[upload_index])
 
