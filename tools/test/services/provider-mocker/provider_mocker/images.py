@@ -17,6 +17,7 @@ router = APIRouter()
 
 @router.post("/v1/images/generations")
 async def images(request: Request):
+    raw_body = await request.body()
     body, error = await parse_provider_request(request, "openai_images")
     if error is not None:
         return error
@@ -34,7 +35,7 @@ async def images(request: Request):
     if not isinstance(body["prompt"], str) or not body["prompt"].strip():
         return invalid_request_response("prompt must be a non-empty string", "prompt")
     session = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session, body, request.headers)
+    request.app.state.request_store.record(session, body, request.headers, raw_body)
     await apply_fixture_delay()
     return {
         "created": 1,
