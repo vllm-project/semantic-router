@@ -15,6 +15,7 @@ from .catalog_adapter import (
     resolve_decision_runtime_model,
 )
 from .physical_batching import PhysicalBatchBackend
+from .metrics import RuntimeMetrics
 from .row_executor import TorchDecisionRowExecutor
 from .runtime_profile import RuntimeProfileError
 from .scheduler import ModelScheduler
@@ -46,7 +47,9 @@ class AssembledRuntime:
     scheduler: ModelScheduler
 
 
-def assemble_runtime(config: RuntimeLaunchConfig) -> AssembledRuntime:
+def assemble_runtime(
+    config: RuntimeLaunchConfig, *, metrics: RuntimeMetrics | None = None
+) -> AssembledRuntime:
     """Verify identity and bytes before loading any model framework."""
 
     _validate_config(config)
@@ -78,6 +81,7 @@ def assemble_runtime(config: RuntimeLaunchConfig) -> AssembledRuntime:
         executor,
         physical_batch_size=config.max_batch,
         max_pending_rows=MAX_PENDING_ROWS,
+        metrics=metrics,
     )
     scheduler = ModelScheduler(
         (descriptor.name,),

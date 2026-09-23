@@ -349,7 +349,9 @@ def test_server_lifespan_closes_physical_backend(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
         server,
         "assemble_runtime",
-        lambda config: SimpleNamespace(backend=backend, scheduler=scheduler),
+        lambda config, *, metrics: SimpleNamespace(
+            backend=backend, scheduler=scheduler
+        ),
     )
     app = server.create_runtime_app(_config(tmp_path))
 

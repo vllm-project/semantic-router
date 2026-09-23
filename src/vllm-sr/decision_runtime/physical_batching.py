@@ -10,6 +10,7 @@ cannot silently monopolize every physical batch.
 from __future__ import annotations
 
 import asyncio
+import time
 from collections import deque
 from collections.abc import Awaitable, Sequence
 from contextlib import suppress
@@ -29,6 +30,7 @@ from .backend import (
     UnknownModelError,
 )
 from .contracts import JsonContent, Question, SystemOneRequest
+from .metrics import RuntimeMetrics
 
 
 class PhysicalBatchOverloadedError(BackendOverloadedError):
@@ -144,6 +146,7 @@ class PhysicalBatchBackend(DecisionBackend):
         physical_batch_size: int = 8,
         max_pending_rows: int = 4096,
         coalesce_seconds: float = 0.0005,
+        metrics: RuntimeMetrics | None = None,
     ) -> None:
         if physical_batch_size < 1:
             raise ValueError("physical_batch_size must be positive")
@@ -156,6 +159,7 @@ class PhysicalBatchBackend(DecisionBackend):
         self.physical_batch_size = physical_batch_size
         self.max_pending_rows = max_pending_rows
         self.coalesce_seconds = coalesce_seconds
+        self._metrics = metrics
         self._condition = asyncio.Condition()
         self._pending: deque[_RowJob] = deque()
         self._pending_rows = 0
@@ -301,7 +305,14 @@ class PhysicalBatchBackend(DecisionBackend):
 
         if not rows:
             raise BackendContractError("request produced no inference rows")
-        prepared = await self._executor.prepare_rows(rows)
+        started = time.perf_counter()
+        try:
+            prepared = await self._executor.prepare_rows(rows)
+        finally:
+            if self._metrics is not None:
+                self._metrics.record_row_preparation(
+                    self._model.name, time.perf_counter() - started
+                )
         _validate_prepared_rows(rows, prepared)
         return prepared
 
@@ -351,12 +362,20 @@ class PhysicalBatchBackend(DecisionBackend):
                 if not selected:
                     continue
                 rows = tuple(item.row for item in selected)
+                started = time.perf_counter()
                 try:
                     results = await self._executor.predict_rows(rows)
                     _validate_executor_results(tuple(row.row for row in rows), results)
                 except Exception as error:
                     await self._fail_jobs(selected, error)
                     continue
+                finally:
+                    if self._metrics is not None:
+                        self._metrics.record_physical_batch(
+                            self._model.name,
+                            len(rows),
+                            time.perf_counter() - started,
+                        )
                 await self._complete_rows(selected, results)
             except asyncio.CancelledError as error:
                 failure: BaseException = error

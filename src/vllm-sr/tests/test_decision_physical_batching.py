@@ -19,6 +19,7 @@ from decision_runtime.backend import (  # noqa: E402
     ModelDescriptor,
 )
 from decision_runtime.contracts import SystemOneRequest  # noqa: E402
+from decision_runtime.metrics import RuntimeMetrics  # noqa: E402
 from decision_runtime.physical_batching import (  # noqa: E402
     DecisionRow,
     DecisionRowResult,
@@ -670,3 +671,37 @@ def test_executor_identity_error_fails_whole_job_without_partial_response():
             await backend.aclose()
 
     asyncio.run(scenario())
+
+
+def test_physical_batch_metrics_measure_actual_rows_without_request_labels():
+    async def scenario():
+        metrics = RuntimeMetrics()
+        backend = PhysicalBatchBackend(
+            MODEL,
+            RecordingExecutor(),
+            physical_batch_size=8,
+            coalesce_seconds=0,
+            metrics=metrics,
+        )
+        try:
+            await backend.infer(request("shared state", ("first", "second")))
+        finally:
+            await backend.aclose()
+        return metrics.render(())
+
+    rendered = asyncio.run(scenario())
+    label = f'model="{MODEL.name}"'
+    assert f"decision_runtime_row_preparations_total{{{label}}} 1" in rendered
+    assert f"decision_runtime_physical_batches_total{{{label}}} 1" in rendered
+    assert f"decision_runtime_physical_batch_rows_total{{{label}}} 2" in rendered
+    assert (
+        f'decision_runtime_physical_batch_size_bucket{{{label},le="1"}} 0' in rendered
+    )
+    assert (
+        f'decision_runtime_physical_batch_size_bucket{{{label},le="2"}} 1' in rendered
+    )
+    assert (
+        f'decision_runtime_physical_batch_size_bucket{{{label},le="+Inf"}} 1'
+        in rendered
+    )
+    assert "shared state" not in rendered

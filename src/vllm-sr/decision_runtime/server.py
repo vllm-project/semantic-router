@@ -6,16 +6,19 @@ from contextlib import asynccontextmanager
 
 from .api import create_app
 from .engine import DecisionEngine
+from .metrics import RuntimeMetrics
 from .runtime_factory import RuntimeLaunchConfig, assemble_runtime
 
 
 def create_runtime_app(config: RuntimeLaunchConfig):
     """Load one pinned model before the server can report readiness."""
 
-    assembled = assemble_runtime(config)
+    metrics = RuntimeMetrics()
+    assembled = assemble_runtime(config, metrics=metrics)
     app = create_app(
         DecisionEngine(assembled.backend),
         scheduler=assembled.scheduler,
+        metrics=metrics,
     )
 
     @asynccontextmanager
