@@ -61,13 +61,22 @@ This proposal covers logical-model changes after upstream execution failure. It 
 not replace same-model transport retry, circuit breaking, outlier ejection, or
 ordinary semantic selection.
 
-## Open questions
+| Dimension | Gateway Transport Retry | Router Model Fallback |
+| :--- | :--- | :--- |
+| **Layer** | Envoy / network reverse-proxy | Semantic Router Data Plane |
+| **Scope** | Same logical model, alternative replica endpoints | Different logical model from hard-eligible candidates |
+| **Request Mutation** | None (identical wire bytes retransmitted) | Re-encoded from neutral request through candidate backend codec |
+| **Credentials & Auth** | Shared across replicas | Model- and provider-scoped credentials re-resolved |
+| **Context & Capabilities** | Unchanged | Target model context window and wire capabilities re-validated |
+| **Decision Engine** | Completely bypassed | Uses initial decision candidate ordering; never re-classifies |
 
-- Where are compatibility sets declared?
-- Which provider failures are safe to replay?
-- How is usage reconciled when a failed attempt consumed tokens?
-- Which streaming protocols expose a reliable commit point?
-- How does protection state record a fallback-driven switch?
+## Resolved decisions
+
+- **Where are compatibility sets declared?** In the decision's `modelRefs`. The Decision Engine validates context windows and required capabilities to construct `VSREligibleModelRefs`.
+- **Which provider failures are safe to replay?** Connection drops, connect/read timeouts, and allowlisted 5xx (`502`, `503`, `504`) before response commit. 4xx errors and context cancellations are non-retryable.
+- **How is usage reconciled when a failed attempt consumed tokens?** An `ExecutionRecord` tracks all attempts. Final client usage reflects only the successful model; discarded tokens are recorded separately for auditing without duplicate billing.
+- **Which streaming protocols expose a reliable commit point?** SSE and chunked HTTP commit at the first byte chunk or header dispatch (`ResponseWriter.Flush()`). Fallback is only allowed prior to this point.
+- **How does protection state record a fallback-driven switch?** The fallback orchestrator records attempt outcomes and emits audit diagnostics capturing the failed model, reason, and selected fallback candidate.
 
 ## References
 

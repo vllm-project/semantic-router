@@ -12,7 +12,7 @@ const python = process.env.VLLM_SR_DOCS_PYTHON
   || localPython
   || 'python3'
 
-// Check committed artifacts before any build-time generators can run.
+// Check committed artifacts before the website consumes them.
 // Keep using the authoritative generators, rather than a second JS compiler.
 const commands = [
   [python, 'tools/catalog/generate_model_catalog.py', '--check'],
