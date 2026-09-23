@@ -134,7 +134,8 @@ class Client:
             )
         except requests.RequestException as exc:
             raise ValueError(
-                "Service request failed; inspect runs before submitting again (requests are never retried)"
+                "Service request failed; inspect saved runs and dataset preparations "
+                "before submitting again (requests are never retried)"
             ) from exc
         data = response.json()
         if response.status_code >= HTTPStatus.BAD_REQUEST:

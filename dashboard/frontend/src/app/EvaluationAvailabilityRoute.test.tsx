@@ -3,13 +3,20 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import EvaluationAvailabilityRoute from './EvaluationAvailabilityRoute'
 
-const renderRoute = (props: { available: boolean; isLoading: boolean; reason?: string }) =>
+const renderRoute = (props: {
+  available: boolean
+  isLoading: boolean
+  reason?: string
+  settingsError?: string
+}) =>
   renderToStaticMarkup(
     <MemoryRouter>
       <EvaluationAvailabilityRoute
         available={props.available}
         isLoading={props.isLoading}
         reason={props.reason ?? ''}
+        settingsError={props.settingsError ?? null}
+        onRefreshAccess={() => undefined}
       >
         <main>Evaluation workspace</main>
       </EvaluationAvailabilityRoute>
@@ -35,6 +42,18 @@ describe('EvaluationAvailabilityRoute', () => {
   it('does not expose the workspace while settings are loading', () => {
     const markup = renderRoute({ available: false, isLoading: true })
     expect(markup).toContain('Checking Evaluation')
+    expect(markup).not.toContain('Evaluation workspace')
+  })
+
+  it('offers settings recovery without exposing a workspace with unverified access', () => {
+    const markup = renderRoute({
+      available: true,
+      isLoading: false,
+      settingsError: 'Dashboard access settings are unavailable.',
+    })
+    expect(markup).toContain('Unable to check Evaluation access')
+    expect(markup).toContain('Dashboard access settings are unavailable.')
+    expect(markup).toContain('Refresh access')
     expect(markup).not.toContain('Evaluation workspace')
   })
 })
