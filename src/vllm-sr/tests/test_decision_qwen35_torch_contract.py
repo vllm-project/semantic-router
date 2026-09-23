@@ -1,0 +1,550 @@
+"""Dependency-free fail-closed tests for the owned Qwen Torch loader."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import sys
+from functools import wraps
+from pathlib import Path
+from types import FunctionType, SimpleNamespace
+
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from decision_runtime.qwen35_torch import (  # noqa: E402
+    QWEN_PROMPT_VERSION,
+    RELEASED_MAX_INPUT_TOKENS,
+    QwenRocmProfileBinding,
+    Qwen35RuntimeError,
+    Qwen35TorchRuntime,
+    _bind_rocm_profile,
+    _install_cpu_reference_kernels,
+    _validate_device,
+    _validated_rocm_profile,
+)
+
+
+def _artifact(tmp_path: Path, *, prompt_version: str = QWEN_PROMPT_VERSION) -> Path:
+    root = tmp_path / "artifact"
+    (root / "backbone").mkdir(parents=True)
+    (root / "backbone/config.json").write_text("{}")
+    (root / "decision_config.json").write_text(
+        json.dumps(
+            {
+                "prompt_version": prompt_version,
+                "head_dim": 256,
+                "base_model": "Qwen/Qwen3.5-2B",
+            }
+        )
+    )
+    (root / "decision_head.safetensors").write_bytes(b"not loaded in this test")
+    (root / "runtime.json").write_text("{}")
+    (root / "tokenizer.json").write_text("{}")
+    (root / "tokenizer_config.json").write_text("{}")
+    return root
+
+
+def test_loader_validates_release_contract_before_gpu_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module",
+        lambda name: imported.append(name),
+    )
+    root = _artifact(tmp_path, prompt_version="wrong")
+
+    with pytest.raises(Qwen35RuntimeError, match="prompt version"):
+        Qwen35TorchRuntime.load(
+            root,
+            temperature=1.0,
+            max_length=16384,
+            backend="rocm",
+        )
+
+    assert imported == []
+
+
+@pytest.mark.parametrize(
+    ("temperature", "max_length", "backend", "message"),
+    (
+        (0.0, 16384, "rocm", "temperature"),
+        (float("nan"), 16384, "rocm", "temperature"),
+        (1.0, 0, "rocm", "length"),
+        (1.0, RELEASED_MAX_INPUT_TOKENS + 1, "rocm", "length"),
+        (1.0, 16384, "mlx", "cpu, rocm, or cuda"),
+    ),
+)
+def test_loader_rejects_invalid_profile_values_before_import(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    temperature,
+    max_length,
+    backend,
+    message,
+) -> None:
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(Qwen35RuntimeError, match=message):
+        Qwen35TorchRuntime.load(
+            _artifact(tmp_path),
+            temperature=temperature,
+            max_length=max_length,
+            backend=backend,
+        )
+
+    assert imported == []
+
+
+def test_loader_rejects_non_sdpa_attention_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(Qwen35RuntimeError, match="SDPA"):
+        Qwen35TorchRuntime.load(
+            _artifact(tmp_path),
+            temperature=1.0,
+            max_length=16384,
+            backend="rocm",
+            attention="eager",
+        )
+
+    assert imported == []
+
+
+def _profiled_artifact(tmp_path: Path, *, status: str = "hardware-qualified") -> Path:
+    root = _artifact(tmp_path)
+    profile_root = root / "runtime-profile"
+    profile_root.mkdir()
+    entries = {}
+    for batch_size in range(1, 33):
+        key = [
+            128,
+            batch_size,
+            "torch.bfloat16",
+            "torch.bfloat16",
+            "torch.float32",
+        ]
+        encoded = json.dumps(key, sort_keys=True, separators=(",", ":"))
+        entries[hashlib.md5(encoded.encode(), usedforsecurity=False).hexdigest()] = {
+            "autotune_key": key,
+            "config": {
+                "kwargs": {"BT": 8},
+                "num_warps": 1,
+                "num_stages": 3,
+                "num_ctas": 1,
+                "maxnreg": None,
+                "pre_hook": None,
+                "ir_override": None,
+            },
+        }
+    kernel_bytes = json.dumps(
+        {"default_config": None, "autotune_entries": entries}, sort_keys=True
+    ).encode()
+    (profile_root / "l2norm_fwd_kernel.json").write_bytes(kernel_bytes)
+    kernel_sha = hashlib.sha256(kernel_bytes).hexdigest()
+    source_hashes = {
+        "modules/l2norm.py": "1" * 64,
+        "ops/utils/cache.py": "2" * 64,
+    }
+    profile_bytes = json.dumps(
+        {
+            "format": "decision-fla-l2norm-profile-v1",
+            "status": status,
+            "cache_mode": "strict",
+            "supported": {
+                "head_dimension": 128,
+                "key_heads": 16,
+                "body_dtype": "bfloat16",
+                "output_dtype": "bfloat16",
+                "rstd_dtype": "float32",
+                "batch_size_min": 1,
+                "batch_size_max": 8,
+                "padded_tokens_max": 16384,
+                "NB_min": 1,
+                "NB_max": 32,
+                "NB_formula": "ceil(B*padded_tokens*16/65536)",
+                "unknown_key": "raise before kernel/autotune",
+            },
+            "runtime": {
+                "torch": "2.12.0+git6bbd260",
+                "hip": "7.2.53211",
+                "triton": "3.7.1",
+                "fla": "0.5.2",
+                "gpu_arch": "gfx942",
+            },
+            "files": [{"file": "l2norm_fwd_kernel.json", "sha256": kernel_sha}],
+            "fla_source_sha256": source_hashes,
+        },
+        sort_keys=True,
+    ).encode()
+    (profile_root / "profile.json").write_bytes(profile_bytes)
+    profile_sha = hashlib.sha256(profile_bytes).hexdigest()
+    guard_bytes = b"published guard contract; never executed"
+    guard_path = root / "code" / "profile_guard.py"
+    guard_path.parent.mkdir()
+    guard_path.write_bytes(guard_bytes)
+    guard_sha = hashlib.sha256(guard_bytes).hexdigest()
+    (root / "runtime.json").write_text(
+        json.dumps(
+            {
+                "normalization_profile": {
+                    "kind": "decision-fla-l2norm-profile-v1",
+                    "profile_file": "runtime-profile/profile.json",
+                    "profile_sha256": profile_sha,
+                    "guard_file": "code/profile_guard.py",
+                    "guard_sha256": guard_sha,
+                    "validated_arch": "gfx942",
+                }
+            }
+        )
+    )
+    return root
+
+
+def test_candidate_profile_is_not_runtime_qualification(tmp_path: Path) -> None:
+    root = _profiled_artifact(tmp_path, status="diagnostic-only")
+    metadata = json.loads((root / "decision_config.json").read_text())
+
+    with pytest.raises(Qwen35RuntimeError, match="hardware qualification"):
+        _validated_rocm_profile(root, metadata)
+
+
+def test_profile_validates_supported_envelope_and_fla_sources(tmp_path: Path) -> None:
+    root = _profiled_artifact(tmp_path)
+    profile_path = root / "runtime-profile/profile.json"
+    profile = json.loads(profile_path.read_text())
+    profile["supported"]["batch_size_max"] = 64
+    profile_bytes = json.dumps(profile, sort_keys=True).encode()
+    profile_path.write_bytes(profile_bytes)
+    runtime = json.loads((root / "runtime.json").read_text())
+    runtime["normalization_profile"]["profile_sha256"] = hashlib.sha256(
+        profile_bytes
+    ).hexdigest()
+    (root / "runtime.json").write_text(json.dumps(runtime))
+    metadata = json.loads((root / "decision_config.json").read_text())
+
+    with pytest.raises(Qwen35RuntimeError, match="execution envelope"):
+        _validated_rocm_profile(root, metadata)
+
+
+def test_binder_receipt_must_prove_source_cache_and_guard_enforcement(
+    tmp_path: Path,
+) -> None:
+    root = _profiled_artifact(tmp_path)
+    metadata = json.loads((root / "decision_config.json").read_text())
+    profile = _validated_rocm_profile(root, metadata)
+    assert profile is not None
+
+    class IncompleteBinder:
+        def bind(self, selected):
+            return QwenRocmProfileBinding(
+                profile_sha256=selected.profile_sha256,
+                kernel_config_sha256=selected.kernel_config_sha256,
+                guard_contract_sha256=selected.guard_contract_sha256,
+                runtime=selected.runtime,
+                fla_source_sha256=selected.fla_source_sha256,
+                physical_batch_size_min=selected.physical_batch_size_min,
+                physical_batch_size_max=selected.physical_batch_size_max,
+                normalization_blocks_min=selected.normalization_blocks_min,
+                normalization_blocks_max=selected.normalization_blocks_max,
+                strict=True,
+                source_hashes_verified=True,
+                strict_cache_enforced=False,
+                unknown_key_guard_enforced=True,
+            )
+
+    with pytest.raises(Qwen35RuntimeError, match="invalid receipt"):
+        _bind_rocm_profile(IncompleteBinder(), profile)
+
+
+def test_profile_keeps_physical_batch_and_normalization_blocks_distinct(
+    tmp_path: Path,
+) -> None:
+    root = _profiled_artifact(tmp_path)
+    metadata = json.loads((root / "decision_config.json").read_text())
+    profile = _validated_rocm_profile(root, metadata)
+    assert profile is not None
+
+    # Eight request rows at a short padded length still select one l2norm
+    # normalization block; NB is a kernel shape, not a request count.
+    assert (
+        profile.normalization_blocks_for(physical_batch_size=8, padded_tokens=256) == 1
+    )
+    assert (
+        profile.normalization_blocks_for(physical_batch_size=8, padded_tokens=16_384)
+        == 32
+    )
+    with pytest.raises(Qwen35RuntimeError, match="physical batch size"):
+        profile.normalization_blocks_for(physical_batch_size=9, padded_tokens=256)
+
+
+def test_profiled_rocm_release_requires_owned_binder_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(Qwen35RuntimeError, match="owned strict ROCm profile binder"):
+        Qwen35TorchRuntime.load(
+            _profiled_artifact(tmp_path),
+            temperature=1.0,
+            max_length=16384,
+            backend="rocm",
+        )
+
+    assert imported == []
+
+
+def test_profile_hash_mismatch_fails_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _profiled_artifact(tmp_path)
+    runtime = json.loads((root / "runtime.json").read_text())
+    runtime["normalization_profile"]["profile_sha256"] = "0" * 64
+    (root / "runtime.json").write_text(json.dumps(runtime))
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(Qwen35RuntimeError, match="profile hash mismatch"):
+        Qwen35TorchRuntime.load(
+            root,
+            temperature=1.0,
+            max_length=16384,
+            backend="rocm",
+        )
+
+    assert imported == []
+
+
+def test_profile_path_traversal_fails_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _profiled_artifact(tmp_path)
+    runtime = json.loads((root / "runtime.json").read_text())
+    runtime["normalization_profile"]["profile_file"] = "../profile.json"
+    (root / "runtime.json").write_text(json.dumps(runtime))
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(Qwen35RuntimeError, match="unsafe.*profile path"):
+        Qwen35TorchRuntime.load(
+            root,
+            temperature=1.0,
+            max_length=16384,
+            backend="rocm",
+        )
+
+    assert imported == []
+
+
+def test_cpu_loader_requires_pinned_manifest_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(Qwen35RuntimeError, match="pinned release manifest"):
+        Qwen35TorchRuntime.load(
+            _artifact(tmp_path),
+            temperature=1.0,
+            max_length=1024,
+            backend="cpu",
+        )
+
+    assert imported == []
+
+
+def test_cpu_loader_rejects_wrong_manifest_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _artifact(tmp_path)
+    (root / "MODEL_MANIFEST.json").write_text("{}")
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module",
+        lambda name: imported.append(name),
+    )
+
+    with pytest.raises(Qwen35RuntimeError, match="manifest digest mismatch"):
+        Qwen35TorchRuntime.load(
+            root,
+            temperature=1.0,
+            max_length=1024,
+            backend="cpu",
+            expected_manifest_sha256="0" * 64,
+        )
+
+    assert imported == []
+
+
+def test_cpu_loader_converts_verified_body_to_fp32(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from decision_runtime import qwen35_torch
+
+    root = _artifact(tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        qwen35_torch,
+        "verify_release_manifest",
+        lambda *args, **kwargs: calls.append(kwargs["manifest_name"]),
+    )
+
+    class FakeModule:
+        def __init__(self, dtype="fp32"):
+            self.dtype = dtype
+            self.config = SimpleNamespace(hidden_size=16, use_cache=True)
+
+        def load_state_dict(self, *args, **kwargs):
+            pass
+
+        def to(self, device):
+            calls.append(device.type)
+            return self
+
+        def eval(self):
+            return self
+
+        def parameters(self):
+            return (SimpleNamespace(dtype=self.dtype),)
+
+    def from_pretrained(*args, **kwargs):
+        calls.append(kwargs["dtype"])
+        return FakeModule(dtype=kwargs["dtype"])
+
+    fake_torch = SimpleNamespace(
+        float32="fp32",
+        bfloat16="bf16",
+        device=lambda name: SimpleNamespace(type=name),
+    )
+    fake_transformers = SimpleNamespace(
+        __version__=qwen35_torch.SUPPORTED_TRANSFORMERS_VERSION,
+        AutoTokenizer=SimpleNamespace(from_pretrained=lambda *a, **k: object()),
+    )
+    fake_safetensors = SimpleNamespace(load_file=lambda *a, **k: {})
+    modules = {
+        "torch": fake_torch,
+        "transformers": fake_transformers,
+        "safetensors.torch": fake_safetensors,
+    }
+    monkeypatch.setattr(qwen35_torch, "_required_module", modules.__getitem__)
+    monkeypatch.setattr(
+        qwen35_torch.importlib,
+        "import_module",
+        lambda name: SimpleNamespace(
+            Qwen3_5TextModel=SimpleNamespace(from_pretrained=from_pretrained)
+        ),
+    )
+    monkeypatch.setattr(qwen35_torch, "_candidate_head", lambda *a: FakeModule())
+    monkeypatch.setattr(qwen35_torch, "_decision_model", lambda *a: FakeModule())
+    monkeypatch.setattr(
+        qwen35_torch,
+        "_install_cpu_reference_kernels",
+        lambda *a: calls.append("cpu-reference"),
+    )
+
+    runtime = Qwen35TorchRuntime.load(
+        root,
+        temperature=1.0,
+        max_length=1024,
+        backend="cpu",
+        expected_manifest_sha256="a" * 64,
+    )
+
+    assert runtime.device.type == "cpu"
+    assert runtime.rocm_profile_binding is None
+    assert calls == ["MODEL_MANIFEST.json", "fp32", "cpu", "cpu-reference"]
+    with pytest.raises(Qwen35RuntimeError, match="CPU device"):
+        _validate_device(
+            fake_torch,
+            SimpleNamespace(type="cuda"),
+            backend="cpu",
+            rocm_profile=None,
+        )
+
+
+def test_cpu_reference_binding_is_instance_local() -> None:
+    def reference_kernel():
+        return "reference"
+
+    reference_kernel = FunctionType(
+        reference_kernel.__code__.replace(co_filename="modeling_qwen3_5.py"),
+        {},
+        "causal_conv1d_fn",
+    )
+
+    @wraps(reference_kernel)
+    def accelerated_kernel():
+        return "accelerator"
+
+    def reference_forward(self):
+        _ = (
+            causal_conv1d_update,
+            torch_chunk_gated_delta_rule,
+            torch_recurrent_gated_delta_rule,
+        )
+        return causal_conv1d_fn()
+
+    reference_forward = FunctionType(
+        reference_forward.__code__.replace(co_filename="modeling_qwen3_5.py"),
+        {
+            "causal_conv1d_fn": accelerated_kernel,
+            "causal_conv1d_update": accelerated_kernel,
+            "torch_chunk_gated_delta_rule": accelerated_kernel,
+            "torch_recurrent_gated_delta_rule": accelerated_kernel,
+        },
+        "forward",
+    )
+
+    @wraps(reference_forward)
+    def accelerated_forward(self):
+        return "accelerator"
+
+    class FakeLayer:
+        forward = accelerated_forward
+
+        def __init__(self):
+            self.conv1d = object()
+
+    layer = FakeLayer()
+    other = FakeLayer()
+    modeling = SimpleNamespace(
+        Qwen3_5GatedDeltaNet=FakeLayer,
+        causal_conv1d_fn=accelerated_kernel,
+        causal_conv1d_update=reference_kernel,
+        torch_chunk_gated_delta_rule=reference_kernel,
+        torch_recurrent_gated_delta_rule=reference_kernel,
+    )
+    model = SimpleNamespace(modules=lambda: (layer,))
+
+    _install_cpu_reference_kernels(model, modeling)
+
+    assert layer.forward() == "reference"
+    assert other.forward() == "accelerator"
+    assert modeling.causal_conv1d_fn is accelerated_kernel
