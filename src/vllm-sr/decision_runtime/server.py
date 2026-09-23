@@ -1,90 +1,49 @@
-"""Development server entry point for the backend-neutral Decision API."""
+"""Production HTTP server for one verified, resident Decision model."""
 
 from __future__ import annotations
 
-import importlib
-import os
+from contextlib import asynccontextmanager
 
 from .api import create_app
-from .backend import ModelDescriptor
 from .engine import DecisionEngine
-from .fake_backend import FakeDecisionBackend
-from .scheduler import DEFAULT_MAX_CONCURRENCY, DEFAULT_MAX_QUEUE, ModelScheduler
+from .runtime_factory import RuntimeLaunchConfig, assemble_runtime
 
 
-def create_default_app():
-    """Create a deterministic contract server; it is not a real model server."""
+def create_runtime_app(config: RuntimeLaunchConfig):
+    """Load one pinned model before the server can report readiness."""
 
-    model_names = tuple(
-        name.strip()
-        for name in os.getenv("VLLM_SR_DECISION_MODELS", "decision-fake").split(",")
-        if name.strip()
+    assembled = assemble_runtime(config)
+    app = create_app(
+        DecisionEngine(assembled.backend),
+        scheduler=assembled.scheduler,
     )
-    if not model_names:
-        raise ValueError("VLLM_SR_DECISION_MODELS must name at least one model")
-    models = [
-        ModelDescriptor(
-            name=name,
-            description="Deterministic contract-development backend",
-            release_date="1970-01-01",
-        )
-        for name in model_names
-    ]
-    engine = DecisionEngine(FakeDecisionBackend(models))
-    scheduler = ModelScheduler(
-        model_names,
-        max_concurrency=_positive_env(
-            "VLLM_SR_DECISION_CONCURRENCY", DEFAULT_MAX_CONCURRENCY
-        ),
-        max_queue=_nonnegative_env("VLLM_SR_DECISION_QUEUE", DEFAULT_MAX_QUEUE),
-    )
-    return create_app(engine, scheduler=scheduler)
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        try:
+            yield
+        finally:
+            try:
+                await assembled.backend.aclose()
+            finally:
+                app.state.decision_backend_closed = True
+
+    app.router.lifespan_context = lifespan
+    app.state.decision_backend = assembled.backend
+    app.state.decision_backend_closed = False
+    return app
 
 
-def _positive_env(name: str, default: int) -> int:
-    value = _integer_env(name, default)
-    if value < 1:
-        raise ValueError(f"{name} must be positive")
-    return value
+def run_server(config: RuntimeLaunchConfig) -> None:
+    """Serve the already-verified app with one model-owning worker."""
 
+    import asyncio
+    import uvicorn
 
-def _nonnegative_env(name: str, default: int) -> int:
-    value = _integer_env(name, default)
-    if value < 0:
-        raise ValueError(f"{name} must be non-negative")
-    return value
-
-
-def _integer_env(name: str, default: int) -> int:
-    raw = os.getenv(name)
-    if raw is None:
-        return default
+    app = create_runtime_app(config)
     try:
-        return int(raw)
-    except ValueError as exc:
-        raise ValueError(f"{name} must be an integer") from exc
-
-
-app = create_default_app()
-
-
-def main() -> None:
-    """Run the optional Uvicorn server."""
-
-    try:
-        uvicorn = importlib.import_module("uvicorn")
-    except ImportError as exc:  # pragma: no cover - packaging guard
-        raise SystemExit(
-            "Install the server dependencies with "
-            "`pip install 'vllm-sr[decision-runtime]'`."
-        ) from exc
-    uvicorn.run(
-        "decision_runtime.server:app",
-        host=os.getenv("VLLM_SR_DECISION_HOST", "127.0.0.1"),
-        port=_positive_env("VLLM_SR_DECISION_PORT", 8000),
-        workers=1,
-    )
-
-
-if __name__ == "__main__":
-    main()
+        uvicorn.run(app, host=config.host, port=config.port, workers=1)
+    finally:
+        # Uvicorn can fail before entering ASGI lifespan.
+        if not app.state.decision_backend_closed:
+            asyncio.run(app.state.decision_backend.aclose())

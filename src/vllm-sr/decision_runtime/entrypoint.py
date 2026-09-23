@@ -1,12 +1,61 @@
-"""Dependency-light console entry point for the optional HTTP runtime."""
+"""Dependency-light console entry point for a pinned Decision runtime."""
 
 from __future__ import annotations
 
+import argparse
 import importlib
+import ipaddress
+from pathlib import Path
+from typing import Sequence
+
+from .runtime_factory import MAX_PENDING_ROWS, RuntimeLaunchConfig
 
 
-def main() -> None:
-    """Start the server or explain which optional extra is required."""
+def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
+    """Parse the exact host-side ``drun`` launch contract."""
+
+    parser = argparse.ArgumentParser(prog="vllm-sr-decision-runtime")
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--revision", required=True)
+    parser.add_argument("--backend", required=True, choices=("cpu", "rocm", "cuda"))
+    parser.add_argument("--artifact-root", required=True, type=Path)
+    parser.add_argument("--artifact-content-id", required=True)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--max-batch", type=int, required=True)
+    parser.add_argument("--max-concurrency", type=int, required=True)
+    parser.add_argument("--max-queue", type=int, required=True)
+    args = parser.parse_args(argv)
+    try:
+        ipaddress.ip_address(args.host)
+    except ValueError as error:
+        parser.error(f"--host must be an IP address: {error}")
+    if not args.artifact_root.is_absolute():
+        parser.error("--artifact-root must be absolute")
+    if not 1 <= args.port <= 65535:
+        parser.error("--port must be between 1 and 65535")
+    if not 1 <= args.max_batch <= MAX_PENDING_ROWS:
+        parser.error(f"--max-batch must be between 1 and {MAX_PENDING_ROWS}")
+    if args.max_concurrency < 1:
+        parser.error("--max-concurrency must be positive")
+    if args.max_queue < 0:
+        parser.error("--max-queue must be non-negative")
+    return RuntimeLaunchConfig(
+        model=args.model,
+        revision=args.revision,
+        backend=args.backend,
+        artifact_root=args.artifact_root,
+        artifact_content_id=args.artifact_content_id,
+        host=args.host,
+        port=args.port,
+        max_batch=args.max_batch,
+        max_concurrency=args.max_concurrency,
+        max_queue=args.max_queue,
+    )
+
+
+def main(argv: Sequence[str] | None = None) -> None:
+    """Start the real model server or explain the missing optional extra."""
 
     try:
         importlib.import_module("fastapi")
@@ -17,9 +66,10 @@ def main() -> None:
             "`pip install 'vllm-sr[decision-runtime]'`."
         ) from exc
 
-    from .server import main as server_main
+    config = parse_launch_args(argv)
+    from .server import run_server
 
-    server_main()
+    run_server(config)
 
 
 if __name__ == "__main__":
