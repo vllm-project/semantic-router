@@ -486,6 +486,7 @@ export interface DatasetSelection {
     case_count: number
     source_ids: string[]
     reason: string | null
+    reason_code?: string | null
   }>
   model_requests: 0
 }

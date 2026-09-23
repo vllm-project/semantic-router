@@ -86,6 +86,28 @@ make verify DOMAIN=<domain>
 make verify PROFILE=<profile>
 ```
 
+## 测试后端
+
+从源码运行 provider mocker 需要 Python 3.11 或更高版本。统一的 mocker 为协议、路由和故障测试提供确定性响应，在同一个轻量服务中覆盖 OpenAI Chat Completions、Responses、Anthropic Messages 和图像测试数据：
+
+```bash
+make test-provider-mocker
+make docker-run-provider-mocker
+# 也可以在独立 Python 环境中直接运行：
+make start-provider-mocker
+```
+
+设置 `PROVIDER_MOCKER_IMAGE` 可以复用已有镜像；未设置时，Docker 目标在本地构建服务。mocker 独立于产品 release 维护。镜像标签对应运行时代码、依赖锁文件、Dockerfile 和 `.dockerignore` 的内容哈希，仅文档或测试改动会复用已有镜像。CI 将标签解析为镜像 digest，并让各测试任务使用同一个产物；只有上述构建输入变化时才发布新的辅助镜像。
+
+需要真实生成时，使用可选的 tiny-model runner。它统一运行 `Qwen/Qwen3-0.6B`，固定上游 llama.cpp CPU 镜像 digest、模型 revision 和校验和，将 Q8_0 权重下载到忽略的缓存目录，并关闭 thinking，不再构建额外的推理镜像：
+
+```bash
+make tiny-model-smoke  # 健康检查、真实文本、SSE 结束和停止字符串
+make tiny-model-serve # 在 localhost:8000 前台运行真实后端
+```
+
+模型 smoke 限制 CPU、内存、上下文和输出长度。测试 Router 行为时，在独立终端运行后端，通过 `vllm-sr serve` 转发请求；协议边界条件由确定性测试覆盖。
+
 ## 校验本地栈
 
 已配置的 listener 是面向客户端的端点。空工作区生成的设置是 `http://localhost:8899`：

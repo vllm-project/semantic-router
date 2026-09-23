@@ -14,16 +14,33 @@ import (
 func TestAssetSelection(t *testing.T) {
 	for suite, count := range map[string]int{"runtime": 10, "perf": 4, "openvino": 2} {
 		for _, provider := range []string{"candle", "ort"} {
+			expectedCount := count
+			if suite == "runtime" {
+				if provider == "candle" {
+					expectedCount++
+				} else {
+					expectedCount += 2
+				}
+			}
 			m, specs, err := assets(suite, provider, t.TempDir())
-			if err != nil || len(m.Models) != count || len(specs) != count {
+			if err != nil || len(m.Models) != expectedCount || len(specs) != expectedCount {
 				t.Fatalf("%s/%s: models=%d specs=%d err=%v", suite, provider, len(m.Models), len(specs), err)
 			}
 			for i, spec := range specs {
+				if spec.PreparedArtifact != "" {
+					if provider != "ort" || spec.PreparedArtifact != "vela_omni" || filepath.Base(spec.LocalPath) != spec.ArtifactBundle || filepath.Base(filepath.Dir(spec.LocalPath)) != "vela-omni-artifacts" || !spec.Strict || spec.Revision != m.Models[i].Revision {
+						t.Fatalf("invalid prepared Omni contract: %+v", spec)
+					}
+					continue
+				}
 				if filepath.Base(spec.LocalPath) != spec.Revision || filepath.Base(filepath.Dir(spec.LocalPath)) != provider || !strings.Contains(spec.LocalPath, "Vela-") {
 					t.Fatalf("artifact is not isolated by runtime and revision: %s", spec.LocalPath)
 				}
 				if !spec.Strict || spec.Revision != m.Models[i].Revision || spec.RepoID != m.Models[i].RepoID || spec.CheckONNX != (provider == "ort") {
 					t.Fatalf("incomplete artifact contract: %+v", spec)
+				}
+				if m.Models[i].Name == "Halu" && (!slices.Contains(spec.RequiredFiles, "operating_point.json") || len(spec.RequiredFileGroups) != 1) {
+					t.Fatalf("Halu lost its token-span checkpoint: %+v", spec)
 				}
 				if m.Models[i].Name == "Hazard" {
 					if !slices.Contains(spec.RequiredFiles, "model.safetensors") || !slices.Contains(spec.RequiredFiles, "operating_point.json") || slices.Contains(spec.ExcludePatterns, "*.safetensors") {

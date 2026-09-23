@@ -6,23 +6,24 @@ type VideoProps = {
   src: string
   poster: string
   title: string
+  landscape?: boolean
   children: React.ReactNode
 }
 
-export function ArticleVideo({ src, poster, title, children }: VideoProps) {
+export function ArticleVideo({ src, poster, title, landscape = false, children }: VideoProps) {
   const videoUrl = useBaseUrl(src)
   const posterUrl = useBaseUrl(poster)
 
   return (
     <figure className={styles.videoFigure}>
       <video
-        className={styles.video}
+        className={landscape ? `${styles.video} ${styles.landscapeVideo}` : styles.video}
         controls
         playsInline
         preload="metadata"
         poster={posterUrl}
         aria-label={title}
-        width="1080"
+        width={landscape ? 1920 : 1080}
         height="1080"
       >
         <source src={videoUrl} type="video/mp4" />
