@@ -268,6 +268,16 @@ func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) 
 			wantRequired: []string{PermEvalWrite},
 		},
 		{
+			name: "dataset preparation requires write", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset preparation needs no generation permission", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
 			name: "dataset composition needs no generation permission", path: "/api/sr-bench/v1/datasets/compose",
 			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
 			wantRequired: []string{PermEvalWrite},

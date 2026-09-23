@@ -1762,6 +1762,20 @@ recipes:
               use_reasoning: false
           algorithm:
             type: static
+      fallback:
+        version: 1
+        enabled: false
+        max_attempts: 3
+        total_timeout: 30s
+        per_attempt_timeout: 10s
+        retryable_status_codes:
+          - 502
+          - 503
+          - 504
+        circuit_breaker:
+          consecutive_failures: 3
+          cooldown_period: 30s
+          half_open_probes: 1
 
 global:
   router:
@@ -1774,6 +1788,20 @@ global:
       - exhaustive-reference
     include_config_models_in_list: true
     clear_route_cache: true
+    fallback:
+      version: 1
+      enabled: false
+      max_attempts: 3
+      total_timeout: 30s
+      per_attempt_timeout: 10s
+      retryable_status_codes:
+        - 502
+        - 503
+        - 504
+      circuit_breaker:
+        consecutive_failures: 3
+        cooldown_period: 30s
+        half_open_probes: 1
     streamed_body:
       enabled: true
       max_bytes: 1048576

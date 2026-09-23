@@ -64,10 +64,9 @@ translation:
 | --- | --- | --- |
 | KServe 示例 | Experimental example | KServe 集成冒烟测试；不是经过限定的 KServe 或模型服务部署。 |
 | OpenShift 示例 | Experimental example | 将资源适配到 Route 和安全约束；不是加固的 OpenShift 配置。 |
-| Anthropic 兼容后端 fixture | Experimental example | 协议集成测试；不是生产模型服务。 |
 | 幻觉策略演示 | Experimental example | 事实核查策略行为；不是经过限定的护栏或模型。 |
 | 越狱错误处理演示 | Experimental example | 分类器失败路径；不是安全的生产策略。 |
-| LLM Katan 开发后端 | Experimental example | 轻量 OpenAI 兼容测试后端；不是生产推理。 |
+| Provider mocker 与可选 tiny-model smoke | Experimental example | 确定性协议测试数据；需要真实推理时，使用上游 llama.cpp server 和固定版本的 Qwen3-0.6B。 |
 | PII 远程后端演示 | Experimental example | 远程 token_spans.v1 PII 后端及其 on_error 策略；不是经过限定的 PII 模型或脱敏策略。 |
 | 可观测性演示 | Experimental example | Prometheus、Grafana、告警和控制面板接线；替换所有示例安全和保留设置。 |
 | 响应越狱演示 | Experimental example | 响应分类器窗口行为；不是生产护栏模型。 |
