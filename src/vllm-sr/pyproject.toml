@@ -34,13 +34,19 @@ dependencies = [
 
 [project.optional-dependencies]
 bench = ["pyarrow>=18.0.0", "tomli>=2.0.1; python_version < '3.11'"]
+decision-runtime = [
+    "fastapi>=0.115.0,<1",
+    "uvicorn>=0.30.0,<1",
+]
 dev = [
     "pytest>=8.4.1",
     "black>=22.0.0",
+    "httpx>=0.28.0,<1",
 ]
 
 [project.scripts]
 vllm-sr = "cli.main:main"
+vllm-sr-decision-runtime = "decision_runtime.entrypoint:main"
 
 [project.urls]
 Homepage = "https://github.com/vllm-project/vllm-semantic-router"
@@ -49,7 +55,7 @@ Repository = "https://github.com/vllm-project/vllm-semantic-router"
 Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
 
 [tool.setuptools]
-packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.sr_bench", "cli.config_schema"]
+packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.sr_bench", "cli.config_schema", "decision_runtime"]
 include-package-data = false
 
 [tool.setuptools.cmdclass]

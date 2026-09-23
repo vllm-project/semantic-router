@@ -22,6 +22,66 @@ python -m venv .venv
 pip install -e .
 ```
 
+## Run the Decision SystemOne contract server
+
+The optional Decision runtime package defines a backend-neutral inference
+boundary and a strict single-state `POST /v1/systemone` API. Install its HTTP
+dependencies separately from the base CLI:
+
+```bash
+pip install 'vllm-sr[decision-runtime]'
+vllm-sr-decision-runtime
+```
+
+The default process uses a deterministic fake backend for contract development;
+it does not run a Decision model. Production CUDA, ROCm, and Apple MLX adapters
+can implement the same async backend protocol without importing their inference
+frameworks into CLI paths. Generic CPU execution is limited to contract tests;
+it is not a supported production target.
+
+The HTTP contract requires an explicit `model`, one string/object/array `state`,
+and at least one named question. Instructions are required and non-null. Choice
+questions accept 2–255 options and Score questions accept 2–10 levels. Successful
+responses contain only `model`, `answers`, and `usage`; diagnostics stay on
+`/api/status` and `/metrics`. Batch and debug request-body extensions are not
+part of `/v1/systemone`.
+
+The separate Decision extension `POST /v1/systemone/batch` applies one required
+`model` and one shared `questions` map to ordered
+`states: [{"id": ..., "state": ...}]`. IDs must be unique, nonblank strings of
+at most 128 characters. A request may contain at most 1,024 states, 1,024
+questions, and 1,024 state/question decisions. Its atomic response contains
+only `model`, ordered `results: [{"id", "answers", "usage"}]`, and aggregate
+`usage`; one invalid backend result rejects the whole response. This endpoint is
+a Decision batching extension, not part of the official single-state API.
+
+This foundation defines the shared-question batch seam but does not claim
+physical GPU microbatching. Production adapters and the public Gateway must add
+validated raw-body and expanded-input byte limits, per-model complete-input
+token admission, implement the explicit `BatchDecisionBackend` capability, and
+add hardware-specific physical microbatch scheduling before the batch endpoint
+is exposed publicly. There is no sequential single-request fallback. Those
+resource policies must not add fields to either inference response.
+
+Choice and Score answers use the Decision-owned `decision_normalized_top`
+concentration statistic:
+
+```text
+(max(probabilities) - 1 / option_count) / (1 - 1 / option_count)
+```
+
+It maps a uniform distribution to zero and a one-hot distribution to one. It is
+not a calibrated probability of correctness and does not claim numeric
+equivalence to TypeSafe/Jev confidence, whose formula is not public.
+
+The development server also exposes `GET /v1/models`, `/health`, `/ready`,
+`/api/status`, and `/metrics`. The status and metrics routes are control-plane
+surfaces and must not be exposed by a public Gateway. Configure its fake model
+names with `VLLM_SR_DECISION_MODELS`; no model is selected implicitly by the
+SystemOne request contract. Production requests accept only the exact canonical
+IDs returned by `/v1/models`; this runtime does not define compatibility aliases,
+and the response repeats the exact requested model ID.
+
 Local `serve` requires Docker or Podman on Linux, macOS, or WSL2. A native
 Windows Python environment can run config and catalog commands, but it cannot
 run the local container stack.

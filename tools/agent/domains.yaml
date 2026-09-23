@@ -386,6 +386,15 @@ domains:
     checks: [make ck-rewrite-test]
     verifications: [ck-rewrite]
 
+  decision-runtime:
+    owner: vllm-sr-cli
+    paths:
+      - src/vllm-sr/decision_runtime/**
+      - src/vllm-sr/tests/test_decision_runtime_*.py
+      - src/vllm-sr/tests/fixtures/decision_confidence_oracle.v1.json
+    checks: [make vllm-sr-decision-runtime-test]
+    verifications: [cli-unit]
+
   vllm-sr-cli:
     owner: vllm-sr-cli
     paths:

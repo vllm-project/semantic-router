@@ -1,0 +1,38 @@
+{
+  "contract": "decision.normalized-top.v1",
+  "description": "Decision-owned concentration statistic; not a TypeSafe/Jev confidence formula claim.",
+  "cases": [
+    {
+      "id": "binary-uniform",
+      "probabilities": [0.5, 0.5],
+      "expected": 0.0,
+      "oracle": "analytic endpoint"
+    },
+    {
+      "id": "three-way-live-oracle-low",
+      "option_count": 3,
+      "top_probability": 0.56,
+      "expected": 0.34,
+      "oracle": "secret-free upstream observation: K=3, pmax=0.56, confidence=0.34"
+    },
+    {
+      "id": "three-way-live-oracle-high",
+      "option_count": 3,
+      "top_probability": 0.96,
+      "expected": 0.94,
+      "oracle": "secret-free upstream observation: K=3, pmax=0.96, confidence=0.94"
+    },
+    {
+      "id": "four-way-midpoint",
+      "probabilities": [0.625, 0.125, 0.125, 0.125],
+      "expected": 0.5,
+      "oracle": "exact rational calculation"
+    },
+    {
+      "id": "three-way-one-hot",
+      "probabilities": [1.0, 0.0, 0.0],
+      "expected": 1.0,
+      "oracle": "analytic endpoint"
+    }
+  ]
+}

@@ -585,6 +585,15 @@ vllm-sr-test: vllm-sr-install-cli
 		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
 		src/vllm-sr/tests/test_split_runtime_stack.py
 
+vllm-sr-decision-runtime-test: ## Run focused Decision runtime contract tests
+vllm-sr-decision-runtime-test: harness-venv-install
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[decision-runtime,dev]"
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		src/vllm-sr/tests/test_decision_runtime_contracts.py \
+		src/vllm-sr/tests/test_decision_runtime_engine.py \
+		src/vllm-sr/tests/test_decision_runtime_api.py
+
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker
 	@$(LOG_TARGET)

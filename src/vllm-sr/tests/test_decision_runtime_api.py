@@ -1,0 +1,479 @@
+"""In-process HTTP conformance tests for the Decision runtime."""
+
+import asyncio
+import sys
+from pathlib import Path
+
+import httpx
+import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from decision_runtime.api import create_app  # noqa: E402
+from decision_runtime.backend import (  # noqa: E402
+    BackendPrediction,
+    BackendResult,
+    ModelDescriptor,
+    UnknownModelError,
+)
+from decision_runtime.engine import DecisionEngine  # noqa: E402
+from decision_runtime.fake_backend import FakeDecisionBackend  # noqa: E402
+from decision_runtime.scheduler import ModelScheduler  # noqa: E402
+
+MODEL = ModelDescriptor(
+    name="decision-test",
+    description="Test model",
+    release_date="2026-09-23",
+)
+
+
+def payload():
+    return {
+        "model": MODEL.name,
+        "state": "Please refund the duplicate charge.",
+        "questions": {
+            "refund": {
+                "type": "noul",
+                "instructions": "Is a refund requested?",
+            },
+            "category": {
+                "type": "choice",
+                "instructions": "Classify the request.",
+                "criteria": {"billing": None, "technical": None},
+            },
+            "urgency": {
+                "type": "score",
+                "instructions": "Rate urgency.",
+                "criteria": ["low", "high"],
+            },
+        },
+    }
+
+
+def batch_payload():
+    request = payload()
+    return {
+        "model": request["model"],
+        "states": [
+            {"id": "first", "state": request["state"]},
+            {"id": "second", "state": "The product crashes on startup."},
+        ],
+        "questions": request["questions"],
+    }
+
+
+def app_for(backend=None, *, max_concurrency=1, max_queue=8):
+    engine = DecisionEngine(backend or FakeDecisionBackend([MODEL]))
+    scheduler = ModelScheduler(
+        [MODEL.name],
+        max_concurrency=max_concurrency,
+        max_queue=max_queue,
+    )
+    return create_app(engine, scheduler=scheduler)
+
+
+def test_http_e2e_exposes_models_health_readiness_and_strict_response():
+    async def scenario():
+        async with _client(app_for()) as client:
+            assert (await client.get("/health")).json() == {"status": "ok"}
+            assert (await client.get("/ready")).json() == {"status": "ready"}
+            assert (await client.get("/v1/models")).json() == {
+                "models": [
+                    {
+                        "name": MODEL.name,
+                        "description": MODEL.description,
+                        "release_date": MODEL.release_date,
+                    }
+                ]
+            }
+            response = await client.post("/v1/systemone", json=payload())
+            assert response.status_code == 200
+            body = response.json()
+            assert set(body) == {"model", "answers", "usage"}
+            assert set(body["answers"]["refund"]) == {"type", "noul"}
+            assert "confidence" in body["answers"]["category"]
+            assert "confidence" in body["answers"]["urgency"]
+
+    asyncio.run(scenario())
+
+
+def test_http_validation_uses_documented_422_issue_shape():
+    async def scenario():
+        async with _client(app_for()) as client:
+            missing_model = payload()
+            missing_model.pop("model")
+            response = await client.post("/v1/systemone", json=missing_model)
+            assert response.status_code == 422
+            issue = response.json()["detail"][0]
+            assert issue["loc"] == ["body", "model"]
+            assert set(issue) == {"loc", "msg", "type", "input"}
+            assert issue["input"] == missing_model
+
+            legacy = payload()
+            legacy["states"] = [{"id": "legacy", "state": "not allowed"}]
+            assert (await client.post("/v1/systemone", json=legacy)).status_code == 422
+
+            debug = payload()
+            debug["debug"] = True
+            assert (await client.post("/v1/systemone", json=debug)).status_code == 422
+
+            missing_instructions = payload()
+            missing_instructions["questions"]["refund"].pop("instructions")
+            assert (
+                await client.post("/v1/systemone", json=missing_instructions)
+            ).status_code == 422
+
+            too_few_choices = payload()
+            too_few_choices["questions"] = {
+                "category": {
+                    "type": "choice",
+                    "instructions": "Classify.",
+                    "criteria": {"only": None},
+                }
+            }
+            response = await client.post("/v1/systemone", json=too_few_choices)
+            assert response.status_code == 422
+            issue = response.json()["detail"][0]
+            assert issue["input"] == {"only": None}
+            assert issue["ctx"] == {
+                "field_type": "Dictionary",
+                "min_length": 2,
+                "actual_length": 1,
+            }
+
+    asyncio.run(scenario())
+
+
+def test_batch_http_e2e_is_strict_ordered_and_state_specific():
+    async def scenario():
+        async with _client(app_for()) as client:
+            response = await client.post("/v1/systemone/batch", json=batch_payload())
+        assert response.status_code == 200
+        body = response.json()
+        assert set(body) == {"model", "results", "usage"}
+        assert [result["id"] for result in body["results"]] == [
+            "first",
+            "second",
+        ]
+        assert all(
+            set(result) == {"id", "answers", "usage"} for result in body["results"]
+        )
+        assert body["results"][0]["answers"] != body["results"][1]["answers"]
+        assert body["usage"] == {
+            "input_tokens": sum(
+                result["usage"]["input_tokens"] for result in body["results"]
+            ),
+            "output_tokens": sum(
+                result["usage"]["output_tokens"] for result in body["results"]
+            ),
+        }
+
+    asyncio.run(scenario())
+
+
+def test_batch_validation_rejects_duplicate_ids_and_excess_decisions():
+    async def scenario():
+        async with _client(app_for()) as client:
+            duplicate = batch_payload()
+            duplicate["states"][1]["id"] = "first"
+            response = await client.post("/v1/systemone/batch", json=duplicate)
+            assert response.status_code == 422
+            assert response.json()["detail"][0]["loc"] == ["body", "states"]
+
+            too_many = batch_payload()
+            too_many["states"] = [
+                {"id": f"state-{index}", "state": "state"} for index in range(513)
+            ]
+            response = await client.post("/v1/systemone/batch", json=too_many)
+            assert response.status_code == 422
+            assert "1024 decisions" in response.json()["detail"][0]["msg"]
+
+    asyncio.run(scenario())
+
+
+def test_unknown_model_is_a_field_scoped_422():
+    async def scenario():
+        request = payload()
+        request["model"] = "unknown"
+        async with _client(app_for()) as client:
+            response = await client.post("/v1/systemone", json=request)
+        assert response.status_code == 422
+        assert response.json()["detail"][0]["loc"] == ["body", "model"]
+
+    asyncio.run(scenario())
+
+
+def test_unknown_model_metrics_use_one_bounded_label():
+    async def scenario():
+        async with _client(app_for()) as client:
+            for model in ("arbitrary-one", "arbitrary-two"):
+                request = payload()
+                request["model"] = model
+                assert (
+                    await client.post("/v1/systemone", json=request)
+                ).status_code == 422
+
+            metrics = (await client.get("/metrics")).text
+            assert (
+                metrics.count(
+                    'decision_runtime_evaluations_total{model="__unknown__",outcome="invalid_model"}'
+                )
+                == 1
+            )
+            assert "arbitrary-one" not in metrics
+            assert "arbitrary-two" not in metrics
+
+    asyncio.run(scenario())
+
+
+def test_status_and_metrics_keep_diagnostics_outside_systemone():
+    async def scenario():
+        async with _client(app_for()) as client:
+            await client.post("/v1/systemone", json=payload())
+            status = (await client.get("/api/status")).json()
+            assert status["contract"] == "systemone.single.v1"
+            assert status["confidence"]["typesafe_equivalent"] is False
+            metrics = await client.get("/metrics")
+            assert metrics.status_code == 200
+            assert "decision_runtime_evaluations_total" in metrics.text
+            assert 'model="decision-test",outcome="success"' in metrics.text
+
+    asyncio.run(scenario())
+
+
+def test_openapi_preserves_strict_single_state_schema():
+    schema = app_for().openapi()["components"]["schemas"]
+    request_schema = schema["SystemOneRequest"]
+    assert request_schema["required"] == ["state", "model", "questions"]
+    assert request_schema["additionalProperties"] is False
+    assert "states" not in request_schema["properties"]
+    assert schema["NoulQuestion"]["required"] == ["type", "instructions"]
+    assert schema["ChoiceQuestion"]["properties"]["criteria"]["minProperties"] == 2
+    assert schema["ChoiceQuestion"]["properties"]["criteria"]["maxProperties"] == 255
+    assert schema["ScoreQuestion"]["properties"]["criteria"]["minItems"] == 2
+    assert schema["ScoreQuestion"]["properties"]["criteria"]["maxItems"] == 10
+    response_schema = schema["SystemOneResponse"]
+    assert response_schema["additionalProperties"] is False
+    assert set(response_schema["properties"]) == {"model", "answers", "usage"}
+
+    batch_request_schema = schema["SystemOneBatchRequest"]
+    assert batch_request_schema["required"] == ["model", "states", "questions"]
+    assert batch_request_schema["additionalProperties"] is False
+    assert set(batch_request_schema["properties"]) == {
+        "model",
+        "states",
+        "questions",
+    }
+    assert batch_request_schema["properties"]["states"]["maxItems"] == 1024
+    assert batch_request_schema["properties"]["questions"]["maxProperties"] == 1024
+    batch_response_schema = schema["SystemOneBatchResponse"]
+    assert batch_response_schema["additionalProperties"] is False
+    assert set(batch_response_schema["properties"]) == {"model", "results", "usage"}
+
+
+def test_not_ready_is_503_without_changing_health():
+    async def scenario():
+        backend = FakeDecisionBackend([MODEL], available=False)
+        async with _client(app_for(backend)) as client:
+            assert (await client.get("/health")).status_code == 200
+            assert (await client.get("/ready")).status_code == 503
+            assert (
+                await client.post("/v1/systemone", json=payload())
+            ).status_code == 503
+
+    asyncio.run(scenario())
+
+
+def test_queue_overload_maps_to_official_529_with_retry_after():
+    class BlockingBackend(FakeDecisionBackend):
+        def __init__(self):
+            super().__init__([MODEL])
+            self.entered = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def infer(self, request):
+            self.entered.set()
+            await self.release.wait()
+            return await super().infer(request)
+
+    async def scenario():
+        backend = BlockingBackend()
+        app = app_for(backend, max_concurrency=1, max_queue=0)
+        async with _client(app) as client:
+            first = asyncio.create_task(client.post("/v1/systemone", json=payload()))
+            await backend.entered.wait()
+            second = await client.post("/v1/systemone", json=payload())
+            assert second.status_code == 529
+            assert second.headers["retry-after"] == "1"
+            backend.release.set()
+            assert (await first).status_code == 200
+
+    asyncio.run(scenario())
+
+
+def test_batch_uses_same_unknown_model_and_overload_mapping():
+    class BlockingBatchBackend(FakeDecisionBackend):
+        def __init__(self):
+            super().__init__([MODEL])
+            self.entered = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def infer_batch(self, requests):
+            self.entered.set()
+            await self.release.wait()
+            return await super().infer_batch(requests)
+
+    async def scenario():
+        backend = BlockingBatchBackend()
+        app = app_for(backend, max_concurrency=1, max_queue=0)
+        async with _client(app) as client:
+            unknown = batch_payload()
+            unknown["model"] = "unknown"
+            response = await client.post("/v1/systemone/batch", json=unknown)
+            assert response.status_code == 422
+            assert response.json()["detail"][0]["loc"] == ["body", "model"]
+
+            first = asyncio.create_task(
+                client.post("/v1/systemone/batch", json=batch_payload())
+            )
+            await backend.entered.wait()
+            overloaded = await client.post("/v1/systemone/batch", json=batch_payload())
+            assert overloaded.status_code == 529
+            assert overloaded.headers["retry-after"] == "1"
+            backend.release.set()
+            assert (await first).status_code == 200
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("mutation", ["reordered", "missing"])
+def test_batch_backend_identity_failures_use_backend_error_boundary(mutation):
+    class InvalidBatchBackend(FakeDecisionBackend):
+        async def infer_batch(self, requests):
+            results = await super().infer_batch(requests)
+            if mutation == "reordered":
+                return tuple(reversed(results))
+            return results[:-1]
+
+    async def scenario():
+        async with _client(app_for(InvalidBatchBackend([MODEL]))) as client:
+            response = await client.post("/v1/systemone/batch", json=batch_payload())
+            assert response.status_code == 500
+            assert response.json() == {
+                "detail": "Decision backend returned an invalid result"
+            }
+
+    asyncio.run(scenario())
+
+
+def test_batch_backend_model_rejection_is_not_a_client_unknown_model_error():
+    class RejectingBatchBackend(FakeDecisionBackend):
+        async def infer_batch(self, requests):
+            raise UnknownModelError(requests[0].request.model)
+
+    async def scenario():
+        async with _client(app_for(RejectingBatchBackend([MODEL]))) as client:
+            response = await client.post("/v1/systemone/batch", json=batch_payload())
+            assert response.status_code == 500
+            assert response.json() == {
+                "detail": "Decision backend returned an invalid result"
+            }
+            metrics = (await client.get("/metrics")).text
+            assert 'model="decision-test",outcome="backend_error"' in metrics
+            assert 'outcome="invalid_model"' not in metrics
+
+    asyncio.run(scenario())
+
+
+def test_unexpected_backend_failure_is_not_counted_as_success():
+    class CrashingBackend(FakeDecisionBackend):
+        async def infer(self, request):
+            raise RuntimeError("unexpected adapter failure")
+
+    async def scenario():
+        app = app_for(CrashingBackend([MODEL]))
+        async with _client(app, raise_app_exceptions=False) as client:
+            response = await client.post("/v1/systemone", json=payload())
+            assert response.status_code == 500
+            metrics = (await client.get("/metrics")).text
+            assert 'model="decision-test",outcome="internal_error"' in metrics
+            assert 'model="decision-test",outcome="success"' not in metrics
+
+    asyncio.run(scenario())
+
+
+def test_backend_key_error_is_an_internal_failure_not_an_unknown_model():
+    class KeyErrorBackend(FakeDecisionBackend):
+        async def infer(self, request):
+            raise KeyError("adapter-internal lookup")
+
+    async def scenario():
+        app = app_for(KeyErrorBackend([MODEL]))
+        async with _client(app, raise_app_exceptions=False) as client:
+            response = await client.post("/v1/systemone", json=payload())
+            assert response.status_code == 500
+            metrics = (await client.get("/metrics")).text
+            assert 'model="decision-test",outcome="internal_error"' in metrics
+            assert 'outcome="invalid_model"' not in metrics
+
+    asyncio.run(scenario())
+
+
+def test_backend_model_rejection_is_a_backend_error_not_client_422():
+    class RejectingBackend(FakeDecisionBackend):
+        async def infer(self, request):
+            raise UnknownModelError(request.model)
+
+    async def scenario():
+        async with _client(app_for(RejectingBackend([MODEL]))) as client:
+            response = await client.post("/v1/systemone", json=payload())
+            assert response.status_code == 500
+            assert response.json() == {
+                "detail": "Decision backend returned an invalid result"
+            }
+            metrics = (await client.get("/metrics")).text
+            assert 'model="decision-test",outcome="backend_error"' in metrics
+            assert 'outcome="invalid_model"' not in metrics
+
+    asyncio.run(scenario())
+
+
+def test_malformed_backend_probabilities_use_the_backend_error_boundary():
+    class MalformedBackend(FakeDecisionBackend):
+        async def infer(self, request):
+            result = await super().infer(request)
+            predictions = list(result.predictions)
+            first = predictions[0]
+            predictions[0] = BackendPrediction(
+                question_id=first.question_id,
+                type=first.type,
+                probabilities=(False, True),
+            )
+            return BackendResult(
+                model=result.model,
+                predictions=tuple(predictions),
+                input_tokens=result.input_tokens,
+                output_tokens=result.output_tokens,
+            )
+
+    async def scenario():
+        async with _client(app_for(MalformedBackend([MODEL]))) as client:
+            response = await client.post("/v1/systemone", json=payload())
+            assert response.status_code == 500
+            assert response.json() == {
+                "detail": "Decision backend returned an invalid result"
+            }
+
+    asyncio.run(scenario())
+
+
+def _client(app, *, raise_app_exceptions=True):
+    return httpx.AsyncClient(
+        transport=httpx.ASGITransport(
+            app=app,
+            raise_app_exceptions=raise_app_exceptions,
+        ),
+        base_url="http://test",
+    )
