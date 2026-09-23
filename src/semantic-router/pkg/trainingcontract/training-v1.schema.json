@@ -1,0 +1,1526 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/Catalog",
+  "$defs": {
+    "APIError": {
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "invalid_request",
+            "unauthenticated",
+            "forbidden",
+            "not_found",
+            "conflict",
+            "internal_error"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ]
+    },
+    "Artifact": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "profile": {
+          "$ref": "#/$defs/Profile"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "provenance",
+        "profile"
+      ]
+    },
+    "ArtifactResult": {
+      "properties": {
+        "profile": {
+          "$ref": "#/$defs/Profile"
+        },
+        "variants": {
+          "items": {
+            "$ref": "#/$defs/ArtifactVariantSpec"
+          },
+          "type": "array",
+          "minItems": 1
+        },
+        "manifest_bundle": {
+          "$ref": "#/$defs/File"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "profile",
+        "variants"
+      ]
+    },
+    "ArtifactVariant": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "format": {
+          "$ref": "#/$defs/Component"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/File"
+          },
+          "type": "array",
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "artifact_id",
+        "format",
+        "files"
+      ]
+    },
+    "ArtifactVariantSpec": {
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/Component"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/File"
+          },
+          "type": "array",
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "format",
+        "files"
+      ]
+    },
+    "Attempt": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "worker_handle": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "finished_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "diagnostic": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "number",
+        "idempotency_key",
+        "status"
+      ]
+    },
+    "BindingProposal": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "variant_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "qualification_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "variant_id",
+        "qualification_id",
+        "name"
+      ]
+    },
+    "BindingProposalSpec": {
+      "properties": {
+        "variant_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "qualification_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "variant_id",
+        "qualification_id",
+        "name"
+      ]
+    },
+    "Catalog": {
+      "properties": {
+        "asset_request": {
+          "$ref": "#/$defs/DataAssetSpec"
+        },
+        "snapshot_request": {
+          "$ref": "#/$defs/SnapshotSpec"
+        },
+        "experiment_request": {
+          "$ref": "#/$defs/ExperimentSpec"
+        },
+        "proposal_request": {
+          "$ref": "#/$defs/BindingProposalSpec"
+        },
+        "fixture": {
+          "$ref": "#/$defs/Fixture"
+        },
+        "asset": {
+          "$ref": "#/$defs/DataAsset"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/DataSnapshot"
+        },
+        "upload": {
+          "$ref": "#/$defs/Upload"
+        },
+        "experiment": {
+          "$ref": "#/$defs/Experiment"
+        },
+        "graph": {
+          "$ref": "#/$defs/RunGraph"
+        },
+        "artifact": {
+          "$ref": "#/$defs/Artifact"
+        },
+        "variant": {
+          "$ref": "#/$defs/ArtifactVariant"
+        },
+        "evaluation": {
+          "$ref": "#/$defs/Evaluation"
+        },
+        "qualification": {
+          "$ref": "#/$defs/Qualification"
+        },
+        "proposal": {
+          "$ref": "#/$defs/BindingProposal"
+        },
+        "event": {
+          "$ref": "#/$defs/Event"
+        },
+        "worker_request": {
+          "$ref": "#/$defs/WorkerRequest"
+        },
+        "comparison_request": {
+          "$ref": "#/$defs/ComparisonRequest"
+        },
+        "comparison_response": {
+          "$ref": "#/$defs/ComparisonResponse"
+        },
+        "validation_request": {
+          "$ref": "#/$defs/ValidationRequest"
+        },
+        "validation_response": {
+          "$ref": "#/$defs/ValidationResponse"
+        },
+        "error": {
+          "$ref": "#/$defs/APIError"
+        },
+        "event_page": {
+          "$ref": "#/$defs/EventPage"
+        },
+        "worker_submission": {
+          "$ref": "#/$defs/WorkerSubmission"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "asset_request",
+        "snapshot_request",
+        "experiment_request",
+        "proposal_request",
+        "fixture",
+        "asset",
+        "snapshot",
+        "upload",
+        "experiment",
+        "graph",
+        "artifact",
+        "variant",
+        "evaluation",
+        "qualification",
+        "proposal",
+        "event",
+        "worker_request",
+        "comparison_request",
+        "comparison_response",
+        "validation_request",
+        "validation_response",
+        "error",
+        "event_page",
+        "worker_submission"
+      ]
+    },
+    "ClassifierProfile": {
+      "properties": {
+        "label_mapping": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "label_mapping"
+      ]
+    },
+    "ComparisonEntry": {
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/TrainingRun"
+        },
+        "evaluations": {
+          "items": {
+            "$ref": "#/$defs/Evaluation"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "run",
+        "evaluations"
+      ]
+    },
+    "ComparisonRequest": {
+      "properties": {
+        "run_ids": {
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+          },
+          "type": "array",
+          "minItems": 2,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "run_ids"
+      ]
+    },
+    "ComparisonResponse": {
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/$defs/ComparisonEntry"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "entries"
+      ]
+    },
+    "Component": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "version"
+      ]
+    },
+    "DataAsset": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "name",
+        "target_contract"
+      ]
+    },
+    "DataAssetSpec": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "target_contract"
+      ]
+    },
+    "DataSnapshot": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "upload_handle": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "source": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "preprocessing": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "type": "array"
+        },
+        "profile": {
+          "$ref": "#/$defs/Profile"
+        },
+        "content": {
+          "$ref": "#/$defs/File"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "asset_id",
+        "upload_handle",
+        "profile",
+        "content"
+      ]
+    },
+    "Evaluation": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "variant_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "method": {
+          "$ref": "#/$defs/Component"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "provenance",
+        "variant_id",
+        "snapshot_id",
+        "method",
+        "metrics"
+      ]
+    },
+    "EvaluationSpec": {
+      "properties": {
+        "variant_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "method": {
+          "$ref": "#/$defs/Component"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "variant_id",
+        "snapshot_id",
+        "method",
+        "metrics"
+      ]
+    },
+    "Event": {
+      "properties": {
+        "sequence": {
+          "type": "integer"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "diagnostic": {
+          "type": "string"
+        },
+        "recorded_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "sequence",
+        "run_id",
+        "status",
+        "recorded_at"
+      ]
+    },
+    "EventPage": {
+      "properties": {
+        "events": {
+          "items": {
+            "$ref": "#/$defs/Event"
+          },
+          "type": "array"
+        },
+        "next_after": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "events",
+        "next_after"
+      ]
+    },
+    "Experiment": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "name",
+        "target_contract"
+      ]
+    },
+    "ExperimentSpec": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "target_contract"
+      ]
+    },
+    "File": {
+      "properties": {
+        "handle": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "handle",
+        "digest",
+        "size_bytes"
+      ]
+    },
+    "Fixture": {
+      "properties": {
+        "asset": {
+          "$ref": "#/$defs/DataAsset"
+        },
+        "upload": {
+          "$ref": "#/$defs/Upload"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/DataSnapshot"
+        },
+        "experiment": {
+          "$ref": "#/$defs/Experiment"
+        },
+        "submit": {
+          "$ref": "#/$defs/SubmitRunRequest"
+        },
+        "graph": {
+          "$ref": "#/$defs/RunGraph"
+        },
+        "worker_request": {
+          "$ref": "#/$defs/WorkerRequest"
+        },
+        "train_result": {
+          "$ref": "#/$defs/WorkerResult"
+        },
+        "artifact": {
+          "$ref": "#/$defs/Artifact"
+        },
+        "variant": {
+          "$ref": "#/$defs/ArtifactVariant"
+        },
+        "evaluate_request": {
+          "$ref": "#/$defs/WorkerRequest"
+        },
+        "evaluate_result": {
+          "$ref": "#/$defs/WorkerResult"
+        },
+        "evaluation": {
+          "$ref": "#/$defs/Evaluation"
+        },
+        "qualify_result": {
+          "$ref": "#/$defs/WorkerResult"
+        },
+        "qualification": {
+          "$ref": "#/$defs/Qualification"
+        },
+        "proposal": {
+          "$ref": "#/$defs/BindingProposal"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "asset",
+        "upload",
+        "snapshot",
+        "experiment",
+        "submit",
+        "graph",
+        "worker_request",
+        "train_result",
+        "artifact",
+        "variant",
+        "evaluate_request",
+        "evaluate_result",
+        "evaluation",
+        "qualify_result",
+        "qualification",
+        "proposal"
+      ]
+    },
+    "ModelRef": {
+      "properties": {
+        "repository": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$"
+        },
+        "revision": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "repository",
+        "revision"
+      ]
+    },
+    "Profile": {
+      "oneOf": [
+        {
+          "properties": {
+            "target_contract": {
+              "const": "selector.model-choice/v1"
+            },
+            "classifier": false,
+            "spans": false
+          },
+          "required": [
+            "selector"
+          ]
+        },
+        {
+          "properties": {
+            "target_contract": {
+              "const": "signal.label-scores/v1"
+            },
+            "selector": false,
+            "spans": false
+          },
+          "required": [
+            "classifier"
+          ]
+        },
+        {
+          "properties": {
+            "target_contract": {
+              "const": "signal.spans/v1"
+            },
+            "selector": false,
+            "classifier": false
+          },
+          "required": [
+            "spans"
+          ]
+        }
+      ],
+      "properties": {
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        },
+        "selector": {
+          "$ref": "#/$defs/SelectorProfile"
+        },
+        "classifier": {
+          "$ref": "#/$defs/ClassifierProfile"
+        },
+        "spans": {
+          "$ref": "#/$defs/SpanProfile"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "target_contract"
+      ]
+    },
+    "Provenance": {
+      "properties": {
+        "run_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "trainer": {
+          "$ref": "#/$defs/Component"
+        },
+        "manifest_bundle": {
+          "$ref": "#/$defs/File"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "run_id",
+        "task_id",
+        "attempt_id",
+        "snapshot_id",
+        "trainer"
+      ]
+    },
+    "Qualification": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "variant_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "runtime": {
+          "$ref": "#/$defs/Component"
+        },
+        "compatible": {
+          "type": "boolean"
+        },
+        "receipt": {
+          "$ref": "#/$defs/File"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "provenance",
+        "variant_id",
+        "runtime",
+        "compatible",
+        "receipt"
+      ]
+    },
+    "QualificationSpec": {
+      "properties": {
+        "variant_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "runtime": {
+          "$ref": "#/$defs/Component"
+        },
+        "compatible": {
+          "type": "boolean"
+        },
+        "receipt": {
+          "$ref": "#/$defs/File"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "variant_id",
+        "runtime",
+        "compatible",
+        "receipt"
+      ]
+    },
+    "RunGraph": {
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/TrainingRun"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/RunTask"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "run",
+        "tasks"
+      ]
+    },
+    "RunSpec": {
+      "properties": {
+        "base_model": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "experiment_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "snapshot_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "target_contract": {
+          "$ref": "#/$defs/Target"
+        },
+        "trainer": {
+          "$ref": "#/$defs/Component"
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "tasks": {
+          "items": {
+            "$ref": "#/$defs/TaskSpec"
+          },
+          "type": "array",
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "experiment_id",
+        "snapshot_id",
+        "target_contract",
+        "trainer",
+        "tasks"
+      ]
+    },
+    "RunTask": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "spec": {
+          "$ref": "#/$defs/TaskSpec"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/Attempt"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "run_id",
+        "spec",
+        "status",
+        "attempts"
+      ]
+    },
+    "SelectorProfile": {
+      "properties": {
+        "candidate_models": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "observation_fields": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "candidate_models",
+        "observation_fields"
+      ]
+    },
+    "SnapshotSpec": {
+      "properties": {
+        "asset_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "upload_handle": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "source": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "preprocessing": {
+          "items": {
+            "$ref": "#/$defs/Component"
+          },
+          "type": "array"
+        },
+        "profile": {
+          "$ref": "#/$defs/Profile"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "asset_id",
+        "upload_handle",
+        "profile"
+      ]
+    },
+    "SpanProfile": {
+      "properties": {
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "offset_unit": {
+          "type": "string",
+          "enum": [
+            "unicode-codepoint"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "labels",
+        "offset_unit"
+      ]
+    },
+    "Status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "cancelling",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "skipped"
+      ]
+    },
+    "SubmitRunRequest": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "spec": {
+          "$ref": "#/$defs/RunSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "idempotency_key",
+        "spec"
+      ]
+    },
+    "Target": {
+      "type": "string",
+      "enum": [
+        "selector.model-choice/v1",
+        "signal.label-scores/v1",
+        "signal.spans/v1"
+      ]
+    },
+    "TaskSpec": {
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "executor": {
+          "$ref": "#/$defs/Component"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "executor"
+      ]
+    },
+    "TrainingRun": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "spec": {
+          "$ref": "#/$defs/RunSpec"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "running",
+            "cancelling",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "spec",
+        "status",
+        "updated_at"
+      ]
+    },
+    "Upload": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "handle": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "id",
+        "created_at",
+        "handle",
+        "digest",
+        "size_bytes"
+      ]
+    },
+    "ValidationRequest": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "spec": {
+          "$ref": "#/$defs/RunSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "spec"
+      ]
+    },
+    "ValidationResponse": {
+      "properties": {
+        "valid": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "valid"
+      ]
+    },
+    "WorkerRequest": {
+      "properties": {
+        "base_model": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "task_id": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        },
+        "executor": {
+          "$ref": "#/$defs/Component"
+        },
+        "trainer": {
+          "$ref": "#/$defs/Component"
+        },
+        "parameters": {
+          "type": "object"
+        },
+        "snapshot": {
+          "$ref": "#/$defs/DataSnapshot"
+        },
+        "inputs": {
+          "items": {
+            "$ref": "#/$defs/ArtifactVariant"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "run_id",
+        "schema_version",
+        "attempt_id",
+        "task_id",
+        "executor",
+        "trainer",
+        "snapshot"
+      ]
+    },
+    "WorkerResult": {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "succeeded"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "artifacts": {
+            "maxItems": 0
+          },
+          "evaluations": {
+            "maxItems": 0
+          },
+          "qualifications": {
+            "maxItems": 0
+          }
+        }
+      },
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "running",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "diagnostic": {
+          "type": "string"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/ArtifactResult"
+          },
+          "type": "array"
+        },
+        "evaluations": {
+          "items": {
+            "$ref": "#/$defs/EvaluationSpec"
+          },
+          "type": "array"
+        },
+        "qualifications": {
+          "items": {
+            "$ref": "#/$defs/QualificationSpec"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "status"
+      ]
+    },
+    "WorkerSubmission": {
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": [
+            "semantic-router.training/v1"
+          ]
+        },
+        "worker_handle": {
+          "type": "string",
+          "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schema_version",
+        "worker_handle"
+      ]
+    }
+  }
+}

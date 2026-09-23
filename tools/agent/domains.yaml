@@ -107,6 +107,18 @@ domains:
     checks: [make docs-community-check, make docs-community-test]
     verifications: []
 
+  training-control-plane-contract:
+    owner: training
+    paths:
+      - src/semantic-router/pkg/trainingcontract/**
+      - src/training/control_plane/**
+      - tools/codegen/trainingcontract/**
+      - dashboard/frontend/src/generated/trainingContract.ts
+      - dashboard/frontend/src/utils/trainingContract.test.ts
+      - website/docs/training/control-plane-contract.md
+    checks: [make training-contract-check]
+    verifications: []
+
   generated-api-contract:
     owner: router-core
     documentation_check: true

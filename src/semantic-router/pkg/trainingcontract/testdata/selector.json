@@ -1,0 +1,569 @@
+{
+  "asset": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "asset_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "name": "selector",
+    "target_contract": "selector.model-choice/v1"
+  },
+  "upload": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "upload_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "handle": "file_selector-data",
+    "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "size_bytes": 7
+  },
+  "snapshot": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "snapshot_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "asset_id": "asset_selector",
+    "upload_handle": "upload_selector",
+    "source": {
+      "repository": "example/data",
+      "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "preprocessing": [
+      {
+        "name": "normalize",
+        "version": "1"
+      }
+    ],
+    "profile": {
+      "target_contract": "selector.model-choice/v1",
+      "selector": {
+        "candidate_models": [
+          "small",
+          "large"
+        ],
+        "observation_fields": [
+          "quality",
+          "latency_ms"
+        ]
+      }
+    },
+    "content": {
+      "handle": "file_selector-data",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "size_bytes": 7
+    }
+  },
+  "experiment": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "experiment_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "name": "selector",
+    "target_contract": "selector.model-choice/v1"
+  },
+  "submit": {
+    "schema_version": "semantic-router.training/v1",
+    "idempotency_key": "selector-fixture",
+    "spec": {
+      "experiment_id": "experiment_selector",
+      "snapshot_id": "snapshot_selector",
+      "target_contract": "selector.model-choice/v1",
+      "trainer": {
+        "name": "selector",
+        "version": "1"
+      },
+      "parameters": {
+        "seed": 42,
+        "kernel": "rbf",
+        "normalize": true
+      },
+      "tasks": [
+        {
+          "key": "train",
+          "executor": {
+            "name": "train",
+            "version": "1"
+          }
+        },
+        {
+          "key": "evaluate",
+          "depends_on": [
+            "train"
+          ],
+          "executor": {
+            "name": "evaluate",
+            "version": "1"
+          }
+        },
+        {
+          "key": "qualify",
+          "depends_on": [
+            "evaluate"
+          ],
+          "executor": {
+            "name": "qualify",
+            "version": "1"
+          }
+        }
+      ]
+    }
+  },
+  "graph": {
+    "run": {
+      "schema_version": "semantic-router.training/v1",
+      "id": "run_selector",
+      "created_at": "2026-09-23T00:00:00Z",
+      "spec": {
+        "experiment_id": "experiment_selector",
+        "snapshot_id": "snapshot_selector",
+        "target_contract": "selector.model-choice/v1",
+        "trainer": {
+          "name": "selector",
+          "version": "1"
+        },
+        "parameters": {
+          "seed": 42,
+          "kernel": "rbf",
+          "normalize": true
+        },
+        "tasks": [
+          {
+            "key": "train",
+            "executor": {
+              "name": "train",
+              "version": "1"
+            }
+          },
+          {
+            "key": "evaluate",
+            "depends_on": [
+              "train"
+            ],
+            "executor": {
+              "name": "evaluate",
+              "version": "1"
+            }
+          },
+          {
+            "key": "qualify",
+            "depends_on": [
+              "evaluate"
+            ],
+            "executor": {
+              "name": "qualify",
+              "version": "1"
+            }
+          }
+        ]
+      },
+      "status": "succeeded",
+      "updated_at": "2026-09-23T00:00:00Z"
+    },
+    "tasks": [
+      {
+        "schema_version": "semantic-router.training/v1",
+        "id": "task_selector-train",
+        "created_at": "2026-09-23T00:00:00Z",
+        "run_id": "run_selector",
+        "spec": {
+          "key": "train",
+          "executor": {
+            "name": "train",
+            "version": "1"
+          }
+        },
+        "status": "succeeded",
+        "attempts": [
+          {
+            "schema_version": "semantic-router.training/v1",
+            "id": "attempt_selector-train",
+            "created_at": "2026-09-23T00:00:00Z",
+            "number": 1,
+            "idempotency_key": "attempt_selector-train",
+            "worker_handle": "job_selector-train",
+            "status": "succeeded",
+            "started_at": "2026-09-23T00:00:00Z",
+            "finished_at": "2026-09-23T00:00:00Z"
+          }
+        ]
+      },
+      {
+        "schema_version": "semantic-router.training/v1",
+        "id": "task_selector-evaluate",
+        "created_at": "2026-09-23T00:00:00Z",
+        "run_id": "run_selector",
+        "spec": {
+          "key": "evaluate",
+          "depends_on": [
+            "train"
+          ],
+          "executor": {
+            "name": "evaluate",
+            "version": "1"
+          }
+        },
+        "status": "succeeded",
+        "attempts": [
+          {
+            "schema_version": "semantic-router.training/v1",
+            "id": "attempt_selector-evaluate",
+            "created_at": "2026-09-23T00:00:00Z",
+            "number": 1,
+            "idempotency_key": "attempt_selector-evaluate",
+            "worker_handle": "job_selector-evaluate",
+            "status": "succeeded",
+            "started_at": "2026-09-23T00:00:00Z",
+            "finished_at": "2026-09-23T00:00:00Z"
+          }
+        ]
+      },
+      {
+        "schema_version": "semantic-router.training/v1",
+        "id": "task_selector-qualify",
+        "created_at": "2026-09-23T00:00:00Z",
+        "run_id": "run_selector",
+        "spec": {
+          "key": "qualify",
+          "depends_on": [
+            "evaluate"
+          ],
+          "executor": {
+            "name": "qualify",
+            "version": "1"
+          }
+        },
+        "status": "succeeded",
+        "attempts": [
+          {
+            "schema_version": "semantic-router.training/v1",
+            "id": "attempt_selector-qualify",
+            "created_at": "2026-09-23T00:00:00Z",
+            "number": 1,
+            "idempotency_key": "attempt_selector-qualify",
+            "worker_handle": "job_selector-qualify",
+            "status": "succeeded",
+            "started_at": "2026-09-23T00:00:00Z",
+            "finished_at": "2026-09-23T00:00:00Z"
+          }
+        ]
+      }
+    ]
+  },
+  "worker_request": {
+    "schema_version": "semantic-router.training/v1",
+    "run_id": "run_selector",
+    "attempt_id": "attempt_selector-train",
+    "snapshot": {
+      "schema_version": "semantic-router.training/v1",
+      "id": "snapshot_selector",
+      "created_at": "2026-09-23T00:00:00Z",
+      "asset_id": "asset_selector",
+      "upload_handle": "upload_selector",
+      "source": {
+        "repository": "example/data",
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "preprocessing": [
+        {
+          "name": "normalize",
+          "version": "1"
+        }
+      ],
+      "profile": {
+        "target_contract": "selector.model-choice/v1",
+        "selector": {
+          "candidate_models": [
+            "small",
+            "large"
+          ],
+          "observation_fields": [
+            "quality",
+            "latency_ms"
+          ]
+        }
+      },
+      "content": {
+        "handle": "file_selector-data",
+        "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "size_bytes": 7
+      }
+    },
+    "task_id": "task_selector-train",
+    "executor": {
+      "name": "train",
+      "version": "1"
+    },
+    "trainer": {
+      "name": "selector",
+      "version": "1"
+    },
+    "parameters": {
+      "seed": 42,
+      "kernel": "rbf",
+      "normalize": true
+    }
+  },
+  "train_result": {
+    "schema_version": "semantic-router.training/v1",
+    "status": "succeeded",
+    "artifacts": [
+      {
+        "profile": {
+          "target_contract": "selector.model-choice/v1",
+          "selector": {
+            "candidate_models": [
+              "small",
+              "large"
+            ],
+            "observation_fields": [
+              "quality",
+              "latency_ms"
+            ]
+          }
+        },
+        "manifest_bundle": {
+          "handle": "file_selector-manifests",
+          "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "size_bytes": 7
+        },
+        "variants": [
+          {
+            "format": {
+              "name": "selector-weights",
+              "version": "1"
+            },
+            "files": [
+              {
+                "handle": "file_selector-weights",
+                "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+                "size_bytes": 7
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "artifact": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "artifact_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "profile": {
+      "target_contract": "selector.model-choice/v1",
+      "selector": {
+        "candidate_models": [
+          "small",
+          "large"
+        ],
+        "observation_fields": [
+          "quality",
+          "latency_ms"
+        ]
+      }
+    },
+    "provenance": {
+      "run_id": "run_selector",
+      "task_id": "task_selector-train",
+      "attempt_id": "attempt_selector-train",
+      "snapshot_id": "snapshot_selector",
+      "trainer": {
+        "name": "selector",
+        "version": "1"
+      },
+      "manifest_bundle": {
+        "handle": "file_selector-manifests",
+        "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "size_bytes": 7
+      }
+    }
+  },
+  "variant": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "variant_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "artifact_id": "artifact_selector",
+    "format": {
+      "name": "selector-weights",
+      "version": "1"
+    },
+    "files": [
+      {
+        "handle": "file_selector-weights",
+        "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "size_bytes": 7
+      }
+    ]
+  },
+  "evaluate_request": {
+    "schema_version": "semantic-router.training/v1",
+    "run_id": "run_selector",
+    "attempt_id": "attempt_selector-evaluate",
+    "snapshot": {
+      "schema_version": "semantic-router.training/v1",
+      "id": "snapshot_selector",
+      "created_at": "2026-09-23T00:00:00Z",
+      "asset_id": "asset_selector",
+      "upload_handle": "upload_selector",
+      "source": {
+        "repository": "example/data",
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "preprocessing": [
+        {
+          "name": "normalize",
+          "version": "1"
+        }
+      ],
+      "profile": {
+        "target_contract": "selector.model-choice/v1",
+        "selector": {
+          "candidate_models": [
+            "small",
+            "large"
+          ],
+          "observation_fields": [
+            "quality",
+            "latency_ms"
+          ]
+        }
+      },
+      "content": {
+        "handle": "file_selector-data",
+        "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "size_bytes": 7
+      }
+    },
+    "inputs": [
+      {
+        "schema_version": "semantic-router.training/v1",
+        "id": "variant_selector",
+        "created_at": "2026-09-23T00:00:00Z",
+        "artifact_id": "artifact_selector",
+        "format": {
+          "name": "selector-weights",
+          "version": "1"
+        },
+        "files": [
+          {
+            "handle": "file_selector-weights",
+            "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "size_bytes": 7
+          }
+        ]
+      }
+    ],
+    "task_id": "task_selector-evaluate",
+    "executor": {
+      "name": "evaluate",
+      "version": "1"
+    },
+    "trainer": {
+      "name": "selector",
+      "version": "1"
+    },
+    "parameters": {
+      "seed": 42,
+      "kernel": "rbf",
+      "normalize": true
+    }
+  },
+  "evaluate_result": {
+    "schema_version": "semantic-router.training/v1",
+    "status": "succeeded",
+    "evaluations": [
+      {
+        "variant_id": "variant_selector",
+        "snapshot_id": "snapshot_selector",
+        "method": {
+          "name": "accuracy",
+          "version": "1"
+        },
+        "metrics": {
+          "accuracy": 0.9
+        }
+      }
+    ]
+  },
+  "evaluation": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "evaluation_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "variant_id": "variant_selector",
+    "snapshot_id": "snapshot_selector",
+    "method": {
+      "name": "accuracy",
+      "version": "1"
+    },
+    "metrics": {
+      "accuracy": 0.9
+    },
+    "provenance": {
+      "run_id": "run_selector",
+      "task_id": "task_selector-evaluate",
+      "attempt_id": "attempt_selector-evaluate",
+      "snapshot_id": "snapshot_selector",
+      "trainer": {
+        "name": "selector",
+        "version": "1"
+      },
+      "manifest_bundle": {
+        "handle": "file_selector-manifests",
+        "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "size_bytes": 7
+      }
+    }
+  },
+  "qualify_result": {
+    "schema_version": "semantic-router.training/v1",
+    "status": "succeeded",
+    "qualifications": [
+      {
+        "variant_id": "variant_selector",
+        "runtime": {
+          "name": "router",
+          "version": "1"
+        },
+        "compatible": true,
+        "receipt": {
+          "handle": "file_selector-receipt",
+          "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "size_bytes": 7
+        }
+      }
+    ]
+  },
+  "qualification": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "qualification_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "variant_id": "variant_selector",
+    "runtime": {
+      "name": "router",
+      "version": "1"
+    },
+    "compatible": true,
+    "receipt": {
+      "handle": "file_selector-receipt",
+      "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "size_bytes": 7
+    },
+    "provenance": {
+      "run_id": "run_selector",
+      "task_id": "task_selector-qualify",
+      "attempt_id": "attempt_selector-qualify",
+      "snapshot_id": "snapshot_selector",
+      "trainer": {
+        "name": "selector",
+        "version": "1"
+      },
+      "manifest_bundle": {
+        "handle": "file_selector-manifests",
+        "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "size_bytes": 7
+      }
+    }
+  },
+  "proposal": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "proposal_selector",
+    "created_at": "2026-09-23T00:00:00Z",
+    "variant_id": "variant_selector",
+    "qualification_id": "qualification_selector",
+    "name": "selector"
+  }
+}

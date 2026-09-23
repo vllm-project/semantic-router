@@ -1,0 +1,469 @@
+openapi: 3.1.0
+info:
+  title: Training management contract
+  version: v1
+  description: Contract for the planned Go management API. These routes are not registered by the contract-only
+    change.
+servers:
+- url: /api/training/v1
+security:
+- bearerAuth: []
+- sessionCookie: []
+paths:
+  /uploads:
+    post:
+      operationId: createUpload
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/Upload
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+  /data-assets:
+    post:
+      operationId: createDataAsset
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/DataAsset
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./training-v1.schema.json#/$defs/DataAssetSpec
+  /data-assets/{id}:
+    get:
+      operationId: getDataAsset
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/DataAsset
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /data-snapshots:
+    post:
+      operationId: createDataSnapshot
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/DataSnapshot
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./training-v1.schema.json#/$defs/SnapshotSpec
+  /data-snapshots/{id}:
+    get:
+      operationId: getDataSnapshot
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/DataSnapshot
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /experiments:
+    post:
+      operationId: createExperiment
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/Experiment
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./training-v1.schema.json#/$defs/ExperimentSpec
+  /experiments/{id}:
+    get:
+      operationId: getExperiment
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/Experiment
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /binding-proposals:
+    post:
+      operationId: createBindingProposal
+      responses:
+        '201':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/BindingProposal
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./training-v1.schema.json#/$defs/BindingProposalSpec
+  /binding-proposals/{id}:
+    get:
+      operationId: getBindingProposal
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/BindingProposal
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /artifacts/{id}:
+    get:
+      operationId: getArtifact
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/Artifact
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /artifact-variants/{id}:
+    get:
+      operationId: getArtifactVariant
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/ArtifactVariant
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /evaluations/{id}:
+    get:
+      operationId: getEvaluation
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/Evaluation
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /qualifications/{id}:
+    get:
+      operationId: getQualification
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/Qualification
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /runs/validate:
+    post:
+      operationId: validateRun
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/ValidationResponse
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./training-v1.schema.json#/$defs/ValidationRequest
+  /runs:
+    post:
+      operationId: submitRun
+      responses:
+        '202':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/RunGraph
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./training-v1.schema.json#/$defs/SubmitRunRequest
+    get:
+      operationId: listRuns
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ./training-v1.schema.json#/$defs/TrainingRun
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: experiment_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /runs/{id}:
+    get:
+      operationId: getRun
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/RunGraph
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /runs/{id}/cancel:
+    post:
+      operationId: cancelRun
+      responses:
+        '202':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/RunGraph
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /runs/{id}/retry:
+    post:
+      operationId: retryRun
+      responses:
+        '202':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/RunGraph
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /runs/{id}/events:
+    get:
+      operationId: getRunEvents
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/EventPage
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+      - name: after
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+  /runs/compare:
+    post:
+      operationId: compareRuns
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: ./training-v1.schema.json#/$defs/ComparisonResponse
+        default:
+          $ref: '#/components/responses/Error'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: ./training-v1.schema.json#/$defs/ComparisonRequest
+  /artifacts/{id}/variants:
+    get:
+      operationId: listArtifactVariants
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: ./training-v1.schema.json#/$defs/ArtifactVariant
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+  /files/{id}:
+    get:
+      operationId: downloadFile
+      responses:
+        '200':
+          description: Owned file bytes; id is a server-issued file handle.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        default:
+          $ref: '#/components/responses/Error'
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z]+_[a-zA-Z0-9-]+$
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: vsr_session
+  responses:
+    Error:
+      description: 400 invalid_request; 401 unauthenticated; 403 forbidden; 404 not_found; 409 conflict;
+        500 internal_error. Cookie requests also follow Dashboard CSRF protection.
+      content:
+        application/json:
+          schema:
+            $ref: ./training-v1.schema.json#/$defs/APIError
