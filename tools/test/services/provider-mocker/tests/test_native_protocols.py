@@ -94,6 +94,7 @@ async def test_messages_tools_stream_preserves_arguments_and_terminal_order(clie
         p["content_block"] for p in payloads if p["type"] == "content_block_start"
     )
     assert tool["id"] == "call_mock_lookup" and tool["name"] == "lookup"
+    assert tool["caller"] == {"type": "direct"}
     fragments = [
         p["delta"]["partial_json"]
         for p in payloads
