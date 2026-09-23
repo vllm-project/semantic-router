@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -182,7 +184,7 @@ func (r *Runner) setJobRunning(j *Job) {
 }
 
 func (r *Runner) createJob(jobType string) *Job {
-	id := fmt.Sprintf("ml-%s-%d", jobType, time.Now().UnixMilli())
+	id := fmt.Sprintf("ml-%s-%s", jobType, uuid.NewString())
 	job := &Job{
 		ID:        id,
 		Type:      jobType,

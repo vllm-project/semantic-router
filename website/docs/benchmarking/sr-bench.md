@@ -57,8 +57,9 @@ stack port offset is not added to the override.
 When only the selected Dashboard image changes, `serve` upgrades its managed
 worker after verifying the same launch settings, store and credentials. The CLI
 briefly pauses the worker to check its durable journal before replacing it.
-Active runs block the upgrade and resume unchanged; finish or cancel them before
-retrying. Saved results remain in the same store. A stopped worker, changed
+Active runs and dataset preparations block the upgrade and resume unchanged.
+Finish or cancel runs and wait for preparations to finish before retrying.
+Saved results remain in the same store. A stopped worker, changed
 credentials or changed launch settings still require explicit reconciliation.
 The container runtime must support pausing for this image upgrade.
 
@@ -100,24 +101,76 @@ of manifests, command arguments and public artifacts.
 
 ## Prepare reusable tasks and targets
 
-Install `vllm-sr[bench]` on the preparation host for Parquet sources. Prepare data
-on the worker host or its shared store; a local client path is not uploaded to a
-remote worker.
+Open **Dashboard → Evaluation → Create evaluation** and choose benchmarks,
+an evaluation size, models or recipes, and limits. Benchmarks do not need to be
+downloaded first. **Review plan** automatically reuses verified data and prepares
+missing datasets and their supported data dependencies. The creation page shows
+progress through installation, download and freezing, then presents the frozen
+plan. **Start evaluation** begins model requests only after that review.
+
+For independent data management, **Datasets → Prepare dataset** uses the same
+shared worker. Accepted preparation jobs continue if the page closes. Completed
+datasets become available to both Dashboard and CLI.
+
+The CLI uses the same service operation by default. It waits for completion and
+writes the frozen manifest to standard output, so it can still be redirected to
+a file. `--url` selects a remote worker; downloads and frozen dataset files remain
+on that worker, not on the CLI host.
 
 ```bash
 vllm-sr benchmark --store ./data/sr-bench dataset prepare \
-  --benchmark mmlu-pro --profile quick > mmlu-quick.json
-vllm-sr benchmark --store ./data/sr-bench dataset prepare \
-  --benchmark gpqa-diamond --profile quick > gpqa-quick.json
-vllm-sr benchmark --store ./data/sr-bench dataset combine \
-  mmlu-quick.json gpqa-quick.json > quick-dataset.json
+  --benchmark mmlu-pro --benchmark gpqa-diamond \
+  --profile quick > quick-dataset.json
 ```
 
-Gated sources require the appropriate source access and environment credential.
+Repeating `--benchmark` creates one service-owned collection job. It pins eligible
+existing sources, prepares only missing benchmarks with the same seed, and
+validates the final composition. Source or seed conflicts require explicit
+resolution; they are not treated as missing data. A failed job can be retried
+explicitly and can reuse verified completed items. Single-benchmark preparation
+and explicit `dataset combine` remain available.
+
+Use `--no-wait` to return the preparation job immediately. Closing the page or
+interrupting the CLI wait does not cancel the worker's preparation. Both clients
+can inspect the same jobs and prepared datasets:
+
+```bash
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset options
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset prepare \
+  --benchmark simpleqa-verified --profile smoke --no-wait
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset preparations
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset preparations PREPARATION_ID
+vllm-sr benchmark --url http://127.0.0.1:8090 dataset show
+```
+
+Preparation requires Evaluation write permission in Dashboard; reading options,
+progress and datasets requires read permission. Read-only Dashboard mode disables
+preparation, while benchmark and profile selection remain available for browsing.
+If access could not be checked, use **Refresh access** to retry the settings and
+account checks. Preparing data does not require model generation permission,
+start an evaluation, or make model requests. Automatic dependency installation is limited to the
+allowlisted data preparation packages. It does not install execution harnesses,
+build sandbox images, or provision model servers. Those remain explicit worker
+setup operations. Gated sources require access approval and the appropriate
+Hugging Face credential in the **worker environment**; browser or local CLI
+credentials are not uploaded. Installation and download failures remain visible
+on the preparation job and can be retried explicitly after the cause is fixed.
+
+Local file imports and advanced history options use the explicit `--local` mode.
+For this mode, install `vllm-sr[bench]` on the preparation host for Parquet sources.
+A local file is never implicitly uploaded to a remote worker, and `--local` cannot
+be combined with `--url` or `SR_BENCH_URL`:
+
+```bash
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
+  --benchmark mmlu-pro --profile smoke \
+  --source-path ./tasks.parquet --revision imported-v1
+```
+
 Local task imports require `--source-path` and `--revision`; their actual bytes
-are hashed. `--limit` creates a labeled custom subset. Never edit a prepared
-file in place. New questions, selection rules or source bytes create a new
-identity.
+are hashed. `--limit` creates a labeled custom subset in either mode. Never edit
+a prepared file in place. New questions, selection rules or source bytes create
+a new identity.
 
 ### Reserve named evaluation history
 
@@ -128,12 +181,12 @@ of sr-bench's evaluation split and seed. Use the same partition and exact source
 provenance throughout a history comparison.
 
 ```bash
-vllm-sr benchmark --store ./data/sr-bench dataset prepare \
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
   --benchmark mmlu-pro --profile quick --source-partition test > quick.json
 # Use the dataset ID returned above; --dataset and --run may be repeated.
 vllm-sr benchmark --store ./data/sr-bench dataset exclusions \
   --dataset DATASET_ID --run RUN_ID --output history.json
-vllm-sr benchmark --store ./data/sr-bench dataset prepare \
+vllm-sr benchmark --store ./data/sr-bench dataset prepare --local \
   --benchmark mmlu-pro --profile standard --source-partition test \
   --exclusion-snapshot history.json --evaluation-role holdout > standard.json
 ```
@@ -493,10 +546,11 @@ kind. Read-only polling reconnects after a temporary network failure and discove
 CLI-created runs. Closing or refreshing the page does not restart a run.
 
 In **Create evaluation**, first choose **smoke**, **quick** or **standard**, then
-select one or more prepared benchmarks, or **Select all benchmarks**. These are
+select one or more benchmarks, or **Select all benchmarks**. These are
 the actual run profiles; standard uses the holdout split. Available sources must
-share a profile, seed and split. **Review plan** composes whole benchmark groups
-from those frozen sources without downloading data, resampling questions or
+share a profile, seed and split. **Review plan** reuses verified prepared groups
+and automatically downloads missing groups and supported data dependencies in
+one background preparation job. It then composes the frozen sources without
 calling a model. Selecting all benchmarks from one source reuses its original
 identity; a subset or multi-source composition creates a reusable frozen dataset.
 Conflicting selections are rejected rather than silently merged.
@@ -507,7 +561,11 @@ read-only. **Route preview** also accepts optional session and conversation
 context for inspecting session-dependent routing. Review the frozen plan before
 starting; plan review does not generate model answers.
 
-**Datasets** provides search, profile/benchmark filters and pagination. Open a
+**Datasets → Prepare dataset** is an optional management entry point that downloads
+and freezes a built-in source through
+the same service used by `benchmark dataset prepare`. Preparation progress and
+errors survive page refreshes; completion refreshes the available datasets.
+**Datasets** also provides search, profile/benchmark filters and pagination. Open a
 dataset to browse its questions, benchmark coverage and subject groups. Questions
 load in pages of 25 with benchmark/category filters and text search; opening one
 shows the task instructions and choices, including complete code/agent task

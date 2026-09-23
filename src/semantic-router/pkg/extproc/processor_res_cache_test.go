@@ -33,6 +33,8 @@ type mockStreamingCache struct {
 	exactHit           bool
 	exactFindCalled    bool
 	exactAdded         bool
+	addEntryResponse   []byte
+	exactResponseAdded []byte
 }
 
 func (m *mockStreamingCache) IsEnabled() bool { return true }
@@ -65,12 +67,13 @@ func (m *mockStreamingCache) AddEntry(
 	model string,
 	query string,
 	_ []byte,
-	_ []byte,
+	responseBody []byte,
 	ttlSeconds int,
 ) error {
 	m.addEntryCalled = true
 	m.addEntryModel = model
 	m.addEntryQuery = query
+	m.addEntryResponse = append([]byte(nil), responseBody...)
 	m.lastTTLSeconds = ttlSeconds
 	return m.addEntryErr
 }
@@ -115,10 +118,11 @@ func (m *mockStreamingCache) AddExact(
 	_ context.Context,
 	_ string,
 	_ string,
-	_ []byte,
+	responseBody []byte,
 	ttlSeconds int,
 ) error {
 	m.exactAdded = true
+	m.exactResponseAdded = append([]byte(nil), responseBody...)
 	m.lastTTLSeconds = ttlSeconds
 	return nil
 }
