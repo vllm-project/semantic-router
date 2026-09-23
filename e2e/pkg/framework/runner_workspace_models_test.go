@@ -224,7 +224,7 @@ func (p *stubProfile) GetTestCases() []string { return nil }
 func (p *stubProfile) GetServiceConfig() ServiceConfig { return ServiceConfig{} }
 
 func TestSkipMissingLocalImageDeployment(t *testing.T) {
-	notFound := apierrors.NewNotFound(schema.GroupResource{Resource: "deployments"}, "mock-vllm")
+	notFound := apierrors.NewNotFound(schema.GroupResource{Resource: "deployments"}, "provider-mocker")
 	if !skipMissingLocalImageDeployment(notFound) {
 		t.Fatal("expected a missing deployment to be skipped")
 	}

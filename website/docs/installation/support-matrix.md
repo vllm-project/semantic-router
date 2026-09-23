@@ -70,10 +70,9 @@ external project.
 | --- | --- | --- |
 | KServe example | Experimental example | KServe integration smoke testing; not a qualified KServe or model-serving deployment. |
 | OpenShift example | Experimental example | Adapting resources to Routes and security constraints; not a hardened OpenShift profile. |
-| Anthropic-compatible backend fixture | Experimental example | Protocol integration tests; not a production model service. |
 | Hallucination policy demo | Experimental example | Fact-check policy behavior; not a qualified guardrail or model. |
 | Jailbreak error-handling demo | Experimental example | Classifier failure paths; not a secure production policy. |
-| LLM Katan development backends | Experimental example | Lightweight OpenAI-compatible test backends; not production inference. |
+| Provider mocker and optional tiny-model smoke | Experimental example | Deterministic protocol fixtures; optional pinned Qwen3-0.6B real inference via the upstream llama.cpp server. |
 | PII remote backend demo | Experimental example | Remote token_spans.v1 PII backend and its on_error policy; not a qualified PII model or redaction policy. |
 | Observability demo | Experimental example | Prometheus, Grafana, alert, and Dashboard wiring; replace all example security and retention settings. |
 | Response jailbreak demo | Experimental example | Response-classifier window behavior; not a production guardrail model. |

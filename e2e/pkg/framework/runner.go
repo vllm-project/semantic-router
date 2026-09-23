@@ -428,7 +428,7 @@ func (r *Runner) collectSemanticRouterLogs(ctx context.Context, client *kubernet
 	}
 
 	// Write logs to file
-	logFilename := "semantic-router-logs.txt"
+	logFilename := reportPath("semantic-router-logs.txt")
 	if err := os.WriteFile(logFilename, []byte(allLogs.String()), 0o644); err != nil {
 		return fmt.Errorf("failed to write log file: %w", err)
 	}
@@ -520,14 +520,10 @@ func validateCaseInventory(names []string) error {
 
 func prebuiltFixtureImage(dockerfile string) string {
 	switch dockerfile {
-	case "tools/test/services/mock-vllm/Dockerfile":
-		return os.Getenv("E2E_PREBUILT_MOCK_VLLM_IMAGE")
+	case "tools/test/services/provider-mocker/Dockerfile":
+		return os.Getenv("E2E_PREBUILT_PROVIDER_MOCKER_IMAGE")
 	case "dashboard/backend/Dockerfile":
 		return os.Getenv("VLLM_SR_DASHBOARD_IMAGE")
-	case "e2e/testing/llm-katan/Dockerfile":
-		return os.Getenv("E2E_PREBUILT_LLM_KATAN_IMAGE")
-	case "e2e/testing/anthropic-shim/Dockerfile":
-		return os.Getenv("E2E_PREBUILT_ANTHROPIC_SHIM_IMAGE")
 	default:
 		return ""
 	}

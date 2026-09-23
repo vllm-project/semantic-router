@@ -12,8 +12,8 @@
       "package": "./pkg/cache",
       "test": "TestOmniStorageIntegrationUsesArtifactDimensionAndIdentity",
       "source": "src/semantic-router/pkg/cache/omni_storage_integration_test.go",
-      "profile": "native.image-calibration-cpu",
-      "reason": "Executed with the pinned prepared Nano ORT artifact by the strict image-calibration inventory; explicit Mini qualification uses the same test and its separately supplied artifact."
+      "profile": "native.ort-cpu",
+      "reason": "Executed with the pinned prepared Nano ORT artifact by the required published-model runtime inventory; each owned integration must pass without skipping."
     },
     {
       "package": "./pkg/cache",
@@ -47,15 +47,15 @@
       "package": "./pkg/classification",
       "test": "TestEmbeddingClassifier_IntegrationImageQueryEndToEnd",
       "source": "src/semantic-router/pkg/classification/embedding_classifier_integration_test.go",
-      "profile": "native.image-calibration-cpu",
-      "reason": "Executed with the pinned prepared Nano ORT artifact by the strict image-calibration owned integration inventory; legacy Candle compatibility owns only its original binding tests."
+      "profile": "native.ort-cpu",
+      "reason": "Executed with the pinned prepared Nano ORT artifact by the required published-model runtime inventory; each owned integration must pass without skipping."
     },
     {
       "package": "./pkg/classification",
       "test": "TestEmbeddingClassifier_IntegrationTextRulesIgnoredOnImagePath",
       "source": "src/semantic-router/pkg/classification/embedding_classifier_integration_test.go",
-      "profile": "native.image-calibration-cpu",
-      "reason": "Executed with the pinned prepared Nano ORT artifact by the strict image-calibration owned integration inventory; legacy Candle compatibility owns only its original binding tests."
+      "profile": "native.ort-cpu",
+      "reason": "Executed with the pinned prepared Nano ORT artifact by the required published-model runtime inventory; each owned integration must pass without skipping."
     },
     {
       "package": "./pkg/classification",
@@ -250,8 +250,8 @@
       "package": "./pkg/modeldownload",
       "test": "TestPublishedOmniPreparedInventory",
       "source": "src/semantic-router/pkg/modeldownload/prepared_artifact_test.go",
-      "profile": "native.image-calibration-cpu",
-      "reason": "Executed against the same pinned prepared Nano artifact as the image-calibration inventory; no model download occurs inside the test."
+      "profile": "native.ort-cpu",
+      "reason": "Executed with the pinned prepared Nano ORT artifact by the required published-model runtime inventory; each owned integration must pass without skipping."
     },
     {
       "package": "./pkg/modelruntime",
@@ -283,10 +283,17 @@
     },
     {
       "package": "./pkg/modelruntime/native",
+      "test": "TestPublishedOmniModels",
+      "source": "src/semantic-router/pkg/modelruntime/native/published_omni_test.go",
+      "profile": "native.ort-cpu",
+      "reason": "Required ORT CPU published-model runtime inventory supplies pinned prepared Nano and Mini artifacts and rejects missing or skipped runtime cases."
+    },
+    {
+      "package": "./pkg/modelruntime/native",
       "test": "TestPublishedVelaHalu",
       "source": "src/semantic-router/pkg/modelruntime/native/published_halu_test.go",
-      "profile": "explicit-vela-halu-reference",
-      "reason": "Requires VLLM_SR_HALU_MODEL and optional VLLM_SR_HALU_REFERENCE. Explicit Candle/ORT source-reference qualification; routine native CI does not supply these inputs. The vela-halu E2E profile covers deployed Halu behavior."
+      "profile": "native.candle-cpu",
+      "reason": "Required Candle CPU published-model runtime inventory supplies the pinned Halu artifact. Optional ORT/source-reference qualification remains separate."
     },
     {
       "package": "./pkg/modelruntime/native",
@@ -356,7 +363,7 @@
       "test": "TestPublishedOmniParity",
       "source": "onnx-binding/instance/omni_published_test.go",
       "profile": "explicit-vela-omni-reference",
-      "reason": "Requires VELA_OMNI_ARTIFACT retaining source-reference goldens. Explicit CPU/AMD numerical qualification; routine image-calibration CI independently checks Nano export parity and owned routing/storage integration."
+      "reason": "Requires VELA_OMNI_ARTIFACT retaining source-reference goldens. Explicit CPU/AMD numerical qualification; routine ORT CPU runtime checks Nano/Mini prepared export parity and owned routing/storage integration."
     }
   ],
   "ginkgo_excluded_labels": {

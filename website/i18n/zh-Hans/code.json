@@ -2211,6 +2211,18 @@
   "visionPaper.heroDescription": {
     "message": "用于 LLM 推理优化的 Workload-Router-Pool 架构，以 vLLM Semantic Router 愿景论文的完整 PDF 阅读器形式呈现。"
   },
+  "decisionPaper.title": {
+    "message": "Decision 论文"
+  },
+  "decisionPaper.socialTitle": {
+    "message": "Decision 1.0：迈向开放的决策基础模型 — vLLM Semantic Router"
+  },
+  "decisionPaper.metaDescription": {
+    "message": "Decision 1.0：迈向开放的决策基础模型"
+  },
+  "decisionPaper.heroDescription": {
+    "message": "Decision 1.0：迈向开放的决策基础模型。这份技术报告介绍 Decision 系列的模型、数据与训练方法。"
+  },
   "homepage.meta.description": {
     "message": "Mixture-of-Models 是面向异构 LLM 推理的服务架构。vLLM Semantic Router 让它能够实际部署。"
   },

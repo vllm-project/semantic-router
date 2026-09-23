@@ -305,7 +305,11 @@ func (m *MemoryBackend) HybridSearch(
 	fused := FuseScores(vectorScores, bm25Scores, ngramScores, config)
 
 	// 5. Apply threshold and topK, build results.
-	results := make([]SearchResult, 0, topK)
+	resultCapacity := topK
+	if resultCapacity < 0 {
+		resultCapacity = 0
+	}
+	results := make([]SearchResult, 0, resultCapacity)
 	for _, fc := range fused {
 		if fc.FinalScore < float64(threshold) {
 			continue

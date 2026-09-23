@@ -136,7 +136,7 @@ raise SystemExit("unhandled fixture command: " + name)
             if call["command"] == "vllm-sr":
                 self.assertEqual(call["stack"], stack)
                 self.assertEqual(call["cwd"], state)
-        self.assertIn(stack + "-llm-katan", stopped)
+        self.assertIn(stack + "-provider-mocker", stopped)
         self.assertIn(stack + "-vllm-sr-milvus", stopped)
 
     def test_two_stack_names_have_independent_resources_ports_and_artifacts(self):
@@ -152,15 +152,15 @@ raise SystemExit("unhandled fixture command: " + name)
                     if call["command"] == "fake-runtime" and call["args"][0] == "run"
                 ]
                 self.assertEqual(len(runs), 2)
-                milvus, katan = runs
+                milvus, mocker = runs
                 self.assertIn(stack + "-vllm-sr-milvus", milvus)
                 self.assertIn(f"127.0.0.1:{19530 + offset}:19530", milvus)
                 self.assertIn(f"127.0.0.1:{9091 + offset}:9091", milvus)
                 self.assertIn(state + "/milvus-data:/var/lib/milvus:z", milvus)
-                self.assertIn(stack + "-llm-katan", katan)
-                self.assertIn(stack + "-vllm-sr-network", katan)
-                self.assertIn(f"127.0.0.1:{8000 + offset}:8000", katan)
-                self.assertIn(stack + "-llm-katan:8000", config)
+                self.assertIn(stack + "-provider-mocker", mocker)
+                self.assertIn(stack + "-vllm-sr-network", mocker)
+                self.assertIn(f"127.0.0.1:{8000 + offset}:8000", mocker)
+                self.assertIn(stack + "-provider-mocker:8000", config)
                 self.assertIn(stack + "-vllm-sr-milvus:19530", config)
                 suite = next(
                     call

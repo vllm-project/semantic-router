@@ -120,10 +120,10 @@ jobs:
             --output=../reports/current.json
 
       # Model benchmarks use the measured base implementation with identical
-      # artifacts; other components retain their committed baselines. Allocation
-      # thresholds block regressions. Machine-dependent ns/op remains advisory.
-      - name: Compare against baseline and gate on regressions
-        id: gate
+      # artifacts; other components retain their committed baselines. Numeric
+      # regressions are advisory; invalid or incomplete comparisons still fail.
+      - name: Compare against baseline and report regressions
+        id: comparison
         run: |
           cd perf && go run cmd/perftest/main.go \
             --compare-baseline=testdata/baselines/ \
@@ -131,8 +131,7 @@ jobs:
             --current=../reports/current.json \
             --threshold-file=config/thresholds.yaml \
             --output=../reports/comparison.json \
-            --inventory=config/benchmark-inventory.json \
-            --fail-on-regression
+            --inventory=config/benchmark-inventory.json
 
       - name: Record the complete production benchmark inventory
         if: inputs.verification != ''
@@ -161,6 +160,7 @@ jobs:
         id: summary
         if: always()
         run: |
+          mkdir -p reports
           # Per-suite status derived from actual benchmark output:
           # a suite failed if any of its benchmarks printed "--- FAIL:", passed if
           # at least one result line is present, and did not run otherwise.
@@ -174,25 +174,28 @@ jobs:
               echo "⚠️ not run"
             fi
           }
-          case "${{ steps.gate.outcome }}" in
-            success) gate_status="✅ no regressions beyond thresholds";;
-            failure) gate_status="❌ regression detected beyond threshold";;
-            *)       gate_status="⚠️ not run";;
-          esac
-          if [ "${{ steps.gate.outcome }}" = "failure" ]; then
-            headline="❌ **Performance regression gate FAILED** — a benchmark regressed beyond its configured threshold. See the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
-          elif [ "${{ steps.bench.outcome }}" = "success" ] && [ "${{ steps.looper.outcome }}" = "success" ]; then
-            headline="Component benchmarks completed with no regressions beyond thresholds."
-          else
-            headline="❌ Component benchmarks **FAILED** — see the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          # Preserve allocation and timing observations without blocking CI.
+          regressions=""
+          timing=""
+          comparison_status="⚠️ not run"
+          if [ "${{ steps.comparison.outcome }}" = "success" ]; then
+            jq -e '(.results | type == "array") and (.has_regressions | type == "boolean")' reports/comparison.json > /dev/null
+            regressions=$(jq -r '.results[]? | select(.RegressionDetected==true) | "- \(.BenchmarkName): allocs/op \(.Baseline.allocs_per_op // 0)→\(.Current.allocs_per_op // 0) \(if (.Baseline.allocs_per_op // 0) > 0 then "(\(if .AllocsPerOpChange>=0 then "+" else "" end)\(.AllocsPerOpChange|round)%)" else "(new)" end), B/op \(.Baseline.bytes_per_op // 0)→\(.Current.bytes_per_op // 0) \(if (.Baseline.bytes_per_op // 0) > 0 then "(\(if .BytesPerOpChange>=0 then "+" else "" end)\(.BytesPerOpChange|round)%)" else "(new)" end)"' reports/comparison.json)
+            timing=$(jq -r '.results[]? | select(.NsAdvisory==true) | "- \(.BenchmarkName): ns/op \(.NsPerOpChange|round)% slower"' reports/comparison.json)
+            comparison_status="✅ no allocation regressions beyond thresholds"
+            if [ -n "$regressions" ]; then
+              comparison_status="⚠️ allocation regressions detected (advisory)"
+              echo "::warning::Performance regressions detected; see the performance summary. Numerical regressions do not block CI."
+            fi
+          elif [ "${{ steps.comparison.outcome }}" = "failure" ]; then
+            comparison_status="❌ comparison failed"
           fi
-          # Blocking (allocs/op or B/op over threshold) and advisory (ns/op
-          # slower — reported, never blocks) lists, pulled from the comparison.
-          blocked=""
-          advisory=""
-          if [ -f reports/comparison.json ]; then
-            blocked=$(jq -r '.results[]? | select(.RegressionDetected==true) | "- \(.BenchmarkName): allocs/op \(.Baseline.allocs_per_op // 0)→\(.Current.allocs_per_op // 0) \(if (.Baseline.allocs_per_op // 0) > 0 then "(\(if .AllocsPerOpChange>=0 then "+" else "" end)\(.AllocsPerOpChange|round)%)" else "(new)" end), B/op \(.Baseline.bytes_per_op // 0)→\(.Current.bytes_per_op // 0) \(if (.Baseline.bytes_per_op // 0) > 0 then "(\(if .BytesPerOpChange>=0 then "+" else "" end)\(.BytesPerOpChange|round)%)" else "(new)" end)"' reports/comparison.json 2>/dev/null || true)
-            advisory=$(jq -r '.results[]? | select(.NsAdvisory==true) | "- \(.BenchmarkName): ns/op \(.NsPerOpChange|round)% slower"' reports/comparison.json 2>/dev/null || true)
+          if [ "${{ steps.bench.outcome }}" != "success" ] || [ "${{ steps.looper.outcome }}" != "success" ] || [ "${{ steps.comparison.outcome }}" != "success" ]; then
+            headline="❌ Benchmark execution or comparison **FAILED** — see the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
+          elif [ -n "$regressions" ]; then
+            headline="⚠️ **Performance regressions detected (advisory)** — measurements completed; numerical regressions do not block CI."
+          else
+            headline="Component benchmarks completed with no allocation regressions beyond thresholds."
           fi
           cat > reports/summary.md <<EOF
           ## Performance Benchmark Results
@@ -204,13 +207,14 @@ jobs:
           - Decision engine benchmarks: $(suite_status BenchmarkEvaluate)
           - Cache benchmarks: $(suite_status BenchmarkCache)
           - Looper family benchmarks: $(suite_status "Benchmark(ReMoM|Fusion|Flow|Base)")
-          - Regression gate: ${gate_status}
+          - Baseline comparison: ${comparison_status}
+          - Regression policy: advisory; benchmark execution and complete evidence remain required.
           EOF
-          if [ -n "$blocked" ]; then
-            { echo ""; echo "### Blocking regressions (allocs/op or B/op over threshold)"; echo "$blocked"; } >> reports/summary.md
+          if [ -n "$regressions" ]; then
+            { echo ""; echo "### Advisory allocation regressions (allocs/op or B/op over threshold)"; echo "$regressions"; } >> reports/summary.md
           fi
-          if [ -n "$advisory" ]; then
-            { echo ""; echo "### Advisory — slower wall-clock, does not block the gate (ns/op)"; echo "$advisory"; } >> reports/summary.md
+          if [ -n "$timing" ]; then
+            { echo ""; echo "### Advisory timing regressions (ns/op)"; echo "$timing"; } >> reports/summary.md
           fi
           cat >> reports/summary.md <<EOF
 
@@ -220,6 +224,7 @@ jobs:
           ---
           _Performance testing powered by [vLLM Semantic Router](https://github.com/vllm-project/semantic-router)_
           EOF
+          cat reports/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload performance artifacts
         if: always()

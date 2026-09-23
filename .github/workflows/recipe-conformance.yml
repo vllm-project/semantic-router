@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   inventory:
-    name: Recipe Inventory
+    name: Inventory
     runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
@@ -64,7 +64,7 @@ jobs:
           retention-days: 30
 
   live-cpu:
-    name: Recipe Preview (${{ matrix.shard }})
+    name: Preview (${{ matrix.shard }})
     needs: inventory
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -145,7 +145,7 @@ jobs:
           retention-days: 30
 
   report:
-    name: Recipe Results
+    name: Results
     if: ${{ !cancelled() && needs.inventory.result == 'success' }}
     needs:
       - inventory
