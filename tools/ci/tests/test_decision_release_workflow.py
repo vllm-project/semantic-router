@@ -52,6 +52,17 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
             "decision_perf_release_gate.py validate",
             "\n".join(step.get("run", "") for step in rocm["steps"]),
         )
+        performance_gate = next(
+            step
+            for step in rocm["steps"]
+            if "decision_perf_release_gate.py validate" in step.get("run", "")
+        )
+        for argument in ("--qualification-receipt", "--candidate-ref", "--owner"):
+            self.assertIn(argument, performance_gate["run"])
+        self.assertNotIn(
+            "decision_perf_release_producer.py",
+            "\n".join(step.get("run", "") for step in rocm["steps"]),
+        )
         upload = next(
             step
             for step in rocm["steps"]
@@ -93,6 +104,8 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
             "decision_perf_release_gate.py validate",
         ):
             self.assertIn(expected, commands)
+        for argument in ("--qualification-receipt", "--candidate-ref", "--owner"):
+            self.assertIn(argument, commands)
         self.assertLess(commands.index("--promote"), commands.index("generate"))
         self.assertLess(
             commands.index("generate"), commands.index("package_contract.py")

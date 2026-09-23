@@ -216,11 +216,37 @@ def _run_wave(
     )
 
 
-def _record_wave(samples_handle, workflows_handle, samples, workflows, origin_ns):
+def _logical_schedule_sha256(
+    selected: list[WorkloadCase], phase: str, round_number: int, concurrency: int
+) -> str:
+    """Identify equal ordered logical cases, not a paired timed-arrival epoch."""
+
+    payload = {
+        "question_count": selected[0].question_count,
+        "state_count": selected[0].state_count,
+        "concurrency": concurrency,
+        "phase": phase,
+        "round": round_number,
+        "case_ids": [case.id for case in selected],
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _record_wave(
+    samples_handle, workflows_handle, samples, workflows, selected, origin_ns
+):
+    schedule_sha256 = _logical_schedule_sha256(
+        selected,
+        workflows[0].phase,
+        workflows[0].round,
+        workflows[0].concurrency,
+    )
     for sample in samples:
-        samples_handle.write(
-            json.dumps(sample.public_record(origin_ns), sort_keys=True) + "\n"
-        )
+        record = sample.public_record(origin_ns)
+        record["logical_schedule_sha256"] = schedule_sha256
+        samples_handle.write(json.dumps(record, sort_keys=True) + "\n")
     for workflow in workflows:
         workflows_handle.write(
             json.dumps(workflow.public_record(origin_ns), sort_keys=True) + "\n"
@@ -274,6 +300,12 @@ def run_semantic(args: argparse.Namespace) -> int:
         "parity_policy": args.parity_policy,
         "probability_tolerance_absolute": args.probability_tolerance,
         "concurrency_unit": "maximum in-flight HTTP requests per arm",
+        "arrival_policy": (
+            "the same ordered logical workflows are submitted per arm and round; "
+            "old fan-out submits one HTTP call per state while new batch submits "
+            "one HTTP call per workflow; submission and server admission times "
+            "are not paired across arms"
+        ),
         "connection_policy": "new HTTP connection per request",
         "latency_boundary": "first HTTP send through last complete response body in workflow",
         "percentile": "nearest rank over complete conforming workflows",
@@ -415,6 +447,7 @@ def run_semantic(args: argparse.Namespace) -> int:
                                 workflow_handle,
                                 wave_samples,
                                 wave_workflows,
+                                [case],
                                 origin_ns,
                             )
                 for round_number in range(args.rounds):
@@ -483,6 +516,7 @@ def run_semantic(args: argparse.Namespace) -> int:
                             workflow_handle,
                             wave_samples,
                             wave_workflows,
+                            selected,
                             origin_ns,
                         )
                 summary = summarize_shape(
