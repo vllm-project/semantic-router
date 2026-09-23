@@ -332,42 +332,186 @@ def test_batch_failure_is_isolated_to_jobs_in_that_compatible_forward():
     asyncio.run(scenario())
 
 
-def test_batch_restores_state_and_question_order_after_question_major_execution():
+@pytest.mark.parametrize("split_by_type", [False, True])
+def test_batch_prepares_state_major_rows_and_restores_exact_mixed_outputs(
+    split_by_type: bool,
+):
+    probabilities = {
+        ("alpha", "allowed"): (0.11, 0.89),
+        ("alpha", "move"): (0.12, 0.88),
+        ("alpha", "quality"): (0.13, 0.87),
+        ("beta", "allowed"): (0.21, 0.79),
+        ("beta", "move"): (0.22, 0.78),
+        ("beta", "quality"): (0.23, 0.77),
+        ("gamma", "allowed"): (0.31, 0.69),
+        ("gamma", "move"): (0.32, 0.68),
+        ("gamma", "quality"): (0.33, 0.67),
+    }
+
+    class DistinctExecutor(RecordingExecutor):
+        async def predict_rows(self, rows):
+            self.prepared_calls.append(rows)
+            raw_rows = tuple(item.row for item in rows)
+            self.calls.append(raw_rows)
+            return tuple(
+                DecisionRowResult(
+                    question_id=row.question_id,
+                    type=row.question.type,
+                    probabilities=probabilities[(row.state, row.question_id)],
+                    input_tokens=len(row.state),
+                )
+                for row in raw_rows
+            )
+
     async def scenario():
-        executor = RecordingExecutor()
+        executor = DistinctExecutor(
+            batch_key=(
+                (lambda row: row.question.type)
+                if split_by_type
+                else (lambda row: "default")
+            )
+        )
         backend = PhysicalBatchBackend(
             MODEL,
             executor,
-            physical_batch_size=8,
+            physical_batch_size=4,
             coalesce_seconds=0,
         )
         payloads = (
-            BackendBatchRequest("left", request("left", ("a", "b"))),
-            BackendBatchRequest("right", request("right", ("a", "b"))),
+            BackendBatchRequest("first", mixed_request("alpha")),
+            BackendBatchRequest("second", mixed_request("beta")),
+            BackendBatchRequest("third", mixed_request("gamma")),
         )
         try:
             results = await backend.infer_batch(payloads)
         finally:
             await backend.aclose()
-        assert [(row.state, row.question_id) for row in executor.calls[0]] == [
-            ("left", "a"),
-            ("right", "a"),
-            ("left", "b"),
-            ("right", "b"),
+
+        state_major = [
+            ("alpha", "allowed", "noul"),
+            ("alpha", "move", "choice"),
+            ("alpha", "quality", "score"),
+            ("beta", "allowed", "noul"),
+            ("beta", "move", "choice"),
+            ("beta", "quality", "score"),
+            ("gamma", "allowed", "noul"),
+            ("gamma", "move", "choice"),
+            ("gamma", "quality", "score"),
         ]
-        assert [item.state_id for item in results] == ["left", "right"]
+        assert len(executor.prepare_calls) == 1
         assert [
-            prediction.question_id for prediction in results[0].result.predictions
-        ] == [
-            "a",
-            "b",
+            (row.state, row.question_id, row.question.type)
+            for row in executor.prepare_calls[0]
+        ] == state_major
+
+        forwarded = [
+            (row.state, row.question_id, row.question.type)
+            for call in executor.calls
+            for row in call
         ]
+        if split_by_type:
+            assert forwarded == [
+                row
+                for question_type in ("noul", "choice", "score")
+                for row in state_major
+                if row[2] == question_type
+            ]
+            assert all(
+                len({row.question.type for row in call}) == 1 for call in executor.calls
+            )
+        else:
+            assert forwarded == state_major
+        assert all(len(call) <= 4 for call in executor.calls)
         assert [
-            prediction.question_id for prediction in results[1].result.predictions
+            (
+                item.state_id,
+                item.result.model,
+                tuple(
+                    (prediction.question_id, prediction.type, prediction.probabilities)
+                    for prediction in item.result.predictions
+                ),
+                item.result.input_tokens,
+                item.result.output_tokens,
+            )
+            for item in results
         ] == [
-            "a",
-            "b",
+            (
+                "first",
+                MODEL.name,
+                (
+                    ("allowed", "noul", (0.11, 0.89)),
+                    ("move", "choice", (0.12, 0.88)),
+                    ("quality", "score", (0.13, 0.87)),
+                ),
+                15,
+                0,
+            ),
+            (
+                "second",
+                MODEL.name,
+                (
+                    ("allowed", "noul", (0.21, 0.79)),
+                    ("move", "choice", (0.22, 0.78)),
+                    ("quality", "score", (0.23, 0.77)),
+                ),
+                12,
+                0,
+            ),
+            (
+                "third",
+                MODEL.name,
+                (
+                    ("allowed", "noul", (0.31, 0.69)),
+                    ("move", "choice", (0.32, 0.68)),
+                    ("quality", "score", (0.33, 0.67)),
+                ),
+                15,
+                0,
+            ),
         ]
+        assert backend._pending_rows == 0
+
+    asyncio.run(scenario())
+
+
+def test_batch_preparation_failure_never_admits_partial_state_major_rows():
+    class RejectingExecutor(RecordingExecutor):
+        async def prepare_rows(self, rows):
+            if any(row.state == "rejected" for row in rows):
+                self.prepare_calls.append(rows)
+                raise BackendInputTooLargeError("profile token limit exceeded")
+            return await super().prepare_rows(rows)
+
+    async def scenario():
+        executor = RejectingExecutor()
+        backend = PhysicalBatchBackend(MODEL, executor, coalesce_seconds=0)
+        payloads = (
+            BackendBatchRequest("first", mixed_request("accepted")),
+            BackendBatchRequest("second", mixed_request("rejected")),
+        )
+        try:
+            failed, valid = await asyncio.gather(
+                backend.infer_batch(payloads),
+                backend.infer(request("survivor")),
+                return_exceptions=True,
+            )
+        finally:
+            await backend.aclose()
+
+        assert isinstance(failed, BackendInputTooLargeError)
+        assert not isinstance(valid, BaseException)
+        assert [row.state for row in executor.prepare_calls[0]] == [
+            "accepted",
+            "accepted",
+            "accepted",
+            "rejected",
+            "rejected",
+            "rejected",
+        ]
+        assert [[row.state for row in call] for call in executor.calls] == [
+            ["survivor"]
+        ]
+        assert backend._pending_rows == 0
 
     asyncio.run(scenario())
 
