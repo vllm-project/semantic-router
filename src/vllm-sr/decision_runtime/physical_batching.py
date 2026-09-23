@@ -95,6 +95,7 @@ class _RowJob:
     results: list[DecisionRowResult | None] = field(init=False)
     indices_by_key: dict[str, deque[int]] = field(init=False)
     remaining_count: int = field(init=False)
+    unresolved_count: int = field(init=False)
 
     def __post_init__(self) -> None:
         self.results = [None] * len(self.rows)
@@ -102,6 +103,7 @@ class _RowJob:
         for index, row in enumerate(self.rows):
             self.indices_by_key.setdefault(row.batch_key, deque()).append(index)
         self.remaining_count = len(self.rows)
+        self.unresolved_count = len(self.rows)
 
     @property
     def remaining(self) -> int:
@@ -457,7 +459,8 @@ class PhysicalBatchBackend(DecisionBackend):
             if item.job.future.done():
                 continue
             item.job.results[item.index] = result
-            if all(value is not None for value in item.job.results):
+            item.job.unresolved_count -= 1
+            if item.job.unresolved_count == 0:
                 completed[id(item.job)] = item.job
         for job in completed.values():
             if job.future.done():

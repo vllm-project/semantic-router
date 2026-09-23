@@ -372,6 +372,41 @@ def test_batch_restores_state_and_question_order_after_question_major_execution(
     asyncio.run(scenario())
 
 
+def test_1024_decision_batch_completes_and_restores_every_identity():
+    async def scenario():
+        executor = RecordingExecutor()
+        backend = PhysicalBatchBackend(
+            MODEL,
+            executor,
+            physical_batch_size=32,
+            max_pending_rows=1024,
+            coalesce_seconds=0,
+        )
+        question_ids = tuple(f"q{index}" for index in range(32))
+        payloads = tuple(
+            BackendBatchRequest(f"s{index}", request(f"state-{index}", question_ids))
+            for index in range(32)
+        )
+        try:
+            results = await backend.infer_batch(payloads)
+        finally:
+            await backend.aclose()
+        assert len(results) == 32
+        assert sum(len(item.result.predictions) for item in results) == 1024
+        assert [item.state_id for item in results] == [
+            f"s{index}" for index in range(32)
+        ]
+        assert all(
+            tuple(prediction.question_id for prediction in item.result.predictions)
+            == question_ids
+            for item in results
+        )
+        assert len(executor.calls) == 32
+        assert backend._pending_rows == 0
+
+    asyncio.run(scenario())
+
+
 def test_admission_is_atomic_when_row_queue_is_full():
     async def scenario():
         gate = asyncio.Event()
