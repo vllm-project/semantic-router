@@ -84,6 +84,24 @@ def test_loader_rejects_identity_drift_before_gpu_import(
     assert imported == []
 
 
+def test_model_metadata_transformers_version_does_not_gate_compatible_checkpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _artifact(
+        tmp_path,
+        transformers_version="4.57.7",
+        state_layout={"fixture": True},
+    )
+    (root / "STATE_LAYOUT.json").write_text('{"fixture": true}')
+    (root / "INVENTORY.json").write_text("{}")
+    monkeypatch.setattr(vela_torch, "_validate_state_layout", lambda value: None)
+    monkeypatch.setattr(vela_torch, "_validate_inventory", lambda value: {})
+
+    artifact = vela_torch._validate_artifact(root, max_length=1024, backend="rocm")
+
+    assert artifact.config["transformers_version"] == "4.57.7"
+
+
 @pytest.mark.parametrize(
     ("max_length", "backend", "message"),
     (

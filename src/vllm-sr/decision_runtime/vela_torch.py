@@ -524,7 +524,6 @@ def _validate_artifact(
         "arm": "all22",
         "training_arm": "S22",
         "head": EXPECTED_HEAD_CONFIG,
-        "transformers_version": SUPPORTED_TRANSFORMERS_VERSION,
         "weight_dtype": "float32",
         "inference_precision": "fp32",
         "base_model": "llm-semantic-router/Vela-1.0-Encoder-307M",
