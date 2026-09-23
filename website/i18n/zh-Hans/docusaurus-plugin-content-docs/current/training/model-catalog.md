@@ -28,7 +28,7 @@ translation:
 | [Embedding](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Embedding) | 比较请求并检索相关文档 |
 | [Reranker](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Reranker) | 按相关性重新排列候选文档 |
 
-Guard 检测改变指令执行的攻击；Safety 检测内容风险，Hazard 识别风险类别。应用同时需要提示词攻击防护和内容策略时，可以组合使用。Shield 是单独训练的模型，与 Safety 使用相同的 `safe`/`unsafe` 接口；Safety 仍是默认模型，改用 Shield 的方法见 [Safety 信号指南](../tutorials/signal/learned/safety.md#select-vela-shield)。
+Guard 检测改变指令执行的攻击；Safety 检测内容风险，Hazard 识别风险类别。应用同时需要提示词攻击防护和内容策略时，可以组合使用。Shield 是单独训练的模型，与 Safety 使用相同的 `safe`/`unsafe` 接口；Safety 仍是默认模型，改用 Shield 的方法见英文版 [Safety 信号指南](https://vllm-sr.ai/docs/tutorials/signal/learned/safety#select-vela-shield)。
 
 Embedding 和 Reranker 提供四种编码器深度和五种维度，方便权衡质量、延迟和内存。选择方法见 [Embedding 和 Reranking](./mmbert-32k-models)。
 
