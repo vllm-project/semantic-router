@@ -186,5 +186,180 @@
         ]
       }
     }
+  },
+  {
+    "name": "empty candidate_models element",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "selector.model-choice/v1",
+      "selector": {
+        "candidate_models": [
+          ""
+        ],
+        "observation_fields": [
+          "quality",
+          "latency_ms"
+        ]
+      }
+    }
+  },
+  {
+    "name": "empty observation_fields element",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "selector.model-choice/v1",
+      "selector": {
+        "candidate_models": [
+          "small",
+          "large"
+        ],
+        "observation_fields": [
+          ""
+        ]
+      }
+    }
+  },
+  {
+    "name": "empty span label",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "signal.spans/v1",
+      "spans": {
+        "labels": [
+          ""
+        ],
+        "offset_unit": "unicode-codepoint"
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name ''",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name '/tmp/model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "/tmp/model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name '../model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "../model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name 'weights/../config.json'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "weights/../config.json": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name 'C:\\\\model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "C:\\model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name 'weights\\\\model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "weights\\model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name 'weights//model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "weights//model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "variant requires at least one named file",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {}
+    }
   }
 ]

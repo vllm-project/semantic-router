@@ -51,6 +51,15 @@ func TestSharedFixtures(t *testing.T) {
 			if !reflect.DeepEqual(f.Variant.ArtifactVariantSpec, f.TrainResult.Artifacts[0].Variants[0]) {
 				t.Fatal("published variant differs from worker output")
 			}
+			if err := ValidateVariant(f.Variant.ArtifactVariantSpec); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(f.Graph.Outputs, RunOutputs{
+				ArtifactIDs: []string{f.Artifact.ID}, EvaluationIDs: []string{f.Evaluation.ID},
+				QualificationIDs: []string{f.Qualification.ID},
+			}) {
+				t.Fatal("run does not index its published outputs")
+			}
 			if f.Variant.ArtifactID != f.Artifact.ID {
 				t.Fatal("variant lost artifact identity")
 			}
@@ -121,6 +130,12 @@ func TestSharedInvalidInputs(t *testing.T) {
 					t.Fatal(err)
 				}
 				err = ValidateProfile(p)
+			case "ArtifactVariantSpec":
+				var spec ArtifactVariantSpec
+				if err := json.Unmarshal(tc.Value, &spec); err != nil {
+					t.Fatal(err)
+				}
+				err = ValidateVariant(spec)
 			case "SubmitRunRequest":
 				var r SubmitRunRequest
 				decoder := json.NewDecoder(bytes.NewReader(tc.Value))

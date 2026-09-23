@@ -131,13 +131,12 @@ type TrainingRun struct {
 }
 type Attempt struct {
 	Metadata
-	Number         int        `json:"number" jsonschema:"minimum=1"`
-	IdempotencyKey string     `json:"idempotency_key"`
-	WorkerHandle   string     `json:"worker_handle,omitempty" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
-	Status         Status     `json:"status"`
-	StartedAt      *time.Time `json:"started_at,omitempty"`
-	FinishedAt     *time.Time `json:"finished_at,omitempty"`
-	Diagnostic     string     `json:"diagnostic,omitempty"`
+	Number       int        `json:"number" jsonschema:"minimum=1"`
+	WorkerHandle string     `json:"worker_handle,omitempty" jsonschema:"pattern=^[a-z]+_[a-zA-Z0-9-]+$"`
+	Status       Status     `json:"status"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	FinishedAt   *time.Time `json:"finished_at,omitempty"`
+	Diagnostic   string     `json:"diagnostic,omitempty"`
 }
 type RunTask struct {
 	Metadata
@@ -147,8 +146,17 @@ type RunTask struct {
 	Attempts []Attempt `json:"attempts"`
 }
 type RunGraph struct {
-	Run   TrainingRun `json:"run"`
-	Tasks []RunTask   `json:"tasks"`
+	Run     TrainingRun `json:"run"`
+	Tasks   []RunTask   `json:"tasks"`
+	Outputs RunOutputs  `json:"outputs"`
+}
+
+// RunOutputs indexes published resources so consumers can discover results from
+// a run ID alone. Resource provenance identifies the producing task and attempt.
+type RunOutputs struct {
+	ArtifactIDs      []string `json:"artifact_ids" jsonschema:"uniqueItems=true"`
+	EvaluationIDs    []string `json:"evaluation_ids" jsonschema:"uniqueItems=true"`
+	QualificationIDs []string `json:"qualification_ids" jsonschema:"uniqueItems=true"`
 }
 
 // Provenance links produced resources to their immutable inputs and execution.
@@ -175,7 +183,9 @@ type ArtifactVariant struct {
 // ArtifactVariantSpec describes one representation of the same logical artifact.
 type ArtifactVariantSpec struct {
 	Format Component `json:"format"`
-	Files  []File    `json:"files" jsonschema:"minItems=1"`
+	// Files maps logical relative names (e.g. config.json) to owned bytes.
+	// Names describe the artifact layout, never server filesystem locations.
+	Files map[string]File `json:"files"`
 }
 type Evaluation struct {
 	Metadata

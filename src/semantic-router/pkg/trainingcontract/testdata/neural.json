@@ -184,7 +184,6 @@
             "id": "attempt_neural-train",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
-            "idempotency_key": "attempt_neural-train",
             "worker_handle": "job_neural-train",
             "status": "succeeded",
             "started_at": "2026-09-23T00:00:00Z",
@@ -214,7 +213,6 @@
             "id": "attempt_neural-evaluate",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
-            "idempotency_key": "attempt_neural-evaluate",
             "worker_handle": "job_neural-evaluate",
             "status": "succeeded",
             "started_at": "2026-09-23T00:00:00Z",
@@ -244,7 +242,6 @@
             "id": "attempt_neural-qualify",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
-            "idempotency_key": "attempt_neural-qualify",
             "worker_handle": "job_neural-qualify",
             "status": "succeeded",
             "started_at": "2026-09-23T00:00:00Z",
@@ -252,7 +249,18 @@
           }
         ]
       }
-    ]
+    ],
+    "outputs": {
+      "artifact_ids": [
+        "artifact_neural"
+      ],
+      "evaluation_ids": [
+        "evaluation_neural"
+      ],
+      "qualification_ids": [
+        "qualification_neural"
+      ]
+    }
   },
   "worker_request": {
     "schema_version": "semantic-router.training/v1",
@@ -336,13 +344,28 @@
               "name": "safetensors",
               "version": "1"
             },
-            "files": [
-              {
-                "handle": "file_neural-weights",
-                "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+            "files": {
+              "config.json": {
+                "handle": "file_neural-part0",
+                "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+                "size_bytes": 7
+              },
+              "tokenizer/tokenizer.json": {
+                "handle": "file_neural-part1",
+                "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+                "size_bytes": 7
+              },
+              "model-00001-of-00002.safetensors": {
+                "handle": "file_neural-part2",
+                "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+                "size_bytes": 7
+              },
+              "model-00002-of-00002.safetensors": {
+                "handle": "file_neural-part3",
+                "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
                 "size_bytes": 7
               }
-            ]
+            }
           }
         ]
       }
@@ -386,13 +409,28 @@
       "name": "safetensors",
       "version": "1"
     },
-    "files": [
-      {
-        "handle": "file_neural-weights",
-        "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "files": {
+      "config.json": {
+        "handle": "file_neural-part0",
+        "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "size_bytes": 7
+      },
+      "tokenizer/tokenizer.json": {
+        "handle": "file_neural-part1",
+        "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "size_bytes": 7
+      },
+      "model-00001-of-00002.safetensors": {
+        "handle": "file_neural-part2",
+        "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "size_bytes": 7
+      },
+      "model-00002-of-00002.safetensors": {
+        "handle": "file_neural-part3",
+        "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
         "size_bytes": 7
       }
-    ]
+    }
   },
   "evaluate_request": {
     "schema_version": "semantic-router.training/v1",
@@ -439,13 +477,28 @@
           "name": "safetensors",
           "version": "1"
         },
-        "files": [
-          {
-            "handle": "file_neural-weights",
-            "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "files": {
+          "config.json": {
+            "handle": "file_neural-part0",
+            "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+            "size_bytes": 7
+          },
+          "tokenizer/tokenizer.json": {
+            "handle": "file_neural-part1",
+            "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+            "size_bytes": 7
+          },
+          "model-00001-of-00002.safetensors": {
+            "handle": "file_neural-part2",
+            "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+            "size_bytes": 7
+          },
+          "model-00002-of-00002.safetensors": {
+            "handle": "file_neural-part3",
+            "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
             "size_bytes": 7
           }
-        ]
+        }
       }
     ],
     "task_id": "task_neural-evaluate",

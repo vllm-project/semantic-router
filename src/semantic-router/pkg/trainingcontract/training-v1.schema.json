@@ -106,11 +106,17 @@
           "$ref": "#/$defs/Component"
         },
         "files": {
-          "items": {
+          "additionalProperties": {
             "$ref": "#/$defs/File"
           },
-          "type": "array",
-          "minItems": 1
+          "propertyNames": {
+            "not": {
+              "pattern": "^/|/$|//|\\\\|:|\\x00|(^|/)\\.{1,2}(/|$)"
+            },
+            "minLength": 1
+          },
+          "type": "object",
+          "minProperties": 1
         }
       },
       "additionalProperties": false,
@@ -130,11 +136,17 @@
           "$ref": "#/$defs/Component"
         },
         "files": {
-          "items": {
+          "additionalProperties": {
             "$ref": "#/$defs/File"
           },
-          "type": "array",
-          "minItems": 1
+          "propertyNames": {
+            "not": {
+              "pattern": "^/|/$|//|\\\\|:|\\x00|(^|/)\\.{1,2}(/|$)"
+            },
+            "minLength": 1
+          },
+          "type": "object",
+          "minProperties": 1
         }
       },
       "additionalProperties": false,
@@ -164,9 +176,6 @@
           "type": "integer",
           "minimum": 1
         },
-        "idempotency_key": {
-          "type": "string"
-        },
         "worker_handle": {
           "type": "string",
           "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
@@ -193,7 +202,6 @@
         "id",
         "created_at",
         "number",
-        "idempotency_key",
         "status"
       ]
     },
@@ -1022,13 +1030,52 @@
             "$ref": "#/$defs/RunTask"
           },
           "type": "array"
+        },
+        "outputs": {
+          "$ref": "#/$defs/RunOutputs"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
         "run",
-        "tasks"
+        "tasks",
+        "outputs"
+      ]
+    },
+    "RunOutputs": {
+      "properties": {
+        "artifact_ids": {
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "evaluation_ids": {
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+          },
+          "type": "array",
+          "uniqueItems": true
+        },
+        "qualification_ids": {
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z]+_[a-zA-Z0-9-]+$"
+          },
+          "type": "array",
+          "uniqueItems": true
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "artifact_ids",
+        "evaluation_ids",
+        "qualification_ids"
       ]
     },
     "RunSpec": {
@@ -1120,7 +1167,8 @@
       "properties": {
         "candidate_models": {
           "items": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "type": "array",
           "minItems": 1,
@@ -1128,7 +1176,8 @@
         },
         "observation_fields": {
           "items": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "type": "array",
           "minItems": 1,
@@ -1177,7 +1226,8 @@
       "properties": {
         "labels": {
           "items": {
-            "type": "string"
+            "type": "string",
+            "minLength": 1
           },
           "type": "array",
           "minItems": 1,

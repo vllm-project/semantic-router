@@ -2,8 +2,13 @@ openapi: 3.1.0
 info:
   title: Training management contract
   version: v1
-  description: Contract for the planned Go management API. These routes are not registered by the contract-only
-    change.
+  description: >-
+    Contract for the planned Go management API; these routes are not yet registered.
+    Management assigns resource IDs and derives ownership from authenticated
+    Dashboard permissions. Request bodies contain no owner field. Every resource
+    reference must resolve within the caller's accessible resources; handle syntax
+    alone does not establish access. Cookie requests follow Dashboard session and
+    CSRF rules.
 servers:
 - url: /api/training/v1
 security:
@@ -13,6 +18,9 @@ paths:
   /uploads:
     post:
       operationId: createUpload
+      description: >-
+        Accepts bytes and returns a server-owned handle, SHA-256 digest and byte
+        count. Clients cannot choose server filesystem paths.
       responses:
         '201':
           description: Success
@@ -69,6 +77,11 @@ paths:
   /data-snapshots:
     post:
       operationId: createDataSnapshot
+      description: >-
+        Creates an immutable snapshot of bytes, profile, source metadata and
+        preprocessing. There is no update operation; changed bytes or metadata
+        require a new snapshot. Source is optional for uploads; when supplied,
+        it identifies a pinned repository revision.
       responses:
         '201':
           description: Success
@@ -143,6 +156,9 @@ paths:
   /binding-proposals:
     post:
       operationId: createBindingProposal
+      description: >-
+        Records a reviewable variant and compatible qualification reference;
+        creating a proposal does not activate the model.
       responses:
         '201':
           description: Success
@@ -256,6 +272,9 @@ paths:
   /runs/validate:
     post:
       operationId: validateRun
+      description: >-
+        Returns valid=true for a valid spec, or 400 with APIError for invalid
+        input. Validation does not submit a run.
       responses:
         '200':
           description: Success
@@ -274,6 +293,11 @@ paths:
   /runs:
     post:
       operationId: submitRun
+      description: >-
+        Freezes the snapshot, trainer version, parameters and task plan.
+        Idempotency keys are scoped to the authenticated owner: the same key and
+        decoded spec return the existing run; a different spec returns 409.
+        Changing the frozen spec requires a new run, not retry.
       responses:
         '202':
           description: Success
@@ -312,6 +336,17 @@ paths:
   /runs/{id}:
     get:
       operationId: getRun
+      description: >-
+        Returns the run, task attempt history, and published output IDs in outputs.
+        Follow artifact_ids to artifacts and their variants, evaluation_ids to
+        evaluations, and qualification_ids to qualification evidence for binding
+        proposals. Fetch GET /artifacts/{id}/variants for each artifact, then
+        GET /files/{id} for its named file handles. Fetch GET /qualifications/{id}
+        for each qualification; compatible evidence supplies the variant_id and
+        qualification ID for POST /binding-proposals.
+        All three output lists are required, empty until publication, and survive
+        retry. Output IDs become visible together with their resources and task
+        outcome; resource provenance identifies the producing task and attempt.
       responses:
         '200':
           description: Success
@@ -331,6 +366,12 @@ paths:
   /runs/{id}/cancel:
     post:
       operationId: cancelRun
+      description: >-
+        Records cancellation intent. A pending or running run enters cancelling
+        and becomes cancelled after executing tasks settle. Repeating cancellation
+        while cancelling or cancelled returns the current graph. A task that
+        finishes successfully while cancellation is in progress may retain its
+        successful output.
       responses:
         '202':
           description: Success
@@ -350,6 +391,11 @@ paths:
   /runs/{id}/retry:
     post:
       operationId: retryRun
+      description: >-
+        Accepts only failed or cancelled runs; retry of an active or successful
+        run returns 409. Keeps run/task IDs, frozen spec, published outputs and
+        attempt history. Work needing execution receives new attempt IDs and the
+        run returns to pending. Concurrent retries cannot create duplicate attempts.
       responses:
         '202':
           description: Success
@@ -369,6 +415,10 @@ paths:
   /runs/{id}/events:
     get:
       operationId: getRunEvents
+      description: >-
+        Returns events ordered by sequence. The after cursor is exclusive and
+        scoped to this run. next_after is the final returned sequence, or the input
+        cursor when the page is empty.
       responses:
         '200':
           description: Success
@@ -394,6 +444,10 @@ paths:
   /runs/compare:
     post:
       operationId: compareRuns
+      description: >-
+        Returns evaluations with their run identities, without ranking a winner.
+        Incompatible targets or profiles must be rejected. Metrics retain their
+        method and snapshot references so consumers can assess comparability.
       responses:
         '200':
           description: Success
@@ -412,6 +466,14 @@ paths:
   /artifacts/{id}/variants:
     get:
       operationId: listArtifactVariants
+      description: >-
+        Lists the formats and files of an artifact discovered through
+        RunGraph.outputs.artifact_ids. Each variant's files maps logical relative
+        names, such as config.json, tokenizer/tokenizer.json and weight shard names,
+        to file handles, digests and byte counts. Download each handle through
+        GET /files/{id} to restore the layout without requiring manifest_bundle.
+        Names use / separators, with no empty, . or .. segments, and never identify
+        absolute or server filesystem paths.
       responses:
         '200':
           description: Success

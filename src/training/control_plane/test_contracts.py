@@ -5,11 +5,12 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import yaml
 from jsonschema import ValidationError
 
-from src.training.model_eval.provenance.manifest import ManifestError
+from src.training.model_eval.provenance.manifest import ManifestError, load_manifest
 from src.training.model_eval.test_provenance import (
     artifact_manifest,
     dataset_manifest,
@@ -29,10 +30,6 @@ class ContractTests(unittest.TestCase):
                     (CONTRACT_ROOT / f"testdata/{name}.json").read_text()
                 )
                 validate(fixture, "Fixture")
-                for field in ("worker_request", "evaluate_request"):
-                    validate(fixture[field], "WorkerRequest")
-                for field in ("train_result", "evaluate_result", "qualify_result"):
-                    validate(fixture[field], "WorkerResult")
                 self.assertEqual(
                     fixture["variant"]["id"],
                     fixture["evaluate_result"]["evaluations"][0]["variant_id"],
@@ -93,6 +90,29 @@ class ContractTests(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate(run, "TrainingRun")
 
+    def test_named_files_in_published_variants_and_worker_messages(self):
+        fixture = json.loads((CONTRACT_ROOT / "testdata/neural.json").read_text())
+        del fixture["artifact"]["provenance"]["manifest_bundle"]
+        del fixture["train_result"]["artifacts"][0]["manifest_bundle"]
+        validate(fixture, "Fixture")
+        for variant, message, definition in (
+            (fixture["variant"], fixture["variant"], "ArtifactVariant"),
+            (
+                fixture["train_result"]["artifacts"][0]["variants"][0],
+                fixture["train_result"],
+                "WorkerResult",
+            ),
+            (
+                fixture["evaluate_request"]["inputs"][0],
+                fixture["evaluate_request"],
+                "WorkerRequest",
+            ),
+        ):
+            with self.subTest(definition=definition):
+                variant["files"]["../config.json"] = variant["files"].pop("config.json")
+                with self.assertRaises(ValidationError):
+                    validate(message, definition)
+
     def test_span_profile(self):
         validate(
             {
@@ -131,7 +151,12 @@ class ClassifierProvenanceTests(unittest.TestCase):
                 (directory / f"{manifest['kind']}.manifest.yaml").write_text(
                     yaml.safe_dump(manifest)
                 )
-            validate_classifier_provenance(directory, profile, base_model)
+            with patch(
+                "src.training.model_eval.provenance.manifest.load_manifest",
+                wraps=load_manifest,
+            ) as load:
+                validate_classifier_provenance(directory, profile, base_model)
+                self.assertEqual(load.call_count, 4)
             changed = copy.deepcopy(profile)
             changed["classifier"]["label_mapping"] = {"jailbreak": 0, "benign": 1}
             with self.assertRaisesRegex(ManifestError, "label_mapping differ"):

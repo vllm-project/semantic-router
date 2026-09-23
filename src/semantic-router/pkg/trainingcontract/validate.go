@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	revisionPattern   = regexp.MustCompile(`^[0-9a-f]{40}$`)
-	repositoryPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
-	handlePattern     = regexp.MustCompile(`^[a-z]+_[a-zA-Z0-9-]+$`)
+	revisionPattern     = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	repositoryPattern   = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$`)
+	handlePattern       = regexp.MustCompile(`^[a-z]+_[a-zA-Z0-9-]+$`)
+	invalidArtifactName = regexp.MustCompile(`^/|/$|//|\\|:|\x00|(^|/)\.{1,2}(/|$)`)
 )
 
 func ValidateHandle(handle string) error {
@@ -174,7 +175,7 @@ func ValidateTransition(from, to Status) error {
 }
 
 func nonemptyUnique(values []string) bool {
-	return len(values) > 0 && unique(values)
+	return len(values) > 0 && !slices.Contains(values, "") && unique(values)
 }
 
 func unique(values []string) bool {
@@ -184,4 +185,24 @@ func unique(values []string) bool {
 		}
 	}
 	return true
+}
+
+// ValidateVariant checks worker-supplied format and logical file references.
+// Ownership and content digests are verified by the management file store.
+func ValidateVariant(spec ArtifactVariantSpec) error {
+	if err := ValidateComponent(spec.Format); err != nil {
+		return err
+	}
+	if len(spec.Files) == 0 {
+		return fmt.Errorf("variant requires named files")
+	}
+	for name, file := range spec.Files {
+		if name == "" || invalidArtifactName.MatchString(name) {
+			return fmt.Errorf("artifact file name %q must be a relative logical path", name)
+		}
+		if err := ValidateHandle(file.Handle); err != nil {
+			return err
+		}
+	}
+	return nil
 }

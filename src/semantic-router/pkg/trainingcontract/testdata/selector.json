@@ -174,7 +174,6 @@
             "id": "attempt_selector-train",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
-            "idempotency_key": "attempt_selector-train",
             "worker_handle": "job_selector-train",
             "status": "succeeded",
             "started_at": "2026-09-23T00:00:00Z",
@@ -204,7 +203,6 @@
             "id": "attempt_selector-evaluate",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
-            "idempotency_key": "attempt_selector-evaluate",
             "worker_handle": "job_selector-evaluate",
             "status": "succeeded",
             "started_at": "2026-09-23T00:00:00Z",
@@ -234,7 +232,6 @@
             "id": "attempt_selector-qualify",
             "created_at": "2026-09-23T00:00:00Z",
             "number": 1,
-            "idempotency_key": "attempt_selector-qualify",
             "worker_handle": "job_selector-qualify",
             "status": "succeeded",
             "started_at": "2026-09-23T00:00:00Z",
@@ -242,7 +239,18 @@
           }
         ]
       }
-    ]
+    ],
+    "outputs": {
+      "artifact_ids": [
+        "artifact_selector"
+      ],
+      "evaluation_ids": [
+        "evaluation_selector"
+      ],
+      "qualification_ids": [
+        "qualification_selector"
+      ]
+    }
   },
   "worker_request": {
     "schema_version": "semantic-router.training/v1",
@@ -327,13 +335,13 @@
               "name": "selector-weights",
               "version": "1"
             },
-            "files": [
-              {
+            "files": {
+              "model.json": {
                 "handle": "file_selector-weights",
                 "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
                 "size_bytes": 7
               }
-            ]
+            }
           }
         ]
       }
@@ -381,13 +389,13 @@
       "name": "selector-weights",
       "version": "1"
     },
-    "files": [
-      {
+    "files": {
+      "model.json": {
         "handle": "file_selector-weights",
         "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
         "size_bytes": 7
       }
-    ]
+    }
   },
   "evaluate_request": {
     "schema_version": "semantic-router.training/v1",
@@ -438,13 +446,13 @@
           "name": "selector-weights",
           "version": "1"
         },
-        "files": [
-          {
+        "files": {
+          "model.json": {
             "handle": "file_selector-weights",
             "digest": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
             "size_bytes": 7
           }
-        ]
+        }
       }
     ],
     "task_id": "task_selector-evaluate",

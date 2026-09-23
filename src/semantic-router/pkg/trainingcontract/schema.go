@@ -81,3 +81,34 @@ func (ComparisonRequest) JSONSchemaExtend(schema *jsonschema.Schema) {
 	ids, _ := schema.Properties.Get("run_ids")
 	ids.Items.Pattern = handlePattern.String()
 }
+
+func (SelectorProfile) JSONSchemaExtend(schema *jsonschema.Schema) {
+	one := uint64(1)
+	for _, name := range []string{"candidate_models", "observation_fields"} {
+		field, _ := schema.Properties.Get(name)
+		field.Items.MinLength = &one
+	}
+}
+
+func (SpanProfile) JSONSchemaExtend(schema *jsonschema.Schema) {
+	one := uint64(1)
+	labels, _ := schema.Properties.Get("labels")
+	labels.Items.MinLength = &one
+}
+
+func (RunOutputs) JSONSchemaExtend(schema *jsonschema.Schema) {
+	for _, name := range []string{"artifact_ids", "evaluation_ids", "qualification_ids"} {
+		field, _ := schema.Properties.Get(name)
+		field.Items.Pattern = handlePattern.String()
+	}
+}
+
+func (ArtifactVariantSpec) JSONSchemaExtend(schema *jsonschema.Schema) {
+	one := uint64(1)
+	files, _ := schema.Properties.Get("files")
+	files.MinProperties = &one
+	files.PropertyNames = &jsonschema.Schema{
+		MinLength: &one,
+		Not:       &jsonschema.Schema{Pattern: invalidArtifactName.String()},
+	}
+}

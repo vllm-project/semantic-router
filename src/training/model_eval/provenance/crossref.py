@@ -23,6 +23,7 @@ __all__ = [
     "artifact_identity_digest",
     "file_digest",
     "validate_bundle",
+    "load_validated_bundle",
     "verify_artifact_bytes",
 ]
 
@@ -80,6 +81,14 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
     Returns a summary of what was checked. Raises :class:`ManifestError` listing
     every problem found, so one run reports the full set rather than the first.
     """
+    summary, _ = load_validated_bundle(directory)
+    return summary
+
+
+def load_validated_bundle(
+    directory: Path,
+) -> tuple[dict[str, Any], dict[str, list[tuple[Path, dict[str, Any]]]]]:
+    """Load manifests once, validate their references, and return summary and content."""
     grouped = load_manifests(directory)
     problems: list[str] = []
 
@@ -116,7 +125,7 @@ def validate_bundle(directory: Path) -> dict[str, Any]:
         "runs": sorted(runs),
         "artifacts": sorted(artifacts),
         "evaluations": sorted(evaluations),
-    }
+    }, grouped
 
 
 def _index(

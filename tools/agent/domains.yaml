@@ -115,7 +115,7 @@ domains:
       - tools/codegen/trainingcontract/**
       - dashboard/frontend/src/generated/trainingContract.ts
       - dashboard/frontend/src/utils/trainingContract.test.ts
-      - website/docs/training/control-plane-contract.md
+      - src/training/README.md
     checks: [make training-contract-check]
     verifications: []
 

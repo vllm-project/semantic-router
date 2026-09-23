@@ -24,12 +24,12 @@ export interface ArtifactVariant {
   created_at: string
   artifact_id: string
   format: Component
-  files: Array<File>
+  files: Record<string, File>
 }
 
 export interface ArtifactVariantSpec {
   format: Component
-  files: Array<File>
+  files: Record<string, File>
 }
 
 export interface Attempt {
@@ -37,7 +37,6 @@ export interface Attempt {
   id: string
   created_at: string
   number: number
-  idempotency_key: string
   worker_handle?: string
   status: Status
   started_at?: string
@@ -250,6 +249,13 @@ export interface QualificationSpec {
 export interface RunGraph {
   run: TrainingRun
   tasks: Array<RunTask>
+  outputs: RunOutputs
+}
+
+export interface RunOutputs {
+  artifact_ids: Array<string>
+  evaluation_ids: Array<string>
+  qualification_ids: Array<string>
 }
 
 export interface RunSpec {
