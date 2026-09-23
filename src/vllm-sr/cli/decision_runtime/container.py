@@ -13,6 +13,7 @@ from collections.abc import Mapping
 from contextlib import suppress
 from dataclasses import dataclass
 from http import HTTPStatus
+from pathlib import Path, PurePosixPath
 from typing import Protocol
 
 from cli.consts import (
@@ -35,7 +36,7 @@ from cli.container_services import (
     container_logs,
 )
 from cli.container_start_runner import run_container_specs
-from cli.decision_runtime.catalog import ResolvedDecisionRuntime
+from cli.decision_runtime.catalog import DecisionRuntimeMount, ResolvedDecisionRuntime
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
     validate_immutable_image_reference,
@@ -526,6 +527,14 @@ def build_decision_container_command(
         command,
         {key: spec.environment[key] for key in sorted(spec.environment)},
     )
+    for mount in spec.mounts:
+        source, target = validate_decision_mount(mount)
+        command.extend(
+            [
+                "--mount",
+                f"type=bind,src={source},dst={target},readonly",
+            ]
+        )
     if spec.backend == "rocm":
         append_amd_gpu_passthrough(command, "amd")
     elif spec.backend == "cuda":
@@ -553,6 +562,54 @@ def validate_decision_environment(environment: object) -> None:
             raise DecisionContainerError(
                 "Decision runtime public tuning environment value is invalid."
             )
+
+
+def validate_decision_mount(mount: object) -> tuple[str, str]:
+    """Validate one immutable artifact bind without shell or mount-option ambiguity."""
+
+    if not isinstance(mount, DecisionRuntimeMount):
+        raise DecisionContainerError("Decision runtime mount is invalid.")
+    if not isinstance(mount.source, str) or not isinstance(mount.target, str):
+        raise DecisionContainerError("Decision runtime mount paths are invalid.")
+    if any(
+        not value
+        or value != value.strip()
+        or "\0" in value
+        or "," in value
+        or any(ord(character) < 32 for character in value)
+        for value in (mount.source, mount.target)
+    ):
+        raise DecisionContainerError("Decision runtime mount paths are invalid.")
+
+    source = Path(mount.source)
+    if not source.is_absolute() or source.is_symlink() or not source.is_dir():
+        raise DecisionContainerError(
+            "Decision runtime mount source must be an existing absolute directory."
+        )
+    try:
+        resolved_source = source.resolve(strict=True)
+    except OSError as error:
+        raise DecisionContainerError(
+            "Decision runtime mount source is unavailable."
+        ) from error
+    if str(resolved_source) != mount.source:
+        raise DecisionContainerError(
+            "Decision runtime mount source must be a canonical absolute directory."
+        )
+
+    target = PurePosixPath(mount.target)
+    if (
+        not target.is_absolute()
+        or target == PurePosixPath("/")
+        or target.as_posix() != mount.target
+        or any(part in {"", ".", ".."} for part in target.parts[1:])
+        or "\\" in mount.target
+        or ":" in mount.target
+    ):
+        raise DecisionContainerError(
+            "Decision runtime mount target must be a canonical absolute POSIX path."
+        )
+    return str(resolved_source), target.as_posix()
 
 
 def _probe_host(host: str) -> str:

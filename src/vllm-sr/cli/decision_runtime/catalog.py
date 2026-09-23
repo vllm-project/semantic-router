@@ -25,6 +25,14 @@ class DecisionCatalogError(ValueError):
 
 
 @dataclass(frozen=True)
+class DecisionRuntimeMount:
+    """One read-only host artifact tree exposed to an OCI runtime."""
+
+    source: str
+    target: str
+
+
+@dataclass(frozen=True)
 class DecisionRuntimeRequest:
     """User intent passed to the sole catalog/runtime resolver."""
 
@@ -53,6 +61,7 @@ class ResolvedDecisionRuntime:
     max_queue: int
     command: tuple[str, ...] = ()
     environment: Mapping[str, str] = field(default_factory=dict)
+    mounts: tuple[DecisionRuntimeMount, ...] = ()
     container_port: int = 8000
     health_path: str = "/ready"
     api_path: str = "/v1/systemone"
@@ -67,6 +76,11 @@ class ResolvedDecisionRuntime:
                 "Decision runtime environment must be a mapping."
             ) from error
         object.__setattr__(self, "environment", MappingProxyType(environment))
+        try:
+            mounts = tuple(self.mounts)
+        except TypeError as error:
+            raise TypeError("Decision runtime mounts must be an iterable.") from error
+        object.__setattr__(self, "mounts", mounts)
 
 
 class DecisionCatalogResolver(Protocol):

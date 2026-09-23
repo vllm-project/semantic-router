@@ -23,6 +23,7 @@ from cli.decision_runtime.catalog import (
     RESOLVED_DECISION_BACKENDS,
     SUPPORTED_DECISION_BACKENDS,
     DecisionCatalogResolver,
+    DecisionRuntimeMount,
     DecisionRuntimeRequest,
     ResolvedDecisionRuntime,
 )
@@ -35,6 +36,7 @@ from cli.decision_runtime.container import (
     LowLevelDecisionContainerDriver,
     select_container_runtime,
     validate_decision_environment,
+    validate_decision_mount,
 )
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
@@ -467,7 +469,8 @@ def _validate_resolved_runtime(
     _positive_integer("resolved container port", spec.container_port, maximum=65535)
     if not _ARTIFACT_DIGEST.fullmatch(spec.artifact_digest):
         raise DecisionLifecycleError(
-            "Resolved Decision runtime artifact digest must be sha256:<64 lowercase hex>."
+            "Resolved Decision runtime artifact digest must be "
+            "sha256:<64 lowercase hex>."
         )
     for label, path in (("health", spec.health_path), ("API", spec.api_path)):
         if (
@@ -489,6 +492,14 @@ def _validate_resolved_runtime(
     ):
         raise DecisionLifecycleError("Resolved Decision runtime command is invalid.")
     validate_decision_environment(spec.environment)
+    mount_targets: set[str] = set()
+    for mount in spec.mounts:
+        _source, target = validate_decision_mount(mount)
+        if target in mount_targets:
+            raise DecisionLifecycleError(
+                "Resolved Decision runtime mount targets must be unique."
+            )
+        mount_targets.add(target)
 
 
 def _freeze_resolved_runtime(spec: ResolvedDecisionRuntime) -> ResolvedDecisionRuntime:
@@ -500,7 +511,19 @@ def _freeze_resolved_runtime(spec: ResolvedDecisionRuntime) -> ResolvedDecisionR
         raise DecisionLifecycleError(
             "Resolved Decision runtime environment is invalid."
         ) from error
-    return replace(spec, environment=MappingProxyType(environment))
+    try:
+        mounts = tuple(spec.mounts)
+    except TypeError as error:
+        raise DecisionLifecycleError(
+            "Resolved Decision runtime mounts are invalid."
+        ) from error
+    if any(not isinstance(mount, DecisionRuntimeMount) for mount in mounts):
+        raise DecisionLifecycleError("Resolved Decision runtime mounts are invalid.")
+    return replace(
+        spec,
+        environment=MappingProxyType(environment),
+        mounts=mounts,
+    )
 
 
 def _validate_host(host: str) -> None:
@@ -570,6 +593,9 @@ def _identity_digest(
         "max_batch": spec.max_batch,
         "max_concurrency": spec.max_concurrency,
         "max_queue": spec.max_queue,
+        "mounts": [
+            {"source": mount.source, "target": mount.target} for mount in spec.mounts
+        ],
         "revision": spec.revision,
         "runtime": runtime,
         "systemone_path": spec.api_path,

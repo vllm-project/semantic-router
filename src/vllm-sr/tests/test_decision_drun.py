@@ -24,6 +24,7 @@ container_module = importlib.import_module("cli.decision_runtime.container")
 registry_module = importlib.import_module("cli.decision_runtime.registry")
 from cli.decision_runtime import lifecycle  # noqa: E402
 from cli.decision_runtime.catalog import (  # noqa: E402
+    DecisionRuntimeMount,
     DecisionRuntimeRequest,
     ResolvedDecisionRuntime,
 )
@@ -767,6 +768,136 @@ def test_resolved_runtime_detaches_from_retained_environment_mapping():
     command = build_decision_container_command(_launch(spec))
     assert "DECISION_RUNTIME_LOG_LEVEL=info" in command
     assert "DECISION_RUNTIME_LOG_LEVEL=debug" not in command
+
+
+def test_container_command_mounts_verified_artifact_read_only(tmp_path: Path):
+    artifact_root = tmp_path / "artifact"
+    artifact_root.mkdir()
+    spec = replace(
+        FixtureResolver().resolve(
+            DecisionRuntimeRequest(MODEL, None, "rocm", None, None, None, None, None)
+        ),
+        mounts=(
+            DecisionRuntimeMount(
+                source=str(artifact_root),
+                target="/opt/vllm-sr/decision-artifact",
+            ),
+        ),
+    )
+
+    command = build_decision_container_command(_launch(spec))
+
+    mount_index = command.index("--mount")
+    assert command[mount_index + 1] == (
+        f"type=bind,src={artifact_root},dst=/opt/vllm-sr/decision-artifact,readonly"
+    )
+    assert mount_index < command.index(IMAGE)
+
+
+@pytest.mark.parametrize(
+    "target",
+    ("relative", "/", "/opt/../artifact", "/opt/artifact,ro"),
+)
+def test_invalid_artifact_mount_target_is_rejected_before_start(
+    tmp_path: Path, target: str
+):
+    artifact_root = tmp_path / "artifact"
+    artifact_root.mkdir()
+    spec = replace(
+        FixtureResolver().resolve(
+            DecisionRuntimeRequest(MODEL, None, "rocm", None, None, None, None, None)
+        ),
+        mounts=(DecisionRuntimeMount(str(artifact_root), target),),
+    )
+    driver = FakeDriver()
+
+    class InvalidMountResolver:
+        def resolve(self, _request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            return spec
+
+    with pytest.raises(DecisionContainerError, match="mount target|mount paths"):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, detach=True),
+            resolver=InvalidMountResolver(),
+            registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
+            driver=driver,
+            runtime_selector=lambda _requested: "docker",
+        )
+    assert driver.events == []
+
+
+def test_noncanonical_or_symlink_artifact_mount_is_rejected(tmp_path: Path):
+    artifact_root = tmp_path / "artifact"
+    artifact_root.mkdir()
+    artifact_link = tmp_path / "artifact-link"
+    artifact_link.symlink_to(artifact_root, target_is_directory=True)
+
+    for source in (f"{artifact_root}/.", str(artifact_link)):
+        spec = replace(
+            FixtureResolver().resolve(
+                DecisionRuntimeRequest(
+                    MODEL, None, "rocm", None, None, None, None, None
+                )
+            ),
+            mounts=(DecisionRuntimeMount(source, "/opt/decision-artifact"),),
+        )
+        with pytest.raises(DecisionContainerError, match="mount source"):
+            build_decision_container_command(_launch(spec))
+
+
+def test_duplicate_artifact_mount_targets_are_rejected_before_start(tmp_path: Path):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+
+    class DuplicateMountResolver(FixtureResolver):
+        def resolve(self, request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            return replace(
+                super().resolve(request),
+                mounts=(
+                    DecisionRuntimeMount(str(first), "/opt/decision-artifact"),
+                    DecisionRuntimeMount(str(second), "/opt/decision-artifact"),
+                ),
+            )
+
+    driver = FakeDriver()
+    with pytest.raises(
+        lifecycle.DecisionLifecycleError, match="mount targets must be unique"
+    ):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, detach=True),
+            resolver=DuplicateMountResolver(),
+            registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
+            driver=driver,
+            runtime_selector=lambda _requested: "docker",
+        )
+    assert driver.events == []
+
+
+def test_artifact_mount_is_part_of_managed_container_identity(tmp_path: Path):
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    base = FixtureResolver().resolve(
+        DecisionRuntimeRequest(MODEL, None, "rocm", None, None, None, None, None)
+    )
+
+    def digest(source: Path) -> str:
+        spec = replace(
+            base,
+            mounts=(DecisionRuntimeMount(str(source), "/opt/decision-artifact"),),
+        )
+        return lifecycle._identity_digest(
+            instance_id="00000000-0000-0000-0000-000000000001",
+            instance_name="fixture",
+            endpoint="http://127.0.0.1:8000/v1/systemone",
+            runtime="docker",
+            spec=spec,
+        )
+
+    assert digest(first) != digest(second)
 
 
 def test_resolved_runtime_defaults_to_strict_readiness_endpoint():
