@@ -239,6 +239,16 @@
     grid-template-columns: minmax(8rem, 0.16fr) minmax(0, 0.28fr)
       minmax(0, 0.28fr) minmax(0, 0.28fr);
   }
+
+  /* The base rule accents the last header cell, which is llm-d in this
+     table; the accent belongs on the Semantic Router column instead. */
+  .alternativesMatrix .matrixHeader span:last-child {
+    color: var(--site-muted);
+  }
+
+  .alternativesMatrix .matrixHeader span:nth-child(2) {
+    color: var(--site-accent-strong);
+  }
 }
 
 .capabilityStats {
