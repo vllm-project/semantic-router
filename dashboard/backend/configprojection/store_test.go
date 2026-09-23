@@ -146,10 +146,10 @@ func TestActiveStatusReadsSeededTimestamp(t *testing.T) {
 	// Rewrite the seed with SQLite's datetime('now') so the reader's tolerance
 	// for that layout is asserted no matter how the writer seeds it later.
 	before := time.Now().UTC().Truncate(time.Second)
-	if _, err := store.db.Exec(
+	if _, execErr := store.db.Exec(
 		`UPDATE config_projection_active SET updated_at = datetime('now') WHERE id = 1`,
-	); err != nil {
-		t.Fatalf("write sqlite-layout updated_at: %v", err)
+	); execErr != nil {
+		t.Fatalf("write sqlite-layout updated_at: %v", execErr)
 	}
 
 	reread, err := store.GetActiveProjection()
