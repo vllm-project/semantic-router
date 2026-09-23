@@ -18,6 +18,14 @@
   border-radius: var(--radius-lg);
 }
 
+.showcaseVideoFigure .video {
+  width: min(100%, 62svh, 32rem);
+}
+
+.showcaseVideoFigure .caption {
+  text-align: center;
+}
+
 .videoFigure .landscapeVideo {
   width: 100%;
   aspect-ratio: 16 / 9;

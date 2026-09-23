@@ -40,8 +40,8 @@ cd website && npm run build
 `make docs-install` installs Node dependencies and creates an isolated Python
 environment at `website/.venv` for generated-reference checks. `make docs-build`
 runs this setup automatically, including when a deployment service builds from
-the repository root. The checks run before build-time generators and reject
-stale committed references.
+the repository root. The checks run before Docusaurus and reject stale
+committed references without rewriting them.
 
 Direct `npm` builds reuse `website/.venv` when present. CI may instead install
 `website/requirements.txt` in its Python environment or select an interpreter
