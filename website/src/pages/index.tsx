@@ -227,15 +227,15 @@ const alternativeComparison = [
     }),
     semanticRouter: translate({
       id: 'homepage.alternatives.decides.semanticRouter',
-      message: 'which model, recipe and policy serve a request',
+      message: 'Which model, recipe and policy serve a request',
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.decides.aiGateway',
-      message: 'how a request reaches a backend',
+      message: 'How a request reaches a backend',
     }),
     llmd: translate({
       id: 'homepage.alternatives.decides.llmd',
-      message: 'which healthy replica inside the chosen pool',
+      message: 'Which healthy replica inside the chosen pool',
     }),
   },
   {
@@ -245,15 +245,15 @@ const alternativeComparison = [
     }),
     semanticRouter: translate({
       id: 'homepage.alternatives.reads.semanticRouter',
-      message: 'request content, policy, semantic evidence',
+      message: 'Request content, policy, semantic evidence',
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.reads.aiGateway',
-      message: 'protocol, credentials, rate limits',
+      message: 'Protocol, credentials, rate limits',
     }),
     llmd: translate({
       id: 'homepage.alternatives.reads.llmd',
-      message: 'load, prefix-cache locality, replica health',
+      message: 'Load, prefix-cache locality, replica health',
     }),
   },
   {
@@ -263,15 +263,15 @@ const alternativeComparison = [
     }),
     semanticRouter: translate({
       id: 'homepage.alternatives.owns.semanticRouter',
-      message: 'the model, recipe and policy decision',
+      message: 'The model, recipe and policy decision',
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.owns.aiGateway',
-      message: 'provider translation, credentials, rate limits, traffic policy',
+      message: 'Provider translation, credentials, rate limits, traffic policy',
     }),
     llmd: translate({
       id: 'homepage.alternatives.owns.llmd',
-      message: 'endpoint selection inside a pool',
+      message: 'Endpoint selection inside a pool',
     }),
   },
   {
@@ -281,15 +281,15 @@ const alternativeComparison = [
     }),
     semanticRouter: translate({
       id: 'homepage.alternatives.runs.semanticRouter',
-      message: 'an Envoy ExtProc filter',
+      message: 'An Envoy ExtProc filter',
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.runs.aiGateway',
-      message: 'the data plane',
+      message: 'The data plane',
     }),
     llmd: translate({
       id: 'homepage.alternatives.runs.llmd',
-      message: 'the llm-d Endpoint Picker',
+      message: 'The llm-d Endpoint Picker',
     }),
   },
   {
@@ -303,11 +303,11 @@ const alternativeComparison = [
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.receipt.aiGateway',
-      message: 'none',
+      message: 'None',
     }),
     llmd: translate({
       id: 'homepage.alternatives.receipt.llmd',
-      message: 'none',
+      message: 'None',
     }),
   },
 ]
@@ -449,11 +449,11 @@ function AlternativesSection(): JSX.Element {
                 </span>
                 <span role="columnheader">
                   <Translate id="homepage.alternatives.table.aiGateway">
-                    AI gateway
+                    AI Gateway
                   </Translate>
                 </span>
                 <span role="columnheader">
-                  <Translate id="homepage.alternatives.table.llmd">llm-d</Translate>
+                  <Translate id="homepage.alternatives.table.llmd">LLM-D</Translate>
                 </span>
               </div>
 
@@ -473,14 +473,14 @@ function AlternativesSection(): JSX.Element {
                   <div className={styles.matrixFragmented} role="cell">
                     <span className={styles.matrixMobileLabel}>
                       <Translate id="homepage.alternatives.table.aiGateway">
-                        AI gateway
+                        AI Gateway
                       </Translate>
                     </span>
                     <p>{item.aiGateway}</p>
                   </div>
                   <div className={styles.matrixFragmented} role="cell">
                     <span className={styles.matrixMobileLabel}>
-                      <Translate id="homepage.alternatives.table.llmd">llm-d</Translate>
+                      <Translate id="homepage.alternatives.table.llmd">LLM-D</Translate>
                     </span>
                     <p>{item.llmd}</p>
                   </div>
