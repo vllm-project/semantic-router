@@ -38,6 +38,12 @@ from cli.decision_runtime.container import (
     validate_decision_environment,
     validate_decision_mount,
 )
+from cli.decision_runtime.gpu_device import (
+    ROCM_VISIBLE_DEVICES_ENV,
+    DecisionGPUDeviceError,
+    gpu_visibility_environment,
+    validate_gpu_device,
+)
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
     is_local_docker_image_id,
@@ -81,6 +87,7 @@ class DrunOptions:
     max_concurrency: int | None = None
     max_queue: int | None = None
     cpu_threads: int | None = None
+    gpu_device: str | None = None
     instance_name: str | None = None
     image: str | None = None
     image_pull_policy: str = IMAGE_PULL_POLICY_IF_NOT_PRESENT
@@ -301,6 +308,14 @@ def _resolve_runtime(
                 "DECISION_CPU_THREADS": str(options.cpu_threads),
             },
         )
+    if options.gpu_device is not None:
+        try:
+            gpu_environment = gpu_visibility_environment(
+                spec.backend, options.gpu_device
+            )
+        except DecisionGPUDeviceError as error:
+            raise DecisionLifecycleError(str(error)) from error
+        spec = replace(spec, environment={**spec.environment, **gpu_environment})
     if spec.backend == "mlx":
         raise DecisionLifecycleError(
             "The MLX backend requires the native Decision runtime driver, which is "
@@ -406,6 +421,16 @@ def _validate_options(options: DrunOptions) -> None:
         if options.backend not in ("auto", "cpu"):
             raise DecisionLifecycleError(
                 "--cpu-threads is supported only for the CPU Decision backend."
+            )
+    if options.gpu_device is not None:
+        try:
+            validate_gpu_device(options.gpu_device)
+        except DecisionGPUDeviceError as error:
+            raise DecisionLifecycleError(str(error)) from error
+        if options.backend not in ("auto", "rocm"):
+            raise DecisionLifecycleError(
+                "--gpu-device is currently supported only for the ROCm "
+                "Decision backend."
             )
     _validate_host(options.host)
     _positive_integer("port", options.port, maximum=65535)
@@ -533,6 +558,11 @@ def _validate_resolved_runtime(
     ):
         raise DecisionLifecycleError("Resolved Decision runtime command is invalid.")
     validate_decision_environment(spec.environment)
+    if ROCM_VISIBLE_DEVICES_ENV in spec.environment:
+        raise DecisionLifecycleError(
+            "ROCR_VISIBLE_DEVICES must be set through --gpu-device, not by the "
+            "Decision runtime catalog."
+        )
     if spec.backend != "cpu" and "DECISION_CPU_THREADS" in spec.environment:
         raise DecisionLifecycleError(
             "DECISION_CPU_THREADS is supported only for the CPU Decision backend."

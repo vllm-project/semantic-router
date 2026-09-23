@@ -38,6 +38,10 @@ from cli.container_services import (
 )
 from cli.container_start_runner import run_container_specs
 from cli.decision_runtime.catalog import DecisionRuntimeMount, ResolvedDecisionRuntime
+from cli.decision_runtime.gpu_device import (
+    GPU_DEVICE_INDEX,
+    ROCM_VISIBLE_DEVICES_ENV,
+)
 from cli.decision_runtime.image_reference import (
     ImmutableImageReferenceError,
     is_local_docker_image_id,
@@ -55,6 +59,7 @@ _PUBLIC_TUNING_ENVIRONMENT = {
     ),
     "OMP_NUM_THREADS": re.compile(r"[1-9][0-9]{0,3}"),
     "TOKENIZERS_PARALLELISM": re.compile(r"(?:true|false)"),
+    ROCM_VISIBLE_DEVICES_ENV: GPU_DEVICE_INDEX,
 }
 _CONTAINER_ID = re.compile(r"[0-9a-f]{64}")
 _CONTAINER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,127}")
@@ -515,6 +520,10 @@ def build_decision_container_command(
     spec = launch.runtime_spec
     local_image_id = _validated_launch_image(launch)
     validate_decision_environment(spec.environment)
+    if ROCM_VISIBLE_DEVICES_ENV in spec.environment and spec.backend != "rocm":
+        raise DecisionContainerError(
+            "ROCR_VISIBLE_DEVICES is supported only for the ROCm Decision backend."
+        )
     command = build_base_run_command(
         launch.runtime,
         DEFAULT_NOFILE_LIMIT,

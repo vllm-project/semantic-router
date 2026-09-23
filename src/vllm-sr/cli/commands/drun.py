@@ -133,6 +133,10 @@ def drun() -> None:
     help="CPU-only Torch/BLAS threads; default is min(8, container CPU allowance).",
 )
 @click.option(
+    "--gpu-device",
+    help="ROCm-only GPU index visible to this instance (0-9999); default sees all GPUs.",
+)
+@click.option(
     "--instance-name",
     help="Stable lowercase name for this managed Decision runtime instance.",
 )
@@ -185,6 +189,7 @@ def run(
     max_concurrency: int | None,
     max_queue: int | None,
     cpu_threads: int | None,
+    gpu_device: str | None,
     instance_name: str | None,
     image: str | None,
     image_pull_policy: str,
@@ -205,6 +210,7 @@ def run(
         max_concurrency=max_concurrency,
         max_queue=max_queue,
         cpu_threads=cpu_threads,
+        gpu_device=gpu_device,
         instance_name=instance_name,
         image=image,
         image_pull_policy=image_pull_policy.lower(),

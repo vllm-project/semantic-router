@@ -454,6 +454,26 @@ def test_drun_cli_forwards_cpu_thread_override(monkeypatch):
     assert options_seen[0].cpu_threads == 6
 
 
+def test_drun_cli_forwards_one_rocm_gpu_device(monkeypatch):
+    options_seen: list[DrunOptions] = []
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", lambda: object())
+    monkeypatch.setattr(
+        drun_command,
+        "run_decision_runtime",
+        lambda options, **_kwargs: options_seen.append(options),
+    )
+
+    result = CliRunner().invoke(
+        drun_command.drun,
+        ["run", MODEL, "--backend", "rocm", "--gpu-device", "2"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(options_seen) == 1
+    assert options_seen[0].backend == "rocm"
+    assert options_seen[0].gpu_device == "2"
+
+
 def test_drun_cli_forwards_exact_local_docker_image_id(monkeypatch):
     options_seen: list[DrunOptions] = []
     monkeypatch.setattr(drun_command, "default_catalog_resolver", lambda: object())
@@ -863,6 +883,165 @@ def test_cpu_thread_override_rejects_auto_gpu_before_registry_mutation(
     assert driver.events == []
 
 
+def test_two_rocm_gpu_devices_launch_independently_on_distinct_ports(tmp_path: Path):
+    class PerDeviceDriver(FakeDriver):
+        def start(
+            self, launch: DecisionContainerLaunch
+        ) -> DecisionContainerObservation:
+            self.events.append(("start", launch))
+            device = int(launch.runtime_spec.environment["ROCR_VISIBLE_DEVICES"])
+            return DecisionContainerObservation(
+                identity=launch.identity(container_id=f"{device + 1:064x}"),
+                state="running",
+            )
+
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = PerDeviceDriver()
+    resolver = FixtureResolver()
+
+    for device, port in (("0", 8100), ("2", 8102)):
+        run_decision_runtime(
+            DrunOptions(
+                model=MODEL,
+                backend="rocm",
+                gpu_device=device,
+                port=port,
+                instance_name=f"gpu-{device}",
+                detach=True,
+            ),
+            resolver=resolver,
+            registry=registry,
+            driver=driver,
+            runtime_selector=lambda _requested: "docker",
+        )
+
+    launches = {
+        event[1].instance_name: event[1]
+        for event in driver.events
+        if event[0] == "start"
+    }
+    records = {record.instance_name: record for record in registry.records()}
+    assert set(launches) == set(records) == {"gpu-0", "gpu-2"}
+    assert launches["gpu-0"].runtime_spec.environment["ROCR_VISIBLE_DEVICES"] == "0"
+    assert launches["gpu-2"].runtime_spec.environment["ROCR_VISIBLE_DEVICES"] == "2"
+    assert "ROCR_VISIBLE_DEVICES=0" in build_decision_container_command(
+        launches["gpu-0"]
+    )
+    assert "ROCR_VISIBLE_DEVICES=2" in build_decision_container_command(
+        launches["gpu-2"]
+    )
+    assert launches["gpu-0"].identity_digest != launches["gpu-2"].identity_digest
+    assert records["gpu-0"].identity_digest == launches["gpu-0"].identity_digest
+    assert records["gpu-2"].identity_digest == launches["gpu-2"].identity_digest
+    assert records["gpu-0"].endpoint.startswith("http://127.0.0.1:8100/")
+    assert records["gpu-2"].endpoint.startswith("http://127.0.0.1:8102/")
+    assert records["gpu-0"].container_id != records["gpu-2"].container_id
+    assert all(record.state == "running" for record in records.values())
+
+
+def test_rocm_gpu_device_combines_with_exact_local_image_id(tmp_path: Path):
+    driver = FakeDriver()
+    run_decision_runtime(
+        DrunOptions(
+            model=MODEL,
+            backend="rocm",
+            gpu_device="2",
+            image=LOCAL_IMAGE_ID,
+            image_pull_policy="never",
+            detach=True,
+        ),
+        resolver=FixtureResolver(),
+        registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
+        driver=driver,
+        runtime_selector=lambda _requested: "docker",
+    )
+
+    launch = next(event[1] for event in driver.events if event[0] == "start")
+    command = build_decision_container_command(launch)
+    assert "ROCR_VISIBLE_DEVICES=2" in command
+    assert "--pull=never" in command
+    assert command[-4] == LOCAL_IMAGE_ID
+
+
+@pytest.mark.parametrize(
+    "device", ("-1", " 2", "2 ", "0,1", "2-3", "02", "10000", "GPU-deadbeef")
+)
+def test_invalid_gpu_device_rejected_before_catalog_resolution(device: str) -> None:
+    class MustNotResolve:
+        def resolve(self, _request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            raise AssertionError("invalid GPU selector reached the catalog")
+
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="one GPU index"):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, gpu_device=device),
+            resolver=MustNotResolve(),
+        )
+
+
+@pytest.mark.parametrize("backend", ("cpu", "cuda"))
+def test_gpu_device_rejects_unsupported_explicit_backend_before_catalog(
+    backend: str,
+) -> None:
+    class MustNotResolve:
+        def resolve(self, _request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            raise AssertionError("unsupported GPU selector reached the catalog")
+
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="only for the ROCm"):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, backend=backend, gpu_device="2"),
+            resolver=MustNotResolve(),
+        )
+
+
+@pytest.mark.parametrize("backend", ("cpu", "cuda"))
+def test_gpu_device_rejects_auto_resolved_unsupported_backend_before_registry(
+    tmp_path: Path, backend: str
+) -> None:
+    class UnsupportedResolver(FixtureResolver):
+        def resolve(self, request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            return replace(super().resolve(request), backend=backend)
+
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = FakeDriver()
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="only for the ROCm"):
+        run_decision_runtime(
+            DrunOptions(model=MODEL, gpu_device="2"),
+            resolver=UnsupportedResolver(),
+            registry=registry,
+            driver=driver,
+            runtime_selector=lambda _requested: "docker",
+        )
+
+    assert registry.records() == ()
+    assert driver.events == []
+
+
+def test_catalog_cannot_inject_rocm_gpu_visibility_without_selector(
+    tmp_path: Path,
+) -> None:
+    class MaskingResolver(FixtureResolver):
+        def resolve(self, request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            spec = super().resolve(request)
+            return replace(
+                spec,
+                environment={**spec.environment, "ROCR_VISIBLE_DEVICES": "2"},
+            )
+
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = FakeDriver()
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="through --gpu-device"):
+        run_decision_runtime(
+            DrunOptions(model=MODEL),
+            resolver=MaskingResolver(),
+            registry=registry,
+            driver=driver,
+            runtime_selector=lambda _requested: "docker",
+        )
+
+    assert registry.records() == ()
+    assert driver.events == []
+
+
 def test_resolved_runtime_detaches_from_retained_environment_mapping():
     source = {"DECISION_RUNTIME_LOG_LEVEL": "info"}
     spec = replace(
@@ -1010,6 +1189,27 @@ def test_artifact_mount_is_part_of_managed_container_identity(tmp_path: Path):
         )
 
     assert digest(first) != digest(second)
+
+
+def test_rocm_gpu_visibility_is_part_of_managed_container_identity():
+    base = FixtureResolver().resolve(
+        DecisionRuntimeRequest(MODEL, None, "rocm", None, None, None, None, None)
+    )
+
+    def digest(device: str) -> str:
+        spec = replace(
+            base,
+            environment={**base.environment, "ROCR_VISIBLE_DEVICES": device},
+        )
+        return lifecycle._identity_digest(
+            instance_id="00000000-0000-0000-0000-000000000001",
+            instance_name="fixture",
+            endpoint="http://127.0.0.1:8000/v1/systemone",
+            runtime="docker",
+            spec=spec,
+        )
+
+    assert digest("0") != digest("2")
 
 
 def test_resolved_runtime_defaults_to_strict_readiness_endpoint():
@@ -1283,6 +1483,14 @@ def test_container_command_is_stable_and_contains_no_registry_secrets(monkeypatc
     ]
 
 
+def test_default_rocm_launch_keeps_all_gpu_visibility_unset():
+    assert "ROCR_VISIBLE_DEVICES" not in _launch().runtime_spec.environment
+    assert not any(
+        part.startswith("ROCR_VISIBLE_DEVICES=")
+        for part in build_decision_container_command(_launch())
+    )
+
+
 def test_local_image_id_is_inspected_exactly_and_run_with_pull_disabled(monkeypatch):
     launch = _launch(replace(_launch().runtime_spec, image=LOCAL_IMAGE_ID))
     commands: list[list[str]] = []
@@ -1385,6 +1593,8 @@ def test_repository_digest_keeps_existing_image_preparation_path(monkeypatch):
         {"DECISION_RUNTIME_LOG_LEVEL": "jv_live_must_not_reach_argv"},
         {"OMP_NUM_THREADS": "12345"},
         {"DECISION_CPU_THREADS": "257"},
+        {"ROCR_VISIBLE_DEVICES": "0,1"},
+        {"ROCR_VISIBLE_DEVICES": "-1"},
     ),
 )
 def test_container_command_rejects_nonpublic_or_unbounded_environment_values(
@@ -1412,6 +1622,18 @@ def test_container_command_rejects_nonpublic_or_unbounded_environment_values(
         build_decision_container_command(launch)
 
     assert all(value not in str(error.value) for value in environment.values())
+
+
+@pytest.mark.parametrize("backend", ("cpu", "cuda"))
+def test_container_command_rejects_rocm_visibility_on_other_backends(backend: str):
+    spec = replace(
+        _launch().runtime_spec,
+        backend=backend,
+        environment={"ROCR_VISIBLE_DEVICES": "2"},
+    )
+
+    with pytest.raises(DecisionContainerError, match="only for the ROCm"):
+        build_decision_container_command(_launch(spec))
 
 
 def test_low_level_start_preserves_actionable_runtime_stderr(monkeypatch):

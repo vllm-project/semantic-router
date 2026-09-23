@@ -10,7 +10,9 @@ description: Serve Decision 1.0 models and call the strict single-state API or t
 instance a different port to serve multiple models on one machine. The runtime
 does not select a default model: every request must name the model served by
 that instance. See the [`drun` command reference](./cli#vllm-sr-drun-run) for
-the available backend, image, capacity, and lifecycle options.
+the available backend, image, capacity, and lifecycle options. Once a qualified
+backend has a published immutable runtime image in the packaged inventory, a
+release launch can use:
 
 ```bash
 vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
@@ -21,7 +23,19 @@ For isolated validation with an already-loaded Docker image, pass its full
 `sha256:` image ID with `--image` and set `--image-pull-policy never`. The ID
 must exist locally and is never pulled; abbreviated IDs and Podman are not
 accepted for this override. Published `repository@sha256:` image references
-retain the normal pull-policy behavior.
+retain the normal pull-policy behavior. Staging builds with an empty packaged
+image inventory require an explicit immutable image override; the release
+example above will not launch from such a build as written.
+
+For ROCm, `--gpu-device 0` selects one numeric GPU index for that instance by
+setting [`ROCR_VISIBLE_DEVICES`](https://rocm.docs.amd.com/en/latest/reference/system-optimization/gpu-isolation.html)
+inside the container. Use different ports and device indices when launching
+multiple instances. Without `--gpu-device`, each ROCm instance retains the
+current all-visible default and may contend for the same GPUs. This is
+process-level ROCm visibility, not exclusive GPU ownership or a security
+boundary; verify the host's current GPU index mapping before launch. CPU and
+CUDA do not currently support this selector; CUDA hardware is not qualified by
+the presence of a backend option.
 
 The selected model and hardware pair must have a qualified release profile;
 `drun` refuses unsupported combinations. In particular, the presence of a
