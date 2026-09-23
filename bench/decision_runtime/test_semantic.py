@@ -1,0 +1,301 @@
+"""Loopback contract tests for synthetic workflow and batch measurements."""
+
+from __future__ import annotations
+
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest import TestCase
+
+from .cases import MODELS
+from decision_runtime.confidence import choice_confidence, score_confidence
+
+from .__main__ import main
+from .semantic_cases import generate_cases
+from .semantic_report import build_semantic_matrix
+
+
+def _answer(question):
+    if question["type"] == "noul":
+        return {"type": "noul", "noul": 0.5}
+    if question["type"] == "choice":
+        keys = list(question["criteria"])
+        probabilities = dict.fromkeys(keys, 1 / len(keys))
+        return {
+            "type": "choice",
+            "choice": keys[0],
+            "confidence": choice_confidence(tuple(probabilities.values())),
+            "probabilities": probabilities,
+        }
+    levels = question["criteria"]
+    probabilities = {str(index): 1 / len(levels) for index in range(len(levels))}
+    return {
+        "type": "score",
+        "score": (len(levels) - 1) / 2,
+        "confidence": score_confidence(tuple(probabilities.values())),
+        "legend": {str(index): level for index, level in enumerate(levels)},
+        "probabilities": probabilities,
+    }
+
+
+class _Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        self.server.bodies.append((self.path, body))
+        request = json.loads(body)
+        if self.path == "/v1/systemone":
+            response = {
+                "model": request["model"],
+                "answers": {
+                    key: _answer(value) for key, value in request["questions"].items()
+                },
+                "usage": {"input_tokens": 10, "output_tokens": 1},
+            }
+        elif self.path == "/v1/decision/batches":
+            results = [
+                {
+                    "id": state["id"],
+                    "answers": {
+                        key: _answer(value)
+                        for key, value in request["questions"].items()
+                    },
+                    "usage": {"input_tokens": 10, "output_tokens": 1},
+                }
+                for state in request["states"]
+            ]
+            if self.server.invalid_batch:
+                results[0]["answers"] = {}
+            response = {
+                "model": request["model"],
+                "results": results,
+                "usage": {
+                    "input_tokens": 10 * len(results),
+                    "output_tokens": len(results),
+                },
+            }
+        else:
+            self.send_error(404)
+            return
+        payload = json.dumps(response).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def log_message(self, format, *args):
+        pass
+
+
+class SemanticTests(TestCase):
+    def test_generator_is_deterministic_and_respects_contract(self):
+        cases = generate_cases(
+            MODELS[0], MODELS[0], question_count=9, state_count=4, variants=2, seed=17
+        )
+        repeated = generate_cases(
+            MODELS[0], MODELS[0], question_count=9, state_count=4, variants=2, seed=17
+        )
+        self.assertEqual(cases, repeated)
+        self.assertEqual(cases[0].decisions, 36)
+        self.assertEqual(len(cases[0].old_singles), 4)
+        self.assertFalse(cases[0].same_wire_bytes)
+        self.assertEqual(
+            {
+                question.type
+                for question in cases[0].new_request.request.questions.values()
+            },
+            {"noul", "choice", "score"},
+        )
+        single = generate_cases(
+            MODELS[0], MODELS[0], question_count=3, state_count=1, variants=1, seed=17
+        )[0]
+        self.assertTrue(single.same_wire_bytes)
+        self.assertEqual(single.old_singles[0].sha256, single.new_request.sha256)
+        with self.assertRaisesRegex(ValueError, "decision limit"):
+            generate_cases(
+                MODELS[0],
+                MODELS[0],
+                question_count=33,
+                state_count=32,
+                variants=1,
+                seed=17,
+            )
+
+    def _servers(self, invalid_batch=False):
+        servers = [ThreadingHTTPServer(("127.0.0.1", 0), _Handler) for _ in range(2)]
+        for server in servers:
+            server.bodies = []
+            server.invalid_batch = invalid_batch
+        servers[0].invalid_batch = False
+        threads = [
+            threading.Thread(target=server.serve_forever, daemon=True)
+            for server in servers
+        ]
+        for thread in threads:
+            thread.start()
+        return servers, threads
+
+    def _run_args(self, servers, output, *extra):
+        return [
+            "semantic",
+            "--model",
+            MODELS[0],
+            "--old-url",
+            f"http://127.0.0.1:{servers[0].server_port}/v1/systemone",
+            "--new-url",
+            f"http://127.0.0.1:{servers[1].server_port}/v1/systemone",
+            "--old-source-ref",
+            "a" * 40,
+            "--new-source-ref",
+            "b" * 40,
+            "--old-model-revision",
+            "c" * 40,
+            "--new-model-revision",
+            "c" * 40,
+            "--old-hardware",
+            "test GPU x1",
+            "--new-hardware",
+            "test GPU x1",
+            "--old-network-scope",
+            "loopback",
+            "--new-network-scope",
+            "loopback",
+            "--old-physical-batch-size",
+            "1",
+            "--new-physical-batch-size",
+            "8",
+            "--question-counts",
+            "3",
+            "--state-counts",
+            "1,4",
+            "--concurrencies",
+            "1,4",
+            "--variants",
+            "2",
+            "--warmup",
+            "1",
+            "--latency-workflows",
+            "2",
+            "--throughput-workflows",
+            "4",
+            "--rounds",
+            "2",
+            "--output-dir",
+            str(output),
+            *extra,
+        ]
+
+    def test_fake_services_validate_singles_and_batches_and_record_shape(self):
+        servers, threads = self._servers()
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                self.assertEqual(main(self._run_args(servers, output)), 0)
+                receipt_text = (output / "receipt.json").read_text()
+                receipt = json.loads(receipt_text)
+                samples = [
+                    json.loads(line)
+                    for line in (output / "samples.jsonl").read_text().splitlines()
+                ]
+                workflows = [
+                    json.loads(line)
+                    for line in (output / "workflows.jsonl").read_text().splitlines()
+                ]
+                self.assertEqual(len(receipt["shapes"]), 4)
+                self.assertTrue(all(sample["success"] for sample in samples))
+                self.assertTrue(all(item["success"] for item in workflows))
+                self.assertEqual({item["concurrency"] for item in samples}, {1, 4})
+                self.assertEqual({item["concurrency"] for item in workflows}, {1, 4})
+                self.assertEqual(
+                    {path for path, _ in servers[0].bodies}, {"/v1/systemone"}
+                )
+                self.assertEqual(
+                    {path for path, _ in servers[1].bodies},
+                    {"/v1/systemone", "/v1/decision/batches"},
+                )
+                for row in receipt["shapes"]:
+                    summary = row["summary"]
+                    comparison = summary["comparison"]
+                    self.assertTrue(comparison["eligible"])
+                    self.assertGreater(
+                        summary["arms"]["new"]["throughput"][
+                            "successful_decisions_per_second"
+                        ],
+                        0,
+                    )
+                    self.assertIsNotNone(
+                        summary["arms"]["old"]["latency"]["workflow_latency"]["p99_ms"]
+                    )
+                    self.assertEqual(
+                        comparison["wire_bytes_identical"], row["state_count"] == 1
+                    )
+                self.assertNotIn("127.0.0.1", receipt_text)
+                self.assertNotIn("http://", receipt_text)
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_bad_batch_fails_complete_workflow(self):
+        servers, threads = self._servers(invalid_batch=True)
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(servers, output)
+                args[args.index("--state-counts") + 1] = "4"
+                args[args.index("--concurrencies") + 1] = "2"
+                args[args.index("--warmup") + 1] = "0"
+                args[args.index("--rounds") + 1] = "1"
+                self.assertEqual(main(args), 1)
+                receipt = json.loads((output / "receipt.json").read_text())
+                row = receipt["shapes"][0]
+                self.assertEqual(
+                    row["summary"]["arms"]["new"]["throughput"]["successful_decisions"],
+                    0,
+                )
+                self.assertEqual(
+                    row["summary"]["arms"]["new"]["throughput"]["errors"],
+                    {"response_contract": 4},
+                )
+                self.assertFalse(row["summary"]["comparison"]["eligible"])
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_model_id_adapter_is_explicitly_nonidentical(self):
+        servers, threads = self._servers()
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(
+                    servers, output, "--old-model-id", "legacy/decision"
+                )
+                args[args.index("--state-counts") + 1] = "1"
+                args[args.index("--concurrencies") + 1] = "1"
+                args[args.index("--warmup") + 1] = "0"
+                args[args.index("--rounds") + 1] = "1"
+                self.assertEqual(main(args), 0)
+                receipt = json.loads((output / "receipt.json").read_text())
+                self.assertEqual(receipt["adapter"]["kind"], "model_id_only")
+                comparison = receipt["shapes"][0]["summary"]["comparison"]
+                self.assertEqual(
+                    comparison["type"], "single_request_model_id_adapter_workflow"
+                )
+                self.assertFalse(comparison["wire_bytes_identical"])
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_semantic_matrix_requires_six_receipts(self):
+        with self.assertRaisesRegex(ValueError, "exactly six"):
+            build_semantic_matrix([])

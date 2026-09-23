@@ -1,4 +1,106 @@
-# Decision SystemOne HTTP comparison
+# Decision HTTP performance comparisons
+
+This directory has two independently labeled measurements. `run` is the
+byte-identical, single-state SystemOne comparison below. `semantic` measures
+synthetic logical workflows with mixed questions, concurrent requests, and
+multiple states. For multiple states it compares old `/v1/systemone` fan-out
+with new `/v1/decision/batches`; those are different HTTP protocols and wire
+bytes. Neither mode measures decision quality.
+
+## Synthetic semantic workloads
+
+Run each of the six catalog models independently on two isolated, ready
+services. The old service needs `/v1/systemone`; the new service needs both
+`/v1/systemone` and `/v1/decision/batches`. The runner derives the new batch
+URL from `--new-url`. Use the exact deployed source and weight revisions,
+public-safe hardware labels, and the serving configuration's actual physical
+batch capacity. The example ports are placeholders. Credentials belong only
+in environment variables named by `--old-token-env` and `--new-token-env`.
+
+```bash
+.venv-agent/bin/python -m bench.decision_runtime semantic \
+  --model llm-semantic-router/Decision-1.0-Kai-0.6B \
+  --old-url 'http://127.0.0.1:<old-port>/v1/systemone' \
+  --new-url 'http://127.0.0.1:<new-port>/v1/systemone' \
+  --old-source-ref <old-source-commit> --new-source-ref <new-source-commit> \
+  --old-model-revision <old-model-commit> \
+  --new-model-revision <new-model-commit> \
+  --old-hardware 'MI300X x1' --new-hardware 'MI300X x1' \
+  --old-network-scope loopback --new-network-scope loopback \
+  --old-physical-batch-size 1 --new-physical-batch-size 32 \
+  --question-counts 1,8,32 --state-counts 1,8,32 \
+  --concurrencies 1,8,32 --variants 4 --seed 17 \
+  --warmup 2 --latency-workflows 16 \
+  --throughput-workflows 32 --rounds 2 \
+  --output-dir .agent-harness/decision-semantic/kai
+```
+
+The generator constructs a deterministic cohort for every question/state
+shape. Question types cycle through Noul, Choice, and Score, and counts of at
+least three contain all three. States and wording vary by seed; these synthetic
+fixtures have no accuracy labels. Every request is validated against the
+runtime's strict contract before traffic. The batch decision limit is 1,024,
+so each question count multiplied by each state count must fit it. Repeat the
+same shape grid, seed, variants, phase counts, concurrency levels, timeout, and
+declared serving policy across all six models. Reconfigure the actual serving
+physical batch capacity between runs when studying that axis; the CLI records
+the declared capacity but cannot verify it from the server. `--concurrencies`
+bounds in-flight HTTP requests per arm. The server's observed physical batches
+should be checked separately in its own telemetry.
+
+For a one-state shape, both arms send the same single-request bytes when they
+use the same model ID. For a multi-state shape, the old arm sends one single
+request per state and the new arm sends one shared-question batch request. A
+logical workflow is complete only when every state returns a conforming answer.
+The old fan-out is bounded by the selected HTTP concurrency. Each arm runs in
+its own wave; throughput wave order alternates by round. Latency workflow order
+alternates per item. There are no automatic retries or simultaneous old/new
+inference waves.
+
+Optional `--old-model-id <slug>` adapts only the old request's model ID before
+timing. It requires the old response to echo that ID and still pass strict
+request-relative validation. The receipt records the mapping and labels even
+the one-state comparison as nonidentical wire bytes. No generic response
+envelope rewrite is supplied; a service with another envelope needs a specific
+audited adapter and explicit protocol labeling before measurement.
+
+`samples.jsonl` records every HTTP attempt with request and response hashes,
+status, error code, decision count, and timing offsets. `workflows.jsonl`
+records each logical workflow's first-send to last-complete interval and full
+success/failure. `receipt.json` records source, harness, generator, and cohort
+hashes; declared deployment provenance; all settings; per-shape and per-arm
+error counts; complete-workflow p50/p95/p99; HTTP p50/p95/p99; and successful
+and attempted decisions per second. Percentiles use nearest rank over complete
+conforming workflows. Throughput divides complete-workflow decisions by the
+sum of each wave's first-send to last-completion window; partial old fan-out
+does not earn successful decisions. Parsing and strict response validation are
+outside the HTTP timing interval. The files contain no URLs, tokens, request
+bodies, response bodies, or answer text. Review all metadata before publication.
+
+Ratios appear only when model revision, hardware, and network-scope declarations
+match, warmup and measured responses all conform, and both arms have successful
+latency and throughput samples. Multi-state ratios are explicitly labeled
+`single_fanout_vs_batch_protocol_workflow` and do not imply equivalent HTTP
+payloads. Equal metadata alone does not prove equal deployment conditions.
+Small fake-service or smoke runs demonstrate the harness, not a ROCm speedup.
+
+The command exits 1 after writing receipts if any workflow fails. It exits 2
+for invalid input or an existing output directory; it never overwrites a run.
+After all six model runs, collate their receipts with `semantic-matrix`:
+
+```bash
+.venv-agent/bin/python -m bench.decision_runtime semantic-matrix \
+  --receipts .agent-harness/decision-semantic/{kai,lex,eos,sol,nox,lux}/receipt.json \
+  --output .agent-harness/decision-semantic/matrix.json
+```
+
+The matrix requires one receipt per catalog model with the same harness source,
+case IDs, and settings. It preserves each model's own cohort hash, serving
+metadata, and per-shape results. Run the fake-service checks with
+`python -m unittest bench.decision_runtime.test_semantic -v` in the approved
+validation environment.
+
+## Byte-identical SystemOne comparison
 
 This runner measures the six Decision 1.0 models one at a time against an old
 SystemOne HTTP service and the integrated runtime. It measures performance and

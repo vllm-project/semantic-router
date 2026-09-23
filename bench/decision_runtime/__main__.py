@@ -17,6 +17,7 @@ from pathlib import Path
 
 from .cases import DEFAULT_CASES, MODELS, Case, cohort_sha256, load_cases
 from .report import SCHEMA_VERSION, build_matrix, summarize
+from .semantic_runner import add_parsers as add_semantic_parsers
 from .transport import Endpoint, Sample, measure, validate_endpoint_url
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -166,7 +167,7 @@ def _run(args: argparse.Namespace) -> int:
     origin_ns = time.perf_counter_ns()
     with (args.output_dir / "samples.jsonl").open("w", encoding="utf-8") as handle:
         for sequence in range(args.warmup):
-            for endpoint in ((old, new) if sequence % 2 == 0 else (new, old)):
+            for endpoint in (old, new) if sequence % 2 == 0 else (new, old):
                 sample = _measure_one(
                     endpoint, schedule[sequence], "warmup", 0, sequence, args.timeout
                 )
@@ -174,7 +175,7 @@ def _run(args: argparse.Namespace) -> int:
                 _save_sample(handle, sample, origin_ns)
 
         for sequence in range(args.latency_pairs):
-            for endpoint in ((old, new) if sequence % 2 == 0 else (new, old)):
+            for endpoint in (old, new) if sequence % 2 == 0 else (new, old):
                 sample = _measure_one(
                     endpoint, schedule[sequence], "latency", 0, sequence, args.timeout
                 )
@@ -288,6 +289,8 @@ def main(argv: list[str] | None = None) -> int:
     matrix.add_argument("--receipts", nargs="+", required=True, type=Path)
     matrix.add_argument("--output", type=Path)
     matrix.set_defaults(handler=_matrix)
+
+    add_semantic_parsers(commands)
 
     args = parser.parse_args(argv)
     try:
