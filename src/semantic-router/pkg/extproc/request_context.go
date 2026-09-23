@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/projectiontrace"
@@ -151,6 +152,11 @@ type RequestContext struct {
 	// reads it to avoid caching non-2xx error bodies (cache poisoning).
 	UpstreamStatusCode int
 
+	// ResponseHeadersContinued indicates whether response headers were forwarded
+	// downstream to the client. Once true, response headers are committed and no
+	// subsequent replacement or fallback response may be attempted.
+	ResponseHeadersContinued bool
+
 	// TTFT tracking
 	TTFTRecorded bool
 	TTFTSeconds  float64
@@ -246,6 +252,10 @@ type RequestContext struct {
 	// VSRSelectedCandidate is the exact post-policy choice used at dispatch.
 	// Never recover its reasoning settings by searching model names again.
 	VSRSelectedCandidate *config.ModelRef
+
+	// FallbackRecord tracks bounded cross-candidate execution attempts and token accounting.
+	FallbackRecord        *fallback.ExecutionRecord
+	FallbackAuditRecorded bool
 
 	// Selection stages ownership; only a validated provider continuation commits it.
 	pendingSessionDecision *sessiontelemetry.SessionDecisionParams
@@ -381,9 +391,13 @@ type RequestContext struct {
 
 	// SourceFormat and SemanticRequest are the authoritative public protocol
 	// contract and neutral request.
-	SourceFormat             llmprotocol.WireFormat
-	TargetFormat             llmprotocol.WireFormat
-	SemanticRequest          *llmprotocol.Request
+	SourceFormat    llmprotocol.WireFormat
+	TargetFormat    llmprotocol.WireFormat
+	SemanticRequest *llmprotocol.Request
+	// FallbackRequest is an immutable, protocol-neutral snapshot taken after all
+	// request plugins and final capability checks. Every provider retry clones
+	// this snapshot instead of replaying mutations made for the primary backend.
+	FallbackRequest          *llmprotocol.Request
 	OriginalContextHistory   *contextcompression.HistorySnapshot
 	ContextRequestIR         *contextcompression.RequestIR
 	ContextHistorySteps      []contextcompression.TransformationStep

@@ -1117,6 +1117,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1161,6 +1164,9 @@
         },
         "learning": {
           "$ref": "#/$defs/RouterLearningConfig"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1204,6 +1210,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1468,6 +1477,28 @@
             "$ref": "#/$defs/ModelScore"
           },
           "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "CircuitBreakerConfig": {
+      "properties": {
+        "consecutive_failures": {
+          "type": "integer"
+        },
+        "cooldown_period": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "half_open_probes": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -2595,6 +2626,50 @@
         },
         "description": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FallbackPolicy": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "circuit_breaker": {
+          "$ref": "#/$defs/CircuitBreakerConfig"
         }
       },
       "additionalProperties": false,
