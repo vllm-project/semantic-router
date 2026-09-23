@@ -9,6 +9,8 @@ from dataclasses import dataclass
 
 from pydantic import ValidationError
 
+# Importing cases initializes the source checkout's runtime-contract path.
+# isort: off
 from .cases import MODELS
 from decision_runtime.contracts import (
     MAX_BATCH_DECISIONS,
@@ -17,6 +19,8 @@ from decision_runtime.contracts import (
     SystemOneBatchRequest,
     SystemOneRequest,
 )
+
+# isort: on
 
 
 def wire_bytes(value: dict[str, object]) -> bytes:

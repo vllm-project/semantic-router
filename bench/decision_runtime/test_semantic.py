@@ -9,8 +9,12 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
 
+# cases initializes the source checkout's runtime-contract path.
+# isort: off
 from .cases import MODELS
 from decision_runtime.confidence import choice_confidence, score_confidence
+
+# isort: on
 
 from .__main__ import main
 from .semantic_cases import generate_cases
@@ -66,7 +70,7 @@ class _Handler(BaseHTTPRequestHandler):
                 for state in request["states"]
             ]
             if self.server.invalid_batch:
-                results[0]["answers"] = {}
+                results.reverse()
             response = {
                 "model": request["model"],
                 "results": results,
@@ -113,6 +117,11 @@ class SemanticTests(TestCase):
         )[0]
         self.assertTrue(single.same_wire_bytes)
         self.assertEqual(single.old_singles[0].sha256, single.new_request.sha256)
+        maximum = generate_cases(
+            MODELS[0], MODELS[0], question_count=32, state_count=32, variants=1, seed=17
+        )[0]
+        self.assertEqual(maximum.decisions, 1024)
+        self.assertEqual(len(maximum.old_singles), 32)
         with self.assertRaisesRegex(ValueError, "decision limit"):
             generate_cases(
                 MODELS[0],
@@ -231,6 +240,27 @@ class SemanticTests(TestCase):
                     self.assertEqual(
                         comparison["wire_bytes_identical"], row["state_count"] == 1
                     )
+                    if row["state_count"] == 4:
+                        self.assertEqual(
+                            summary["arms"]["old"]["throughput"][
+                                "successful_decisions"
+                            ],
+                            96,
+                        )
+                        self.assertEqual(
+                            summary["arms"]["new"]["throughput"][
+                                "successful_decisions"
+                            ],
+                            96,
+                        )
+                        self.assertEqual(
+                            summary["arms"]["old"]["throughput"]["http_attempts"],
+                            32,
+                        )
+                        self.assertEqual(
+                            summary["arms"]["new"]["throughput"]["http_attempts"],
+                            8,
+                        )
                 self.assertNotIn("127.0.0.1", receipt_text)
                 self.assertNotIn("http://", receipt_text)
         finally:

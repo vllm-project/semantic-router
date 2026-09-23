@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import random
 import re
@@ -73,7 +74,7 @@ def _positive_float(value: str) -> float:
         number = float(value)
     except ValueError as error:
         raise argparse.ArgumentTypeError("must be positive and finite") from error
-    if number <= 0 or number == float("inf") or number != number:
+    if number <= 0 or not math.isfinite(number):
         raise argparse.ArgumentTypeError("must be positive and finite")
     return number
 
@@ -214,10 +215,6 @@ def run_semantic(args: argparse.Namespace) -> int:
     old_model_id = args.old_model_id or args.model
     if not MODEL_ID.fullmatch(old_model_id):
         raise ValueError("old model ID is not a public-safe model slug")
-    for questions in args.question_counts:
-        for states in args.state_counts:
-            if questions * states > 1024:
-                raise ValueError("every question/state shape must fit 1024 decisions")
     old = Endpoint("old", old_url, _token(args.old_token_env))
     new_single = Endpoint("new", new_url, _token(args.new_token_env))
     new_batch = Endpoint("new", batch_url(new_url), new_single.token)
