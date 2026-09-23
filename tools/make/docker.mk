@@ -592,6 +592,7 @@ vllm-sr-decision-runtime-test: harness-venv-install
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
 		src/vllm-sr/tests/test_decision_runtime_contracts.py \
 		src/vllm-sr/tests/test_decision_runtime_engine.py \
+		src/vllm-sr/tests/test_decision_cpu_threads.py \
 		src/vllm-sr/tests/test_decision_runtime_api.py \
 		src/vllm-sr/tests/test_decision_runtime_profiles.py \
 		src/vllm-sr/tests/test_decision_runtime_artifacts.py \

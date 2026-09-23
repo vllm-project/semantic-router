@@ -56,7 +56,7 @@ for forbidden in ("fastapi", "uvicorn", "torch"):
     )
 
 
-def test_console_entrypoint_reports_the_optional_extra_before_server_import():
+def test_console_entrypoint_reports_the_optional_extra_before_model_load():
     environment = dict(os.environ, PYTHONPATH=str(PROJECT_ROOT))
     script = r"""
 import importlib
@@ -72,7 +72,16 @@ importlib.import_module = blocked
 from decision_runtime.entrypoint import main
 
 try:
-    main()
+    main([
+        "--model", "fixture",
+        "--revision", "a" * 40,
+        "--backend", "rocm",
+        "--artifact-root", "/nonexistent/model",
+        "--artifact-content-id", "b" * 64,
+        "--max-batch", "1",
+        "--max-concurrency", "1",
+        "--max-queue", "0",
+    ])
 except SystemExit as error:
     assert "vllm-sr[decision-runtime]" in str(error)
 else:
