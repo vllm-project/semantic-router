@@ -111,3 +111,5 @@ espace
 analise
 # Evaluation terminology (grading saved answers again)
 regrading
+# Linux DRM render-node basename prefix (/dev/dri/renderD*)
+renderD

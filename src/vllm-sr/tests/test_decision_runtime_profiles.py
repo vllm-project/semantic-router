@@ -88,14 +88,14 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
     )
 
 
-def test_profile_package_has_exact_catalog_revision_set() -> None:
+def test_profile_package_has_exact_catalog_model_set() -> None:
     profile_files = {
         item.name.removesuffix(".json")
         for item in resources.files("decision_runtime.profiles").iterdir()
         if item.name.endswith(".json")
     }
 
-    assert profile_files == {revision for revision, *_ in MODELS.values()}
+    assert profile_files == {model_id.rsplit("/", 1)[-1] for model_id in MODELS}
 
 
 @pytest.mark.parametrize(
@@ -113,12 +113,11 @@ def test_catalog_adapter_rejects_aliases_and_unknown_models(model_id: str) -> No
         resolve_decision_runtime_model(model_id)
 
 
+@pytest.mark.parametrize("model_id", MODELS)
 def test_catalog_new_revision_reuses_model_template(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, model_id: str
 ) -> None:
-    resolved = resolve_decision_runtime_model(
-        "llm-semantic-router/Decision-1.0-Kai-0.6B"
-    )
+    resolved = resolve_decision_runtime_model(model_id)
     monkeypatch.setattr(
         catalog_adapter,
         "resolve_catalog_provider_model",
@@ -128,7 +127,8 @@ def test_catalog_new_revision_reuses_model_template(
     updated = resolve_decision_runtime_model(resolved.catalog.model_id)
     assert updated.catalog.revision == "a" * 40
     assert updated.profile.revision == "a" * 40
-    assert updated.template_revision == resolved.template_revision
+    assert updated.template_id == resolved.template_id
+    assert updated.template_id == model_id.rsplit("/", 1)[-1]
     assert updated.profile.prompt_policy == resolved.profile.prompt_policy
 
 
@@ -149,7 +149,7 @@ def test_catalog_adapter_fails_closed_on_family_mismatch(
     monkeypatch.setattr(
         catalog_adapter,
         "load_runtime_profile",
-        lambda revision: replace(resolved.profile, family="qwen3.5"),
+        lambda profile_id, *, revision: replace(resolved.profile, family="qwen3.5"),
     )
 
     with pytest.raises(RuntimeModelResolutionError, match="model family"):
@@ -158,7 +158,8 @@ def test_catalog_adapter_fails_closed_on_family_mismatch(
 
 def test_unqualified_backends_and_targets_are_rejected() -> None:
     profile = load_runtime_profile(
-        MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
+        "Decision-1.0-Kai-0.6B",
+        revision=MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0],
     )
 
     profile.require_backend("rocm", target="gfx942")
@@ -196,7 +197,9 @@ def test_runtime_owned_backend_capabilities_cover_six_rocm_and_sub_1b_cpu() -> N
 
 def test_profile_parser_rejects_traversal_and_revision_fields() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
-    packaged = resources.files("decision_runtime.profiles").joinpath(f"{revision}.json")
+    packaged = resources.files("decision_runtime.profiles").joinpath(
+        "Decision-1.0-Kai-0.6B.json"
+    )
     document = json.loads(packaged.read_bytes())
     document["artifact"]["files"][0] = "../weights.safetensors"
 
@@ -211,7 +214,9 @@ def test_profile_parser_rejects_traversal_and_revision_fields() -> None:
 
 def test_physical_batch_is_a_tunable_positive_profile_value() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
-    packaged = resources.files("decision_runtime.profiles").joinpath(f"{revision}.json")
+    packaged = resources.files("decision_runtime.profiles").joinpath(
+        "Decision-1.0-Kai-0.6B.json"
+    )
     document = json.loads(packaged.read_bytes())
     document["physical_batch_size"] = 4
 
@@ -223,7 +228,7 @@ def test_physical_batch_is_a_tunable_positive_profile_value() -> None:
 @pytest.mark.parametrize("model_id", MODELS)
 def test_cpu_is_explicit_and_unqualified_until_hardware_evidence(model_id: str) -> None:
     revision = MODELS[model_id][0]
-    profile = load_runtime_profile(revision)
+    profile = load_runtime_profile(model_id.rsplit("/", 1)[-1], revision=revision)
     cpu = profile.backends["cpu"]
     assert not cpu.qualified
     assert cpu.targets == ()
@@ -235,7 +240,9 @@ def test_cpu_is_explicit_and_unqualified_until_hardware_evidence(model_id: str) 
 
 def test_profile_rejects_qualified_backend_without_dtype() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
-    packaged = resources.files("decision_runtime.profiles").joinpath(f"{revision}.json")
+    packaged = resources.files("decision_runtime.profiles").joinpath(
+        "Decision-1.0-Kai-0.6B.json"
+    )
     document = json.loads(packaged.read_bytes())
     document["backends"]["cpu"] = {
         "qualified": True,
@@ -250,4 +257,10 @@ def test_profile_rejects_qualified_backend_without_dtype() -> None:
 @pytest.mark.parametrize("revision", ("main", "A" * 40, "a" * 39, "a" * 41))
 def test_profile_loader_requires_full_lowercase_revision(revision: str) -> None:
     with pytest.raises(RuntimeProfileError, match="full lowercase Git SHA"):
-        load_runtime_profile(revision)
+        load_runtime_profile("Decision-1.0-Kai-0.6B", revision=revision)
+
+
+@pytest.mark.parametrize("profile_id", ("../Kai", ".hidden", "Kai/other", ""))
+def test_profile_loader_rejects_unsafe_model_names(profile_id: str) -> None:
+    with pytest.raises(RuntimeProfileError, match="profile ID is invalid"):
+        load_runtime_profile(profile_id, revision="a" * 40)

@@ -158,7 +158,7 @@ def test_open_verified_artifact_rejects_wrong_identity_and_corruption(
     selected = artifact.root / "artifact/config.json"
     selected.chmod(0o644)
     selected.write_bytes(b"corrupted")
-    with pytest.raises(ArtifactIntegrityError, match="size|digest"):
+    with pytest.raises(ArtifactIntegrityError, match=r"size|digest"):
         open_verified_artifact(
             artifact.root,
             model,
@@ -235,7 +235,7 @@ def test_materialization_detects_cached_corruption(tmp_path: Path) -> None:
     corrupted.chmod(0o644)
     corrupted.write_bytes(b"corrupted")
 
-    with pytest.raises(ArtifactIntegrityError, match="size|digest"):
+    with pytest.raises(ArtifactIntegrityError, match=r"size|digest"):
         resolver.materialize(model)
 
 
@@ -243,7 +243,7 @@ def test_fetched_file_corruption_is_rejected(tmp_path: Path) -> None:
     model, fetcher = _fixture_model(tmp_path)
     fetcher.files["artifact/config.json"].write_bytes(b"wrong")
 
-    with pytest.raises(ArtifactIntegrityError, match="size|digest"):
+    with pytest.raises(ArtifactIntegrityError, match=r"size|digest"):
         ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
 
 
@@ -379,7 +379,7 @@ def test_new_commit_with_valid_self_manifest_needs_no_packaged_profile(
 ) -> None:
     revision = "c" * 40
     model = resolve_decision_runtime_model(MODEL_ID, revision=revision)
-    assert model.template_revision != revision
+    assert model.template_id == "Decision-1.0-Kai-0.6B"
     payloads = {
         name: f"snapshot:{name}".encode() for name in model.profile.artifact.files
     }
@@ -416,7 +416,7 @@ def test_new_commit_with_valid_self_manifest_needs_no_packaged_profile(
     assert {call[1] for call in fetcher.calls} == {revision}
 
     (source / "choice_encoder.safetensors").write_bytes(b"corrupted")
-    with pytest.raises(ArtifactIntegrityError, match="size|digest"):
+    with pytest.raises(ArtifactIntegrityError, match=r"size|digest"):
         ArtifactResolver(fetcher, tmp_path / "other-cache").materialize(model)
 
 

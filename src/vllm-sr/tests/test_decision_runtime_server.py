@@ -12,8 +12,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from decision_runtime.backend import BackendInputTooLargeError  # noqa: E402
 from decision_runtime.artifacts import ArtifactFile, VerifiedArtifact  # noqa: E402
+from decision_runtime.backend import BackendInputTooLargeError  # noqa: E402
 from decision_runtime.contracts import SystemOneRequest  # noqa: E402
 from decision_runtime.entrypoint import parse_launch_args  # noqa: E402
 from decision_runtime.physical_batching import DecisionRow  # noqa: E402
@@ -29,6 +29,7 @@ from decision_runtime.runtime_profile import (  # noqa: E402
 )
 
 MODEL = "llm-semantic-router/Decision-1.0-Kai-0.6B"
+PROFILE_ID = "Decision-1.0-Kai-0.6B"
 REVISION = "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
 CONTENT_ID = "a" * 64
 
@@ -104,9 +105,9 @@ def test_entrypoint_parses_exact_drun_command(tmp_path: Path):
 
 
 def test_assembly_reopens_artifact_before_loading(monkeypatch, tmp_path: Path):
-    from decision_runtime import runtime_factory
+    from decision_runtime import runtime_factory  # noqa: PLC0415
 
-    profile = load_runtime_profile(REVISION)
+    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
     model = SimpleNamespace(
         catalog=SimpleNamespace(
             model_id=MODEL, revision=REVISION, parameter_size="0.6B"
@@ -151,18 +152,30 @@ def test_assembly_reopens_artifact_before_loading(monkeypatch, tmp_path: Path):
 
 
 @pytest.mark.parametrize(
-    ("revision", "expected_manifest"),
+    ("profile_id", "revision", "expected_manifest"),
     [
-        ("3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd", True),
-        ("0665a41108e8f0b33a9515c98311c45947b99399", False),
+        (
+            "Decision-1.0-Eos-0.8B",
+            "3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+            True,
+        ),
+        (
+            "Decision-1.0-Sol-2B",
+            "0665a41108e8f0b33a9515c98311c45947b99399",
+            False,
+        ),
     ],
 )
 def test_qwen_loader_uses_verified_manifest_layout(
-    monkeypatch, tmp_path: Path, revision: str, expected_manifest: bool
+    monkeypatch,
+    tmp_path: Path,
+    profile_id: str,
+    revision: str,
+    expected_manifest: bool,
 ):
-    from decision_runtime import qwen35_torch, runtime_factory
+    from decision_runtime import qwen35_torch, runtime_factory  # noqa: PLC0415
 
-    profile = load_runtime_profile(revision)
+    profile = load_runtime_profile(profile_id, revision=revision)
     model = SimpleNamespace(profile=profile)
     artifact = SimpleNamespace(data_root=tmp_path)
     calls = []
@@ -183,7 +196,7 @@ def test_qwen_loader_uses_verified_manifest_layout(
 
 
 def test_qwen_calibration_is_read_from_verified_snapshot(tmp_path: Path):
-    from decision_runtime.runtime_factory import _qwen_temperature
+    from decision_runtime.runtime_factory import _qwen_temperature  # noqa: PLC0415
 
     (tmp_path / "temperature.json").write_text(
         json.dumps({"temperature": 1.75}), encoding="utf-8"
@@ -208,9 +221,9 @@ def test_qwen_calibration_is_read_from_verified_snapshot(tmp_path: Path):
 def test_vela_loader_receives_native_data_root_and_manifest_digest(
     monkeypatch, tmp_path: Path
 ):
-    from decision_runtime import runtime_factory, vela_torch
+    from decision_runtime import runtime_factory, vela_torch  # noqa: PLC0415
 
-    profile = load_runtime_profile(REVISION)
+    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
     model = SimpleNamespace(profile=profile)
     artifact = SimpleNamespace(data_root=tmp_path / "native")
     calls = []
@@ -265,7 +278,7 @@ class _RecordingVela:
 
 
 def test_vela_executor_preserves_question_order_and_type_batch_keys():
-    profile = load_runtime_profile(REVISION)
+    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
     resident = _RecordingVela(profile.max_input_tokens)
     executor = TorchDecisionRowExecutor(resident, profile)
     request = _request("An outage was reported.")
@@ -290,7 +303,7 @@ def test_vela_executor_preserves_question_order_and_type_batch_keys():
 
 
 def test_vela_executor_rejects_complete_oversized_row():
-    profile = load_runtime_profile(REVISION)
+    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
     resident = _RecordingVela(profile.max_input_tokens)
     executor = TorchDecisionRowExecutor(resident, profile)
     request = _request("x" * (profile.max_input_tokens + 1))
@@ -316,7 +329,10 @@ class _QwenTokenizer:
 
 
 def test_qwen_executor_can_score_mixed_types_in_one_forward():
-    profile = load_runtime_profile("3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd")
+    profile = load_runtime_profile(
+        "Decision-1.0-Eos-0.8B",
+        revision="3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+    )
     calls = []
     tokenizer = _QwenTokenizer()
 
@@ -358,7 +374,7 @@ def test_qwen_executor_can_score_mixed_types_in_one_forward():
 
 
 def test_server_lifespan_closes_physical_backend(monkeypatch, tmp_path: Path):
-    from decision_runtime import server
+    from decision_runtime import server  # noqa: PLC0415
 
     class Backend:
         def __init__(self):
@@ -400,7 +416,7 @@ def test_server_lifespan_closes_physical_backend(monkeypatch, tmp_path: Path):
 def test_server_closes_backend_when_uvicorn_fails_before_lifespan(
     monkeypatch, tmp_path: Path
 ):
-    from decision_runtime import server
+    from decision_runtime import server  # noqa: PLC0415
 
     closed = []
 

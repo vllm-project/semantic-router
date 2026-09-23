@@ -1,7 +1,8 @@
-"""Immutable, revision-keyed configuration for Decision inference backends.
+"""Model-keyed implementation profiles for Decision inference backends.
 
 Runtime profiles deliberately do not repeat a model ID or revision. The model
-catalog owns both identities; its exact revision selects one packaged profile.
+catalog owns both identities; the model name selects one packaged template and
+its exact revision selects the artifact snapshot.
 Keeping this module free of inference-framework imports makes catalog and
 artifact validation safe in ordinary CLI processes.
 """
@@ -28,6 +29,7 @@ PROFILE_SCHEMA_VERSION = 2
 DEFAULT_PHYSICAL_BATCH_SIZE = 8
 _BACKEND_NAMES = ("rocm", "cuda", "cpu", "mlx")
 _DTYPES = frozenset({"bfloat16", "float32"})
+_ASCII_CONTROL_LIMIT = 32
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _REVISION = re.compile(r"[0-9a-f]{40}")
 
@@ -42,7 +44,11 @@ class UnsupportedRuntimeBackendError(RuntimeProfileError):
 
 @dataclass(frozen=True, slots=True)
 class ArtifactManifestIdentity:
-    """Immutable identity of the model repository's artifact inventory."""
+    """Template manifest path and historical fixture identity.
+
+    Production artifact resolution observes the selected snapshot's manifest
+    digest and size. These packaged values never gate a newer model revision.
+    """
 
     path: str
     sha256: str
@@ -112,7 +118,11 @@ def validate_relative_artifact_path(value: object, *, field: str) -> str:
 
     if not isinstance(value, str) or not value or value != value.strip():
         raise RuntimeProfileError(f"{field} must be a nonblank canonical path")
-    if "\\" in value or "\x00" in value or any(ord(char) < 32 for char in value):
+    if (
+        "\\" in value
+        or "\x00" in value
+        or any(ord(char) < _ASCII_CONTROL_LIMIT for char in value)
+    ):
         raise RuntimeProfileError(f"{field} contains an unsafe path")
     path = PurePosixPath(value)
     if (
@@ -125,20 +135,27 @@ def validate_relative_artifact_path(value: object, *, field: str) -> str:
     return value
 
 
-def load_runtime_profile(revision: str) -> RuntimeProfile:
-    """Load a packaged profile whose filename is the exact catalog revision."""
+def load_runtime_profile(profile_id: str, *, revision: str) -> RuntimeProfile:
+    """Load a stable model template and bind it to one catalog revision."""
 
     validate_catalog_revision(revision)
-    resource = resources.files("decision_runtime.profiles").joinpath(f"{revision}.json")
+    if (
+        not isinstance(profile_id, str)
+        or re.fullmatch(r"[A-Za-z][A-Za-z0-9._-]*", profile_id) is None
+    ):
+        raise RuntimeProfileError("Decision runtime profile ID is invalid")
+    resource = resources.files("decision_runtime.profiles").joinpath(
+        f"{profile_id}.json"
+    )
     if not resource.is_file():
         raise RuntimeProfileError(
-            f"no packaged Decision runtime profile for revision {revision}"
+            f"no packaged Decision runtime profile for model {profile_id}"
         )
     try:
         payload = resource.read_bytes()
     except OSError as error:
         raise RuntimeProfileError(
-            f"could not read Decision runtime profile for revision {revision}"
+            f"could not read Decision runtime profile for model {profile_id}"
         ) from error
     return parse_runtime_profile(payload, revision=revision)
 
@@ -271,9 +288,7 @@ def _parse_backends(
     parsed: dict[RuntimeBackendName, BackendQualification] = {}
     for name in _BACKEND_NAMES:
         raw = _mapping(backends[name], f"backends.{name}")
-        _exact_keys(
-            raw, {"qualified", "targets", "backbone_dtype"}, f"backends.{name}"
-        )
+        _exact_keys(raw, {"qualified", "targets", "backbone_dtype"}, f"backends.{name}")
         qualified = raw["qualified"]
         targets = raw["targets"]
         dtype = raw["backbone_dtype"]

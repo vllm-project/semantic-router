@@ -21,6 +21,11 @@ startup; a successful image build is not hardware qualification. Model-file
 versions and hashes are read from the selected artifact's own verified manifest,
 not a revision allowlist compiled into the image.
 
+The six packaged profiles use stable model names and carry implementation
+policy. Their historical manifest digest, size, and file inventory fields are
+retained for synthetic tests; production artifact resolution observes the
+selected snapshot's manifest and selects files from that inventory.
+
 ## Build
 
 Use a digest-qualified OCI base image with Python 3.12 and pip. CPU and CUDA
