@@ -28,6 +28,7 @@ in environment variables named by `--old-token-env` and `--new-token-env`.
   --old-hardware 'MI300X x1' --new-hardware 'MI300X x1' \
   --old-network-scope loopback --new-network-scope loopback \
   --old-physical-batch-size 1 --new-physical-batch-size 32 \
+  --new-metrics-url 'http://127.0.0.1:<new-port>/metrics' \
   --question-counts 1,8,32 --state-counts 1,8,32 \
   --concurrencies 1,8,32 --variants 4 --seed 17 \
   --warmup 2 --latency-workflows 16 \
@@ -46,7 +47,7 @@ declared serving policy across all six models. Reconfigure the actual serving
 physical batch capacity between runs when studying that axis; the CLI records
 the declared capacity but cannot verify it from the server. `--concurrencies`
 bounds in-flight HTTP requests per arm. The server's observed physical batches
-should be checked separately in its own telemetry.
+can be captured from its own telemetry.
 
 For a one-state shape, both arms send the same single-request bytes when they
 use the same model ID. For a multi-state shape, the old arm sends one single
@@ -76,6 +77,25 @@ sum of each wave's first-send to last-completion window; partial old fan-out
 does not earn successful decisions. Parsing and strict response validation are
 outside the HTTP timing interval. The files contain no URLs, tokens, request
 bodies, response bodies, or answer text. Review all metadata before publication.
+
+Optional `--old-metrics-url` and `--new-metrics-url` accept each service's
+`GET /metrics` address. For every throughput wave, the runner takes a snapshot
+immediately before and after the HTTP work, outside the timed interval. It
+selects the request model's cumulative row-preparation seconds, preparation
+count, physical batch count, physical batch row count, and fixed-size histogram
+buckets. These metrics require the bounded `model` label, and histogram buckets
+use `le`. `metrics.jsonl` stores selected before/after values, response hashes,
+deltas, and generic error codes; it does not store the raw metrics body or URL.
+The receipt normalizes preparation seconds and observed physical rows per
+complete decision, plus mean rows per physical batch. It shows an internal
+old/new ratio only when both services expose complete counters. An old service
+without these counters may omit `--old-metrics-url`; its internal baseline
+remains unavailable. A requested metrics stream that fails or resets makes the
+run exit 1 after writing the receipt. Isolate the services from other model
+traffic so their process-wide counter deltas belong to these waves. Neither a
+declared physical batch capacity nor an observed histogram is a capability
+gate based on a particular model revision; record each actual deployment and
+weight snapshot in every receipt.
 
 Ratios appear only when model revision, hardware, and network-scope declarations
 match, warmup and measured responses all conform, and both arms have successful

@@ -49,6 +49,27 @@ class _Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(int(self.headers["Content-Length"]))
         self.server.bodies.append((self.path, body))
         request = json.loads(body)
+        rows = len(request["questions"]) * len(request.get("states", [None]))
+        with self.server.metrics_lock:
+            counters = self.server.metrics.setdefault(
+                request["model"],
+                {
+                    "row_preparation_seconds": 0.0,
+                    "row_preparations": 0,
+                    "physical_batches": 0,
+                    "physical_batch_rows": 0,
+                    "buckets": dict.fromkeys(
+                        ("1", "2", "4", "8", "16", "32", "64", "+Inf"), 0
+                    ),
+                },
+            )
+            counters["row_preparation_seconds"] += rows / 1000
+            counters["row_preparations"] += rows
+            counters["physical_batches"] += 1
+            counters["physical_batch_rows"] += rows
+            for le in counters["buckets"]:
+                if le == "+Inf" or rows <= int(le):
+                    counters["buckets"][le] += 1
         if self.path == "/v1/systemone":
             response = {
                 "model": request["model"],
@@ -85,6 +106,33 @@ class _Handler(BaseHTTPRequestHandler):
         payload = json.dumps(response).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_GET(self):
+        if self.path != "/metrics":
+            self.send_error(404)
+            return
+        names = {
+            "row_preparation_seconds": "decision_runtime_row_preparation_duration_seconds_total",
+            "row_preparations": "decision_runtime_row_preparations_total",
+            "physical_batches": "decision_runtime_physical_batches_total",
+            "physical_batch_rows": "decision_runtime_physical_batch_rows_total",
+        }
+        lines = []
+        with self.server.metrics_lock:
+            for model, counters in self.server.metrics.items():
+                for key, name in names.items():
+                    lines.append(f'{name}{{model="{model}"}} {counters[key]}')
+                for le, count in counters["buckets"].items():
+                    lines.append(
+                        "decision_runtime_physical_batch_size_bucket"
+                        f'{{model="{model}",le="{le}"}} {count}'
+                    )
+        payload = ("\n".join(lines) + "\n").encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain")
         self.send_header("Content-Length", str(len(payload)))
         self.end_headers()
         self.wfile.write(payload)
@@ -137,6 +185,8 @@ class SemanticTests(TestCase):
         for server in servers:
             server.bodies = []
             server.invalid_batch = invalid_batch
+            server.metrics_lock = threading.Lock()
+            server.metrics = {}
         servers[0].invalid_batch = False
         threads = [
             threading.Thread(target=server.serve_forever, daemon=True)
@@ -201,9 +251,21 @@ class SemanticTests(TestCase):
         try:
             with TemporaryDirectory() as directory:
                 output = Path(directory) / "run"
-                self.assertEqual(main(self._run_args(servers, output)), 0)
+                args = self._run_args(
+                    servers,
+                    output,
+                    "--old-metrics-url",
+                    f"http://127.0.0.1:{servers[0].server_port}/metrics",
+                    "--new-metrics-url",
+                    f"http://127.0.0.1:{servers[1].server_port}/metrics",
+                )
+                self.assertEqual(main(args), 0)
                 receipt_text = (output / "receipt.json").read_text()
                 receipt = json.loads(receipt_text)
+                metrics = [
+                    json.loads(line)
+                    for line in (output / "metrics.jsonl").read_text().splitlines()
+                ]
                 samples = [
                     json.loads(line)
                     for line in (output / "samples.jsonl").read_text().splitlines()
@@ -213,6 +275,8 @@ class SemanticTests(TestCase):
                     for line in (output / "workflows.jsonl").read_text().splitlines()
                 ]
                 self.assertEqual(len(receipt["shapes"]), 4)
+                self.assertEqual(len(metrics), 16)
+                self.assertTrue(all(item["error_code"] is None for item in metrics))
                 self.assertTrue(all(sample["success"] for sample in samples))
                 self.assertTrue(all(item["success"] for item in workflows))
                 self.assertEqual({item["concurrency"] for item in samples}, {1, 4})
@@ -240,7 +304,7 @@ class SemanticTests(TestCase):
                     self.assertEqual(
                         comparison["wire_bytes_identical"], row["state_count"] == 1
                     )
-                    if row["state_count"] == 4:
+                    if row["state_count"] > 1:
                         self.assertEqual(
                             summary["arms"]["old"]["throughput"][
                                 "successful_decisions"
@@ -260,6 +324,32 @@ class SemanticTests(TestCase):
                         self.assertEqual(
                             summary["arms"]["new"]["throughput"]["http_attempts"],
                             8,
+                        )
+                        telemetry = summary["telemetry"]
+                        self.assertTrue(telemetry["comparison"]["available"])
+                        self.assertEqual(
+                            telemetry["arms"]["old"]["counter_deltas"][
+                                "row_preparations"
+                            ],
+                            96,
+                        )
+                        self.assertEqual(
+                            telemetry["arms"]["new"]["counter_deltas"][
+                                "physical_batches"
+                            ],
+                            8,
+                        )
+                        self.assertEqual(
+                            telemetry["arms"]["old"][
+                                "observed_rows_per_physical_batch"
+                            ],
+                            3,
+                        )
+                        self.assertEqual(
+                            telemetry["arms"]["new"][
+                                "observed_rows_per_physical_batch"
+                            ],
+                            12,
                         )
                 self.assertNotIn("127.0.0.1", receipt_text)
                 self.assertNotIn("http://", receipt_text)

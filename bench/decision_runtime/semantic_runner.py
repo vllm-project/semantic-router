@@ -17,6 +17,14 @@ from pathlib import Path
 
 from .cases import MODELS
 from .semantic_cases import WorkloadCase, cohort_sha256, generate_cases
+from .semantic_metrics import (
+    MetricCapture,
+    MetricsError,
+    read_snapshot,
+    summarize_captures,
+    telemetry_comparison,
+    validate_metrics_url,
+)
 from .semantic_report import (
     SCHEMA_VERSION,
     WorkflowSample,
@@ -35,6 +43,7 @@ SOURCE_FILES = (
     "transport.py",
     "report.py",
     "semantic_cases.py",
+    "semantic_metrics.py",
     "semantic_transport.py",
     "semantic_report.py",
     "semantic_runner.py",
@@ -218,6 +227,14 @@ def run_semantic(args: argparse.Namespace) -> int:
     old = Endpoint("old", old_url, _token(args.old_token_env))
     new_single = Endpoint("new", new_url, _token(args.new_token_env))
     new_batch = Endpoint("new", batch_url(new_url), new_single.token)
+    metrics_urls = {
+        "old": (
+            validate_metrics_url(args.old_metrics_url) if args.old_metrics_url else None
+        ),
+        "new": (
+            validate_metrics_url(args.new_metrics_url) if args.new_metrics_url else None
+        ),
+    }
     cohorts = {
         (questions, states): generate_cases(
             args.model,
@@ -245,11 +262,17 @@ def run_semantic(args: argparse.Namespace) -> int:
         "connection_policy": "new HTTP connection per request",
         "latency_boundary": "first HTTP send through last complete response body in workflow",
         "percentile": "nearest rank over complete conforming workflows",
+        "metrics_collection": {
+            "old": metrics_urls["old"] is not None,
+            "new": metrics_urls["new"] is not None,
+            "boundary": "before and after each throughput wave, outside HTTP timing",
+        },
     }
     args.output_dir.mkdir(parents=True, exist_ok=False)
     origin_ns = time.perf_counter_ns()
     shape_rows = []
     total_errors = 0
+    total_metric_errors = 0
     with (
         (args.output_dir / "samples.jsonl").open(
             "w", encoding="utf-8"
@@ -257,11 +280,15 @@ def run_semantic(args: argparse.Namespace) -> int:
         (args.output_dir / "workflows.jsonl").open(
             "w", encoding="utf-8"
         ) as workflow_handle,
+        (args.output_dir / "metrics.jsonl").open(
+            "w", encoding="utf-8"
+        ) as metrics_handle,
     ):
         for (questions, states), cases in cohorts.items():
             for concurrency in args.concurrencies:
                 samples: list[HttpSample] = []
                 workflows: list[WorkflowSample] = []
+                captures: list[MetricCapture] = []
                 warmup = _schedule(cases, args.warmup, args.seed)
                 latency = _schedule(cases, args.latency_workflows, args.seed + 1)
                 for phase, selected in (("warmup", warmup), ("latency", latency)):
@@ -294,6 +321,21 @@ def run_semantic(args: argparse.Namespace) -> int:
                     )
                     order = ("old", "new") if round_number % 2 == 0 else ("new", "old")
                     for arm in order:
+                        metrics_url = metrics_urls[arm]
+                        metrics_token = old.token if arm == "old" else new_single.token
+                        metrics_model = old_model_id if arm == "old" else args.model
+                        before = None
+                        metrics_error = None
+                        if metrics_url is not None:
+                            try:
+                                before = read_snapshot(
+                                    metrics_url,
+                                    metrics_token,
+                                    metrics_model,
+                                    args.timeout,
+                                )
+                            except MetricsError as error:
+                                metrics_error = str(error)
                         wave_samples, wave_workflows = _run_wave(
                             arm,
                             "throughput",
@@ -305,6 +347,33 @@ def run_semantic(args: argparse.Namespace) -> int:
                             concurrency=concurrency,
                             timeout=args.timeout,
                         )
+                        if metrics_url is not None:
+                            after = None
+                            try:
+                                after = read_snapshot(
+                                    metrics_url,
+                                    metrics_token,
+                                    metrics_model,
+                                    args.timeout,
+                                )
+                            except MetricsError as error:
+                                metrics_error = metrics_error or str(error)
+                            capture = MetricCapture(
+                                arm=arm,
+                                question_count=questions,
+                                state_count=states,
+                                concurrency=concurrency,
+                                round=round_number,
+                                before=before,
+                                after=after,
+                                error_code=metrics_error,
+                            )
+                            captures.append(capture)
+                            metrics_handle.write(
+                                json.dumps(capture.public_record(), sort_keys=True)
+                                + "\n"
+                            )
+                            metrics_handle.flush()
                         samples.extend(wave_samples)
                         workflows.extend(wave_workflows)
                         _record_wave(
@@ -321,6 +390,30 @@ def run_semantic(args: argparse.Namespace) -> int:
                     new_meta,
                     state_count=states,
                     same_wire_bytes=all(case.same_wire_bytes for case in cases),
+                )
+                arm_telemetry = {
+                    arm: summarize_captures(
+                        [capture for capture in captures if capture.arm == arm],
+                        requested=metrics_urls[arm] is not None,
+                        successful_decisions=summary["arms"][arm]["throughput"][
+                            "successful_decisions"
+                        ],
+                        failed_workflows=summary["arms"][arm]["throughput"][
+                            "failed_workflows"
+                        ],
+                    )
+                    for arm in ("old", "new")
+                }
+                summary["telemetry"] = {
+                    "arms": arm_telemetry,
+                    "comparison": telemetry_comparison(
+                        arm_telemetry["old"], arm_telemetry["new"]
+                    ),
+                }
+                total_metric_errors += sum(
+                    metrics_urls[arm] is not None
+                    and arm_telemetry[arm]["status"] != "complete"
+                    for arm in ("old", "new")
                 )
                 total_errors += sum(not item.success for item in workflows)
                 shape_rows.append(
@@ -359,11 +452,20 @@ def run_semantic(args: argparse.Namespace) -> int:
         "settings": settings,
         "shapes": shape_rows,
         "failed_workflows": total_errors,
+        "failed_metrics_shapes": total_metric_errors,
     }
     receipt_path = args.output_dir / "receipt.json"
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
-    print(json.dumps({"receipt": str(receipt_path), "failed_workflows": total_errors}))
-    return int(total_errors > 0)
+    print(
+        json.dumps(
+            {
+                "receipt": str(receipt_path),
+                "failed_workflows": total_errors,
+                "failed_metrics_shapes": total_metric_errors,
+            }
+        )
+    )
+    return int(total_errors > 0 or total_metric_errors > 0)
 
 
 def run_semantic_matrix(args: argparse.Namespace) -> int:
@@ -388,6 +490,8 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     run.add_argument("--new-url", required=True)
     run.add_argument("--old-token-env")
     run.add_argument("--new-token-env")
+    run.add_argument("--old-metrics-url", help="optional old /metrics endpoint")
+    run.add_argument("--new-metrics-url", help="optional new /metrics endpoint")
     run.add_argument(
         "--old-model-id", help="audited model-ID translation for old singles"
     )
