@@ -281,6 +281,18 @@ func RevalidateRequest(r *http.Request) error {
 	return revalidate(r.Context())
 }
 
+// RevalidateMutationContext checks the live authorization of an admitted
+// mutation inside service code. Contexts from trusted in-process callers have
+// no revalidator and need no Dashboard session, just like direct handlers.
+// Detached operation contexts retain the request's revalidator.
+func RevalidateMutationContext(ctx context.Context) error {
+	revalidate, ok := ctx.Value(revalidatorKey).(permissionRevalidator)
+	if !ok {
+		return nil
+	}
+	return revalidate(ctx)
+}
+
 // WithPermissionRevalidator installs a revalidator, for tests and for callers
 // that dispatch outside AuthenticateRequest.
 func WithPermissionRevalidator(ctx context.Context, check func(context.Context) error) context.Context {

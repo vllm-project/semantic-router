@@ -100,6 +100,9 @@ func (a *RecipeActivator) Activate(ctx context.Context, request recipe.ActivateR
 	defer release()
 	operationContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*a.attemptTimeout+2*time.Minute)
 	defer cancel()
+	if authorizationErr := revalidateRecipeMutation(operationContext); authorizationErr != nil {
+		return recipe.ActivateResult{}, authorizationErr
+	}
 	if recoveryErr := a.recoverLocked(operationContext); recoveryErr != nil {
 		return recipe.ActivateResult{}, recoveryErr
 	}
@@ -123,6 +126,9 @@ func (a *RecipeActivator) activateLocked(ctx context.Context, request recipe.Act
 	target, plan, previousConfig, realizedConfig, err := a.prepareActivation(ctx, request)
 	if err != nil {
 		return recipe.ActivateResult{}, err
+	}
+	if authorizationErr := revalidateRecipeMutation(ctx); authorizationErr != nil {
+		return recipe.ActivateResult{}, authorizationErr
 	}
 	if state == recipe.ActivationNone {
 		if baselineErr := a.store.RefreshSourceBaseline(previousConfig); baselineErr != nil {
@@ -155,6 +161,9 @@ func (a *RecipeActivator) executeActivation(ctx context.Context, target recipe.P
 	if verificationErr := a.verifyRuntimeAttempt(ctx, realizedDigest); verificationErr != nil {
 		return recipe.ActivateResult{}, a.failAndRollback(ctx, transaction, previousConfig, verificationErr)
 	}
+	if authorizationErr := revalidateRecipeMutation(ctx); authorizationErr != nil {
+		return recipe.ActivateResult{}, a.failAndRollback(ctx, transaction, previousConfig, authorizationErr)
+	}
 	pointer := recipe.ActivePointer{
 		RecipeDigest:         target.RecipeDigest,
 		ConfigDigest:         target.ConfigDigest,
@@ -183,6 +192,9 @@ func (a *RecipeActivator) Deactivate(ctx context.Context, requests ...recipe.Dea
 	defer release()
 	operationContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*a.attemptTimeout+2*time.Minute)
 	defer cancel()
+	if authorizationErr := revalidateRecipeMutation(operationContext); authorizationErr != nil {
+		return recipe.DeactivateResult{}, authorizationErr
+	}
 	if recoveryErr := a.recoverLocked(operationContext); recoveryErr != nil {
 		return recipe.DeactivateResult{}, recoveryErr
 	}
@@ -203,6 +215,9 @@ func (a *RecipeActivator) deactivateLocked(ctx context.Context, requests ...reci
 	}
 	if confirmationErr := requireDeactivationConfirmation(request, plan); confirmationErr != nil {
 		return recipe.DeactivateResult{}, confirmationErr
+	}
+	if authorizationErr := revalidateRecipeMutation(ctx); authorizationErr != nil {
+		return recipe.DeactivateResult{}, authorizationErr
 	}
 	transaction, err := a.store.BeginDeactivation(previousConfig)
 	if err != nil {
@@ -225,6 +240,9 @@ func (a *RecipeActivator) executeDeactivation(ctx context.Context, active recipe
 	}
 	if err != nil {
 		return recipe.DeactivateResult{}, a.failDeactivationAndRollback(ctx, transaction, previousConfig, err)
+	}
+	if authorizationErr := revalidateRecipeMutation(ctx); authorizationErr != nil {
+		return recipe.DeactivateResult{}, a.failDeactivationAndRollback(ctx, transaction, previousConfig, authorizationErr)
 	}
 	if commitErr := a.store.PrepareDeactivationCommit(transaction); commitErr != nil {
 		return recipe.DeactivateResult{}, a.failDeactivationAndRollback(ctx, transaction, previousConfig, commitErr)
@@ -258,6 +276,9 @@ func (a *RecipeActivator) prepareActivationTopology(ctx context.Context, plan re
 }
 
 func (a *RecipeActivator) publishActivationConfig(ctx context.Context, config []byte, topology activationTopologyExecution) error {
+	if err := revalidateRecipeMutation(ctx); err != nil {
+		return err
+	}
 	if err := writeActivationConfig(a.configPath, config); err != nil {
 		return err
 	}
@@ -438,6 +459,9 @@ func (a *RecipeActivator) failAndRollback(ctx context.Context, transaction recip
 		_ = a.store.MarkTransactionInconsistent(transaction)
 		return activationRollbackFailed(errors.Join(activationErr, rollbackErr))
 	}
+	if isRecipeAuthorizationError(activationErr) {
+		return activationErr
+	}
 	return activationFailed("Recipe activation failed; the previous runtime config was restored.", activationErr)
 }
 
@@ -447,6 +471,9 @@ func (a *RecipeActivator) failDeactivationAndRollback(ctx context.Context, trans
 	if rollbackErr := a.rollback(rollbackContext, transaction, previousConfig); rollbackErr != nil {
 		_ = a.store.MarkTransactionInconsistent(transaction)
 		return activationRollbackFailed(errors.Join(deactivationErr, rollbackErr))
+	}
+	if isRecipeAuthorizationError(deactivationErr) {
+		return deactivationErr
 	}
 	return activationFailed("Recipe deactivation failed; the active package runtime was restored.", deactivationErr)
 }

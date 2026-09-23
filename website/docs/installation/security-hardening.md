@@ -63,6 +63,11 @@ permissions after the body has arrived, and check them again immediately
 before committing, so a session revoked or demoted while a request is in
 flight cannot complete a write.
 
+Recipe activation and deactivation also check authorization after preparation,
+before publishing configuration, and before committing the transaction. If
+authorization is revoked during runtime verification, the previous configuration
+and activation state are restored before the request is rejected.
+
 Role grants can be overridden per user: a user-level permission row with
 `allowed = 0` revokes that permission for that user even though the role
 grants it, and a row with `allowed = 1` grants it without changing the role.
