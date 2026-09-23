@@ -151,6 +151,14 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
 			return
 		}
+		submitted := false
+		defer func() {
+			if !submitted {
+				if cleanupErr := os.RemoveAll(tempDir); cleanupErr != nil {
+					log.Printf("Failed to remove rejected ML benchmark upload %s: %v", tempDir, cleanupErr)
+				}
+			}
+		}()
 
 		modelsPath, err := saveUploadedFile(r, "models_yaml", tempDir)
 		if err != nil {
@@ -179,6 +187,7 @@ func (h *MLPipelineHandler) RunBenchmarkHandler() http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("Failed to start benchmark: %v", err), http.StatusInternalServerError)
 			return
 		}
+		submitted = true
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
@@ -205,6 +214,7 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 
 		var benchmarkDataPath string
 		var trainConfig mlpipeline.TrainRequest
+		submitted := false
 
 		contentType := r.Header.Get("Content-Type")
 
@@ -221,6 +231,13 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 				http.Error(w, fmt.Sprintf("Failed to create temp dir: %v", err), http.StatusInternalServerError)
 				return
 			}
+			defer func() {
+				if !submitted {
+					if cleanupErr := os.RemoveAll(tempDir); cleanupErr != nil {
+						log.Printf("Failed to remove rejected ML training upload %s: %v", tempDir, cleanupErr)
+					}
+				}
+			}()
 
 			uploadedPath, err := saveUploadedFile(r, "training_data", tempDir)
 			if err != nil {
@@ -274,6 +291,7 @@ func (h *MLPipelineHandler) RunTrainHandler() http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("Failed to start training: %v", err), http.StatusInternalServerError)
 			return
 		}
+		submitted = true
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusCreated)
