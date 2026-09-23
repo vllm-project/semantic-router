@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from bench.redteam import datasets
+from bench.redteam import datasets, evaluate
 
 
 @pytest.fixture
@@ -68,6 +68,20 @@ def test_jailbreakbench_rejects_no_rows(monkeypatch: pytest.MonkeyPatch) -> None
 
     with pytest.raises(ValueError, match="no prompts found"):
         datasets.load_prompts(source="jailbreakbench")
+
+
+def test_jailbreakbench_stops_before_model_load(hub_corpus: Path) -> None:
+    hub_corpus.write_text(json.dumps({"Goal": " \t "}))
+
+    with pytest.raises(ValueError, match="no prompts found"):
+        evaluate.main(
+            argv=[
+                "--model",
+                str(hub_corpus.parent / "missing-model"),
+                "--max-flip-rate",
+                "0",
+            ]
+        )
 
 
 @pytest.mark.parametrize("suffix", [".json", ".jsonl"])

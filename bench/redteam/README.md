@@ -36,27 +36,17 @@ a model misses the bar, which is what turns it into a gate.
 The loader accepts `Goal`, `goal`, `prompt`, `behavior`, or `text` fields. It
 strips surrounding whitespace and rejects a corpus with no non-empty prompts.
 
-## Measured baseline
+## Loader validation
 
-`llm-semantic-router/mmbert32k-jailbreak-detector-merged` against the
-JailbreakBench harmful split, threshold 0.7, on one NVIDIA H100 80GB:
+```bash
+python3 -m pytest bench/redteam/test_datasets.py -q
+```
 
-| metric | value |
-| --- | --- |
-| prompts | 100 |
-| detected at baseline | 39 (39%) |
-| flipped to benign | 34 of 39 (87%) |
-| suffix words to flip, mean | 2.44 |
-| suffix words to flip, median | 2 |
-| suffix words to flip, max | 10 |
-| queries per prompt, mean | 35.2 |
-
-Two results matter here. The detector misses 61 of 100 harmful behaviors before
-any attack runs, and of the 39 it does catch, appending a median of two harmless
-words defeats it. Raising `--max-words` from 10 to 30 changes nothing, so the
-five that survive are a local minimum of the greedy search rather than a budget
-limit; a wider pool or a search that tolerates a temporary score increase would
-likely take them too.
+The tests use benign local datasets with the published column names and the real
+dataset loader. They cover legacy input fields and rejection of empty input
+before model loading. These checks do not measure classifier recall or evasion
+rates; model-backed results require a separate run with a named artifact and
+dataset revision.
 
 ## Adding a signal
 
