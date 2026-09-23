@@ -16,8 +16,10 @@ bridge:
 The environments inherit one base Torch installation. They keep incompatible
 Hugging Face Hub and tokenizers major versions separate. The ROCm Qwen
 environment also contains FLA 0.5.2. The qualified artifact's strict runtime
-profile still checks exact Torch, HIP, Triton, FLA, and source identities at
-startup; a successful image build is not hardware qualification.
+backend checks its installed Torch, HIP, Triton, and FLA capabilities at
+startup; a successful image build is not hardware qualification. Model-file
+versions and hashes are read from the selected artifact's own verified manifest,
+not a revision allowlist compiled into the image.
 
 ## Build
 
@@ -34,8 +36,8 @@ image_dir=src/vllm-sr/decision_runtime/image
 "$image_dir/build-image.sh" cuda \
   'python@sha256:<verified-base-digest>' decision-runtime-cuda:validation
 "$image_dir/build-image.sh" rocm \
-  'rocm/pytorch@sha256:<verified-base-digest>' decision-runtime-rocm:validation \
-  /opt/venv/bin/python
+  'vllm/vllm-openai-rocm@sha256:<verified-base-digest>' \
+  decision-runtime-rocm:validation python3
 ```
 
 Replace each placeholder with the selected base manifest digest. The ROCm
@@ -61,5 +63,5 @@ qualification is complete.
 
 For this rollout, CPU qualification is scoped to Kai, Lex, and Eos. CUDA image
 construction is a candidate path; model qualification remains deferred. ROCm
-model profiles and their strict runtime contracts decide which revisions may
-launch on a particular device.
+backend capability checks and verified artifact manifests decide whether a
+selected immutable revision can launch on a particular device.

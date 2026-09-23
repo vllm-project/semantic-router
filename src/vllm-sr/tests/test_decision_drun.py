@@ -1491,6 +1491,24 @@ def test_default_rocm_launch_keeps_all_gpu_visibility_unset():
     )
 
 
+def test_decision_rocm_passthrough_uses_devices_without_debug_privileges(
+    tmp_path: Path,
+):
+    container_module = importlib.import_module("cli.decision_runtime.container")
+    kfd = tmp_path / "kfd"
+    kfd.touch()
+    dri = tmp_path / "dri"
+    dri.mkdir()
+    (dri / "renderD128").touch()
+    command: list[str] = []
+
+    container_module._append_decision_rocm_devices(command, kfd=kfd, dri=dri)
+
+    assert command[:4] == ["--device", str(kfd), "--device", str(dri)]
+    assert "SYS_PTRACE" not in command
+    assert "seccomp=unconfined" not in command
+
+
 def test_local_image_id_is_inspected_exactly_and_run_with_pull_disabled(monkeypatch):
     launch = _launch(replace(_launch().runtime_spec, image=LOCAL_IMAGE_ID))
     commands: list[list[str]] = []

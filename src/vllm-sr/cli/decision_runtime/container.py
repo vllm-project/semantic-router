@@ -24,7 +24,6 @@ from cli.consts import (
 )
 from cli.container_images import _ensure_image_available
 from cli.container_run_command import (
-    append_amd_gpu_passthrough,
     append_env_vars,
     append_nvidia_gpu_passthrough,
     append_port_mappings,
@@ -552,7 +551,7 @@ def build_decision_container_command(
             ]
         )
     if spec.backend == "rocm":
-        append_amd_gpu_passthrough(command, "amd")
+        _append_decision_rocm_devices(command)
     elif spec.backend == "cuda":
         append_nvidia_gpu_passthrough(command, launch.runtime)
     if local_image_id:
@@ -560,6 +559,34 @@ def build_decision_container_command(
     command.append(spec.image)
     command.extend(spec.command)
     return command
+
+
+def _append_decision_rocm_devices(
+    command: list[str],
+    *,
+    kfd: Path = Path("/dev/kfd"),
+    dri: Path = Path("/dev/dri"),
+) -> None:
+    """Pass only GPU devices and their host groups to the Decision process.
+
+    Unlike the shared general-purpose ROCm helper, the Decision Torch/FLA
+    serving path has been exercised with Docker's default seccomp profile and
+    no ptrace capability. Keep those grants out of this isolated runtime.
+    """
+
+    if not kfd.exists() or not dri.is_dir():
+        # Command construction is also used for dry-run and non-GPU unit tests.
+        # A real ROCm launch still fails readiness without these devices.
+        return
+    command.extend(("--device", str(kfd), "--device", str(dri)))
+    groups = {kfd.stat().st_gid}
+    groups.update(
+        entry.stat().st_gid
+        for entry in dri.iterdir()
+        if entry.name.startswith("renderD")
+    )
+    for group in sorted(groups - {0}):
+        command.extend(("--group-add", str(group)))
 
 
 def _validated_launch_image(launch: DecisionContainerLaunch) -> bool:
