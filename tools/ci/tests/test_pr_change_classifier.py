@@ -475,6 +475,22 @@ class SelectionTests(unittest.TestCase):
         self.assertTrue(cli["publish_python"])
         self.assertIn("cli-package", cli["expected_verification_ids"])
 
+    def test_decision_cpu_enters_trusted_image_flow_without_scheduling_rocm(self):
+        path = "src/vllm-sr/decision_runtime/image/Dockerfile"
+        pr = make_plan([path], source_sha=SHA)
+        self.assertIn("decision-runtime-cpu", pr["images"])
+        self.assertNotIn("decision-runtime-rocm", pr["images"])
+        self.assertEqual(pr["publish_images"], [])
+        self.assertIn(
+            "decision-runtime-cpu", pr["image_producers"]["image-distribution"]
+        )
+        main = make_plan([path], source_sha=SHA, profile="main")
+        self.assertIn("decision-runtime-cpu", main["publish_images"])
+        for profile in ("nightly", "release"):
+            plan = make_plan([], source_sha=SHA, profile=profile)
+            self.assertIn("decision-runtime-cpu", plan["publish_images"])
+            self.assertNotIn("decision-runtime-rocm", plan["images"])
+
     def test_previous_release_is_explicit_compatible_and_not_head_parent(self):
         self.assertEqual(
             previous_release(

@@ -57,6 +57,10 @@ jobs:
           MULTIARCH: ${{ inputs.multiarch }}
           MODE: ${{ inputs.mode }}
         run: |
+          if [[ "$IMAGE" == decision-runtime-rocm ]]; then
+            echo '::error::Decision ROCm requires the external device-qualified digest handoff' >&2
+            exit 1
+          fi
           args=()
           if [[ "$MULTIARCH" == true ]]; then args+=(--multiarch); fi
           python tools/ci/image_artifacts.py definition --image "$IMAGE" --mode "$MODE" "${args[@]}"
@@ -98,6 +102,10 @@ jobs:
           if [[ "$MULTIARCH" == true ]]; then args+=(--multiarch); fi
           python tools/ci/image_artifacts.py seal --image "$IMAGE" \
             --directory .agent-harness/image-output --mode "$MODE" --tag "$TAG" "${args[@]}"
+      - name: Verify the sealed candidate
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: python tools/ci/image_artifacts.py verify --image "$IMAGE" --directory .agent-harness/image-output
       - uses: actions/upload-artifact@v4
         with:
           name: ci-image-${{ matrix.image }}

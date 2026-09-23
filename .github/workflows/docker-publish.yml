@@ -65,6 +65,13 @@ jobs:
           if [[ "$PUBLISH_LATEST" == true ]]; then args+=(--latest); fi
           python tools/ci/image_artifacts.py promote --image "$IMAGE" \
             --directory .agent-harness/image-input --mode "$MODE" --tag "$RELEASE_TAG" "${args[@]}"
+      - name: Record the published registry digest
+        if: matrix.image == 'decision-runtime-cpu'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-published-digest-${{ matrix.image }}
+          path: .agent-harness/image-input/published-digest.txt
+          if-no-files-found: error
 
       - uses: docker/setup-qemu-action@v3
         if: matrix.image == 'dashboard'

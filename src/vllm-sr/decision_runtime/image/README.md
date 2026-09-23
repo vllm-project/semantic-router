@@ -66,6 +66,72 @@ release workflow, record its registry digest, then pass that digest to
 `PACKAGED_DECISION_RUNTIME_IMAGES` before backend, model, and supply-chain
 qualification is complete.
 
+## Publication gates
+
+The CPU image is part of the normal immutable CI image handoff. Changes to the
+Decision image build select `decision-runtime-cpu` for PR builds. The main,
+nightly, and release planners also build the CPU image when applicable. The
+image uses a digest-qualified Python base, records the source commit and
+backend in its OCI configuration, and is sealed and verified before upload.
+The trusted publisher copies the tested OCI artifact without rebuilding and
+uploads `ci-published-digest-decision-runtime-cpu` with the registry digest.
+Until model-backed qualification of that exact digest, it publishes only the
+immutable source-commit tag, even when the general publisher requests `latest`
+or a release alias.
+Image construction runs import and catalog smoke checks; this does not replace
+real Kai, Lex, and Eos CPU serving tests before making the image a CLI default.
+
+The ROCm image is approximately 46 GiB in virtual layers. It is intentionally
+absent from ordinary hosted CI build and artifact matrices. Build it from the
+same clean source commit on a capacity-appropriate ROCm host, push the candidate
+to `ghcr.io/<owner>/semantic-router/decision-runtime-rocm-staging` by digest,
+then run all six Decision models from that exact digest on a ROCm device. Keep
+one JSON evidence file per model. Each file must identify the candidate digest,
+source commit, immutable selected model revision and artifact content ID, ROCm
+execution, successful health, Noul/Choice/Score, and a mixed two-state batch.
+The qualification receipt lists the six canonical model IDs, evidence file
+paths relative to the receipt, and the SHA-256 of each evidence file. The
+selected model revisions come from the artifact resolver; no version or hash
+allowlist is compiled into the runtime.
+
+The top-level receipt has `schema: 1`, `image: decision-runtime-rocm`, the
+current `source_sha`, the pinned `base_image`, `backend: rocm`,
+`platform: linux/amd64`, and a digest-qualified `candidate_ref`. Its `models`
+array has exactly one row for each of Kai, Lex, Eos, Sol, Nox, and Lux. Each row
+provides `id`, the selected 40-character `revision`, an
+`artifact_content_id` of the form `sha256:<64 hex>`, a relative
+`evidence_file`, and that file's `evidence_sha256`. The evidence JSON repeats
+`image_ref`, `source_sha`, `model_id`, `revision`, and
+`artifact_content_id`, records `backend: rocm`, `device: rocm`, and
+`result: passed`, and includes these boolean checks:
+`artifact.identity`, `health`, `single.noul`, `single.choice`,
+`single.score`, `batch.mixed_two_states`, and `rocm.execution`. Keep the
+underlying HTTP and runtime logs with the private receipt for review.
+
+After the six-model and performance review, validate the receipt and registry
+configuration from the matching source commit:
+
+```bash
+python3 tools/ci/decision_rocm_promotion.py \
+  --receipt /path/to/private/qualification.json --owner vllm-project
+```
+
+The validator rejects mutable tags, missing or changed model evidence, a
+different source or base, and a candidate whose registry digest or OCI labels
+disagree with the receipt. On a protected `main` run with registry write
+credentials, `--promote` copies that exact digest to the official ROCm package
+under its source-commit tag; it does not rebuild. The ROCm promotion is still
+pending a capacity-appropriate build host, real six-model hardware and
+performance receipts, and registry write access. A standard GitHub hosted
+runner is not assumed to provide these.
+
+Once each backend has a published, tested registry digest, update
+`PACKAGED_DECISION_RUNTIME_IMAGES` in
+`src/vllm-sr/cli/decision_runtime/catalog_adapter.py` with the corresponding
+`ghcr.io/vllm-project/semantic-router/decision-runtime-{cpu,rocm}@sha256:<digest>`
+references, run the `drun` integration tests, and release that CLI build.
+Until then an explicit `--image` remains required.
+
 For this rollout, CPU qualification is scoped to Kai, Lex, and Eos. CUDA image
 construction is a candidate path; model qualification remains deferred. ROCm
 backend capability checks and verified artifact manifests decide whether a
