@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import importlib
+import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from .artifacts import ArtifactError, VerifiedArtifact, open_verified_artifact
+from .backend_capabilities import require_runtime_backend
 from .backend import ModelDescriptor
 from .catalog_adapter import (
     ResolvedRuntimeModel,
@@ -45,6 +48,7 @@ class RuntimeLaunchConfig:
 class AssembledRuntime:
     backend: PhysicalBatchBackend
     scheduler: ModelScheduler
+    artifact_provenance: dict[str, str] | None = None
 
 
 def assemble_runtime(
@@ -54,18 +58,18 @@ def assemble_runtime(
 
     _validate_config(config)
     try:
-        model = resolve_decision_runtime_model(config.model, backend=config.backend)
-        if model.catalog.revision != config.revision:
-            raise RuntimeAssemblyError(
-                "launch revision does not match the immutable catalog revision"
-            )
+        model = resolve_decision_runtime_model(
+            config.model, revision=config.revision, backend=config.backend
+        )
         artifact = open_verified_artifact(
             config.artifact_root,
             model,
             expected_content_id=config.artifact_content_id,
         )
         target = _device_target(config.backend)
-        model.profile.require_backend(config.backend, target=target)
+        require_runtime_backend(
+            model.catalog, model.profile, config.backend, target=target
+        )
         resident = _load_family(model, artifact, config.backend)
     except (RuntimeModelResolutionError, RuntimeProfileError, ArtifactError) as error:
         raise RuntimeAssemblyError(str(error)) from error
@@ -88,7 +92,20 @@ def assemble_runtime(
         max_concurrency=config.max_concurrency,
         max_queue=config.max_queue,
     )
-    return AssembledRuntime(backend=backend, scheduler=scheduler)
+    manifest = getattr(artifact, "manifest", None)
+    provenance = (
+        {
+            "model": model.catalog.model_id,
+            "revision": artifact.revision,
+            "manifest_sha256": manifest.sha256,
+            "content_sha256": artifact.content_id,
+        }
+        if manifest is not None
+        else None
+    )
+    return AssembledRuntime(
+        backend=backend, scheduler=scheduler, artifact_provenance=provenance
+    )
 
 
 def _validate_config(config: RuntimeLaunchConfig) -> None:
@@ -140,7 +157,7 @@ def _load_family(
     backend: Literal["cpu", "rocm", "cuda"],
 ):
     profile = model.profile
-    manifest = profile.artifact.manifest
+    manifest = getattr(artifact, "manifest", None) or profile.artifact.manifest
     if profile.family == "vela":
         from .vela_torch import VelaTorchRuntime
 
@@ -162,11 +179,10 @@ def _load_family(
             from .qwen35_rocm_binder import create_qwen_rocm_profile_binder
 
             binder = create_qwen_rocm_profile_binder()
-        if profile.temperature is None:
-            raise RuntimeAssemblyError("Qwen release has no calibration temperature")
+        temperature = _qwen_temperature(artifact, fallback=profile.temperature)
         return Qwen35TorchRuntime.load(
             artifact.data_root,
-            temperature=profile.temperature,
+            temperature=temperature,
             max_length=profile.max_input_tokens,
             backend=backend,
             rocm_profile_binder=binder,
@@ -175,3 +191,30 @@ def _load_family(
             ),
         )
     raise RuntimeAssemblyError("Decision model family has no owned loader")
+
+
+def _qwen_temperature(artifact: VerifiedArtifact, *, fallback: float | None) -> float:
+    """Read calibration from the verified snapshot, not its template revision."""
+
+    # Unit assemblers may inject a synthetic artifact without a receipt. Real
+    # materializations always include manifest identity and selected file data.
+    if getattr(artifact, "manifest", None) is None:
+        if fallback is None:
+            raise RuntimeAssemblyError("Qwen release has no calibration temperature")
+        return fallback
+
+    selected = {item.manifest_path for item in artifact.files}
+    source = "temperature.json" if "temperature.json" in selected else "runtime.json"
+    try:
+        metadata = json.loads((artifact.data_root / source).read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RuntimeAssemblyError("Qwen calibration metadata is invalid") from error
+    temperature = metadata.get("temperature") if isinstance(metadata, dict) else None
+    if (
+        isinstance(temperature, bool)
+        or not isinstance(temperature, (int, float))
+        or not math.isfinite(float(temperature))
+        or float(temperature) <= 0
+    ):
+        raise RuntimeAssemblyError("Qwen calibration temperature is invalid")
+    return float(temperature)

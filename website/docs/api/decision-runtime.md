@@ -37,10 +37,20 @@ boundary; verify the host's current GPU index mapping before launch. CPU and
 CUDA do not currently support this selector; CUDA hardware is not qualified by
 the presence of a backend option.
 
-The selected model and hardware pair must have a qualified release profile;
-`drun` refuses unsupported combinations. In particular, the presence of a
-backend option does not by itself mean every Decision model is qualified on
-that hardware.
+The model ID is fixed by the catalog. By default, `drun` uses its catalog
+revision; `--revision` accepts a different full, immutable Hugging Face commit
+SHA for the same model. At launch, the runtime verifies that commit's own
+manifest and selected inference files, records the revision and content digest,
+and verifies the mounted files again before loading weights. Changing weights
+within a supported model family does not require a runtime rebuild. Changes to
+architecture, prompt format, or hardware kernels must still satisfy the
+runtime's structural and device checks.
+
+The ROCm implementation targets all six Decision 1.0 catalog models on
+`gfx942`. Linux CPU execution is scoped to the three models below 1B (Kai,
+Lex, and Eos); publish CPU performance and quality claims only with matching
+model-backed validation results. CUDA and Apple MLX require separate hardware
+qualification before they can be selected.
 
 ## One state: `POST /v1/systemone`
 
@@ -135,8 +145,9 @@ it does not change the meaning of an individual answer.
 
 `GET /ready` reports whether the pinned model is available. `GET /v1/models`
 lists the model served by the instance. Runtime diagnostics are separate from
-normal inference responses: `GET /api/status` reports model and scheduler
-status, and `GET /metrics` exposes Prometheus-format metrics. Keep these
+normal inference responses: `GET /api/status` reports the resolved model
+revision, verified manifest SHA-256, content SHA-256, and scheduler status;
+`GET /metrics` exposes Prometheus-format metrics. Keep these
 diagnostic routes on a protected control-plane listener or allowlist when
 placing the runtime behind a public Gateway.
 

@@ -1,6 +1,7 @@
 """Pinned Decision startup, family adaptation, and backend ownership."""
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from decision_runtime.backend import BackendInputTooLargeError  # noqa: E402
+from decision_runtime.artifacts import ArtifactFile, VerifiedArtifact  # noqa: E402
 from decision_runtime.contracts import SystemOneRequest  # noqa: E402
 from decision_runtime.entrypoint import parse_launch_args  # noqa: E402
 from decision_runtime.physical_batching import DecisionRow  # noqa: E402
@@ -21,7 +23,10 @@ from decision_runtime.runtime_factory import (  # noqa: E402
     RuntimeLaunchConfig,
     assemble_runtime,
 )
-from decision_runtime.runtime_profile import load_runtime_profile  # noqa: E402
+from decision_runtime.runtime_profile import (  # noqa: E402
+    ArtifactManifestIdentity,
+    load_runtime_profile,
+)
 
 MODEL = "llm-semantic-router/Decision-1.0-Kai-0.6B"
 REVISION = "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
@@ -103,14 +108,18 @@ def test_assembly_reopens_artifact_before_loading(monkeypatch, tmp_path: Path):
 
     profile = load_runtime_profile(REVISION)
     model = SimpleNamespace(
-        catalog=SimpleNamespace(model_id=MODEL, revision=REVISION),
+        catalog=SimpleNamespace(
+            model_id=MODEL, revision=REVISION, parameter_size="0.6B"
+        ),
         profile=profile,
     )
     events = []
     resident = SimpleNamespace(max_length=profile.max_input_tokens, tokenizer=object())
 
-    def resolve(model_id, *, backend):
-        events.append(("resolve", model_id, backend))
+    def resolve(model_id, *, revision, backend):
+        events.append(("resolve", model_id, revision, backend))
+        if revision != REVISION:
+            raise runtime_factory.RuntimeModelResolutionError("unavailable revision")
         return model
 
     def reopen(root, resolved, *, expected_content_id):
@@ -170,6 +179,29 @@ def test_qwen_loader_uses_verified_manifest_layout(
     assert calls[0][1]["expected_manifest_sha256"] == (
         profile.artifact.manifest.sha256 if expected_manifest else None
     )
+
+
+def test_qwen_calibration_is_read_from_verified_snapshot(tmp_path: Path):
+    from decision_runtime.runtime_factory import _qwen_temperature
+
+    (tmp_path / "temperature.json").write_text(
+        json.dumps({"temperature": 1.75}), encoding="utf-8"
+    )
+    artifact = VerifiedArtifact(
+        root=tmp_path,
+        data_root=tmp_path,
+        content_id="a" * 64,
+        repository_id="llm-semantic-router/Decision-1.0-Sol-2B",
+        revision="c" * 40,
+        files=(ArtifactFile("temperature.json", "temperature.json", "b" * 64, 1),),
+        manifest=ArtifactManifestIdentity("bundle-manifest.json", "d" * 64, 10),
+    )
+    assert _qwen_temperature(artifact, fallback=9.0) == 1.75
+    (tmp_path / "temperature.json").write_text(
+        json.dumps({"temperature": -1}), encoding="utf-8"
+    )
+    with pytest.raises(RuntimeAssemblyError, match="temperature"):
+        _qwen_temperature(artifact, fallback=9.0)
 
 
 def test_vela_loader_receives_native_data_root_and_manifest_digest(

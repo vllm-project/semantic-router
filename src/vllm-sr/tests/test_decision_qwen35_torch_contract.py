@@ -215,12 +215,13 @@ def _profiled_artifact(tmp_path: Path, *, status: str = "hardware-qualified") ->
     return root
 
 
-def test_candidate_profile_is_not_runtime_qualification(tmp_path: Path) -> None:
+def test_candidate_label_does_not_override_owned_kernel_contract(
+    tmp_path: Path,
+) -> None:
     root = _profiled_artifact(tmp_path, status="diagnostic-only")
     metadata = json.loads((root / "decision_config.json").read_text())
 
-    with pytest.raises(Qwen35RuntimeError, match="hardware qualification"):
-        _validated_rocm_profile(root, metadata)
+    assert _validated_rocm_profile(root, metadata) is not None
 
 
 def test_profile_validates_supported_envelope_and_fla_sources(tmp_path: Path) -> None:

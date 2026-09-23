@@ -16,6 +16,7 @@ from decision_runtime.artifacts import (
     ArtifactIntegrityError,
     ArtifactManifestError,
     ArtifactResolver,
+    _select_artifact_files,
     _select_profile_files,
     open_verified_artifact,
     parse_artifact_manifest,
@@ -165,6 +166,51 @@ def test_open_verified_artifact_rejects_wrong_identity_and_corruption(
         )
 
 
+def test_artifact_receipt_binds_repository_and_revision(tmp_path: Path) -> None:
+    model, fetcher = _fixture_model(tmp_path)
+    artifact = ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
+    different_revision = "c" * 40
+    changed = replace(
+        model,
+        catalog=replace(model.catalog, revision=different_revision),
+        profile=replace(model.profile, revision=different_revision),
+    )
+    with pytest.raises(ArtifactIntegrityError, match="different model revision"):
+        open_verified_artifact(
+            artifact.root, changed, expected_content_id=artifact.content_id
+        )
+
+
+def test_qwen_file_selection_accepts_new_weight_shards_without_repo_code() -> None:
+    model = resolve_decision_runtime_model(
+        "llm-semantic-router/Decision-1.0-Sol-2B", revision="c" * 40
+    )
+    names = {
+        "backbone/config.json",
+        "backbone/model.safetensors.index.json",
+        "backbone/model-00001-of-00002.safetensors",
+        "backbone/model-00002-of-00002.safetensors",
+        "decision_config.json",
+        "decision_head.safetensors",
+        "runtime.json",
+        "temperature.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "code/profile_guard.py",
+        "code/untrusted.py",
+    }
+    inventory = {name: ArtifactFile(name, name, "a" * 64, 1) for name in names}
+    selected = _select_artifact_files(model, inventory)
+    selected_names = {item.manifest_path for item in selected}
+    assert "backbone/model-00002-of-00002.safetensors" in selected_names
+    assert "code/profile_guard.py" in selected_names
+    assert "code/untrusted.py" not in selected_names
+
+    inventory.pop("backbone/model-00002-of-00002.safetensors")
+    with pytest.raises(ArtifactManifestError, match="incomplete"):
+        _select_artifact_files(model, inventory)
+
+
 def test_concurrent_materialization_converges_on_one_complete_view(
     tmp_path: Path,
 ) -> None:
@@ -291,7 +337,9 @@ def test_only_pinned_qwen_guard_python_is_selected_as_inert_data() -> None:
             )
 
 
-def test_manifest_identity_is_verified_before_json_is_parsed(tmp_path: Path) -> None:
+def test_manifest_identity_is_observed_from_the_selected_revision(
+    tmp_path: Path,
+) -> None:
     model, fetcher = _fixture_model(tmp_path)
     manifest = model.profile.artifact.manifest
     model = replace(
@@ -305,8 +353,71 @@ def test_manifest_identity_is_verified_before_json_is_parsed(tmp_path: Path) -> 
         ),
     )
 
-    with pytest.raises(ArtifactIntegrityError, match="digest"):
+    verified = ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
+    assert verified.manifest is not None
+    assert verified.manifest.sha256 == manifest.sha256
+    assert verified.manifest.sha256 != model.profile.artifact.manifest.sha256
+    assert (
+        open_verified_artifact(
+            verified.root, model, expected_content_id=verified.content_id
+        )
+        == verified
+    )
+
+
+def test_corrupt_snapshot_manifest_is_rejected_before_materialization(
+    tmp_path: Path,
+) -> None:
+    model, fetcher = _fixture_model(tmp_path)
+    fetcher.files["artifact/MANIFEST.json"].write_bytes(b"invalid JSON")
+    with pytest.raises(ArtifactManifestError, match="valid JSON"):
         ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
+
+
+def test_new_commit_with_valid_self_manifest_needs_no_packaged_profile(
+    tmp_path: Path,
+) -> None:
+    revision = "c" * 40
+    model = resolve_decision_runtime_model(MODEL_ID, revision=revision)
+    assert model.template_revision != revision
+    payloads = {
+        name: f"snapshot:{name}".encode() for name in model.profile.artifact.files
+    }
+    manifest_payload = json.dumps(
+        {
+            "files": {
+                name: {"bytes": len(data), "sha256": _sha256(data)}
+                for name, data in payloads.items()
+            }
+        },
+        sort_keys=True,
+    ).encode()
+    source = tmp_path / "source" / "native"
+    source.mkdir(parents=True)
+    (source / "MANIFEST.json").write_bytes(manifest_payload)
+    sources = {"native/MANIFEST.json": source / "MANIFEST.json"}
+    for name, data in payloads.items():
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        sources[f"native/{name}"] = path
+
+    fetcher = FakeFetcher(sources)
+    artifact = ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
+    assert artifact.revision == revision
+    assert artifact.manifest is not None
+    assert artifact.manifest.sha256 == _sha256(manifest_payload)
+    assert (
+        open_verified_artifact(
+            artifact.root, model, expected_content_id=artifact.content_id
+        )
+        == artifact
+    )
+    assert {call[1] for call in fetcher.calls} == {revision}
+
+    (source / "choice_encoder.safetensors").write_bytes(b"corrupted")
+    with pytest.raises(ArtifactIntegrityError, match="size|digest"):
+        ArtifactResolver(fetcher, tmp_path / "other-cache").materialize(model)
 
 
 def test_materializer_revalidates_catalog_identity(tmp_path: Path) -> None:

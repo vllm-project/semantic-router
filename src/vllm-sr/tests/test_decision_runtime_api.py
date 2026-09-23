@@ -327,6 +327,27 @@ def test_status_and_metrics_keep_diagnostics_outside_systemone():
     asyncio.run(scenario())
 
 
+def test_status_attests_resolved_artifact_without_changing_inference_response():
+    provenance = {
+        "model": MODEL.name,
+        "revision": "a" * 40,
+        "manifest_sha256": "b" * 64,
+        "content_sha256": "c" * 64,
+    }
+    app = create_app(
+        DecisionEngine(FakeDecisionBackend([MODEL])),
+        artifact_provenance=provenance,
+    )
+
+    async def scenario():
+        async with _client(app) as client:
+            assert (await client.get("/api/status")).json()["artifact"] == provenance
+            response = (await client.post("/v1/systemone", json=payload())).json()
+            assert set(response) == {"model", "answers", "usage"}
+
+    asyncio.run(scenario())
+
+
 def test_openapi_preserves_strict_single_state_schema():
     openapi = app_for().openapi()
     assert "/v1/decision/batches" in openapi["paths"]

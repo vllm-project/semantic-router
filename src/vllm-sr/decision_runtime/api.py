@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from typing import Annotated, TypeVar
 
 from fastapi import Body, FastAPI, Request
@@ -59,6 +59,7 @@ def create_app(
     *,
     scheduler: ModelScheduler | None = None,
     metrics: RuntimeMetrics | None = None,
+    artifact_provenance: Mapping[str, str] | None = None,
 ) -> FastAPI:
     """Build the HTTP API without selecting or owning a model framework.
 
@@ -71,6 +72,9 @@ def create_app(
     model_names = tuple(model.name for model in engine.models)
     served_model_names = frozenset(model_names)
     runtime_scheduler = scheduler or ModelScheduler(model_names)
+    attested_artifact = (
+        dict(artifact_provenance) if artifact_provenance is not None else None
+    )
     app = FastAPI(
         title="vLLM Semantic Router Decision Runtime",
         version="0.1.0",
@@ -224,7 +228,7 @@ def create_app(
     async def status():
         snapshots = await runtime_scheduler.snapshots()
         is_ready = await engine.ready()
-        return {
+        result = {
             "status": "ready" if is_ready else "not_ready",
             "contracts": ["systemone.single.v1", "decision.batches.v1"],
             "confidence": {
@@ -243,6 +247,9 @@ def create_app(
                 for snapshot in snapshots
             ],
         }
+        if attested_artifact is not None:
+            result["artifact"] = attested_artifact
+        return result
 
     @app.get("/metrics", response_class=PlainTextResponse)
     async def prometheus_metrics():

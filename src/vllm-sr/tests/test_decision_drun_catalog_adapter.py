@@ -174,7 +174,7 @@ def test_missing_released_image_fails_before_artifact_download(tmp_path: Path) -
 @pytest.mark.parametrize(
     ("overrides", "message"),
     (
-        ({"revision": "c" * 40}, "immutable catalog revision"),
+        ({"revision": "main"}, "full lowercase Git SHA"),
         ({"dtype": "bfloat16"}, "requires backbone dtype"),
         ({"backend": "mlx"}, "rocm, cuda, or cpu"),
     ),
@@ -188,6 +188,18 @@ def test_incompatible_launch_request_fails_before_artifact_download(
         bridge.resolve(request(**overrides))
 
     assert bridge.artifacts.calls == []  # type: ignore[attr-defined]
+
+
+def test_explicit_immutable_revision_reaches_artifact_and_container(
+    tmp_path: Path,
+) -> None:
+    bridge = resolver(tmp_path)
+    revision = "c" * 40
+    spec = bridge.resolve(request(revision=revision))
+
+    assert spec.revision == revision
+    assert spec.command[spec.command.index("--revision") + 1] == revision
+    assert bridge.artifacts.calls[0].catalog.revision == revision  # type: ignore[attr-defined]
 
 
 def test_noncanonical_artifact_root_is_rejected(tmp_path: Path) -> None:

@@ -12,6 +12,7 @@ import errno
 import hashlib
 import json
 import os
+import re
 import shutil
 import stat
 import tempfile
@@ -29,7 +30,8 @@ from .runtime_profile import (
 )
 
 _RECEIPT = ".vllm-sr-artifact.json"
-_RECEIPT_SCHEMA = 1
+_RECEIPT_SCHEMA = 2
+_QWEN_SHARD = re.compile(r"backbone/model-(\d{5})-of-(\d{5})\.safetensors")
 _REPOSITORY_CODE_SUFFIXES = frozenset(
     {".py", ".pyc", ".pyo", ".so", ".dylib", ".dll", ".sh", ".bash"}
 )
@@ -69,6 +71,7 @@ class VerifiedArtifact:
     repository_id: str
     revision: str
     files: tuple[ArtifactFile, ...]
+    manifest: ArtifactManifestIdentity | None = None
 
 
 class ArtifactFetcher(Protocol):
@@ -111,7 +114,7 @@ class HfHubArtifactFetcher:
 
 @dataclass(slots=True)
 class ArtifactResolver:
-    """Verify a pinned manifest and materialize its selected data read-only."""
+    """Verify an immutable snapshot's own inventory and materialize data read-only."""
 
     fetcher: ArtifactFetcher
     cache_root: Path
@@ -128,18 +131,18 @@ class ArtifactResolver:
             raise ArtifactError(
                 "resolved artifact identity does not match the catalog model"
             )
-        identity = model.profile.artifact.manifest
+        manifest_path = model.profile.artifact.manifest.path
         manifest_source = self.fetcher.fetch(
             repository_id=model.repository_id,
             revision=model.catalog.revision,
-            filename=identity.path,
+            filename=manifest_path,
         )
-        verify_file_identity(manifest_source, identity)
+        identity = _observed_manifest_identity(manifest_source, manifest_path)
         inventory = parse_artifact_manifest(
-            manifest_source.read_bytes(), manifest_path=identity.path
+            manifest_source.read_bytes(), manifest_path=manifest_path
         )
-        files = _select_profile_files(model, inventory)
-        receipt = _receipt(identity, files)
+        files = _select_artifact_files(model, inventory)
+        receipt = _receipt(model, identity, files)
         content_id = hashlib.sha256(
             json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
@@ -149,18 +152,22 @@ class ArtifactResolver:
             if destination.exists() or destination.is_symlink():
                 _verify_materialization(destination, receipt, files)
             else:
-                self._create_materialization(model, destination, receipt, files)
+                self._create_materialization(
+                    model, destination, identity, receipt, files
+                )
         return _verified_artifact(
             root=destination,
             content_id=content_id,
             model=model,
             files=files,
+            manifest=identity,
         )
 
     def _create_materialization(
         self,
         model: ResolvedRuntimeModel,
         destination: Path,
+        identity: ArtifactManifestIdentity,
         receipt: dict[str, Any],
         files: tuple[ArtifactFile, ...],
     ) -> None:
@@ -170,18 +177,17 @@ class ArtifactResolver:
             tempfile.mkdtemp(prefix=f".{destination.name}.", dir=parent)
         )
         try:
-            manifest = model.profile.artifact.manifest
             manifest_source = self.fetcher.fetch(
                 repository_id=model.repository_id,
                 revision=model.catalog.revision,
-                filename=manifest.path,
+                filename=identity.path,
             )
-            verify_file_identity(manifest_source, manifest)
+            verify_file_identity(manifest_source, identity)
             _copy_verified(
                 manifest_source,
-                temporary / manifest.path,
-                sha256=manifest.sha256,
-                size_bytes=manifest.size_bytes,
+                temporary / identity.path,
+                sha256=identity.sha256,
+                size_bytes=identity.size_bytes,
             )
             for item in files:
                 source = self.fetcher.fetch(
@@ -257,14 +263,21 @@ def open_verified_artifact(
             "content-addressed artifact root is unavailable"
         ) from error
 
-    identity = model.profile.artifact.manifest
+    receipt_path = resolved_root / _RECEIPT
+    try:
+        saved_receipt = json.loads(receipt_path.read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ArtifactIntegrityError(
+            "artifact receipt is unavailable or invalid"
+        ) from error
+    identity = _manifest_identity_from_receipt(saved_receipt, model)
     manifest_path = resolved_root / identity.path
     verify_file_identity(manifest_path, identity)
     inventory = parse_artifact_manifest(
         manifest_path.read_bytes(), manifest_path=identity.path
     )
-    files = _select_profile_files(model, inventory)
-    receipt = _receipt(identity, files)
+    files = _select_artifact_files(model, inventory)
+    receipt = _receipt(model, identity, files)
     actual_content_id = hashlib.sha256(
         json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode()
     ).hexdigest()
@@ -278,6 +291,7 @@ def open_verified_artifact(
         content_id=actual_content_id,
         model=model,
         files=files,
+        manifest=identity,
     )
 
 
@@ -341,6 +355,52 @@ def verify_file_identity(path: Path, identity: ArtifactManifestIdentity) -> None
     )
 
 
+def _observed_manifest_identity(
+    path: Path, manifest_path: str
+) -> ArtifactManifestIdentity:
+    """Pin the manifest bytes from the selected immutable Hub commit."""
+
+    validate_relative_artifact_path(manifest_path, field="artifact manifest path")
+    try:
+        size_bytes = path.stat().st_size
+    except OSError as error:
+        raise ArtifactIntegrityError("artifact manifest is unavailable") from error
+    if not path.is_file() or not 0 < size_bytes <= 4 * 1024 * 1024:
+        raise ArtifactManifestError("artifact manifest has an invalid size")
+    try:
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    except OSError as error:
+        raise ArtifactIntegrityError("artifact manifest is unreadable") from error
+    return ArtifactManifestIdentity(manifest_path, digest, size_bytes)
+
+
+def _manifest_identity_from_receipt(
+    value: object, model: ResolvedRuntimeModel
+) -> ArtifactManifestIdentity:
+    if not isinstance(value, dict) or value.get("schema_version") != _RECEIPT_SCHEMA:
+        raise ArtifactIntegrityError("artifact receipt schema is unsupported")
+    if (
+        value.get("repository_id") != model.repository_id
+        or value.get("revision") != model.catalog.revision
+    ):
+        raise ArtifactIntegrityError("artifact receipt has a different model revision")
+    raw = value.get("manifest")
+    if not isinstance(raw, dict) or set(raw) != {"path", "sha256", "size_bytes"}:
+        raise ArtifactIntegrityError("artifact receipt manifest is invalid")
+    if raw["path"] != model.profile.artifact.manifest.path:
+        raise ArtifactIntegrityError("artifact manifest layout is unsupported")
+    digest, size_bytes = raw["sha256"], raw["size_bytes"]
+    if (
+        not isinstance(digest, str)
+        or re.fullmatch(r"[0-9a-f]{64}", digest) is None
+        or isinstance(size_bytes, bool)
+        or not isinstance(size_bytes, int)
+        or not 0 < size_bytes <= 4 * 1024 * 1024
+    ):
+        raise ArtifactIntegrityError("artifact receipt manifest identity is invalid")
+    return ArtifactManifestIdentity(raw["path"], digest, size_bytes)
+
+
 def _manifest_entry(
     path: object | None, value: object, *, include_path: bool
 ) -> tuple[str, str, int]:
@@ -394,14 +454,106 @@ def _select_profile_files(
     return tuple(files)
 
 
+def _select_artifact_files(
+    model: ResolvedRuntimeModel, inventory: dict[str, ArtifactFile]
+) -> tuple[ArtifactFile, ...]:
+    """Select data by family layout, independent of a packaged file list.
+
+    Synthetic profiles with a different manifest layout retain their explicit
+    selection seam. Production loaders only accept the three known layouts.
+    """
+
+    manifest_path = model.profile.artifact.manifest.path
+    if manifest_path not in {
+        "native/MANIFEST.json",
+        "MODEL_MANIFEST.json",
+        "bundle-manifest.json",
+    }:
+        return _select_profile_files(model, inventory)
+
+    if model.profile.family == "vela":
+        if manifest_path != "native/MANIFEST.json":
+            raise ArtifactManifestError("Vela artifact manifest layout is unsupported")
+        required = {
+            "INVENTORY.json",
+            "STATE_LAYOUT.json",
+            "choice_encoder.safetensors",
+            "decision_config.json",
+            "decision_heads.safetensors",
+            "encoder/config.json",
+            "encoder/model.safetensors",
+            "score_encoder.safetensors",
+            "tokenizer/tokenizer.json",
+            "tokenizer/tokenizer_config.json",
+        }
+        optional = {"tokenizer/special_tokens_map.json"}
+    elif model.profile.family == "qwen3.5":
+        if manifest_path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
+            raise ArtifactManifestError("Qwen artifact manifest layout is unsupported")
+        required = {
+            "backbone/config.json",
+            "decision_config.json",
+            "decision_head.safetensors",
+            "runtime.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        }
+        optional = {
+            "chat_template.jinja",
+            "temperature.json",
+            "runtime-profile/profile.json",
+            "runtime-profile/l2norm_fwd_kernel.json",
+            _INERT_QWEN_GUARD,
+        }
+        if "backbone/model.safetensors" in inventory:
+            if "backbone/model.safetensors.index.json" in inventory:
+                raise ArtifactManifestError("Qwen weight layout is ambiguous")
+            required.add("backbone/model.safetensors")
+        else:
+            required.add("backbone/model.safetensors.index.json")
+            shards = {
+                name: _QWEN_SHARD.fullmatch(name)
+                for name in inventory
+                if name.startswith("backbone/model-") and name.endswith(".safetensors")
+            }
+            if not shards or any(match is None for match in shards.values()):
+                raise ArtifactManifestError("Qwen sharded weight layout is invalid")
+            total = {int(match.group(2)) for match in shards.values() if match}
+            indexes = {int(match.group(1)) for match in shards.values() if match}
+            if len(total) != 1 or indexes != set(range(1, next(iter(total)) + 1)):
+                raise ArtifactManifestError("Qwen weight shards are incomplete")
+            required.update(shards)
+    else:  # pragma: no cover - family parser closes this path
+        raise ArtifactManifestError("Decision artifact family is unsupported")
+
+    missing = required - inventory.keys()
+    if missing:
+        raise ArtifactManifestError(
+            f"Decision artifact manifest is missing {sorted(missing)[0]}"
+        )
+    selected = required | (optional & inventory.keys())
+    files = tuple(inventory[path] for path in sorted(selected))
+    for item in files:
+        _reject_repository_code(
+            item.repository_path,
+            inert_guard=(
+                model.profile.family == "qwen3.5"
+                and item.manifest_path == _INERT_QWEN_GUARD
+                and manifest_path == "bundle-manifest.json"
+            ),
+        )
+    return files
+
+
 def _verified_artifact(
     *,
     root: Path,
     content_id: str,
     model: ResolvedRuntimeModel,
     files: tuple[ArtifactFile, ...],
+    manifest: ArtifactManifestIdentity,
 ) -> VerifiedArtifact:
-    manifest_parent = PurePosixPath(model.profile.artifact.manifest.path).parent
+    manifest_parent = PurePosixPath(manifest.path).parent
     data_root = root
     if manifest_parent != PurePosixPath("."):
         data_root = root.joinpath(*manifest_parent.parts)
@@ -414,6 +566,7 @@ def _verified_artifact(
         repository_id=model.repository_id,
         revision=model.catalog.revision,
         files=files,
+        manifest=manifest,
     )
 
 
@@ -429,10 +582,14 @@ def _reject_repository_code(path: str, *, inert_guard: bool = False) -> None:
 
 
 def _receipt(
-    manifest: ArtifactManifestIdentity, files: tuple[ArtifactFile, ...]
+    model: ResolvedRuntimeModel,
+    manifest: ArtifactManifestIdentity,
+    files: tuple[ArtifactFile, ...],
 ) -> dict[str, Any]:
     return {
         "schema_version": _RECEIPT_SCHEMA,
+        "repository_id": model.repository_id,
+        "revision": model.catalog.revision,
         "manifest": {
             "path": manifest.path,
             "sha256": manifest.sha256,

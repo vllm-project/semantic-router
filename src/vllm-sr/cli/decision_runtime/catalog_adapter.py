@@ -27,6 +27,7 @@ from decision_runtime.catalog_adapter import (
     RuntimeModelResolutionError,
     resolve_decision_runtime_model,
 )
+from decision_runtime.backend_capabilities import require_runtime_backend
 from decision_runtime.scheduler import DEFAULT_MAX_CONCURRENCY, DEFAULT_MAX_QUEUE
 
 from cli.decision_runtime.catalog import (
@@ -98,15 +99,13 @@ class IntegratedDecisionCatalogResolver:
             )
 
         try:
-            model = resolve_decision_runtime_model(request.model, backend=backend)
+            model = resolve_decision_runtime_model(
+                request.model, revision=request.revision, backend=backend
+            )
         except RuntimeModelResolutionError as error:
             raise DecisionCatalogError(str(error)) from error
-        if request.revision is not None and request.revision != model.catalog.revision:
-            raise DecisionCatalogError(
-                "requested revision does not match the immutable catalog revision"
-            )
 
-        qualification = model.profile.require_backend(backend)
+        qualification = require_runtime_backend(model.catalog, model.profile, backend)
         dtype = qualification.backbone_dtype
         if dtype is None:  # pragma: no cover - qualified profiles require a dtype
             raise DecisionCatalogError("qualified Decision backend has no dtype")
@@ -144,6 +143,13 @@ class IntegratedDecisionCatalogResolver:
             raise DecisionCatalogError(
                 f"Decision model artifact verification failed: {error}"
             ) from error
+        if (
+            artifact.repository_id != model.repository_id
+            or artifact.revision != model.catalog.revision
+        ):
+            raise DecisionCatalogError(
+                "Decision artifact resolver returned a different model revision"
+            )
         artifact_root = _canonical_artifact_root(artifact)
         python = _FAMILY_PYTHON.get(model.profile.family)
         if python is None:  # pragma: no cover - guarded by the profile parser

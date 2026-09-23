@@ -19,6 +19,7 @@ def create_runtime_app(config: RuntimeLaunchConfig):
         DecisionEngine(assembled.backend),
         scheduler=assembled.scheduler,
         metrics=metrics,
+        artifact_provenance=getattr(assembled, "artifact_provenance", None),
     )
 
     @asynccontextmanager

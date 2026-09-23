@@ -113,7 +113,7 @@ def test_catalog_adapter_rejects_aliases_and_unknown_models(model_id: str) -> No
         resolve_decision_runtime_model(model_id)
 
 
-def test_catalog_adapter_fails_closed_on_profile_revision_mismatch(
+def test_catalog_new_revision_reuses_model_template(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     resolved = resolve_decision_runtime_model(
@@ -125,8 +125,19 @@ def test_catalog_adapter_fails_closed_on_profile_revision_mismatch(
         lambda *args, **kwargs: replace(resolved.catalog, revision="a" * 40),
     )
 
-    with pytest.raises(RuntimeModelResolutionError, match="no packaged"):
-        resolve_decision_runtime_model(resolved.catalog.model_id)
+    updated = resolve_decision_runtime_model(resolved.catalog.model_id)
+    assert updated.catalog.revision == "a" * 40
+    assert updated.profile.revision == "a" * 40
+    assert updated.template_revision == resolved.template_revision
+    assert updated.profile.prompt_policy == resolved.profile.prompt_policy
+
+
+def test_explicit_revision_requires_an_immutable_commit() -> None:
+    model = "llm-semantic-router/Decision-1.0-Kai-0.6B"
+    updated = resolve_decision_runtime_model(model, revision="a" * 40)
+    assert updated.catalog.revision == "a" * 40
+    with pytest.raises(RuntimeModelResolutionError, match="full lowercase Git SHA"):
+        resolve_decision_runtime_model(model, revision="main")
 
 
 def test_catalog_adapter_fails_closed_on_family_mismatch(
@@ -141,7 +152,7 @@ def test_catalog_adapter_fails_closed_on_family_mismatch(
         lambda revision: replace(resolved.profile, family="qwen3.5"),
     )
 
-    with pytest.raises(RuntimeModelResolutionError, match="revision and family"):
+    with pytest.raises(RuntimeModelResolutionError, match="model family"):
         resolve_decision_runtime_model(resolved.catalog.model_id)
 
 
@@ -165,6 +176,22 @@ def test_unqualified_backends_and_targets_are_rejected() -> None:
         resolve_decision_runtime_model(
             "llm-semantic-router/Decision-1.0-Kai-0.6B", target="gfx942"
         )
+
+
+def test_runtime_owned_backend_capabilities_cover_six_rocm_and_sub_1b_cpu() -> None:
+    for model_id in MODELS:
+        assert resolve_decision_runtime_model(
+            model_id, backend="rocm", target="gfx942"
+        ).profile.family in {"vela", "qwen3.5"}
+        with pytest.raises(RuntimeModelResolutionError, match="no installed"):
+            resolve_decision_runtime_model(model_id, backend="cuda")
+        with pytest.raises(RuntimeModelResolutionError, match="target"):
+            resolve_decision_runtime_model(model_id, backend="rocm", target="gfx1100")
+        if model_id.endswith(("Kai-0.6B", "Lex-0.6B", "Eos-0.8B")):
+            resolve_decision_runtime_model(model_id, backend="cpu")
+        else:
+            with pytest.raises(RuntimeModelResolutionError, match="no installed"):
+                resolve_decision_runtime_model(model_id, backend="cpu")
 
 
 def test_profile_parser_rejects_traversal_and_revision_fields() -> None:
