@@ -65,6 +65,18 @@ the one-state comparison as nonidentical wire bytes. No generic response
 envelope rewrite is supplied; a service with another envelope needs a specific
 audited adapter and explicit protocol labeling before measurement.
 
+The historical Decision preview service returns a diagnostic envelope and
+defines Choice/Score `confidence` as `max(probabilities)`. For that **specific**
+old shape, add `--old-response-mode legacy_preview` (usually together with
+`--old-model-id decision-nano-preview` or the matching old model slug). The
+runner checks the old model ID, answer identities, input-token accounting, and
+max-probability statistic, then projects the old answers onto the current
+Decision-owned confidence formula solely for common response validation.
+This projection happens **after** the complete old HTTP body is timed and its
+raw hash recorded. The receipt identifies the adapter and does not claim
+identical wire bytes or confidence semantics. Other old envelopes fail closed;
+do not use this flag for a current strict `drun` service.
+
 `samples.jsonl` records every HTTP attempt with request and response hashes,
 status, error code, decision count, and timing offsets. `workflows.jsonl`
 records each logical workflow's first-send to last-complete interval and full

@@ -125,6 +125,38 @@ def test_state_rejects_non_content_scalars(state):
         SystemOneRequest.model_validate(payload)
 
 
+def test_blank_text_is_rejected_before_family_tokenization():
+    mutations = (
+        ("state", lambda body: body.update(state=" ")),
+        (
+            "instructions",
+            lambda body: body["questions"]["billing"].update(instructions=""),
+        ),
+        (
+            "Noul criterion",
+            lambda body: body["questions"]["billing"].update(criteria={"true": ""}),
+        ),
+        (
+            "Choice option description",
+            lambda body: body["questions"]["category"]["criteria"].update(technical=""),
+        ),
+        (
+            "Score criterion",
+            lambda body: body["questions"]["urgency"]["criteria"].__setitem__(0, ""),
+        ),
+    )
+    for label, mutate in mutations:
+        payload = request_payload()
+        mutate(payload)
+        with pytest.raises(ValidationError, match=label):
+            SystemOneRequest.model_validate(payload)
+
+    batch = batch_request_payload()
+    batch["states"][0]["state"] = ""
+    with pytest.raises(ValidationError, match="state"):
+        SystemOneBatchRequest.model_validate(batch)
+
+
 def test_model_is_explicit_and_request_fields_are_closed():
     payload = request_payload()
     payload.pop("model")
@@ -374,6 +406,16 @@ def test_batch_decision_product_accepts_1024_and_rejects_1025_or_more():
     assert len(accepted.states) * len(accepted.questions) == MAX_BATCH_DECISIONS
     with pytest.raises(ValidationError, match="must not exceed 1024 decisions"):
         SystemOneBatchRequest.model_validate(body(41, 25))
+
+
+def test_single_question_count_is_bounded_before_row_preparation():
+    body = request_payload()
+    item = {"type": "noul", "instructions": "Is this relevant?"}
+    body["questions"] = {f"q{index}": item for index in range(1024)}
+    assert len(SystemOneRequest.model_validate(body).questions) == 1024
+    body["questions"]["q1024"] = item
+    with pytest.raises(ValidationError, match="at most 1024"):
+        SystemOneRequest.model_validate(body)
 
 
 def test_batch_response_validates_order_answer_math_and_aggregate_usage():

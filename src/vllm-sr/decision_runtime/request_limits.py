@@ -2,17 +2,26 @@
 
 from __future__ import annotations
 
-import json
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from fastapi.responses import JSONResponse
 
 from .contracts import SystemOneBatchRequest, SystemOneRequest
+from .model_inputs import (
+    QWEN_DEFAULT_NO,
+    QWEN_DEFAULT_YES,
+    build_model_input,
+    content_text,
+    qwen_segments,
+)
 
 SINGLE_MAX_REQUEST_BYTES = 256 * 1024
 BATCH_MAX_REQUEST_BYTES = 2 * 1024 * 1024
 MAX_EXPANDED_INPUT_BYTES = 16 * 1024 * 1024
+# Conservatively covers Vela's task/candidate marker framing as well as
+# tokenizer-side separators that are absent from the Qwen text rendering.
+PER_DECISION_FRAMING_BYTES = 256
 
 ASGIApp = Callable[
     [
@@ -98,23 +107,31 @@ class BoundedJSONBodyMiddleware:
 def expanded_input_bytes(
     request: SystemOneRequest | SystemOneBatchRequest,
 ) -> int:
-    """Return a conservative UTF-8 size for the logical question rows."""
+    """Bound the actual family prompt expansion without allocating every row.
 
-    questions = tuple(request.questions.values())
-    question_bytes = sum(
-        _json_size(question.model_dump(mode="json")) for question in questions
+    Qwen's per-option JSON and delimiters can greatly exceed the compact wire
+    criteria map, especially at 255 options. Render each shared question once
+    with an empty state, then account for each state by UTF-8 length. The
+    larger Choice-null policy is used when both model families differ; a fixed
+    row margin also covers Vela marker framing without tokenizing model data.
+    """
+
+    questions = tuple(request.questions.items())
+    states = (
+        (request.state,)
+        if isinstance(request, SystemOneRequest)
+        else tuple(item.state for item in request.states)
     )
-    if isinstance(request, SystemOneRequest):
-        state_bytes = _json_size(request.state)
-        decisions = len(questions)
-        return state_bytes * decisions + question_bytes + 256 * decisions
-
-    state_bytes = sum(_json_size(state.state) for state in request.states)
-    decisions = len(request.states) * len(questions)
+    state_bytes = sum(len(content_text(state).encode("utf-8")) for state in states)
+    question_bytes = sum(
+        _question_rendered_bytes(question_id, question)
+        for question_id, question in questions
+    )
+    decisions = len(states) * len(questions)
     return (
         state_bytes * len(questions)
-        + question_bytes * len(request.states)
-        + 256 * decisions
+        + question_bytes * len(states)
+        + PER_DECISION_FRAMING_BYTES * decisions
     )
 
 
@@ -124,15 +141,28 @@ def exceeds_expanded_input_limit(
     return expanded_input_bytes(request) > MAX_EXPANDED_INPUT_BYTES
 
 
-def _json_size(value: object) -> int:
-    return len(
-        json.dumps(
-            value,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-            allow_nan=False,
-        ).encode("utf-8")
+def _question_rendered_bytes(question_id: str, question) -> int:
+    has_null_choice = question.type == "choice" and any(
+        value is None for value in question.criteria.values()
+    )
+    policies = (
+        ("render_key", "preserve_json_null") if has_null_choice else ("render_key",)
+    )
+    return max(
+        len(
+            qwen_segments(
+                build_model_input(
+                    question_id=question_id,
+                    state="",
+                    question=question,
+                    choice_null_description=policy,
+                    noul_default_false=QWEN_DEFAULT_NO,
+                    noul_default_true=QWEN_DEFAULT_YES,
+                    noul_explicit_null="use_default",
+                )
+            ).rendered.encode("utf-8")
+        )
+        for policy in policies
     )
 
 

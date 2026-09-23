@@ -14,6 +14,7 @@ from pydantic import ValidationError
 # semantic_cases initializes the source checkout's runtime-contract path.
 # isort: off
 from .semantic_cases import RequestSpec
+from .legacy_projection import project_legacy_preview
 from .transport import Endpoint, OPENER, _consume, validate_endpoint_url
 from decision_runtime.contracts import (
     ResponseContractError,
@@ -133,12 +134,24 @@ def measure_http(
         else:
             try:
                 if isinstance(spec.request, SystemOneBatchRequest):
+                    if endpoint.response_mode != "decision_v1":
+                        raise ValueError("legacy preview mode supports singles only")
                     response = SystemOneBatchResponse.model_validate(parsed)
                     validate_batch_response_for_request(spec.request, response)
                 else:
+                    if endpoint.response_mode == "legacy_preview":
+                        parsed = project_legacy_preview(parsed, spec.request)
+                    elif endpoint.response_mode != "decision_v1":
+                        raise ValueError("unsupported benchmark response mode")
                     response = SystemOneResponse.model_validate(parsed)
                     validate_response_for_request(spec.request, response)
-            except (ValidationError, ResponseContractError):
+            except (
+                ValidationError,
+                ResponseContractError,
+                TypeError,
+                ValueError,
+                OverflowError,
+            ):
                 error_code = "response_contract"
 
     return HttpSample(

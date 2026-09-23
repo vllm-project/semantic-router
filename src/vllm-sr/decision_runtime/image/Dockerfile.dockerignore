@@ -10,6 +10,10 @@
 !src/vllm-sr/requirements.txt
 !src/vllm-sr/cli/
 !src/vllm-sr/cli/**
+# Generated catalog files in a developer checkout must never enter the image.
+# The wheel builder stages them from canonical config after COPY.
+src/vllm-sr/cli/model_assets/**
+!src/vllm-sr/cli/model_assets/__init__.py
 !src/vllm-sr/decision_runtime/
 !src/vllm-sr/decision_runtime/**
 !src/semantic-router/

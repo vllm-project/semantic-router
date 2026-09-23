@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from .cases import Case
+from .legacy_projection import project_legacy_preview
 
 from pydantic import ValidationError
 
@@ -37,6 +38,7 @@ class Endpoint:
     arm: str
     url: str
     token: str | None
+    response_mode: str = "decision_v1"
 
 
 @dataclass(frozen=True)
@@ -170,9 +172,19 @@ def measure(
             error_code = "invalid_json"
         else:
             try:
+                if endpoint.response_mode == "legacy_preview":
+                    parsed = project_legacy_preview(parsed, case.request)
+                elif endpoint.response_mode != "decision_v1":
+                    raise ValueError("unsupported benchmark response mode")
                 response = SystemOneResponse.model_validate(parsed)
                 validate_response_for_request(case.request, response)
-            except (ValidationError, ResponseContractError):
+            except (
+                ValidationError,
+                ResponseContractError,
+                TypeError,
+                ValueError,
+                OverflowError,
+            ):
                 error_code = "response_contract"
 
     return Sample(

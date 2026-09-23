@@ -40,6 +40,7 @@ SOURCE_FILES = (
     "__init__.py",
     "__main__.py",
     "cases.py",
+    "legacy_projection.py",
     "transport.py",
     "report.py",
     "semantic_cases.py",
@@ -224,7 +225,7 @@ def run_semantic(args: argparse.Namespace) -> int:
     old_model_id = args.old_model_id or args.model
     if not MODEL_ID.fullmatch(old_model_id):
         raise ValueError("old model ID is not a public-safe model slug")
-    old = Endpoint("old", old_url, _token(args.old_token_env))
+    old = Endpoint("old", old_url, _token(args.old_token_env), args.old_response_mode)
     new_single = Endpoint("new", new_url, _token(args.new_token_env))
     new_batch = Endpoint("new", batch_url(new_url), new_single.token)
     metrics_urls = {
@@ -429,6 +430,15 @@ def run_semantic(args: argparse.Namespace) -> int:
     for cases in cohorts.values():
         cohort_digest.update(cohort_sha256(cases).encode("ascii"))
         cohort_digest.update(b"\x00")
+    adapter_kind = "none"
+    if old_model_id != args.model:
+        adapter_kind = "model_id_only"
+    if args.old_response_mode == "legacy_preview":
+        adapter_kind = (
+            "legacy_preview_and_model_id"
+            if old_model_id != args.model
+            else "legacy_preview"
+        )
     receipt = {
         "schema_version": SCHEMA_VERSION,
         "measured_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -437,9 +447,13 @@ def run_semantic(args: argparse.Namespace) -> int:
         "old": old_meta,
         "new": new_meta,
         "adapter": {
-            "kind": "model_id_only" if old_model_id != args.model else "none",
+            "kind": adapter_kind,
             "old_model_id": old_model_id,
-            "envelope_transform": "none",
+            "envelope_transform": (
+                "old_max_probability_to_decision_v1_for_validation"
+                if args.old_response_mode == "legacy_preview"
+                else "none"
+            ),
             "applied_outside_timed_interval": True,
         },
         "source_commit": _source_commit(),
@@ -494,6 +508,12 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     run.add_argument("--new-metrics-url", help="optional new /metrics endpoint")
     run.add_argument(
         "--old-model-id", help="audited model-ID translation for old singles"
+    )
+    run.add_argument(
+        "--old-response-mode",
+        choices=("decision_v1", "legacy_preview"),
+        default="decision_v1",
+        help="Validate the old preview envelope with an audited post-timing projection.",
     )
     for arm in ("old", "new"):
         run.add_argument(f"--{arm}-source-ref", required=True)

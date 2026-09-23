@@ -85,6 +85,11 @@ contains `type`, `score`, `confidence`, `legend`, and `probabilities`; `score` i
 the expected zero-based rubric index. Request and response JSON are strict:
 unknown fields are rejected, and answers must match the requested question
 names and criteria.
+One single-state request accepts at most 1,024 questions. The transport and
+expanded rendered-input byte limits are separate safeguards; oversized input
+is rejected before model preparation instead of entering a retryable queue.
+Text `state`, instructions, and criterion descriptions must be nonblank;
+structured JSON content is still accepted where the request schema permits it.
 
 Decision confidence is a versioned, type-aware statistic, not a claim of
 numeric equivalence to another provider. For Choice it is the top-two

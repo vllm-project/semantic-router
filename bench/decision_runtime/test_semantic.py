@@ -17,8 +17,14 @@ from decision_runtime.confidence import choice_confidence, score_confidence
 # isort: on
 
 from .__main__ import main
+from .legacy_projection import project_legacy_preview
 from .semantic_cases import generate_cases
 from .semantic_report import build_semantic_matrix
+from decision_runtime.contracts import (
+    SystemOneRequest,
+    SystemOneResponse,
+    validate_response_for_request,
+)
 
 
 def _answer(question):
@@ -42,6 +48,16 @@ def _answer(question):
         "legend": {str(index): level for index, level in enumerate(levels)},
         "probabilities": probabilities,
     }
+
+
+def _legacy_answer(question):
+    answer = _answer(question)
+    answer["input_tokens"] = 10
+    if question["type"] != "noul":
+        peak = max(answer["probabilities"].values())
+        answer["top_probability"] = peak
+        answer["confidence"] = peak
+    return answer
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -71,13 +87,24 @@ class _Handler(BaseHTTPRequestHandler):
                 if le == "+Inf" or rows <= int(le):
                     counters["buckets"][le] += 1
         if self.path == "/v1/systemone":
+            legacy = self.server.legacy_preview
             response = {
                 "model": request["model"],
                 "answers": {
-                    key: _answer(value) for key, value in request["questions"].items()
+                    key: (_legacy_answer(value) if legacy else _answer(value))
+                    for key, value in request["questions"].items()
                 },
-                "usage": {"input_tokens": 10, "output_tokens": 1},
+                "usage": {
+                    "input_tokens": 10 * len(request["questions"]) if legacy else 10,
+                    "output_tokens": 0 if legacy else 1,
+                },
             }
+            if legacy:
+                response.update(
+                    profile={"confidence_definition": "max(p); old preview"},
+                    timing={"inference_ms": 1.0},
+                    source="live_native",
+                )
         elif self.path == "/v1/decision/batches":
             results = [
                 {
@@ -142,6 +169,53 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class SemanticTests(TestCase):
+    def test_legacy_preview_projection_checks_old_statistic_and_distribution(self):
+        request = SystemOneRequest.model_validate(
+            {
+                "model": "decision-nano-preview",
+                "state": "Please refund the duplicate charge.",
+                "questions": {
+                    "refund": {
+                        "type": "noul",
+                        "instructions": "Is a refund requested?",
+                    },
+                    "category": {
+                        "type": "choice",
+                        "instructions": "Classify the request.",
+                        "criteria": {"billing": None, "technical": None},
+                    },
+                    "urgency": {
+                        "type": "score",
+                        "instructions": "Rate urgency.",
+                        "criteria": ["low", "medium", "high"],
+                    },
+                },
+            }
+        )
+        answers = {
+            key: _legacy_answer(question.model_dump())
+            for key, question in request.questions.items()
+        }
+        legacy = {
+            "model": request.model,
+            "answers": answers,
+            "usage": {"input_tokens": 30, "output_tokens": 0},
+            "profile": {"confidence_definition": "max(p); old preview"},
+            "timing": {"inference_ms": 1.0},
+            "source": "live_native",
+        }
+        projected = project_legacy_preview(legacy, request)
+        validate_response_for_request(
+            request, SystemOneResponse.model_validate(projected)
+        )
+        self.assertNotIn("profile", projected)
+        self.assertNotIn("input_tokens", projected["answers"]["refund"])
+        self.assertEqual(projected["answers"]["category"]["confidence"], 0.0)
+
+        legacy["answers"]["category"]["confidence"] = 0.9
+        with self.assertRaisesRegex(ValueError, "max-probability"):
+            project_legacy_preview(legacy, request)
+
     def test_generator_is_deterministic_and_respects_contract(self):
         cases = generate_cases(
             MODELS[0], MODELS[0], question_count=9, state_count=4, variants=2, seed=17
@@ -185,6 +259,7 @@ class SemanticTests(TestCase):
         for server in servers:
             server.bodies = []
             server.invalid_batch = invalid_batch
+            server.legacy_preview = False
             server.metrics_lock = threading.Lock()
             server.metrics = {}
         servers[0].invalid_batch = False
@@ -409,6 +484,42 @@ class SemanticTests(TestCase):
                     comparison["type"], "single_request_model_id_adapter_workflow"
                 )
                 self.assertFalse(comparison["wire_bytes_identical"])
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_legacy_preview_adapter_is_recorded_and_runs_after_timing(self):
+        servers, threads = self._servers()
+        servers[0].legacy_preview = True
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(
+                    servers,
+                    output,
+                    "--old-model-id",
+                    "decision-nano-preview",
+                    "--old-response-mode",
+                    "legacy_preview",
+                )
+                args[args.index("--state-counts") + 1] = "1"
+                args[args.index("--concurrencies") + 1] = "1"
+                args[args.index("--warmup") + 1] = "0"
+                args[args.index("--rounds") + 1] = "1"
+                self.assertEqual(main(args), 0)
+                receipt = json.loads((output / "receipt.json").read_text())
+                self.assertEqual(
+                    receipt["adapter"]["kind"], "legacy_preview_and_model_id"
+                )
+                self.assertTrue(receipt["adapter"]["applied_outside_timed_interval"])
+                self.assertFalse(
+                    receipt["shapes"][0]["summary"]["comparison"][
+                        "wire_bytes_identical"
+                    ]
+                )
         finally:
             for server in servers:
                 server.shutdown()

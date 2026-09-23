@@ -28,6 +28,7 @@ PROBABILITY_SUM_TOLERANCE = 2e-5
 MAX_BATCH_DECISIONS = 1024
 MAX_BATCH_QUESTIONS = 1024
 MAX_BATCH_STATES = 1024
+MAX_SINGLE_QUESTIONS = MAX_BATCH_DECISIONS
 
 
 class ContractModel(BaseModel):
@@ -40,11 +41,22 @@ class ContractModel(BaseModel):
     )
 
 
+def _nonblank_text(value: JsonContent | None, *, field: str) -> JsonContent | None:
+    if isinstance(value, str) and not value.strip():
+        raise ValueError(f"{field} must not be empty or whitespace")
+    return value
+
+
 class NoulCriteria(ContractModel):
     """Optional descriptions of the true and false outcomes."""
 
     true: JsonContent | None = None
     false: JsonContent | None = None
+
+    @field_validator("true", "false")
+    @classmethod
+    def criterion_text_must_be_nonblank(cls, value: JsonContent | None):
+        return _nonblank_text(value, field="Noul criterion")
 
 
 class NoulQuestion(ContractModel):
@@ -53,6 +65,11 @@ class NoulQuestion(ContractModel):
     type: Literal["noul"]
     instructions: JsonContent
     criteria: NoulCriteria | None = None
+
+    @field_validator("instructions")
+    @classmethod
+    def instructions_must_be_nonblank(cls, value: JsonContent):
+        return _nonblank_text(value, field="instructions")
 
 
 class ChoiceQuestion(ContractModel):
@@ -64,6 +81,11 @@ class ChoiceQuestion(ContractModel):
         dict[str, JsonContent | None], Field(min_length=2, max_length=255)
     ]
 
+    @field_validator("instructions")
+    @classmethod
+    def instructions_must_be_nonblank(cls, value: JsonContent):
+        return _nonblank_text(value, field="instructions")
+
     @field_validator("criteria")
     @classmethod
     def option_names_must_be_nonblank(
@@ -71,6 +93,8 @@ class ChoiceQuestion(ContractModel):
     ) -> dict[str, JsonContent | None]:
         if any(not name.strip() for name in value):
             raise ValueError("Choice option names must not be empty or whitespace")
+        for description in value.values():
+            _nonblank_text(description, field="Choice option description")
         return value
 
 
@@ -80,6 +104,18 @@ class ScoreQuestion(ContractModel):
     type: Literal["score"]
     instructions: JsonContent
     criteria: Annotated[list[JsonContent], Field(min_length=2, max_length=10)]
+
+    @field_validator("instructions")
+    @classmethod
+    def instructions_must_be_nonblank(cls, value: JsonContent):
+        return _nonblank_text(value, field="instructions")
+
+    @field_validator("criteria")
+    @classmethod
+    def level_text_must_be_nonblank(cls, value: list[JsonContent]):
+        for criterion in value:
+            _nonblank_text(criterion, field="Score criterion")
+        return value
 
 
 Question: TypeAlias = Annotated[
@@ -93,7 +129,14 @@ class SystemOneRequest(ContractModel):
 
     state: JsonContent
     model: Annotated[str, Field(min_length=1)]
-    questions: Annotated[dict[str, Question], Field(min_length=1)]
+    questions: Annotated[
+        dict[str, Question], Field(min_length=1, max_length=MAX_SINGLE_QUESTIONS)
+    ]
+
+    @field_validator("state")
+    @classmethod
+    def state_text_must_be_nonblank(cls, value: JsonContent):
+        return _nonblank_text(value, field="state")
 
     @field_validator("model")
     @classmethod
@@ -117,6 +160,11 @@ class BatchState(ContractModel):
 
     id: Annotated[str, Field(min_length=1, max_length=128)]
     state: JsonContent
+
+    @field_validator("state")
+    @classmethod
+    def state_text_must_be_nonblank(cls, value: JsonContent):
+        return _nonblank_text(value, field="state")
 
     @field_validator("id")
     @classmethod
@@ -289,9 +337,7 @@ def _require_confidence(
 ) -> None:
     values = tuple(probabilities.values())
     expected = (
-        choice_confidence(values)
-        if kind == "choice"
-        else score_confidence(values)
+        choice_confidence(values) if kind == "choice" else score_confidence(values)
     )
     if not math.isclose(
         confidence,

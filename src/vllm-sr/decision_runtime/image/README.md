@@ -45,6 +45,12 @@ and backend for review. The build checks the packaged model catalog and profiles
 both `drun` Python paths, exact Transformers versions, and the shared Torch
 identity. It does not download a model.
 
+The wheel-builder stages the canonical built-in catalog from
+`config/recipes/built-in` before creating the wheel. Build release candidates
+from a fresh clean checkout and verify the wheel's catalog resources and image
+smoke; `source-state=clean` alone does not attest ignored developer-side
+`cli/model_assets` files.
+
 The CLI accepts only an image reference of the form
 `registry/repository@sha256:<manifest-digest>`. A local `docker build` image ID
 is not a registry manifest digest. Publish a validated candidate through the

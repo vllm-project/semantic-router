@@ -15,6 +15,12 @@ from decision_runtime.api import create_app  # noqa: E402
 from decision_runtime.backend import ModelDescriptor  # noqa: E402
 from decision_runtime.engine import DecisionEngine  # noqa: E402
 from decision_runtime.fake_backend import FakeDecisionBackend  # noqa: E402
+from decision_runtime.model_inputs import (  # noqa: E402
+    QWEN_DEFAULT_NO,
+    QWEN_DEFAULT_YES,
+    build_model_input,
+    qwen_segments,
+)
 from decision_runtime.request_limits import (  # noqa: E402
     BATCH_MAX_REQUEST_BYTES,
     MAX_EXPANDED_INPUT_BYTES,
@@ -280,6 +286,73 @@ def test_expanded_size_accounts_for_state_question_cartesian_product():
     batch_size = expanded_input_bytes(SystemOneBatchRequest.model_validate(batch))
     assert batch_size > single_size
     assert batch_size < MAX_EXPANDED_INPUT_BYTES
+
+
+def test_many_choice_candidates_cannot_bypass_expanded_prompt_limit():
+    from decision_runtime.contracts import SystemOneBatchRequest  # noqa: PLC0415
+
+    question = {
+        "type": "choice",
+        "instructions": "Choose the matching option.",
+        "criteria": {f"o{index:03d}": "x" * 40 for index in range(255)},
+    }
+    payload = {
+        "model": MODEL.name,
+        "states": [
+            {"id": f"state-{index}", "state": "A short state."} for index in range(32)
+        ],
+        "questions": {f"q{index}": question for index in range(32)},
+    }
+    assert len(json.dumps(payload).encode()) < BATCH_MAX_REQUEST_BYTES
+    request = SystemOneBatchRequest.model_validate(payload)
+    one_rendering = qwen_segments(
+        build_model_input(
+            question_id="q0",
+            state="A short state.",
+            question=request.questions["q0"],
+            choice_null_description="render_key",
+            noul_default_false=QWEN_DEFAULT_NO,
+            noul_default_true=QWEN_DEFAULT_YES,
+            noul_explicit_null="use_default",
+        )
+    ).rendered
+    actual_bytes = len(one_rendering.encode()) * 1024
+    assert actual_bytes > MAX_EXPANDED_INPUT_BYTES
+    assert expanded_input_bytes(request) >= actual_bytes
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=_app())
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            response = await client.post("/v1/decision/batches", json=payload)
+            assert response.status_code == 413
+
+    asyncio.run(scenario())
+
+
+def test_invalid_empty_state_and_too_many_single_questions_are_not_retryable():
+    async def scenario():
+        transport = httpx.ASGITransport(app=_app())
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://test"
+        ) as client:
+            empty = await client.post("/v1/systemone", json=_payload(state=""))
+            assert empty.status_code == 422
+
+            body = _payload()
+            body["questions"] = {
+                f"q{index}": {
+                    "type": "noul",
+                    "instructions": "Is this relevant?",
+                }
+                for index in range(1025)
+            }
+            assert len(json.dumps(body).encode()) < SINGLE_MAX_REQUEST_BYTES
+            too_many = await client.post("/v1/systemone", json=body)
+            assert too_many.status_code == 422
+
+    asyncio.run(scenario())
 
 
 def test_expanded_limit_rejects_small_raw_batch_with_large_logical_product(monkeypatch):
