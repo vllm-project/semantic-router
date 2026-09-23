@@ -508,6 +508,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'api/cli',
+        'api/decision-runtime',
         'api/router',
         'api/configuration-schema',
         'api/apiserver',
