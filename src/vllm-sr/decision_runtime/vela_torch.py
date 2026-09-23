@@ -239,13 +239,22 @@ class VelaTorchRuntime:
         try:
             with self.torch.inference_mode():
                 logits = self.model(batch)
+                valid_logits = []
                 probabilities = []
                 for row, values in zip(rows, logits, strict=True):
                     values = values[: len(row.marker_positions)]
-                    if not bool(self.torch.isfinite(values).all()):
-                        raise VelaRuntimeError("non-finite Vela candidate logits")
+                    valid_logits.append(values)
                     probabilities.append(values.softmax(-1))
-                host = self.torch.cat(probabilities).tolist()
+                # Transfer raw valid logits and probabilities together. Checking
+                # each row's GPU tensor as a Python bool would synchronize once
+                # per row; the combined transfer synchronizes once per batch.
+                host = self.torch.cat(valid_logits + probabilities).tolist()
+                candidate_count = sum(len(row.marker_positions) for row in rows)
+                if len(host) != 2 * candidate_count:
+                    raise VelaRuntimeError("invalid Vela probability vector")
+                if any(not math.isfinite(value) for value in host[:candidate_count]):
+                    raise VelaRuntimeError("non-finite Vela candidate logits")
+                host = host[candidate_count:]
         except VelaRuntimeError:
             raise
         except Exception as error:

@@ -598,6 +598,7 @@ vllm-sr-decision-runtime-test: harness-venv-install
 		src/vllm-sr/tests/test_decision_runtime_api.py \
 		src/vllm-sr/tests/test_decision_runtime_profiles.py \
 		src/vllm-sr/tests/test_decision_runtime_artifacts.py \
+		src/vllm-sr/tests/test_decision_runtime_torch_batch_sync.py \
 		src/vllm-sr/tests/test_decision_physical_batching.py \
 		src/vllm-sr/tests/test_decision_request_limits.py \
 		src/vllm-sr/tests/test_decision_release_artifacts.py \

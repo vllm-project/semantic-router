@@ -282,14 +282,22 @@ class Qwen35TorchRuntime:
                 )
                 with autocast:
                     logits = self.model(**batch)
+                valid_logits = []
                 probabilities = []
                 for row, values in zip(rows, logits, strict=True):
                     candidate_count = len(row.candidate_positions)
                     values = values[:candidate_count].float()
-                    if not bool(self.torch.isfinite(values).all()):
-                        raise Qwen35RuntimeError("non-finite Qwen candidate logits")
+                    valid_logits.append(values)
                     probabilities.append((values / self.temperature).softmax(-1))
-                host = self.torch.cat(probabilities).tolist()
+                # The padded logits may be -inf; transfer only real candidates
+                # alongside probabilities and validate them after one batch sync.
+                host = self.torch.cat(valid_logits + probabilities).tolist()
+                candidate_count = sum(len(row.candidate_positions) for row in rows)
+                if len(host) != 2 * candidate_count:
+                    raise Qwen35RuntimeError("invalid Qwen probability vector")
+                if any(not math.isfinite(value) for value in host[:candidate_count]):
+                    raise Qwen35RuntimeError("non-finite Qwen candidate logits")
+                host = host[candidate_count:]
         except Qwen35RuntimeError:
             raise
         except Exception as error:
