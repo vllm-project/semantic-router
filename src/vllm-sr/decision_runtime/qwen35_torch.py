@@ -287,22 +287,24 @@ class Qwen35TorchRuntime:
                 )
                 with autocast:
                     logits = self.model(**batch)
-                valid_logits = []
-                probabilities = []
-                for row, values in zip(rows, logits, strict=True):
-                    candidate_count = len(row.candidate_positions)
-                    valid_values = values[:candidate_count].float()
-                    valid_logits.append(valid_values)
-                    probabilities.append((valid_values / self.temperature).softmax(-1))
-                # The padded logits may be -inf; transfer only real candidates
-                # alongside probabilities and validate them after one batch sync.
-                host = self.torch.cat(valid_logits + probabilities).tolist()
-                candidate_count = sum(len(row.candidate_positions) for row in rows)
-                if len(host) != 2 * candidate_count:
+                # Keep padded candidates out of the shared softmax even if a
+                # model implementation returns finite values in those slots.
+                valid_logits = logits.float().masked_fill(
+                    ~batch["candidate_mask"], -float("inf")
+                )
+                probabilities = (valid_logits / self.temperature).softmax(-1)
+                # Transfer logits and probabilities together for one batch sync.
+                host = self.torch.cat((valid_logits, probabilities)).tolist()
+                batch_size = len(rows)
+                if len(host) != 2 * batch_size:
                     raise Qwen35RuntimeError("invalid Qwen probability vector")
-                if any(not math.isfinite(value) for value in host[:candidate_count]):
-                    raise Qwen35RuntimeError("non-finite Qwen candidate logits")
-                host = host[candidate_count:]
+                for row, values in zip(rows, host[:batch_size], strict=True):
+                    count = len(row.candidate_positions)
+                    if len(values) < count or any(
+                        not math.isfinite(value) for value in values[:count]
+                    ):
+                        raise Qwen35RuntimeError("non-finite Qwen candidate logits")
+                host = host[batch_size:]
         except Qwen35RuntimeError:
             raise
         except Exception as error:
@@ -311,11 +313,9 @@ class Qwen35TorchRuntime:
             ) from error
 
         output = []
-        offset = 0
-        for row in rows:
+        for row, probabilities in zip(rows, host, strict=True):
             count = len(row.candidate_positions)
-            values = tuple(float(value) for value in host[offset : offset + count])
-            offset += count
+            values = tuple(float(value) for value in probabilities[:count])
             if (
                 len(values) != count
                 or any(not math.isfinite(value) or value < 0.0 for value in values)

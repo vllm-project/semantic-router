@@ -50,12 +50,75 @@ class FakeTensor:
         return list(self.values)
 
 
+class FakeMask:
+    def __init__(self, values):
+        self.values = [list(row) for row in values]
+
+    def __invert__(self):
+        return FakeMask(([not value for value in row] for row in self.values))
+
+
+class FakeMatrix:
+    def __init__(self, values, torch):
+        self.values = [list(row) for row in values]
+        self.torch = torch
+
+    def float(self):
+        return self
+
+    def masked_fill(self, mask, value):
+        self.torch.masked_fill_calls += 1
+        return FakeMatrix(
+            (
+                [
+                    value if hidden else item
+                    for item, hidden in zip(row, flags, strict=True)
+                ]
+                for row, flags in zip(self.values, mask.values, strict=True)
+            ),
+            self.torch,
+        )
+
+    def __truediv__(self, denominator):
+        return FakeMatrix(
+            ([value / denominator for value in row] for row in self.values),
+            self.torch,
+        )
+
+    def softmax(self, dimension):
+        assert dimension == -1
+        self.torch.softmax_calls += 1
+        output = []
+        for row in self.values:
+            if any(not math.isfinite(value) and value != -math.inf for value in row):
+                output.append([math.nan] * len(row))
+                continue
+            finite = [value for value in row if math.isfinite(value)]
+            if not finite:
+                output.append([math.nan] * len(row))
+                continue
+            maximum = max(finite)
+            weights = [
+                math.exp(value - maximum) if value != -math.inf else 0.0
+                for value in row
+            ]
+            total = sum(weights)
+            output.append([weight / total for weight in weights])
+        return FakeMatrix(output, self.torch)
+
+    def tolist(self):
+        self.torch.host_transfers += 1
+        return [list(row) for row in self.values]
+
+
 class FakeTorch:
     bfloat16 = "bfloat16"
 
     def __init__(self):
         self.host_transfers = 0
         self.cat_calls = 0
+        self.masked_fill_calls = 0
+        self.softmax_calls = 0
 
     def inference_mode(self):
         return nullcontext()
@@ -66,17 +129,24 @@ class FakeTorch:
 
     def cat(self, tensors):
         self.cat_calls += 1
+        tensors = tuple(tensors)
+        if isinstance(tensors[0], FakeMatrix):
+            return FakeMatrix(
+                (row for tensor in tensors for row in tensor.values), self
+            )
         return FakeTensor(
             (value for tensor in tensors for value in tensor.values), self
         )
 
 
-def _runtime(family, monkeypatch, logits, *, temperature=1.0):
+def _runtime(family, monkeypatch, logits, *, temperature=1.0, qwen_rows=None):
     torch = FakeTorch()
 
     class FakeModel:
         def __call__(self, *args, **kwargs):
-            return tuple(FakeTensor(values, torch) for values in logits)
+            if family == "vela":
+                return tuple(FakeTensor(values, torch) for values in logits)
+            return FakeMatrix(logits, torch)
 
     if family == "vela":
         monkeypatch.setattr(vela_torch, "_collate", lambda *args, **kwargs: {})
@@ -96,7 +166,21 @@ def _runtime(family, monkeypatch, logits, *, temperature=1.0):
         )
         error_type = vela_torch.VelaRuntimeError
     else:
-        monkeypatch.setattr(qwen35_torch, "_collate", lambda *args, **kwargs: {})
+        monkeypatch.setattr(
+            qwen35_torch,
+            "_collate",
+            lambda _, items, *args, **kwargs: {
+                "candidate_mask": FakeMask(
+                    (
+                        [
+                            index < len(row.candidate_positions)
+                            for index in range(len(logits[0]))
+                        ]
+                        for row in items
+                    )
+                )
+            },
+        )
         runtime = qwen35_torch.Qwen35TorchRuntime(
             model=FakeModel(),
             tokenizer=None,
@@ -107,7 +191,7 @@ def _runtime(family, monkeypatch, logits, *, temperature=1.0):
             backend="rocm",
             rocm_profile_binding=None,
         )
-        rows = (
+        rows = qwen_rows or (
             EncodedQwenRow("first", "choice", (1, 2), (0, 1), 1, "0" * 64),
             EncodedQwenRow("second", "choice", (3, 4, 5), (0, 1, 2), 2, "1" * 64),
         )
@@ -144,6 +228,104 @@ def test_predict_encoded_transfers_once_and_preserves_row_order(
     )
     assert torch.host_transfers == 1
     assert torch.cat_calls == 1
+    if family == "qwen":
+        assert torch.masked_fill_calls == 1
+        assert torch.softmax_calls == 1
+
+
+@pytest.mark.parametrize("temperature", (0.7, 1.3))
+def test_qwen_batched_softmax_matches_rowwise_reference_with_mixed_candidates(
+    temperature: float, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rows = (
+        EncodedQwenRow("first", "choice", (1, 2, 3), (0, 1), 2, "0" * 64),
+        EncodedQwenRow("second", "choice", (4, 5, 6, 7), (0, 1, 2), 3, "1" * 64),
+        EncodedQwenRow(
+            "third", "choice", (8, 9, 10, 11, 12), (0, 1, 2, 3), 4, "2" * 64
+        ),
+    )
+    logits = (
+        (1.0, 1.000001, math.nan, 100.0),
+        (3.0, 2.999999, 3.000002, 100.0),
+        (0.4, 0.400002, 0.399998, 0.400001),
+    )
+    runtime, _, torch, _ = _runtime(
+        "qwen", monkeypatch, logits, temperature=temperature, qwen_rows=rows
+    )
+
+    predictions = runtime.predict_encoded(rows)
+
+    for row, raw, prediction in zip(rows, logits, predictions, strict=True):
+        # This is the old rowwise computation over real candidates only.
+        selected = raw[: len(row.candidate_positions)]
+        scaled = [value / temperature for value in selected]
+        peak = max(scaled)
+        weights = [math.exp(value - peak) for value in scaled]
+        reference = [weight / sum(weights) for weight in weights]
+        assert prediction.probabilities == pytest.approx(reference, abs=1e-12)
+        assert max(
+            range(len(prediction.probabilities)),
+            key=prediction.probabilities.__getitem__,
+        ) == max(range(len(reference)), key=reference.__getitem__)
+    assert [prediction.question_id for prediction in predictions] == [
+        "first",
+        "second",
+        "third",
+    ]
+    assert torch.masked_fill_calls == 1
+    assert torch.softmax_calls == 1
+    assert torch.host_transfers == 1
+    assert torch.cat_calls == 1
+
+
+def test_qwen_cpu_torch_matches_rowwise_softmax_with_padded_logits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    torch = pytest.importorskip("torch")
+    rows = (
+        EncodedQwenRow("first", "choice", (1, 2, 3), (0, 1), 2, "0" * 64),
+        EncodedQwenRow("second", "choice", (4, 5, 6, 7), (0, 1, 2), 3, "1" * 64),
+        EncodedQwenRow(
+            "third", "choice", (8, 9, 10, 11, 12), (0, 1, 2, 3), 4, "2" * 64
+        ),
+    )
+    logits = torch.tensor(
+        [
+            [1.0, 1.000001, math.nan, 100.0],
+            [3.0, 2.999999, 3.000002, 100.0],
+            [0.4, 0.400002, 0.399998, 0.400001],
+        ],
+        dtype=torch.float32,
+    )
+    mask = torch.tensor(
+        [[True, True, False, False], [True, True, True, False], [True] * 4]
+    )
+    monkeypatch.setattr(
+        qwen35_torch,
+        "_collate",
+        lambda *args, **kwargs: {"candidate_mask": mask},
+    )
+    temperature = 1.3
+    runtime = qwen35_torch.Qwen35TorchRuntime(
+        model=lambda **kwargs: logits,
+        tokenizer=None,
+        torch=torch,
+        device=torch.device("cpu"),
+        temperature=temperature,
+        max_length=1024,
+        backend="cpu",
+        rocm_profile_binding=None,
+    )
+
+    predictions = runtime.predict_encoded(rows)
+
+    for index, (row, prediction) in enumerate(zip(rows, predictions, strict=True)):
+        count = len(row.candidate_positions)
+        reference = (logits[index, :count].float() / temperature).softmax(-1).tolist()
+        assert prediction.probabilities == pytest.approx(reference, abs=1e-7)
+        assert max(range(count), key=prediction.probabilities.__getitem__) == max(
+            range(count), key=reference.__getitem__
+        )
 
 
 @pytest.mark.parametrize("family", ("vela", "qwen"))
