@@ -178,6 +178,13 @@ def drun() -> None:
     is_flag=True,
     help="Leave the managed runtime running after readiness succeeds.",
 )
+@click.option(
+    "--restart-policy",
+    type=click.Choice(("no", "unless-stopped"), case_sensitive=False),
+    default="no",
+    show_default=True,
+    help="Docker restart policy; unless-stopped requires --detach.",
+)
 def run(
     model: str,
     revision: str | None,
@@ -196,6 +203,7 @@ def run(
     runtime: str | None,
     startup_timeout: int,
     detach: bool,
+    restart_policy: str,
 ) -> None:
     """Launch one exact MODEL as a standalone SystemOne service."""
 
@@ -217,6 +225,7 @@ def run(
         runtime=runtime.lower() if runtime is not None else None,
         startup_timeout=startup_timeout,
         detach=detach,
+        restart_policy=restart_policy.lower(),
     )
     try:
         resolver = default_catalog_resolver()
@@ -308,6 +317,7 @@ def _show_ready_receipt(receipt: DecisionLaunchReceipt) -> None:
     click.echo(f"  Backend: {receipt.backend} ({receipt.dtype})")
     click.echo(f"  Artifact: {receipt.artifact_digest}")
     click.echo(f"  Mode: {'detached' if receipt.detached else 'foreground'}")
+    click.echo(f"  Restart policy: {receipt.restart_policy}")
 
 
 def _show_managed_status(managed_status: DecisionManagedStatus) -> None:
@@ -317,6 +327,7 @@ def _show_managed_status(managed_status: DecisionManagedStatus) -> None:
         f"{record.instance_name}\tregistry={record.state}\t"
         f"runtime={managed_status.runtime_state}\t"
         f"readiness={managed_status.readiness_state}\townership={ownership}\t"
+        f"restart={managed_status.restart_policy}\t"
         f"{record.model}\t{record.endpoint}"
     )
     _show_registry_durability(managed_status.registry_durable)

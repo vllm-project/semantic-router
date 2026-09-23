@@ -109,6 +109,7 @@ class FakeDriver:
         return DecisionContainerObservation(
             identity=launch.identity(container_id=CONTAINER_ID),
             state="running",
+            restart_policy=launch.restart_policy,
         )
 
     def inspect(
@@ -179,6 +180,7 @@ def _inspect_completed_process(
     labels: dict[str, str] | None = None,
     image: str | None = None,
     container_id: str | None = None,
+    restart_policy: str = "no",
 ) -> subprocess.CompletedProcess[str]:
     effective_labels = labels or {
         "ai.vllm-sr.drun.managed": "true",
@@ -191,6 +193,7 @@ def _inspect_completed_process(
             "Id": container_id or identity.container_id or CONTAINER_ID,
             "Name": f"/{identity.container_name}",
             "State": {"Status": state},
+            "HostConfig": {"RestartPolicy": {"Name": restart_policy}},
             "Config": {
                 "Labels": effective_labels,
                 "Image": image or identity.image,
@@ -575,6 +578,170 @@ def test_drun_cli_runs_fixture_lifecycle_end_to_end(monkeypatch, tmp_path: Path)
     assert records[0].artifact_digest == ARTIFACT_DIGEST
     assert records[0].container_id == CONTAINER_ID
     assert records[0].image == IMAGE
+
+
+def test_drun_cli_opt_in_restart_policy_is_detached_and_docker_only(
+    monkeypatch, tmp_path: Path
+):
+    driver = FakeDriver()
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", FixtureResolver)
+    monkeypatch.setattr(lifecycle, "LowLevelDecisionContainerDriver", lambda: driver)
+    monkeypatch.setattr(
+        lifecycle,
+        "select_container_runtime",
+        lambda requested: requested or "docker",
+    )
+
+    result = CliRunner().invoke(
+        drun_command.drun,
+        [
+            "run",
+            MODEL,
+            "--instance-name",
+            "durable-fixture",
+            "--runtime",
+            "docker",
+            "--detach",
+            "--restart-policy",
+            "unless-stopped",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Mode: detached" in result.output
+    assert "Restart policy: unless-stopped" in result.output
+    launch = next(event[1] for event in driver.events if event[0] == "start")
+    assert launch.restart_policy == "unless-stopped"
+    assert DecisionInstanceRegistry().get("durable-fixture").state == "running"
+
+
+@pytest.mark.parametrize(
+    ("options", "runtime", "message"),
+    (
+        (
+            DrunOptions(model=MODEL, restart_policy="unless-stopped"),
+            "docker",
+            "requires --detach",
+        ),
+        (
+            DrunOptions(model=MODEL, detach=True, restart_policy="unless-stopped"),
+            "podman",
+            "requires the Docker container runtime",
+        ),
+    ),
+)
+def test_durable_restart_policy_rejects_foreground_and_podman_before_reservation(
+    options: DrunOptions, runtime: str, message: str, tmp_path: Path
+):
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = FakeDriver()
+
+    with pytest.raises(lifecycle.DecisionLifecycleError, match=message):
+        run_decision_runtime(
+            options,
+            resolver=FixtureResolver(),
+            registry=registry,
+            driver=driver,
+            runtime_selector=lambda _requested: runtime,
+        )
+
+    assert driver.events == []
+    assert not registry.path.exists()
+
+
+def test_durable_restart_policy_must_be_observed_before_ready(tmp_path: Path):
+    class IgnoredRestartDriver(FakeDriver):
+        def start(
+            self, launch: DecisionContainerLaunch
+        ) -> DecisionContainerObservation:
+            self.events.append(("start", launch))
+            return DecisionContainerObservation(
+                identity=launch.identity(container_id=CONTAINER_ID),
+                state="running",
+                restart_policy="no",
+            )
+
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    driver = IgnoredRestartDriver()
+
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="did not apply"):
+        run_decision_runtime(
+            DrunOptions(
+                model=MODEL,
+                instance_name="ignored-restart",
+                detach=True,
+                restart_policy="unless-stopped",
+            ),
+            resolver=FixtureResolver(),
+            registry=registry,
+            driver=driver,
+            runtime_selector=lambda _requested: "docker",
+        )
+
+    assert [event[0] for event in driver.events] == ["ensure", "start", "stop"]
+    assert registry.records() == ()
+
+
+def test_durable_instance_remains_owned_and_status_ready_after_process_restart(
+    monkeypatch, tmp_path: Path
+):
+    class ReconnectedDriver(FakeDriver):
+        def __init__(self) -> None:
+            super().__init__()
+            self.state = "restarting"
+
+        def inspect(self, identity: DecisionContainerIdentity):
+            self.events.append(("inspect", identity))
+            return DecisionContainerObservation(
+                identity=identity,
+                state=self.state,
+                restart_policy="unless-stopped",
+            )
+
+    registry = DecisionInstanceRegistry(tmp_path / "instances.json")
+    run_decision_runtime(
+        DrunOptions(
+            model=MODEL,
+            instance_name="recovered",
+            detach=True,
+            restart_policy="unless-stopped",
+        ),
+        resolver=FixtureResolver(),
+        registry=registry,
+        driver=FakeDriver(),
+        runtime_selector=lambda _requested: "docker",
+    )
+    reconnected = ReconnectedDriver()
+    restarting = status_decision_instance(
+        "recovered", registry=registry, driver=reconnected
+    )
+    assert restarting.record.state == "running"
+    assert restarting.runtime_state == "restarting"
+    assert restarting.readiness_state == "not-ready"
+    assert restarting.ownership_verified is True
+    assert restarting.restart_policy == "unless-stopped"
+    assert registry.get("recovered").state == "running"
+
+    reconnected.state = "running"
+    status = status_decision_instance(
+        "recovered", registry=registry, driver=reconnected
+    )
+
+    assert status.record.state == "running"
+    assert status.runtime_state == "running"
+    assert status.readiness_state == "ready"
+    assert status.ownership_verified is True
+    assert status.restart_policy == "unless-stopped"
+    monkeypatch.setattr(drun_command, "status_decision_instance", lambda _name: status)
+    output = CliRunner().invoke(drun_command.drun, ["status", "recovered"])
+    assert output.exit_code == 0, output.output
+    assert "ownership=verified\trestart=unless-stopped" in output.output
+
+    stopped = stop_decision_instance("recovered", registry=registry, driver=reconnected)
+    assert stopped.action == "stopped"
+    assert registry.records() == ()
+    assert any(event[0] == "stop" for event in reconnected.events)
 
 
 def test_foreground_launch_follows_logs_then_cleans_registry(tmp_path: Path):
@@ -1481,6 +1648,40 @@ def test_container_command_is_stable_and_contains_no_registry_secrets(monkeypatc
         "-m",
         "decision_runtime.service",
     ]
+
+
+def test_durable_docker_command_sets_only_opted_in_restart_policy():
+    default_command = build_decision_container_command(_launch())
+    durable_command = build_decision_container_command(
+        replace(_launch(), restart_policy="unless-stopped")
+    )
+
+    assert "--restart" not in default_command
+    assert durable_command[durable_command.index("--restart") + 1] == "unless-stopped"
+    assert durable_command.index("--restart") < durable_command.index(IMAGE)
+    with pytest.raises(DecisionContainerError, match="requires Docker"):
+        build_decision_container_command(
+            replace(_launch(), runtime="podman", restart_policy="unless-stopped")
+        )
+
+
+def test_inspection_reports_actual_restart_policy_without_changing_ownership(
+    monkeypatch,
+):
+    ownership = _launch().identity(container_id=CONTAINER_ID)
+    monkeypatch.setattr(
+        container_module.subprocess,
+        "run",
+        lambda _command, **_kwargs: _inspect_completed_process(
+            ownership, restart_policy="unless-stopped"
+        ),
+    )
+
+    observation = LowLevelDecisionContainerDriver().inspect(ownership)
+
+    assert observation is not None
+    assert observation.identity == ownership
+    assert observation.restart_policy == "unless-stopped"
 
 
 def test_default_rocm_launch_keeps_all_gpu_visibility_unset():

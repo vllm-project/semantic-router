@@ -1042,6 +1042,7 @@ Launch one exact MODEL as a standalone SystemOne service.
 | `--runtime CHOICE` | Docker-compatible container runtime. Choices: docker, podman. |
 | `--startup-timeout INTEGER RANGE` | Seconds allowed for model loading and readiness.  [default: 1800; x&gt;=1] |
 | `--detach` | Leave the managed runtime running after readiness succeeds. Default: false. |
+| `--restart-policy CHOICE` | Docker restart policy; unless-stopped requires --detach.  [default: no] Choices: no, unless-stopped. |
 | `--help` | Show this message and exit. Default: false. |
 
 ### `vllm-sr drun status` {#vllm-sr-drun-status}

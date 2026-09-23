@@ -94,6 +94,7 @@ class DrunOptions:
     runtime: str | None = None
     startup_timeout: int = HEALTH_CHECK_TIMEOUT
     detach: bool = False
+    restart_policy: str = "no"
 
 
 @dataclass(frozen=True)
@@ -108,6 +109,7 @@ class DecisionLaunchReceipt:
     dtype: str
     artifact_digest: str
     detached: bool
+    restart_policy: str
 
 
 def run_decision_runtime(
@@ -131,6 +133,10 @@ def run_decision_runtime(
     if is_local_docker_image_id(spec.image) and runtime != "docker":
         raise DecisionLifecycleError(
             "A local Docker image ID requires the Docker container runtime."
+        )
+    if options.restart_policy == "unless-stopped" and runtime != "docker":
+        raise DecisionLifecycleError(
+            "--restart-policy unless-stopped requires the Docker container runtime."
         )
     host = _normalize_host(options.host)
     instance_name = options.instance_name or _default_instance_name(
@@ -156,6 +162,7 @@ def run_decision_runtime(
         port=options.port,
         pull_policy=options.image_pull_policy,
         runtime_spec=spec,
+        restart_policy=options.restart_policy,
     )
     record = DecisionInstanceRecord(
         instance_id=instance_id,
@@ -198,6 +205,13 @@ def run_decision_runtime(
             # reconciliation; cleanup must never guess by reusable name.
             ownership_uncertain = True
             raise
+        if (
+            options.restart_policy == "unless-stopped"
+            and observation.restart_policy != "unless-stopped"
+        ):
+            raise DecisionLifecycleError(
+                "Docker did not apply the requested unless-stopped restart policy."
+            )
         identity_commit = instance_registry.transition(
             instance_name,
             instance_id,
@@ -236,6 +250,7 @@ def run_decision_runtime(
             dtype=spec.dtype,
             artifact_digest=spec.artifact_digest,
             detached=options.detach,
+            restart_policy=options.restart_policy,
         )
         if on_ready is not None:
             on_ready(receipt)
@@ -446,6 +461,14 @@ def _validate_options(options: DrunOptions) -> None:
     if options.image_pull_policy not in _VALID_PULL_POLICIES:
         raise DecisionLifecycleError(
             f"Unsupported image pull policy {options.image_pull_policy!r}."
+        )
+    if options.restart_policy not in {"no", "unless-stopped"}:
+        raise DecisionLifecycleError(
+            f"Unsupported restart policy {options.restart_policy!r}."
+        )
+    if options.restart_policy == "unless-stopped" and not options.detach:
+        raise DecisionLifecycleError(
+            "--restart-policy unless-stopped requires --detach."
         )
     if options.instance_name is not None:
         _validate_instance_name(options.instance_name)

@@ -36,6 +36,7 @@ class DecisionManagedStatus:
     readiness_state: str
     ownership_verified: bool
     registry_durable: bool = True
+    restart_policy: str = "unavailable"
 
 
 @dataclass(frozen=True)
@@ -322,6 +323,7 @@ def _reconcile_record(
         return DecisionManagedStatus(
             record=updated.record,
             runtime_state=observation.state,
+            restart_policy=observation.restart_policy,
             readiness_state=_readiness_state(
                 updated.record,
                 observation,
@@ -334,6 +336,7 @@ def _reconcile_record(
     return DecisionManagedStatus(
         record=updated,
         runtime_state=observation.state,
+        restart_policy=observation.restart_policy,
         readiness_state=_readiness_state(
             updated,
             observation,

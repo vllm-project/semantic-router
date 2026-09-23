@@ -19,6 +19,17 @@ vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
   --backend rocm --port 8001 --detach
 ```
 
+Detached launches default to Docker's `no` restart policy. For a long-running
+Docker deployment, add `--restart-policy unless-stopped` with `--detach` to
+restart the same owned container when the Docker daemon restarts. This option
+is not supported with foreground mode or Podman. The Docker service must start
+on the host, and the model cache and any mounted artifact paths must remain
+available after reboot. `vllm-sr drun status INSTANCE_NAME` reports the
+observed restart policy and current readiness; `vllm-sr drun stop INSTANCE_NAME`
+stops and removes the owned container so it will not restart. Manually stopping
+the container outside `drun` suppresses Docker's `unless-stopped` restart until
+it is started again.
+
 For isolated validation with an already-loaded Docker image, pass its full
 `sha256:` image ID with `--image` and set `--image-pull-policy never`. The ID
 must exist locally and is never pulled; abbreviated IDs and Podman are not

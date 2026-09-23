@@ -93,6 +93,7 @@ class DecisionContainerLaunch:
     port: int
     pull_policy: str
     runtime_spec: ResolvedDecisionRuntime
+    restart_policy: str = "no"
 
     def identity(self, *, container_id: str | None = None) -> DecisionContainerIdentity:
         """Return the immutable ownership contract encoded in container labels."""
@@ -125,6 +126,7 @@ class DecisionContainerObservation:
 
     identity: DecisionContainerIdentity
     state: str
+    restart_policy: str = "unavailable"
 
 
 @dataclass(frozen=True)
@@ -248,7 +250,7 @@ class LowLevelDecisionContainerDriver:
         inspected = _inspect_container(identity.runtime, reference)
         if inspected is None:
             return None
-        container_id, state, labels, image = inspected
+        container_id, state, labels, image, restart_policy = inspected
         if identity.container_id is not None and container_id != identity.container_id:
             raise DecisionContainerOwnershipError(
                 "Refusing to manage a container whose immutable ID changed."
@@ -279,6 +281,7 @@ class LowLevelDecisionContainerDriver:
                 container_id=container_id,
             ),
             state=state,
+            restart_policy=restart_policy,
         )
 
     def list_managed(self, runtime: str) -> tuple[DecisionContainerCandidate, ...]:
@@ -323,7 +326,14 @@ class LowLevelDecisionContainerDriver:
             snapshot = _inspect_container_snapshot(runtime, reference)
             if snapshot is None:
                 continue
-            container_id, state, labels, image, container_name = snapshot
+            (
+                container_id,
+                state,
+                labels,
+                image,
+                container_name,
+                _restart_policy,
+            ) = snapshot
             instance_name = labels.get(INSTANCE_LABEL)
             identity_digest = labels.get(IDENTITY_LABEL)
             labeled_image = labels.get(IMAGE_LABEL)
@@ -517,6 +527,12 @@ def build_decision_container_command(
     """Build one stable, inspectable container command from resolved inputs."""
 
     spec = launch.runtime_spec
+    if launch.restart_policy not in {"no", "unless-stopped"}:
+        raise DecisionContainerError("Decision runtime restart policy is invalid.")
+    if launch.restart_policy == "unless-stopped" and launch.runtime != "docker":
+        raise DecisionContainerError(
+            "Decision runtime unless-stopped restart policy requires Docker."
+        )
     local_image_id = _validated_launch_image(launch)
     validate_decision_environment(spec.environment)
     if ROCM_VISIBLE_DEVICES_ENV in spec.environment and spec.backend != "rocm":
@@ -530,6 +546,8 @@ def build_decision_container_command(
         launch.container_name,
         start_immediately=True,
     )
+    if launch.restart_policy == "unless-stopped":
+        command.extend(("--restart", "unless-stopped"))
     command.extend(["--label", f"{MANAGED_LABEL}=true"])
     command.extend(["--label", f"{INSTANCE_LABEL}={launch.instance_name}"])
     command.extend(["--label", f"{IDENTITY_LABEL}={launch.identity_digest}"])
@@ -740,17 +758,17 @@ class _RejectRedirects(urllib.request.HTTPRedirectHandler):
 
 def _inspect_container(
     runtime: str, reference: str
-) -> tuple[str, str, dict[str, str], str] | None:
+) -> tuple[str, str, dict[str, str], str, str] | None:
     snapshot = _inspect_container_snapshot(runtime, reference)
     if snapshot is None:
         return None
-    container_id, state, labels, image, _container_name = snapshot
-    return container_id, state, labels, image
+    container_id, state, labels, image, _container_name, restart_policy = snapshot
+    return container_id, state, labels, image, restart_policy
 
 
 def _inspect_container_snapshot(
     runtime: str, reference: str
-) -> tuple[str, str, dict[str, str], str, str] | None:
+) -> tuple[str, str, dict[str, str], str, str, str] | None:
     try:
         result = subprocess.run(
             [runtime, "inspect", reference],
@@ -796,6 +814,19 @@ def _inspect_container_snapshot(
     state = state_record.get("Status")
     labels = config.get("Labels")
     image = config.get("Image")
+    host_config = snapshot.get("HostConfig")
+    restart_record = (
+        host_config.get("RestartPolicy") if isinstance(host_config, dict) else None
+    )
+    restart_name = (
+        restart_record.get("Name") if isinstance(restart_record, dict) else None
+    )
+    restart_policy = (
+        restart_name
+        if isinstance(restart_name, str)
+        and restart_name in {"no", "unless-stopped", "always", "on-failure"}
+        else "unavailable"
+    )
     container_name = snapshot.get("Name")
     if isinstance(container_name, str):
         container_name = container_name.removeprefix("/")
@@ -825,7 +856,14 @@ def _inspect_container_snapshot(
         raise DecisionContainerError(
             "Decision runtime ownership inspection returned invalid fields."
         )
-    return container_id.lower(), state.lower(), labels, image, container_name
+    return (
+        container_id.lower(),
+        state.lower(),
+        labels,
+        image,
+        container_name,
+        restart_policy,
+    )
 
 
 def _run_destructive_container_command(
