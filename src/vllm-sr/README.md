@@ -39,6 +39,22 @@ can implement the same async backend protocol without importing their inference
 frameworks into CLI paths. Generic CPU execution is limited to contract tests;
 it is not a supported production target.
 
+Production model identity comes only from the packaged catalog: each canonical
+Hugging Face repository ID resolves to an immutable revision, which selects an
+internal revision-keyed runtime profile. The profile pins a repository artifact
+manifest and the exact data files consumed by vLLM-SR-owned runtime code.
+Artifacts are SHA-256 and size verified into a read-only, content-addressed
+local view; model-repository Python and `trust_remote_code` are never used.
+
+| Runtime family | ROCm `gfx942` | CUDA | Apple MLX |
+| --- | --- | --- | --- |
+| Vela (Kai, Lex) | Qualified | Evidence gated | Evidence gated |
+| Qwen3.5 (Eos, Sol, Nox, Lux) | Qualified | Evidence gated | Evidence gated |
+
+The initial physical microbatch is 8 for every profile. CUDA and MLX remain
+fail-closed until their owned backend implementations pass parity, correctness,
+and performance qualification; catalog presence alone does not enable them.
+
 The HTTP contract requires an explicit `model`, one string/object/array `state`,
 and at least one named question. Instructions are required and non-null. Choice
 questions accept 2–255 options and Score questions accept 2–10 levels. Successful

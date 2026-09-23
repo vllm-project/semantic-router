@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "family": "qwen3.5",
+  "artifact": {
+    "manifest": {
+      "path": "bundle-manifest.json",
+      "sha256": "985ade73c509399291d60b5f98e8bbbbe99c0ee0efe611a5f84604f71420e0fd",
+      "size_bytes": 5504
+    },
+    "files": [
+      "backbone/config.json",
+      "backbone/model-00001-of-00004.safetensors",
+      "backbone/model-00002-of-00004.safetensors",
+      "backbone/model-00003-of-00004.safetensors",
+      "backbone/model-00004-of-00004.safetensors",
+      "backbone/model.safetensors.index.json",
+      "chat_template.jinja",
+      "decision_config.json",
+      "decision_head.safetensors",
+      "runtime-profile/l2norm_fwd_kernel.json",
+      "runtime-profile/profile.json",
+      "runtime.json",
+      "temperature.json",
+      "tokenizer.json",
+      "tokenizer_config.json"
+    ]
+  },
+  "max_input_tokens": 16384,
+  "dtype": {
+    "backbone": "bfloat16",
+    "head": "float32"
+  },
+  "physical_batch_size": 8,
+  "calibration": {"temperature": 2.0054410339959294},
+  "prompt_policy": {"choice_null_description": "preserve_json_null"},
+  "backends": {
+    "rocm": {"qualified": true, "targets": ["gfx942"]},
+    "cuda": {"qualified": false, "targets": []},
+    "mlx": {"qualified": false, "targets": []}
+  }
+}
