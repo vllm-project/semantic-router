@@ -13,6 +13,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from decision_runtime.backend import (  # noqa: E402
     BackendBatchRequest,
+    BackendContractError,
+    BackendInputTooLargeError,
     BackendUnavailableError,
     ModelDescriptor,
 )
@@ -22,6 +24,7 @@ from decision_runtime.physical_batching import (  # noqa: E402
     DecisionRowResult,
     PhysicalBatchBackend,
     PhysicalBatchOverloadedError,
+    PreparedDecisionRow,
 )
 
 MODEL = ModelDescriptor(
@@ -48,22 +51,70 @@ def request(state: str, question_ids=("move",)) -> SystemOneRequest:
     )
 
 
+def mixed_request(state: str) -> SystemOneRequest:
+    return SystemOneRequest.model_validate(
+        {
+            "model": MODEL.name,
+            "state": state,
+            "questions": {
+                "allowed": {
+                    "type": "noul",
+                    "instructions": "Is this move allowed?",
+                },
+                "move": {
+                    "type": "choice",
+                    "instructions": "Choose a move.",
+                    "criteria": {"left": None, "right": None},
+                },
+                "quality": {
+                    "type": "score",
+                    "instructions": "Rate the move.",
+                    "criteria": ["poor", "good"],
+                },
+            },
+        }
+    )
+
+
 class RecordingExecutor:
-    def __init__(self, *, gate: asyncio.Event | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        gate: asyncio.Event | None = None,
+        batch_key=lambda row: "default",
+    ) -> None:
         self.gate = gate
+        self.batch_key = batch_key
+        self.prepare_calls: list[tuple[DecisionRow, ...]] = []
         self.calls: list[tuple[DecisionRow, ...]] = []
+        self.prepared_calls: list[tuple[PreparedDecisionRow, ...]] = []
 
     async def ready(self) -> bool:
         return True
 
-    async def predict_rows(
+    async def prepare_rows(
         self, rows: tuple[DecisionRow, ...]
+    ) -> tuple[PreparedDecisionRow, ...]:
+        self.prepare_calls.append(rows)
+        return tuple(
+            PreparedDecisionRow(
+                row=row,
+                batch_key=self.batch_key(row),
+                payload={"state": row.state},
+            )
+            for row in rows
+        )
+
+    async def predict_rows(
+        self, rows: tuple[PreparedDecisionRow, ...]
     ) -> tuple[DecisionRowResult, ...]:
-        self.calls.append(rows)
+        self.prepared_calls.append(rows)
+        raw_rows = tuple(item.row for item in rows)
+        self.calls.append(raw_rows)
         if self.gate is not None:
             await self.gate.wait()
         output = []
-        for row in rows:
+        for row in raw_rows:
             digest = hashlib.sha256(f"{row.state}|{row.question_id}".encode()).digest()
             left = 0.2 + (digest[0] / 2550)
             output.append(
@@ -133,6 +184,149 @@ def test_large_jobs_are_round_robin_and_never_exceed_physical_batch_size():
             "second",
             "first",
         ]
+
+    asyncio.run(scenario())
+
+
+def test_incompatible_batch_keys_are_partitioned_without_losing_fairness():
+    async def scenario():
+        executor = RecordingExecutor(batch_key=lambda row: row.question.type)
+        backend = PhysicalBatchBackend(
+            MODEL,
+            executor,
+            physical_batch_size=8,
+            coalesce_seconds=0.01,
+        )
+        try:
+            left, right = await asyncio.gather(
+                backend.infer(mixed_request("left")),
+                backend.infer(mixed_request("right")),
+            )
+        finally:
+            await backend.aclose()
+
+        assert len(left.predictions) == len(right.predictions) == 3
+        assert len(executor.prepared_calls) == 3
+        assert {
+            tuple(item.batch_key for item in call) for call in executor.prepared_calls
+        } == {("noul", "noul"), ("choice", "choice"), ("score", "score")}
+        assert all(
+            [item.row.state for item in call] == ["left", "right"]
+            for call in executor.prepared_calls
+        )
+
+    asyncio.run(scenario())
+
+
+def test_preparation_failure_is_atomic_and_does_not_poison_concurrent_request():
+    class SizeCheckingExecutor(RecordingExecutor):
+        async def prepare_rows(self, rows):
+            self.prepare_calls.append(rows)
+            if any(row.state == "too-large" for row in rows):
+                raise BackendInputTooLargeError("profile token limit exceeded")
+            return tuple(
+                PreparedDecisionRow(row=row, batch_key="valid", payload=None)
+                for row in rows
+            )
+
+    async def scenario():
+        executor = SizeCheckingExecutor()
+        backend = PhysicalBatchBackend(
+            MODEL,
+            executor,
+            physical_batch_size=8,
+            coalesce_seconds=0.01,
+        )
+        try:
+            failed, valid = await asyncio.gather(
+                backend.infer(request("too-large", ("a", "b"))),
+                backend.infer(request("valid", ("x", "y"))),
+                return_exceptions=True,
+            )
+        finally:
+            await backend.aclose()
+
+        assert isinstance(failed, BackendInputTooLargeError)
+        assert not isinstance(valid, BaseException)
+        assert [[row.state for row in call] for call in executor.calls] == [
+            ["valid", "valid"]
+        ]
+        assert backend._pending_rows == 0
+
+    asyncio.run(scenario())
+
+
+def test_invalid_preparation_result_fails_only_that_logical_request():
+    class BrokenPreparationExecutor(RecordingExecutor):
+        async def prepare_rows(self, rows):
+            if rows[0].state == "broken":
+                return ()
+            return await super().prepare_rows(rows)
+
+    async def scenario():
+        executor = BrokenPreparationExecutor()
+        backend = PhysicalBatchBackend(
+            MODEL,
+            executor,
+            physical_batch_size=8,
+            coalesce_seconds=0.01,
+        )
+        try:
+            broken, valid = await asyncio.gather(
+                backend.infer(request("broken")),
+                backend.infer(request("valid")),
+                return_exceptions=True,
+            )
+        finally:
+            await backend.aclose()
+
+        assert isinstance(broken, BackendContractError)
+        assert "prepared row count" in str(broken)
+        assert not isinstance(valid, BaseException)
+        assert [[row.state for row in call] for call in executor.calls] == [["valid"]]
+
+    asyncio.run(scenario())
+
+
+def test_batch_failure_is_isolated_to_jobs_in_that_compatible_forward():
+    class SelectiveFailureExecutor(RecordingExecutor):
+        def __init__(self):
+            super().__init__(batch_key=lambda row: str(row.state).split("-")[0])
+
+        async def predict_rows(self, rows):
+            assert len({row.batch_key for row in rows}) == 1
+            if rows[0].batch_key == "bad":
+                self.prepared_calls.append(rows)
+                self.calls.append(tuple(item.row for item in rows))
+                raise RuntimeError("bad physical batch")
+            return await super().predict_rows(rows)
+
+    async def scenario():
+        executor = SelectiveFailureExecutor()
+        backend = PhysicalBatchBackend(
+            MODEL,
+            executor,
+            physical_batch_size=8,
+            coalesce_seconds=0.01,
+        )
+        try:
+            bad_one, bad_two, good_one, good_two = await asyncio.gather(
+                backend.infer(request("bad-one")),
+                backend.infer(request("bad-two")),
+                backend.infer(request("good-one")),
+                backend.infer(request("good-two")),
+                return_exceptions=True,
+            )
+        finally:
+            await backend.aclose()
+
+        assert isinstance(bad_one, RuntimeError)
+        assert isinstance(bad_two, RuntimeError)
+        assert not isinstance(good_one, BaseException)
+        assert not isinstance(good_two, BaseException)
+        assert [
+            {item.batch_key for item in call} for call in executor.prepared_calls
+        ] == [{"bad"}, {"good"}]
 
     asyncio.run(scenario())
 
@@ -229,6 +423,61 @@ def test_cancelled_job_releases_pending_capacity():
         await active
         await replacement
         await backend.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_cancellation_during_preparation_never_admits_partial_work():
+    class BlockingPreparationExecutor(RecordingExecutor):
+        def __init__(self):
+            super().__init__()
+            self.entered = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def prepare_rows(self, rows):
+            self.entered.set()
+            await self.release.wait()
+            return await super().prepare_rows(rows)
+
+    async def scenario():
+        executor = BlockingPreparationExecutor()
+        backend = PhysicalBatchBackend(MODEL, executor)
+        caller = asyncio.create_task(backend.infer(request("cancelled", ("a", "b"))))
+        await executor.entered.wait()
+        caller.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await caller
+        assert backend._pending_rows == 0
+        assert backend._worker is None
+        assert executor.calls == []
+        await backend.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_shutdown_during_preparation_rejects_post_prepare_admission():
+    class BlockingPreparationExecutor(RecordingExecutor):
+        def __init__(self):
+            super().__init__()
+            self.entered = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def prepare_rows(self, rows):
+            self.entered.set()
+            await self.release.wait()
+            return await super().prepare_rows(rows)
+
+    async def scenario():
+        executor = BlockingPreparationExecutor()
+        backend = PhysicalBatchBackend(MODEL, executor)
+        caller = asyncio.create_task(backend.infer(request("closing")))
+        await executor.entered.wait()
+        await backend.aclose()
+        executor.release.set()
+        with pytest.raises(BackendUnavailableError, match="backend is closed"):
+            await caller
+        assert backend._pending_rows == 0
+        assert executor.calls == []
 
     asyncio.run(scenario())
 

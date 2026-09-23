@@ -93,5 +93,9 @@ class BackendOverloadedError(RuntimeError):
     """The backend's bounded physical work queue cannot admit a request."""
 
 
+class BackendInputTooLargeError(RuntimeError):
+    """A complete model input exceeds the backend's token limit."""
+
+
 class BackendContractError(RuntimeError):
     """The backend returned malformed or mismatched predictions."""

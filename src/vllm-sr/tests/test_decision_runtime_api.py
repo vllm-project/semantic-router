@@ -13,6 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from decision_runtime.api import create_app  # noqa: E402
 from decision_runtime.backend import (  # noqa: E402
+    BackendInputTooLargeError,
     BackendOverloadedError,
     BackendPrediction,
     BackendResult,
@@ -24,6 +25,7 @@ from decision_runtime.fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.physical_batching import (  # noqa: E402
     DecisionRowResult,
     PhysicalBatchBackend,
+    PreparedDecisionRow,
 )
 from decision_runtime.scheduler import ModelScheduler  # noqa: E402
 
@@ -112,16 +114,22 @@ def test_create_app_default_admission_allows_http_physical_coalescing():
         async def ready(self):
             return True
 
+        async def prepare_rows(self, rows):
+            return tuple(
+                PreparedDecisionRow(row=row, batch_key="test", payload=None)
+                for row in rows
+            )
+
         async def predict_rows(self, rows):
             self.calls.append(rows)
             return tuple(
                 DecisionRowResult(
-                    question_id=row.question_id,
-                    type=row.question.type,
+                    question_id=item.row.question_id,
+                    type=item.row.question.type,
                     probabilities=(0.25, 0.75),
-                    input_tokens=len(str(row.state)),
+                    input_tokens=len(str(item.row.state)),
                 )
-                for row in rows
+                for item in rows
             )
 
     async def scenario():
@@ -158,7 +166,7 @@ def test_create_app_default_admission_allows_http_physical_coalescing():
         assert [response.status_code for response in responses] == [200, 200]
         assert len(executor.calls) == 1
         assert len(executor.calls[0]) == 6
-        assert {row.state for row in executor.calls[0]} == {"first", "second"}
+        assert {item.row.state for item in executor.calls[0]} == {"first", "second"}
 
     asyncio.run(scenario())
 
@@ -394,6 +402,33 @@ def test_physical_backend_overload_maps_to_official_529_with_retry_after():
             assert response.headers["retry-after"] == "1"
             metrics = (await client.get("/metrics")).text
             assert 'model="decision-test",outcome="overloaded"' in metrics
+
+    asyncio.run(scenario())
+
+
+def test_backend_token_limit_maps_to_413_for_single_and_batch_requests():
+    class InputTooLargeBackend(FakeDecisionBackend):
+        async def infer(self, request):
+            raise BackendInputTooLargeError(request.model)
+
+        async def infer_batch(self, requests):
+            raise BackendInputTooLargeError(requests[0].request.model)
+
+    async def scenario():
+        async with _client(app_for(InputTooLargeBackend([MODEL]))) as client:
+            for route, body in (
+                ("/v1/systemone", payload()),
+                ("/v1/systemone/batch", batch_payload()),
+            ):
+                response = await client.post(route, json=body)
+                assert response.status_code == 413
+                assert response.json() == {
+                    "detail": "Decision input exceeds the model token limit"
+                }
+                assert "retry-after" not in response.headers
+
+            metrics = (await client.get("/metrics")).text
+            assert 'model="decision-test",outcome="input_too_large"' in metrics
 
     asyncio.run(scenario())
 

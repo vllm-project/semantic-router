@@ -75,9 +75,14 @@ The runtime bounds a single request body at 256 KiB, a batch body at 2 MiB, and
 the logical state/question expansion at 16 MiB before inference. Its
 `PhysicalBatchBackend` coalesces question rows from concurrent callers, rotates
 fairly across requests, preserves per-state identity, and never exceeds the
-selected physical batch size. Admission allows eight concurrent calls per model
-and queues eight by default, so the physical backend can observe concurrent
-callers; the development server overrides these bounds with
+selected physical batch size. Each logical request is completely tokenized
+before atomic queue admission, and only rows with the same executor-defined
+batch key share a model forward. A complete input over the model profile's token
+limit must raise `BackendInputTooLargeError`; the API returns HTTP 413 without
+admitting any part of that request or affecting concurrent callers. Admission
+allows eight concurrent calls per model and queues eight by default, so the
+physical backend can observe concurrent callers; the development server
+overrides these bounds with
 `VLLM_SR_DECISION_CONCURRENCY` and `VLLM_SR_DECISION_QUEUE`. There is no
 sequential single-request fallback. Production model adapters must additionally
 enforce the profile's complete-input token limit without truncation and qualify

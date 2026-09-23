@@ -1,9 +1,10 @@
 """Fair cross-request physical batching for one resident Decision model.
 
 The public API admits requests. This module independently flattens their
-questions into model rows, coalesces rows from concurrent callers, and restores
-the original request/state/question identity after inference. A large batch
-request therefore cannot silently monopolize every physical batch.
+questions into model rows, prepares each logical request before admission,
+coalesces compatible rows from concurrent callers, and restores the original
+request/state/question identity after inference. A large batch request therefore
+cannot silently monopolize every physical batch.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from collections.abc import Awaitable, Sequence
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -35,12 +37,26 @@ class PhysicalBatchOverloadedError(BackendOverloadedError):
 
 @dataclass(frozen=True, slots=True)
 class DecisionRow:
-    """One independently scored question row passed to a model-family runtime."""
+    """One independently scored question row before model-family preparation."""
 
     model: str
     state: JsonContent
     question_id: str
     question: Question
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedDecisionRow:
+    """One fully prepared row that can enter the shared physical queue.
+
+    ``batch_key`` is an executor-owned compatibility identity. Only rows with
+    the same non-empty key can share one model forward. ``payload`` contains the
+    immutable tokenizer/model-family representation consumed by the executor.
+    """
+
+    row: DecisionRow
+    batch_key: str
+    payload: object
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,32 +75,56 @@ class DecisionRowExecutor(Protocol):
     async def ready(self) -> bool:
         """Return whether the resident model can accept work."""
 
-    async def predict_rows(
+    async def prepare_rows(
         self, rows: tuple[DecisionRow, ...]
+    ) -> tuple[PreparedDecisionRow, ...]:
+        """Prepare one complete logical request before queue admission."""
+
+    async def predict_rows(
+        self, rows: tuple[PreparedDecisionRow, ...]
     ) -> tuple[DecisionRowResult, ...]:
-        """Score rows without changing their order or identity."""
+        """Score one compatible physical batch without changing its order."""
 
 
 @dataclass(slots=True)
 class _RowJob:
-    rows: tuple[DecisionRow, ...]
+    rows: tuple[PreparedDecisionRow, ...]
     future: asyncio.Future[tuple[DecisionRowResult, ...]]
-    cursor: int = 0
     results: list[DecisionRowResult | None] = field(init=False)
+    indices_by_key: dict[str, deque[int]] = field(init=False)
+    remaining_count: int = field(init=False)
 
     def __post_init__(self) -> None:
         self.results = [None] * len(self.rows)
+        self.indices_by_key = {}
+        for index, row in enumerate(self.rows):
+            self.indices_by_key.setdefault(row.batch_key, deque()).append(index)
+        self.remaining_count = len(self.rows)
 
     @property
     def remaining(self) -> int:
-        return len(self.rows) - self.cursor
+        return self.remaining_count
+
+    @property
+    def next_batch_key(self) -> str:
+        return next(iter(self.indices_by_key))
+
+    def take_for_key(self, batch_key: str) -> int | None:
+        indices = self.indices_by_key.get(batch_key)
+        if not indices:
+            return None
+        index = indices.popleft()
+        self.remaining_count -= 1
+        if not indices:
+            del self.indices_by_key[batch_key]
+        return index
 
 
 @dataclass(frozen=True, slots=True)
 class _SelectedRow:
     job: _RowJob
     index: int
-    row: DecisionRow
+    row: PreparedDecisionRow
 
 
 class PhysicalBatchBackend(DecisionBackend):
@@ -134,7 +174,8 @@ class PhysicalBatchBackend(DecisionBackend):
     async def infer(self, request: SystemOneRequest) -> BackendResult:
         self._require_model(request.model)
         rows = _request_rows(request)
-        results = await self._submit(rows)
+        prepared = await self._prepare_rows(rows)
+        results = await self._submit(prepared)
         return _backend_result(request.model, rows, results)
 
     async def infer_batch(
@@ -166,7 +207,9 @@ class PhysicalBatchBackend(DecisionBackend):
                 )
                 coordinates.append((state_index, question_index))
 
-        results = await self._submit(tuple(rows))
+        raw_rows = tuple(rows)
+        prepared = await self._prepare_rows(raw_rows)
+        results = await self._submit(prepared)
         restored: list[list[DecisionRowResult | None]] = [
             [None] * len(question_ids) for _ in requests
         ]
@@ -224,13 +267,11 @@ class PhysicalBatchBackend(DecisionBackend):
             self._condition.notify_all()
         if worker is not None:
             worker.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await worker
-            except asyncio.CancelledError:
-                pass
 
     async def _submit(
-        self, rows: tuple[DecisionRow, ...]
+        self, rows: tuple[PreparedDecisionRow, ...]
     ) -> tuple[DecisionRowResult, ...]:
         if not rows:
             raise BackendContractError("request produced no inference rows")
@@ -252,6 +293,17 @@ class PhysicalBatchBackend(DecisionBackend):
         except asyncio.CancelledError:
             await _finish_cleanup(self._cancel_job(job))
             raise
+
+    async def _prepare_rows(
+        self, rows: tuple[DecisionRow, ...]
+    ) -> tuple[PreparedDecisionRow, ...]:
+        """Prepare a logical request atomically before shared queue admission."""
+
+        if not rows:
+            raise BackendContractError("request produced no inference rows")
+        prepared = await self._executor.prepare_rows(rows)
+        _validate_prepared_rows(rows, prepared)
+        return prepared
 
     async def _cancel_job(self, job: _RowJob) -> None:
         async with self._condition:
@@ -282,21 +334,26 @@ class PhysicalBatchBackend(DecisionBackend):
                     selected = self._take_rows(self.physical_batch_size)
 
                 if (
-                    len(selected) < self.physical_batch_size
+                    selected
+                    and len(selected) < self.physical_batch_size
                     and self.coalesce_seconds > 0
                 ):
                     await asyncio.sleep(self.coalesce_seconds)
                     async with self._condition:
                         selected.extend(
-                            self._take_rows(self.physical_batch_size - len(selected))
+                            self._take_rows(
+                                self.physical_batch_size - len(selected),
+                                batch_key=selected[0].row.batch_key,
+                            )
                         )
 
+                selected = [item for item in selected if not item.job.future.done()]
                 if not selected:
                     continue
                 rows = tuple(item.row for item in selected)
                 try:
                     results = await self._executor.predict_rows(rows)
-                    _validate_executor_results(rows, results)
+                    _validate_executor_results(tuple(row.row for row in rows), results)
                 except Exception as error:
                     await self._fail_jobs(selected, error)
                     continue
@@ -310,20 +367,48 @@ class PhysicalBatchBackend(DecisionBackend):
                 await _finish_cleanup(self._fail_jobs(selected, failure))
                 raise
 
-    def _take_rows(self, limit: int) -> list[_SelectedRow]:
+    def _take_rows(
+        self, limit: int, *, batch_key: str | None = None
+    ) -> list[_SelectedRow]:
+        if limit < 1:
+            return []
+        if batch_key is None:
+            batch_key = self._next_batch_key()
+        if batch_key is None:
+            return []
+
         selected: list[_SelectedRow] = []
         while self._pending and len(selected) < limit:
-            job = self._pending.popleft()
-            if job.future.done():
-                self._pending_rows -= job.remaining
-                continue
-            index = job.cursor
-            job.cursor += 1
-            self._pending_rows -= 1
-            selected.append(_SelectedRow(job=job, index=index, row=job.rows[index]))
-            if job.remaining:
-                self._pending.append(job)
+            round_size = len(self._pending)
+            progressed = False
+            for _ in range(round_size):
+                job = self._pending.popleft()
+                if job.future.done():
+                    self._pending_rows -= job.remaining
+                    continue
+                index = job.take_for_key(batch_key)
+                if index is not None:
+                    progressed = True
+                    self._pending_rows -= 1
+                    selected.append(
+                        _SelectedRow(job=job, index=index, row=job.rows[index])
+                    )
+                if job.remaining:
+                    self._pending.append(job)
+                if len(selected) == limit:
+                    break
+            if not progressed:
+                break
         return selected
+
+    def _next_batch_key(self) -> str | None:
+        while self._pending:
+            job = self._pending[0]
+            if not job.future.done() and job.remaining:
+                return job.next_batch_key
+            self._pending.popleft()
+            self._pending_rows -= job.remaining
+        return None
 
     async def _fail_jobs(
         self, selected: list[_SelectedRow], error: BaseException
@@ -417,6 +502,29 @@ def _backend_result(
         input_tokens=sum(result.input_tokens for result in results),
         output_tokens=0,
     )
+
+
+def _validate_prepared_rows(
+    rows: tuple[DecisionRow, ...],
+    prepared: tuple[PreparedDecisionRow, ...],
+) -> None:
+    if not isinstance(prepared, tuple) or len(prepared) != len(rows):
+        raise BackendContractError("row executor changed the prepared row count")
+    for row, item in zip(rows, prepared, strict=True):
+        if not isinstance(item, PreparedDecisionRow):
+            raise BackendContractError(
+                "row executor returned an invalid prepared row type"
+            )
+        if item.row != row:
+            raise BackendContractError("row executor changed prepared row identity")
+        if (
+            not isinstance(item.batch_key, str)
+            or not item.batch_key.strip()
+            or item.batch_key != item.batch_key.strip()
+        ):
+            raise BackendContractError(
+                "row executor returned an invalid prepared batch key"
+            )
 
 
 def _validate_executor_results(

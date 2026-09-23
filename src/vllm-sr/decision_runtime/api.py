@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 
 from .backend import (
     BackendContractError,
+    BackendInputTooLargeError,
     BackendOverloadedError,
     BackendUnavailableError,
     ModelDescriptor,
@@ -161,6 +162,12 @@ def create_app(
                 status_code=529,
                 content={"detail": "Decision runtime is temporarily overloaded"},
                 headers={"Retry-After": "1"},
+            )
+        except BackendInputTooLargeError:
+            outcome = "input_too_large"
+            return JSONResponse(
+                status_code=413,
+                content={"detail": "Decision input exceeds the model token limit"},
             )
         except BackendUnavailableError:
             outcome = "unavailable"
