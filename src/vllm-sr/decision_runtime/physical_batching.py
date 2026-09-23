@@ -194,15 +194,15 @@ class PhysicalBatchBackend(DecisionBackend):
         if any(item.request.model != model for item in requests):
             raise BackendContractError("backend batch changed model identity")
 
-        # Question-major order lets equal questions across states share physical
-        # batches. Coordinates, not row contents, restore the caller's order.
+        # Prepare all questions for each state together. Coordinates restore
+        # caller order even when compatible physical batches reorder rows.
         question_ids = tuple(requests[0].request.questions)
         if any(tuple(item.request.questions) != question_ids for item in requests):
             raise BackendContractError("backend batch questions are not shared")
         rows: list[DecisionRow] = []
         coordinates: list[tuple[int, int]] = []
-        for question_index, question_id in enumerate(question_ids):
-            for state_index, item in enumerate(requests):
+        for state_index, item in enumerate(requests):
+            for question_index, question_id in enumerate(question_ids):
                 rows.append(
                     DecisionRow(
                         model=model,
