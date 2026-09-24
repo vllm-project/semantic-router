@@ -9,6 +9,8 @@ choose platform and image from the actual host, not an assumed accelerator.
 Local stacks use `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET`. The offset affects
 inference and management ports. Inspect `VLLM_SR_STATE_ROOT_DIR`: an inherited
 root can load another stack's active configuration even from a new directory.
+Set this variable to the directory that contains `.vllm-sr`, usually the config
+directory; pointing it at `.vllm-sr` creates a second, empty state directory.
 Keep the selected state root, runtime, image, platform and ports consistent across
 lifecycle commands. Supply the actual management endpoint explicitly.
 
