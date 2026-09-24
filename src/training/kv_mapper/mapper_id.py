@@ -5,9 +5,13 @@ from __future__ import annotations
 import re
 
 _PRECISION_ALIASES = {
-    "fp16": "fp16", "float16": "fp16", "half": "fp16",
-    "bf16": "bf16", "bfloat16": "bf16",
-    "fp32": "fp32", "float32": "fp32",
+    "fp16": "fp16",
+    "float16": "fp16",
+    "half": "fp16",
+    "bf16": "bf16",
+    "bfloat16": "bf16",
+    "fp32": "fp32",
+    "float32": "fp32",
 }
 
 
@@ -49,11 +53,7 @@ def make_mapper_id(
     prec = normalize_precision(precision)
     src = _revision_token(source_revision)
     tgt = _revision_token(target_revision)
-    tp = (
-        f"tp{source_tp}"
-        if source_tp == target_tp
-        else f"tp{source_tp}to{target_tp}"
-    )
+    tp = f"tp{source_tp}" if source_tp == target_tp else f"tp{source_tp}to{target_tp}"
     return (
         f"{pair_slug}-{variant}-{prec}-{tp}-h{n_kv_heads}"
         f"-s{src}-t{tgt}-b{bundle_version}"

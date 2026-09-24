@@ -19,6 +19,7 @@ from src.training.kv_mapper.artifact import (
     verify_compatibility,
     write_artifact,
 )
+from src.training.kv_mapper.artifact import _write_checksums
 from src.training.kv_mapper.mapper_id import make_mapper_id
 
 COMPAT_MISMATCHES = (
@@ -44,8 +45,8 @@ def _compat(**overrides) -> CompatibilitySpec:
         "source_tp": 1,
         "target_tp": 1,
         "head_order": "contiguous",
-        "num_kv_heads": 8,
-        "head_dim": 128,
+        "num_kv_heads": 2,
+        "head_dim": 4,
     }
     base.update(overrides)
     return CompatibilitySpec(**base)
@@ -61,7 +62,7 @@ def _synthetic_manifest() -> Manifest:
         target_revision=compat.target_revision,
         source_tp=1,
         target_tp=1,
-        n_kv_heads=8,
+        n_kv_heads=2,
     )
     return Manifest(
         mapper_id=mapper_id,
@@ -79,7 +80,7 @@ def _synthetic_manifest() -> Manifest:
 
 
 def _synthetic_tensors(
-    target_layers: int = 3, dx: int = 32, dy: int = 16
+    target_layers: int = 3, dx: int = 24, dy: int = 8
 ) -> dict[str, np.ndarray]:
     tensors: dict[str, np.ndarray] = {}
     for key in tensor_keys_for_layers(target_layers):
@@ -91,6 +92,40 @@ def _synthetic_tensors(
 
 
 class ArtifactContractTests(unittest.TestCase):
+    def test_rejects_wrong_tensor_layout(self) -> None:
+        manifest = _synthetic_manifest()
+        tensors = _synthetic_tensors()
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "artifact"
+            for bad in (
+                {**tensors, "target.0.k.W": np.zeros((8, 8), dtype=np.float32)},
+                {
+                    name: value
+                    for name, value in tensors.items()
+                    if name != "target.0.k.b"
+                },
+            ):
+                with self.subTest(keys=set(bad)):
+                    with self.assertRaisesRegex(ValueError, "mapper tensor"):
+                        write_artifact(out, manifest, bad)
+
+            from safetensors.numpy import save_file
+
+            write_artifact(out, manifest, tensors)
+            bad = dict(tensors)
+            bad["target.0.k.W"] = np.zeros((8, 8), dtype=np.float32)
+            save_file(bad, str(out / "weights.safetensors"))
+            _write_checksums(out)
+            with self.assertRaisesRegex(ValueError, "invalid mapper tensor"):
+                read_artifact(out)
+
+    def test_rejects_invalid_source_layer_selection(self) -> None:
+        manifest = _synthetic_manifest()
+        manifest.source_layers_per_target["v"]["0"] = [0, 1, 1]
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(ValueError, "shared source layers"):
+                write_artifact(Path(directory), manifest, _synthetic_tensors())
+
     def test_roundtrip_three_layers(self) -> None:
         manifest = _synthetic_manifest()
         tensors = _synthetic_tensors()
@@ -128,7 +163,12 @@ class ArtifactContractTests(unittest.TestCase):
             out = Path(directory) / "artifact"
             write_artifact(out, _synthetic_manifest(), _synthetic_tensors())
             lines = (out / "SHA256SUMS").read_text().splitlines()
-            for contents in ("", lines[0] + "\n", lines[1] + "\n", "\n".join(lines + [lines[0]]) + "\n"):
+            for contents in (
+                "",
+                lines[0] + "\n",
+                lines[1] + "\n",
+                "\n".join(lines + [lines[0]]) + "\n",
+            ):
                 with self.subTest(contents=contents):
                     (out / "SHA256SUMS").write_text(contents)
                     with self.assertRaisesRegex(ValueError, "checksum"):
@@ -139,11 +179,19 @@ class ArtifactContractTests(unittest.TestCase):
         verify_compatibility(manifest, _compat(precision="float16"))
         self.assertEqual(manifest.compatibility.precision, "fp16")
         self.assertEqual(_compat(precision="bfloat16").precision, "bf16")
-        self.assertIn("-bf16-", make_mapper_id(
-            pair_slug="pair", variant="full_head", precision="bfloat16",
-            source_revision="abc123", target_revision="def456",
-            source_tp=1, target_tp=1, n_kv_heads=8,
-        ))
+        self.assertIn(
+            "-bf16-",
+            make_mapper_id(
+                pair_slug="pair",
+                variant="full_head",
+                precision="bfloat16",
+                source_revision="abc123",
+                target_revision="def456",
+                source_tp=1,
+                target_tp=1,
+                n_kv_heads=8,
+            ),
+        )
         with self.assertRaisesRegex(ValueError, "unsupported mapper precision"):
             _compat(precision="float128")
 
