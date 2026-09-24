@@ -163,6 +163,9 @@ func RequiredCapabilities(request Request) CapabilitySet {
 		request.ToolChoice.Mode == ToolChoiceImageGeneration {
 		required.bits |= CapabilityImageGeneration
 	}
+	if request.SpeechGeneration != nil {
+		required.bits |= CapabilitySpeechGeneration
+	}
 	required.bits |= toolCapabilities(request.Tools)
 	required.bits |= instructionCapabilities(request.Instructions)
 	required.bits |= messageCapabilities(request.Messages)

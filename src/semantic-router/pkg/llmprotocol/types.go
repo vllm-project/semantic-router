@@ -229,6 +229,7 @@ type Request struct {
 	Messages              []Message
 	Tools                 []Tool
 	ImageGeneration       *ImageGenerationOptions
+	SpeechGeneration      *SpeechGenerationOptions
 	ToolChoice            ToolChoice
 	ParallelToolCalls     *bool
 	CandidateCount        *int64

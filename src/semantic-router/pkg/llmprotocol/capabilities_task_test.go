@@ -25,6 +25,22 @@ func TestRequiredCapabilitiesImageGenerationToolChoiceRequiresImageGeneration(t 
 	}
 }
 
+func TestRequiredCapabilitiesSpeechGenerationRequiresSpeechGeneration(t *testing.T) {
+	required := RequiredCapabilities(Request{
+		SpeechGeneration: &SpeechGenerationOptions{Input: "hello"},
+	})
+	if !required.Supports(CapabilitySpeechGeneration) {
+		t.Fatalf("speech request must require speech_generation, got %v", required.Names())
+	}
+}
+
+func TestRequiredCapabilitiesWithoutSpeechDoesNotRequireSpeechGeneration(t *testing.T) {
+	required := RequiredCapabilities(Request{})
+	if required.Supports(CapabilitySpeechGeneration) {
+		t.Fatalf("non-speech request must not require speech_generation, got %v", required.Names())
+	}
+}
+
 // TaskCapabilities keeps the modality/task bits that model capability
 // declarations can meaningfully claim, and drops transport/accounting fidelity
 // (text is assumed for every model, tools/streaming/reasoning are protocol
