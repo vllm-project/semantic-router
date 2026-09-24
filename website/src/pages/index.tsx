@@ -289,7 +289,7 @@ const alternativeComparison = [
     }),
     llmd: translate({
       id: 'homepage.alternatives.runs.llmd',
-      message: 'The llm-d Endpoint Picker',
+      message: 'A pool scheduler, such as the llm-d Endpoint Picker',
     }),
   },
   {
@@ -307,7 +307,7 @@ const alternativeComparison = [
     }),
     llmd: translate({
       id: 'homepage.alternatives.receipt.llmd',
-      message: 'None',
+      message: 'Varies by implementation',
     }),
   },
 ]
@@ -420,8 +420,9 @@ function AlternativesSection(): JSX.Element {
             </h2>
             <p>
               <Translate id="homepage.alternatives.description">
-                What the Router owns next to the AI gateway and llm-d — three
-                components, no overlapping decisions.
+                What the Router owns next to an AI Gateway and an Inference
+                Router such as llm-d. The three components make no overlapping
+                decisions.
               </Translate>
             </p>
           </header>
@@ -433,7 +434,7 @@ function AlternativesSection(): JSX.Element {
               aria-label={translate({
                 id: 'homepage.alternatives.table.aria',
                 message:
-                  'Semantic Router compared with an AI gateway and llm-d',
+                  'Semantic Router compared with an AI Gateway and an Inference Router',
               })}
             >
               <div className={styles.matrixHeader} role="row">
@@ -453,7 +454,9 @@ function AlternativesSection(): JSX.Element {
                   </Translate>
                 </span>
                 <span role="columnheader">
-                  <Translate id="homepage.alternatives.table.llmd">LLM-D</Translate>
+                  <Translate id="homepage.alternatives.table.llmd">
+                    Inference Router
+                  </Translate>
                 </span>
               </div>
 
@@ -480,7 +483,9 @@ function AlternativesSection(): JSX.Element {
                   </div>
                   <div className={styles.matrixFragmented} role="cell">
                     <span className={styles.matrixMobileLabel}>
-                      <Translate id="homepage.alternatives.table.llmd">LLM-D</Translate>
+                      <Translate id="homepage.alternatives.table.llmd">
+                        Inference Router
+                      </Translate>
                     </span>
                     <p>{item.llmd}</p>
                   </div>

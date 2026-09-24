@@ -40,9 +40,9 @@ kubectl get gateway,httproute -A
 kubectl describe httproute <route-name> -n <namespace>
 ```
 
-The route should be accepted and its backend references resolved. In an LLM-D
-deployment, also inspect the `InferencePool` and EPP scheduler selected by each
-route.
+The route should be accepted and its backend references resolved. If the route
+targets an `InferencePool`, as in an llm-d deployment, also inspect the pool and
+the endpoint picker (EPP) that schedules its replicas.
 
 ## 3. List exposed models
 

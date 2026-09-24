@@ -5,7 +5,9 @@ description: Let Semantic Router choose a model pool while llm-d schedules a rep
 
 # Integrate with llm-d
 
-Use this topology when a request must make two different choices:
+Use this topology when llm-d is the
+[Inference Router](../../overview/semantic-router-overview#protocol-and-deployment-boundaries)
+for your model pools and a request must make two different choices:
 
 1. **Semantic Router** chooses the logical model or model pool from request
    intent, policy, and recipe state.
