@@ -18,15 +18,15 @@ func TestAnthropicContextManagementSurvivesRoutedRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 	var wire anthropicRequestWire
-	if err := json.Unmarshal(result.Body, &wire); err != nil {
-		t.Fatal(err)
+	if unmarshalErr := json.Unmarshal(result.Body, &wire); unmarshalErr != nil {
+		t.Fatal(unmarshalErr)
 	}
 	if wire.Model != "selected" || !bytes.Equal(wire.ContextManagement, []byte(`{"edits":[{"type":"clear_thinking_20251015","keep":"last"}]}`)) {
 		t.Fatalf("routed request lost context edits: %s", result.Body)
 	}
 	for _, target := range []llmprotocol.WireFormat{llmprotocol.OpenAIChatV1, llmprotocol.OpenAIResponsesV1} {
-		_, err := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, target, body, nil)
-		assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "lossy_translation")
+		_, translationErr := engine.TranslateRequest(llmprotocol.AnthropicMessagesV1, target, body, nil)
+		assertProtocolError(t, translationErr, llmprotocol.ErrorUnsupportedFeature, "lossy_translation")
 	}
 	policy := llmprotocol.DefaultPolicy()
 	policy.LossyFeatures = llmprotocol.LossyAllowWithDiagnostic
