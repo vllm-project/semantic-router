@@ -3696,8 +3696,8 @@ providers:
     lifecycle: active
     verification:
       status: claimed
-      verified_at: '2026-09-05'
-      source: https://www.volcengine.com/docs/82379/1795150
+      verified_at: '2026-09-24'
+      source: https://www.volcengine.com/docs/82379/1330310
 - id: writer
   display_name: Writer
   description: Palmyra enterprise models through the Writer chat API.
