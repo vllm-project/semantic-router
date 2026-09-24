@@ -627,10 +627,11 @@ def _qualify_managed_model(
         str(options.startup_timeout),
         "--detach",
     ]
-    launched = False
+    launch_attempted = False
+    failure: BaseException | None = None
     try:
+        launch_attempted = True
         output = io.command(arguments, timeout=options.startup_timeout + 60)
-        launched = True
         writer.raw(f"raw/{slug}/drun-launch.txt", output.encode())
         revision, artifact = _parse_launch(
             output, model=model, port=options.port, instance=instance
@@ -645,9 +646,17 @@ def _qualify_managed_model(
             artifact=artifact,
             slug=slug,
         )
+    except BaseException as error:
+        failure = error
+        raise
     finally:
-        if launched:
-            io.command(["vllm-sr", "drun", "stop", instance], timeout=60)
+        if launch_attempted:
+            try:
+                # The CLI can time out after creating an owned container.
+                io.command(["vllm-sr", "drun", "stop", instance], timeout=60)
+            except Exception:
+                if failure is None:
+                    raise
     return evidence
 
 

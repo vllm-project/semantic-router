@@ -59,12 +59,14 @@ class FakeRuntimeIO:
         bad_response: bool = False,
         missing_forward: bool = False,
         no_coalescing: bool = False,
+        partial_launch: bool = False,
     ):
         self.bad_status = bad_status
         self.bad_row_limit = bad_row_limit
         self.bad_response = bad_response
         self.missing_forward = missing_forward
         self.no_coalescing = no_coalescing
+        self.partial_launch = partial_launch
         self.commands: list[list[str]] = []
         self.paths: list[str] = []
         self.active_model: str | None = None
@@ -82,6 +84,8 @@ class FakeRuntimeIO:
             self.active_instance = arguments[arguments.index("--instance-name") + 1]
             self.rows = self.batches = 0
             port = arguments[arguments.index("--port") + 1]
+            if self.partial_launch:
+                raise qualify.QualificationError("simulated CLI timeout after launch")
             return (
                 "Decision runtime ready\n"
                 f"  Instance: {self.active_instance}\n"
@@ -297,6 +301,21 @@ class ROCmQualificationTests(unittest.TestCase):
                 qualify.qualify_all(options, io=io, inspect_candidate=lambda _: None)
             self.assertFalse((options.output_dir / "qualification.json").exists())
             self.assertEqual([command[2] for command in io.commands], ["run", "stop"])
+
+    def test_partial_launch_still_attempts_owned_stop_and_preserves_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            options = self._options(Path(temporary))
+            io = FakeRuntimeIO(partial_launch=True)
+            with (
+                patch.object(qualify, "source_sha", return_value=SOURCE),
+                patch.object(qualify, "_require_clean_source"),
+                patch.object(qualify, "_require_free_port"),
+                self.assertRaisesRegex(qualify.QualificationError, "CLI timeout"),
+            ):
+                qualify.qualify_all(options, io=io, inspect_candidate=lambda _: None)
+            self.assertFalse((options.output_dir / "qualification.json").exists())
+            self.assertEqual([command[2] for command in io.commands], ["run", "stop"])
+            self.assertIsNone(io.active_instance)
 
     def test_singleton_only_forwards_do_not_qualify_physical_batching(self):
         with tempfile.TemporaryDirectory() as temporary:
