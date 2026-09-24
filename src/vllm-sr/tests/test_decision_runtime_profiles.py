@@ -101,7 +101,7 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
         8 if "Eos-0.8B" in model_id else None
     )
     assert resolved.profile.rows_per_job_turn("rocm", 8) == (
-        32 if model_id.endswith(("Nox-4B", "Lux-9B")) else 1
+        32 if model_id.endswith(("Eos-0.8B", "Nox-4B", "Lux-9B")) else 1
     )
     assert resolved.profile.rows_per_job_turn("cpu", 8) == 1
     assert resolved.profile.use_short_b8_graph("rocm", 8) == model_id.endswith("Sol-2B")
