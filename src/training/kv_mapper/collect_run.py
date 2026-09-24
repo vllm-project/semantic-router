@@ -119,14 +119,6 @@ def main() -> None:
     if windows.shape != (args.num_sequences, args.seq_len):
         raise ValueError(f"token windows have unexpected shape {windows.shape}")
     token_sha = token_fingerprint(windows)
-    out.mkdir(parents=True, exist_ok=True)
-    if token_path.exists():
-        if token_fingerprint(np.load(token_path, allow_pickle=False)) != token_sha:
-            raise ValueError("saved token windows differ")
-    else:
-        with token_path.with_suffix(".tmp").open("wb") as stream:
-            np.save(stream, windows)
-        token_path.with_suffix(".tmp").replace(token_path)
     from transformers import AutoConfig, AutoTokenizer
 
     tgt_tok = AutoTokenizer.from_pretrained(args.target_model, revision=args.target_revision, trust_remote_code=True)
@@ -147,6 +139,10 @@ def main() -> None:
         precision=args.dtype,
     )
     write_run_metadata(out, meta)
+    if not token_path.exists():
+        with token_path.with_suffix(".tmp").open("wb") as stream:
+            np.save(stream, windows)
+        token_path.with_suffix(".tmp").replace(token_path)
     _capture_windows(
         src_model, windows, args.source_device, args.num_kv_heads,
         args.head_dim, src_layers, args.fitting_token_step, out / "source",
