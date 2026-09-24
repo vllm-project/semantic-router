@@ -598,7 +598,11 @@ def _fixture(
                 new = _arm(q, s, new_seconds, concurrency, "new")
                 total_rows = gate.MIN_WORKFLOWS_PER_ROUND * gate.ROUNDS * q * s
                 total_batches = total_rows // 4
-                if slowdown == "latency_only" and (q, s, concurrency) == (32, 1, 32):
+                if (
+                    slowdown == "latency_only"
+                    and model_id == sorted(gate.MODEL_IDS)[0]
+                    and (q, s, concurrency) == (32, 1, 32)
+                ):
                     new["throughput"]["workflow_latency"] = dict.fromkeys(
                         ("p50_ms", "p95_ms", "p99_ms"), 500.0
                     )
