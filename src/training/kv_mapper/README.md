@@ -73,6 +73,18 @@ PYTHONPATH=. python3 src/training/kv_mapper/collect_run.py \
 over K and V, then fits a centered ridge with bias (keys and values separately),
 and writes the A1 directory via
 `write_fitted_artifact`.
+`fit_run.py` validates every captured chunk, loads the sampled rows into host
+RAM, selects one shared source-layer list per target, fits K and V, writes the
+artifact, and reads it back to verify checksums. It stores completed target
+fits under `.fit-work/` for restart after interruption. A full 500-sequence
+Qwen3 run needs a high-memory machine; this script has not yet been validated
+on the model pair.
+
+```bash
+PYTHONPATH=. python3 src/training/kv_mapper/fit_run.py \
+  --run-dir /tmp/kv-collect --output-dir /tmp/kv-artifacts \
+  --pair-slug qwen3-14b-32b --topk 8 --ridge-alpha 0.01
+```
 
 ```bash
 PYTHONPATH=. python3 -m unittest src.training.kv_mapper.tests.test_fit
