@@ -17,7 +17,7 @@ import (
 const valuesFile = "e2e/profiles/hallucination/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/hallucination/mock-vllm.yaml",
+	"deploy/kubernetes/hallucination/provider-mocker.yaml",
 	"deploy/kubernetes/hallucination/mock-hallucination-detector.yaml",
 	"deploy/kubernetes/hallucination/gwapi-resources.yaml",
 }
@@ -25,7 +25,7 @@ var resourceManifests = []string{
 // waitDeployments are the mock backends the profile must wait on before running
 // tests: the LLM backend and the endpoint detector both back the detection path.
 var waitDeployments = []helpers.DeploymentRef{
-	{Namespace: "default", Name: "mock-vllm"},
+	{Namespace: "default", Name: "provider-mocker"},
 	{Namespace: "default", Name: "mock-hallucination-detector"},
 }
 
@@ -53,7 +53,7 @@ func (p *Profile) Name() string {
 
 // Description returns the profile description.
 func (p *Profile) Description() string {
-	return "Tests the pluggable hallucination detector endpoint backend end-to-end"
+	return "Tests the hallucination signal over the pluggable endpoint detector backend and the hallucination plugin that enforces on it"
 }
 
 // Setup deploys the shared gateway stack and hallucination resources.
@@ -70,6 +70,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 func (p *Profile) GetTestCases() []string {
 	return []string{
 		"hallucination-detection",
+		"hallucination-streaming-observation",
 	}
 }
 

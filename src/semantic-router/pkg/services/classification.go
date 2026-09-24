@@ -1,8 +1,9 @@
 package services
 
 import (
+	"context"
 	"fmt"
-	"os"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -10,7 +11,9 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
 
 // Global classification service instance
@@ -26,7 +29,15 @@ type ClassificationService struct {
 	unifiedClassifier *classification.UnifiedClassifier // New unified classifier
 	config            *config.RouterConfig
 	configMutex       sync.RWMutex // Protects config access
-	evalSelector      EvalModelSelector
+	// Router generations already lease this service. These locks additionally
+	// drain model calls for standalone compatibility-service replacement.
+	runtimeMutex     sync.RWMutex
+	reloadMutex      sync.Mutex
+	runtimeOwner     io.Closer // nil when classifiers are borrowed from the router
+	modelPool        *binding.Pool
+	globalEmbeddings *embedding.Set
+	closed           bool
+	evalSelector     EvalModelSelector
 }
 
 func (s *ClassificationService) SetEvalModelSelector(selector EvalModelSelector) {
@@ -57,6 +68,7 @@ func NewRecipeClassificationService(classifiers *classification.RecipeClassifier
 	}
 	return &ClassificationService{
 		classifier:        defaultClassifier,
+		unifiedClassifier: classification.NewUnifiedClassifierFromRecipe(defaultClassifier),
 		recipeClassifiers: classifiers,
 		config:            routerConfig,
 	}
@@ -66,13 +78,16 @@ func NewRecipeClassificationService(classifiers *classification.RecipeClassifier
 func NewClassificationService(classifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
 	return &ClassificationService{
 		classifier:        classifier,
-		unifiedClassifier: nil, // Will be initialized separately
+		unifiedClassifier: classification.NewUnifiedClassifierFromRecipe(classifier),
 		config:            config,
 	}
 }
 
 // NewUnifiedClassificationService creates a new service with unified classifier
 func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedClassifier, legacyClassifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
+	if unifiedClassifier == nil {
+		unifiedClassifier = classification.NewUnifiedClassifierFromRecipe(legacyClassifier)
+	}
 	return &ClassificationService{
 		classifier:        legacyClassifier,
 		unifiedClassifier: unifiedClassifier,
@@ -88,42 +103,23 @@ func SetGlobalClassificationService(service *ClassificationService) {
 	globalClassificationMu.Unlock()
 }
 
-// NewClassificationServiceWithAutoDiscovery creates a service with auto-discovery
-func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*ClassificationService, error) {
-	// Debug: Check current working directory
-	wd, _ := os.Getwd()
-	logging.Debugf("Debug: Current working directory: %s", wd)
-	logging.Debugf("Debug: Attempting to discover models in: ./models")
+// NewClassificationServiceFromConfig owns a canonical recipe graph and a pool
+// from its first generation, so reload reuses compatible physical resources.
+func NewClassificationServiceFromConfig(cfg *config.RouterConfig) (*ClassificationService, error) {
+	pool := binding.NewPool()
+	service := &ClassificationService{modelPool: pool}
+	if err := service.refreshRecipeClassifiers(cfg, nil, classification.RecipeRuntimeOptions{Runtime: native.New(pool)}); err != nil {
+		return nil, err
+	}
+	return service, nil
+}
 
-	// Always try to auto-discover and initialize unified classifier for batch processing
-	// Use model path from config, fallback to "./models" if not specified
-	modelsPath := "./models"
-	if config != nil && config.CategoryModel.ModelID != "" {
-		// Extract the models directory from the model path
-		// e.g., "models/mom-domain-classifier" -> "models"
-		if idx := strings.Index(config.CategoryModel.ModelID, "/"); idx > 0 {
-			modelsPath = config.CategoryModel.ModelID[:idx]
-		}
-	}
-
-	// Pass mom_registry to auto-discovery for LoRA detection
-	var modelRegistry map[string]string
-	if config != nil {
-		modelRegistry = config.MoMRegistry
-	}
-	unifiedClassifier, ucErr := classification.AutoInitializeUnifiedClassifierWithRegistry(modelsPath, modelRegistry)
-	if ucErr != nil {
-		logging.Infof("Unified classifier auto-discovery failed: %v", ucErr)
-	}
-	// create legacy classifier
-	legacyClassifier, lcErr := classification.NewLegacyClassifierFromConfig(config)
-	if lcErr != nil {
-		logging.Warnf("Legacy classifier initialization failed: %v", lcErr)
-	}
-	if unifiedClassifier == nil && legacyClassifier == nil {
-		logging.Warnf("No classifier initialized. Using placeholder service.")
-	}
-	return NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config), nil
+// NewClassificationServiceWithAutoDiscovery is retained for source compatibility.
+//
+// Deprecated: use NewClassificationServiceFromConfig. Model discovery is never
+// a substitute for the declared canonical configuration.
+func NewClassificationServiceWithAutoDiscovery(cfg *config.RouterConfig) (*ClassificationService, error) {
+	return NewClassificationServiceFromConfig(cfg)
 }
 
 // GetGlobalClassificationService returns the global classification service instance
@@ -161,7 +157,9 @@ func NewPlaceholderClassificationService() *ClassificationService {
 }
 
 // ClassifyIntent performs intent classification using signal-driven architecture
-func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentResponse, error) {
+func (s *ClassificationService) ClassifyIntent(ctx context.Context, req IntentRequest) (*IntentResponse, error) {
+	s.runtimeMutex.RLock()
+	defer s.runtimeMutex.RUnlock()
 	start := time.Now()
 
 	input, err := req.resolveSignalInput()
@@ -180,18 +178,16 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		processingTime := time.Since(start).Milliseconds()
 		return &IntentResponse{
 			Classification: Classification{
-				Category:         "general",
-				Confidence:       0.5,
-				ProcessingTimeMs: processingTime,
+				Category:            "general",
+				ConfidenceAvailable: confidenceAvailability(false),
+				ProcessingTimeMs:    processingTime,
 			},
 			RecommendedModel: "general-model",
 			RoutingDecision:  "placeholder_response",
 		}, nil
 	}
 
-	// Use signal-driven architecture: evaluate all signals first
-	// Check if we should force evaluate all signals (for eval scenarios)
-	forceEvaluateAll := req.Options != nil && req.Options.EvaluateAllSignals
+	input.requestFacts.Context = ctx
 	signals := classifier.EvaluateAllSignalsWithRequestFacts(
 		input.evaluationText,
 		input.contextText,
@@ -199,7 +195,7 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		input.priorUserMessages,
 		input.nonUserMessages,
 		input.hasAssistantReply,
-		forceEvaluateAll,
+		false,
 		"",
 		nil,
 		input.conversationFacts,
@@ -219,21 +215,21 @@ func (s *ClassificationService) ClassifyIntent(req IntentRequest) (*IntentRespon
 		}
 	}
 
-	category, confidence := resolveIntentCategory(
+	category := resolveIntentCategory(
+		ctx,
 		classifier,
 		decisionResult,
+		signals,
 		input.evaluationText,
 	)
 
-	processingTime := time.Since(start).Milliseconds()
+	category.ProcessingTimeMs = time.Since(start).Milliseconds()
 
 	// Build response from signals and decision
 	response := s.buildIntentResponseFromSignals(
 		signals,
 		decisionResult,
 		category,
-		confidence,
-		processingTime,
 		req,
 		classifier,
 		runtimeConfig,

@@ -12,6 +12,8 @@ HELM_VALUES_FILE ?=
 HELM_SET_VALUES ?=
 HELM_TIMEOUT ?= 10m
 HELM_TEMPLATE_OUTPUT ?= /tmp/semantic-router-helm/default-template.yaml
+HELM_BACKEND_TARGET_VALUES ?= deploy/helm/testdata/backend-target-values.yaml
+HELM_BACKEND_TARGET_OUTPUT ?= /tmp/semantic-router-helm/backend-target-template.yaml
 HELM_REPO_UPDATE ?= true
 
 # ── Remote OCI chart registry ────────────────────────────────────────────────
@@ -128,23 +130,31 @@ helm-ci-setup:
 		helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update; \
 		helm repo add grafana https://grafana.github.io/helm-charts --force-update; \
 		helm repo update; \
-		helm dependency build $(HELM_CHART_PATH); \
+		for attempt in 1 2 3; do \
+			if helm dependency build $(HELM_CHART_PATH); then \
+				break; \
+			fi; \
+			if [ "$$attempt" -eq 3 ]; then \
+				exit 1; \
+			fi; \
+			echo "$(YELLOW)[WARN]$(NC) Helm dependency download failed; retrying ($$((attempt + 1))/3)"; \
+			sleep 5; \
+		done; \
 	else \
 		echo "$(YELLOW)[WARN]$(NC) Skipping helm repo add/update; using Chart.lock dependency versions"; \
 		helm dependency build $(HELM_CHART_PATH) --skip-refresh; \
 	fi
 
 helm-ci-validate: ## Run the CI Helm lint and template validation flow
-helm-ci-validate: helm-ci-setup
+helm-ci-validate: helm-ci-setup $(HARNESS_VENV_DEPS)
 	@$(LOG_TARGET)
 	@$(MAKE) helm-lint
-	@mkdir -p "$$(dirname "$(HELM_TEMPLATE_OUTPUT)")"
+	@mkdir -p "$$(dirname "$(HELM_TEMPLATE_OUTPUT)")" "$$(dirname "$(HELM_BACKEND_TARGET_OUTPUT)")"
 	@helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		$(if $(HELM_VALUES_FILE),-f $(HELM_VALUES_FILE)) \
 		$(if $(HELM_SET_VALUES),--set $(HELM_SET_VALUES)) \
 		--namespace $(HELM_NAMESPACE) > "$(HELM_TEMPLATE_OUTPUT)"
-	@python3 -c "import yamllint" >/dev/null 2>&1 || python3 -m pip install --user yamllint
-	@python3 -m yamllint -d '{extends: default, rules: {line-length: {max: 120}, indentation: {spaces: 2}}}' "$(HELM_TEMPLATE_OUTPUT)" || echo "Some yamllint warnings are expected for Helm templates"
+	@"$(AGENT_PYTHON)" -m yamllint -d '{extends: default, rules: {line-length: {max: 120}, indentation: {spaces: 2}}}' "$(HELM_TEMPLATE_OUTPUT)" || echo "Some yamllint warnings are expected for Helm templates"
 	@required_resources="ServiceAccount PersistentVolumeClaim ConfigMap Deployment Service"; \
 	for resource in $$required_resources; do \
 		if grep -q "kind: $$resource" "$(HELM_TEMPLATE_OUTPUT)"; then \
@@ -154,6 +164,29 @@ helm-ci-validate: helm-ci-setup
 			exit 1; \
 		fi; \
 	done
+	@helm template backend-target-release $(HELM_CHART_PATH) \
+		-f "$(HELM_BACKEND_TARGET_VALUES)" \
+		--namespace $(HELM_NAMESPACE) > "$(HELM_BACKEND_TARGET_OUTPUT)"
+	@for field in \
+		"base_url: https://provider.example/v1" \
+		"provider_model_id: provider/model-id" \
+		"api_key_env: PROVIDER_API_KEY" \
+		"X-Tenant: production" \
+		"chat_path: /chat/completions" \
+		"weight: 75"; do \
+		if ! grep -q "$$field" "$(HELM_BACKEND_TARGET_OUTPUT)"; then \
+			echo "Backend target field was not preserved: $$field"; \
+			exit 1; \
+		fi; \
+		done
+	@"$(AGENT_PYTHON)" tools/ci/check_backend_target_compatibility.py \
+		--rendered-helm "$(HELM_BACKEND_TARGET_OUTPUT)"
+	@echo "Backend target compatibility rendering verified"
+	@helm template model-runtime-release $(HELM_CHART_PATH) \
+		-f deploy/helm/testdata/model-runtime-values.yaml \
+		> "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
+	@"$(AGENT_PYTHON)" deploy/helm/check-model-runtime.py "$(dir $(HELM_TEMPLATE_OUTPUT))model-runtime-template.yaml"
+	@echo "Model deployment and recipe binding rendering verified"
 	@echo "$(GREEN)[SUCCESS]$(NC) Helm CI validation completed successfully"
 
 helm-safety-validate: ## Validate Helm schema and local-state safety guards

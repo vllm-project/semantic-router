@@ -84,6 +84,31 @@ SIGNAL keyword code_request_markers {
   method: "regex"
 }
 
+SIGNAL keyword code_edit_action {
+  operator: "OR"
+  keywords: ["rename", "refactor", "rewrite", "replace", "simplify", "document", "add a docstring", "重命名", "重构", "改写", "注释"]
+}
+
+SIGNAL keyword code_artifact {
+  operator: "OR"
+  keywords: ["variable", "variables", "parameter", "parameters", "function", "method", "handler", "utility", "module", "docstring", "变量", "参数", "函数", "方法", "模块"]
+}
+
+SIGNAL keyword comparison_request {
+  operator: "OR"
+  keywords: ["compare", "comparison", "contrast", "pros and cons", "advantages and disadvantages", "比较", "对比", "优缺点"]
+}
+
+SIGNAL keyword scientific_inquiry {
+  operator: "OR"
+  keywords: ["experiment", "experiments", "experimental", "simulation", "simulations", "hypothesis", "hypotheses", "measurement", "measurements", "实验", "模拟", "假设", "测量"]
+}
+
+SIGNAL keyword commercial_context {
+  operator: "OR"
+  keywords: ["revenue", "pricing", "market", "market-entry", "customer", "customers", "product", "products", "sales", "subscription", "subscriptions", "retention", "churn", "business", "营销", "营收", "定价", "市场", "客户", "销售"]
+}
+
 SIGNAL keyword legal_risk_markers {
   operator: "OR"
   keywords: ["\\bcontract risk\\b", "\\bcompliance\\b", "\\bindemnity\\b", "\\blimitation[- ]of[- ]liability\\b", "\\bprivacy policy\\b", "\\bregulatory\\b", "\\blegal memo\\b", "\\bdata transfer agreement\\b"]
@@ -261,7 +286,8 @@ SIGNAL complexity evidence_synthesis {
 }
 
 SIGNAL pii pii_strict {
-  threshold: 0.85
+  threshold: 0.9
+  pii_types_allowed: ["GPE"]
 }
 
 PROJECTION score security_risk_score {
@@ -317,7 +343,6 @@ MODEL anthropic/claude-opus-4.6 {
   description: "Simulated high-care domain lane for non-private legal, compliance, and health analysis."
   capabilities: ["chat", "legal_analysis", "health_guidance", "high_stakes"]
   tags: ["deployment:vllm_alias", "tier:premium", "domain:high_care"]
-  quality_score: 0.96
   modality: "text"
 }
 
@@ -326,7 +351,6 @@ MODEL google/gemini-2.5-flash-lite {
   description: "Simulated low-cost domain lane for medium difficulty explanations, follow-ups, and lightweight coding."
   capabilities: ["chat", "low_cost", "explanation", "coding"]
   tags: ["deployment:vllm_alias", "tier:medium"]
-  quality_score: 0.84
   modality: "text"
 }
 
@@ -335,7 +359,6 @@ MODEL google/gemini-3.1-pro {
   description: "Simulated complex-domain lane for architecture, STEM, research synthesis, and difficult coding."
   capabilities: ["chat", "reasoning", "architecture", "research", "code"]
   tags: ["deployment:vllm_alias", "tier:complex", "domain:technical"]
-  quality_score: 0.9
   modality: "text"
 }
 
@@ -349,7 +372,6 @@ MODEL openai/gpt5.4 {
   description: "Simulated frontier reasoning lane for hard non-private planning and long-horizon agent sessions."
   capabilities: ["chat", "frontier_reasoning", "planning", "synthesis"]
   tags: ["deployment:vllm_alias", "tier:frontier"]
-  quality_score: 0.95
   modality: "text"
 }
 
@@ -358,7 +380,6 @@ MODEL qwen/qwen3.6-rocm {
   description: "Local AMD vLLM alias backed by Qwen3.6 for privacy-sensitive work, safety containment, simple traffic, and low-cost fallbacks."
   capabilities: ["chat", "privacy_locality", "private_code", "simple_qa", "tool_use"]
   tags: ["deployment:self_hosted", "tier:simple", "policy:privacy_first"]
-  quality_score: 0.78
   modality: "text"
 }
 
@@ -461,7 +482,7 @@ ROUTE domain_code_complex (description = "Non-private complex coding, architectu
 ROUTE domain_code (description = "Non-private medium coding, repository, and software-system requests route to the code-capable domain alias.") {
   PRIORITY 250
   TIER 3
-  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (keyword("code_request_markers") OR domain("computer science") AND embedding("coding_workflows")) AND NOT (projection("balance_complex") OR projection("balance_reasoning") OR keyword("reasoning_request_markers") OR embedding("architecture_design") OR complexity("general_reasoning:hard") OR complexity("code_task:hard")) AND NOT keyword("research_request_markers")
+  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (keyword("code_request_markers") OR domain("computer science") AND (embedding("coding_workflows") OR keyword("code_edit_action") AND keyword("code_artifact"))) AND NOT (projection("balance_complex") OR projection("balance_reasoning") OR keyword("reasoning_request_markers") OR embedding("architecture_design") OR complexity("general_reasoning:hard") OR complexity("code_task:hard")) AND NOT keyword("research_request_markers")
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false),
         "google/gemini-3.1-pro" (reasoning = false)
   PLUGIN router_replay {
@@ -474,7 +495,7 @@ ROUTE domain_code (description = "Non-private medium coding, repository, and sof
 ROUTE domain_stem_research (description = "Non-private math, science, research, and evidence-heavy requests route to the STEM/research alias.") {
   PRIORITY 240
   TIER 3
-  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (domain("math") OR domain("physics") OR keyword("research_request_markers")) AND NOT (projection("balance_simple") OR domain("business") OR embedding("business_analysis") OR embedding("fast_qa") OR keyword("simple_request_markers"))
+  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (domain("math") OR domain("physics") OR keyword("research_request_markers")) AND (NOT projection("balance_simple") OR keyword("scientific_inquiry") AND keyword("comparison_request")) AND NOT (domain("business") OR embedding("business_analysis") OR embedding("fast_qa") OR keyword("simple_request_markers")) AND (NOT domain("math") OR NOT projection("balance_simple"))
   MODEL "google/gemini-3.1-pro" (reasoning = false),
         "openai/gpt5.4" (reasoning = false)
   PLUGIN router_replay {
@@ -487,7 +508,7 @@ ROUTE domain_stem_research (description = "Non-private math, science, research, 
 ROUTE domain_business (description = "Non-private business and product-analysis requests route to the medium domain alias.") {
   PRIORITY 230
   TIER 3
-  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (domain("business") OR embedding("business_analysis")) AND NOT (projection("balance_complex") OR projection("balance_reasoning") OR keyword("reasoning_request_markers") OR embedding("architecture_design"))
+  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (domain("business") AND keyword("commercial_context") OR embedding("business_analysis")) AND NOT (projection("balance_complex") OR projection("balance_reasoning") OR keyword("reasoning_request_markers") OR embedding("architecture_design"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
   PLUGIN router_replay {
     enabled: true
@@ -512,7 +533,7 @@ ROUTE complex_general (description = "Non-private complex or reasoning-heavy wor
 ROUTE medium_general (description = "Non-private medium-difficulty explanations and follow-ups route to the medium alias.") {
   PRIORITY 150
   TIER 5
-  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND projection("balance_medium")
+  WHEN projection("policy_privacy_cloud_allowed") AND projection("policy_security_standard") AND (projection("balance_medium") OR complexity("general_reasoning:hard") OR keyword("comparison_request")) AND NOT (keyword("code_request_markers") OR domain("computer science") AND (embedding("coding_workflows") OR embedding("architecture_design"))) AND (NOT (domain("math") OR domain("physics") OR keyword("research_request_markers")) OR NOT keyword("scientific_inquiry") OR NOT keyword("comparison_request"))
   MODEL "google/gemini-2.5-flash-lite" (reasoning = false)
 }
 

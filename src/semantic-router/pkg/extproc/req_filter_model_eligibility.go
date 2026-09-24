@@ -7,6 +7,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
 var errNoContextEligibleDecisionModel = errors.New("no decision model can satisfy the request context")
@@ -62,6 +63,68 @@ func (r *OpenAIRouter) contextEligibleDecisionModelRefs(
 
 func (r *OpenAIRouter) modelRefExceedsContextWindow(ref config.ModelRef, contextTokens int) bool {
 	return r.modelNameExceedsContextWindow(ref.Model, contextTokens)
+}
+
+// decisionRouteActionDestination resolves a matched decision's route action.
+// The action is terminal: the destination, or an eligible decision candidate
+// when the destination cannot satisfy the request context, overrides a
+// caller-pinned model so a detected prompt attack can never fall back to the
+// caller's choice. With no eligible safe model at all the request fails
+// closed.
+func (r *OpenAIRouter) decisionRouteActionDestination(
+	decision *config.Decision,
+	ctx *RequestContext,
+) (string, bool, error) {
+	if decision == nil || decision.Action == nil ||
+		decision.Action.Type != config.DecisionActionRoute {
+		return "", false, nil
+	}
+	destination := strings.TrimSpace(decision.Action.Destination)
+	if destination == "" {
+		return "", false, nil
+	}
+	if decisionUsesAutomaticOutput(ctx.SemanticRequest, decision) {
+		refs := append([]config.ModelRef{{Model: destination}}, decision.ModelRefs...)
+		eligible, err := r.automaticEligibleRefs(refs, ctx)
+		if err != nil {
+			return "", false, err
+		}
+		return eligible[0].Model, true, nil
+	}
+	if requirements := r.candidateRequirements(ctx); selection.CandidateRequirementsEnabled(requirements) {
+		demand, err := selection.EffectiveCandidateDemand(ctx.SemanticRequest, decision)
+		if err != nil {
+			return "", false, err
+		}
+		model, err := r.strictRouteActionDestination(decision, demand, requirements)
+		return model, err == nil, err
+	}
+	if !r.modelNameExceedsContextWindow(destination, ctx.VSRContextTokenCount) {
+		logging.ComponentEvent("extproc", "route_action_applied", map[string]interface{}{
+			"request_id":  ctx.RequestID,
+			"decision":    decision.Name,
+			"destination": destination,
+		})
+		return destination, true, nil
+	}
+	eligible, _ := r.contextEligibleModelRefs(decision.ModelRefs, ctx.VSRContextTokenCount)
+	if len(eligible) > 0 {
+		logging.ComponentEvent("extproc", "route_action_destination_ineligible", map[string]interface{}{
+			"request_id":     ctx.RequestID,
+			"decision":       decision.Name,
+			"destination":    destination,
+			"fallback":       eligible[0].Model,
+			"context_tokens": ctx.VSRContextTokenCount,
+		})
+		return eligible[0].Model, true, nil
+	}
+	return "", false, fmt.Errorf(
+		"%w: route action destination %q and every candidate of decision %q have a smaller context window than the %d request tokens",
+		errNoContextEligibleDecisionModel,
+		destination,
+		decision.Name,
+		ctx.VSRContextTokenCount,
+	)
 }
 
 func validateMinimumEligibleDecisionModels(

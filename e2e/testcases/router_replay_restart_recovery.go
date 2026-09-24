@@ -32,7 +32,7 @@ func testRouterReplayRestartRecovery(ctx context.Context, client *kubernetes.Cli
 		fmt.Println("[Test] Testing Router Replay: restart recovery (Postgres persistence)")
 	}
 
-	recordID, err := triggerReplayRecordBeforeRestart(ctx, client, opts)
+	expected, err := triggerReplayRecordBeforeRestart(ctx, client, opts)
 	if err != nil {
 		return err
 	}
@@ -45,23 +45,38 @@ func testRouterReplayRestartRecovery(ctx context.Context, client *kubernetes.Cli
 		return err
 	}
 
-	return verifyReplayRecordAfterRestart(ctx, client, opts, recordID)
+	return verifyReplayRecordAfterRestart(ctx, client, opts, expected.RecordID, expected.PreparedDispatch)
+}
+
+type replayRecoveryExpectation struct {
+	RecordID         string
+	PreparedDispatch preparedDispatchReceipt
 }
 
 // triggerReplayRecordBeforeRestart sends a chat completion through the router,
 // waits for the replay record to appear, and confirms it is persisted in Postgres.
-func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (string, error) {
+func triggerReplayRecordBeforeRestart(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+) (*replayRecoveryExpectation, error) {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
-		return "", fmt.Errorf("open session for pre-restart chat: %w", err)
+		return nil, fmt.Errorf("open session for pre-restart chat: %w", err)
 	}
 	defer session.Close()
 	apiSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
 	if err != nil {
-		return "", fmt.Errorf("open Router management API session: %w", err)
+		return nil, fmt.Errorf("open Router management API session: %w", err)
 	}
 	defer apiSession.Close()
+	providerSession, err := fixtures.OpenServiceEndpointSession(ctx, client, opts, "default", "provider-mocker", "8000")
+	if err != nil {
+		return nil, fmt.Errorf("open provider-mocker observer session: %w", err)
+	}
+	defer providerSession.Close()
 
+	providerObservationID := fmt.Sprintf("prepared-dispatch-%d", time.Now().UnixNano())
 	chatClient := fixtures.NewChatCompletionsClient(session, 30*time.Second)
 	resp, err := chatClient.Create(ctx, fixtures.ChatCompletionsRequest{
 		Model: "auto",
@@ -70,13 +85,14 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 			{Role: "user", Content: "What is 2+2? Reply with just the number."},
 		},
 	}, map[string]string{
-		"x-authz-user-id": "e2e-replay-user",
+		"x-authz-user-id":       "e2e-replay-user",
+		"x-vsr-test-session-id": providerObservationID,
 	})
 	if err != nil {
-		return "", fmt.Errorf("chat completion failed: %w", err)
+		return nil, fmt.Errorf("chat completion failed: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("chat completion returned status %d: %s", resp.StatusCode, string(resp.Body))
+		return nil, fmt.Errorf("chat completion returned status %d: %s", resp.StatusCode, string(resp.Body))
 	}
 
 	if opts.Verbose {
@@ -84,21 +100,25 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 	}
 	time.Sleep(3 * time.Second)
 
-	recordID, err := fetchFirstReplayRecordID(apiSession, opts.Verbose)
-	if err != nil {
-		return "", err
+	recordID := strings.TrimSpace(resp.Headers.Get("x-vsr-replay-id"))
+	if recordID == "" {
+		return nil, fmt.Errorf("chat completion response is missing x-vsr-replay-id")
 	}
 
 	if err := assertPostgresReplayRecordStored(ctx, client, recordID, opts); err != nil {
-		return "", fmt.Errorf("replay record not confirmed in Postgres before restart: %w", err)
+		return nil, fmt.Errorf("replay record not confirmed in Postgres before restart: %w", err)
 	}
 	if err := assertReplayRecordHasSessionMetadata(apiSession, recordID, opts.Verbose); err != nil {
-		return "", err
+		return nil, err
 	}
-	return recordID, nil
+	receipt, err := assertPreparedDispatchMatchesProvider(ctx, apiSession, providerSession, recordID, providerObservationID, opts.Verbose)
+	if err != nil {
+		return nil, err
+	}
+	return &replayRecoveryExpectation{RecordID: recordID, PreparedDispatch: receipt}, nil
 }
 
-// replayListResponse mirrors the JSON shape returned by GET /v1/router_replay.
+// replayListResponse mirrors the JSON shape returned by GET /api/v1/observability/replays.
 type replayListResponse struct {
 	Object string          `json:"object"`
 	Count  int             `json:"count"`
@@ -107,20 +127,30 @@ type replayListResponse struct {
 
 // replayRecordSummary captures fields read from replay API JSON.
 type replayRecordSummary struct {
-	ID        string `json:"id"`
-	SessionID string `json:"session_id"`
-	TurnIndex int    `json:"turn_index"`
+	ID               string `json:"id"`
+	SessionID        string `json:"session_id"`
+	TurnIndex        int    `json:"turn_index"`
+	RouteDiagnostics struct {
+		PreparedDispatch *preparedDispatchReceipt `json:"prepared_dispatch"`
+	} `json:"route_diagnostics"`
 }
 
-// fetchFirstReplayRecordID calls GET /v1/router_replay?limit=1 and returns the
-// first record's ID. When verbose is true, prints the full JSON response.
-func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, verbose bool) (string, error) {
-	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/v1/router_replay?limit=1")
+type preparedDispatchReceipt struct {
+	Version    int    `json:"version"`
+	WireFormat string `json:"wire_format"`
+	SHA256     string `json:"sha256"`
+	ByteLength int    `json:"byte_length"`
+}
+
+// fetchFirstReplayRecordID returns the first record ID from a Replay list target.
+// When verbose is true, it prints the full JSON response.
+func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, requestTarget string, verbose bool) (string, error) {
+	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, requestTarget)
 	if err != nil {
-		return "", fmt.Errorf("GET /v1/router_replay failed: %w", err)
+		return "", fmt.Errorf("GET /api/v1/observability/replays failed: %w", err)
 	}
 	if raw.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("GET /v1/router_replay returned status %d: %s", raw.StatusCode, string(raw.Body))
+		return "", fmt.Errorf("GET /api/v1/observability/replays returned status %d: %s", raw.StatusCode, string(raw.Body))
 	}
 
 	if verbose {
@@ -146,7 +176,7 @@ func fetchFirstReplayRecordID(managementSession *fixtures.ServiceSession, verbos
 }
 
 func assertReplayRecordHasSessionMetadata(managementSession *fixtures.ServiceSession, recordID string, verbose bool) error {
-	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/v1/router_replay/"+recordID)
+	raw, err := doRouterReplayManagementGET(context.Background(), managementSession, "/api/v1/observability/replays/"+recordID)
 	if err != nil {
 		return fmt.Errorf("GET replay record for session metadata: %w", err)
 	}
@@ -164,6 +194,60 @@ func assertReplayRecordHasSessionMetadata(managementSession *fixtures.ServiceSes
 		fmt.Printf("[Test] Replay session_id=%q turn_index=%d\n", rec.SessionID, rec.TurnIndex)
 	}
 	return nil
+}
+
+func assertPreparedDispatchMatchesProvider(
+	ctx context.Context,
+	managementSession *fixtures.ServiceSession,
+	providerSession *fixtures.ServiceSession,
+	recordID string,
+	providerObservationID string,
+	verbose bool,
+) (preparedDispatchReceipt, error) {
+	observedBody, err := lastProviderSimulatorRequest(ctx, providerSession, providerObservationID)
+	if err != nil {
+		return preparedDispatchReceipt{}, fmt.Errorf("read provider-mocker request receipt: %w", err)
+	}
+	var observed struct {
+		SHA256     string `json:"body_sha256"`
+		ByteLength int    `json:"body_bytes"`
+	}
+	unmarshalErr := json.Unmarshal(observedBody, &observed)
+	if unmarshalErr != nil {
+		return preparedDispatchReceipt{}, fmt.Errorf("decode provider-mocker request receipt: %w", unmarshalErr)
+	}
+	if observed.SHA256 == "" || observed.ByteLength <= 0 {
+		return preparedDispatchReceipt{}, fmt.Errorf("provider-mocker request receipt is incomplete: sha256=%q bytes=%d", observed.SHA256, observed.ByteLength)
+	}
+
+	raw, err := doRouterReplayManagementGETAs(
+		ctx,
+		managementSession,
+		"/api/v1/observability/replays/"+recordID,
+		routerReplayDetailToken,
+	)
+	if err != nil {
+		return preparedDispatchReceipt{}, fmt.Errorf("GET replay record for prepared dispatch: %w", err)
+	}
+	if raw.StatusCode != http.StatusOK {
+		return preparedDispatchReceipt{}, fmt.Errorf("GET replay record returned status %d: %s", raw.StatusCode, string(raw.Body))
+	}
+	var record replayRecordSummary
+	if err := raw.DecodeJSON(&record); err != nil {
+		return preparedDispatchReceipt{}, fmt.Errorf("decode prepared-dispatch Replay record: %w", err)
+	}
+	receipt := record.RouteDiagnostics.PreparedDispatch
+	if receipt == nil {
+		return preparedDispatchReceipt{}, fmt.Errorf("replay record %s is missing route_diagnostics.prepared_dispatch", recordID)
+	}
+	if receipt.Version != 1 || receipt.WireFormat != "openai.chat.v1" ||
+		receipt.SHA256 != observed.SHA256 || receipt.ByteLength != observed.ByteLength {
+		return preparedDispatchReceipt{}, fmt.Errorf("prepared dispatch does not match provider-mocker observation: replay=%+v provider=%+v", receipt, observed)
+	}
+	if verbose {
+		fmt.Printf("[Test] Prepared dispatch matched provider-mocker: sha256=%s bytes=%d\n", receipt.SHA256, receipt.ByteLength)
+	}
+	return *receipt, nil
 }
 
 func prettyJSON(data []byte) string {
@@ -240,15 +324,21 @@ func execPsql(ctx context.Context, podName string, verbose bool, query string) (
 	return result, nil
 }
 
-// verifyReplayRecordAfterRestart polls GET /v1/router_replay/{id} until the
+// verifyReplayRecordAfterRestart polls GET /api/v1/observability/replays/{id} until the
 // record is accessible again after the pod restart.
-func verifyReplayRecordAfterRestart(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, recordID string) error {
+func verifyReplayRecordAfterRestart(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	recordID string,
+	expectedReceipt preparedDispatchReceipt,
+) error {
 	const verifyTimeout = 90 * time.Second
 	deadline := time.Now().Add(verifyTimeout)
 	var lastErr error
 
 	for time.Now().Before(deadline) {
-		err := fetchReplayRecordOnce(ctx, client, opts, recordID)
+		err := fetchReplayRecordOnce(ctx, client, opts, recordID, expectedReceipt)
 		if err == nil {
 			return nil
 		}
@@ -259,16 +349,27 @@ func verifyReplayRecordAfterRestart(ctx context.Context, client *kubernetes.Clie
 	return fmt.Errorf("replay record %s not retrievable after %s: %w", recordID, verifyTimeout, lastErr)
 }
 
-// fetchReplayRecordOnce tries a single GET /v1/router_replay/{id} and returns
+// fetchReplayRecordOnce tries a single GET /api/v1/observability/replays/{id} and returns
 // nil when the record is found and valid.
-func fetchReplayRecordOnce(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, recordID string) error {
+func fetchReplayRecordOnce(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	recordID string,
+	expectedReceipt preparedDispatchReceipt,
+) error {
 	managementSession, err := fixtures.OpenRouterAPISession(ctx, client, opts)
 	if err != nil {
 		return err
 	}
 	defer managementSession.Close()
 
-	raw, err := doRouterReplayManagementGET(ctx, managementSession, "/v1/router_replay/"+recordID)
+	raw, err := doRouterReplayManagementGETAs(
+		ctx,
+		managementSession,
+		"/api/v1/observability/replays/"+recordID,
+		routerReplayDetailToken,
+	)
 	if err != nil {
 		if opts.Verbose {
 			fmt.Printf("[Test] GET replay %s not ready yet: %v — retrying\n", recordID, err)
@@ -298,9 +399,16 @@ func fetchReplayRecordOnce(ctx context.Context, client *kubernetes.Clientset, op
 	if record.SessionID == "" {
 		return fmt.Errorf("replay record %s missing session_id after restart", recordID)
 	}
+	receipt := record.RouteDiagnostics.PreparedDispatch
+	if receipt == nil {
+		return fmt.Errorf("replay record %s missing prepared dispatch after restart", recordID)
+	}
+	if *receipt != expectedReceipt {
+		return fmt.Errorf("prepared dispatch changed after restart: got=%+v expected=%+v", *receipt, expectedReceipt)
+	}
 
 	if opts.Verbose {
-		fmt.Printf("[Test] Replay record %s survived restart\n", recordID)
+		fmt.Printf("[Test] Replay record %s and prepared dispatch survived restart\n", recordID)
 	}
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
@@ -316,10 +424,21 @@ func doRouterReplayManagementGET(
 	managementSession *fixtures.ServiceSession,
 	requestTarget string,
 ) (*fixtures.HTTPResponse, error) {
+	return doRouterReplayManagementGETAs(ctx, managementSession, requestTarget, routerReplayManagementToken)
+}
+
+// doRouterReplayManagementGETAs issues a management GET with an explicit
+// bearer token, so a case can pick the role its assertions need.
+func doRouterReplayManagementGETAs(
+	ctx context.Context,
+	managementSession *fixtures.ServiceSession,
+	requestTarget string,
+	token string,
+) (*fixtures.HTTPResponse, error) {
 	return fixtures.DoGETRequestWithHeaders(
 		ctx,
 		managementSession.HTTPClient(30*time.Second),
 		managementSession.BaseURL()+requestTarget,
-		map[string]string{"Authorization": "Bearer " + routerReplayManagementToken},
+		map[string]string{"Authorization": "Bearer " + token},
 	)
 }

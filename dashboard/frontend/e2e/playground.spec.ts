@@ -231,16 +231,64 @@ test.describe('Playground Chat Component', () => {
 
     await page.reload({ waitUntil: 'domcontentloaded' })
     const selector = page.getByTestId('playground-composer-model-select')
-    await expect(selector).toContainText('vllm-sr/mom-v1-blend')
+    await expect(selector).toContainText('vllm-sr/auto')
     await expect(selector).not.toContainText('MoM')
     await selector.click()
 
     await expect(page.getByText('Choose a model', { exact: true })).toBeVisible()
     await expect(page.getByText('speed-first', { exact: true })).toBeVisible()
     await expect(page.getByText('Latency-first routing profile', { exact: true })).toHaveCount(0)
-    await expect(page.getByRole('option')).toHaveCount(2)
+    await expect(page.getByRole('option')).toHaveCount(3)
     await page.getByRole('option', { name: /vllm-sr\/mom-v1-flash/ }).click()
     await expect(selector).toContainText('vllm-sr/mom-v1-flash')
+  })
+
+  test('sends ordinary chat through the advertised default when Fusion is available', async ({
+    page,
+  }) => {
+    await page.unroute('**/api/router/v1/models*')
+    await page.route('**/api/router/v1/models*', async (route) => {
+      await route.fulfill({
+        json: {
+          object: 'list',
+          data: [
+            { id: 'vllm-sr/fusion', routing: { resolution: 'virtual', selectable: true } },
+            {
+              id: 'auto',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
+            },
+            {
+              id: 'vllm-sr/auto',
+              routing: { resolution: 'virtual', selectable: true, default_route: true },
+            },
+          ],
+        },
+      })
+    })
+    const requests: Record<string, unknown>[] = []
+    await page.route('**/api/router/v1/chat/completions', async (route) => {
+      const request = route.request().postDataJSON()
+      requests.push(request)
+      await route.fulfill({
+        status: request.model === 'vllm-sr/auto' ? 200 : 400,
+        contentType: 'application/json',
+        body: chatJsonBody('Hello!'),
+      })
+    })
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    const selector = page.getByTestId('playground-composer-model-select')
+    await expect(selector).toContainText('vllm-sr/auto')
+    await page.getByPlaceholder('Ask me anything...').fill('Hello!')
+    await page.getByRole('button', { name: 'Send message', exact: true }).click()
+    await expect(
+      page.locator('[data-message-role="assistant"] [data-message-content]'),
+    ).toContainText('Hello!')
+    expect(requests).toHaveLength(1)
+    expect(requests[0].model).toBe('vllm-sr/auto')
+    await selector.click()
+    await expect(page.getByRole('option')).toHaveCount(2)
+    await page.getByRole('option', { name: /vllm-sr\/fusion/ }).click()
+    await expect(selector).toContainText('vllm-sr/fusion')
   })
 
   test('consolidates composer tools into an accessible mobile add menu', async ({ page }) => {
@@ -417,6 +465,20 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Do not send this request')
     await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled()
     await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible()
+    const errorRegion = page.getByTestId('playground-error-region')
+    const chatArea = errorRegion.locator('xpath=..')
+    const [errorBox, chatBox, composerBox] = await Promise.all([
+      errorRegion.boundingBox(),
+      chatArea.boundingBox(),
+      page.getByPlaceholder('Ask me anything...').boundingBox(),
+    ])
+    expect(errorBox).not.toBeNull()
+    expect(chatBox).not.toBeNull()
+    expect(composerBox).not.toBeNull()
+    if (errorBox && chatBox && composerBox) {
+      expect(errorBox.y - chatBox.y).toBeLessThanOrEqual(24)
+      expect(errorBox.y + errorBox.height).toBeLessThan(composerBox.y)
+    }
   })
 
   test('rejects a MoM-only discovery response and never submits the retired alias', async ({
@@ -1272,8 +1334,13 @@ test.describe('Playground Chat Component', () => {
     // User message should still appear
     await expect(page.getByTestId('chat-transcript').getByText('Test error handling')).toBeVisible()
 
-    // Error should be displayed (specific API error message)
-    await expect(page.getByText('API error:')).toBeVisible({ timeout: 5000 })
+    const errorRegion = page.getByTestId('playground-error-region')
+    await expect(errorRegion).toBeVisible({ timeout: 5000 })
+    await expect(errorRegion).toContainText('The model service is temporarily unavailable')
+    await expect(page.getByText('API error:')).toHaveCount(0)
+    const technicalDetails = errorRegion.locator('[data-playground-technical-details="true"]')
+    await expect(technicalDetails).toBeVisible()
+    await expect(technicalDetails).not.toHaveAttribute('open')
   })
 
   test('stop button appears during streaming', async ({ page }) => {

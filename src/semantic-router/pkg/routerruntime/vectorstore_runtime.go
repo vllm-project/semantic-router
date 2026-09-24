@@ -2,11 +2,16 @@ package routerruntime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
@@ -21,6 +26,7 @@ type VectorStoreRuntime struct {
 	Pipeline       *vectorstore.IngestionPipeline
 	Embedder       vectorstore.Embedder
 	registryCloser io.Closer
+	embeddings     *embedding.Set
 	// drainTimeout bounds how long Shutdown waits for in-flight ingestion jobs
 	// to drain before cancelling them. Sourced from
 	// vector_store.ingestion_drain_timeout_seconds.
@@ -30,9 +36,9 @@ type VectorStoreRuntime struct {
 // defaultDrainTimeout is the fallback shutdown drain bound used when a runtime
 // is constructed without a configured drain timeout, so Stop is never
 // unbounded.
-const defaultDrainTimeout = 30 * time.Second
+const defaultDrainTimeout = 25 * time.Second
 
-func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error) {
+func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*VectorStoreRuntime, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("vector store runtime requires config")
 	}
@@ -40,11 +46,55 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error
 		return nil, err
 	}
 	cfg.VectorStore.ApplyDefaults()
+	success := false
+
+	var pool *binding.Pool
+	if len(pools) > 0 {
+		pool = pools[0]
+	}
+	// Ingestion outlives individual request generations and owns independent
+	// embedding references until all its workers have stopped.
+	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
+	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
+	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
+	embeddingConfig.ModelDeployments = cfg.ModelDeployments
+	embeddingConfig.GlobalModelBindings = cfg.GlobalModelBindings
+	// Ingestion owns only the shared embedding consumer. Recipe classifier and
+	// safety bindings require their signal declarations and do not belong to
+	// this service's preparation scope.
+	embeddingConfig.ExternalModels = cfg.ExternalModels
+	embeddingConfig.ModelAdmission = cfg.ModelAdmission
+	prepared, err := modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), embeddingConfig, native.New(pool))
+	if err != nil {
+		return nil, fmt.Errorf("prepare vector store embedding: %w", err)
+	}
+	embedder, err := prepareVectorStoreEmbedding(prepared, cfg.VectorStore)
+	if err != nil {
+		_ = prepared.Close()
+		return nil, err
+	}
+	defer func() {
+		if !success {
+			_ = prepared.Close()
+		}
+	}()
+	identity, err := embedding.ResolveProviderIdentity(embedder, embedding.ConsumerSettings{
+		ModelType: cfg.VectorStore.EmbeddingModel, Dimension: cfg.VectorStore.EmbeddingDimension,
+		InputPolicy: "vectorstore-chunk-content-and-query-v1",
+	})
+	if err != nil && (cfg.VectorStore.EmbeddingModel == "mmbert" || cfg.VectorStore.EmbeddingModel == "multimodal" || !errors.Is(err, embedding.ErrIdentityUnsupported)) {
+		return nil, fmt.Errorf("bind vector store embedding representation: %w", err)
+	}
 
 	storeReg, fileReg, regCloser, err := buildMetadataRegistries(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metadata registry: %w", err)
 	}
+	defer func() {
+		if !success && regCloser != nil {
+			_ = regCloser.Close()
+		}
+	}()
 	emitMetadataStoreWarning(cfg)
 
 	fileStore, err := vectorstore.NewFileStore(cfg.VectorStore.FileStorageDir, fileReg)
@@ -57,22 +107,27 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error
 		return nil, fmt.Errorf("failed to create vector store backend: %w", err)
 	}
 
-	manager := vectorstore.NewManager(backend, storeReg, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType)
+	defer func() {
+		if !success {
+			_ = backend.Close()
+		}
+	}()
+	manager := vectorstore.NewManager(backend, storeReg, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType, vectorstore.WithEmbeddingIdentity(identity.Fingerprint))
 
 	ctx := context.Background()
-	if err := manager.LoadFromRegistry(ctx); err != nil {
+	if err = manager.LoadFromRegistry(ctx); err != nil {
 		logging.Warnf("Failed to load vector store registry on startup: %v", err)
 	}
-	if err := fileStore.LoadFromRegistry(ctx); err != nil {
+	if err = fileStore.LoadFromRegistry(ctx); err != nil {
 		logging.Warnf("Failed to load file registry on startup: %v", err)
 	}
 
-	embedder := vectorstore.NewCandleEmbedder(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension)
 	pipeline := vectorstore.NewIngestionPipeline(backend, fileStore, manager, embedder, vectorstore.PipelineConfig{
 		Workers:   cfg.VectorStore.IngestionWorkers,
 		QueueSize: 100,
 	})
 	pipeline.Start()
+	success = true
 
 	return &VectorStoreRuntime{
 		FileStore:      fileStore,
@@ -81,8 +136,25 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig) (*VectorStoreRuntime, error
 		Pipeline:       pipeline,
 		Embedder:       embedder,
 		registryCloser: regCloser,
+		embeddings:     prepared,
 		drainTimeout:   time.Duration(cfg.VectorStore.IngestionDrainTimeoutSeconds) * time.Second,
 	}, nil
+}
+
+// Resolve output width before opening a backend or creating collection metadata.
+// Request a full provider first so an unchecked option view cannot masquerade
+// as support for a dimension that the model does not actually produce.
+func prepareVectorStoreEmbedding(prepared *embedding.Set, cfg *config.VectorStoreConfig) (embedding.Provider, error) {
+	provider, err := prepared.Get(cfg.EmbeddingModel, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	dimension, err := embedding.ResolveDimension(provider, cfg.EmbeddingDimension)
+	if err != nil {
+		return nil, fmt.Errorf("vector store output dimension: %w", err)
+	}
+	cfg.EmbeddingDimension = dimension
+	return embedding.WithOptions(provider, embedding.Options{Dimension: dimension}), nil
 }
 
 func buildMetadataRegistries(cfg *config.RouterConfig) (vectorstore.StoreRegistry, vectorstore.FileRegistry, io.Closer, error) {
@@ -130,8 +202,15 @@ func emitMetadataStoreWarning(cfg *config.RouterConfig) {
 }
 
 func (r *VectorStoreRuntime) Shutdown() error {
+	return r.ShutdownContext(context.Background())
+}
+
+func (r *VectorStoreRuntime) ShutdownContext(ctx context.Context) error {
 	if r == nil {
 		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	if r.Pipeline != nil {
 		// Fall back to a bounded default if drainTimeout was not configured
@@ -140,21 +219,33 @@ func (r *VectorStoreRuntime) Shutdown() error {
 		if drain <= 0 {
 			drain = defaultDrainTimeout
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), drain)
+		stopCtx, cancel := context.WithTimeout(ctx, drain)
 		defer cancel()
-		if err := r.Pipeline.Stop(ctx); err != nil {
+		if err := r.Pipeline.Stop(stopCtx); err != nil {
 			logging.Warnf("Ingestion pipeline did not drain within %s: %v", drain, err)
+			// Workers may still be inside backend or registry calls after a bounded
+			// timeout. Closing their dependencies here would create a use-after-close
+			// race, so leave ownership with the still-stopping pipeline and report the
+			// shutdown failure to the caller.
+			return fmt.Errorf("stop vector store ingestion pipeline: %w", err)
 		}
+	}
+	var closeErr error
+	if r.embeddings != nil {
+		closeErr = errors.Join(closeErr, r.embeddings.Close())
 	}
 	if r.registryCloser != nil {
 		if err := r.registryCloser.Close(); err != nil {
 			logging.Warnf("Failed to close metadata registry: %v", err)
+			closeErr = errors.Join(closeErr, fmt.Errorf("close metadata registry: %w", err))
 		}
 	}
 	if r.Backend != nil {
-		return r.Backend.Close()
+		if err := r.Backend.Close(); err != nil {
+			closeErr = errors.Join(closeErr, fmt.Errorf("close vector store backend: %w", err))
+		}
 	}
-	return nil
+	return closeErr
 }
 
 func (r *VectorStoreRuntime) LogInitialized(component string, cfg *config.RouterConfig) {

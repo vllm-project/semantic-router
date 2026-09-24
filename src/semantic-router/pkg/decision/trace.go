@@ -41,14 +41,14 @@ type DecisionTrace struct {
 func (e *DecisionEngine) EvaluateDecisionsWithTraceAndDiagnostics(
 	signals *SignalMatches,
 ) (*DecisionResult, []DecisionTrace, EvaluationDiagnostics, error) {
-	evaluations, err := e.evaluateDecisions(signals, true)
-	return evaluations.result, evaluations.traces, evaluations.diagnostics, err
+	evaluations := e.evaluateDecisions(signals, true)
+	return evaluations.result, evaluations.traces, evaluations.diagnostics, evaluations.failure
 }
 
 func (e *DecisionEngine) evalDecisionWithTrace(
 	decision *config.Decision,
 	signals *SignalMatches,
-	legacy bool,
+	policy config.UnknownPolicy,
 ) (nodeEvaluation, *TraceNode) {
 	if decision.Rules.IsEmpty() {
 		return nodeEvaluation{state: evaluationTrue, scored: true}, &TraceNode{
@@ -58,7 +58,7 @@ func (e *DecisionEngine) evalDecisionWithTrace(
 			ConfidenceScored: true,
 		}
 	}
-	return e.evalNode(decision.Rules, signals, legacy, true)
+	return e.evalNode(decision.Rules, signals, policy, true)
 }
 
 func newDecisionTrace(

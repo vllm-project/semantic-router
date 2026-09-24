@@ -3,7 +3,7 @@
 The Dashboard is the authenticated control and observability UI for a Semantic
 Router deployment. It combines a React frontend with a Go backend that serves
 the SPA, stores dashboard state, and proxies Router, Envoy, Grafana,
-Prometheus, Jaeger, and Fleet Simulator endpoints.
+Prometheus, and Jaeger endpoints.
 
 Use it to:
 
@@ -14,6 +14,11 @@ Use it to:
 - view topology, logs, evaluations, and monitoring tools;
 - manage security policies, ML selection workflows, MCP tools, and optional
   OpenClaw workers when those features are enabled.
+
+Playground starts with the default route advertised by the Router. Named recipe
+entrypoints and orchestration aliases remain selectable alongside it; adding a
+Fusion route does not change ordinary chat's default. If the Router advertises
+only explicit entrypoints, Playground selects the first available entrypoint.
 
 The Dashboard is a control plane, not an inference proxy. Applications should
 send inference requests to Envoy.
@@ -52,19 +57,21 @@ The current installation and first-run workflow is documented in
 ```bash
 make dashboard-build
 make dashboard-check
+make dashboard-test-e2e-evaluation
 make dashboard-test-backend
 ```
 
-`dashboard-check` is the single entrypoint for dashboard quality, and the required
-`Dashboard` CI workflow runs the **same target** — nothing here is CI-only, and
-nothing in CI is missing locally. Run it before pushing. It runs, in order:
+The required `Dashboard` CI workflow runs `dashboard-check`, then the sr-bench
+browser acceptance target shown above. Both gates are available locally; run
+`dashboard-check` before every Dashboard change and the browser acceptance gate
+when changing sr-bench UI or workflows. `dashboard-check` runs, in order:
 
 | Step | What it covers |
 | --- | --- |
 | `dashboard-lint` | ESLint on the frontend, golangci-lint on the backend |
 | `dashboard-type-check` | TypeScript type checking (frontend + Knowledge Map) |
 | `dashboard-test-frontend` | Frontend unit tests |
-| `dashboard-test-backend` | `go test ./...` on `dashboard/backend` |
+| `dashboard-test-backend` | Go test inventory and JSON test evidence on `dashboard/backend`, including authentication, ownership forwarding and the sr-bench service proxy |
 | `dashboard-go-mod-tidy` | Verifies `go.mod` / `go.sum` are tidy |
 
 The dashboard backend is a **separate Go module**, so `go test ./...` from the
@@ -101,13 +108,13 @@ variables. Defaults are defined in
 | `DASHBOARD_STATIC_DIR` | Built frontend assets. |
 | `ROUTER_CONFIG_PATH` | Canonical Router YAML read or updated by config APIs. |
 | `DASHBOARD_CONFIG_DIR` | Directory for config versions and related state. |
+| `VLLM_SR_CONFIG_BASE_DIR` | Absolute shared asset root for relative tools database paths; defaults to the process working directory. The development launcher sets the repository root and the CLI sets `/app`. |
 | `TARGET_ROUTER_API_URL` | Router management API; default `http://localhost:8080`. |
 | `TARGET_ROUTER_METRICS_URL` | Router Prometheus endpoint. |
 | `TARGET_ENVOY_URL` | Inference endpoint used by Playground and route probes. |
 | `TARGET_GRAFANA_URL` | Optional Grafana base URL. |
 | `TARGET_PROMETHEUS_URL` | Optional Prometheus base URL. |
 | `TARGET_JAEGER_URL` | Optional Jaeger base URL. |
-| `TARGET_FLEET_SIM_URL` | Optional Fleet Simulator service URL. |
 
 Feature controls:
 
@@ -117,33 +124,99 @@ Feature controls:
 | `DASHBOARD_RUNTIME_CONFIG_WRITABLE` | Allow mutation of the mounted runtime config surface. |
 | `DASHBOARD_RECIPE_STORE_WRITABLE` | Allow Recipe package import. |
 | `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
-| `EVALUATION_ENABLED` | Enable evaluation jobs. |
-| `EVALUATION_DATA_DIR` | Durable Evaluation Plane artifact store; default `./data/evaluation`. |
-| `EVALUATION_ENVOY_API_KEY_ENV` | Optional server-owned environment variable name containing the Envoy evaluation credential; the browser never supplies or receives it. |
-| `VLLM_SR_SOURCE_REVISION` | Immutable source identity required to create an evaluation run: a full 40-character Git commit or `sha256:` source-tree digest. Dashboard images set this from their build argument. |
+| `SR_BENCH_URL` | Server-owned sr-bench service origin; default `http://127.0.0.1:8090`. |
+| `SR_BENCH_TOKEN_ENV` | Environment variable containing the service token; default `SR_BENCH_TOKEN`. The browser never receives this token. |
 | `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
-| `ML_SERVICE_URL` | Use an external ML service instead of local subprocesses. |
+| `ML_SERVICE_URL` | Use an ML service instead of local subprocesses; co-located sidecars use `http://127.0.0.1:8686`. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
 | `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
 
-Persistent SQLite paths include `DASHBOARD_AUTH_DB_PATH`,
-`DASHBOARD_WORKFLOW_DB_PATH`, and `DASHBOARD_CONFIG_PROJECTION_DB_PATH`.
-Evaluation evidence is not stored in SQLite: mount `EVALUATION_DATA_DIR` as
-writable persistent storage so complete run bundles survive container restarts.
-The Evaluation Plane fails closed unless its store and run directories are
-private to the Dashboard process (`0700` directories and `0600` bundle files).
-The Dashboard container defaults this store to `/app/data/evaluation`; its
-entrypoint excludes that subtree from shared-data permission widening and
-reapplies the private modes before every restart.
+OpenClaw provisioning accepts optional `skills` entries as exact IDs from the
+server's skills catalog (`GET /api/openclaw/skills`). IDs use lowercase ASCII
+letters or digits, with single hyphens or underscores separating groups. Paths,
+case or whitespace aliases, and unknown IDs return HTTP 400 before provisioning
+starts, including for asynchronous requests. Malformed catalog JSON returns
+HTTP 500 when skills are selected. Omitting skills or selecting an empty list
+still provisions without skills. Administrators can supply a catalog with
+`OPENCLAW_SKILLS_PATH`.
 
-Dashboard image builds accept `VLLM_SR_SOURCE_REVISION` as a build argument and
-embed it in the runtime image. The Dockerfile default is `unavailable`, which
-keeps the Dashboard usable but makes Evaluation Plane run creation fail closed;
-release and CI builds must pass an immutable full commit or source-tree digest.
-Repository Make targets derive the full commit only from a clean checkout; a
-dirty checkout resolves to `unavailable` unless the caller explicitly supplies
-a canonical `sha256:` source-tree digest.
+## sr-bench evaluation
+
+The Evaluation page is sr-bench 1.0. It uses the same durable Python service as
+`vllm-sr benchmark`; the Go backend authenticates each request and forwards the
+user identity. Closing the browser or restarting the Dashboard does not cancel
+a run. The benchmark service owns execution, persisted results and cancellation.
+
+`vllm-sr serve` starts an independent core benchmark worker with the Dashboard
+image. Its store is `<state-root>/.sr-bench/<stack>/store`; its private service
+token is adjacent to that store, outside the Router and Dashboard mounts. The
+worker publishes a loopback port, `8090 + port offset`, and receives neither a
+Docker socket nor GPU devices. Dashboard/config reloads reuse a matching running
+worker. A stopped or changed worker requires explicit reconciliation; `vllm-sr
+stop` stops it without deleting its evidence.
+
+Active runs and dataset preparations block an image upgrade. An
+unverifiable preparation journal also preserves the running worker for inspection.
+
+The core image does not include every upstream execution environment. For code
+and interactive benchmarks, prepare a dedicated worker host with the required
+pinned harnesses and sandbox dependencies. `SR_BENCH_URL` selects that external
+worker and suppresses local worker creation. Use an origin reachable from the
+Dashboard container and the same server-side token for both clients. In local
+Dashboard development:
+
+```bash
+# Set SR_BENCH_TOKEN to the same private value in both server environments.
+vllm-sr benchmark --store ./data/sr-bench serve
+SR_BENCH_URL=http://127.0.0.1:8090 make dashboard-dev-backend
+```
+
+The standalone service binds loopback by default. Keep the token server-side and use the authenticated
+Dashboard origin for browser access. Register operator-owned targets with
+`vllm-sr benchmark --store ./data/sr-bench target register --file targets.json`.
+Targets contain endpoint and model identities, four token prices, and credential
+environment references. The Dashboard selects registered targets; it cannot
+redirect their credentials to another endpoint.
+
+Start in **Evaluation → Create evaluation**: choose benchmarks, a smoke, quick,
+or standard size, targets and limits. **Review plan** reuses available datasets
+and automatically prepares missing data and its supported dependencies. Progress
+stays in the creation flow; the service completes accepted preparation jobs even
+if the page closes. Review the frozen plan before **Start evaluation**.
+
+**Datasets → Prepare dataset** remains a management entry point. It and
+`vllm-sr benchmark dataset prepare` use the same worker, progress and frozen
+datasets. Repeat `--benchmark` to prepare a collection in one background job.
+Required data preparation packages are installed automatically on the
+worker; execution harnesses, sandbox images and model servers are not. Gated
+sources require access approval and credentials in the worker environment.
+Preparation continues when the page closes and makes no model requests. It
+requires Evaluation write permission and is disabled in read-only mode; viewing
+its progress only requires Evaluation read permission.
+Read-only users can still browse every benchmark and compare smoke, quick and
+standard question counts. **Refresh access** retries failed settings reads and
+refreshes the current account permissions without starting a download.
+
+The CLI waits for the manifest by default; use `dataset prepare --no-wait` and
+`dataset preparations [PREPARATION_ID]` to submit and inspect background work.
+`--url` prepares on the selected service. File imports and history selection use
+explicit `dataset prepare --local` on the worker host or shared store, not an
+implicit upload from a remote CLI.
+
+Existing frozen datasets can also be selected explicitly. Live runs record
+capability and usage; preview runs record routing
+diagnostics only. The page shows per-target and per-benchmark results, four
+token buckets, latency, wall time, failures, routing distributions and case
+evidence. Comparisons require completed live runs on the same frozen cases.
+Unknown costs remain unknown.
+
+Mount the sr-bench store as writable persistent storage. Its SQLite ledger and
+run artifacts survive service restarts. Interrupted requests are preserved for
+reconciliation and are never resent automatically. Dashboard-owned SQLite paths
+remain `DASHBOARD_AUTH_DB_PATH`, `DASHBOARD_WORKFLOW_DB_PATH`, and
+`DASHBOARD_CONFIG_PROJECTION_DB_PATH`. Historical Evaluation Plane files are not
+imported or deleted by sr-bench.
 
 ## Authentication and write safety
 
@@ -151,6 +224,20 @@ Set a stable `DASHBOARD_JWT_SECRET` and provision the first administrator with
 `DASHBOARD_ADMIN_EMAIL`, `DASHBOARD_ADMIN_PASSWORD`, and optionally
 `DASHBOARD_ADMIN_NAME`. Public web-form bootstrap is disabled by default; only
 set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` in a controlled first-run environment.
+
+To keep local Docker or Podman sessions valid when recreating the stack:
+
+1. Load the same `DASHBOARD_JWT_SECRET` into the host environment before every
+   `vllm-sr serve` invocation. Use your existing secret store; do not generate a
+   new value on each launch.
+2. Keep the Dashboard authentication database on its persistent volume.
+3. Start the stack normally. This variable configures Dashboard only; do not
+   pass it through `--recipe-env`.
+
+Without a stable key, each Dashboard restart requires users to log in again.
+Rotating the key also ends existing sessions, but does not change stored
+administrator accounts. If a temporary connection or server error interrupts
+session verification, choose **Retry** to reconnect without signing in again.
 
 Writes authenticated by the session cookie must carry an `X-CSRF-Token` header
 and a matching `Origin`. The frontend does this on its own. Set
@@ -164,7 +251,7 @@ handshakes, so the origin check is the only cross-origin control there; a
 split-origin frontend that is not listed can authenticate and write but cannot
 open the room socket.
 
-Evaluation Plane evidence APIs are intentionally stricter: they accept browser
+sr-bench APIs are intentionally stricter: they accept browser
 requests only when `Origin` exactly matches the request scheme and `Host`.
 TLS-terminating proxies must overwrite `X-Forwarded-Proto` with the external
 scheme; arbitrary sibling origins never receive credentialed CORS headers.
@@ -204,6 +291,10 @@ The frontend does not store, copy, or forward it.
   on its own, and the server recomputes the expected value from the session id
   inside the session token rather than reading the cookie back, so planting one
   achieves nothing without the session cookie as well.
+  The embedded Grafana document loads a same-origin request adapter before its
+  application scripts. It performs the same CSRF-cookie echo for Grafana API
+  writes (including Prometheus queries); it does not exempt those requests from
+  the Dashboard's authentication, origin, CSRF, or permission checks.
 - **`SameSite=Lax` is deliberate.** `Strict` would withhold the cookie from
   top-level navigation into the dashboard, so following a link from chat or an
   alert would land on the login page despite a valid session. `Lax` still
@@ -221,6 +312,15 @@ Setup mode is the dashboard's first-run state. While it is active the UI forces 
 - **An unreadable or unparsable config resolves to "not in setup mode", deliberately.** Failing closed is the only safe posture for something gating unauthenticated admin creation; the resolver never falls back to the legacy flag on an error path. `/api/setup/state` answers `200` with a diagnostic `reason` (rather than a `500` the frontend silently coerced to "not in setup mode") so the condition is visible instead of silent. The reason never contains config file contents.
 - **`--allow-open-bootstrap` is a separate, still-supported operator escape hatch.** It is unaffected by setup-mode resolution and has no config-file counterpart. Production should provision the admin via `DASHBOARD_ADMIN_*` rather than enabling it.
 
+## Router contract access
+
+The **System → Platform & Access → Router API Docs** entry opens the running
+Router's Swagger UI through the authenticated Dashboard origin. Its companion
+proxies are `/api/router/api/v1` and `/api/router/openapi.json`; they expose the
+Router's `/api/v1` and `/openapi.json` responses through the existing read-only
+management proxy and do not maintain another API definition. Agents should
+query the Router endpoints directly and do not depend on the Dashboard.
+
 ## Architecture
 
 ```text
@@ -229,7 +329,8 @@ Browser
   -> Go API and reverse proxy (dashboard/backend)
        -> Router management API
        -> Envoy inference listener
-       -> optional monitoring and simulator services
+       -> sr-bench service (durable execution and evaluation store)
+       -> optional monitoring services
        -> local SQLite and config/Recipe storage
 ```
 

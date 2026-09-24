@@ -1,6 +1,7 @@
 package modeldownload
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -9,7 +10,7 @@ import (
 
 // EnsureModelsForConfig ensures all local models required by cfg are ready.
 func EnsureModelsForConfig(cfg *config.RouterConfig) error {
-	return EnsureModelsForConfigWithProgress(cfg, nil)
+	return EnsureModelsForConfigWithProgressContext(context.Background(), cfg, nil)
 }
 
 // EnsureModelsForConfigWithProgress ensures all local models required by cfg
@@ -18,6 +19,17 @@ func EnsureModelsForConfigWithProgress(
 	cfg *config.RouterConfig,
 	reporter ProgressReporter,
 ) error {
+	return EnsureModelsForConfigWithProgressContext(context.Background(), cfg, reporter)
+}
+
+func EnsureModelsForConfigWithProgressContext(
+	ctx context.Context,
+	cfg *config.RouterConfig,
+	reporter ProgressReporter,
+) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	logging.ComponentEvent("router", "required_models_check_started", map[string]interface{}{})
 
 	specs, err := BuildModelSpecs(cfg)
@@ -30,11 +42,10 @@ func EnsureModelsForConfigWithProgress(
 			Phase:       "skipped",
 			ReadyModels: 0,
 			TotalModels: 0,
-			Message:     "No local models configured. Skipping model download.",
+			Message:     "No registered model artifacts require automatic download. Local artifacts are checked during provider preparation.",
 		})
 		logging.ComponentEvent("router", "required_models_check_skipped", map[string]interface{}{
-			"reason": "no_local_models_configured",
-			"mode":   "api_only",
+			"reason": "no_registered_artifacts_needed",
 		})
 		return nil
 	}
@@ -62,8 +73,13 @@ func EnsureModelsForConfigWithProgress(
 		return nil
 	}
 
-	if err := CheckHuggingFaceCLI(); err != nil {
-		return fmt.Errorf("huggingface-cli check failed: %w", err)
+	for _, spec := range missing {
+		if spec.PreparedArtifact == "" {
+			if err := CheckHuggingFaceCLIContext(ctx); err != nil {
+				return fmt.Errorf("huggingface-cli check failed: %w", err)
+			}
+			break
+		}
 	}
 
 	downloadConfig := GetDownloadConfig()
@@ -77,7 +93,7 @@ func EnsureModelsForConfigWithProgress(
 		"hf_home":     downloadConfig.HFHome,
 	})
 
-	if err := EnsureModelsWithProgress(specs, downloadConfig, reporter); err != nil {
+	if err := EnsureModelsWithProgressContext(ctx, specs, downloadConfig, reporter); err != nil {
 		return fmt.Errorf("failed to download models: %w", err)
 	}
 

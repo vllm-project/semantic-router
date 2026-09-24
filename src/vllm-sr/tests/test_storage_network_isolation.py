@@ -2,7 +2,7 @@
 
 Publishing the storage ports on loopback only closes the north-south half of
 the exposure. These tests cover the east-west half: the stores sit on a second
-bridge network that Envoy, Dashboard, the simulator, the observability
+bridge network that Envoy, Dashboard, the observability
 containers, and any user-selected OpenClaw workload never join, and Router is
 the single container attached to both.
 
@@ -38,7 +38,7 @@ def _split_runtime_topology(monkeypatch):
 def _minimal_stack_config(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n"
+        "version: v0.3\nlisteners:\n  - name: http-8899\n"
         "    address: 0.0.0.0\n    port: 8899\n"
     )
     return config_path
@@ -107,6 +107,7 @@ def test_serve_creates_both_stack_networks_before_provisioning_storage(
 
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(tmp_path))
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
+    monkeypatch.setattr(core, "container_status_strict", lambda _name: "not found")
     monkeypatch.setattr(
         core,
         "load_config",
@@ -125,7 +126,6 @@ def test_serve_creates_both_stack_networks_before_provisioning_storage(
         lambda name: created_networks.append(name) or (0, "", ""),
     )
     monkeypatch.setattr(runtime_lifecycle, "container_status", lambda _name: "running")
-    monkeypatch.setattr(core, "start_fleet_sim_sidecar", lambda *_a, **_k: False)
     monkeypatch.setattr(core, "container_start_vllm_sr", lambda **_k: (0, "", ""))
     monkeypatch.setattr(
         runtime_lifecycle, "container_network_connect", lambda *_a: (0, "", "")
@@ -138,6 +138,7 @@ def test_serve_creates_both_stack_networks_before_provisioning_storage(
     )
     monkeypatch.setattr(runtime_lifecycle, "load_openclaw_registry", lambda *_a: [])
     monkeypatch.setattr(core, "recover_openclaw_containers", lambda *_a, **_k: None)
+    monkeypatch.setattr(core, "_wait_and_verify_runtime", lambda *_a, **_k: None)
 
     core.start_vllm_sr(
         str(_minimal_stack_config(tmp_path)), env_vars={}, enable_observability=False
@@ -423,7 +424,7 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
 def _all_managed_names(stack_layout):
     return (
         *stack_layout.runtime_container_names,
-        stack_layout.fleet_sim_container_name,
+        stack_layout.sr_bench_container_name,
         stack_layout.grafana_container_name,
         stack_layout.prometheus_container_name,
         stack_layout.jaeger_container_name,

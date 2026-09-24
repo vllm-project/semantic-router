@@ -139,6 +139,7 @@ func fusionAlgorithmToFields(f *config.FusionAlgorithmConfig, fields map[string]
 	if len(f.AnalysisModels) > 0 {
 		fields["analysis_models"] = stringsToArray(f.AnalysisModels)
 	}
+	setStringValue(fields, "analysis_mode", f.AnalysisMode)
 	setIntValue(fields, "max_concurrent", f.MaxConcurrent)
 	setIntValue(fields, "max_completion_tokens", f.MaxCompletionTokens)
 	setIntValue(fields, "round_timeout_seconds", f.RoundTimeoutSeconds)
@@ -150,6 +151,8 @@ func fusionAlgorithmToFields(f *config.FusionAlgorithmConfig, fields map[string]
 		fields["include_analysis"] = BoolValue{V: *f.IncludeAnalysis}
 	}
 	setStringValue(fields, "on_error", f.OnError)
+	setStringValue(fields, "quorum_failure_policy", string(f.QuorumFailurePolicy))
+	setStringValue(fields, "quorum_fallback_target", f.QuorumFallbackTarget)
 	setStringValue(fields, "analysis_template", f.AnalysisTemplate)
 	setStringValue(fields, "synthesis_template", f.SynthesisTemplate)
 	setStringValue(fields, "judge_prompt_version", f.JudgePromptVersion)
@@ -267,8 +270,32 @@ func multiFactorAlgorithmToFields(m *config.MultiFactorSelectionConfig, fields m
 	if m.SLO != nil {
 		fields["slo"] = multiFactorSLOValue(m.SLO)
 	}
+	if m.Quality != nil {
+		fields["quality"] = qualityEvidenceValue(m.Quality)
+	}
+	if m.Objective != nil {
+		fields["objective"] = multiFactorObjectiveValue(m.Objective)
+	}
+	if m.ExpectedOutputTokens != nil {
+		fields["expected_output_tokens"] = IntValue{V: *m.ExpectedOutputTokens}
+	}
+	setStringValue(fields, "latency_metric", m.LatencyMetric)
 	setIntValue(fields, "latency_percentile", m.LatencyPercentile)
 	setStringValue(fields, "on_no_candidates", m.OnNoCandidates)
+}
+
+func qualityEvidenceValue(quality *config.QualityEvidenceConfig) ObjectValue {
+	fields := map[string]Value{}
+	if quality == nil {
+		return ObjectValue{Fields: fields}
+	}
+	setStringValue(fields, "index", quality.Index)
+	setStringValue(fields, "on_missing", quality.OnMissing)
+	setFloatValue(fields, "min_coverage", quality.MinCoverage)
+	if quality.MinScore != nil {
+		fields["min_score"] = FloatValue{V: *quality.MinScore}
+	}
+	return ObjectValue{Fields: fields}
 }
 
 func setStringValue(fields map[string]Value, key string, value string) {

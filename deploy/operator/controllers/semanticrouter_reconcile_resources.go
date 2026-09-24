@@ -110,6 +110,10 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 
 func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
 	deployment := r.generateDeployment(sr, gatewayMode)
+	hpaEnabled := sr.Spec.Autoscaling.Enabled != nil && *sr.Spec.Autoscaling.Enabled
+	if err := r.annotateDeploymentConfig(ctx, sr, gatewayMode, deployment); err != nil {
+		return err
+	}
 	if err := controllerutil.SetControllerReference(sr, deployment, r.Scheme); err != nil {
 		return err
 	}
@@ -122,10 +126,21 @@ func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *
 		return err
 	}
 
+	// The HPA owns Deployment replicas while autoscaling is enabled. Keep the
+	// current value in the desired spec so ordinary reconciles do not undo its
+	// scaling decisions.
+	if hpaEnabled {
+		deployment.Spec.Replicas = found.Spec.Replicas
+	}
+
 	if !reflect.DeepEqual(found.Spec, deployment.Spec) {
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			if err := r.Get(ctx, types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, found); err != nil {
 				return err
+			}
+			if hpaEnabled {
+				// Re-read after conflicts so an HPA scale between attempts is kept.
+				deployment.Spec.Replicas = found.Spec.Replicas
 			}
 			found.Spec = deployment.Spec
 			return r.Update(ctx, found)

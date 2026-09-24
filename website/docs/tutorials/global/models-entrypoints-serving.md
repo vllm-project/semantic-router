@@ -54,8 +54,13 @@ vllm-sr dashboard
 Open **Build → Models**, choose a provider, and enter the endpoint credentials.
 For compatible providers the Dashboard discovers available model IDs, so you
 can import several in one step. Use **Advanced settings** only when you need to
-override metadata, pricing, or connection behavior. Verify each connection
-before assigning it to a Recipe.
+override metadata, pricing, connection behavior, or select a built-in reasoning
+family. Use **Manual setup** for a custom inline reasoning contract. Verify each
+connection before assigning it to a Recipe. See
+[Configure models](../../installation/model-configuration) for the YAML and
+Dashboard paths and
+[Model configuration patterns](../../installation/model-configuration-patterns)
+for the supported combinations.
 
 ### 2. Choose a Recipe
 
@@ -156,6 +161,8 @@ vllm-sr config migrate --config old-config.yaml
 
 ## Next
 
+- [Configure Models](../../installation/model-configuration) for model identity,
+  Provider bindings, custom models, and reasoning.
 - [Virtual Models](entrypoints-and-recipes) for request resolution and isolation.
 - [Entrypoints](entrypoints) for naming and validation rules.
 - [Recipes](recipes) for lifecycle behavior and limitations.

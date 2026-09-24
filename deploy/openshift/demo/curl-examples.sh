@@ -33,7 +33,7 @@ if [ -z "$API_HOST" ]; then
     exit 1
 fi
 
-API_URL="http://${API_HOST}/api/v1/classify/intent"
+API_URL="http://${API_HOST}/api/v1/diagnostics/classify/intent"
 echo -e "${GREEN}✅ Found API: ${API_URL}${NC}\n"
 
 function classify() {

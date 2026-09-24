@@ -104,6 +104,28 @@ var _ = Describe("MemoryBackend", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
+		It("should reject embeddings with a mismatched dimension", func() {
+			err := backend.InsertChunks(ctx, "vs_insert", []EmbeddedChunk{
+				{ID: "wrong-dimension", Embedding: []float32{1, 0}},
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("embedding dimension mismatch"))
+
+			results, searchErr := backend.Search(ctx, "vs_insert", []float32{1, 0, 0}, 10, 0, nil)
+			Expect(searchErr).NotTo(HaveOccurred())
+			Expect(results).To(BeEmpty())
+		})
+
+		It("should accept embeddings when collection dimension is unspecified", func() {
+			err := backend.CreateCollection(ctx, "vs_unspecified_dimension", 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = backend.InsertChunks(ctx, "vs_unspecified_dimension", []EmbeddedChunk{
+				{ID: "c1", Embedding: []float32{1, 0, 0}},
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("should respect max entries limit", func() {
 			limited := NewMemoryBackend(MemoryBackendConfig{MaxEntriesPerStore: 2})
 			err := limited.CreateCollection(ctx, "vs_limit", 3)
@@ -120,6 +142,49 @@ var _ = Describe("MemoryBackend", func() {
 			err = limited.InsertChunks(ctx, "vs_limit", extra)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("maximum entries"))
+		})
+
+		It("should reject an over-capacity batch without partial writes", func() {
+			limited := NewMemoryBackend(MemoryBackendConfig{MaxEntriesPerStore: 2})
+			err := limited.CreateCollection(ctx, "vs_atomic_limit", 3)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = limited.InsertChunks(ctx, "vs_atomic_limit", []EmbeddedChunk{
+				{ID: "c1", FileID: "f1", Content: "c1", Embedding: []float32{1, 0, 0}},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = limited.InsertChunks(ctx, "vs_atomic_limit", []EmbeddedChunk{
+				{ID: "c2", FileID: "f1", Content: "c2", Embedding: []float32{0, 1, 0}},
+				{ID: "c3", FileID: "f1", Content: "c3", Embedding: []float32{0, 0, 1}},
+			})
+			Expect(err).To(HaveOccurred())
+
+			results, searchErr := limited.Search(ctx, "vs_atomic_limit", []float32{0, 1, 0}, 10, 0, nil)
+			Expect(searchErr).NotTo(HaveOccurred())
+			Expect(results).To(HaveLen(1))
+			Expect(results[0].Content).To(Equal("c1"))
+		})
+
+		It("should allow upserting an existing chunk at capacity", func() {
+			limited := NewMemoryBackend(MemoryBackendConfig{MaxEntriesPerStore: 1})
+			err := limited.CreateCollection(ctx, "vs_upsert_limit", 3)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = limited.InsertChunks(ctx, "vs_upsert_limit", []EmbeddedChunk{
+				{ID: "c1", FileID: "f1", Content: "before", Embedding: []float32{1, 0, 0}},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = limited.InsertChunks(ctx, "vs_upsert_limit", []EmbeddedChunk{
+				{ID: "c1", FileID: "f1", Content: "after", Embedding: []float32{0, 1, 0}},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			results, searchErr := limited.Search(ctx, "vs_upsert_limit", []float32{0, 1, 0}, 10, 0, nil)
+			Expect(searchErr).NotTo(HaveOccurred())
+			Expect(results).To(HaveLen(1))
+			Expect(results[0].Content).To(Equal("after"))
 		})
 	})
 

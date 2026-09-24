@@ -97,24 +97,28 @@ func (k *KindCluster) Create(ctx context.Context) error {
 }
 
 func (k *KindCluster) runCreateClusterCommand(ctx context.Context, configFile string) error {
-	var cmd *exec.Cmd
-	if k.GPUEnabled {
-		k.log("Creating cluster with GPU support and /mnt mount for storage...")
-		cmd = exec.CommandContext(ctx, "kind", "create", "cluster",
-			"--name", k.Name,
-			"--config", configFile,
-			"--wait", "5m")
-	} else {
-		k.log("Using Kind config with /mnt mount for storage")
-		cmd = exec.CommandContext(ctx, "kind", "create", "cluster",
-			"--name", k.Name,
-			"--config", configFile)
-	}
+	args := k.createClusterArgs(configFile)
+	cmd := exec.CommandContext(ctx, "kind", args...)
 	if k.Verbose {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 	}
 	return cmd.Run()
+}
+
+func (k *KindCluster) createClusterArgs(configFile string) []string {
+	args := []string{"create", "cluster", "--name", k.Name}
+	if nodeImage := strings.TrimSpace(os.Getenv("KIND_NODE_IMAGE")); nodeImage != "" {
+		args = append(args, "--image", nodeImage)
+	}
+	args = append(args, "--config", configFile)
+	if k.GPUEnabled {
+		k.log("Creating cluster with GPU support and /mnt mount for storage...")
+		args = append(args, "--wait", "5m")
+	} else {
+		k.log("Using Kind config with /mnt mount for storage")
+	}
+	return args
 }
 
 func (k *KindCluster) configureStorageProvisioner(ctx context.Context) error {
@@ -268,6 +272,15 @@ func (k *KindCluster) verifyNvidiaRuntime(ctx context.Context) error {
 // On macOS: creates a temporary directory in /tmp (Docker Desktop compatible)
 // On Windows: creates a temporary directory in user's temp folder
 func (k *KindCluster) getHostMountPath() (string, error) {
+	if directory := strings.TrimSpace(os.Getenv("E2E_KIND_STORAGE_DIR")); directory != "" {
+		if !filepath.IsAbs(directory) {
+			return "", fmt.Errorf("E2E_KIND_STORAGE_DIR must be an absolute path")
+		}
+		if err := os.MkdirAll(directory, 0o755); err != nil {
+			return "", fmt.Errorf("create isolated Kind storage: %w", err)
+		}
+		return directory, nil
+	}
 	switch runtime.GOOS {
 	case "linux":
 		// On Linux, use /mnt as it's standard and typically has more space
@@ -276,7 +289,7 @@ func (k *KindCluster) getHostMountPath() (string, error) {
 		// On macOS, Docker Desktop only allows mounting from specific locations
 		// Use /tmp which is allowed by default
 		tmpDir := filepath.Join(os.TempDir(), "kind-mnt-"+k.Name)
-		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 			return "", fmt.Errorf("failed to create temp mount directory: %w", err)
 		}
 		k.log("Using macOS-compatible mount path: %s", tmpDir)
@@ -284,7 +297,7 @@ func (k *KindCluster) getHostMountPath() (string, error) {
 	case "windows":
 		// On Windows, use temp directory
 		tmpDir := filepath.Join(os.TempDir(), "kind-mnt-"+k.Name)
-		if err := os.MkdirAll(tmpDir, 0755); err != nil {
+		if err := os.MkdirAll(tmpDir, 0o755); err != nil {
 			return "", fmt.Errorf("failed to create temp mount directory: %w", err)
 		}
 		k.log("Using Windows-compatible mount path: %s", tmpDir)
@@ -292,6 +305,14 @@ func (k *KindCluster) getHostMountPath() (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
+}
+
+// MLModelsHostPath identifies the host directory mounted into this profile's nodes.
+func MLModelsHostPath() string {
+	if directory := strings.TrimSpace(os.Getenv("E2E_KIND_MODELS_DIR")); directory != "" {
+		return directory
+	}
+	return "/tmp/kind-ml-models"
 }
 
 // createClusterConfig creates a Kind config file with host mount for storage
@@ -305,15 +326,18 @@ func (k *KindCluster) createClusterConfig() (string, error) {
 
 	// Ensure ML models mount directory exists BEFORE Kind cluster creation
 	// This is required because Kind mounts are set up at cluster creation time
-	mlModelsDir := "/tmp/kind-ml-models"
-	if err := os.MkdirAll(mlModelsDir, 0755); err != nil {
-		k.log("Warning: failed to create ML models directory %s: %v", mlModelsDir, err)
+	mlModelsDir := MLModelsHostPath()
+	if !filepath.IsAbs(mlModelsDir) {
+		return "", fmt.Errorf("E2E_KIND_MODELS_DIR must be an absolute path")
+	}
+	if mkdirErr := os.MkdirAll(mlModelsDir, 0o755); mkdirErr != nil {
+		k.log("Warning: failed to create ML models directory %s: %v", mlModelsDir, mkdirErr)
 	}
 
 	workspaceModelsMount := ""
 	if k.WorkspaceModelsDir != "" {
-		if err := os.MkdirAll(k.WorkspaceModelsDir, 0755); err != nil {
-			return "", fmt.Errorf("failed to create workspace models directory %s: %w", k.WorkspaceModelsDir, err)
+		if mkdirErr := os.MkdirAll(k.WorkspaceModelsDir, 0o755); mkdirErr != nil {
+			return "", fmt.Errorf("failed to create workspace models directory %s: %w", k.WorkspaceModelsDir, mkdirErr)
 		}
 		workspaceModelsMount = fmt.Sprintf(`
       - hostPath: %s
@@ -330,8 +354,8 @@ nodes:
     extraMounts:
       - hostPath: %s
         containerPath: %s
-      - hostPath: /tmp/kind-ml-models
-        containerPath: /tmp/ml-models%s`, k.Name, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
+      - hostPath: %s
+        containerPath: /tmp/ml-models%s`, k.Name, hostPath, kindStorageNodeMountPath, mlModelsDir, workspaceModelsMount)
 
 	// Add GPU mount to worker if GPU is enabled
 	if k.GPUEnabled {
@@ -340,20 +364,20 @@ nodes:
     extraMounts:
       - hostPath: %s
         containerPath: %s
-      - hostPath: /tmp/kind-ml-models
+      - hostPath: %s
         containerPath: /tmp/ml-models%s
       - hostPath: /dev/null
         containerPath: /var/run/nvidia-container-devices/all
-`, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
+`, hostPath, kindStorageNodeMountPath, mlModelsDir, workspaceModelsMount)
 	} else {
 		kindConfig += fmt.Sprintf(`
   - role: worker
     extraMounts:
       - hostPath: %s
         containerPath: %s
-      - hostPath: /tmp/kind-ml-models
+      - hostPath: %s
         containerPath: /tmp/ml-models%s
-`, hostPath, kindStorageNodeMountPath, workspaceModelsMount)
+`, hostPath, kindStorageNodeMountPath, mlModelsDir, workspaceModelsMount)
 	}
 
 	configFile, err := os.CreateTemp("", "kind-config-*.yaml")

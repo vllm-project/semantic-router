@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
 // RequestFacts carries untrusted request-envelope facts used by signal
@@ -16,6 +15,10 @@ import (
 type RequestFacts struct {
 	Metadata map[string]string
 	Context  context.Context
+
+	// JailbreakInput, when present, supplies role-scoped Guard content separately
+	// from the general routing text. Nil preserves flat-text classifier callers.
+	JailbreakInput *JailbreakInput
 
 	// ContextTokenFloor and the related scalar fields carry the content-free,
 	// request-envelope estimate used by the context signal. They account for
@@ -63,7 +66,7 @@ func (c *Classifier) evaluateMetadataSignal(
 		results.SignalConfidences[signalConfidenceKey(config.SignalTypeMetadata, rule.Name)] = 1.0
 		mu.Unlock()
 		bestConfidence = 1.0
-		metrics.RecordSignalMatch(config.SignalTypeMetadata, rule.Name)
+		c.recordSignalMatch(config.SignalTypeMetadata, rule.Name)
 	}
 	elapsed := time.Since(start)
 	results.Metrics.Metadata.ExecutionTimeMs = float64(elapsed.Microseconds()) / 1000.0

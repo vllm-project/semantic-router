@@ -55,6 +55,9 @@ func (d *decompiler) keywordToSignal(kw *config.KeywordRule) *SignalDecl {
 
 func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if emb.PrototypeScoring != nil {
+		fields["prototype_scoring"] = ObjectValue{Fields: prototypeScoringFields(emb.PrototypeScoring)}
+	}
 	if emb.SimilarityThreshold != 0 {
 		fields["threshold"] = FloatValue{V: float64(emb.SimilarityThreshold)}
 	}
@@ -63,6 +66,16 @@ func (d *decompiler) embeddingToSignal(emb *config.EmbeddingRule) *SignalDecl {
 	}
 	if emb.AggregationMethodConfiged != "" {
 		fields["aggregation_method"] = StringValue{V: string(emb.AggregationMethodConfiged)}
+	}
+	for _, list := range []struct {
+		name   string
+		values []string
+	}{
+		{"image_candidates", emb.ImageCandidates}, {"negative_candidates", emb.NegativeCandidates}, {"negative_image_candidates", emb.NegativeImageCandidates},
+	} {
+		if len(list.values) > 0 {
+			fields[list.name] = stringsToArray(list.values)
+		}
 	}
 	if emb.QueryModality != "" && emb.QueryModality != config.QueryModalityText {
 		fields["query_modality"] = StringValue{V: string(emb.QueryModality)}
@@ -165,6 +178,9 @@ func (d *decompiler) conversationToSignal(rule *config.ConversationRule) *Signal
 
 func (d *decompiler) complexityToSignal(comp *config.ComplexityRule) *SignalDecl {
 	fields := make(map[string]Value)
+	if comp.PrototypeScoring != nil {
+		fields["prototype_scoring"] = ObjectValue{Fields: prototypeScoringFields(comp.PrototypeScoring)}
+	}
 	if comp.Threshold != 0 {
 		fields["threshold"] = FloatValue{V: float64(comp.Threshold)}
 	}
@@ -212,6 +228,17 @@ func (d *decompiler) roleBindingToSignal(rb *config.RoleBinding) *SignalDecl {
 	return &SignalDecl{SignalType: "authz", Name: rb.Name, Fields: fields}
 }
 
+func (d *decompiler) hallucinationToSignal(rule *config.HallucinationRule) *SignalDecl {
+	fields := make(map[string]Value)
+	if rule.UseNLI {
+		fields["use_nli"] = BoolValue{V: true}
+	}
+	if rule.Description != "" {
+		fields["description"] = StringValue{V: rule.Description}
+	}
+	return &SignalDecl{SignalType: "hallucination", Name: rule.Name, Fields: fields}
+}
+
 func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
 	fields := make(map[string]Value)
 	if jb.Method != "" {
@@ -222,6 +249,9 @@ func (d *decompiler) jailbreakToSignal(jb *config.JailbreakRule) *SignalDecl {
 	}
 	if jb.IncludeHistory {
 		fields["include_history"] = BoolValue{V: true}
+	}
+	if jb.Direction != "" {
+		fields["direction"] = StringValue{V: jb.Direction}
 	}
 	if jb.Description != "" {
 		fields["description"] = StringValue{V: jb.Description}
@@ -337,9 +367,16 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	route := &RouteDecl{
 		Name:        dec.Name,
 		Description: dec.Description,
-		OnUnknown:   dec.Rules.OnUnknown,
+		OnUnknown:   string(dec.Rules.OnUnknown),
 		Priority:    dec.Priority,
 		Tier:        dec.Tier,
+	}
+
+	if dec.Action != nil {
+		route.Action = &ActionDecl{
+			Type:        dec.Action.Type,
+			Destination: dec.Action.Destination,
+		}
 	}
 
 	// WHEN
@@ -350,6 +387,7 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 		ref := &ModelRef{
 			Model:     mr.Model,
 			Reasoning: mr.UseReasoning,
+			Mode:      mr.ReasoningMode,
 			Effort:    mr.ReasoningEffort,
 			LoRA:      mr.LoRAName,
 			Weight:    mr.Weight,
@@ -410,6 +448,7 @@ func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
 	return &ModelRef{
 		Model:     model.Model,
 		Reasoning: model.UseReasoning,
+		Mode:      model.ReasoningMode,
 		Effort:    model.ReasoningEffort,
 		LoRA:      model.LoRAName,
 		Weight:    model.Weight,
@@ -507,6 +546,9 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	}
 	if mr.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", mr.ReasoningEffort))
+	}
+	if mr.ReasoningMode != "" {
+		opts = append(opts, fmt.Sprintf("mode = %q", mr.ReasoningMode))
 	}
 	if mr.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", mr.LoRAName))

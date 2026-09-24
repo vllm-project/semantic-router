@@ -1,6 +1,9 @@
 package extproc
 
 import (
+	"bytes"
+	"errors"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,16 +21,20 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	ctx *RequestContext,
 	completionLatency time.Duration,
 ) *ext_proc.ProcessingResponse {
-	usage := invalidResponseTerminalUsage("authoritative_usage_missing")
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", map[string]interface{}{
+		decodeEvent := map[string]interface{}{
 			"request_id":     ctx.RequestID,
 			"backend_format": ctx.TargetFormat,
 			"client_format":  ctx.SourceFormat,
 			"error":          err.Error(),
-		})
+		}
+		// Log the private cause while keeping the client-facing message generic.
+		if cause := errors.Unwrap(err); cause != nil {
+			decodeEvent["cause"] = cause.Error()
+		}
+		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
 	clientBody := responseBody
@@ -38,30 +45,154 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			return r.createErrorResponse(502, "The selected model returned an incompatible response")
 		}
 	}
-	usage = r.takeNeutralResponseUsage(ctx)
+	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 
-	r.updateResponseCache(ctx, clientBody)
+	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
+
+	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
+	if blocked != nil {
+		return blocked
+	}
+
+	response := buildResponseBodyContinueResponse(nil, nil)
+	if len(headerOptions) > 0 {
+		response.GetResponseBody().GetResponse().HeaderMutation = &ext_proc.HeaderMutation{
+			SetHeaders: headerOptions,
+		}
+	}
+	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+		setResponseBodyMutation(response, finalBody)
+	}
+	return response
+}
+
+// finalizeResponsePolicy runs the shared response-stage processing across normal and fallback paths:
+// scoring response signals, evaluating guardrail plugins (jailbreak, hallucination) for blocking or warning,
+// executing memory suppression decisions, applying warnings and cost headers,
+// persisting Responses objects, and updating replay audit records.
+func (r *OpenAIRouter) finalizeResponsePolicy(
+	ctx *RequestContext,
+	semanticResponse *llmprotocol.Response,
+	clientBody []byte,
+) (*ext_proc.ProcessingResponse, []byte, []*core.HeaderValueOption) {
+	plan := r.prepareResponsePolicy(ctx, semanticResponse, clientBody)
+	plan.commit()
+	return plan.blocked, plan.finalBody, plan.headerOptions()
+}
+
+// responsePolicyPlan separates response-policy evaluation and body mutation
+// from irreversible persistence. Fallback can therefore validate the final
+// public wire before committing memory, Responses, and replay side effects.
+type responsePolicyPlan struct {
+	blocked    *ext_proc.ProcessingResponse
+	finalBody  []byte
+	response   *ext_proc.ProcessingResponse
+	commitFunc func()
+}
+
+func (p *responsePolicyPlan) commit() {
+	if p == nil || p.commitFunc == nil {
+		return
+	}
+	commit := p.commitFunc
+	p.commitFunc = nil
+	commit()
+}
+
+func (p *responsePolicyPlan) headerOptions() []*core.HeaderValueOption {
+	if p == nil || p.response == nil {
+		return nil
+	}
+	bodyResp := p.response.GetResponseBody()
+	if bodyResp == nil || bodyResp.GetResponse() == nil || bodyResp.GetResponse().GetHeaderMutation() == nil {
+		return nil
+	}
+	return bodyResp.GetResponse().GetHeaderMutation().GetSetHeaders()
+}
+
+func (r *OpenAIRouter) prepareResponsePolicy(
+	ctx *RequestContext,
+	semanticResponse *llmprotocol.Response,
+	clientBody []byte,
+) *responsePolicyPlan {
+	if r == nil || ctx == nil || semanticResponse == nil {
+		return &responsePolicyPlan{finalBody: clientBody}
+	}
+
+	// The response-stage signal is scored from the declared rules before any
+	// plugin runs, so the observation exists whether or not the selected
+	// decision carries a plugin; the plugins below then consume it. Recorded
+	// before a block returns, so a blocked response leaves the same evidence in
+	// Router Replay as a delivered one.
+	recordPrimaryOutputDigest(ctx, semanticResponse)
+	assistantContent := semanticAssistantContent(semanticResponse)
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+	commitSignalOutcomes := func() {
+		r.recordRouterReplayResponseJailbreak(ctx)
+		r.recordRouterReplayHallucination(ctx)
+	}
 
 	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
-		return jailbreakResponse
+		return &responsePolicyPlan{
+			blocked: jailbreakResponse,
+			commitFunc: func() {
+				commitSignalOutcomes()
+				r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
+			},
+		}
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
-		return hallucinationResponse
+		return &responsePolicyPlan{
+			blocked: hallucinationResponse,
+			commitFunc: func() {
+				commitSignalOutcomes()
+				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
+			},
+		}
 	}
 
-	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 	r.markUnverifiedFactualResponse(ctx)
+	memoryResponse := semanticResponse
+	if cloned, err := cloneSemanticResponseForCommit(semanticResponse); err == nil {
+		memoryResponse = cloned
+	} else {
+		logging.ComponentErrorEvent("extproc", "response_policy_commit_snapshot_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"error":      err.Error(),
+		})
+	}
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
-	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
-		setResponseBodyMutation(response, clientBody)
+	return &responsePolicyPlan{
+		finalBody: finalBody,
+		response:  response,
+		commitFunc: func() {
+			commitSignalOutcomes()
+			r.scheduleSemanticResponseMemoryStore(ctx, memoryResponse)
+			addResponseCostHeaders(ctx, response)
+			r.persistResponseObject(ctx)
+			r.updateRouterReplayHallucinationStatus(ctx)
+			r.attachRouterReplayResponse(ctx, finalBody, true)
+		},
 	}
-	r.persistResponseObject(ctx)
-	r.updateRouterReplayHallucinationStatus(ctx)
-	r.attachRouterReplayResponse(ctx, finalBody, true)
-	return response
+}
+
+// observeResponseStageSignals scores the response-stage rules against the
+// answer and records the observation in Router Replay. Both response paths
+// share it, so a streamed response leaves the evidence a buffered one leaves.
+//
+// Only the buffered path goes on to enforce. A streamed answer exists as a
+// whole for the first time when its bytes are already with the client, so no
+// plugin can block or rewrite it and none runs; the observation is all that is
+// still possible, and the record says so.
+func (r *OpenAIRouter) observeResponseStageSignals(ctx *RequestContext, assistantContent string) {
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+	r.recordRouterReplayResponseJailbreak(ctx)
+	r.recordRouterReplayHallucination(ctx)
 }
 
 func (r *OpenAIRouter) applySemanticResponseWarnings(
@@ -85,6 +216,7 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	if len(codes) > 0 {
 		setResponseWarningsHeader(response, codes)
 	}
+	addResponseStageSignalHeaders(ctx, response)
 	if !changed {
 		return response, originalBody
 	}
@@ -119,9 +251,49 @@ func appendNonEmpty(codes []string, code string) []string {
 	return append(codes, code)
 }
 
+// addResponseStageSignalHeaders writes the response-stage matches in the body
+// phase: x-vsr-matched-jailbreak is rewritten once the response-direction
+// rules have been scored, and x-vsr-matched-hallucination is written once the
+// answer has been checked. The response headers phase wrote the request-stage
+// matches before the body existed, so the debug headers would otherwise never
+// show a response-stage match. Same gate as the request-stage signal headers:
+// only when debug is requested.
+func addResponseStageSignalHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || !debugHeadersRequested(ctx) {
+		return
+	}
+	if len(ctx.VSRMatchedResponseJailbreak) > 0 {
+		matched := make([]string, 0, len(ctx.VSRMatchedJailbreak)+len(ctx.VSRMatchedResponseJailbreak))
+		matched = append(matched, ctx.VSRMatchedJailbreak...)
+		matched = append(matched, ctx.VSRMatchedResponseJailbreak...)
+		setResponseBodyHeader(response, headers.VSRMatchedJailbreak, strings.Join(matched, ","))
+	}
+	if len(ctx.VSRMatchedHallucination) > 0 {
+		setResponseBodyHeader(response, headers.VSRMatchedHallucination, strings.Join(ctx.VSRMatchedHallucination, ","))
+	}
+}
+
 // setResponseWarningsHeader writes the consolidated x-vsr-response-warnings header
 // (comma-separated codes) onto the response, merging with any existing mutation.
 func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []string) {
+	setResponseBodyHeader(response, headers.VSRResponseWarnings, strings.Join(codes, ","))
+}
+
+// addResponseCostHeaders reports the priced cost of a buffered response. A
+// streamed response has already sent its headers by the time usage arrives.
+func addResponseCostHeaders(ctx *RequestContext, response *ext_proc.ProcessingResponse) {
+	if ctx == nil || !ctx.RequestCostPriced {
+		return
+	}
+	setResponseBodyHeader(response, headers.VSRCost, strconv.FormatFloat(ctx.RequestCost, 'f', -1, 64))
+	if ctx.RequestCostCurrency != "" {
+		setResponseBodyHeader(response, headers.VSRCostCurrency, ctx.RequestCostCurrency)
+	}
+}
+
+// setResponseBodyHeader sets one response header from the body phase, merging
+// with any header mutation the response already carries.
+func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value string) {
 	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
 	if !ok {
 		return
@@ -131,8 +303,8 @@ func setResponseWarningsHeader(response *ext_proc.ProcessingResponse, codes []st
 	}
 	opt := &core.HeaderValueOption{
 		Header: &core.HeaderValue{
-			Key:      headers.VSRResponseWarnings,
-			RawValue: []byte(strings.Join(codes, ",")),
+			Key:      key,
+			RawValue: []byte(value),
 		},
 	}
 	if hm := bodyResponse.ResponseBody.Response.HeaderMutation; hm != nil {
@@ -197,4 +369,39 @@ func setResponseContentType(response *ext_proc.ProcessingResponse, contentType s
 
 func isResponseAPIRequest(ctx *RequestContext) bool {
 	return ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1
+}
+
+// cacheableClientResponse returns the bytes that may be persisted as the public
+// response. The cache is read back under the strict canonical contract by
+// decodeCachedClientResponse, deliberately without a backend vendor allowance,
+// because a cache partition is keyed on the ingress protocol and may be served
+// to a request that never touches the same backend.
+//
+// A same-format response is forwarded to the client verbatim, so on a backend
+// with a vendor allowance those bytes still carry the provider's decorations.
+// Persisting them would store an entry the strict reader rejects: the first
+// Azure response would poison its own partition and every later hit would fail.
+// Re-encoding from the neutral response yields the canonical equivalent. When
+// that encode fails, nothing is cached - a miss is recoverable, a poisoned
+// entry is not.
+func (r *OpenAIRouter) cacheableClientResponse(
+	clientBody []byte,
+	rewritten bool,
+	response llmprotocol.Response,
+	ctx *RequestContext,
+) []byte {
+	if rewritten || ctx == nil || !ctx.ResponseVendorExtensions {
+		return clientBody
+	}
+	canonical, err := r.encodeClientResponse(response, ctx)
+	if err != nil {
+		logging.ComponentWarnEvent("extproc", "cache_write_skipped_noncanonical_response", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"format":     ctx.SourceFormat,
+			"vendor":     string(ctx.ResponseVendor),
+			"error":      err.Error(),
+		})
+		return nil
+	}
+	return canonical
 }

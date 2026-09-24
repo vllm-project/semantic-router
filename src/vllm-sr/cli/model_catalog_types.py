@@ -67,5 +67,6 @@ class ModelCatalog:
     channel: str
     default_model: str
     enabled_models: tuple[str, ...]
+    default_intelligence_index: str
     assets: dict[str, dict[str, str]]
     models: tuple[CatalogModel, ...]

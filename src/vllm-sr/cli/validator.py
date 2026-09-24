@@ -1,7 +1,6 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Any, List
-from cli.config_contract import iter_routing_profiles
 from cli.models import (
     UserConfig,
     PluginType,
@@ -15,6 +14,7 @@ from cli.models import (
     HeaderMutationPluginConfig,
     HallucinationPluginConfig,
     RouterReplayPluginConfig,
+    ShadowDispatchPluginConfig,
     MemoryPluginConfig,
     RAGPluginConfig,
 )
@@ -23,6 +23,7 @@ from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
 from cli.validator_classifier import validate_classifier_contracts
+from cli.validator_safety import validate_safety_contracts
 from cli.validator_latency import (
     validate_latency_aware_algorithm_config,
 )
@@ -40,61 +41,21 @@ from cli.validator_workflows import (
     validate_workflow_final_model,
 )
 from cli.validator_signal_references import validate_signal_references
+from cli.validator_models import validate_model_references
+from cli.validator_reasoning import validate_reasoning_controls
+from cli.validator_model_runtime import validate_model_runtime_references
+from cli.config_schema import routing_surface_catalog
 
 log = get_logger(__name__)
 
+_ALGORITHM_SURFACES = routing_surface_catalog()["algorithms"]
 EXPECTED_ALGORITHM_BLOCK_BY_TYPE = {
-    "confidence": "confidence",
-    "ratings": "ratings",
-    "remom": "remom",
-    "fusion": "fusion",
-    "workflows": "workflows",
-    "router_dc": "router_dc",
-    "automix": "automix",
-    "hybrid": "hybrid",
-    "latency_aware": "latency_aware",
-    "multi_factor": "multi_factor",
-    "prompt": "prompt",
+    surface["type"]: surface["config_field"]
+    for surface in _ALGORITHM_SURFACES
+    if surface.get("config_field")
 }
-
-ALGORITHM_CONFIG_BLOCKS = (
-    "confidence",
-    "ratings",
-    "remom",
-    "fusion",
-    "workflows",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "latency_aware",
-    "multi_factor",
-    "prompt",
-)
-
-
-def _iter_profile_decisions(config: UserConfig):
-    for _, routing in iter_routing_profiles(config):
-        yield from routing.decisions
-
-
-VALID_ALGORITHM_TYPES = {
-    "confidence",
-    "ratings",
-    "remom",
-    "fusion",
-    "workflows",
-    "static",
-    "router_dc",
-    "automix",
-    "hybrid",
-    "knn",
-    "kmeans",
-    "svm",
-    "mlp",
-    "multi_factor",
-    "latency_aware",
-    "prompt",
-}
+ALGORITHM_CONFIG_BLOCKS = tuple(EXPECTED_ALGORITHM_BLOCK_BY_TYPE.values())
+VALID_ALGORITHM_TYPES = {surface["type"] for surface in _ALGORITHM_SURFACES}
 
 MIGRATED_LEARNING_ALGORITHM_TARGETS = {
     "elo": "global.router.learning.adaptation",
@@ -256,103 +217,6 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
     return errors
 
 
-def validate_model_references(config: UserConfig) -> List[ValidationError]:
-    """
-    Validate that all model references in decisions exist.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    provider_model_names = {model.name for model in config.providers.models}
-    routing_cards = {card.name: card for card in config.routing.model_cards}
-    routing_model_names = set(routing_cards.keys())
-
-    for model in config.providers.models:
-        if model.name not in routing_model_names:
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' is missing from routing.modelCards",
-                    field=f"providers.models.{model.name}",
-                )
-            )
-
-    for model in config.providers.models:
-        if (
-            model.reasoning_family
-            and model.reasoning_family not in config.providers.reasoning_families
-        ):
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' references unknown reasoning family '{model.reasoning_family}'",
-                    field=f"providers.models.{model.name}.reasoning_family",
-                )
-            )
-
-    # Check decision model references
-    for field_prefix, decision in _all_decisions(config):
-        for model_ref in decision.modelRefs:
-            if model_ref.model not in provider_model_names:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
-                )
-                continue
-            if model_ref.model not in routing_model_names:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references model '{model_ref.model}' without a routing.modelCards entry",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
-                )
-                continue
-            if model_ref.lora_name:
-                declared_loras = {
-                    adapter.name
-                    for adapter in (routing_cards[model_ref.model].loras or [])
-                    if adapter.name
-                }
-                if not declared_loras:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references LoRA '{model_ref.lora_name}' for model '{model_ref.model}', "
-                            "but routing.modelCards declares no loras for that model",
-                            field=f"{field_prefix}.{decision.name}.modelRefs",
-                        )
-                    )
-                elif model_ref.lora_name not in declared_loras:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
-                            field=f"{field_prefix}.{decision.name}.modelRefs",
-                        )
-                    )
-
-    # Check default model
-    if config.providers.default_model not in provider_model_names:
-        errors.append(
-            ValidationError(
-                f"Default model '{config.providers.default_model}' not found in models",
-                field="providers.defaults.default_model",
-            )
-        )
-    elif config.providers.default_model not in routing_model_names:
-        errors.append(
-            ValidationError(
-                f"Default model '{config.providers.default_model}' not found in routing.modelCards",
-                field="providers.defaults.default_model",
-            )
-        )
-
-    return errors
-
-
 def _collect_pydantic_error_messages(exc: PydanticValidationError) -> List[str]:
     messages: List[str] = []
     for error in exc.errors():
@@ -414,6 +278,7 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
         PluginType.HEADER_MUTATION.value: HeaderMutationPluginConfig,
         PluginType.HALLUCINATION.value: HallucinationPluginConfig,
         PluginType.ROUTER_REPLAY.value: RouterReplayPluginConfig,
+        PluginType.SHADOW_DISPATCH.value: ShadowDispatchPluginConfig,
         PluginType.MEMORY.value: MemoryPluginConfig,
         PluginType.RAG.value: RAGPluginConfig,
         PluginType.TOOLS.value: ToolsPluginConfig,
@@ -577,15 +442,6 @@ def _workflow_configuration_errors(
 
     errors: List[ValidationError] = []
     mode = workflows_cfg.mode or "static"
-    planner = workflows_cfg.planner
-    planner_model = getattr(planner, "model", None) if planner is not None else None
-    if mode == "dynamic" and not planner_model:
-        errors.append(
-            ValidationError(
-                f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
-                field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
-            )
-        )
     if mode == "dynamic" and workflows_cfg.roles:
         errors.append(
             ValidationError(
@@ -699,7 +555,10 @@ def validate_user_config(
 
     # Validate model references
     errors.extend(validate_model_references(config))
+    errors.extend(validate_reasoning_controls(config))
+    errors.extend(validate_model_runtime_references(config))
     errors.extend(validate_classifier_contracts(config))
+    errors.extend(validate_safety_contracts(config))
 
     # Validate plugin configurations
     errors.extend(validate_plugin_configurations(config))

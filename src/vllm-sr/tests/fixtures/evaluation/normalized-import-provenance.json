@@ -1,0 +1,11 @@
+{
+  "schema_version": "evaluation-suite-qualification.v2",
+  "evidence_level": "E0",
+  "origins": [
+    "registered_parser_import",
+    "user_provided_import"
+  ],
+  "native_execution_attested": false,
+  "promotion_eligible": false,
+  "qualified_gate_ids": []
+}

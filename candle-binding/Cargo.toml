@@ -21,7 +21,10 @@ flash-attn = ["cuda", "candle-flash-attn"]
 # Intel MKL support for faster CPU inference (Linux/Windows)
 # Enable with: cargo build --no-default-features --features mkl
 # Requires: Intel MKL libraries installed
-mkl = ["candle-core/mkl", "candle-nn/mkl", "candle-transformers/mkl"]
+# gemm/half: candle's mkl path needs hgemm_ (f16 GEMM), which the static
+# MKL 2020.1 package from intel-mkl-src lacks; src/ffi/mkl_shim.rs provides
+# it on top of the gemm crate kernels.
+mkl = ["candle-core/mkl", "candle-nn/mkl", "candle-transformers/mkl", "dep:gemm", "dep:half"]
 # macOS Accelerate framework support for faster CPU inference
 # Enable with: cargo build --no-default-features --features accelerate
 accelerate = ["candle-core/accelerate", "candle-nn/accelerate", "candle-transformers/accelerate"]
@@ -42,6 +45,7 @@ tokenizers = { version = "0.21.0", default-features = false, features = ["http",
 hf-hub = { version = "0.4.1", default-features = false, features = ["rustls-tls"] }
 safetensors = "0.4.1"
 serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"
 serde_json = "1.0.93"
 tracing = "0.1.37"
 libc = "0.2.147"
@@ -53,6 +57,10 @@ crossbeam-channel = "0.5"  # Efficient multi-channel select for scheduler wakeup
 # Image decode + PIL-equivalent bicubic+antialias resize, used by
 # multimodal_encode_image_from_bytes to match SiglipProcessor preprocessing.
 image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+# hgemm_ shim deps (mkl build only): route candle's f16 matmuls around the
+# f16-less static MKL 2020.1 onto the gemm crate kernels.
+gemm = { version = "0.18.2", features = ["f16"], optional = true }
+half = { version = "2.5.0", optional = true }
 
 [dev-dependencies]
 rstest = "0.18"

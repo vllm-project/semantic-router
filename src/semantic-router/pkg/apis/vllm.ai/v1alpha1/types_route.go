@@ -98,15 +98,19 @@ type ContextRule struct {
 	// +kubebuilder:validation:MaxLength=100
 	Name string `json:"name" yaml:"name"`
 
-	// MinTokens is the minimum token count (supports K/M suffixes)
-	// +kubebuilder:validation:Required
+	// MinTokens is the inclusive minimum token count (supports K/M suffixes).
+	// Omit it to start the band at 0. At least one of MinTokens and MaxTokens
+	// must be set.
+	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9]+(\.[0-9]+)?[KMkm]?$`
-	MinTokens string `json:"minTokens" yaml:"min_tokens"`
+	MinTokens string `json:"minTokens,omitempty" yaml:"min_tokens,omitempty"`
 
-	// MaxTokens is the maximum token count (supports K/M suffixes)
-	// +kubebuilder:validation:Required
+	// MaxTokens is the inclusive maximum token count (supports K/M suffixes).
+	// Omit it to make the band open-ended so every request at or above
+	// MinTokens matches. Equal MinTokens and MaxTokens match exactly one count.
+	// +optional
 	// +kubebuilder:validation:Pattern=`^[0-9]+(\.[0-9]+)?[KMkm]?$`
-	MaxTokens string `json:"maxTokens" yaml:"max_tokens"`
+	MaxTokens string `json:"maxTokens,omitempty" yaml:"max_tokens,omitempty"`
 
 	// Description provides human-readable explanation
 	// +optional
@@ -222,17 +226,31 @@ type EmbeddingSignal struct {
 	// +kubebuilder:validation:MaxLength=100
 	Name string `json:"name" yaml:"name"`
 
-	// Threshold is the similarity threshold for matching (0.0-1.0)
+	// Threshold accepts a cosine score, or positive-minus-negative margin when negatives are configured.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Minimum=0
-	// +kubebuilder:validation:Maximum=1
+	// +kubebuilder:validation:Minimum=-2
+	// +kubebuilder:validation:Maximum=2
 	Threshold float32 `json:"threshold" yaml:"threshold"`
 
 	// Candidates is the list of candidate phrases for semantic matching
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=100
-	Candidates []string `json:"candidates" yaml:"candidates"`
+	// +optional
+	// +kubebuilder:validation:MaxItems=1000
+	Candidates []string `json:"candidates,omitempty" yaml:"candidates,omitempty"`
+
+	// ImageCandidates contains local image paths or inline base64 images in the positive bank.
+	// +optional
+	// +kubebuilder:validation:MaxItems=1000
+	ImageCandidates []string `json:"imageCandidates,omitempty" yaml:"imageCandidates,omitempty"`
+
+	// NegativeCandidates contains text anchors subtracted from the positive score.
+	// +optional
+	// +kubebuilder:validation:MaxItems=1000
+	NegativeCandidates []string `json:"negativeCandidates,omitempty" yaml:"negativeCandidates,omitempty"`
+
+	// NegativeImageCandidates contains image anchors subtracted from the positive score.
+	// +optional
+	// +kubebuilder:validation:MaxItems=1000
+	NegativeImageCandidates []string `json:"negativeImageCandidates,omitempty" yaml:"negativeImageCandidates,omitempty"`
 
 	// AggregationMethod defines how to aggregate multiple candidate similarities
 	// +optional
@@ -240,8 +258,13 @@ type EmbeddingSignal struct {
 	// +kubebuilder:default=max
 	AggregationMethod string `json:"aggregationMethod,omitempty" yaml:"aggregationMethod,omitempty"`
 
+	// PrototypeScoring overrides the family's prototype construction and scoring.
+	// An omitted object inherits the family; an empty object uses core defaults.
+	// +optional
+	PrototypeScoring *PrototypeScoringConfig `json:"prototypeScoring,omitempty" yaml:"prototypeScoring,omitempty"`
+
 	// QueryModality declares which modality of the incoming request payload
-	// the query embedding is computed from. Candidates always remain text;
+	// the query embedding is computed from. Candidates are encoded according to their declared text or image field;
 	// the rule cosine-matches the text-anchor set against a query embedding
 	// produced from the declared modality, all in the shared multimodal
 	// embedding space.
@@ -299,8 +322,9 @@ type Decision struct {
 
 // SignalCombination defines how to combine multiple signals
 type SignalCombination struct {
-	// Operator defines the logical operator for combining conditions (AND/OR/NOT)
-	// NOT uses NOR semantics: matches only when none of the conditions match.
+	// Operator defines the logical operator for combining conditions (AND/OR/NOT).
+	// NOT is strictly unary: it takes exactly one child condition and negates its result.
+	// Compose NOR/NAND by nesting NOT around OR/AND.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=AND;OR;NOT
 	Operator string `json:"operator" yaml:"operator"`
@@ -355,9 +379,13 @@ type ModelRef struct {
 	// +kubebuilder:validation:MaxLength=500
 	ReasoningDescription string `json:"reasoningDescription,omitempty" yaml:"reasoningDescription,omitempty"`
 
-	// ReasoningEffort defines the reasoning effort level (low/medium/high)
+	// ReasoningMode selects an activation mode supported by the model family.
 	// +optional
-	// +kubebuilder:validation:Enum=low;medium;high
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	ReasoningMode string `json:"reasoningMode,omitempty" yaml:"reasoningMode,omitempty"`
+
+	// ReasoningEffort selects an effort value supported by the model family.
+	// +optional
 	ReasoningEffort string `json:"reasoningEffort,omitempty" yaml:"reasoningEffort,omitempty"`
 }
 
@@ -366,7 +394,7 @@ type DecisionPlugin struct {
 	// Type is the plugin type. response_cache is canonical; semantic-cache,
 	// semantic_cache, and response-cache are deprecated aliases.
 	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;rag;request_params;response_jailbreak;router_replay;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
+	// +kubebuilder:validation:Enum=context_compression;fast_response;hallucination;header_mutation;memory;rag;request_params;response_jailbreak;router_replay;shadow_dispatch;response_cache;response-cache;semantic_cache;semantic-cache;system_prompt;tools
 	Type string `json:"type" yaml:"type"`
 
 	// Configuration is the plugin-specific configuration as a raw JSON object
@@ -406,9 +434,13 @@ type ModelScore struct {
 	// +kubebuilder:validation:MaxLength=500
 	ReasoningDescription string `json:"reasoningDescription,omitempty" yaml:"reasoningDescription,omitempty"`
 
-	// ReasoningEffort defines the reasoning effort level (low/medium/high)
+	// ReasoningMode selects an activation mode supported by the model family.
 	// +optional
-	// +kubebuilder:validation:Enum=low;medium;high
+	// +kubebuilder:validation:Enum=enabled;disabled;adaptive
+	ReasoningMode string `json:"reasoningMode,omitempty" yaml:"reasoningMode,omitempty"`
+
+	// ReasoningEffort selects an effort value supported by the model family.
+	// +optional
 	ReasoningEffort string `json:"reasoningEffort,omitempty" yaml:"reasoningEffort,omitempty"`
 }
 

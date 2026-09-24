@@ -1,10 +1,43 @@
 package config
 
-const (
-	RuleOnUnknownNoMatch     = "no_match"
-	RuleOnUnknownMatch       = "match"
-	RuleOnUnknownFailRequest = "fail_request"
+import (
+	"slices"
+	"strings"
 )
+
+type UnknownPolicy string
+
+const (
+	RuleOnUnknownNoMatch     UnknownPolicy = "no_match"
+	RuleOnUnknownMatch       UnknownPolicy = "match"
+	RuleOnUnknownFailRequest UnknownPolicy = "fail_request"
+)
+
+var UnknownPolicies = []UnknownPolicy{RuleOnUnknownNoMatch, RuleOnUnknownMatch, RuleOnUnknownFailRequest}
+
+func (p UnknownPolicy) IsValid() bool {
+	return slices.Contains(UnknownPolicies, p)
+}
+
+func UnknownPolicyChoices() string {
+	names := make([]string, len(UnknownPolicies))
+	for i, policy := range UnknownPolicies {
+		names[i] = string(policy)
+	}
+	return strings.Join(names[:len(names)-1], ", ") + ", or " + names[len(names)-1]
+}
+
+const DecisionActionRoute = "route"
+
+// DecisionAction is an explicit action a matched decision applies instead of
+// candidate ranking. The only supported type is "route": send the request to
+// Destination, overriding a caller-pinned model, so a detected prompt attack
+// cannot bypass the guard by naming a model. Destination must resolve in
+// model_config and the decision's rules must reference a jailbreak signal.
+type DecisionAction struct {
+	Type        string `yaml:"type" json:"type" jsonschema:"required"`
+	Destination string `yaml:"destination" json:"destination" jsonschema:"required"`
+}
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
@@ -15,6 +48,7 @@ type Decision struct {
 	OutputContract      string                     `yaml:"output_contract,omitempty" json:"output_contract,omitempty"`
 	OutputContractSpec  *OutputContractSpec        `yaml:"output_contract_spec,omitempty" json:"output_contract_spec,omitempty"`
 	Rules               RuleCombination            `yaml:"rules"`
+	Action              *DecisionAction            `yaml:"action,omitempty" json:"action,omitempty"`
 	ModelRefs           []ModelRef                 `yaml:"modelRefs,omitempty"`
 	Algorithm           *AlgorithmConfig           `yaml:"algorithm,omitempty"`
 	Adaptations         DecisionAdaptationsConfig  `yaml:"adaptations,omitempty"`
@@ -37,11 +71,13 @@ type EmitDirective struct {
 }
 
 // RetentionDirective expresses keep / drop / prefer-retain semantics over the
-// response/cache surface. All fields are tri-state pointers so we can
+// Router-owned response content. All fields are tri-state pointers so we can
 // distinguish "unset" from an explicit zero value.
 //
-// Runtime consumes Drop (semantic-cache write skip), TTLTurns (per-entry
-// cache TTL override), and KeepCurrentModel (model-switch-gate forced stay).
+// Runtime consumes Drop (response-cache, memory, and Responses-object write
+// suppression), TTLTurns (per-entry cache TTL override), and KeepCurrentModel
+// (model-switch-gate forced stay). Drop does not delete existing objects or
+// disable explicit history reads, telemetry, or backend-side persistence.
 // PreferPrefixRetention is emitted to the pool as an x-vsr-retention-prefer-prefix
 // header; its session-aware scoring bias and KV-cache eviction integration are
 // follow-up work. All set fields are also observed via log + trace attributes
@@ -155,8 +191,9 @@ type ReMoMAlgorithmConfig struct {
 }
 
 type ModelReasoningControl struct {
-	UseReasoning         *bool  `yaml:"use_reasoning"`
+	UseReasoning         *bool  `yaml:"use_reasoning,omitempty"`
 	ReasoningDescription string `yaml:"reasoning_description,omitempty"`
+	ReasoningMode        string `yaml:"reasoning_mode,omitempty"`
 	ReasoningEffort      string `yaml:"reasoning_effort,omitempty"`
 }
 
@@ -174,7 +211,7 @@ type RuleNode struct {
 	Label      string            `yaml:"label,omitempty" json:"label,omitempty"`
 	Predicate  *NumericPredicate `yaml:"predicate,omitempty" json:"predicate,omitempty"`
 	OnError    string            `yaml:"on_error,omitempty" json:"on_error,omitempty"`
-	OnUnknown  string            `yaml:"on_unknown,omitempty" json:"on_unknown,omitempty"`
+	OnUnknown  UnknownPolicy     `yaml:"on_unknown,omitempty" json:"on_unknown,omitempty"`
 	Operator   string            `yaml:"operator,omitempty" json:"operator,omitempty"`
 	Conditions []RuleNode        `yaml:"conditions,omitempty" json:"conditions,omitempty"`
 }
@@ -188,6 +225,15 @@ func (n *RuleNode) IsLeaf() bool {
 // terminal decision. Evaluators must not infer that meaning for nested nodes.
 func (n *RuleNode) IsEmpty() bool {
 	return n.Type == "" && n.Name == "" && n.Operator == "" && len(n.Conditions) == 0
+}
+
+// IsCatchAll reports a decision that matches every request: omitted rules or
+// an explicit AND with no conditions.
+func (n *RuleNode) IsCatchAll() bool {
+	if n.IsEmpty() {
+		return true
+	}
+	return !n.IsLeaf() && strings.EqualFold(n.Operator, RuleOperatorAnd) && len(n.Conditions) == 0
 }
 
 type (

@@ -5,7 +5,10 @@ description: Let Semantic Router choose a model pool while llm-d schedules a rep
 
 # Integrate with llm-d
 
-Use this topology when a request must make two different choices:
+llm-d is one
+[Inference Router](../../overview/semantic-router-overview#protocol-and-deployment-boundaries),
+alongside vLLM Router and the [AIBrix gateway](aibrix). Use this topology when
+a request must make two different choices:
 
 1. **Semantic Router** chooses the logical model or model pool from request
    intent, policy, and recipe state.
@@ -88,7 +91,7 @@ the llm-d deployment and must use the API version supported by that release.
    the route values. Validate it before deployment:
 
    ```bash
-   vllm-sr validate --config config.yaml
+   vllm-sr config validate --config config.yaml
    ```
 
 2. Deploy Semantic Router with the Helm or Operator workflow described in

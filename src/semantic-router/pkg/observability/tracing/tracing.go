@@ -8,6 +8,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
@@ -81,7 +82,7 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 	// Create tracer provider
 	tracerProvider = sdktrace.NewTracerProvider(
 		sdktrace.WithResource(res),
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithBatcher(observedExporter{exporter}),
 		sdktrace.WithSampler(sampler),
 	)
 
@@ -89,15 +90,24 @@ func InitTracing(ctx context.Context, cfg TracingConfig) error {
 	otel.SetTracerProvider(tracerProvider)
 
 	// Set global propagator for trace context propagation
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
+	otel.SetTextMapPropagator(DefaultPropagator())
 
 	// Create named tracer for the router
 	tracer = tracerProvider.Tracer("semantic-router")
 
 	return nil
+}
+
+// DefaultPropagator is the text-map propagator InitTracing installs
+// globally: W3C trace context plus baggage. Baggage members a client sends
+// are therefore extracted into the request's trace context, which is why
+// outbound calls to less trusted targets must inject with
+// InjectSpanContextToSlice rather than the global propagator.
+func DefaultPropagator() propagation.TextMapPropagator {
+	return propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	)
 }
 
 func samplerFromConfig(cfg TracingConfig) sdktrace.Sampler {
@@ -162,6 +172,9 @@ func StartSpan(ctx context.Context, spanName string, opts ...trace.SpanStartOpti
 		ctx = context.Background()
 	}
 
+	if attrs, ok := ctx.Value(routingAttributesKey{}).([]attribute.KeyValue); ok {
+		opts = append([]trace.SpanStartOption{trace.WithAttributes(attrs...)}, opts...)
+	}
 	if tracer == nil {
 		// Return noop tracer if tracing is not initialized
 		return otel.Tracer("semantic-router").Start(ctx, spanName, opts...)
@@ -176,49 +189,16 @@ func SetSpanAttributes(span trace.Span, attrs ...attribute.KeyValue) {
 	}
 }
 
-// RecordError records an error on a span if it exists
-func RecordError(span trace.Span, err error) {
-	if span != nil && err != nil {
-		span.RecordError(err)
+// RecordError records a bounded reason, never provider error text or user content.
+func RecordError(span trace.Span, reason string) {
+	if span != nil {
+		span.AddEvent("error", trace.WithAttributes(attribute.String("error.reason", reason)))
+		span.SetStatus(codes.Error, reason)
 	}
-}
-
-// StartSignalSpan starts a new span for signal evaluation
-// signalType: the type of signal (e.g., "keyword", "embedding", "domain")
-// Returns the new context and span
-func StartSignalSpan(ctx context.Context, signalType string) (context.Context, trace.Span) {
-	// Use specific signal span name based on type
-	var spanName string
-	switch signalType {
-	case "keyword":
-		spanName = SpanSignalKeyword
-	case "embedding":
-		spanName = SpanSignalEmbedding
-	case "domain":
-		spanName = SpanSignalDomain
-	case "fact_check":
-		spanName = SpanSignalFactCheck
-	case "user_feedback":
-		spanName = SpanSignalUserFeedback
-	case "reask":
-		spanName = SpanSignalReask
-	case "preference":
-		spanName = SpanSignalPreference
-	case "language":
-		spanName = SpanSignalLanguage
-	case "latency":
-		spanName = SpanSignalLatency
-	default:
-		spanName = SpanSignalEvaluation
-	}
-
-	spanCtx, span := StartSpan(ctx, spanName)
-	SetSpanAttributes(span, attribute.String(AttrSignalType, signalType))
-	return spanCtx, span
 }
 
 // EndSignalSpan ends a signal span with matched rules and confidence
-func EndSignalSpan(span trace.Span, matchedRules []string, confidence float64, latencyMs int64) {
+func EndSignalSpan(span trace.Span, matchedRules []string, confidence float64, latencyMs int64, scored bool) {
 	if span == nil {
 		return
 	}
@@ -226,33 +206,32 @@ func EndSignalSpan(span trace.Span, matchedRules []string, confidence float64, l
 	if len(matchedRules) > 0 {
 		SetSpanAttributes(span,
 			attribute.StringSlice(AttrSignalMatchedRules, matchedRules),
-			attribute.Float64(AttrSignalConfidence, confidence),
 			attribute.Int64(AttrSignalLatencyMs, latencyMs))
 	} else {
 		SetSpanAttributes(span,
 			attribute.Int64(AttrSignalLatencyMs, latencyMs))
 	}
 
+	available := scored
+	SetSpanAttributes(span, attribute.Bool(AttrSignalConfidence+"_available", available))
+	if available && len(matchedRules) > 0 {
+		SetSpanAttributes(span, attribute.Float64(AttrSignalConfidence, confidence))
+	}
 	span.End()
 }
 
-// StartDecisionSpan starts a new span for decision evaluation
-// decisionName: the name of the decision being evaluated
-// Returns the new context and span
-func StartDecisionSpan(ctx context.Context, decisionName string) (context.Context, trace.Span) {
-	spanCtx, span := StartSpan(ctx, SpanDecisionEvaluation)
-	SetSpanAttributes(span, attribute.String(AttrDecisionName, decisionName))
-	return spanCtx, span
-}
-
 // EndDecisionSpan ends a decision span with evaluation results
-func EndDecisionSpan(span trace.Span, confidence float64, matchedRules []string, strategy string) {
+func EndDecisionSpan(span trace.Span, confidence float64, matchedRules []string, strategy string, scored bool) {
 	if span == nil {
 		return
 	}
 
+	available := scored
+	if available {
+		SetSpanAttributes(span, attribute.Float64(AttrDecisionConfidence, confidence))
+	}
 	SetSpanAttributes(span,
-		attribute.Float64(AttrDecisionConfidence, confidence),
+		attribute.Bool(AttrDecisionConfidence+"_available", available),
 		attribute.StringSlice(AttrDecisionMatchedRules, matchedRules),
 		attribute.String(AttrDecisionStrategy, strategy))
 
@@ -293,20 +272,20 @@ func EndPluginSpan(span trace.Span, status string, latencyMs int64, result strin
 	}
 
 	SetSpanAttributes(span, attrs...)
+	if status == "error" {
+		span.SetStatus(codes.Error, "plugin_failed")
+	}
 	span.End()
 }
 
-// Span attribute keys following the signal -> decision -> plugin -> model hierarchy
+// Attribute keys emitted by the current entrypoint/recipe routing pipeline.
 const (
 	// Request metadata
 	AttrRequestID  = "request.id"
-	AttrUserID     = "user.id"
-	AttrSessionID  = "session.id"
 	AttrHTTPMethod = "http.method"
 	AttrHTTPPath   = "http.path"
 
 	// Signal layer attributes
-	AttrSignalType         = "signal.type"
 	AttrSignalMatchedRules = "signal.matched_rules"
 	AttrSignalConfidence   = "signal.confidence"
 	AttrSignalLatencyMs    = "signal.latency_ms"
@@ -322,63 +301,30 @@ const (
 	AttrPluginDecision = "plugin.decision"
 	AttrPluginStatus   = "plugin.status"
 	AttrPluginLatency  = "plugin.latency_ms"
-	AttrPluginEnabled  = "plugin.enabled"
 	AttrPluginResult   = "plugin.result"
 
 	// Model layer attributes
-	AttrModelName            = "model.name"
-	AttrModelProvider        = "model.provider"
-	AttrModelVersion         = "model.version"
-	AttrModelEndpoint        = "model.endpoint"
-	AttrReasoningEnabled     = "model.reasoning_enabled"
-	AttrReasoningEffort      = "model.reasoning_effort"
-	AttrTokenCountPrompt     = "model.token_count_prompt"
-	AttrTokenCountCompletion = "model.token_count_completion"
+	AttrModelName        = "model.name"
+	AttrReasoningEnabled = "model.reasoning_enabled"
+	AttrReasoningEffort  = "model.reasoning_effort"
 
-	// Legacy attributes (for backward compatibility, to be deprecated)
-	AttrCategoryName             = "category.name"
-	AttrCategoryConfidence       = "category.confidence"
-	AttrClassifierType           = "classifier.type"
-	AttrRoutingStrategy          = "routing.strategy"
-	AttrRoutingReason            = "routing.reason"
-	AttrOriginalModel            = "routing.original_model"
-	AttrSelectedModel            = "routing.selected_model"
-	AttrEndpointName             = "endpoint.name"
-	AttrEndpointAddress          = "endpoint.address"
-	AttrPIIDetected              = "pii.detected"
-	AttrPIITypes                 = "pii.types"
-	AttrJailbreakDetected        = "jailbreak.detected"
-	AttrJailbreakType            = "jailbreak.type"
-	AttrSecurityAction           = "security.action"
-	AttrCacheHit                 = "cache.hit"
-	AttrCacheKey                 = "cache.key"
-	AttrReasoningFamily          = "reasoning.family"
-	AttrToolsSelected            = "tools.selected"
-	AttrToolsCount               = "tools.count"
-	AttrProcessingTimeMs         = "processing.time_ms"
-	AttrClassificationTimeMs     = "classification.time_ms"
-	AttrCacheLookupTimeMs        = "cache.lookup_time_ms"
-	AttrCacheWriteSkippedReason  = "cache.write_skipped_reason"
-	AttrPIIDetectionTimeMs       = "pii.detection_time_ms"
-	AttrJailbreakDetectionTimeMs = "jailbreak.detection_time_ms"
+	// Routing and plugin outcome attributes
+	AttrRoutingReason           = "routing.reason"
+	AttrOriginalModel           = "routing.original_model"
+	AttrSelectedModel           = "routing.selected_model"
+	AttrEndpointAddress         = "endpoint.address"
+	AttrCacheHit                = "cache.hit"
+	AttrCacheLookupTimeMs       = "cache.lookup_time_ms"
+	AttrCacheWriteSkippedReason = "cache.write_skipped_reason"
 )
 
-// Span names following the hierarchy: signal -> decision -> plugin -> model
+// Current runtime phase spans; plugin and looper spans carry inherited recipe identity.
 const (
 	// Root span
-	SpanRequestReceived = "semantic_router.request.received"
+	SpanRequest = "semantic_router.request"
 
 	// Signal evaluation layer (Layer 1)
-	SpanSignalEvaluation   = "semantic_router.signal.evaluation"
-	SpanSignalKeyword      = "semantic_router.signal.keyword"
-	SpanSignalEmbedding    = "semantic_router.signal.embedding"
-	SpanSignalDomain       = "semantic_router.signal.domain"
-	SpanSignalFactCheck    = "semantic_router.signal.fact_check"
-	SpanSignalUserFeedback = "semantic_router.signal.user_feedback"
-	SpanSignalReask        = "semantic_router.signal.reask"
-	SpanSignalPreference   = "semantic_router.signal.preference"
-	SpanSignalLanguage     = "semantic_router.signal.language"
-	SpanSignalLatency      = "semantic_router.signal.latency"
+	SpanSignalEvaluation = "semantic_router.signal.evaluation"
 
 	// Decision evaluation layer (Layer 2)
 	SpanDecisionEvaluation = "semantic_router.decision.evaluation"
@@ -387,20 +333,8 @@ const (
 	SpanPluginExecution = "semantic_router.plugin.execution"
 
 	// RAG (Retrieval-Augmented Generation) spans
-	SpanRAGRetrieval        = "semantic_router.rag.retrieval"
-	SpanRAGContextInjection = "semantic_router.rag.context_injection"
+	SpanRAGRetrieval = "semantic_router.rag.retrieval"
 
 	// Model invocation layer (Layer 4)
-	SpanUpstreamRequest       = "semantic_router.upstream.request"
-	SpanResponseProcessing    = "semantic_router.response.processing"
-	SpanToolSelection         = "semantic_router.tools.selection"
-	SpanSystemPromptInjection = "semantic_router.system_prompt.injection"
-
-	// Legacy spans (deprecated - kept for backward compatibility during migration)
-	SpanClassification     = "semantic_router.classification" // Use SpanSignalEvaluation instead
-	SpanPIIDetection       = "semantic_router.security.pii_detection"
-	SpanJailbreakDetection = "semantic_router.security.jailbreak_detection"
-	SpanCacheLookup        = "semantic_router.cache.lookup"
-	SpanRoutingDecision    = "semantic_router.routing.decision"
-	SpanBackendSelection   = "semantic_router.backend.selection"
+	SpanUpstreamRequest = "semantic_router.upstream.request"
 )

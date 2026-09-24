@@ -18,7 +18,12 @@ It does **not** download a language model or start a vLLM server.
 
 - Linux and an NVIDIA GPU supported by the vLLM release you plan to run;
 - an x86-64 host when using the current Semantic Router CUDA image;
-- an NVIDIA driver compatible with the selected container images;
+- a GPU of compute capability 7.0 or newer (Volta and later) for the Router
+  image, which compiles its local models for that minimum; build with
+  `CUDA_COMPUTE_CAP=<value>` to target an older or newer floor;
+- an NVIDIA driver, and GPU passthrough into the Router container. The CUDA
+  Router image links the driver library directly, so it does not start without
+  passthrough even when every Router-side model is configured for CPU;
 - Docker and NVIDIA Container Toolkit;
 - enough GPU memory for the vLLM model, KV cache, and any Router-side models;
   and
@@ -92,7 +97,7 @@ the Router can reach a host-published port through `host.docker.internal`:
 ```yaml
 providers:
   defaults:
-    default_model: local/qwen
+    model: local/qwen
   models:
     - name: local/qwen
       provider_model_id: Qwen/Qwen3-0.6B
@@ -101,7 +106,7 @@ providers:
         - name: nvidia-vllm
           endpoint: host.docker.internal:8000
           protocol: http
-          type: vllm
+          provider: vllm
           weight: 1
 ```
 
@@ -123,16 +128,16 @@ untrusted network.
 If vLLM should own all GPU memory, keep the Router on CPU:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-To run supported Router-side ONNX embeddings and classifiers on CUDA, use
+To run supported Router-side local embeddings and classifiers on CUDA, use
 `--platform nvidia`. The CLI selects and pulls the published
 `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` image by default:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 vllm-sr serve --platform nvidia --config config.yaml
 ```
 
@@ -159,12 +164,15 @@ Check the local stack and Router logs:
 
 ```bash
 vllm-sr status
-vllm-sr logs router | grep 'Using CUDA execution provider'
+vllm-sr logs router | grep model_binding_ready
 nvidia-smi
 ```
 
-The CUDA log appears only when the active recipe loads a supported local ONNX
-model. Then send a request through an entrypoint exposed by that recipe. Replace
+Every prepared Router-side model reports the device it runs on, so a GPU
+deployment shows `"device":"cuda:0"` for the configured classifiers and
+`nvidia-smi` lists the Router process. A model reporting `"device":"cpu"` runs
+on the CPU regardless of GPU passthrough. Then send a request through an
+entrypoint exposed by that recipe. Replace
 `vllm-sr/auto` if your config uses another public model name:
 
 ```bash
@@ -186,14 +194,16 @@ routed request proves the Router, recipe, and backend binding work together.
 
 Configure Docker with `nvidia-ctk`, restart Docker, and repeat NVIDIA's sample
 container command. Debug the container runtime before debugging either vLLM or
-Semantic Router.
+Semantic Router. This is not optional for the CUDA Router image: it links the
+driver library, so without working passthrough the container exits at startup
+with `libcuda.so.1: cannot open shared object file`.
 
 ### The Router uses the CPU
 
 Confirm that `--platform nvidia` selected the `vllm-sr-cuda` image and that
 `VLLM_SR_NVIDIA_PRESERVE_CPU` is not enabled. Check the generated runtime
 configuration and startup logs, not only the source recipe. A recipe without a
-local ONNX signal model has nothing to move to CUDA.
+local signal model has nothing to move to CUDA.
 
 ### vLLM or the Router runs out of GPU memory
 

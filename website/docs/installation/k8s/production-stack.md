@@ -62,7 +62,7 @@ to select. A Kubernetes backend reference uses this shape:
 ```yaml
 providers:
   defaults:
-    default_model: production/qwen3
+    model: production/qwen3
   models:
     - name: production/qwen3
       provider_model_id: Qwen/Qwen3-8B
@@ -70,6 +70,7 @@ providers:
         - name: production-stack
           endpoint: vllm-router-service.default.svc.cluster.local:80
           protocol: http
+          provider: vllm
           weight: 100
 ```
 
@@ -82,14 +83,15 @@ Add model cards, decisions, and entrypoints that reference these provider
 names, then validate the complete document:
 
 ```bash
-vllm-sr validate --config config.yaml
+vllm-sr config validate --config config.yaml
 ```
 
 ## 3. Deploy Semantic Router
 
 Use [Configuration Workflows](../configuration-workflows#helm) to deploy the
 validated config with `configOverride`, then attach one of the supported
-[Kubernetes gateways](ai-gateway). Pin chart and image versions for production;
+[Kubernetes gateways](gateways), such as [Envoy AI Gateway](ai-gateway) or
+[agentgateway](agentgateway). Pin chart and image versions for production;
 the development `0.0.0-latest` chart is for testing current main.
 
 The upstream

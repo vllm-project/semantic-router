@@ -22,13 +22,12 @@ func toxicityRule() config.ClassifierSignalRule {
 func newTestSequenceClassifier(t *testing.T, server *httptest.Server, rule config.ClassifierSignalRule) labelClassifier {
 	t.Helper()
 	classifier, err := newSequenceLabelClassifier(rule, &config.ExternalModelConfig{
-		ModelEndpoint: config.ClassifierVLLMEndpoint{Address: "placeholder", Port: 1},
+		ModelEndpoint: endpointForTestServer(t, server),
 		ModelRole:     config.ModelRoleClassification,
 	})
 	if err != nil {
 		t.Fatalf("failed to construct classifier: %v", err)
 	}
-	classifier.(*sequenceLabelClassifier).backend.baseURL = server.URL
 	return classifier
 }
 

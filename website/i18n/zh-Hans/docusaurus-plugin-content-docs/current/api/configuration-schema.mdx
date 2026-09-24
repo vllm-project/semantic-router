@@ -1,0 +1,39 @@
+---
+title: 配置模式参考
+sidebar_label: 配置 Schema
+description: 检索 vLLM Semantic Router 的规范配置契约。
+hide_table_of_contents: true
+translation:
+  source_commit: "12c2aa4feb5c5d40d90104d8b09cade1facf0bf5"
+  source_file: "docs/api/configuration-schema.mdx"
+  outdated: false
+---
+
+import ConfigurationSchemaReference from "@site/src/components/ConfigurationSchemaReference";
+
+# 配置模式参考 {#configuration-schema-reference}
+
+本页展示当前文档版本随附的 schema。若需要运行中 Router 报告的契约，请使用控制面板参考。
+
+<ConfigurationSchemaReference />
+
+## 渐进式发现 {#progressive-discovery}
+
+Router API 和 CLI 暴露同一份契约，客户端或 Agent 不必先加载完整 schema：
+
+```bash
+vllm-sr config schema
+vllm-sr config schema --section providers.models
+vllm-sr config schema --section routing.decisions.modelRefs
+vllm-sr config schema --section routing --expanded
+vllm-sr config schema --surface algorithm:multi_factor
+vllm-sr config schema --full
+```
+
+对运行中的 Router，`GET /api/v1/config/schema` 返回精简索引。使用 `view=section&path=...` 获取精简字段目录，或使用 `view=surface&kind=...&name=...` 获取单个已注册路由表面。仅在需要自包含 JSON Schema 时，为 section 请求添加 `expanded=true`；完整 schema 使用 `view=full`。
+
+只请求能回答当前编辑的最窄 section。默认字段目录会链接到子路径，因此 Agent 不必加载每一个嵌套的算法、插件、信号和投影。新建文件时使用 `vllm-sr config init`；模板会展示必需的 provider、Model Card 以及决策引用关系，而无需加载完整 schema。
+
+Section 视图保留真实形状：`listeners`、`entrypoints` 和 `recipes` 等列表 section 暴露其条目字段，而 `version` 显示为固定标量值。仅用于引导的控制面板状态（如 `setup.mode`）有意排除在这份稳态 Router 契约之外。
+
+配置之外的 API 发现，见生成的 [Router OpenAPI 参考](./openapi)。Agent 直接从 Router 查询这两份契约；Website 和控制面板只负责可视化。

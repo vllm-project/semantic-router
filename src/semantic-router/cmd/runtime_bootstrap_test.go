@@ -1,12 +1,20 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 func TestBoolFlagOverrideOnlyWhenExplicitlySet(t *testing.T) {
@@ -118,10 +126,14 @@ func TestStartProfilingServerRejectsLiveMetricsPort(t *testing.T) {
 	}
 }
 
-func startProfilingForTest(t *testing.T, cfg *config.RouterConfig, opts runtimeOptions) []func() {
+func startProfilingForTest(t *testing.T, cfg *config.RouterConfig, opts runtimeOptions) []func(context.Context) error {
 	t.Helper()
-	hooks := make([]func(), 0)
-	t.Cleanup(func() { runShutdownHooks(&hooks) })
+	hooks := make([]func(context.Context) error, 0)
+	t.Cleanup(func() {
+		if err := runShutdownHooks(context.Background(), &hooks); err != nil {
+			t.Errorf("shutdown profiling server: %v", err)
+		}
+	})
 	startProfilingServerIfEnabled(cfg, opts, &hooks)
 	return hooks
 }
@@ -141,15 +153,71 @@ func freePort(t *testing.T) int {
 
 func TestRunShutdownHooksCompletesInRegistrationOrder(t *testing.T) {
 	completed := make([]string, 0, 2)
-	hooks := []func(){
-		func() { completed = append(completed, "replay-and-vector-stores") },
-		func() { completed = append(completed, "runtime-resources") },
+	hooks := []func(context.Context) error{
+		func(context.Context) error {
+			completed = append(completed, "replay-and-vector-stores")
+			return nil
+		},
+		func(context.Context) error {
+			completed = append(completed, "runtime-resources")
+			return nil
+		},
 	}
 
-	runShutdownHooks(&hooks)
+	if err := runShutdownHooks(context.Background(), &hooks); err != nil {
+		t.Fatalf("runShutdownHooks() error = %v", err)
+	}
 
 	want := []string{"replay-and-vector-stores", "runtime-resources"}
 	if !reflect.DeepEqual(completed, want) {
 		t.Fatalf("shutdown hook order = %v, want %v", completed, want)
+	}
+}
+
+// Exercise the actual startup loader in a subprocess because invalid config
+// terminates the process. Returning from this boundary would allow startup to
+// create registries, servers, model runtimes, and background workers.
+func TestStartupRejectsInvalidKubernetesGlobals(t *testing.T) {
+	const configPathEnv = "VSR_TEST_STARTUP_VALIDATION_CONFIG"
+	if path := os.Getenv(configPathEnv); path != "" {
+		if _, err := logging.InitLoggerFromEnv(); err != nil {
+			t.Fatal(err)
+		}
+		loadRuntimeConfigOrFatal(path)
+		os.Exit(0)
+	}
+
+	cases := []struct {
+		name   string
+		global string
+		want   string
+	}{
+		{"cache", "  stores: {response_cache: {enabled: true, similarity_threshold: 1.5}}", "similarity_threshold"},
+		{"memory", "  stores: {memory: {default_similarity_threshold: 1.5}}", "default_similarity_threshold"},
+		{"admission", "  model_catalog: {admission: {prompt_guard: {max_concurrency: 1, max_queue: -1}}}", "max_queue"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			raw := "version: v0.3\nglobal:\n  router: {config_source: kubernetes}\n" + tc.global + "\n"
+			if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			//nolint:gosec // G204: runs the current Go test binary with a fixed test selector.
+			cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestStartupRejectsInvalidKubernetesGlobals$")
+			cmd.Env = append(os.Environ(), configPathEnv+"="+path)
+			output, err := cmd.CombinedOutput()
+			var exitErr *exec.ExitError
+			if !errors.As(err, &exitErr) || exitErr.ExitCode() != 1 {
+				t.Fatalf("startup loader must exit with code 1, got %v\n%s", err, output)
+			}
+			for _, want := range []string{"runtime_config_load_failed", tc.want} {
+				if !strings.Contains(string(output), want) {
+					t.Errorf("startup output must contain %q:\n%s", want, output)
+				}
+			}
+		})
 	}
 }

@@ -22,6 +22,8 @@ type Config struct {
 	ConfigFile             string
 	AbsConfigPath          string
 	ConfigDir              string
+	// ConfigBaseDir is the shared resource root, independent of mutable state.
+	ConfigBaseDir string
 
 	// Upstream targets
 	GrafanaURL    string
@@ -30,7 +32,6 @@ type Config struct {
 	RouterMetrics string
 	JaegerURL     string
 	EnvoyURL      string // Envoy proxy for chat completions
-	FleetSimURL   string // Fleet simulator base URL
 
 	// ReadonlyMode is the explicit, process-wide hard deny. The writable flags
 	// describe the two independent persisted surfaces discovered by the
@@ -59,11 +60,12 @@ type Config struct {
 	// Platform branding (e.g., "amd" for AMD GPU deployments)
 	Platform string
 
-	// Evaluation configuration
-	EvaluationEnabled        bool
-	EvaluationDataDir        string
+	// sr-bench is a separate durable service shared by CLI and Dashboard.
+	SRBenchURL               string
+	SRBenchTokenEnv          string
+	SRBenchAvailable         bool
+	SRBenchUnavailableReason string
 	PythonPath               string
-	EvaluationEnvoyAPIKeyEnv string
 
 	// MCP configuration
 	MCPEnabled bool
@@ -141,37 +143,35 @@ func defaultPythonBinary() string {
 }
 
 type parsedFlags struct {
-	port                     *string
-	staticDir                *string
-	configFile               *string
-	grafanaURL               *string
-	promURL                  *string
-	routerAPI                *string
-	routerMetrics            *string
-	jaegerURL                *string
-	envoyURL                 *string
-	fleetSimURL              *string
-	readonlyMode             *bool
-	runtimeConfigWritable    *bool
-	recipeStoreWritable      *bool
-	setupMode                *bool
-	allowOpenBootstrap       *bool
-	allowedOrigins           *string
-	platform                 *string
-	evaluationEnabled        *bool
-	evaluationDataDir        *string
-	pythonPath               *string
-	evaluationEnvoyAPIKeyEnv *string
-	mcpEnabled               *bool
-	mlPipelineEnabled        *bool
-	mlPipelineDataDir        *string
-	mlTrainingDir            *string
-	mlServiceURL             *string
-	workflowDBPath           *string
-	statusDBPath             *string
-	configProjectionDBPath   *string
-	auth                     authFlags
-	openClaw                 openClawFlags
+	port                   *string
+	staticDir              *string
+	configFile             *string
+	grafanaURL             *string
+	promURL                *string
+	routerAPI              *string
+	routerMetrics          *string
+	jaegerURL              *string
+	envoyURL               *string
+	readonlyMode           *bool
+	runtimeConfigWritable  *bool
+	recipeStoreWritable    *bool
+	setupMode              *bool
+	allowOpenBootstrap     *bool
+	allowedOrigins         *string
+	platform               *string
+	srBenchURL             *string
+	srBenchTokenEnv        *string
+	pythonPath             *string
+	mcpEnabled             *bool
+	mlPipelineEnabled      *bool
+	mlPipelineDataDir      *string
+	mlTrainingDir          *string
+	mlServiceURL           *string
+	workflowDBPath         *string
+	statusDBPath           *string
+	configProjectionDBPath *string
+	auth                   authFlags
+	openClaw               openClawFlags
 }
 
 func applyCoreConfig(cfg *Config, flags parsedFlags) {
@@ -184,7 +184,6 @@ func applyCoreConfig(cfg *Config, flags parsedFlags) {
 	cfg.RouterMetrics = *flags.routerMetrics
 	cfg.JaegerURL = *flags.jaegerURL
 	cfg.EnvoyURL = *flags.envoyURL
-	cfg.FleetSimURL = *flags.fleetSimURL
 	cfg.ReadonlyMode = *flags.readonlyMode
 	cfg.RuntimeConfigWritable = *flags.runtimeConfigWritable
 	cfg.RecipeStoreWritable = *flags.recipeStoreWritable
@@ -207,11 +206,13 @@ func parseAllowedOrigins(raw string) []string {
 	return origins
 }
 
-func applyFeatureConfig(cfg *Config, flags parsedFlags) {
-	cfg.EvaluationEnabled = *flags.evaluationEnabled
-	cfg.EvaluationDataDir = *flags.evaluationDataDir
+func applyFeatureConfig(cfg *Config, flags parsedFlags) error {
+	cfg.SRBenchURL = *flags.srBenchURL
+	cfg.SRBenchTokenEnv = *flags.srBenchTokenEnv
 	cfg.PythonPath = *flags.pythonPath
-	cfg.EvaluationEnvoyAPIKeyEnv = *flags.evaluationEnvoyAPIKeyEnv
+	if err := ValidateSRBenchConfig(cfg.SRBenchURL, cfg.SRBenchTokenEnv); err != nil {
+		return err
+	}
 	cfg.MCPEnabled = *flags.mcpEnabled
 	cfg.MLPipelineEnabled = *flags.mlPipelineEnabled
 	cfg.MLPipelineDataDir = *flags.mlPipelineDataDir
@@ -220,6 +221,7 @@ func applyFeatureConfig(cfg *Config, flags parsedFlags) {
 	cfg.WorkflowDBPath = *flags.workflowDBPath
 	cfg.StatusDBPath = *flags.statusDBPath
 	cfg.ConfigProjectionDBPath = *flags.configProjectionDBPath
+	return nil
 }
 
 func applyAuthConfig(cfg *Config, flags authFlags) error {
@@ -259,7 +261,8 @@ func resolveConfigPaths(cfg *Config) error {
 		return err
 	}
 	cfg.ConfigDir = absConfigDir
-	return nil
+	cfg.ConfigBaseDir, err = resolveConfigBaseDir()
+	return err
 }
 
 func bindCoreFlags() parsedFlags {
@@ -275,9 +278,8 @@ func bindCoreFlags() parsedFlags {
 		routerMetrics: flag.String(
 			"router_metrics", env("TARGET_ROUTER_METRICS_URL", "http://localhost:9190/metrics"), "Router metrics URL",
 		),
-		jaegerURL:   flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL"),
-		envoyURL:    flag.String("envoy", env("TARGET_ENVOY_URL", ""), "Envoy proxy URL for chat completions"),
-		fleetSimURL: flag.String("fleet-sim", env("TARGET_FLEET_SIM_URL", ""), "Fleet simulator base URL"),
+		jaegerURL: flag.String("jaeger", env("TARGET_JAEGER_URL", ""), "Jaeger base URL"),
+		envoyURL:  flag.String("envoy", env("TARGET_ENVOY_URL", ""), "Envoy proxy URL for chat completions"),
 		readonlyMode: flag.Bool(
 			"readonly", env("DASHBOARD_READONLY", "false") == "true", "enable read-only mode (disable config editing)",
 		),
@@ -307,13 +309,9 @@ func bindCoreFlags() parsedFlags {
 }
 
 func bindFeatureFlags(flags parsedFlags) parsedFlags {
-	flags.evaluationEnabled = flag.Bool("evaluation", env("EVALUATION_ENABLED", "true") == "true", "enable evaluation feature")
-	flags.evaluationDataDir = flag.String("evaluation-data", env("EVALUATION_DATA_DIR", "./data/evaluation"), "evaluation artifact store directory")
+	flags.srBenchURL = flag.String("sr-bench-url", env("SR_BENCH_URL", "http://127.0.0.1:8090"), "sr-bench service origin")
+	flags.srBenchTokenEnv = flag.String("sr-bench-token-env", env("SR_BENCH_TOKEN_ENV", "SR_BENCH_TOKEN"), "environment variable holding the sr-bench service token")
 	flags.pythonPath = flag.String("python", env("PYTHON_PATH", defaultPythonBinary()), "path to Python interpreter")
-	flags.evaluationEnvoyAPIKeyEnv = flag.String(
-		"evaluation-envoy-api-key-env", env("EVALUATION_ENVOY_API_KEY_ENV", ""),
-		"server-owned Envoy API key environment variable name exposed to the fixed evaluation worker",
-	)
 	flags.mcpEnabled = flag.Bool("mcp", env("MCP_ENABLED", "true") == "true", "enable MCP (Model Context Protocol) feature")
 	flags.mlPipelineEnabled = flag.Bool("ml-pipeline", env("ML_PIPELINE_ENABLED", "true") == "true", "enable ML pipeline (benchmark, train, config)")
 	flags.mlPipelineDataDir = flag.String("ml-pipeline-data", env("ML_PIPELINE_DATA_DIR", "./data/ml-pipeline"), "ML pipeline data directory")
@@ -335,7 +333,9 @@ func LoadConfig() (*Config, error) {
 	flag.Parse()
 
 	applyCoreConfig(cfg, flags)
-	applyFeatureConfig(cfg, flags)
+	if err := applyFeatureConfig(cfg, flags); err != nil {
+		return nil, err
+	}
 	if err := applyAuthConfig(cfg, flags.auth); err != nil {
 		return nil, err
 	}

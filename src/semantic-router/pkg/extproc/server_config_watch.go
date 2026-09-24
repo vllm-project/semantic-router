@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -30,10 +30,9 @@ type configFileReloadLoop struct {
 // watchConfigAndReload watches the active config source and reloads the router on changes.
 func (s *Server) watchConfigAndReload(ctx context.Context) {
 	if s.usesKubernetesConfigSource() {
-		logging.ComponentEvent("extproc", "config_update_watch_started", map[string]interface{}{
-			"source": "kubernetes",
-		})
-		s.watchKubernetesConfigUpdates(ctx)
+		// The controller calls ActivateKubernetesConfig directly and waits for
+		// acknowledgement. A best-effort broadcast cannot establish readiness.
+		<-ctx.Done()
 		return
 	}
 
@@ -92,7 +91,7 @@ func (l *configFileReloadLoop) run(ctx context.Context) {
 			if !ok {
 				return
 			}
-			l.handleEvent(ev)
+			l.handleEvent(ctx, ev)
 		case err, ok := <-l.watcher.Errors:
 			if !ok {
 				return
@@ -105,7 +104,7 @@ func (l *configFileReloadLoop) run(ctx context.Context) {
 	}
 }
 
-func (l *configFileReloadLoop) handleEvent(ev fsnotify.Event) {
+func (l *configFileReloadLoop) handleEvent(ctx context.Context, ev fsnotify.Event) {
 	logging.ComponentDebugEvent("extproc", "config_watcher_event", map[string]interface{}{
 		"name": ev.Name,
 		"op":   ev.Op.String(),
@@ -113,7 +112,7 @@ func (l *configFileReloadLoop) handleEvent(ev fsnotify.Event) {
 	if !isConfigMutationOp(ev.Op) || !shouldReloadForConfigEvent(l.cfgFile, l.cfgDir, ev.Name) {
 		return
 	}
-	l.scheduleReload(ev)
+	l.scheduleReload(ctx, ev)
 }
 
 func isConfigMutationOp(op fsnotify.Op) bool {
@@ -145,11 +144,15 @@ func shouldReloadForConfigEvent(cfgFile, cfgDir, eventPath string) bool {
 	return strings.HasPrefix(base, "..data")
 }
 
-func (l *configFileReloadLoop) scheduleReload(ev fsnotify.Event) {
+func (l *configFileReloadLoop) scheduleReload(ctx context.Context, ev fsnotify.Event) {
 	if l.pending && time.Since(l.last) <= configReloadDebounceWindow {
 		logging.ComponentDebugEvent("extproc", "config_reload_debounced", map[string]interface{}{
 			"file": ev.Name,
 		})
+		return
+	}
+	finish, ok := l.server.lifecycle.startReload()
+	if !ok {
 		return
 	}
 
@@ -161,8 +164,15 @@ func (l *configFileReloadLoop) scheduleReload(ev fsnotify.Event) {
 		"delay_ms": int(configReloadSettleDelay / time.Millisecond),
 	})
 	goSafely("config_reload_debouncer", func() {
-		time.Sleep(configReloadSettleDelay)
-		l.reload()
+		defer finish()
+		timer := time.NewTimer(configReloadSettleDelay)
+		defer timer.Stop()
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+			l.reload()
+		}
 	})
 }
 
@@ -173,6 +183,10 @@ func (l *configFileReloadLoop) reload() {
 	l.logConfigFileStat()
 
 	if err := l.server.reloadRouterFromFile(l.cfgFile); err != nil {
+		if errors.Is(err, errConfigReloadSuperseded) {
+			logging.ComponentEvent("extproc", "config_reload_superseded", map[string]interface{}{"file": l.cfgFile})
+			return
+		}
 		l.logReloadFailure(err)
 		return
 	}
@@ -216,40 +230,4 @@ func (l *configFileReloadLoop) logReloadSuccess() {
 		event["decision_count"] = len(newRouter.Config.Decisions)
 	}
 	logging.ComponentEvent("extproc", "config_reloaded", event)
-}
-
-// watchKubernetesConfigUpdates watches for config updates from the Kubernetes controller.
-func (s *Server) watchKubernetesConfigUpdates(ctx context.Context) {
-	subscription := config.SubscribeConfigUpdates(1)
-	defer subscription.Close()
-	updateCh := subscription.Updates()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case newCfg := <-updateCh:
-			s.handleKubernetesConfigUpdate(newCfg)
-		}
-	}
-}
-
-func (s *Server) handleKubernetesConfigUpdate(newCfg *config.RouterConfig) {
-	if newCfg == nil {
-		return
-	}
-
-	err := s.reloadRouterFromConfig("kubernetes", s.configPath, newCfg)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "config_reload_failed", map[string]interface{}{
-			"source": "kubernetes",
-			"error":  err.Error(),
-		})
-		return
-	}
-
-	logging.ComponentEvent("extproc", "config_reloaded", map[string]interface{}{
-		"source":         "kubernetes",
-		"decision_count": len(newCfg.Decisions),
-	})
 }

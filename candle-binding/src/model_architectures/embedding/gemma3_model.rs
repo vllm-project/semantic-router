@@ -32,51 +32,15 @@
 
 use super::gemma_embedding::{AttentionLayerType, GemmaEmbeddingConfig};
 use crate::core::{config_errors, from_candle_error, ModelErrorType, UnifiedError, UnifiedResult};
-use candle_core::{DType, Device, Tensor};
+use crate::model_architectures::attention::chunked_sdpa::{
+    chunked_sdpa, ChunkedSdpaConfig, ATTN_QUERY_BLOCK,
+};
+use candle_core::{Device, Tensor};
 use candle_nn::{linear_no_bias, Embedding, Linear, Module, VarBuilder};
 
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/// Create a causal attention mask (lower triangular)
-///
-/// # Arguments
-/// - `seq_len`: Sequence length
-/// - `device`: Device to create the mask on
-///
-/// # Returns
-/// Causal mask tensor, shape [1, 1, seq_len, seq_len]
-/// - 0.0 for positions that can attend
-/// - -inf for positions that should be masked
-///
-/// Example for seq_len=4:
-/// ```
-/// [[0,  -inf, -inf, -inf],
-///  [0,   0,   -inf, -inf],
-///  [0,   0,    0,   -inf],
-///  [0,   0,    0,    0  ]]
-/// ```
-fn create_causal_mask(seq_len: usize, device: &Device) -> UnifiedResult<Tensor> {
-    // Create a lower triangular matrix filled with 0s
-    let mut mask_data = vec![0.0f32; seq_len * seq_len];
-
-    // Fill upper triangle with -inf
-    for i in 0..seq_len {
-        for j in (i + 1)..seq_len {
-            mask_data[i * seq_len + j] = f32::NEG_INFINITY;
-        }
-    }
-
-    // Create tensor [seq_len, seq_len]
-    let mask = Tensor::from_vec(mask_data, (seq_len, seq_len), device)
-        .map_err(|e| from_candle_error(e, "create_causal_mask: create tensor", None))?;
-
-    // Reshape to [1, 1, seq_len, seq_len] for broadcasting
-    mask.unsqueeze(0)
-        .and_then(|t| t.unsqueeze(0))
-        .map_err(|e| from_candle_error(e, "create_causal_mask: unsqueeze", None))
-}
 
 // ============================================================================
 // RmsNorm - Reused from Qwen3 (same implementation)
@@ -97,9 +61,6 @@ fn create_causal_mask(seq_len: usize, device: &Device) -> UnifiedResult<Tensor> 
 /// - Applied before attention (input_layernorm)
 /// - Applied before MLP (post_attention_layernorm)
 /// - Applied after all transformer layers (final norm)
-///
-/// # Precision
-/// Uses f64 for critical calculations to match Python implementation.
 #[derive(Debug)]
 pub struct RmsNorm {
     weight: Tensor,
@@ -137,54 +98,26 @@ impl RmsNorm {
     /// # Returns
     /// Normalized tensor with same shape as input
     pub fn forward(&self, x: &Tensor) -> UnifiedResult<Tensor> {
-        // Using f64 precision for RMS normalization (same as Qwen3)
-        // This achieves >0.99 cosine similarity with Python reference
-
-        // Step 1: Convert input to f64
-        let x_f64 = x
-            .to_dtype(DType::F64)
-            .map_err(|e| from_candle_error(e, "RmsNorm: x to f64", None))?;
-
-        // Step 2: Square the input
-        let x_squared = x_f64
+        let x_squared = x
             .sqr()
             .map_err(|e| from_candle_error(e, "RmsNorm: compute x^2", None))?;
-
-        // Step 3: Compute mean along last dimension, keeping dimension
         let mean_squared = x_squared
             .mean_keepdim(candle_core::D::Minus1)
             .map_err(|e| from_candle_error(e, "RmsNorm: compute mean(x^2)", None))?;
-
-        // Step 4: Add epsilon and take square root
         let mean_plus_eps = (mean_squared + self.eps)
             .map_err(|e| from_candle_error(e, "RmsNorm: add epsilon", None))?;
         let rms = mean_plus_eps
             .sqrt()
             .map_err(|e| from_candle_error(e, "RmsNorm: compute sqrt", None))?;
-
-        // Step 5: Normalize by dividing by RMS
-        let normalized_f64 = x_f64
+        let normalized = x
             .broadcast_div(&rms)
             .map_err(|e| from_candle_error(e, "RmsNorm: normalize (x / rms)", None))?;
-
-        // Step 6: Convert weight to f64 and apply Gemma3-specific scaling
-        // CRITICAL: Gemma3 uses (1.0 + weight) instead of just weight!
-        // See: https://github.com/huggingface/transformers/pull/29402
-        // output = normalized * (1.0 + weight)
-        let weight_f64 = self
-            .weight
-            .to_dtype(DType::F64)
-            .map_err(|e| from_candle_error(e, "RmsNorm: weight to f64", None))?;
-        let one_plus_weight =
-            (weight_f64 + 1.0).map_err(|e| from_candle_error(e, "RmsNorm: 1.0 + weight", None))?;
-        let output_f64 = normalized_f64
+        // Gemma3 scales by (1.0 + weight). See huggingface/transformers#29402.
+        let one_plus_weight = (&self.weight + 1.0)
+            .map_err(|e| from_candle_error(e, "RmsNorm: 1.0 + weight", None))?;
+        normalized
             .broadcast_mul(&one_plus_weight)
-            .map_err(|e| from_candle_error(e, "RmsNorm: scale by (1.0 + weight)", None))?;
-
-        // Step 7: Convert back to f32 for subsequent layers
-        output_f64
-            .to_dtype(DType::F32)
-            .map_err(|e| from_candle_error(e, "RmsNorm: output to f32", None))
+            .map_err(|e| from_candle_error(e, "RmsNorm: scale by (1.0 + weight)", None))
     }
 }
 
@@ -231,7 +164,7 @@ impl RotaryEmbeddingCache {
         rope_local_base_freq: f32,
         device: &Device,
     ) -> UnifiedResult<Self> {
-        if head_dim % 2 != 0 {
+        if !head_dim.is_multiple_of(2) {
             return Err(UnifiedError::Validation {
                 field: "head_dim".to_string(),
                 expected: "even number".to_string(),
@@ -398,51 +331,6 @@ impl RotaryEmbeddingCache {
 }
 
 // ============================================================================
-// Helper Functions for F64 Precision
-// ============================================================================
-
-/// Helper function to perform Linear forward with f64 precision
-///
-/// This function temporarily converts Linear weights to f64 for computation,
-/// which helps reduce floating-point accumulation errors in deep networks.
-///
-/// # Arguments
-/// - `linear`: The Linear layer
-/// - `x`: Input tensor (should be f64)
-///
-/// # Returns
-/// Output tensor in f64 precision
-fn linear_forward_f64(linear: &Linear, x: &Tensor) -> UnifiedResult<Tensor> {
-    // Convert weight to f64
-    let weight_f64 = linear
-        .weight()
-        .to_dtype(DType::F64)
-        .map_err(|e| from_candle_error(e, "linear_forward_f64: convert weight to f64", None))?;
-
-    // Transpose weight for matmul
-    let weight_t = weight_f64
-        .t()
-        .map_err(|e| from_candle_error(e, "linear_forward_f64: transpose weight", None))?;
-
-    // Compute: x @ weight^T using broadcast_matmul for proper 3D @ 2D handling
-    let output = x
-        .broadcast_matmul(&weight_t)
-        .map_err(|e| from_candle_error(e, "linear_forward_f64: broadcast_matmul", None))?;
-
-    // Add bias if present
-    if let Some(bias) = linear.bias() {
-        let bias_f64 = bias
-            .to_dtype(DType::F64)
-            .map_err(|e| from_candle_error(e, "linear_forward_f64: convert bias to f64", None))?;
-        output
-            .broadcast_add(&bias_f64)
-            .map_err(|e| from_candle_error(e, "linear_forward_f64: add bias", None))
-    } else {
-        Ok(output)
-    }
-}
-
-// ============================================================================
 // Gemma3 MLP (Feed-Forward Network)
 // ============================================================================
 
@@ -502,7 +390,7 @@ impl Gemma3MLP {
         })
     }
 
-    /// Forward pass through MLP (using f64 precision to reduce accumulation error)
+    /// Forward pass through MLP
     ///
     /// # Arguments
     /// - `x`: Input tensor, shape [batch, seq_len, hidden_size]
@@ -510,33 +398,21 @@ impl Gemma3MLP {
     /// # Returns
     /// Output tensor, shape [batch, seq_len, hidden_size]
     pub fn forward(&self, x: &Tensor) -> UnifiedResult<Tensor> {
-        // Convert input to f64 for higher precision
-        let x_f64 = x
-            .to_dtype(DType::F64)
-            .map_err(|e| from_candle_error(e, "Gemma3MLP: convert input to f64", None))?;
-
-        // Step 1: gate_proj: [batch, seq_len, 768] -> [batch, seq_len, 1152] (f64)
-        let gate_output = linear_forward_f64(&self.gate_proj, &x_f64)?;
-
-        // Step 2: gelu_pytorch_tanh activation on gate_output
-        // GELU(x) ≈ 0.5 * x * (1 + tanh(sqrt(2/π) * (x + 0.044715 * x^3)))
+        let gate_output = self
+            .gate_proj
+            .forward(x)
+            .map_err(|e| from_candle_error(e, "Gemma3MLP: gate_proj", None))?;
         let gate_activated = Self::gelu_pytorch_tanh(&gate_output)?;
-
-        // Step 3: up_proj: [batch, seq_len, 768] -> [batch, seq_len, 1152] (f64)
-        let up_output = linear_forward_f64(&self.up_proj, &x_f64)?;
-
-        // Step 4: Element-wise multiplication (GeGLU gating)
+        let up_output = self
+            .up_proj
+            .forward(x)
+            .map_err(|e| from_candle_error(e, "Gemma3MLP: up_proj", None))?;
         let gated = gate_activated
             .mul(&up_output)
             .map_err(|e| from_candle_error(e, "Gemma3MLP: gate * up", None))?;
-
-        // Step 5: down_proj: [batch, seq_len, 1152] -> [batch, seq_len, 768] (f64)
-        let output_f64 = linear_forward_f64(&self.down_proj, &gated)?;
-
-        // Convert back to f32 for subsequent layers
-        output_f64
-            .to_dtype(DType::F32)
-            .map_err(|e| from_candle_error(e, "Gemma3MLP: convert output to f32", None))
+        self.down_proj
+            .forward(&gated)
+            .map_err(|e| from_candle_error(e, "Gemma3MLP: down_proj", None))
     }
 
     /// Helper function to compute tensor statistics
@@ -698,7 +574,7 @@ impl Gemma3Attention {
             head_dim,
             config.max_position_embeddings,
             config.rope_theta,
-            &vb.device(),
+            vb.device(),
         )?;
 
         // Local RoPE: base=rope_local_base_freq (10000.0) for sliding_attention layers
@@ -706,7 +582,7 @@ impl Gemma3Attention {
             head_dim,
             config.max_position_embeddings,
             config.rope_local_base_freq,
-            &vb.device(),
+            vb.device(),
         )?;
 
         Ok(Self {
@@ -730,7 +606,7 @@ impl Gemma3Attention {
         })
     }
 
-    /// Forward pass through attention (using f64 precision to reduce accumulation error)
+    /// Forward pass through attention
     ///
     /// # Arguments
     /// - `hidden_states`: Input tensor, shape [batch, seq_len, hidden_size]
@@ -738,27 +614,34 @@ impl Gemma3Attention {
     ///
     /// # Returns
     /// Output tensor, shape [batch, seq_len, hidden_size]
+    /// `pad_mask` is an optional `(b, 1, 1, seq)` additive padding mask (`0` for
+    /// real tokens, large negative for padding). Causality and the sliding window
+    /// are applied inside [`Self::compute_attention`].
     pub fn forward(
         &self,
         hidden_states: &Tensor,
-        attention_mask: Option<&Tensor>,
+        pad_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
         let (batch_size, seq_len, _hidden_size) = hidden_states
             .dims3()
             .map_err(|e| from_candle_error(e, "Gemma3Attention: get hidden_states dims", None))?;
 
-        // Convert input to f64 for higher precision
-        let hidden_states_f64 = hidden_states
-            .to_dtype(DType::F64)
-            .map_err(|e| from_candle_error(e, "Gemma3Attention: convert input to f64", None))?;
-
-        // Step 1: Project Q, K, V (in f64 precision)
+        // Step 1: Project Q, K, V
         // Q: [batch, seq_len, hidden_size] -> [batch, seq_len, num_heads * head_dim]
         // K: [batch, seq_len, hidden_size] -> [batch, seq_len, num_kv_heads * head_dim]
         // V: [batch, seq_len, hidden_size] -> [batch, seq_len, num_kv_heads * head_dim]
-        let q = linear_forward_f64(&self.q_proj, &hidden_states_f64)?;
-        let k = linear_forward_f64(&self.k_proj, &hidden_states_f64)?;
-        let v = linear_forward_f64(&self.v_proj, &hidden_states_f64)?;
+        let q = self
+            .q_proj
+            .forward(hidden_states)
+            .map_err(|e| from_candle_error(e, "Gemma3Attention: q_proj", None))?;
+        let k = self
+            .k_proj
+            .forward(hidden_states)
+            .map_err(|e| from_candle_error(e, "Gemma3Attention: k_proj", None))?;
+        let v = self
+            .v_proj
+            .forward(hidden_states)
+            .map_err(|e| from_candle_error(e, "Gemma3Attention: v_proj", None))?;
 
         // Step 2: Reshape to multi-head format
         // Q: [batch, seq_len, num_heads, head_dim]
@@ -823,15 +706,8 @@ impl Gemma3Attention {
             .repeat(&[1, self.num_attention_heads, 1, 1])
             .map_err(|e| from_candle_error(e, "Gemma3Attention: repeat V for MQA", None))?;
 
-        // Step 6: Compute attention based on attention type
-        let attn_output = match self.attention_type {
-            AttentionLayerType::SlidingAttention => {
-                self.compute_sliding_attention(&q_rope, &k_repeated, &v_repeated, attention_mask)?
-            }
-            AttentionLayerType::FullAttention => {
-                self.compute_full_attention(&q_rope, &k_repeated, &v_repeated, attention_mask)?
-            }
-        };
+        // Step 6: Compute attention (causal; windowed on sliding layers)
+        let attn_output = self.compute_attention(&q_rope, &k_repeated, &v_repeated, pad_mask)?;
 
         // Step 7: Reshape back to [batch, seq_len, num_heads * head_dim]
         let attn_output = attn_output
@@ -844,219 +720,40 @@ impl Gemma3Attention {
             ))
             .map_err(|e| from_candle_error(e, "Gemma3Attention: reshape attn output", None))?;
 
-        // Step 8: Output projection (in f64) - convert attn_output to f64 first
-        let attn_output_f64 = attn_output.to_dtype(DType::F64).map_err(|e| {
-            from_candle_error(
-                e,
-                "Gemma3Attention: convert attn_output to f64 for o_proj",
-                None,
-            )
-        })?;
-        let output_f64 = linear_forward_f64(&self.o_proj, &attn_output_f64)?;
-
-        // Convert back to f32 for subsequent layers
-        let output = output_f64
-            .to_dtype(DType::F32)
-            .map_err(|e| from_candle_error(e, "Gemma3Attention: convert output to f32", None))?;
-
-        Ok(output)
+        // Step 8: Output projection
+        self.o_proj
+            .forward(&attn_output)
+            .map_err(|e| from_candle_error(e, "Gemma3Attention: o_proj", None))
     }
 
-    /// Compute full (global) attention
-    fn compute_full_attention(
+    /// Memory-bounded attention for this layer.
+    ///
+    /// Every layer is causal, which `Gemma3Model::forward` used to express as a
+    /// `(1, 1, seq, seq)` lower-triangular mask. A sliding layer additionally keeps
+    /// only the `sliding_window` most recent keys, `[i - sliding_window + 1, i]`:
+    /// the causal triangle intersected with a `±(sliding_window - 1)` band. The
+    /// shared kernel applies both per query block, so neither the `(seq, seq)`
+    /// window mask nor the `(b, heads, seq, seq)` score matrix is materialized.
+    fn compute_attention(
         &self,
-        q: &Tensor,                      // [batch, num_heads, seq_len, head_dim]
-        k: &Tensor,                      // [batch, num_heads, seq_len, head_dim]
-        v: &Tensor,                      // [batch, num_heads, seq_len, head_dim]
-        attention_mask: Option<&Tensor>, // [batch, seq_len]
+        q: &Tensor,                // [batch, num_heads, seq_len, head_dim]
+        k: &Tensor,                // [batch, num_heads, seq_len, head_dim]
+        v: &Tensor,                // [batch, num_heads, seq_len, head_dim]
+        pad_mask: Option<&Tensor>, // [batch, 1, 1, seq_len], additive
     ) -> UnifiedResult<Tensor> {
-        // Standard scaled dot-product attention
-        // scores = (Q @ K^T) / sqrt(head_dim)
-        // attn = softmax(scores) @ V
-        let scale = (self.head_dim as f64).sqrt();
-
-        // Q @ K^T: [batch, num_heads, seq_len, head_dim] @ [batch, num_heads, head_dim, seq_len]
-        //       -> [batch, num_heads, seq_len, seq_len]
-        let k_t = k
-            .transpose(2, 3)
-            .map_err(|e| from_candle_error(e, "FullAttention: transpose K", None))?;
-        let attn_scores = q
-            .matmul(&k_t)
-            .map_err(|e| from_candle_error(e, "FullAttention: Q @ K^T", None))?;
-
-        // Scale by 1/sqrt(head_dim) (standard attention scaling)
-        let attn_scores = (attn_scores / scale)
-            .map_err(|e| from_candle_error(e, "FullAttention: scale scores", None))?;
-
-        // Apply causal mask (attention_mask is now [1, 1, seq_len, seq_len] causal mask)
-        // Mask values: 0 for allowed positions, -inf for masked positions
-        // Add mask to scores: allowed positions remain unchanged, masked positions become -inf
-        let attn_scores = if let Some(mask) = attention_mask {
-            // Broadcasting: [batch, num_heads, seq_len, seq_len] + [1, 1, seq_len, seq_len]
-            attn_scores
-                .broadcast_add(mask)
-                .map_err(|e| from_candle_error(e, "FullAttention: apply causal mask", None))?
-        } else {
-            attn_scores
+        let window = match self.attention_type {
+            AttentionLayerType::SlidingAttention => Some(self.sliding_window.saturating_sub(1)),
+            AttentionLayerType::FullAttention => None,
         };
-        // Softmax over last dimension
-        let attn_weights = candle_nn::ops::softmax_last_dim(&attn_scores)
-            .map_err(|e| from_candle_error(e, "FullAttention: softmax", None))?;
-
-        // attn_weights @ V: [batch, num_heads, seq_len, seq_len] @ [batch, num_heads, seq_len, head_dim]
-        //                -> [batch, num_heads, seq_len, head_dim]
-        // Note: Convert V to F32 to match attn_weights dtype
-        let v_f32 = v
-            .to_dtype(DType::F32)
-            .map_err(|e| from_candle_error(e, "FullAttention: convert V to F32", None))?;
-        let output = attn_weights
-            .matmul(&v_f32)
-            .map_err(|e| from_candle_error(e, "FullAttention: attn @ V", None))?;
-
-        Ok(output)
-    }
-
-    /// Compute sliding window attention
-    fn compute_sliding_attention(
-        &self,
-        q: &Tensor,                      // [batch, num_heads, seq_len, head_dim]
-        k: &Tensor,                      // [batch, num_heads, seq_len, head_dim]
-        v: &Tensor,                      // [batch, num_heads, seq_len, head_dim]
-        attention_mask: Option<&Tensor>, // [batch, seq_len]
-    ) -> UnifiedResult<Tensor> {
-        // Sliding window attention with window size = sliding_window
-        // Each token can only attend to tokens within the window
-        // Implementation: Uses sliding window mask for efficient computation
-
-        // If sequence length <= window size, use full attention
-        let seq_len = q
-            .dim(2)
-            .map_err(|e| from_candle_error(e, "SlidingAttention: get seq_len", None))?;
-
-        if seq_len <= self.sliding_window {
-            return self.compute_full_attention(q, k, v, attention_mask);
-        }
-
-        // Otherwise, apply sliding window mask
-        // Create sliding window mask: each position can attend to [pos - window, pos]
-        let window_mask = self.create_sliding_window_mask(seq_len, q.device())?;
-
-        // Compute attention with window mask
-        let scale = (self.head_dim as f64).sqrt();
-
-        let k_t = k
-            .transpose(2, 3)
-            .map_err(|e| from_candle_error(e, "SlidingAttention: transpose K", None))?;
-        let mut attn_scores = q
-            .matmul(&k_t)
-            .map_err(|e| from_candle_error(e, "SlidingAttention: Q @ K^T", None))?;
-
-        // Scale
-        attn_scores = (attn_scores / scale)
-            .map_err(|e| from_candle_error(e, "SlidingAttention: scale scores", None))?;
-
-        // Apply window mask
-        attn_scores = attn_scores
-            .broadcast_add(&window_mask)
-            .map_err(|e| from_candle_error(e, "SlidingAttention: apply window mask", None))?;
-
-        // Apply causal mask if provided (attention_mask is now [1, 1, seq_len, seq_len] causal mask)
-        if let Some(mask) = attention_mask {
-            attn_scores = attn_scores
-                .broadcast_add(mask)
-                .map_err(|e| from_candle_error(e, "SlidingAttention: apply causal mask", None))?;
-        }
-
-        // Softmax
-        let attn_weights = candle_nn::ops::softmax_last_dim(&attn_scores)
-            .map_err(|e| from_candle_error(e, "SlidingAttention: softmax", None))?;
-
-        // attn @ V (convert V to F32 to match attn_weights dtype)
-        let v_f32 = v
-            .to_dtype(DType::F32)
-            .map_err(|e| from_candle_error(e, "SlidingAttention: convert V to F32", None))?;
-        attn_weights
-            .matmul(&v_f32)
-            .map_err(|e| from_candle_error(e, "SlidingAttention: attn @ V", None))
-    }
-
-    /// Create sliding window mask
-    ///
-    /// Returns a mask of shape [1, 1, seq_len, seq_len] where:
-    /// - 0.0 for positions within the window
-    /// - -1e9 for positions outside the window (avoid -inf to prevent NaN)
-    fn create_sliding_window_mask(&self, seq_len: usize, device: &Device) -> UnifiedResult<Tensor> {
-        const LARGE_NEGATIVE: f32 = -1e9;
-        let mut mask_data = vec![LARGE_NEGATIVE; seq_len * seq_len];
-
-        for i in 0..seq_len {
-            let window_start = if i >= self.sliding_window {
-                i - self.sliding_window + 1
-            } else {
-                0
-            };
-            let window_end = i + 1; // Inclusive of current position
-
-            for j in window_start..window_end {
-                mask_data[i * seq_len + j] = 0.0;
-            }
-        }
-
-        let mask = Tensor::from_vec(mask_data, (seq_len, seq_len), device)
-            .map_err(|e| from_candle_error(e, "create_sliding_window_mask: from_vec", None))?;
-
-        // Unsqueeze to [1, 1, seq_len, seq_len]
-        mask.unsqueeze(0)
-            .map_err(|e| from_candle_error(e, "create_sliding_window_mask: unsqueeze 0", None))?
-            .unsqueeze(0)
-            .map_err(|e| from_candle_error(e, "create_sliding_window_mask: unsqueeze 1", None))
-    }
-
-    /// Apply padding mask to attention scores
-    ///
-    /// # Arguments
-    /// - `attn_scores`: Attention scores, shape [batch, num_heads, seq_len, seq_len]
-    /// - `attention_mask`: Padding mask, shape [batch, seq_len] (1 for valid, 0 for padding)
-    ///
-    /// # Returns
-    /// Masked attention scores with -inf for padded positions
-    fn apply_padding_mask(
-        &self,
-        attn_scores: &Tensor,
-        attention_mask: &Tensor,
-    ) -> UnifiedResult<Tensor> {
-        // attention_mask: [batch, seq_len] -> [batch, 1, 1, seq_len]
-        let mask = attention_mask
-            .unsqueeze(1)
-            .map_err(|e| from_candle_error(e, "apply_padding_mask: unsqueeze 1", None))?
-            .unsqueeze(1)
-            .map_err(|e| from_candle_error(e, "apply_padding_mask: unsqueeze 2", None))?;
-
-        // Convert mask: 1 -> 0.0, 0 -> -inf
-        // IMPORTANT: Avoid 0 * -inf = NaN!
-        // Strategy: (1 - mask) * -1e9 where -1e9 is a large negative number (not -inf)
-        let mask_f32 = mask
-            .to_dtype(DType::F32)
-            .map_err(|e| from_candle_error(e, "apply_padding_mask: mask to f32", None))?;
-
-        // (1 - mask): gives 1 for padding (0), 0 for valid (1)
-        let one_tensor = Tensor::ones_like(&mask_f32)
-            .map_err(|e| from_candle_error(e, "apply_padding_mask: create ones", None))?;
-        let inverted_mask = one_tensor
-            .sub(&mask_f32)
-            .map_err(|e| from_candle_error(e, "apply_padding_mask: 1 - mask", None))?;
-
-        // Use a large negative number instead of -inf to avoid NaN
-        // -1e9 is effectively -inf for softmax but avoids 0 * -inf = NaN
-        const LARGE_NEGATIVE: f64 = -1e9;
-        let neg_mask = (inverted_mask * LARGE_NEGATIVE).map_err(|e| {
-            from_candle_error(e, "apply_padding_mask: multiply large negative", None)
-        })?;
-
-        // Add to attention scores
-        attn_scores
-            .broadcast_add(&neg_mask)
-            .map_err(|e| from_candle_error(e, "apply_padding_mask: add to scores", None))
+        let cfg = ChunkedSdpaConfig {
+            block_size: ATTN_QUERY_BLOCK,
+            window,
+            causal: true,
+            scale: (self.head_dim as f64).powf(-0.5),
+            q_offset: 0,
+        };
+        chunked_sdpa(q, k, v, pad_mask, &cfg)
+            .map_err(|e| from_candle_error(e, "Gemma3Attention: chunked attention", None))
     }
 }
 
@@ -1154,7 +851,7 @@ impl Gemma3Layer {
     pub fn forward(
         &self,
         hidden_states: &Tensor,
-        attention_mask: Option<&Tensor>,
+        pad_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
         // ============ Attention Block ============
         // Step 1: Save residual
@@ -1163,8 +860,8 @@ impl Gemma3Layer {
         // Step 2: Pre-norm (RmsNorm before attention)
         let hidden_states = self.input_layernorm.forward(hidden_states)?;
 
-        // Step 3: Self-attention
-        let mut hidden_states = self.self_attn.forward(&hidden_states, attention_mask)?;
+        // Step 3: Self-attention (causal and, on sliding layers, windowed inside)
+        let mut hidden_states = self.self_attn.forward(&hidden_states, pad_mask)?;
 
         // Step 4: Post-attention LayerNorm (CRITICAL: this was missing!)
         hidden_states = self.post_attention_layernorm.forward(&hidden_states)?;
@@ -1243,7 +940,7 @@ impl Gemma3Model {
         let mut layers = Vec::with_capacity(config.num_hidden_layers);
         for layer_idx in 0..config.num_hidden_layers {
             let layer =
-                Gemma3Layer::load(vb.pp(&format!("layers.{}", layer_idx)), config, layer_idx)?;
+                Gemma3Layer::load(vb.pp(format!("layers.{}", layer_idx)), config, layer_idx)?;
             layers.push(layer);
         }
 
@@ -1285,24 +982,19 @@ impl Gemma3Model {
         hidden_states = (hidden_states * embed_scale)
             .map_err(|e| from_candle_error(e, "Gemma3Model: apply embedding scale", None))?;
 
-        // Step 1.5: Create causal attention mask
-        // CRITICAL: Gemma3 uses causal attention (lower triangular mask)
-        // Each token can only attend to itself and previous tokens
-        let seq_len = hidden_states
-            .dim(1)
-            .map_err(|e| from_candle_error(e, "Gemma3Model: get seq_len", None))?;
-        let causal_mask = create_causal_mask(seq_len, hidden_states.device())?;
-
-        // Step 2: Pass through transformer layers
+        // Step 2: Pass through transformer layers. Causal masking (and the sliding
+        // window) is applied per query block inside each attention layer, so no
+        // `(seq, seq)` mask is built here. The padding mask stays reserved.
         for (layer_idx, layer) in self.layers.iter().enumerate() {
-            hidden_states = layer
-                .forward(&hidden_states, Some(&causal_mask))
-                .map_err(|e| UnifiedError::Model {
-                    model_type: ModelErrorType::Embedding,
-                    operation: format!("Gemma3Model: layer {} forward", layer_idx),
-                    context: Some(format!("Failed to process transformer layer {}", layer_idx)),
-                    source: e.to_string(),
-                })?;
+            hidden_states =
+                layer
+                    .forward(&hidden_states, None)
+                    .map_err(|e| UnifiedError::Model {
+                        model_type: ModelErrorType::Embedding,
+                        operation: format!("Gemma3Model: layer {} forward", layer_idx),
+                        context: Some(format!("Failed to process transformer layer {}", layer_idx)),
+                        source: e.to_string(),
+                    })?;
         }
 
         // Step 3: Final normalization
@@ -1319,5 +1011,157 @@ impl Gemma3Model {
     /// Get model device
     pub fn device(&self) -> Device {
         self.embeddings.embeddings().device().clone()
+    }
+}
+
+#[cfg(test)]
+mod chunked_attention_tests {
+    //! The kernel must reproduce the dense attention it replaced (issue #3382): a
+    //! `(b, heads, seq, seq)` score matrix scaled by `1/sqrt(head_dim)`, a causal
+    //! `-inf` triangle, on sliding layers a one-sided `-1e9` window
+    //! `[i - sliding_window + 1, i]` (skipped when `seq <= sliding_window`), softmax,
+    //! then `@ V` in f32.
+    use super::*;
+
+    const SLIDING_WINDOW: usize = 16;
+
+    fn make_attention(attention_type: AttentionLayerType, device: &Device) -> Gemma3Attention {
+        let (heads, head_dim, hidden) = (3usize, 8usize, 24usize);
+        let lin = |out: usize, inp: usize| {
+            Linear::new(
+                Tensor::randn(0f32, 0.2f32, (out, inp), device).unwrap(),
+                None,
+            )
+        };
+        let norm = || RmsNorm::new(Tensor::randn(1f32, 0.1f32, head_dim, device).unwrap(), 1e-6);
+        Gemma3Attention {
+            q_proj: lin(heads * head_dim, hidden),
+            k_proj: lin(head_dim, hidden),
+            v_proj: lin(head_dim, hidden),
+            o_proj: lin(hidden, heads * head_dim),
+            q_norm: norm(),
+            k_norm: norm(),
+            rope_cache_global: RotaryEmbeddingCache::new(head_dim, 1024, 1_000_000.0, device)
+                .unwrap(),
+            rope_cache_local: RotaryEmbeddingCache::new(head_dim, 1024, 10_000.0, device).unwrap(),
+            num_attention_heads: heads,
+            num_key_value_heads: 1,
+            head_dim,
+            hidden_size: hidden,
+            attention_type,
+            sliding_window: SLIDING_WINDOW,
+            layer_idx: 0,
+        }
+    }
+
+    /// The pre-migration forward: same projections, norms and RoPE as
+    /// `Gemma3Attention::forward`, dense attention in the middle.
+    fn dense_reference(attn: &Gemma3Attention, hidden_states: &Tensor) -> Tensor {
+        let (b, seq, _) = hidden_states.dims3().unwrap();
+        let device = hidden_states.device();
+        let heads = attn.num_attention_heads;
+        let hd = attn.head_dim;
+        let q = attn
+            .q_proj
+            .forward(hidden_states)
+            .unwrap()
+            .reshape((b, seq, heads, hd))
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap();
+        let k = attn
+            .k_proj
+            .forward(hidden_states)
+            .unwrap()
+            .reshape((b, seq, 1, hd))
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap();
+        let v = attn
+            .v_proj
+            .forward(hidden_states)
+            .unwrap()
+            .reshape((b, seq, 1, hd))
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap();
+        let q = attn.q_norm.forward(&q).unwrap();
+        let k = attn.k_norm.forward(&k).unwrap();
+        let positions = Tensor::from_vec((0..seq as u32).collect::<Vec<_>>(), (seq,), device)
+            .unwrap()
+            .unsqueeze(0)
+            .unwrap()
+            .repeat(&[b, 1])
+            .unwrap();
+        let rope = match attn.attention_type {
+            AttentionLayerType::FullAttention => &attn.rope_cache_global,
+            AttentionLayerType::SlidingAttention => &attn.rope_cache_local,
+        };
+        let q = rope.apply_rotary_emb(&q, &positions).unwrap();
+        let k = rope
+            .apply_rotary_emb(&k, &positions)
+            .unwrap()
+            .repeat(&[1, heads, 1, 1])
+            .unwrap();
+        let v = v.repeat(&[1, heads, 1, 1]).unwrap();
+
+        // Dense attention exactly as the removed code wrote it.
+        let scores = (q.matmul(&k.transpose(2, 3).unwrap()).unwrap() / (hd as f64).sqrt()).unwrap();
+        let mut mask = vec![0f32; seq * seq];
+        for i in 0..seq {
+            for j in 0..seq {
+                if j > i {
+                    mask[i * seq + j] = f32::NEG_INFINITY;
+                } else if matches!(attn.attention_type, AttentionLayerType::SlidingAttention)
+                    && seq > SLIDING_WINDOW
+                    && j + SLIDING_WINDOW <= i
+                {
+                    mask[i * seq + j] = -1e9;
+                }
+            }
+        }
+        let mask = Tensor::from_vec(mask, (1, 1, seq, seq), device).unwrap();
+        let scores = scores.broadcast_add(&mask).unwrap();
+        let probs = candle_nn::ops::softmax_last_dim(&scores).unwrap();
+        let ctx = probs
+            .matmul(&v)
+            .unwrap()
+            .transpose(1, 2)
+            .unwrap()
+            .reshape((b, seq, heads * hd))
+            .unwrap();
+        attn.o_proj.forward(&ctx).unwrap()
+    }
+
+    fn max_abs_diff(a: &Tensor, b: &Tensor) -> f32 {
+        (a - b)
+            .unwrap()
+            .abs()
+            .unwrap()
+            .flatten_all()
+            .unwrap()
+            .max(0)
+            .unwrap()
+            .to_scalar::<f32>()
+            .unwrap()
+    }
+
+    #[test]
+    fn test_chunked_attention_matches_dense() {
+        let device = Device::Cpu;
+        // Below the window, above it, and above the kernel's query block.
+        for layer_type in [
+            AttentionLayerType::FullAttention,
+            AttentionLayerType::SlidingAttention,
+        ] {
+            let attn = make_attention(layer_type, &device);
+            for &seq in &[3usize, 40, ATTN_QUERY_BLOCK + 88] {
+                let xs = Tensor::randn(0f32, 1f32, (2, seq, attn.hidden_size), &device).unwrap();
+                let got = attn.forward(&xs, None).unwrap();
+                let want = dense_reference(&attn, &xs);
+                let diff = max_abs_diff(&got, &want);
+                assert!(diff < 1e-4, "{:?} seq={}: max|Δ|={}", layer_type, seq, diff);
+            }
+        }
     }
 }

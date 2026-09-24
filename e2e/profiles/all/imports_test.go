@@ -14,7 +14,6 @@ import (
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
-	anthropicshim "github.com/vllm-project/semantic-router/e2e/profiles/anthropic-shim"
 )
 
 func TestDashboardProfileBuildsLocalImage(t *testing.T) {
@@ -46,15 +45,30 @@ func TestEnvoyAIGatewayProfileKeepsKubernetesAlias(t *testing.T) {
 	}
 }
 
+func TestExternalGatewayResponsesProfileCoversStateContract(t *testing.T) {
+	profile, err := framework.NewProfileByName("external-gateway-responses")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"response-api-create",
+		"response-api-get",
+		"response-api-conversation-chaining",
+	}
+	if !reflect.DeepEqual(profile.GetTestCases(), want) {
+		t.Fatalf("external gateway Responses cases = %v, want %v", profile.GetTestCases(), want)
+	}
+}
+
 func TestProtocolCodecE2EMatrixProfilesAreClosed(t *testing.T) {
 	profiles := map[string][]string{
 		"response-api": {
-			"protocol-codec-chat-backend-buffered-matrix",
+			"provider-native-image-generation", "protocol-codec-chat-backend-buffered-matrix",
 			"protocol-codec-chat-backend-streaming-matrix",
 			"protocol-codec-responses-backend-buffered-matrix",
 			"protocol-codec-responses-backend-streaming-matrix",
 		},
-		"anthropic-shim": {
+		"provider-protocols": {
 			"protocol-codec-anthropic-backend-buffered-matrix",
 			"protocol-codec-anthropic-backend-streaming-matrix",
 		},
@@ -80,13 +94,13 @@ func TestProtocolCodecE2EMatrixProfilesAreClosed(t *testing.T) {
 	}
 }
 
-func TestAnthropicShimProfileBuildsLocalImage(t *testing.T) {
-	registration, ok := framework.LookupProfileRegistration("anthropic-shim")
+func TestProviderProtocolsProfileBuildsLocalImage(t *testing.T) {
+	registration, ok := framework.LookupProfileRegistration("provider-protocols")
 	if !ok {
-		t.Fatal("anthropic-shim profile is not registered")
+		t.Fatal("provider-protocols profile is not registered")
 	}
 
-	localImages := anthropicshim.LocalImages()
+	localImages := providerMockerLocalImages
 	if len(localImages) != 1 {
 		t.Fatalf("LocalImages() returned %d entries, want 1", len(localImages))
 	}
@@ -94,19 +108,19 @@ func TestAnthropicShimProfileBuildsLocalImage(t *testing.T) {
 		t.Fatalf("registered local images = %#v, want Tag %q", registration.Capabilities.LocalImages, localImages[0].Tag)
 	}
 
-	image, pullPolicy := anthropicShimContainerFromBackendYAML(t)
+	image, pullPolicy := providerProtocolsContainerFromBackendYAML(t)
 	if image != localImages[0].Tag {
-		t.Fatalf("backend.yaml anthropic-shim image = %q, want LocalImages Tag %q", image, localImages[0].Tag)
+		t.Fatalf("backend.yaml provider-protocols image = %q, want LocalImages Tag %q", image, localImages[0].Tag)
 	}
 	if pullPolicy != corev1.PullNever {
-		t.Fatalf("backend.yaml anthropic-shim imagePullPolicy = %q, want %q", pullPolicy, corev1.PullNever)
+		t.Fatalf("backend.yaml provider-protocols imagePullPolicy = %q, want %q", pullPolicy, corev1.PullNever)
 	}
 }
 
-func anthropicShimContainerFromBackendYAML(t *testing.T) (string, corev1.PullPolicy) {
+func providerProtocolsContainerFromBackendYAML(t *testing.T) (string, corev1.PullPolicy) {
 	t.Helper()
 
-	raw, err := os.ReadFile("../anthropic-shim/gateway-resources/backend.yaml")
+	raw, err := os.ReadFile("../provider-protocols/gateway-resources/backend.yaml")
 	if err != nil {
 		t.Fatalf("read backend.yaml: %v", err)
 	}
@@ -117,7 +131,7 @@ func anthropicShimContainerFromBackendYAML(t *testing.T) (string, corev1.PullPol
 		if err == io.EOF {
 			break
 		}
-		image, pullPolicy, found := anthropicShimFromYAMLDocument(t, doc)
+		image, pullPolicy, found := providerProtocolsFromYAMLDocument(t, doc)
 		if found {
 			return image, pullPolicy
 		}
@@ -139,13 +153,13 @@ func nextYAMLDocument(t *testing.T, reader *utilyaml.YAMLReader) ([]byte, error)
 	return doc, nil
 }
 
-func anthropicShimFromYAMLDocument(t *testing.T, doc []byte) (string, corev1.PullPolicy, bool) {
+func providerProtocolsFromYAMLDocument(t *testing.T, doc []byte) (string, corev1.PullPolicy, bool) {
 	t.Helper()
 	jsonDocument, kind, ok := decodeYAMLDocument(t, doc)
 	if !ok || kind != "Deployment" {
 		return "", "", false
 	}
-	return findAnthropicShimContainer(t, jsonDocument)
+	return findProviderProtocolsContainer(t, jsonDocument)
 }
 
 func decodeYAMLDocument(t *testing.T, doc []byte) ([]byte, string, bool) {
@@ -168,17 +182,21 @@ func decodeYAMLDocument(t *testing.T, doc []byte) ([]byte, string, bool) {
 	return jsonDocument, typeMeta.Kind, true
 }
 
-func findAnthropicShimContainer(t *testing.T, jsonDocument []byte) (string, corev1.PullPolicy, bool) {
+func findProviderProtocolsContainer(t *testing.T, jsonDocument []byte) (string, corev1.PullPolicy, bool) {
 	t.Helper()
 	var deployment appsv1.Deployment
 	if err := json.Unmarshal(jsonDocument, &deployment); err != nil {
 		t.Fatalf("decode backend.yaml deployment: %v", err)
 	}
-	for _, container := range deployment.Spec.Template.Spec.Containers {
-		if container.Name == "anthropic-shim" {
+	pod := deployment.Spec.Template.Spec
+	if len(pod.Containers) != 1 || len(pod.InitContainers) != 0 || len(pod.Volumes) != 0 {
+		t.Fatal("native provider fixture must be one service without model downloads, volumes, or sidecars")
+	}
+	for _, container := range pod.Containers {
+		if container.Name == "provider-mocker" {
 			return container.Image, container.ImagePullPolicy, true
 		}
 	}
-	t.Fatal("anthropic-shim container not found in backend.yaml Deployment")
+	t.Fatal("provider-protocols container not found in backend.yaml Deployment")
 	return "", "", false
 }

@@ -34,17 +34,22 @@ type Manager struct {
 	stores             map[string]*VectorStore // id -> store
 	embeddingDim       int
 	defaultBackendType string
+	embeddingIdentity  string
 }
 
 // NewManager creates a new vector store manager.
-func NewManager(backend VectorStoreBackend, registry StoreRegistry, embeddingDim int, backendType string) *Manager {
-	return &Manager{
+func NewManager(backend VectorStoreBackend, registry StoreRegistry, embeddingDim int, backendType string, options ...ManagerOption) *Manager {
+	m := &Manager{
 		backend:            backend,
 		registry:           registry,
 		stores:             make(map[string]*VectorStore),
 		embeddingDim:       embeddingDim,
 		defaultBackendType: backendType,
 	}
+	for _, option := range options {
+		option(m)
+	}
+	return m
 }
 
 // LoadFromRegistry populates the in-memory index from the durable
@@ -87,6 +92,12 @@ type ListStoresParams struct {
 
 // CreateStore creates a new vector store and its backing collection.
 func (m *Manager) CreateStore(ctx context.Context, req CreateStoreRequest) (*VectorStore, error) {
+	if err := validateClientMetadata(req.Metadata); err != nil {
+		return nil, err
+	}
+	if err := m.validateEmbeddingBackend(); err != nil {
+		return nil, err
+	}
 	id := GenerateVectorStoreID()
 
 	if err := m.backend.CreateCollection(ctx, id, m.embeddingDim); err != nil {
@@ -103,6 +114,12 @@ func (m *Manager) CreateStore(ctx context.Context, req CreateStoreRequest) (*Vec
 		ExpiresAfter: cloneExpirationPolicy(req.ExpiresAfter),
 		Metadata:     cloneMetadata(req.Metadata),
 		BackendType:  m.defaultBackendType,
+	}
+	if m.embeddingIdentity != "" {
+		if vs.Metadata == nil {
+			vs.Metadata = make(map[string]interface{})
+		}
+		vs.Metadata[EmbeddingIdentityMetadataKey] = m.embeddingIdentity
 	}
 
 	m.mu.Lock()
@@ -157,9 +174,19 @@ func normalizeListStoresParams(params ListStoresParams) ListStoresParams {
 
 func sortVectorStores(stores []*VectorStore, order string) {
 	if order == "asc" {
-		sort.Slice(stores, func(i, j int) bool { return stores[i].CreatedAt < stores[j].CreatedAt })
+		sort.Slice(stores, func(i, j int) bool {
+			if stores[i].CreatedAt != stores[j].CreatedAt {
+				return stores[i].CreatedAt < stores[j].CreatedAt
+			}
+			return stores[i].ID < stores[j].ID
+		})
 	} else {
-		sort.Slice(stores, func(i, j int) bool { return stores[i].CreatedAt > stores[j].CreatedAt })
+		sort.Slice(stores, func(i, j int) bool {
+			if stores[i].CreatedAt != stores[j].CreatedAt {
+				return stores[i].CreatedAt > stores[j].CreatedAt
+			}
+			return stores[i].ID > stores[j].ID
+		})
 	}
 }
 
@@ -198,6 +225,9 @@ func pageVectorStores(all []*VectorStore, params ListStoresParams) []*VectorStor
 
 // UpdateStore updates a vector store's metadata.
 func (m *Manager) UpdateStore(ctx context.Context, id string, req UpdateStoreRequest) (*VectorStore, error) {
+	if err := validateClientMetadata(req.Metadata); err != nil {
+		return nil, err
+	}
 	m.mu.Lock()
 	vs, ok := m.stores[id]
 	if !ok {
@@ -212,7 +242,11 @@ func (m *Manager) UpdateStore(ctx context.Context, id string, req UpdateStoreReq
 		vs.ExpiresAfter = cloneExpirationPolicy(req.ExpiresAfter)
 	}
 	if req.Metadata != nil {
+		identity, exists := vs.Metadata[EmbeddingIdentityMetadataKey]
 		vs.Metadata = cloneMetadata(req.Metadata)
+		if exists {
+			vs.Metadata[EmbeddingIdentityMetadataKey] = identity
+		}
 	}
 	snapshot := cloneVectorStore(vs)
 	m.mu.Unlock()
@@ -262,6 +296,42 @@ func (m *Manager) UpdateFileCounts(ctx context.Context, id string, fn func(*File
 
 	if err := m.registry.SaveStore(ctx, cloneVectorStore(snapshot)); err != nil {
 		return fmt.Errorf("persist vector store metadata: %w", err)
+	}
+	return nil
+}
+
+// failQueuedFileCounts applies the count transition for a batch of queued
+// jobs before attempting to persist any of the updated stores. Keeping the
+// in-memory transition separate from persistence means a shutdown deadline
+// cannot leave some drained jobs counted as in progress just because an
+// earlier registry write stalled.
+func (m *Manager) failQueuedFileCounts(ctx context.Context, failedByStore map[string]int) error {
+	type snapshot struct {
+		id    string
+		store *VectorStore
+	}
+
+	snapshots := make([]snapshot, 0, len(failedByStore))
+	m.mu.Lock()
+	for id, failed := range failedByStore {
+		if failed <= 0 {
+			continue
+		}
+		vs, ok := m.stores[id]
+		if !ok {
+			m.mu.Unlock()
+			return fmt.Errorf("vector store not found: %s", id)
+		}
+		vs.FileCounts.InProgress -= failed
+		vs.FileCounts.Failed += failed
+		snapshots = append(snapshots, snapshot{id: id, store: cloneVectorStore(vs)})
+	}
+	m.mu.Unlock()
+
+	for _, item := range snapshots {
+		if err := m.registry.SaveStore(ctx, cloneVectorStore(item.store)); err != nil {
+			return fmt.Errorf("persist vector store metadata for %s: %w", item.id, err)
+		}
 	}
 	return nil
 }

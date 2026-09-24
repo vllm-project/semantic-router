@@ -51,6 +51,9 @@ const (
 	// including its request options, output item, and progress events. It is not
 	// interchangeable with generic image input or output support.
 	CapabilityImageGeneration
+	CapabilitySamplingMinP
+	CapabilityRepetitionPenalty
+	CapabilityCacheIsolation
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -73,6 +76,23 @@ func (set CapabilitySet) Intersect(other CapabilitySet) CapabilitySet {
 	return CapabilitySet{bits: set.bits & other.bits}
 }
 func (set CapabilitySet) Empty() bool { return set.bits == 0 }
+
+// taskCapabilityMask is the subset of capabilities that describe model
+// task/modality behavior (content in/out and hosted generation). Text is
+// assumed for every model and transport/accounting fidelity
+// (tools/streaming/reasoning/caching) is protocol concern rather than a task
+// modality, so model capability declarations are compared against this mask.
+var taskCapabilityMask = CapabilityImageInput | CapabilityImageOutput | CapabilityImageGeneration |
+	CapabilityAudioInput | CapabilityAudioOutput |
+	CapabilityVideoInput | CapabilityVideoOutput |
+	CapabilityFileInput | CapabilityFileOutput
+
+// TaskCapabilities returns the task/modality subset of a capability set,
+// dropping transport and accounting fidelity. Used to compare model capability
+// declarations against request requirements.
+func (set CapabilitySet) TaskCapabilities() CapabilitySet {
+	return CapabilitySet{bits: set.bits & taskCapabilityMask}
+}
 
 func (set CapabilitySet) Names() []string {
 	known := []struct {
@@ -104,6 +124,9 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningEffort, "reasoning_effort"},
 		{CapabilityReasoningBudget, "reasoning_budget"},
 		{CapabilitySamplingTopK, "sampling_top_k"},
+		{CapabilitySamplingMinP, "sampling_min_p"},
+		{CapabilityRepetitionPenalty, "repetition_penalty"},
+		{CapabilityCacheIsolation, "cache_isolation"},
 		{CapabilitySamplingSeed, "sampling_seed"},
 		{CapabilitySamplingPenalties, "sampling_penalties"},
 		{CapabilityStopSequences, "stop_sequences"},
@@ -128,7 +151,11 @@ func (set CapabilitySet) Names() []string {
 
 func RequiredCapabilities(request Request) CapabilitySet {
 	required := requestOptionCapabilities(request)
-	if request.ImageGeneration != nil || request.ToolChoice.Mode == ToolChoiceImageGeneration {
+	// An explicit tool_choice: none forbids all tools, including the hosted
+	// image_generation operation, so a declared ImageGeneration must not
+	// require the images capability (Xun: preserve the no-tool choice).
+	if request.ImageGeneration != nil && request.ToolChoice.Mode != ToolChoiceNone ||
+		request.ToolChoice.Mode == ToolChoiceImageGeneration {
 		required.bits |= CapabilityImageGeneration
 	}
 	required.bits |= toolCapabilities(request.Tools)
@@ -163,6 +190,12 @@ func requestTransportCapabilities(request Request) Capability {
 
 func requestSamplingCapabilities(request Request) Capability {
 	var required Capability
+	if request.Sampling.MinP != nil {
+		required |= CapabilitySamplingMinP
+	}
+	if request.Sampling.RepetitionPenalty != nil {
+		required |= CapabilityRepetitionPenalty
+	}
 	if request.Sampling.TopK != nil {
 		required |= CapabilitySamplingTopK
 	}
@@ -180,6 +213,9 @@ func requestSamplingCapabilities(request Request) Capability {
 
 func requestStateCapabilities(request Request) Capability {
 	var required Capability
+	if request.CacheSalt != nil {
+		required |= CapabilityCacheIsolation
+	}
 	if len(request.Metadata) > 0 {
 		required |= CapabilityRequestMetadata
 	}
@@ -394,6 +430,9 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_effort":      CapabilityReasoningEffort,
 		"reasoning_budget":      CapabilityReasoningBudget,
 		"sampling_top_k":        CapabilitySamplingTopK,
+		"sampling_min_p":        CapabilitySamplingMinP,
+		"repetition_penalty":    CapabilityRepetitionPenalty,
+		"cache_isolation":       CapabilityCacheIsolation,
 		"sampling_seed":         CapabilitySamplingSeed,
 		"sampling_penalties":    CapabilitySamplingPenalties,
 		"stop_sequences":        CapabilityStopSequences,

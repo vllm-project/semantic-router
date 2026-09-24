@@ -20,6 +20,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -50,16 +51,14 @@ func TestGMTRouterSelector_InitializeFromConfig(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4": {
-			Pricing:      config.ModelPricing{PromptPer1M: 30.0},
-			QualityScore: 0.95,
-			Description:  "Advanced reasoning model",
-		},
-		"gpt-3.5-turbo": {
-			Pricing:      config.ModelPricing{PromptPer1M: 1.0},
-			QualityScore: 0.85,
-			Description:  "Fast general-purpose model",
-		},
+		"gpt-4": addTestQuality(config.ModelParams{
+			Pricing:     config.ModelPricing{PromptPer1M: 30.0},
+			Description: "Advanced reasoning model",
+		}, 0.95),
+		"gpt-3.5-turbo": addTestQuality(config.ModelParams{
+			Pricing:     config.ModelPricing{PromptPer1M: 1.0},
+			Description: "Fast general-purpose model",
+		}, 0.85),
 	}
 
 	selector.InitializeFromConfig(modelConfig)
@@ -74,8 +73,8 @@ func TestGMTRouterSelector_ColdStartSelection(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4":         {QualityScore: 0.95},
-		"gpt-3.5-turbo": {QualityScore: 0.85},
+		"gpt-4":         modelParamsWithTestQuality(0.95),
+		"gpt-3.5-turbo": modelParamsWithTestQuality(0.85),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -104,12 +103,83 @@ func TestGMTRouterSelector_ColdStartSelection(t *testing.T) {
 	}
 }
 
+func TestGMTRouterSelector_UsesCoverageForExactEffortTie(t *testing.T) {
+	selector := NewGMTRouterSelector(nil)
+	selector.InitializeFromConfig(map[string]config.ModelParams{
+		"a": addTestEvidence(config.ModelParams{}, 0.75, 0.6, "low"),
+		"b": addTestEvidence(config.ModelParams{}, 0.75, 1, "high"),
+	})
+	result, err := selector.Select(context.Background(), &SelectionContext{UserID: "new-user", CandidateModels: []config.ModelRef{
+		{Model: "a", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+		{Model: "b", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedModel != "b" || !strings.Contains(result.Reasoning, "score=75.00 coverage=100%") {
+		t.Fatalf("coverage tie result = model %q reasoning %q", result.SelectedModel, result.Reasoning)
+	}
+
+	selector.config.MinInteractionsForPersonalization = 1
+	selector.userStates["known-user"] = &UserPreferenceState{
+		UserID: "known-user", TotalInteractions: 1,
+		ModelPreferences: map[string]float64{"a": 0.5, "b": 0.5},
+	}
+	result, err = selector.Select(context.Background(), &SelectionContext{UserID: "known-user", CandidateModels: []config.ModelRef{
+		{Model: "a", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+		{Model: "b", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedModel != "b" {
+		t.Fatalf("personalized coverage tie selected %q", result.SelectedModel)
+	}
+}
+
+func TestGMTRouterSelector_KeepsPersonalizedScoresPerCandidate(t *testing.T) {
+	selector := NewGMTRouterSelector(nil)
+	params := addTestEvidence(config.ModelParams{}, 0.6, 1, "low")
+	params = addTestEvidence(params, 0.9, 1, "high")
+	selector.InitializeFromConfig(map[string]config.ModelParams{"model": params})
+	selector.config.MinInteractionsForPersonalization = 1
+	selector.userStates["user"] = &UserPreferenceState{
+		UserID: "user", TotalInteractions: 1,
+		ModelPreferences: map[string]float64{"model": 0.5},
+	}
+	result, err := selector.Select(context.Background(), &SelectionContext{UserID: "user", CandidateModels: []config.ModelRef{
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "low"}},
+		{Model: "model", ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"}},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedCandidate == nil || result.SelectedCandidate.ReasoningEffort != "high" ||
+		len(result.AllScores) != 2 || !strings.Contains(result.Reasoning, "effort=high score=90.00") {
+		t.Fatalf("duplicate-model selection = candidate %+v scores %v reasoning %q",
+			result.SelectedCandidate, result.AllScores, result.Reasoning)
+	}
+}
+
+func TestGMTRouterSelector_MissingEvidenceIsNeutral(t *testing.T) {
+	selector := NewGMTRouterSelector(nil)
+	zero := modelParamsWithTestQuality(0)
+	selector.InitializeFromConfig(map[string]config.ModelParams{"missing": {}, "zero": zero})
+	result, err := selector.Select(context.Background(), &SelectionContext{UserID: "new-user", CandidateModels: candidates("zero", "missing")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedModel != "missing" || result.Score != 0.5 || !strings.Contains(result.Reasoning, "status=unavailable") {
+		t.Fatalf("missing evidence result = model %q score %.2f reasoning %q", result.SelectedModel, result.Score, result.Reasoning)
+	}
+}
+
 func TestGMTRouterSelector_UpdateFeedback(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4":         {QualityScore: 0.95},
-		"gpt-3.5-turbo": {QualityScore: 0.85},
+		"gpt-4":         modelParamsWithTestQuality(0.95),
+		"gpt-3.5-turbo": modelParamsWithTestQuality(0.85),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -141,8 +211,8 @@ func TestGMTRouterSelector_PersonalizedSelection(t *testing.T) {
 	selector := NewGMTRouterSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4":         {QualityScore: 0.95},
-		"gpt-3.5-turbo": {QualityScore: 0.85},
+		"gpt-4":         modelParamsWithTestQuality(0.95),
+		"gpt-3.5-turbo": modelParamsWithTestQuality(0.85),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -183,7 +253,7 @@ func TestGMTRouterSelector_GraphNodeCreation(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"model-1": {QualityScore: 0.9},
+		"model-1": modelParamsWithTestQuality(0.9),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -246,7 +316,7 @@ func TestGMTRouterSelector_Persistence(t *testing.T) {
 	selector := NewGMTRouterSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"model-1": {QualityScore: 0.9},
+		"model-1": modelParamsWithTestQuality(0.9),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -340,7 +410,7 @@ func TestGMTRouterSelector_AnonymousUser(t *testing.T) {
 	selector := NewGMTRouterSelector(nil)
 
 	modelConfig := map[string]config.ModelParams{
-		"gpt-4": {QualityScore: 0.95},
+		"gpt-4": modelParamsWithTestQuality(0.95),
 	}
 	selector.InitializeFromConfig(modelConfig)
 
@@ -383,8 +453,8 @@ func TestGMTRouterSelector_MultipleUsers(t *testing.T) {
 	selector := NewGMTRouterSelector(cfg)
 
 	modelConfig := map[string]config.ModelParams{
-		"model-a": {QualityScore: 0.9},
-		"model-b": {QualityScore: 0.8},
+		"model-a": modelParamsWithTestQuality(0.9),
+		"model-b": modelParamsWithTestQuality(0.8),
 	}
 	selector.InitializeFromConfig(modelConfig)
 

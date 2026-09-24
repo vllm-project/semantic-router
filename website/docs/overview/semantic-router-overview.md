@@ -70,7 +70,8 @@ without changing a public entrypoint.
 
 ## Request lifecycle
 
-1. A client sends a request to an OpenAI- or Anthropic-compatible endpoint.
+1. A client sends a request using OpenAI Chat Completions, OpenAI Responses, or
+   Anthropic Messages.
 2. Envoy presents the request to the Router.
 3. The requested model resolves to an entrypoint and its recipe.
 4. The Router extracts relevant signals and computes projections.
@@ -98,8 +99,32 @@ backend platform.
 
 The Router can consider request semantics and configured runtime observations;
 it does not replace a backend scheduler. A deployment may therefore use
-Semantic Router to choose a model class and another component to choose a
-healthy replica of that model.
+Semantic Router to choose a model class and an Inference Router to choose a
+healthy replica of that model. When an AI Gateway also fronts the stack, a
+request crosses three routing layers:
+
+```text
+client
+  -> AI Gateway (e.g. Envoy AI Gateway / LiteLLM / agentgateway)
+  -> Semantic Router ExtProc
+  -> Inference Router / pool scheduler (e.g. llm-d / vLLM Router / AIBrix gateway)
+  -> model replica
+```
+
+| Layer | What it owns | Examples |
+| --- | --- | --- |
+| **AI Gateway** | Client ingress, provider translation, credentials, rate limits, and traffic policy. | [Envoy AI Gateway](../installation/k8s/ai-gateway), [LiteLLM](https://docs.litellm.ai/docs/simple_proxy), [agentgateway](../installation/k8s/agentgateway) |
+| **Semantic Router** | Logical model or model pool selection from request intent and policy, through recipes and decisions. The choice is written to `x-selected-model`. | vLLM Semantic Router |
+| **Inference Router** | Healthy replica or endpoint selection inside the selected pool. | [llm-d](../installation/k8s/llm-d), [vLLM Router](https://github.com/vllm-project/router), [AIBrix gateway](../installation/k8s/aibrix) |
+
+Envoy AI Gateway and agentgateway call Semantic Router through ExtProc.
+[Kubernetes Gateways](../installation/k8s/gateways) and
+[Inference Platforms](../installation/k8s/inference-platforms) list the
+integrations this project maintains.
+
+The client and selected backend do not need to use the same wire format. See
+[Protocol Compatibility](../installation/protocol-compatibility) for the
+supported client endpoints, backend formats, and pairwise translation matrix.
 
 ## Next
 

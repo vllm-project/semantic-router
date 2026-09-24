@@ -1,0 +1,42 @@
+{
+  "manifest_digest": "sha256:e0ad068da8da1a225c76e6776a52c0a0ec938e47dd3ea6c654fc2d29024f2b01",
+  "code_revision": "8dedee734ba3abae9bceae9309903147fda8eeab",
+  "change_profile": "schema_adapter",
+  "concurrency": 2,
+  "config_digest": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "created_at": "2026-01-01T00:00:00Z",
+  "gate_contract_version": "evaluation-release-gates.v2",
+  "mode": "replay",
+  "policy_snapshot_digest": "sha256:34063b31576749e60610d650ba7a045988db38b7de9d27b69b71e3f1e426a9f3",
+  "redaction_policy": "public-safe-v1",
+  "run_id": "00000000-0000-4000-8000-000000000001",
+  "name": "00000000-0000-4000-8000-000000000001",
+  "description": "Evaluation suites: evaluation-smoke",
+  "sample_limit": 4,
+  "schema_version": "evaluation.v1",
+  "seed": 17,
+  "suite_ids": [
+    "evaluation-smoke"
+  ],
+  "suite_revisions": {
+    "evaluation-smoke": "builtin-v1"
+  },
+  "suite_executors": {
+    "evaluation-smoke": "fixture-replay.v1"
+  },
+  "target": {
+    "id": "fixture",
+    "kind": "builtin-fixture",
+    "schema_version": "evaluation.v1"
+  },
+  "track_ids": [
+    "routing",
+    "model_pool",
+    "joint",
+    "agentic",
+    "multimodal",
+    "preference",
+    "safety",
+    "capacity"
+  ]
+}

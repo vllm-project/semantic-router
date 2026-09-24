@@ -58,7 +58,7 @@ Relevant Dashboard permissions include:
 
 | Permission | Purpose | Default roles |
 | --- | --- | --- |
-| `feedback.submit` | Submit routing feedback. | admin, write |
+| `feedback.submit` | Submit routing feedback. Read-role feedback is recorded on the replay without updating model experience. | admin, write, read |
 | `replay.read` | List replay records. | admin, write, read |
 | `logs.read` | Read bounded local-stack service logs. | admin, write |
 
@@ -91,6 +91,26 @@ referenced.
 Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
+
+### Isolate sr-bench credentials
+
+The Dashboard proxies a server-owned sr-bench origin and forwards authenticated
+user ownership. `SR_BENCH_TOKEN_ENV` names the service token environment variable
+(default `SR_BENCH_TOKEN`). Keep this token separate from model API credentials
+and Router management credentials. Browser manifests cannot change registered
+target endpoints, prices, credential references or execution harness options.
+
+The managed core worker receives only the registered model credential references
+and its service token through inherited environment variables, not command-line
+values. Its private store and adjacent token file live outside the common Router
+and Dashboard mounts; the worker has no Docker socket or GPU passthrough.
+Dashboard receives the service token but not model credential values.
+
+For code/agent evaluation, use an independently prepared worker host and set
+`SR_BENCH_URL` to an authenticated origin reachable by the Dashboard. The
+standalone service binds loopback by default and requires a service token for
+non-loopback binding. Keep its source, sandbox and model credentials confined to
+that host. See [sr-bench 1.0](../benchmarking/sr-bench) for setup and limits.
 
 ## Secure the local stack's storage credentials
 
@@ -133,7 +153,7 @@ The local stack runs on two bridge networks.
 | --- | --- | --- |
 | Redis, Postgres, Milvus | no | yes |
 | Router | yes | yes |
-| Envoy, Dashboard, simulator | yes | no |
+| Envoy, Dashboard | yes | no |
 | Jaeger, Prometheus, Grafana | yes | no |
 | OpenClaw workloads | yes | no |
 
@@ -143,7 +163,7 @@ both names, so two stacks share neither. Milvus joins the data network even
 though it has no credentials of its own yet.
 
 This closes east-west reachability. A container on the application network --
-a sidecar, the simulator, an image chosen for an OpenClaw workload -- cannot
+a sidecar or an image chosen for an OpenClaw workload -- cannot
 open a connection to `vllm-sr-redis:6379` or `vllm-sr-postgres:5432` at all. The
 storage ports remain published on `127.0.0.1` only, which closes the same
 exposure from the host side.

@@ -15,7 +15,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("router-replay-session-list-filter", pkgtestcases.TestCase{
-		Description: "GET /v1/router_replay?session_id= returns only replay rows for that session (x-session-id pinned chats)",
+		Description: "GET /api/v1/observability/replays?session_id= returns only replay rows for that session (x-session-id pinned chats)",
 		Tags:        []string{"router-replay", "functional", "router-replay-api"},
 		Fn:          testRouterReplaySessionListFilter,
 	})
@@ -204,7 +204,7 @@ func fetchReplayListForSession(managementSession *fixtures.ServiceSession, sessi
 	raw, err := doRouterReplayManagementGET(
 		context.Background(),
 		managementSession,
-		"/v1/router_replay?"+q.Encode(),
+		"/api/v1/observability/replays?"+q.Encode(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("GET router_replay list: %w", err)

@@ -15,7 +15,7 @@ The repository bootstrap target creates its Python environment and installs the
 tooling used by the validation harness:
 
 ```bash
-make agent-bootstrap
+make harness-bootstrap
 ```
 
 Individual subprojects may have additional requirements. Do not install a
@@ -30,7 +30,7 @@ vllm-sr serve --image-pull-policy never
 ```
 
 The build installs the editable `vllm-sr` CLI and creates local Router,
-Dashboard, Envoy, and Fleet Sim images. `--image-pull-policy never` ensures the
+Dashboard, and Envoy images. `--image-pull-policy never` ensures the
 run uses those local images.
 
 Useful lifecycle commands:
@@ -52,10 +52,11 @@ vllm-sr serve --image-pull-policy never --platform amd
 
 ## Select the right tests
 
-Start with the repository report for your changed files:
+Inspect the repository facts, then run the owning domains' checks:
 
 ```bash
-make agent-report ENV=cpu CHANGED_FILES="path/one,path/two"
+make impact ENV=cpu CHANGED_FILES="path/one path/two"
+make check CHANGED_FILES="path/one path/two"
 ```
 
 Common targeted suites include:
@@ -77,12 +78,50 @@ make vllm-sr-test
 make vllm-sr-sim-test
 ```
 
-Use the affected E2E selector when a change is visible through startup,
+Select integration or E2E explicitly when a change is visible through startup,
 routing, an API, a deployment profile, or another live path:
 
 ```bash
-make agent-e2e-affected CHANGED_FILES="path/one,path/two"
+make verify DOMAIN=<domain>
+make verify PROFILE=<profile>
 ```
+
+## Test backends
+
+Running the provider mocker from source requires Python 3.11 or newer.
+
+Use the shared provider mocker for deterministic protocol, routing and fault
+checks. It serves OpenAI Chat Completions, Responses, Anthropic Messages and
+image fixtures from one lightweight service:
+
+```bash
+make test-provider-mocker
+make docker-run-provider-mocker
+# Or run the service directly in its isolated Python environment:
+make start-provider-mocker
+```
+
+`PROVIDER_MOCKER_IMAGE` selects an existing image for reuse. Without that setting,
+the Docker target builds the local service. The mocker is maintained separately
+from product releases. Its image tag identifies a content hash of the runtime
+package, dependency lock, Dockerfile and `.dockerignore`; changing docs or tests
+alone reuses the image. CI resolves that tag to an image digest and passes the
+same artifact to all consumers. Only changes to those runtime inputs publish a
+new helper image.
+
+For a test that needs actual generation, the optional tiny-model runner uses
+`Qwen/Qwen3-0.6B` and the upstream llama.cpp CPU server. It pins the image digest,
+model revision and checksum; downloads the Q8_0 weights into an ignored cache;
+and disables thinking. It does not build another inference image:
+
+```bash
+make tiny-model-smoke  # health, real text, SSE termination and stop sequences
+make tiny-model-serve # foreground real backend on localhost:8000
+```
+
+The model smoke has bounded CPU, memory, context and output limits. Use a separate
+terminal for the running backend and route requests through `vllm-sr serve` when
+validating Router behavior. Protocol edge cases stay in the deterministic suite.
 
 ## Validate a local stack
 
@@ -108,7 +147,7 @@ offset.
   container names.
 - Set `RUST_LOG=debug` for native-library diagnostics.
 - Set `SR_LOG_LEVEL=debug` for Router diagnostics.
-- Run `vllm-sr validate --config <file>` before debugging a configuration at
+- Run `vllm-sr config validate --config <file>` before debugging a configuration at
   runtime.
 - See [Common Errors](/docs/troubleshooting/common-errors) and
   [Container Connectivity](/docs/troubleshooting/container-connectivity) for

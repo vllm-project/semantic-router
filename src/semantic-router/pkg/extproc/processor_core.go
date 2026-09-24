@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
 	"runtime/debug"
 
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
@@ -12,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
@@ -80,6 +82,7 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
 		}
+		finishRequestTrace(ctx, retErr)
 	}()
 
 	// Initialize request context
@@ -103,8 +106,21 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 }
 
 func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error) error {
+	if !errors.Is(err, io.EOF) {
+		ctx.TraceReceiveError = err
+	} else if ctx.RequestSpan != nil {
+		// A terminal response closes the span before the next Recv. EOF with
+		// an open request therefore means the response was never completed.
+		ctx.TraceReceiveError = io.ErrUnexpectedEOF
+	}
 	if ctx.IsStreamingResponse && !ctx.StreamingComplete {
 		ctx.StreamingAborted = true
+		// The evidence window is count-bounded, so a turn that never reaches EOS
+		// must still land as a fact. Without it the newest failed turns cannot
+		// displace older regressions and a later request could switch on
+		// evidence that is no longer from the latest turns. The recorder is
+		// idempotent and empty usage stays non-attributable.
+		recordSessionTurnOutcome(ctx, responseUsageMetrics{})
 		logging.Debugf("Streaming response aborted before completion, will not cache")
 	}
 	if ctx.InflightToken != 0 {
@@ -223,10 +239,12 @@ func (r *OpenAIRouter) processRequestHeaders(
 		return err
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
+	r.bindBenchmarkConfigResponse(response, ctx)
 	if err := sendResponse(stream, response, "request header"); err != nil {
 		logging.Errorf("sendResponse for headers failed: %v", err)
 		return err
 	}
+	finishImmediateResponseTrace(ctx, response)
 	return nil
 }
 
@@ -237,10 +255,14 @@ func (r *OpenAIRouter) processRequestBody(
 ) error {
 	response, err := r.handleRequestBodyDispatch(v, ctx)
 	if err != nil {
-		logging.Errorf("handleRequestBody failed: %v", err)
-		return err
+		var ok bool
+		if response, ok = r.processBodyRoutingError(err, ctx); !ok {
+			logging.Errorf("handleRequestBody failed: %v", err)
+			return err
+		}
 	}
 	response = r.encodeImmediateResponseForClient(response, ctx)
+	r.bindBenchmarkConfigResponse(response, ctx)
 	r.persistImmediateResponseObject(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil
@@ -252,7 +274,27 @@ func (r *OpenAIRouter) processRequestBody(
 		logging.Errorf("sendResponse for body failed: %v", err)
 		return err
 	}
+	finishImmediateResponseTrace(ctx, response)
 	return nil
+}
+
+// processBodyRoutingError converts a *llmprotocol.ProtocolError raised during
+// routing or dispatch into an immediate client-facing response. Capability
+// mismatches (a request requiring capabilities the chosen backend wire cannot
+// express, e.g. image output on chat completions) are client errors, not
+// server failures; every other error keeps the caller's generic path.
+func (r *OpenAIRouter) processBodyRoutingError(err error, ctx *RequestContext) (*ext_proc.ProcessingResponse, bool) {
+	if err == nil {
+		return nil, false
+	}
+	var protocolError *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolError) {
+		return nil, false
+	}
+	if ctx != nil {
+		ctx.ImmediateProtocolError = protocolError
+	}
+	return r.createErrorResponse(http.StatusBadRequest, protocolError.Message), true
 }
 
 func (r *OpenAIRouter) processResponseHeaders(
@@ -264,7 +306,15 @@ func (r *OpenAIRouter) processResponseHeaders(
 	if err != nil {
 		return err
 	}
-	return sendResponse(stream, response, "response header")
+	r.bindBenchmarkConfigResponse(response, ctx)
+	if err := sendResponse(stream, response, "response header"); err != nil {
+		return err
+	}
+	finishImmediateResponseTrace(ctx, response)
+	if v.ResponseHeaders.GetEndOfStream() {
+		finishRequestTrace(ctx, nil)
+	}
+	return nil
 }
 
 func (r *OpenAIRouter) processResponseBody(
@@ -276,7 +326,15 @@ func (r *OpenAIRouter) processResponseBody(
 	if err != nil {
 		return err
 	}
-	return sendResponse(stream, response, "response body")
+	r.bindBenchmarkConfigResponse(response, ctx)
+	if err := sendResponse(stream, response, "response body"); err != nil {
+		return err
+	}
+	finishImmediateResponseTrace(ctx, response)
+	if v.ResponseBody.GetEndOfStream() || ctx.StreamingComplete {
+		finishRequestTrace(ctx, nil)
+	}
+	return nil
 }
 
 func processUnknownRequest(
