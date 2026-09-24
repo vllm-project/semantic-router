@@ -17,6 +17,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src.training.kv_mapper.eval import (
     build_report,
+    choice_accuracy_arms,
     kv_fit_metrics,
     paired_contrast,
     paired_deltas,
@@ -24,6 +25,20 @@ from src.training.kv_mapper.eval import (
 
 
 class EvalContractTests(unittest.TestCase):
+    def test_choice_accuracy_distinguishes_total_and_per_token_scores(self) -> None:
+        items = [
+            {
+                "id": "row:1",
+                "label": 0,
+                "ending_token_counts": [1, 4],
+                "scores": {"cold": [-0.9, -0.5]},
+            }
+        ]
+        total = choice_accuracy_arms(items, ["cold"], length_normalized=False)
+        normalized = choice_accuracy_arms(items, ["cold"], length_normalized=True)
+        self.assertEqual(total["cold"][0]["score"], 1.0)
+        self.assertEqual(normalized["cold"][0]["score"], 0.0)
+
     def test_kv_fit_perfect_map(self) -> None:
         y = np.arange(12, dtype=np.float64).reshape(3, 4)
         got = kv_fit_metrics(y, y)

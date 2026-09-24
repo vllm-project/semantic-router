@@ -112,8 +112,10 @@ Every arm must have the same unique example IDs; record order may differ.
 and target revisions from an artifact. It uses a seeded random sample with
 stable example IDs. Each item scores the same endings against four target-model
 cache arms: cold target, mapped source, raw source, and zero KV. The report
-contains paired bootstrap intervals for mean gold-ending log probability and
-accuracy, plus per-layer-averaged pre-RoPE K/V relative errors. The scorer
+contains paired bootstrap intervals for total-log-probability HellaSwag
+accuracy, length-normalized accuracy, and mean gold-ending log probability,
+plus per-layer-averaged pre-RoPE K/V relative errors. Per-item files include
+ending token counts so both accuracy rankings can be reproduced. The scorer
 checks its cached continuation against a full forward pass in a small Qwen3
 model test. The GPU runner needs torch, transformers, and datasets in addition
 to the artifact dependencies.

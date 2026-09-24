@@ -25,7 +25,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
 
 from src.training.kv_mapper.artifact import read_artifact
-from src.training.kv_mapper.eval import build_report, write_report
+from src.training.kv_mapper.eval import build_report, choice_accuracy_arms, write_report
 from src.training.kv_mapper.hooks import attach_pre_rope_hooks, remove_hooks
 
 
@@ -256,6 +256,7 @@ def run(args) -> dict:
                 "label": gold,
                 "scores": scores,
                 "context_token_count": len(context_ids),
+                "ending_token_counts": [len(ending) for ending in endings],
             }
         )
         (args.output_dir / "items.json").write_text(
@@ -276,19 +277,16 @@ def run(args) -> dict:
             ),
             flush=True,
         )
-    accuracy_arms = {
-        name: [
-            {
-                "id": item["id"],
-                "score": float(int(np.argmax(item["scores"][name]) == item["label"])),
-            }
-            for item in item_rows
-        ]
-        for name in arms
-    }
+    accuracy_arms = choice_accuracy_arms(item_rows, list(arms), length_normalized=False)
+    normalized_accuracy_arms = choice_accuracy_arms(
+        item_rows, list(arms), length_normalized=True
+    )
     reports = {
         "gold_log_probability": build_report("gold_ending_mean_log_probability", arms),
         "accuracy": build_report("hellaswag_accuracy", accuracy_arms),
+        "length_normalized_accuracy": build_report(
+            "hellaswag_length_normalized_accuracy", normalized_accuracy_arms
+        ),
         "kv_relative_error": {
             name: {
                 channel: float(np.mean([item[channel] for item in rows]))
