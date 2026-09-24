@@ -50,6 +50,12 @@ class TorchDecisionRowExecutor:
         self._inference_pool = ThreadPoolExecutor(
             max_workers=1, thread_name_prefix="decision-inference"
         )
+        # Qwen row preparation does substantial Python work around the
+        # tokenizer. Limit simultaneous preparations so they cannot occupy
+        # every CPU thread while a physical GPU forward is launching.
+        self._preparation_limit = (
+            asyncio.Semaphore(4) if profile.family == "qwen3.5" else None
+        )
         self._closed = False
 
     async def aclose(self) -> None:
@@ -63,10 +69,18 @@ class TorchDecisionRowExecutor:
     async def prepare_rows(
         self, rows: tuple[DecisionRow, ...]
     ) -> tuple[PreparedDecisionRow, ...]:
+        if self._closed:
+            raise BackendUnavailableError("Decision row executor is closed")
         if not rows:
             raise BackendContractError("a Decision request contains no rows")
         try:
-            encoded = await _finish_thread_operation(self._encode_rows, rows)
+            if self._preparation_limit is None:
+                encoded = await _finish_thread_operation(self._encode_rows, rows)
+            else:
+                async with self._preparation_limit:
+                    if self._closed:
+                        raise BackendUnavailableError("Decision row executor is closed")
+                    encoded = await _finish_thread_operation(self._encode_rows, rows)
         except ValueError as error:
             if "max_length" in str(error) or "no room for state" in str(error):
                 raise BackendInputTooLargeError(str(error)) from error

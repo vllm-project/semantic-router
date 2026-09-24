@@ -663,6 +663,56 @@ def test_qwen_executor_can_score_mixed_types_in_one_forward():
     assert any('"description":null' in segment for segment in tokenizer.segments)
 
 
+def test_qwen_preparation_limits_simultaneous_tokenization():
+    profile = load_runtime_profile(
+        "Decision-1.0-Eos-0.8B",
+        revision="3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+    )
+    resident = SimpleNamespace(
+        max_length=profile.max_input_tokens,
+        tokenizer=_QwenTokenizer(),
+        predict_encoded=lambda rows: rows,
+    )
+    executor = TorchDecisionRowExecutor(resident, profile)
+    request = _request("A billing question.")
+    row = DecisionRow(MODEL, request.state, "yes", request.questions["yes"])
+    original_encode = executor._encode_rows
+    started = threading.Event()
+    release = threading.Event()
+    lock = threading.Lock()
+    active = 0
+    peak = 0
+
+    def blocking_encode(rows):
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+            if active == 4:
+                started.set()
+        try:
+            assert release.wait(timeout=5)
+            return original_encode(rows)
+        finally:
+            with lock:
+                active -= 1
+
+    executor._encode_rows = blocking_encode
+
+    async def scenario():
+        tasks = [asyncio.create_task(executor.prepare_rows((row,))) for _ in range(12)]
+        try:
+            assert await asyncio.wait_for(asyncio.to_thread(started.wait), timeout=2)
+            await asyncio.sleep(0.05)
+            assert peak == 4
+        finally:
+            release.set()
+            await asyncio.gather(*tasks)
+            await executor.aclose()
+
+    asyncio.run(scenario())
+
+
 def test_server_lifespan_closes_physical_backend(monkeypatch, tmp_path: Path):
     from decision_runtime import server  # noqa: PLC0415
 
