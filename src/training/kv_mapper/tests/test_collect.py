@@ -27,15 +27,23 @@ from src.training.kv_mapper.collect import (
 
 class CollectContractTests(unittest.TestCase):
     def test_calibration_windows_use_requested_count_and_stride(self) -> None:
-        documents = [[0, 1, 2], [3, 4, 5, 6, 7, 8, 9]]
+        documents = [[0, 1, 2], [3, 4, 5, 6, 7, 8, 9], [10, 11, 12, 13]]
         self.assertEqual(
-            list(calibration_windows(documents, seq_len=4, window_stride=2, num_sequences=3)),
-            [[0, 1, 2, 3], [2, 3, 4, 5], [4, 5, 6, 7]],
+            list(
+                calibration_windows(
+                    documents, seq_len=4, window_stride=2, num_sequences=3
+                )
+            ),
+            [[3, 4, 5, 6], [5, 6, 7, 8], [10, 11, 12, 13]],
         )
 
     def test_calibration_windows_reject_short_corpus(self) -> None:
         with self.assertRaisesRegex(ValueError, "only 1 complete windows"):
-            list(calibration_windows([[0, 1, 2, 3]], seq_len=4, window_stride=4, num_sequences=2))
+            list(
+                calibration_windows(
+                    [[0, 1, 2, 3]], seq_len=4, window_stride=4, num_sequences=2
+                )
+            )
 
     def test_stride_defaults_to_disjoint_windows(self) -> None:
         self.assertEqual(resolve_stride(0, 1024), 1024)
@@ -89,10 +97,18 @@ class CollectContractTests(unittest.TestCase):
         self.assertEqual(raw["corpus"], "HuggingFaceFW/fineweb-edu")
 
     def test_disjoint_windows_and_sampled_chunk_resume(self) -> None:
-        windows = np.asarray(list(calibration_windows([list(range(12))], seq_len=4, window_stride=4, num_sequences=3)))
+        windows = np.asarray(
+            list(
+                calibration_windows(
+                    [list(range(12))], seq_len=4, window_stride=4, num_sequences=3
+                )
+            )
+        )
         np.testing.assert_array_equal(windows[:, 0], [0, 4, 8])
         self.assertEqual(token_fingerprint(windows), token_fingerprint(windows.copy()))
-        self.assertNotEqual(token_fingerprint(windows), token_fingerprint(windows[:, ::-1]))
+        self.assertNotEqual(
+            token_fingerprint(windows), token_fingerprint(windows[:, ::-1])
+        )
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "source" / "000000.npz"
             sample = np.arange(8, dtype=np.float32).reshape(2, 1, 4)

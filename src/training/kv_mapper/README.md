@@ -53,6 +53,8 @@ token from each distinct sequence by default. Each chunk stores K and V with
 shape `(layers, sampled_tokens, num_kv_heads, head_dim)` in float32. Chunks have
 SHA-256 sidecars and are checked before a resumed run skips them. `run.json`
 records the exact token fingerprint, dataset revision, and fitting recipe.
+Windows stay within each corpus document; short documents are skipped, and no
+synthetic transition is created between adjacent documents.
 The models must use the same tokenizer vocabulary so positions stay paired.
 That script needs torch, transformers, and datasets; it is not part of
 `make test-training-contracts`.
