@@ -42,6 +42,7 @@ class RuntimeLaunchConfig:
     max_batch: int
     max_concurrency: int
     max_queue: int
+    experimental_qwen_rocm_graph_b8: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,9 +71,10 @@ def assemble_runtime(
         require_runtime_backend(
             model.catalog, model.profile, config.backend, target=target
         )
-        resident = _load_family(
-            model, artifact, config.backend, physical_batch_size=config.max_batch
-        )
+        load_options = {"physical_batch_size": config.max_batch}
+        if config.experimental_qwen_rocm_graph_b8:
+            load_options["enable_rocm_graph"] = True
+        resident = _load_family(model, artifact, config.backend, **load_options)
     except (RuntimeModelResolutionError, RuntimeProfileError, ArtifactError) as error:
         raise RuntimeAssemblyError(str(error)) from error
 
@@ -115,6 +117,11 @@ def _validate_config(config: RuntimeLaunchConfig) -> None:
         raise RuntimeAssemblyError("Decision launch configuration is invalid")
     if config.backend not in {"cpu", "rocm", "cuda"}:
         raise RuntimeAssemblyError("Decision backend is unsupported")
+    if type(config.experimental_qwen_rocm_graph_b8) is not bool or (
+        config.experimental_qwen_rocm_graph_b8
+        and (config.backend != "rocm" or config.max_batch != 8)
+    ):
+        raise RuntimeAssemblyError("experimental Qwen ROCm graph requires B8 ROCm")
     for name, value, minimum, maximum in (
         ("port", config.port, 1, 65535),
         ("max_batch", config.max_batch, 1, MAX_PENDING_ROWS),
@@ -159,8 +166,11 @@ def _load_family(
     backend: Literal["cpu", "rocm", "cuda"],
     *,
     physical_batch_size: int = 8,
+    enable_rocm_graph: bool = False,
 ):
     profile = model.profile
+    if enable_rocm_graph and profile.family != "qwen3.5":
+        raise RuntimeAssemblyError("experimental ROCm graph is Sol-only")
     manifest = getattr(artifact, "manifest", None) or profile.artifact.manifest
     if profile.family == "vela":
         from .vela_torch import VelaTorchRuntime  # noqa: PLC0415
@@ -174,7 +184,16 @@ def _load_family(
             expected_manifest_sha256=manifest.sha256,
         )
     if profile.family == "qwen3.5":
-        from .qwen35_torch import Qwen35TorchRuntime  # noqa: PLC0415
+        from .qwen35_torch import (  # noqa: PLC0415
+            EXPERIMENTAL_SOL_GRAPH_MODEL_ID,
+            Qwen35TorchRuntime,
+        )
+
+        if (
+            enable_rocm_graph
+            and model.catalog.model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+        ):
+            raise RuntimeAssemblyError("experimental ROCm graph is Sol-only")
 
         if manifest.path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
             raise RuntimeAssemblyError("Qwen release manifest layout is unsupported")
@@ -186,6 +205,15 @@ def _load_family(
 
             binder = create_qwen_rocm_profile_binder()
         temperature = _qwen_temperature(artifact, fallback=profile.temperature)
+        graph_options = (
+            {
+                "enable_rocm_graph": True,
+                "artifact_content_id": artifact.content_id,
+                "graph_model_id": model.catalog.model_id,
+            }
+            if enable_rocm_graph
+            else {}
+        )
         return Qwen35TorchRuntime.load(
             artifact.data_root,
             temperature=temperature,
@@ -196,6 +224,7 @@ def _load_family(
             expected_manifest_sha256=(
                 manifest.sha256 if manifest.path == "MODEL_MANIFEST.json" else None
             ),
+            **graph_options,
         )
     raise RuntimeAssemblyError("Decision model family has no owned loader")
 

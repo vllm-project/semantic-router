@@ -44,6 +44,7 @@ class DecisionRuntimeRequest:
     max_batch: int | None
     max_concurrency: int | None
     max_queue: int | None
+    experimental_qwen_rocm_graph_b8: bool = False
 
 
 @dataclass(frozen=True)

@@ -23,6 +23,7 @@ from .release_artifacts import ReleaseArtifactError, verify_release_manifest
 
 QWEN_PROMPT_VERSION = "structured-segmented-candidate-endpoints-global-query-v2"
 SUPPORTED_TRANSFORMERS_VERSION = "5.17.0"
+EXPERIMENTAL_SOL_GRAPH_MODEL_ID = "llm-semantic-router/Decision-1.0-Sol-2B"
 RELEASED_MAX_INPUT_TOKENS = 16_384
 _ROCM_PROFILE_FORMAT = "decision-fla-l2norm-profile-v1"
 _FLA_SOURCE_FILES = ("modules/l2norm.py", "ops/utils/cache.py")
@@ -142,6 +143,7 @@ class Qwen35TorchRuntime:
     max_length: int
     backend: Literal["cpu", "rocm", "cuda"]
     rocm_profile_binding: QwenRocmProfileBinding | None
+    rocm_graphs: Any | None = None
 
     @classmethod
     def load(
@@ -156,6 +158,9 @@ class Qwen35TorchRuntime:
         physical_batch_size: int = 8,
         rocm_profile_binder: QwenRocmProfileBinder | None = None,
         expected_manifest_sha256: str | None = None,
+        enable_rocm_graph: bool = False,
+        artifact_content_id: str | None = None,
+        graph_model_id: str | None = None,
     ) -> Qwen35TorchRuntime:
         """Load verified data files with the distribution-owned implementation."""
 
@@ -168,6 +173,22 @@ class Qwen35TorchRuntime:
             attention=attention,
             physical_batch_size=physical_batch_size,
         )
+        if type(enable_rocm_graph) is not bool:
+            raise Qwen35RuntimeError("experimental Qwen graph flag must be boolean")
+        if enable_rocm_graph and (
+            backend != "rocm"
+            or rocm_profile is None
+            or physical_batch_size != 8
+            or graph_model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+            or not isinstance(artifact_content_id, str)
+            or len(artifact_content_id) != 64
+            or any(
+                character not in "0123456789abcdef" for character in artifact_content_id
+            )
+        ):
+            raise Qwen35RuntimeError(
+                "experimental Qwen ROCm graph requires a verified strict B8 profile"
+            )
         if backend == "cpu" and expected_manifest_sha256 is None:
             raise Qwen35RuntimeError(
                 "CPU Qwen requires a pinned release manifest digest"
@@ -256,7 +277,7 @@ class Qwen35TorchRuntime:
             )
         if any(parameter.dtype != torch.float32 for parameter in head.parameters()):
             raise Qwen35RuntimeError("Decision candidate-head storage must be FP32")
-        return cls(
+        runtime = cls(
             model=model,
             tokenizer=tokenizer,
             torch=torch,
@@ -266,11 +287,27 @@ class Qwen35TorchRuntime:
             backend=backend,
             rocm_profile_binding=binding,
         )
+        if enable_rocm_graph:
+            from .qwen35_rocm_graph import QwenRocmBackboneGraphs  # noqa: PLC0415
+
+            runtime.rocm_graphs = QwenRocmBackboneGraphs(
+                runtime, artifact_content_id=artifact_content_id
+            )
+        return runtime
 
     def predict_encoded(
         self, rows: tuple[EncodedQwenRow, ...]
     ) -> tuple[Qwen35Prediction, ...]:
         """Run one complete physical batch and synchronize once for host output."""
+
+        lock = self.rocm_graphs.lock if self.rocm_graphs is not None else nullcontext()
+        with lock:
+            return self._predict_encoded_locked(rows)
+
+    def _predict_encoded_locked(
+        self, rows: tuple[EncodedQwenRow, ...]
+    ) -> tuple[Qwen35Prediction, ...]:
+        """Keep static graph buffers owned through the host synchronization."""
 
         if not rows:
             raise ValueError("at least one encoded Qwen row is required")
@@ -286,7 +323,11 @@ class Qwen35TorchRuntime:
                     )
                 )
                 with autocast:
-                    logits = self.model(**batch)
+                    logits = (
+                        self.rocm_graphs.logits(batch)
+                        if self.rocm_graphs is not None
+                        else self.model(**batch)
+                    )
                 # Keep padded candidates out of the shared softmax even if a
                 # model implementation returns finite values in those slots.
                 valid_logits = logits.float().masked_fill(

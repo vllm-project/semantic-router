@@ -104,6 +104,42 @@ def test_entrypoint_parses_exact_drun_command(tmp_path: Path):
         parse_launch_args([*args[:-1], "-1"])
 
 
+def test_experimental_qwen_graph_requires_explicit_b8_rocm(tmp_path: Path):
+    args = [
+        "--model",
+        MODEL,
+        "--revision",
+        REVISION,
+        "--backend",
+        "rocm",
+        "--artifact-root",
+        str(tmp_path),
+        "--artifact-content-id",
+        CONTENT_ID,
+        "--max-batch",
+        "8",
+        "--max-concurrency",
+        "1",
+        "--max-queue",
+        "0",
+        "--experimental-qwen-rocm-graph-b8",
+    ]
+    parsed = parse_launch_args(args)
+    assert parsed.experimental_qwen_rocm_graph_b8 is True
+    with pytest.raises(SystemExit):
+        parse_launch_args(
+            [
+                *args[: args.index("--max-batch") + 1],
+                "4",
+                *args[args.index("--max-concurrency") :],
+            ]
+        )
+    cpu = list(args)
+    cpu[cpu.index("rocm")] = "cpu"
+    with pytest.raises(SystemExit):
+        parse_launch_args(cpu)
+
+
 def test_assembly_reopens_artifact_before_loading(monkeypatch, tmp_path: Path):
     from decision_runtime import runtime_factory  # noqa: PLC0415
 
@@ -193,6 +229,78 @@ def test_qwen_loader_uses_verified_manifest_layout(
     assert calls[0][1]["expected_manifest_sha256"] == (
         profile.artifact.manifest.sha256 if expected_manifest else None
     )
+
+
+def test_opt_in_qwen_graph_receives_verified_artifact_identity(
+    monkeypatch, tmp_path: Path
+):
+    from decision_runtime import qwen35_torch, runtime_factory  # noqa: PLC0415
+
+    profile = load_runtime_profile(
+        "Decision-1.0-Sol-2B",
+        revision="0665a41108e8f0b33a9515c98311c45947b99399",
+    )
+    model = SimpleNamespace(
+        profile=profile,
+        catalog=SimpleNamespace(model_id="llm-semantic-router/Decision-1.0-Sol-2B"),
+    )
+    artifact = SimpleNamespace(
+        data_root=tmp_path,
+        content_id=CONTENT_ID,
+        manifest=profile.artifact.manifest,
+    )
+    calls = []
+    monkeypatch.setattr(runtime_factory, "_qwen_temperature", lambda *a, **k: 1.0)
+    monkeypatch.setattr(
+        qwen35_torch.Qwen35TorchRuntime,
+        "load",
+        lambda root, **options: calls.append((root, options)),
+    )
+    runtime_factory._load_family(
+        model, artifact, "rocm", physical_batch_size=8, enable_rocm_graph=True
+    )
+    assert calls[0][1]["enable_rocm_graph"] is True
+    assert calls[0][1]["artifact_content_id"] == CONTENT_ID
+    assert calls[0][1]["graph_model_id"] == model.catalog.model_id
+    assert calls[0][1]["physical_batch_size"] == 8
+
+
+@pytest.mark.parametrize(
+    "model_id",
+    (
+        "llm-semantic-router/Decision-1.0-Nox-4B",
+        "llm-semantic-router/Decision-1.0-Lux-9B",
+    ),
+)
+def test_experimental_graph_rejects_other_qwen_models_before_load(
+    model_id: str, tmp_path: Path, monkeypatch
+):
+    from decision_runtime import qwen35_torch, runtime_factory  # noqa: PLC0415
+
+    model = SimpleNamespace(
+        catalog=SimpleNamespace(model_id=model_id),
+        profile=SimpleNamespace(family="qwen3.5"),
+    )
+    artifact = SimpleNamespace(
+        data_root=tmp_path,
+        content_id=CONTENT_ID,
+        manifest=SimpleNamespace(path="bundle-manifest.json", sha256="a" * 64),
+    )
+    loads = []
+    monkeypatch.setattr(
+        qwen35_torch.Qwen35TorchRuntime,
+        "load",
+        lambda *args, **kwargs: loads.append(args),
+    )
+    with pytest.raises(RuntimeAssemblyError, match="Sol-only"):
+        runtime_factory._load_family(
+            model,
+            artifact,
+            "rocm",
+            physical_batch_size=8,
+            enable_rocm_graph=True,
+        )
+    assert loads == []
 
 
 def test_qwen_calibration_is_read_from_verified_snapshot(tmp_path: Path):
