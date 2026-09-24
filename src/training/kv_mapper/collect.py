@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 import os
+from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
-from collections.abc import Iterable, Iterator
 
 import numpy as np
+
+KV_LAYOUT_RANK = 4
+FLAT_KV_LAYOUT_RANK = 3
 
 
 def resolve_stride(stride: int, seq_len: int) -> int:
@@ -45,7 +48,7 @@ def calibration_windows(
 
 def as_bshd_numpy(out: np.ndarray, n_kv: int, head_dim: int) -> np.ndarray:
     """Normalize hook output to (batch, seq, n_kv, head_dim)."""
-    if out.ndim == 4:
+    if out.ndim == KV_LAYOUT_RANK:
         _batch, a, c, d = out.shape
         if c == n_kv and d == head_dim:
             return out
@@ -54,7 +57,7 @@ def as_bshd_numpy(out: np.ndarray, n_kv: int, head_dim: int) -> np.ndarray:
         raise ValueError(
             f"Unexpected 4D KV {tuple(out.shape)}; want n_kv={n_kv} head_dim={head_dim}"
         )
-    if out.ndim != 3:
+    if out.ndim != FLAT_KV_LAYOUT_RANK:
         raise ValueError(f"Unexpected KV rank {out.ndim} shape {tuple(out.shape)}")
     return out.reshape(out.shape[0], out.shape[1], n_kv, head_dim)
 

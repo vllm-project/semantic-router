@@ -4,6 +4,9 @@ import sys
 import unittest
 from pathlib import Path
 
+# Torch is optional in the contract test environment.
+# ruff: noqa: PLC0415
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT))
 
