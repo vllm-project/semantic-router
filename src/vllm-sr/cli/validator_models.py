@@ -11,11 +11,12 @@ from cli.validation_error import ValidationError
 
 
 @lru_cache(maxsize=1)
-def _catalog_ids() -> tuple[
+def _catalog_index() -> tuple[
     frozenset[str],
     frozenset[str],
     frozenset[str],
     frozenset[str],
+    dict[str, dict[str, Any]],
 ]:
     _, document = _load_catalog_document(DEFAULT_CHANNEL)
     models = document.get("models")
@@ -24,6 +25,11 @@ def _catalog_ids() -> tuple[
         _ids(models, kind="physical"),
         _ids(models, kind="virtual"),
         _ids(document.get("reasoning_families")),
+        {
+            model["id"]: model
+            for model in models or []
+            if isinstance(model, dict) and isinstance(model.get("id"), str)
+        },
     )
 
 
@@ -42,7 +48,13 @@ def _ids(values: Any, *, kind: str | None = None) -> frozenset[str]:
 def validate_model_references(config: UserConfig) -> list[ValidationError]:
     """Validate aliases, canonical card identities, providers, and LoRAs."""
 
-    provider_ids, physical_models, virtual_models, reasoning_families = _catalog_ids()
+    (
+        provider_ids,
+        physical_models,
+        virtual_models,
+        reasoning_families,
+        built_in_cards,
+    ) = _catalog_index()
     built_in_models = physical_models | virtual_models
     aliases = {model.name for model in config.providers.models}
     cards = {card.name: card for card in config.routing.model_cards}
@@ -72,6 +84,7 @@ def validate_model_references(config: UserConfig) -> list[ValidationError]:
             cards, set(catalogs_by_alias.values()), aliases, lora_aliases
         )
     )
+    errors.extend(_built_in_card_claim_errors(config, built_in_cards))
     errors.extend(_decision_errors(config, aliases, cards, catalogs_by_alias))
     errors.extend(_default_model_errors(config, aliases, cards, lora_aliases))
     return errors
@@ -239,6 +252,53 @@ def _model_card_errors(
                     field=f"routing.modelCards.{card_name}.name",
                 )
             )
+    return errors
+
+
+def _built_in_card_claim_errors(
+    config: UserConfig, built_in_cards: dict[str, dict[str, Any]]
+) -> list[ValidationError]:
+    """Match the Router catalog compiler's built-in claim widening rule.
+
+    A public v0.3 model card cannot carry verification.status=reproduced, so
+    additions to a catalog-backed card must be rejected before serve starts.
+    Custom cards, even ones sharing a built-in name, remain operator-owned.
+    """
+
+    catalog_backed = {model.catalog for model in config.providers.models if model.catalog}
+    errors: list[ValidationError] = []
+    for index, card in enumerate(config.routing.model_cards):
+        if card.name not in catalog_backed:
+            continue
+        built_in = built_in_cards.get(card.name)
+        if built_in is None:
+            continue  # The unknown catalog identity is reported by provider validation.
+        if card.capabilities is not None:
+            added = set(card.capabilities) - set(built_in.get("capabilities") or [])
+            if added:
+                errors.append(
+                    ValidationError(
+                        "capabilities widen a built-in claim without "
+                        "verification.status=reproduced: " + ", ".join(sorted(added)),
+                        field=f"routing.modelCards[{index}].capabilities",
+                    )
+                )
+        if card.modalities is not None:
+            built_in_modalities = built_in.get("modalities") or {}
+            added = {
+                modality
+                for direction in ("input", "output")
+                for modality in set(card.modalities.get(direction) or [])
+                - set(built_in_modalities.get(direction) or [])
+            }
+            if added:
+                errors.append(
+                    ValidationError(
+                        "modalities widen a built-in claim without "
+                        "verification.status=reproduced: " + ", ".join(sorted(added)),
+                        field=f"routing.modelCards[{index}].modalities",
+                    )
+                )
     return errors
 
 
