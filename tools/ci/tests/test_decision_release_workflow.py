@@ -239,8 +239,11 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(decision["with"]["mode"], "main")
         self.assertEqual(needs(publisher), {"ci", "decision"})
         self.assertIn("needs.decision.result == 'success'", publisher["if"])
-        self.assertIn("decision-runtime-cpu", publisher["if"])
-        self.assertIn("qualified-decision", publisher["with"])
+        self.assertIn(
+            "contains(fromJSON(needs.ci.outputs.publish_images), 'decision-runtime-cpu')",
+            publisher["if"],
+        )
+        self.assertIs(publisher["with"]["qualified-decision"], True)
 
     def test_pypi_rechecks_lock_and_distribution_before_upload(self) -> None:
         publisher = self.workflows["pypi-publish.yml"]

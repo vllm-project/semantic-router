@@ -479,7 +479,28 @@ class SelectionTests(unittest.TestCase):
         self.assertFalse(docs["publish_images"])
         cli = make_plan(["src/vllm-sr/cli/core.py"], source_sha=SHA, profile="main")
         self.assertTrue(cli["publish_python"])
+        self.assertIn("decision-runtime-cpu", cli["publish_images"])
         self.assertIn("cli-package", cli["expected_verification_ids"])
+
+    def test_main_decision_package_never_publishes_without_qualification(self):
+        for path in (
+            "src/vllm-sr/tests/test_decision_runtime_server.py",
+            "config/catalog/README.md",
+            "website/static/model-catalog/catalog.json",
+        ):
+            with self.subTest(path=path):
+                plan = make_plan([path], source_sha=SHA, profile="main")
+                self.assertFalse(plan["publish_python"])
+        for path in (
+            "config/catalog/manifest.yaml",
+            "config/catalog/resources/models/single/llm-semantic-router.yaml",
+            "config/catalog/schemas/catalog-resources-v1.schema.json",
+        ):
+            with self.subTest(path=path):
+                plan = make_plan([path], source_sha=SHA, profile="main")
+                self.assertTrue(plan["publish_python"])
+                self.assertIn("decision-runtime-cpu", plan["publish_images"])
+                self.assertIn("decision-runtime-cpu", plan["images"])
 
     def test_decision_cpu_enters_trusted_image_flow_without_scheduling_rocm(self):
         for path in (

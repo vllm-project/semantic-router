@@ -79,8 +79,8 @@ jobs:
       !cancelled() && needs.ci.result == 'success'
       && needs.ci.outputs.publish_python == 'true'
       && github.repository == 'vllm-project/semantic-router'
-      && (!contains(fromJSON(needs.ci.outputs.publish_images), 'decision-runtime-cpu')
-        || needs.decision.result == 'success')
+      && contains(fromJSON(needs.ci.outputs.publish_images), 'decision-runtime-cpu')
+      && needs.decision.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -89,5 +89,5 @@ jobs:
     with:
       channel: dev
       prebuilt-dist: true
-      qualified-decision: ${{ contains(fromJSON(needs.ci.outputs.publish_images), 'decision-runtime-cpu') }}
+      qualified-decision: true
     secrets: inherit

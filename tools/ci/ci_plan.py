@@ -19,6 +19,8 @@ from classify_pr_changes import (
     classify,
     git_changed_files,
 )
+from decision_release_policy import ROOT as SOURCE_ROOT
+from decision_release_policy import requires_qualification
 from domain_registry import domain_records, load_domain_registry, matching_domains
 from execution_batches import (
     EXECUTOR_JOBS,
@@ -148,6 +150,17 @@ def make_plan(
         publish_images = list(NIGHTLY_IMAGES)
     elif profile == "release":
         publish_images = list(PRODUCTION_RELEASE_IMAGES)
+    publish_python = profile == "release" or (
+        profile == "main"
+        and not selection.signals["docs_only"]
+        and not selection.test_only
+        and bool({"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains))
+    )
+    # The installed CLI contains Decision even when only its catalog changed.
+    # A main-channel wheel must never bypass the source-qualified image lock
+    # merely because the changed-path image selector missed that dependency.
+    if profile == "main" and publish_python and requires_qualification(SOURCE_ROOT):
+        publish_images = sorted({*publish_images, "decision-runtime-cpu"})
     images = sorted(
         set(selection.pr_images if ids else ())
         | set(publish_images)
@@ -184,13 +197,7 @@ def make_plan(
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
         or (profile == "main" and selection.signals["helm"]),
-        "publish_python": profile == "release"
-        or (
-            profile == "main"
-            and bool(
-                {"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains)
-            )
-        ),
+        "publish_python": publish_python,
         "multiarch": bool(publish_images),
         "not_applicable": load_catalog()["full_cpu"]["excluded"],
         "quality_context": dict(selection.signals),
