@@ -574,3 +574,129 @@
     verification: imported
     source: https://artificialanalysis.ai/evaluations/gpqa-diamond
     redistributable: true
+- id: independent/nova-lite-critpt@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-artificial-analysis-long-context-reasoning@1.1.0
+  model: amazon/nova-lite-v1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    score: 0.19
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-omniscience@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    index: -42.166666666666664
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-gpqa-diamond@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.433333333333333
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-ifbench@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.341496598639456
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-aime-2025@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.07
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-mmmu-pro@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: standard-10
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.378034682080925
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
