@@ -1,11 +1,58 @@
 # Decision HTTP performance comparisons
 
-This directory has two independently labeled measurements. `run` is the
+This directory has three independently labeled measurements. `run` is the
 byte-identical, single-state SystemOne comparison below. `semantic` measures
 synthetic logical workflows with mixed questions, concurrent requests, and
-multiple states. For multiple states it compares old `/v1/systemone` fan-out
-with new `/v1/decision/batches`; those are different HTTP protocols and wire
-bytes. Neither mode measures decision quality.
+multiple states. `semantic-arrivals` adds fixed logical-workflow arrival times
+as an opt-in exploratory comparison. For multiple states both semantic modes
+compare old `/v1/systemone` fan-out with new `/v1/decision/batches`; those are
+different HTTP protocols and wire bytes. None measures decision quality.
+
+## Fixed-arrival exploratory workloads
+
+Use `semantic-arrivals` when the question is how each service completes the
+same offered logical-workflow trace. Its source, model, hardware, and endpoint
+arguments match `semantic` below. Specify `--arrival-spacing-ms` deliberately:
+`0` releases a synchronized burst, while a positive value releases each next
+workflow that many milliseconds later. The case order and offsets are written
+to `arrival-traces.json` before either service receives audit or timed traffic;
+both arms use each exact trace. The receipt records the trace file's SHA-256.
+
+```bash
+.venv-agent/bin/python -m bench.decision_runtime semantic-arrivals \
+  --model llm-semantic-router/Decision-1.0-Kai-0.6B \
+  --old-url 'http://127.0.0.1:<old-port>/v1/systemone' \
+  --new-url 'http://127.0.0.1:<new-port>/v1/systemone' \
+  --old-source-ref <old-source-commit> --new-source-ref <new-source-commit> \
+  --old-model-revision <model-commit> --new-model-revision <model-commit> \
+  --old-hardware 'MI300X x1' --new-hardware 'MI300X x1' \
+  --old-network-scope loopback --new-network-scope loopback \
+  --old-physical-batch-size 8 --new-physical-batch-size 8 \
+  --question-counts 32 --state-counts 1,8,32 \
+  --concurrencies 1,8,32 --variants 4 --seed 17 \
+  --warmup 2 --workflows 32 --rounds 3 \
+  --arrival-spacing-ms 10 --max-arrival-jitter-ms 50 \
+  --output-dir .agent-harness/decision-arrivals/kai
+```
+
+The same untimed semantic and token parity audit must pass before timing. Each
+arm then runs in its own alternating wave. At each scheduled arrival, the
+client queues a whole workflow. It dispatches at most `--concurrencies` HTTP
+calls per arm, taking one pending state per old workflow in round-robin order;
+the new arm sends one batch call per multi-state workflow. This keeps the
+offered logical arrivals equal while preserving the real protocol difference.
+The trace is an open-loop schedule: a slow response never delays the next
+logical arrival. Queued calls still contribute to a workflow's latency.
+
+`workflows.jsonl` records scheduled and actual arrival, first HTTP send, final
+completion, scheduling jitter, client queue wait, errors, and scheduled-arrival
+latency. `samples.jsonl` records each HTTP attempt, its trace hash and arrival
+offsets. Throughput counts complete successful workflows and divides their
+decisions by the sum of each round's first scheduled arrival to last completion
+window. A client scheduling miss above `--max-arrival-jitter-ms`, a failed
+workflow, or mismatched model revision/hardware/network scope suppresses the
+old/new ratios. The mode does not assert a no-regression floor, collect timed
+semantic bodies or server metrics, or qualify the protected release gate.
 
 ## Synthetic semantic workloads
 
