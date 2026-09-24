@@ -78,13 +78,11 @@ def test_amd_compiler_cache_skips_uninspectable_image_and_other_platforms(
     monkeypatch.setattr(container_gpu_isolation.subprocess, "run", inspect)
     state = tmp_path / ".vllm-sr"
     assert (
-        router_compiler_cache("docker", "router:latest", str(state), "a", "cpu")
-        is None
+        router_compiler_cache("docker", "router:latest", str(state), "a", "cpu") is None
     )
     assert calls == []
     assert (
-        router_compiler_cache("docker", "router:latest", str(state), "a", "amd")
-        is None
+        router_compiler_cache("docker", "router:latest", str(state), "a", "amd") is None
     )
     assert len(calls) == 1
     assert not state.exists()

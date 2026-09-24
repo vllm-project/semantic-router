@@ -595,7 +595,9 @@ def _build_dashboard_runtime_command(
         network_name=runtime_network_name,
         env_vars=dashboard_env,
         mount_specs=dashboard_mount_specs,
-        port_mappings=[(_dashboard_host_bind_address(), stack_layout.dashboard_port, 8700)],
+        port_mappings=[
+            (_dashboard_host_bind_address(), stack_layout.dashboard_port, 8700)
+        ],
         entrypoint=service_entrypoint,
         command_args=service_args,
         inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD", "DASHBOARD_JWT_SECRET"}

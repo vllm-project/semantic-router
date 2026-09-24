@@ -114,9 +114,7 @@ def test_dashboard_docker_published_address(monkeypatch, host_bind, expected):
         "_build_dashboard_runtime_env",
         lambda **kw: {"OPENCLAW_ENABLED": "false"},
     )
-    monkeypatch.setattr(
-        container_start, "_build_service_run_command", lambda **kw: kw
-    )
+    monkeypatch.setattr(container_start, "_build_service_run_command", lambda **kw: kw)
     stack = resolve_runtime_stack(stack_name="dashboard-bind-test", port_offset=100)
     spec = container_start._build_dashboard_runtime_command(
         runtime="docker",

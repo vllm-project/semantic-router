@@ -113,7 +113,15 @@ def _catalog_backed_qwen_config() -> UserConfig:
     ("overlay", "field", "added"),
     [
         (
-            {"capabilities": ["chat", "reasoning", "tools", "structured_output", "text"]},
+            {
+                "capabilities": [
+                    "chat",
+                    "reasoning",
+                    "tools",
+                    "structured_output",
+                    "text",
+                ]
+            },
             "capabilities",
             "text",
         ),
@@ -192,7 +200,9 @@ def test_config_validate_reports_unverified_catalog_claim(tmp_path: Path):
     ]
     path = tmp_path / "config.yaml"
     path.write_text(
-        yaml.safe_dump(config.model_dump(mode="json", by_alias=True, exclude_none=True)),
+        yaml.safe_dump(
+            config.model_dump(mode="json", by_alias=True, exclude_none=True)
+        ),
         encoding="utf-8",
     )
 

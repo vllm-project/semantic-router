@@ -265,7 +265,9 @@ def _built_in_card_claim_errors(
     Custom cards, even ones sharing a built-in name, remain operator-owned.
     """
 
-    catalog_backed = {model.catalog for model in config.providers.models if model.catalog}
+    catalog_backed = {
+        model.catalog for model in config.providers.models if model.catalog
+    }
     errors: list[ValidationError] = []
     for index, card in enumerate(config.routing.model_cards):
         if card.name not in catalog_backed:
