@@ -14,7 +14,7 @@
     "rocm": {
       "gated_delta": "native_torch",
       "max_physical_batch_size": 8,
-      "job_turn_batches": 4
+      "job_turn_batches": 2
     }
   }
 }

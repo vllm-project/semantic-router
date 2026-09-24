@@ -8,10 +8,11 @@ snapshot's manifest to choose model files, including a complete Qwen weight
 layout; changing weight shards does not require editing a packaged file list.
 An optional `execution` section groups model-specific choices by hardware
 backend. Eos selects instance-local native GatedDeltaNet on ROCm with a B8
-batch bound; Sol selects guarded short-batch ROCm graphs; Eos, Nox, and Lux group at
-most four physical forwards from one request before rotating to reduce
-completion tail latency at high concurrency. Other Qwen profiles retain the
-accelerated eager path and default row rotation. A change to any execution
+batch bound; Sol selects guarded short-batch ROCm graphs; Eos groups at most two
+physical forwards per request, while Nox and Lux group at most four before
+rotating to reduce completion tail latency at high concurrency. Other Qwen
+profiles retain the accelerated eager path and default row rotation. A change
+to any execution
 policy needs numerical, memory, and performance validation on the selected
 device.
 

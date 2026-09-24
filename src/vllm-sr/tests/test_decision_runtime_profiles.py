@@ -100,9 +100,12 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
     assert (rocm_policy.max_physical_batch_size if rocm_policy else None) == (
         8 if "Eos-0.8B" in model_id else None
     )
-    assert resolved.profile.rows_per_job_turn("rocm", 8) == (
-        32 if model_id.endswith(("Eos-0.8B", "Nox-4B", "Lux-9B")) else 1
-    )
+    expected_turn_rows = {
+        "Decision-1.0-Eos-0.8B": 16,
+        "Decision-1.0-Nox-4B": 32,
+        "Decision-1.0-Lux-9B": 32,
+    }.get(model_id.rsplit("/", 1)[-1], 1)
+    assert resolved.profile.rows_per_job_turn("rocm", 8) == expected_turn_rows
     assert resolved.profile.rows_per_job_turn("cpu", 8) == 1
     assert resolved.profile.use_short_b8_graph("rocm", 8) == model_id.endswith("Sol-2B")
     assert not resolved.profile.use_short_b8_graph("rocm", 16)
