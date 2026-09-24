@@ -148,8 +148,10 @@ Optional `--old-metrics-url` and `--new-metrics-url` accept each service's
 immediately before and after the HTTP work, outside the timed interval. It
 selects the request model's cumulative row-preparation seconds, preparation
 count, physical batch count, physical batch row count, and fixed-size histogram
-buckets. These metrics require the bounded `model` label, and histogram buckets
-use `le`. `metrics.jsonl` stores selected before/after values, response hashes,
+buckets. Sol graph capture, replay, and fallback counters are also selected;
+missing event series count as zero. These metrics require the bounded `model`
+label, and histogram buckets use `le`. `metrics.jsonl` stores selected
+before/after values, response hashes,
 deltas, and generic error codes; it does not store the raw metrics body or URL.
 The receipt normalizes preparation seconds and observed physical rows per
 complete decision, plus mean rows per physical batch. It shows an internal

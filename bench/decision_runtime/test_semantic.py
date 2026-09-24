@@ -28,6 +28,7 @@ from decision_runtime.contracts import (
 from .__main__ import main
 from .legacy_projection import project_legacy_preview
 from .semantic_cases import generate_cases
+from .semantic_metrics import MetricCapture, MetricsError, _parse_snapshot
 from .semantic_report import build_semantic_matrix
 from tools.ci.decision_timed_semantics import canonical_request_bodies
 
@@ -194,6 +195,34 @@ class _Handler(BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         pass
+
+
+class GraphMetricTests(TestCase):
+    def test_graph_replay_is_counted_and_bad_events_fail(self) -> None:
+        model = "llm-semantic-router/Decision-1.0-Sol-2B"
+        base = [
+            f'decision_runtime_row_preparation_duration_seconds_total{{model="{model}"}} 1',
+            f'decision_runtime_row_preparations_total{{model="{model}"}} 1',
+            f'decision_runtime_physical_batches_total{{model="{model}"}} 1',
+            f'decision_runtime_physical_batch_rows_total{{model="{model}"}} 8',
+            f'decision_runtime_physical_batch_size_bucket{{model="{model}",le="+Inf"}} 1',
+        ]
+        before = _parse_snapshot("\n".join(base).encode(), "a" * 64, model)
+        self.assertEqual(
+            before.graph_events, dict.fromkeys(("capture", "replay", "fallback"), 0)
+        )
+        event = f'decision_runtime_qwen_rocm_graph_events_total{{model="{model}",event="replay"}} 3'
+        after = _parse_snapshot("\n".join([*base, event]).encode(), "b" * 64, model)
+        capture = MetricCapture("new", 8, 8, 32, 0, before, after, None)
+        self.assertEqual(capture.public_record()["delta"]["graph_events"]["replay"], 3)
+        for bad in (
+            event.replace('event="replay"', 'event="unreviewed"'),
+            event.replace(" 3", " 3.5"),
+            "\n".join((event, event)),
+        ):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(MetricsError, "metrics_invalid_graph_events"):
+                    _parse_snapshot("\n".join([*base, bad]).encode(), "c" * 64, model)
 
 
 class SemanticTests(TestCase):

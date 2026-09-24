@@ -21,8 +21,11 @@ from typing import Any
 from decision_rocm_promotion import MODEL_IDS, validate_receipt
 from decision_timed_semantics import validate_timed_semantics
 
-SCHEMA = "decision-paired-release-v6"
+SCHEMA = "decision-paired-release-v7"
 RAW_SCHEMA = "decision-semantic-workload-v2"
+SOL_GRAPH_MODEL_ID = "llm-semantic-router/Decision-1.0-Sol-2B"
+RUNTIME_VARIANTS = frozenset({"eager", "sol_rocm_graph_b8"})
+GRAPH_EVENTS = frozenset({"capture", "replay", "fallback"})
 ARRIVAL_POLICY = (
     "the same ordered logical workflows are submitted per arm and round; "
     "old fan-out submits one HTTP call per state while new batch submits "
@@ -35,10 +38,8 @@ ROUNDS = 3
 PHYSICAL_BATCH = 8  # Current untuned qualification ceiling, not a report-wide size.
 PHYSICAL_BATCH_BUCKETS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
 MIN_WORKFLOWS_PER_ROUND = 32
-HIGH_LOAD_SHAPES = ((8, 8), (32, 32))
-OVERALL_HIGH_LOAD_THROUGHPUT_GAIN_GOAL = 1.05
-MIN_MODEL_HIGH_LOAD_THROUGHPUT_RATIO = 1.00
-MIN_ACCEPTABLE_HIGH_LOAD_THROUGHPUT_RATIO = 0.95
+HIGH_LOAD_SHAPES = ((8, 8), (32, 32))  # Graph replay and batching proof cells.
+MIN_HIGH_LOAD_THROUGHPUT_RATIO = 1.00
 MAX_SEMANTIC_PROBABILITY_DELTA = 0.010000001
 HIGH_LOAD_MIN_CONCURRENCY = 8
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -536,6 +537,12 @@ def _validate_cell(
     )
     _same(batches, counters.get("physical_batches"), "physical batches")
     _same(rows, counters.get("physical_batch_rows"), "physical batch rows")
+    graph_events = _mapping(measured.get("graph_event_deltas"), "new graph events")
+    _same(
+        _counter_integer(cell.get("new_graph_replays"), "new graph replays"),
+        _counter_integer(graph_events.get("replay"), "raw new graph replays"),
+        "new graph replay count",
+    )
     if rows < batches or rows > batches * new_physical_batch_size:
         raise ValueError("observed physical batch rows exceed declared batch capacity")
     observed = _close(
@@ -951,6 +958,7 @@ def _validate_metrics(
     q: int,
     s: int,
     new_physical_batch_size: int,
+    runtime_variant: str,
     previous_snapshots: dict[str, dict[str, dict[str, Any]]],
     hash_snapshots: dict[tuple[str, str], str],
 ) -> None:
@@ -989,6 +997,7 @@ def _validate_metrics(
                 continue
             totals: Counter[str] = Counter()
             bucket_totals: Counter[str] = Counter()
+            graph_totals: Counter[str] = Counter()
             for round_number in range(ROUNDS):
                 capture = indexed[(concurrency, arm, round_number)]
                 before = _mapping(capture.get("before"), "metric before")
@@ -1006,6 +1015,16 @@ def _validate_metrics(
                 delta_buckets = _mapping(
                     delta.get("physical_batch_size_buckets"), "delta buckets"
                 )
+                before_graph = _mapping(
+                    before.get("graph_events"), "before graph events"
+                )
+                after_graph = _mapping(after.get("graph_events"), "after graph events")
+                delta_graph = _mapping(delta.get("graph_events"), "delta graph events")
+                if any(
+                    set(events) != GRAPH_EVENTS
+                    for events in (before_graph, after_graph, delta_graph)
+                ):
+                    raise ValueError("graph event inventory differs")
                 for snapshot, label in ((before, "before"), (after, "after")):
                     digest = _hex(
                         snapshot.get("response_sha256"), label + " metrics", HASH
@@ -1016,6 +1035,7 @@ def _validate_metrics(
                             "physical_batch_size_buckets": snapshot.get(
                                 "physical_batch_size_buckets"
                             ),
+                            "graph_events": snapshot.get("graph_events"),
                         },
                         sort_keys=True,
                         separators=(",", ":"),
@@ -1098,6 +1118,33 @@ def _validate_metrics(
                     ):
                         raise ValueError("metric delta differs from snapshots")
                     totals[name] += observed
+                for name in GRAPH_EVENTS:
+                    before_count = _counter_integer(
+                        before_graph[name], "graph event before"
+                    )
+                    after_count = _counter_integer(
+                        after_graph[name], "graph event after"
+                    )
+                    delta_count = _counter_integer(
+                        delta_graph[name], "graph event delta"
+                    )
+                    if after_count - before_count != delta_count:
+                        raise ValueError("graph event delta differs from snapshots")
+                    graph_totals[name] += delta_count
+                    if (
+                        arm == "new"
+                        and runtime_variant == "eager"
+                        and (before_count or after_count or delta_count)
+                    ):
+                        raise ValueError("eager candidate emitted graph events")
+                if (
+                    arm == "new"
+                    and runtime_variant == "sol_rocm_graph_b8"
+                    and concurrency == 32
+                    and (q, s) in HIGH_LOAD_SHAPES
+                    and not delta_graph["replay"]
+                ):
+                    raise ValueError("graph candidate has no timed high-load replay")
                 round_batches = _counter_integer(
                     delta_counters.get("physical_batches"),
                     "round physical batches",
@@ -1173,6 +1220,17 @@ def _validate_metrics(
                 summary.get("physical_batch_size_bucket_deltas"),
                 arm + " histogram",
             )
+            graph_summary = _mapping(
+                summary.get("graph_event_deltas"), arm + " graph events"
+            )
+            if set(graph_summary) != GRAPH_EVENTS:
+                raise ValueError("graph event summary inventory differs")
+            for name in GRAPH_EVENTS:
+                _same(
+                    _counter_integer(graph_summary[name], name + " graph total"),
+                    graph_totals[name],
+                    name + " graph total",
+                )
             _same(set(buckets), set(bucket_totals), arm + " histogram buckets")
             for bucket, value in bucket_totals.items():
                 if not math.isclose(
@@ -1262,6 +1320,15 @@ def _validate_metrics(
                 )
                 if current < earlier:
                     raise ValueError("metric histogram reset between measured waves")
+            for name in GRAPH_EVENTS:
+                current = _counter_integer(
+                    before["graph_events"].get(name), "graph event before"
+                )
+                earlier = _counter_integer(
+                    previous["graph_events"].get(name), "prior graph event"
+                )
+                if current < earlier:
+                    raise ValueError("graph event counter reset between measured waves")
         previous_snapshots[arm] = after
 
 
@@ -1484,6 +1551,7 @@ def _validate_shape(
         q,
         s,
         new_physical_batch_size,
+        model["new_runtime_variant"],
         previous_snapshots,
         hash_snapshots,
     )
@@ -1767,6 +1835,16 @@ def validate_report(
                 model_id
                 + " larger physical batch requires independent tuning qualification evidence"
             )
+        variant = model.get("new_runtime_variant")
+        if (
+            not isinstance(variant, str)
+            or variant not in RUNTIME_VARIANTS
+            or (
+                variant == "sol_rocm_graph_b8"
+                and (model_id != SOL_GRAPH_MODEL_ID or new_batch != 8)
+            )
+        ):
+            raise ValueError(model_id + " candidate runtime variant is invalid")
         _same(
             model.get("new_scheduler"),
             {"max_concurrency": 4, "max_queue": 32},
@@ -1803,29 +1881,21 @@ def validate_report(
         # The arms perform the same logical work, but old fanout and new batch
         # have different HTTP submissions and no shared scheduled-arrival trace.
         # Workflow latency is diagnostic, never an alternative release win.
-        for shape in shapes:
-            for cell in shape["cells"]:
-                if (
-                    cell["concurrency"] >= HIGH_LOAD_MIN_CONCURRENCY
-                    and cell["new_over_old_decisions_per_second"]
-                    < MIN_ACCEPTABLE_HIGH_LOAD_THROUGHPUT_RATIO
-                ):
-                    raise ValueError(
-                        model_id + " has a material high-load throughput regression"
-                    )
         high_load_shape_ratios = {
-            f"q{q}_s{s}_c32": indexed[q, s]["cells"][-1][
+            f"q{q}_s{s}_c{cell['concurrency']}": cell[
                 "new_over_old_decisions_per_second"
             ]
-            for q, s in HIGH_LOAD_SHAPES
+            for q, s in SHAPES
+            for cell in indexed[q, s]["cells"]
+            if cell["concurrency"] >= HIGH_LOAD_MIN_CONCURRENCY
         }
+        for cell_name, ratio in high_load_shape_ratios.items():
+            if ratio < MIN_HIGH_LOAD_THROUGHPUT_RATIO:
+                raise ValueError(
+                    f"{model_id} has a high-load throughput regression at "
+                    f"{cell_name} against its selected historical snapshot"
+                )
         model_high_load_geomean = _geometric_mean(list(high_load_shape_ratios.values()))
-        if model_high_load_geomean < MIN_MODEL_HIGH_LOAD_THROUGHPUT_RATIO:
-            raise ValueError(
-                model_id
-                + " has a high-load throughput regression against its selected "
-                "historical snapshot"
-            )
         for q, s in HIGH_LOAD_SHAPES:
             if (
                 indexed[q, s]["cells"][-1]["new_observed_rows_per_physical_batch"]
@@ -1836,17 +1906,17 @@ def validate_report(
                 )
         all_high_load_ratios.extend(high_load_shape_ratios.values())
         summary["models"][model_id] = {
+            "new_runtime_variant": variant,
             "high_load_shape_ratios": high_load_shape_ratios,
             "high_load_throughput_geomean": model_high_load_geomean,
+            "high_load_graph_replays": {
+                f"q{q}_s{s}_c32": indexed[q, s]["cells"][-1]["new_graph_replays"]
+                for q, s in HIGH_LOAD_SHAPES
+            },
         }
     if len(new_images) != 1:
         raise ValueError("six models must use one immutable new runtime image")
     summary["high_load_throughput_geomean"] = _geometric_mean(all_high_load_ratios)
-    summary["high_load_throughput_gain_goal"] = OVERALL_HIGH_LOAD_THROUGHPUT_GAIN_GOAL
-    summary["high_load_throughput_gain_goal_met"] = (
-        summary["high_load_throughput_geomean"]
-        >= OVERALL_HIGH_LOAD_THROUGHPUT_GAIN_GOAL
-    )
     return summary
 
 

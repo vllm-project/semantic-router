@@ -70,6 +70,7 @@ ARTIFACT_DIGEST = f"sha256:{'b' * 64}"
 IMAGE = f"example.test/decision-runtime@sha256:{'c' * 64}"
 LOCAL_IMAGE_ID = f"sha256:{'9' * 64}"
 MODEL = "llm-semantic-router/Decision-1.0-Kai-0.6B"
+SOL_MODEL = "llm-semantic-router/Decision-1.0-Sol-2B"
 CONTAINER_ID = "d" * 64
 
 
@@ -410,6 +411,7 @@ def test_drun_run_help_exposes_required_model_and_lifecycle_options():
         "--max-batch",
         "--max-concurrency",
         "--max-queue",
+        "--experimental-qwen-rocm-graph-b8",
         "--cpu-threads",
         "--instance-name",
         "--image",
@@ -475,6 +477,85 @@ def test_drun_cli_forwards_one_rocm_gpu_device(monkeypatch):
     assert len(options_seen) == 1
     assert options_seen[0].backend == "rocm"
     assert options_seen[0].gpu_device == "2"
+
+
+def test_drun_cli_forwards_explicit_sol_graph_opt_in(monkeypatch):
+    options_seen: list[DrunOptions] = []
+
+    def record_options(options: DrunOptions, **_kwargs: object) -> None:
+        options_seen.append(options)
+
+    monkeypatch.setattr(drun_command, "default_catalog_resolver", object)
+    monkeypatch.setattr(drun_command, "run_decision_runtime", record_options)
+
+    result = CliRunner().invoke(
+        drun_command.drun,
+        [
+            "run",
+            SOL_MODEL,
+            "--backend",
+            "rocm",
+            "--max-batch",
+            "8",
+            "--experimental-qwen-rocm-graph-b8",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(options_seen) == 1
+    assert options_seen[0].experimental_qwen_rocm_graph_b8 is True
+    assert options_seen[0].model == SOL_MODEL
+    assert options_seen[0].max_batch == 8
+
+
+def test_drun_graph_opt_in_request_requires_matching_resolved_command():
+    class GraphResolver:
+        def __init__(self, *, model=SOL_MODEL, flag=True):
+            self.requests: list[DecisionRuntimeRequest] = []
+            self.model = model
+            self.flag = flag
+
+        def resolve(self, request: DecisionRuntimeRequest) -> ResolvedDecisionRuntime:
+            self.requests.append(request)
+            command = ("python", "-m", "decision_runtime.entrypoint")
+            if self.flag:
+                command += ("--experimental-qwen-rocm-graph-b8",)
+            return ResolvedDecisionRuntime(
+                canonical_model=self.model,
+                revision=REVISION,
+                backend="rocm",
+                dtype="bfloat16",
+                image=IMAGE,
+                artifact_digest=ARTIFACT_DIGEST,
+                max_batch=8,
+                max_concurrency=8,
+                max_queue=8,
+                command=command,
+            )
+
+    options = DrunOptions(
+        model=SOL_MODEL, backend="rocm", experimental_qwen_rocm_graph_b8=True
+    )
+    resolver = GraphResolver()
+    spec = lifecycle._resolve_runtime(options, resolver)
+    assert spec.command[-1] == "--experimental-qwen-rocm-graph-b8"
+    assert resolver.requests[0].experimental_qwen_rocm_graph_b8 is True
+
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="graph mode"):
+        lifecycle._resolve_runtime(options, GraphResolver(flag=False))
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="canonical Sol"):
+        lifecycle._resolve_runtime(options, GraphResolver(model=MODEL))
+
+
+def test_drun_graph_opt_in_rejects_explicit_non_rocm_before_resolver():
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="ROCm backend"):
+        lifecycle._validate_options(
+            DrunOptions(
+                model=SOL_MODEL,
+                backend="cuda",
+                experimental_qwen_rocm_graph_b8=True,
+            )
+        )
 
 
 def test_drun_cli_forwards_exact_local_docker_image_id(monkeypatch):

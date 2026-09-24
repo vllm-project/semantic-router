@@ -250,6 +250,47 @@ def test_verified_warm_key_avoids_profile_hash_and_fla_config_lookup(
     assert kernel.cache_lookups == 2
 
 
+@pytest.mark.parametrize(
+    "mutation",
+    ("environment", "hook", "config", "source", "cache", "binding"),
+)
+def test_graph_replay_guard_rechecks_live_profile_before_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    profile, package, configs = _profile(tmp_path)
+    modules, kernel, _, _ = _fake_fla_modules(package, configs)
+    monkeypatch.setattr(binder, "_ACTIVE", None)
+    monkeypatch.setattr(binder, "sys", SimpleNamespace(modules={}))
+    monkeypatch.setattr(binder, "_fla_package_root", lambda: package)
+    monkeypatch.setattr(binder, "_import_module", modules.__getitem__)
+    monkeypatch.delenv("FLA_CACHE_MODE", raising=False)
+    monkeypatch.delenv("FLA_CONFIG_DIR", raising=False)
+    receipt = binder.create_qwen_rocm_profile_binder().bind(profile)
+    legal = (128, 1, "torch.bfloat16", "torch.bfloat16", "torch.float32")
+    assert kernel.run(key=legal) == "launched"
+    binder.assert_qwen_rocm_graph_replay_safe(
+        receipt, physical_batch_size=8, padded_tokens=128
+    )
+
+    if mutation == "environment":
+        monkeypatch.setenv("FLA_CACHE_MODE", "autotune")
+    elif mutation == "hook":
+        kernel.run = lambda *args, **kwargs: "unguarded"
+    elif mutation == "config":
+        profile.kernel_config_path.write_bytes(b"changed config")
+    elif mutation == "source":
+        (package / "modules/l2norm.py").write_bytes(b"changed source")
+    elif mutation == "cache":
+        kernel.cache[legal] = SimpleNamespace(**{**configs[legal], "num_warps": 8})
+    else:
+        receipt = replace(receipt, profile_sha256="0" * 64)
+
+    with pytest.raises(binder.QwenRocmBindingError):
+        binder.assert_qwen_rocm_graph_replay_safe(
+            receipt, physical_batch_size=8, padded_tokens=128
+        )
+
+
 @pytest.mark.parametrize("mutation", ["in_place", "replace"])
 def test_config_file_mutation_stops_cached_launch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str

@@ -36,8 +36,10 @@ from decision_perf_release_gate import (
     MIN_WORKFLOWS_PER_ROUND,
     PHYSICAL_BATCH,
     ROUNDS,
+    RUNTIME_VARIANTS,
     SCHEMA,
     SHAPES,
+    SOL_GRAPH_MODEL_ID,
     _read_json,
     _reject_nonfinite,
     _unique_pairs,
@@ -546,6 +548,7 @@ def _candidate_process(
     artifact_content_id: str,
     physical_batch_size: int,
     gpu_device: str,
+    runtime_variant: str,
 ) -> None:
     """Bind the timed candidate to drun's exact, live, image-owned command."""
 
@@ -581,6 +584,12 @@ def _candidate_process(
         "--max-queue",
         str(NEW_MAX_QUEUE),
     ]
+    if runtime_variant == "sol_rocm_graph_b8":
+        if model_id != SOL_GRAPH_MODEL_ID or physical_batch_size != 8:
+            raise ProducerError("graph variant requires canonical Sol at B8")
+        expected.append("--experimental-qwen-rocm-graph-b8")
+    elif runtime_variant != "eager":
+        raise ProducerError("candidate runtime variant is invalid")
     image_config = image.get("Config") or {}
     config = container.get("Config") or {}
     if (
@@ -787,6 +796,7 @@ def _container_image(
     new_physical_batch_size: int | None = None,
     new_model_id: str | None = None,
     new_model_revision: str | None = None,
+    new_runtime_variant: str | None = None,
 ) -> str:
     ref = arm.get("image_ref")
     if source_sha is None and isinstance(ref, str) and IMAGE_ID.fullmatch(ref):
@@ -990,6 +1000,7 @@ def _container_image(
             or new_model_id is None
             or new_model_revision is None
             or new_physical_batch_size is None
+            or new_runtime_variant is None
         ):
             raise ProducerError("candidate model identity is incomplete")
         _candidate_process(
@@ -1000,6 +1011,7 @@ def _container_image(
             artifact_content_id=new_artifact_content_id,
             physical_batch_size=new_physical_batch_size,
             gpu_device=gpu_device,
+            runtime_variant=new_runtime_variant,
         )
         mounts = container.get("Mounts") or []
         expected_source = (
@@ -1074,7 +1086,7 @@ def _status(url: str) -> dict:
 def _validate_config(
     config: dict, *, candidate_ref: str, qualification: dict
 ) -> list[dict]:
-    if config.get("schema_version") != "decision-paired-baseline-v2":
+    if config.get("schema_version") != "decision-paired-baseline-v3":
         raise ProducerError("protected baseline schema is invalid")
     hardware = config.get("hardware")
     if (
@@ -1118,6 +1130,16 @@ def _validate_config(
             raise ProducerError(
                 "protected batch size requires independent tuning qualification above eight"
             )
+        variant = row.get("new_runtime_variant")
+        if (
+            not isinstance(variant, str)
+            or variant not in RUNTIME_VARIANTS
+            or (
+                variant == "sol_rocm_graph_b8"
+                and (model_id != SOL_GRAPH_MODEL_ID or batch_size != 8)
+            )
+        ):
+            raise ProducerError("protected candidate runtime variant is invalid")
         old_batch = row.get("old_physical_batch_size")
         if type(old_batch) is not int or not 1 <= old_batch <= 4096:
             raise ProducerError("protected old physical batch declaration is invalid")
@@ -1485,6 +1507,7 @@ def _shape(
                 ],
                 "new_physical_batches": counters["physical_batches"],
                 "new_physical_batch_rows": counters["physical_batch_rows"],
+                "new_graph_replays": telemetry["graph_event_deltas"]["replay"],
                 "new_observed_rows_per_physical_batch": telemetry[
                     "observed_rows_per_physical_batch"
                 ],
@@ -1607,6 +1630,7 @@ def produce(args: argparse.Namespace) -> Path:
             new_physical_batch_size=row["new_physical_batch_size"],
             new_model_id=row["model_id"],
             new_model_revision=row["revision"],
+            new_runtime_variant=row["new_runtime_variant"],
         )
         if old_id == new_id:
             raise ProducerError("old and new runtime images are identical")
@@ -1646,6 +1670,7 @@ def produce(args: argparse.Namespace) -> Path:
             "new_image_id": new_id,
             "old_physical_batch_size": row["old_physical_batch_size"],
             "new_physical_batch_size": row["new_physical_batch_size"],
+            "new_runtime_variant": row["new_runtime_variant"],
             "new_scheduler": {
                 field: scheduler[0][field] for field in ("max_concurrency", "max_queue")
             },
@@ -1698,6 +1723,7 @@ def produce(args: argparse.Namespace) -> Path:
                 new_physical_batch_size=row["new_physical_batch_size"],
                 new_model_id=row["model_id"],
                 new_model_revision=row["revision"],
+                new_runtime_variant=row["new_runtime_variant"],
             )
             != new_id
         ):

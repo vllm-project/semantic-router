@@ -128,6 +128,11 @@ def drun() -> None:
     help="Maximum queued request override.",
 )
 @click.option(
+    "--experimental-qwen-rocm-graph-b8",
+    is_flag=True,
+    help="Opt in to short-shape B8 ROCm backbone graphs for Decision Sol only.",
+)
+@click.option(
     "--cpu-threads",
     type=click.IntRange(min=1, max=256),
     help="CPU-only Torch/BLAS threads; default is min(8, container CPU allowance).",
@@ -195,6 +200,7 @@ def run(
     max_batch: int | None,
     max_concurrency: int | None,
     max_queue: int | None,
+    experimental_qwen_rocm_graph_b8: bool,
     cpu_threads: int | None,
     gpu_device: str | None,
     instance_name: str | None,
@@ -217,6 +223,7 @@ def run(
         max_batch=max_batch,
         max_concurrency=max_concurrency,
         max_queue=max_queue,
+        experimental_qwen_rocm_graph_b8=experimental_qwen_rocm_graph_b8,
         cpu_threads=cpu_threads,
         gpu_device=gpu_device,
         instance_name=instance_name,
