@@ -221,7 +221,7 @@ class GraphMetricTests(TestCase):
             "\n".join((event, event)),
         ):
             with self.subTest(bad=bad):
-                with self.assertRaisesRegex(MetricsError, "graph events"):
+                with self.assertRaisesRegex(MetricsError, "metrics_invalid_graph_events"):
                     _parse_snapshot("\n".join([*base, bad]).encode(), "c" * 64, model)
 
 
