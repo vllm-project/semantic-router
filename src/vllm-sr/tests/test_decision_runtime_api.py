@@ -245,6 +245,33 @@ def test_batch_http_e2e_is_strict_ordered_and_state_specific():
     asyncio.run(scenario())
 
 
+def test_http_admission_prices_single_and_batch_decision_rows():
+    class RecordingScheduler(ModelScheduler):
+        def __init__(self):
+            super().__init__([MODEL.name], max_active_rows=4096)
+            self.costs = []
+
+        async def run(self, model, operation, *, row_cost=1):
+            self.costs.append(row_cost)
+            return await super().run(model, operation, row_cost=row_cost)
+
+    async def scenario():
+        scheduler = RecordingScheduler()
+        app = create_app(
+            DecisionEngine(FakeDecisionBackend([MODEL])), scheduler=scheduler
+        )
+        async with _client(app) as client:
+            single = await client.post("/v1/systemone", json=payload())
+            batch = await client.post("/v1/decision/batches", json=batch_payload())
+            status = (await client.get("/api/status")).json()["scheduler"][0]
+        assert (single.status_code, batch.status_code) == (200, 200)
+        assert scheduler.costs == [3, 6]
+        assert status["max_active_rows"] == 4096
+        assert status["active_rows"] == 0
+
+    asyncio.run(scenario())
+
+
 def test_batch_extension_has_no_systemone_batch_alias():
     async def scenario():
         async with _client(app_for()) as client:

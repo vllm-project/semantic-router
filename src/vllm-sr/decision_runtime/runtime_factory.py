@@ -93,6 +93,7 @@ def assemble_runtime(
         (descriptor.name,),
         max_concurrency=config.max_concurrency,
         max_queue=config.max_queue,
+        max_active_rows=backend.max_pending_rows,
     )
     manifest = getattr(artifact, "manifest", None)
     provenance = (

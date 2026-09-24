@@ -96,6 +96,8 @@ class _RowJob:
     indices_by_key: dict[str, deque[int]] = field(init=False)
     remaining_count: int = field(init=False)
     unresolved_count: int = field(init=False)
+    selected_count: int = field(default=0, init=False)
+    selected_drained: asyncio.Event = field(init=False)
 
     def __post_init__(self) -> None:
         self.results = [None] * len(self.rows)
@@ -104,6 +106,8 @@ class _RowJob:
             self.indices_by_key.setdefault(row.batch_key, deque()).append(index)
         self.remaining_count = len(self.rows)
         self.unresolved_count = len(self.rows)
+        self.selected_drained = asyncio.Event()
+        self.selected_drained.set()
 
     @property
     def remaining(self) -> int:
@@ -297,8 +301,21 @@ class PhysicalBatchBackend(DecisionBackend):
         try:
             return await future
         except asyncio.CancelledError:
+            # Selected rows retain the complete prepared job while their one
+            # physical forward is running. Keep the caller's scheduler credit
+            # until that forward drops its references, but remove unselected
+            # rows immediately so cancellation never scores the whole job.
             await _finish_cleanup(self._cancel_job(job))
             raise
+        finally:
+            # Shutdown and worker failures can complete the future before an
+            # in-flight selected row is retired too. All exits retain their
+            # caller's row credits until that reference is gone. Successful
+            # forwards normally arrive here with the event already set.
+            if not job.selected_drained.is_set():
+                interrupted = await _finish_cleanup(job.selected_drained.wait())
+                if interrupted:
+                    raise asyncio.CancelledError
 
     async def _prepare_rows(
         self, rows: tuple[DecisionRow, ...]
@@ -337,6 +354,8 @@ class PhysicalBatchBackend(DecisionBackend):
     async def _run_worker(self) -> None:
         while True:
             selected: list[_SelectedRow] = []
+            active_selected: list[_SelectedRow] = []
+            rows: tuple[PreparedDecisionRow, ...] = ()
             try:
                 async with self._condition:
                     await self._condition.wait_for(
@@ -360,16 +379,18 @@ class PhysicalBatchBackend(DecisionBackend):
                             )
                         )
 
-                selected = [item for item in selected if not item.job.future.done()]
-                if not selected:
+                active_selected = [
+                    item for item in selected if not item.job.future.done()
+                ]
+                if not active_selected:
                     continue
-                rows = tuple(item.row for item in selected)
+                rows = tuple(item.row for item in active_selected)
                 started = time.perf_counter()
                 try:
                     results = await self._executor.predict_rows(rows)
                     _validate_executor_results(tuple(row.row for row in rows), results)
                 except Exception as error:
-                    await self._fail_jobs(selected, error)
+                    await self._fail_jobs(active_selected, error)
                     continue
                 finally:
                     if self._metrics is not None:
@@ -378,7 +399,7 @@ class PhysicalBatchBackend(DecisionBackend):
                             len(rows),
                             time.perf_counter() - started,
                         )
-                await self._complete_rows(selected, results)
+                await self._complete_rows(active_selected, results)
             except asyncio.CancelledError as error:
                 failure: BaseException = error
                 if self._closed:
@@ -387,6 +408,24 @@ class PhysicalBatchBackend(DecisionBackend):
                     )
                 await _finish_cleanup(self._fail_jobs(selected, failure))
                 raise
+            finally:
+                # Neither the worker nor its selected-row list may retain a
+                # cancelled job once its drain event wakes the HTTP caller.
+                rows = ()
+                active_selected.clear()
+                self._retire_selected(selected)
+
+    @staticmethod
+    def _retire_selected(selected: list[_SelectedRow]) -> None:
+        drained: list[asyncio.Event] = []
+        for item in selected:
+            job = item.job
+            job.selected_count -= 1
+            if job.selected_count == 0:
+                drained.append(job.selected_drained)
+        selected.clear()
+        for event in drained:
+            event.set()
 
     def _take_rows(
         self, limit: int, *, batch_key: str | None = None
@@ -411,6 +450,8 @@ class PhysicalBatchBackend(DecisionBackend):
                 if index is not None:
                     progressed = True
                     self._pending_rows -= 1
+                    job.selected_count += 1
+                    job.selected_drained.clear()
                     selected.append(
                         _SelectedRow(job=job, index=index, row=job.rows[index])
                     )

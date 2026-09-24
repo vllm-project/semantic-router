@@ -27,6 +27,7 @@ from decision_runtime.physical_batching import (  # noqa: E402
     PhysicalBatchOverloadedError,
     PreparedDecisionRow,
 )
+from decision_runtime.scheduler import ModelScheduler  # noqa: E402
 
 MODEL = ModelDescriptor(
     name="llm-semantic-router/Decision-1.0-Kai-0.6B",
@@ -603,6 +604,206 @@ def test_cancelled_job_releases_pending_capacity():
         await active
         await replacement
         await backend.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_cancel_during_forward_keeps_row_credit_until_selected_job_is_drained():
+    async def scenario():
+        gate = asyncio.Event()
+        executor = RecordingExecutor(gate=gate)
+        backend = PhysicalBatchBackend(
+            MODEL,
+            executor,
+            physical_batch_size=1,
+            max_pending_rows=4,
+            coalesce_seconds=0,
+        )
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=2, max_queue=1, max_active_rows=4
+        )
+        first_request = request("first", ("a", "b", "c", "d"))
+        second_request = request("second", ("e", "f", "g", "h"))
+        first = asyncio.create_task(
+            scheduler.run(
+                MODEL.name, lambda: backend.infer(first_request), row_cost=4
+            )
+        )
+
+        async def wait_for_first_forward():
+            while not executor.calls:
+                await asyncio.sleep(0)
+
+        async def wait_for_pending_removal():
+            while backend._pending_rows:
+                await asyncio.sleep(0)
+
+        try:
+            await asyncio.wait_for(wait_for_first_forward(), timeout=2)
+            assert backend._pending_rows == 3
+            first.cancel()
+            await asyncio.wait_for(wait_for_pending_removal(), timeout=2)
+            first.cancel()
+            await asyncio.sleep(0)
+            assert not first.done()
+
+            second = asyncio.create_task(
+                scheduler.run(
+                    MODEL.name, lambda: backend.infer(second_request), row_cost=4
+                )
+            )
+            await asyncio.sleep(0)
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+                1,
+                1,
+                4,
+            )
+            assert len(executor.prepare_calls) == 1
+
+            gate.set()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            result = await asyncio.wait_for(second, timeout=2)
+            assert len(result.predictions) == 4
+            assert [row.state for call in executor.calls for row in call] == [
+                "first",
+                "second",
+                "second",
+                "second",
+                "second",
+            ]
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+                0,
+                0,
+                0,
+            )
+        finally:
+            gate.set()
+            await backend.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_close_during_partial_forward_keeps_credit_until_selected_job_is_drained():
+    class CancellationSafeExecutor(RecordingExecutor):
+        def __init__(self):
+            super().__init__()
+            self.entered = asyncio.Event()
+            self.cancelled = asyncio.Event()
+            self.release = asyncio.Event()
+
+        async def predict_rows(self, rows):
+            self.entered.set()
+            forward = asyncio.create_task(self.release.wait())
+            try:
+                await asyncio.shield(forward)
+            except asyncio.CancelledError:
+                self.cancelled.set()
+                while not forward.done():
+                    try:
+                        await asyncio.shield(forward)
+                    except asyncio.CancelledError:
+                        pass
+                raise
+            return await super().predict_rows(rows)
+
+    async def scenario():
+        executor = CancellationSafeExecutor()
+        backend = PhysicalBatchBackend(
+            MODEL,
+            executor,
+            physical_batch_size=1,
+            max_pending_rows=4,
+            coalesce_seconds=0,
+        )
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=2, max_queue=1, max_active_rows=4
+        )
+        first_request = request("first", ("a", "b", "c", "d"))
+        first = asyncio.create_task(
+            scheduler.run(
+                MODEL.name, lambda: backend.infer(first_request), row_cost=4
+            )
+        )
+        try:
+            await asyncio.wait_for(executor.entered.wait(), timeout=2)
+            assert backend._pending_rows == 3
+            close_task = asyncio.create_task(backend.aclose())
+            await asyncio.wait_for(executor.cancelled.wait(), timeout=2)
+            assert not close_task.done()
+            assert not first.done()
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.active_rows) == (1, 4)
+
+            executor.release.set()
+            await close_task
+            with pytest.raises(BackendUnavailableError, match="backend is closed"):
+                await first
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.active_rows) == (0, 0)
+        finally:
+            executor.release.set()
+            await backend.aclose()
+
+    asyncio.run(scenario())
+
+
+def test_worker_error_and_double_cancel_wait_for_selected_job_drain():
+    class ErrorExecutor(RecordingExecutor):
+        async def predict_rows(self, rows):
+            raise RuntimeError("forward failed")
+
+    async def scenario():
+        backend = PhysicalBatchBackend(
+            MODEL,
+            ErrorExecutor(),
+            physical_batch_size=1,
+            max_pending_rows=4,
+            coalesce_seconds=0,
+        )
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=2, max_queue=1, max_active_rows=4
+        )
+        failed = asyncio.Event()
+        release_failure = asyncio.Event()
+        fail_jobs = backend._fail_jobs
+
+        async def delayed_fail_jobs(selected, error):
+            await fail_jobs(selected, error)
+            failed.set()
+            await release_failure.wait()
+
+        backend._fail_jobs = delayed_fail_jobs
+        first_request = request("first", ("a", "b", "c", "d"))
+        first = asyncio.create_task(
+            scheduler.run(
+                MODEL.name, lambda: backend.infer(first_request), row_cost=4
+            )
+        )
+        try:
+            await asyncio.wait_for(failed.wait(), timeout=2)
+            await asyncio.sleep(0)
+            assert not first.done()
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.active_rows) == (1, 4)
+
+            first.cancel()
+            await asyncio.sleep(0)
+            first.cancel()
+            await asyncio.sleep(0)
+            assert not first.done()
+            assert (await scheduler.snapshots())[0].active_rows == 4
+
+            release_failure.set()
+            with pytest.raises(asyncio.CancelledError):
+                await first
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.active_rows) == (0, 0)
+        finally:
+            release_failure.set()
+            await backend.aclose()
 
     asyncio.run(scenario())
 
