@@ -8068,6 +8068,150 @@
       }
     },
     {
+      "benchmark": "chartqa/chartqa@1.0.0",
+      "benchmark_profile": "test",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md",
+        "verification": "claimed"
+      },
+      "id": "cohere/north-micro-vision-instruct-model-card-chartqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.808
+      },
+      "model": "cohere/north-micro-vision-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "VLMEvalKit",
+        "maximum_output_tokens": 1024,
+        "source_kind": "official_model_card",
+        "variant": "North Micro Vision Instruct"
+      }
+    },
+    {
+      "benchmark": "ocrbench/ocrbench@1.0.0",
+      "benchmark_profile": "standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md",
+        "verification": "claimed"
+      },
+      "id": "cohere/north-micro-vision-instruct-model-card-ocrbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.792
+      },
+      "model": "cohere/north-micro-vision-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "VLMEvalKit",
+        "maximum_output_tokens": 1024,
+        "source_kind": "official_model_card",
+        "variant": "North Micro Vision Instruct"
+      }
+    },
+    {
+      "benchmark": "ai2d/ai2d@1.0.0",
+      "benchmark_profile": "test",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md",
+        "verification": "claimed"
+      },
+      "id": "cohere/north-micro-vision-instruct-model-card-ai2d@1.0.0",
+      "metrics": {
+        "accuracy": 0.775
+      },
+      "model": "cohere/north-micro-vision-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "VLMEvalKit",
+        "maximum_output_tokens": 1024,
+        "source_kind": "official_model_card",
+        "variant": "North Micro Vision Instruct"
+      }
+    },
+    {
+      "benchmark": "mmmu-benchmark/mmmu@1.0.0",
+      "benchmark_profile": "dev-val",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md",
+        "verification": "claimed"
+      },
+      "id": "cohere/north-micro-vision-instruct-model-card-mmmu@1.0.0",
+      "metrics": {
+        "accuracy": 0.329
+      },
+      "model": "cohere/north-micro-vision-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "VLMEvalKit",
+        "maximum_output_tokens": 1024,
+        "source_kind": "official_model_card",
+        "variant": "North Micro Vision Instruct"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md",
+        "verification": "claimed"
+      },
+      "id": "cohere/north-micro-vision-instruct-model-card-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.749
+      },
+      "model": "cohere/north-micro-vision-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "VLMEvalKit",
+        "maximum_output_tokens": 1024,
+        "source_kind": "official_model_card",
+        "variant": "North Micro Vision Instruct"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md",
+        "verification": "claimed"
+      },
+      "id": "cohere/north-micro-vision-instruct-model-card-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.307
+      },
+      "model": "cohere/north-micro-vision-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "evaluation_harness": "VLMEvalKit",
+        "maximum_output_tokens": 1024,
+        "source_kind": "official_model_card",
+        "variant": "North Micro Vision Instruct"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -46283,6 +46427,325 @@
         "bytedance/seed-oss-36b-instruct-model-card-mmlu-pro@1.0.0"
       ],
       "reasoning_effort": "default",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "cohere/north-micro-vision-instruct-model-card-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.307,
+          "status": "available",
+          "value": 0.307,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 30.7
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [
+        "cohere/north-micro-vision-instruct-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 30.7,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.307,
+          "status": "available",
+          "value": 0.307,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "cohere/north-micro-vision-instruct",
+      "provenance": [
+        "cohere/north-micro-vision-instruct-model-card-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
       "score": null,
       "status": "partial"
     },
@@ -88449,6 +88912,57 @@
     {
       "capabilities": [
         "chat",
+        "vision",
+        "multilingual"
+      ],
+      "description": "Compact open-weight vision-language model for native-resolution image understanding, OCR, charts, and documents.",
+      "display_name": "North Micro Vision Instruct",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct",
+        "type": "open_weights"
+      },
+      "family": "north-micro-vision",
+      "id": "cohere/north-micro-vision-instruct",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 128000
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "2.4B",
+      "presentation": {
+        "logo": "package:cohere",
+        "monochrome": false,
+        "monogram": "C"
+      },
+      "publisher": "Cohere",
+      "released_at": "2026-08-12",
+      "tags": [
+        "open_weights",
+        "multimodal",
+        "multilingual",
+        "efficient",
+        "dense"
+      ],
+      "verification": {
+        "authority": "Cohere Labs",
+        "source": "https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "reasoning",
         "tools",
         "structured_output",
@@ -97199,6 +97713,24 @@
             "source": "https://huggingface.co/CohereLabs/North-Mini-Code-1.0",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "cohere/north-micro-vision-instruct",
+          "id": "CohereLabs/North-Micro-Vision-Instruct",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.30.0"
+          },
+          "verification": {
+            "source": "https://github.com/vllm-project/vllm/pull/54774",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
           }
         },
         {

@@ -1,3 +1,117 @@
+- id: cohere/north-micro-vision-instruct-model-card-chartqa@1.0.0
+  model: cohere/north-micro-vision-instruct
+  benchmark: chartqa/chartqa@1.0.0
+  benchmark_profile: test
+  reasoning_effort: unspecified
+  subject:
+    variant: North Micro Vision Instruct
+    source_kind: official_model_card
+    evaluation_harness: VLMEvalKit
+    maximum_output_tokens: 1024
+  metrics:
+    accuracy: 0.808
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md
+    redistributable: true
+- id: cohere/north-micro-vision-instruct-model-card-ocrbench@1.0.0
+  model: cohere/north-micro-vision-instruct
+  benchmark: ocrbench/ocrbench@1.0.0
+  benchmark_profile: standard
+  reasoning_effort: unspecified
+  subject:
+    variant: North Micro Vision Instruct
+    source_kind: official_model_card
+    evaluation_harness: VLMEvalKit
+    maximum_output_tokens: 1024
+  metrics:
+    accuracy: 0.792
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md
+    redistributable: true
+- id: cohere/north-micro-vision-instruct-model-card-ai2d@1.0.0
+  model: cohere/north-micro-vision-instruct
+  benchmark: ai2d/ai2d@1.0.0
+  benchmark_profile: test
+  reasoning_effort: unspecified
+  subject:
+    variant: North Micro Vision Instruct
+    source_kind: official_model_card
+    evaluation_harness: VLMEvalKit
+    maximum_output_tokens: 1024
+  metrics:
+    accuracy: 0.775
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md
+    redistributable: true
+- id: cohere/north-micro-vision-instruct-model-card-mmmu@1.0.0
+  model: cohere/north-micro-vision-instruct
+  benchmark: mmmu-benchmark/mmmu@1.0.0
+  benchmark_profile: dev-val
+  reasoning_effort: unspecified
+  subject:
+    variant: North Micro Vision Instruct
+    source_kind: official_model_card
+    evaluation_harness: VLMEvalKit
+    maximum_output_tokens: 1024
+  metrics:
+    accuracy: 0.329
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md
+    redistributable: true
+- id: cohere/north-micro-vision-instruct-model-card-ifeval@1.0.0
+  model: cohere/north-micro-vision-instruct
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: North Micro Vision Instruct
+    source_kind: official_model_card
+    evaluation_harness: VLMEvalKit
+    maximum_output_tokens: 1024
+  metrics:
+    accuracy: 0.749
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md
+    redistributable: true
+- id: cohere/north-micro-vision-instruct-model-card-mmlu-pro@1.0.0
+  model: cohere/north-micro-vision-instruct
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: North Micro Vision Instruct
+    source_kind: official_model_card
+    evaluation_harness: VLMEvalKit
+    maximum_output_tokens: 1024
+  metrics:
+    accuracy: 0.307
+  status: available
+  observed_at: 2026-09-23
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/CohereLabs/North-Micro-Vision-Instruct/blob/46b719694e3bad142f3e931774f4622f1024009e/README.md
+    redistributable: true
 - id: independent/north-mini-code-critpt@1.0.0
   model: cohere/north-mini-code-1.0
   benchmark: artificial-analysis/critpt@1.0.0
