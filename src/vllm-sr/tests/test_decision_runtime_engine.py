@@ -28,6 +28,7 @@ from decision_runtime.contracts import (  # noqa: E402
 from decision_runtime.engine import DecisionEngine  # noqa: E402
 from decision_runtime.fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.scheduler import (  # noqa: E402
+    MAX_ROW_CREDIT_BYPASSES,
     ModelScheduler,
     SchedulerOverloadedError,
 )
@@ -457,7 +458,9 @@ def test_scheduler_releases_running_and_queued_cancellations():
 
 def test_scheduler_double_cancellation_cannot_leak_a_running_slot():
     async def scenario():
-        scheduler = ModelScheduler([MODEL.name], max_concurrency=1, max_queue=0)
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=1, max_queue=0, max_active_rows=1
+        )
         state = scheduler._states[MODEL.name]
         entered = asyncio.Event()
         operation_release = asyncio.Event()
@@ -481,10 +484,326 @@ def test_scheduler_double_cancellation_cannot_leak_a_running_slot():
         with pytest.raises(asyncio.CancelledError):
             await task
         snapshot = (await scheduler.snapshots())[0]
-        assert (snapshot.running, snapshot.queued) == (0, 0)
+        assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (0, 0, 0)
         assert await scheduler.run(MODEL.name, _immediate_result) == "available"
 
     async def _immediate_result():
         return "available"
+
+    asyncio.run(scenario())
+
+
+def test_scheduler_reserves_row_credits_before_eight_large_requests():
+    async def scenario():
+        scheduler = ModelScheduler(
+            [MODEL.name],
+            max_concurrency=8,
+            max_queue=8,
+            max_active_rows=4096,
+        )
+        release = asyncio.Event()
+        entered = 0
+        peak_running = 0
+
+        async def blocking():
+            nonlocal entered, peak_running
+            entered += 1
+            peak_running = max(peak_running, entered)
+            try:
+                await release.wait()
+            finally:
+                entered -= 1
+            return "done"
+
+        tasks = [
+            asyncio.create_task(scheduler.run(MODEL.name, blocking, row_cost=1024))
+            for _ in range(8)
+        ]
+
+        async def all_waiting():
+            while True:
+                snapshot = (await scheduler.snapshots())[0]
+                if (snapshot.running, snapshot.queued) == (4, 4):
+                    return snapshot
+                await asyncio.sleep(0)
+
+        try:
+            snapshot = await asyncio.wait_for(all_waiting(), timeout=2)
+            assert snapshot.active_rows == 4096
+            assert snapshot.max_active_rows == 4096
+        finally:
+            release.set()
+        assert await asyncio.gather(*tasks) == ["done"] * 8
+        assert peak_running == 4
+        snapshot = (await scheduler.snapshots())[0]
+        assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+            0,
+            0,
+            0,
+        )
+
+    asyncio.run(scenario())
+
+
+def test_scheduler_keeps_eight_small_requests_concurrent_with_row_credits():
+    async def scenario():
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=8, max_queue=0, max_active_rows=4096
+        )
+        all_entered = asyncio.Event()
+        release = asyncio.Event()
+        entered = 0
+
+        async def blocking():
+            nonlocal entered
+            entered += 1
+            if entered == 8:
+                all_entered.set()
+            await release.wait()
+
+        tasks = [
+            asyncio.create_task(scheduler.run(MODEL.name, blocking, row_cost=1))
+            for _ in range(8)
+        ]
+        try:
+            await asyncio.wait_for(all_entered.wait(), timeout=2)
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+                8,
+                0,
+                8,
+            )
+        finally:
+            release.set()
+        await asyncio.gather(*tasks)
+
+    asyncio.run(scenario())
+
+
+def test_scheduler_row_waiters_are_bounded_and_cancelled_without_credit_leaks():
+    async def scenario():
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=8, max_queue=1, max_active_rows=1024
+        )
+        entered = asyncio.Event()
+        release = asyncio.Event()
+
+        async def blocking():
+            entered.set()
+            await release.wait()
+
+        running = asyncio.create_task(
+            scheduler.run(MODEL.name, blocking, row_cost=1024)
+        )
+        await entered.wait()
+        queued = asyncio.create_task(
+            scheduler.run(MODEL.name, blocking, row_cost=1024)
+        )
+        await asyncio.sleep(0)
+        snapshot = (await scheduler.snapshots())[0]
+        assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+            1,
+            1,
+            1024,
+        )
+        with pytest.raises(SchedulerOverloadedError):
+            await scheduler.run(MODEL.name, blocking, row_cost=1)
+
+        queued.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await queued
+        snapshot = (await scheduler.snapshots())[0]
+        assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+            1,
+            0,
+            1024,
+        )
+
+        release.set()
+        await running
+        assert (
+            await scheduler.run(MODEL.name, _immediate_result, row_cost=1024)
+            == "available"
+        )
+        snapshot = (await scheduler.snapshots())[0]
+        assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+            0,
+            0,
+            0,
+        )
+
+    async def _immediate_result():
+        return "available"
+
+    asyncio.run(scenario())
+
+
+async def _hold_scheduler_rows(scheduler, costs):
+    """Hold several valid request-sized row reservations until released."""
+
+    entered = [asyncio.Event() for _ in costs]
+    releases = [asyncio.Event() for _ in costs]
+
+    async def hold(started, release):
+        started.set()
+        await release.wait()
+
+    tasks = [
+        asyncio.create_task(
+            scheduler.run(
+                MODEL.name,
+                lambda started=started, release=release: hold(started, release),
+                row_cost=cost,
+            )
+        )
+        for cost, started, release in zip(costs, entered, releases, strict=True)
+    ]
+    await asyncio.wait_for(
+        asyncio.gather(*(event.wait() for event in entered)), timeout=2
+    )
+    return tasks, releases
+
+
+def test_scheduler_full_wait_queue_still_admits_fitting_small_work():
+    async def scenario():
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=8, max_queue=1, max_active_rows=4096
+        )
+
+        async def immediate():
+            return "done"
+
+        running, releases = await _hold_scheduler_rows(
+            scheduler, (1024, 1024, 1024, 428)
+        )
+        head = asyncio.create_task(
+            scheduler.run(MODEL.name, immediate, row_cost=1024)
+        )
+        await asyncio.sleep(0)
+        try:
+            assert (await scheduler.snapshots())[0].queued == 1
+            for _ in range(MAX_ROW_CREDIT_BYPASSES + 1):
+                assert await scheduler.run(MODEL.name, immediate, row_cost=1) == "done"
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+                4,
+                1,
+                3500,
+            )
+        finally:
+            for release in releases:
+                release.set()
+        await asyncio.gather(*running)
+        assert await head == "done"
+
+    asyncio.run(scenario())
+
+
+async def _start_aged_large_waiter(scheduler, head_operation):
+    """After two original 512-row releases, a 1024-row head needs protection."""
+
+    async def small_operation():
+        return "small"
+
+    running, releases = await _hold_scheduler_rows(scheduler, (512,) * 8)
+    head = asyncio.create_task(
+        scheduler.run(MODEL.name, head_operation, row_cost=1024)
+    )
+    await asyncio.sleep(0)
+    releases[0].set()
+    await running[0]
+    replacement, replacement_releases = await _hold_scheduler_rows(scheduler, (512,))
+    releases[1].set()
+    await running[1]
+    for _ in range(MAX_ROW_CREDIT_BYPASSES):
+        assert await scheduler.run(MODEL.name, small_operation, row_cost=1) == "small"
+    return running, releases, replacement, replacement_releases, head
+
+
+def test_scheduler_ages_large_head_only_after_original_credit_deficit_is_released():
+    async def scenario():
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=8, max_queue=2, max_active_rows=4096
+        )
+        head_entered = asyncio.Event()
+        release_head = asyncio.Event()
+        order = []
+
+        async def head_operation():
+            order.append("head")
+            head_entered.set()
+            await release_head.wait()
+
+        async def tail_operation():
+            order.append("tail")
+
+        running, releases, replacement, replacement_releases, head = (
+            await _start_aged_large_waiter(scheduler, head_operation)
+        )
+        try:
+            tail = asyncio.create_task(
+                scheduler.run(MODEL.name, tail_operation, row_cost=1)
+            )
+            await asyncio.sleep(0)
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+                7,
+                2,
+                3584,
+            )
+            assert not tail.done()
+
+            replacement_releases[0].set()
+            await replacement[0]
+            await asyncio.wait_for(head_entered.wait(), timeout=2)
+            release_head.set()
+            await head
+            await tail
+            assert order == ["head", "tail"]
+        finally:
+            release_head.set()
+            for release in (*releases, *replacement_releases):
+                release.set()
+        await asyncio.gather(*running, *replacement, head)
+
+    asyncio.run(scenario())
+
+
+def test_scheduler_cancelling_aged_head_unblocks_fitting_tail():
+    async def scenario():
+        scheduler = ModelScheduler(
+            [MODEL.name], max_concurrency=8, max_queue=2, max_active_rows=4096
+        )
+
+        async def never_started():
+            raise AssertionError("blocked head must not start")
+
+        async def small_operation():
+            return "small"
+
+        running, releases, replacement, replacement_releases, head = (
+            await _start_aged_large_waiter(scheduler, never_started)
+        )
+        try:
+            tail = asyncio.create_task(
+                scheduler.run(MODEL.name, small_operation, row_cost=1)
+            )
+            await asyncio.sleep(0)
+            assert (await scheduler.snapshots())[0].queued == 2
+
+            head.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await head
+            assert await asyncio.wait_for(tail, timeout=2) == "small"
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
+                7,
+                0,
+                3584,
+            )
+        finally:
+            for release in (*releases, *replacement_releases):
+                release.set()
+        await asyncio.gather(*running, *replacement)
 
     asyncio.run(scenario())

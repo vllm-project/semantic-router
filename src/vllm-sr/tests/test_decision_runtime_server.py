@@ -3,6 +3,7 @@
 import asyncio
 import json
 import sys
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -180,6 +181,7 @@ def test_assembly_reopens_artifact_before_loading(monkeypatch, tmp_path: Path):
     assert assembled.backend.physical_batch_size == 4
     assert assembled.scheduler.max_concurrency == 3
     assert assembled.scheduler.max_queue == 2
+    assert assembled.scheduler.max_active_rows == assembled.backend.max_pending_rows
     assert assembled.backend.models()[0].name == MODEL
 
     events.clear()
@@ -481,6 +483,57 @@ def test_vela_executor_rejects_complete_oversized_row():
     with pytest.raises(BackendInputTooLargeError):
         asyncio.run(executor.prepare_rows((row,)))
     assert resident.calls == []
+
+
+def test_cancelled_row_preparation_waits_for_tokenizer_before_releasing_credit():
+    from decision_runtime.scheduler import ModelScheduler  # noqa: PLC0415
+
+    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
+    executor = TorchDecisionRowExecutor(
+        _RecordingVela(profile.max_input_tokens), profile
+    )
+    request = _request("A billing question.")
+    row = DecisionRow(MODEL, request.state, "yes", request.questions["yes"])
+    original_encode = executor._encode_rows
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def blocking_encode(rows):
+        started.set()
+        try:
+            assert release.wait(timeout=5)
+            return original_encode(rows)
+        finally:
+            finished.set()
+
+    executor._encode_rows = blocking_encode
+
+    async def scenario():
+        scheduler = ModelScheduler(
+            [MODEL], max_concurrency=1, max_queue=0, max_active_rows=1
+        )
+        task = asyncio.create_task(
+            scheduler.run(MODEL, lambda: executor.prepare_rows((row,)), row_cost=1)
+        )
+        try:
+            assert await asyncio.wait_for(asyncio.to_thread(started.wait), timeout=2)
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+            await asyncio.sleep(0)
+            assert not task.done()
+            snapshot = (await scheduler.snapshots())[0]
+            assert (snapshot.running, snapshot.active_rows) == (1, 1)
+        finally:
+            release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert finished.is_set()
+        snapshot = (await scheduler.snapshots())[0]
+        assert (snapshot.running, snapshot.active_rows) == (0, 0)
+
+    asyncio.run(scenario())
 
 
 class _QwenTokenizer:
