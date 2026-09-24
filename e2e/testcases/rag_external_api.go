@@ -106,7 +106,7 @@ func verifyExternalRAGOversizeRejection(
 			oversizedBody,
 		)
 	}
-	if !bytes.Contains(oversizedBody, []byte("exceeded configured limit of 38 bytes")) {
+	if !bytes.Contains(oversizedBody, []byte("response body exceeds limit of 38 bytes")) {
 		return fmt.Errorf("oversized-response rejection omitted byte-limit detail: %s", oversizedBody)
 	}
 	return nil
