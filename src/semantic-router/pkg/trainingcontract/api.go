@@ -15,8 +15,11 @@ type ComparisonEntry struct {
 
 // APIError is the JSON body of every non-success management response.
 // HTTP status carries the category; message explains the rejected operation.
+// Code is an open string: v1 may add codes without a contract-version bump.
+// Clients must accept unknown codes and use HTTP status and message for generic handling.
+// Well-known codes and their HTTP statuses are documented in training-v1.openapi.yaml.
 type APIError struct {
-	Code    string `json:"code" jsonschema:"enum=invalid_request,enum=unauthenticated,enum=forbidden,enum=not_found,enum=conflict,enum=internal_error"`
+	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 

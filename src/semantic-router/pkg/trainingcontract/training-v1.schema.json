@@ -5,15 +5,7 @@
     "APIError": {
       "properties": {
         "code": {
-          "type": "string",
-          "enum": [
-            "invalid_request",
-            "unauthenticated",
-            "forbidden",
-            "not_found",
-            "conflict",
-            "internal_error"
-          ]
+          "type": "string"
         },
         "message": {
           "type": "string"

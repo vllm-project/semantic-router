@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, expectTypeOf, it } from 'vitest'
 import type {
-  Artifact, ArtifactVariant, BindingProposalSpec, Evaluation, Fixture,
+  APIError, Artifact, ArtifactVariant, BindingProposalSpec, Evaluation, Fixture,
   Profile, Qualification, RunGraph, RunSpec, WorkerResult,
 } from '../generated/trainingContract'
 
@@ -87,6 +87,10 @@ describe.each(fixtures)('training contract: $asset.name', (fixture) => {
     expect(fixture.evaluate_result.artifacts).toBeUndefined()
     expect(fixture.proposal.qualification_id).toBe(fixture.qualification.id)
   })
+})
+
+it('keeps API error codes open for future v1 server conditions', () => {
+  expectTypeOf<APIError['code']>().toEqualTypeOf<string>()
 })
 
 it('keeps trainer parameters open and worker outcomes distinct from run scheduling', () => {

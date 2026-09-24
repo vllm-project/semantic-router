@@ -23,6 +23,11 @@ from .provenance import validate_classifier_provenance
 
 
 class ContractTests(unittest.TestCase):
+    def test_api_error_accepts_unknown_codes(self):
+        for code in ("unavailable", "rate_limited"):
+            with self.subTest(code=code):
+                validate({"code": code, "message": "Try again later"}, "APIError")
+
     def test_shared_fixtures(self):
         for name in ("selector", "neural"):
             with self.subTest(name=name):

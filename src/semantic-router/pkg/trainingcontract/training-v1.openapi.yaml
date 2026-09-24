@@ -523,8 +523,13 @@ components:
       name: vsr_session
   responses:
     Error:
-      description: 400 invalid_request; 401 unauthenticated; 403 forbidden; 404 not_found; 409 conflict;
-        500 internal_error. Cookie requests also follow Dashboard CSRF protection.
+      description: >-
+        APIError.code is an open string. Well-known codes are 400 invalid_request;
+        401 unauthenticated; 403 forbidden; 404 not_found; 409 conflict;
+        500 internal_error. New codes may be added in v1 without a contract-version
+        bump; existing codes retain their meanings. Clients must accept unknown
+        codes and handle them as generic errors using HTTP status and message.
+        Cookie requests also follow Dashboard CSRF protection.
       content:
         application/json:
           schema:

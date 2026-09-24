@@ -41,6 +41,11 @@ The [OpenAPI contract](../semantic-router/pkg/trainingcontract/training-v1.opena
 defines management operations, ownership, output discovery, submission idempotency,
 cancellation and retry semantics.
 
+`APIError.code` is an open string. New codes may be added within v1 without a
+contract-version bump; existing codes retain their meanings. Clients must accept
+unknown codes and handle them as generic errors using HTTP status and `message`.
+The OpenAPI error response lists the well-known codes and their HTTP statuses.
+
 Starting from a run ID, clients follow `RunGraph.outputs` to artifacts, evaluations
 and qualifications. Artifact variants map logical relative file names to owned
 file handles, so clients can reconstruct a model's file layout. Qualification
