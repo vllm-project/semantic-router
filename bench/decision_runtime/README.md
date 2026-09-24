@@ -142,8 +142,8 @@ audited adapter and explicit protocol labeling before measurement.
 
 The historical Decision preview service returns a diagnostic envelope and
 defines Choice/Score `confidence` as `max(probabilities)`. For that **specific**
-old shape, add `--old-response-mode legacy_preview` (usually together with
-`--old-model-id decision-nano-preview` or the matching old model slug). The
+old shape, add `--old-response-mode legacy_preview` (together with
+`--old-model-id <historical-model-id>` when the old service uses another ID). The
 runner checks the old model ID, answer identities, input-token accounting, and
 max-probability statistic, then projects the old answers onto the current
 Decision-owned confidence formula solely for common response validation.
