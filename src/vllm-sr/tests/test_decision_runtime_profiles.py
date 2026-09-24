@@ -109,6 +109,9 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
     )
     assert not resolved.profile.use_short_b8_graph("rocm", 16)
     assert not resolved.profile.use_short_b8_graph("cpu", 8)
+    assert (rocm_policy.graph_prewarm_padded_tokens if rocm_policy else ()) == (
+        (128,) if model_id.endswith("Nox-4B") else ()
+    )
 
 
 def test_profile_package_has_exact_catalog_model_set() -> None:
@@ -170,6 +173,31 @@ def test_catalog_new_revision_reuses_model_template(
         {"rocm": {"job_turn_batches": 0}},
         {"rocm": {"job_turn_batches": 5}},
         {"rocm": {"job_turn_batches": True}},
+        {"rocm": {"graph_prewarm_padded_tokens": [128]}},
+        {
+            "rocm": {
+                "backbone_graph": "short_b8",
+                "graph_prewarm_padded_tokens": [128, 128],
+            }
+        },
+        {
+            "rocm": {
+                "backbone_graph": "short_b8",
+                "graph_prewarm_padded_tokens": [32, 64, 96],
+            }
+        },
+        {
+            "rocm": {
+                "backbone_graph": "short_b8",
+                "graph_prewarm_padded_tokens": [True],
+            }
+        },
+        {
+            "rocm": {
+                "backbone_graph": "short_b8",
+                "graph_prewarm_padded_tokens": [129],
+            }
+        },
     ),
 )
 def test_execution_policy_rejects_unknown_modes_and_backend_claims(

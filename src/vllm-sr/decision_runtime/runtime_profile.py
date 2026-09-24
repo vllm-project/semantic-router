@@ -30,6 +30,9 @@ PROFILE_SCHEMA_VERSION = 4
 # it after backend/device correctness and performance validation.
 DEFAULT_PHYSICAL_BATCH_SIZE = 8
 SHORT_GRAPH_PHYSICAL_BATCH_SIZE = 8
+_MAX_GRAPH_PREWARM_SHAPES = 2
+_MAX_GRAPH_PADDED_TOKENS = 256
+_GRAPH_PADDED_TOKEN_MULTIPLE = 32
 _PROFILE_FAMILY_DIRECTORIES = ("vela", "qwen35")
 _DTYPES = frozenset({"bfloat16", "float32"})
 _ASCII_CONTROL_LIMIT = 32
@@ -77,6 +80,7 @@ class BackendExecutionPolicy:
     """Model-selected optimizations for one installed hardware backend."""
 
     backbone_graph: Literal["short_b8"] | None = None
+    graph_prewarm_padded_tokens: tuple[int, ...] = ()
     gated_delta: QwenGatedDeltaKernel = "accelerated"
     max_physical_batch_size: int | None = None
     job_turn_batches: int | None = None
@@ -264,6 +268,7 @@ def _parse_execution(
     rocm = _mapping(execution["rocm"], "execution.rocm")
     allowed = {
         "backbone_graph",
+        "graph_prewarm_padded_tokens",
         "gated_delta",
         "max_physical_batch_size",
         "job_turn_batches",
@@ -275,6 +280,22 @@ def _parse_execution(
     graph = rocm.get("backbone_graph")
     if "backbone_graph" in rocm and graph != "short_b8":
         raise RuntimeProfileError("execution.rocm.backbone_graph is unsupported")
+    prewarm = rocm.get("graph_prewarm_padded_tokens", [])
+    if (
+        not isinstance(prewarm, list)
+        or len(prewarm) > _MAX_GRAPH_PREWARM_SHAPES
+        or any(
+            type(tokens) is not int
+            or not _GRAPH_PADDED_TOKEN_MULTIPLE <= tokens <= _MAX_GRAPH_PADDED_TOKENS
+            or tokens % _GRAPH_PADDED_TOKEN_MULTIPLE
+            for tokens in prewarm
+        )
+        or len(set(prewarm)) != len(prewarm)
+        or ("graph_prewarm_padded_tokens" in rocm and graph != "short_b8")
+    ):
+        raise RuntimeProfileError(
+            "execution.rocm.graph_prewarm_padded_tokens is unsupported"
+        )
     kernel = rocm.get("gated_delta", "accelerated")
     if not isinstance(kernel, str) or kernel not in {"native_torch", "accelerated"}:
         raise RuntimeProfileError("execution.rocm.gated_delta is unsupported")
@@ -298,7 +319,15 @@ def _parse_execution(
             f"execution.rocm.job_turn_batches must be 1 to {MAX_JOB_TURN_BATCHES}"
         )
     return MappingProxyType(
-        {"rocm": BackendExecutionPolicy(graph, kernel, maximum, job_turn_batches)}
+        {
+            "rocm": BackendExecutionPolicy(
+                backbone_graph=graph,
+                graph_prewarm_padded_tokens=tuple(prewarm),
+                gated_delta=kernel,
+                max_physical_batch_size=maximum,
+                job_turn_batches=job_turn_batches,
+            )
+        }
     )
 
 

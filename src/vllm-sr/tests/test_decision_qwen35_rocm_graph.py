@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import threading
+from contextlib import nullcontext
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -55,7 +56,11 @@ class _Graph:
         self.replays += 1
 
 
-def _runtime_and_graphs(monkeypatch, event_recorder=None):
+class _Device(str):
+    type = "cuda"
+
+
+def _runtime_and_graphs(monkeypatch, event_recorder=None, *, capture_on_request=True):
     model = _Model()
     cuda = SimpleNamespace(
         mem_get_info=lambda device: (16 << 30, 256 << 30),
@@ -67,9 +72,14 @@ def _runtime_and_graphs(monkeypatch, event_recorder=None):
     )
     runtime = Qwen35TorchRuntime(
         model=model,
-        tokenizer=object(),
-        torch=SimpleNamespace(cuda=cuda),
-        device="cuda:0",
+        tokenizer=SimpleNamespace(eos_token_id=1),
+        torch=SimpleNamespace(
+            cuda=cuda,
+            inference_mode=nullcontext,
+            autocast=lambda **kwargs: nullcontext(),
+            bfloat16="torch.bfloat16",
+        ),
+        device=_Device("cuda:0"),
         temperature=1.0,
         max_length=16384,
         backend="rocm",
@@ -84,7 +94,10 @@ def _runtime_and_graphs(monkeypatch, event_recorder=None):
         ),
     )
     graphs = graph_module.QwenRocmBackboneGraphs(
-        runtime, artifact_content_id="a" * 64, event_recorder=event_recorder
+        runtime,
+        artifact_content_id="a" * 64,
+        event_recorder=event_recorder,
+        capture_on_request=capture_on_request,
     )
     runtime.rocm_graphs = graphs
     monkeypatch.setattr(graphs, "_exact_masks", lambda batch: batch["masks"])
@@ -151,6 +164,117 @@ def test_changed_content_replays_copy_every_static_id_and_mask(monkeypatch):
         "linear:B",
         "linear:A",
     ]
+
+
+def test_startup_prewarm_removes_capture_from_live_requests(monkeypatch):
+    events = []
+    _, graphs, entries = _runtime_and_graphs(
+        monkeypatch, events.append, capture_on_request=False
+    )
+    monkeypatch.setattr(
+        graphs,
+        "_synthetic_batch",
+        lambda tokens, *, varied: _batch(
+            "synthetic-varied" if varied else "synthetic", tokens=tokens
+        ),
+    )
+
+    graphs.prewarm((128,))
+    assert events == ["capture"]
+    assert graphs._capture_attempts == 1
+    assert graphs.logits(_batch("changed-content")) == "graph:changed-content"
+    assert graphs.logits(_batch("unknown-shape", tokens=160)) == "eager:unknown-shape"
+    assert graphs.logits(_batch("other-mask", padded=False)) == "eager:other-mask"
+    assert len(entries) == 1
+    assert graphs._capture_attempts == 1
+    assert events == ["capture", "replay", "fallback", "fallback"]
+
+
+def test_failed_startup_prewarm_keeps_requests_on_eager(monkeypatch):
+    runtime, graphs, entries = _runtime_and_graphs(
+        monkeypatch, capture_on_request=False
+    )
+    monkeypatch.setattr(
+        graphs,
+        "_synthetic_batch",
+        lambda tokens, *, varied: _batch("startup-varied" if varied else "startup"),
+    )
+    runtime.torch.cuda.mem_get_info = lambda device: (7 << 30, 256 << 30)
+
+    graphs.prewarm((128,))
+    assert graphs.logits(_batch("live")) == "eager:live"
+    assert not entries
+    assert graphs._capture_attempts == 0
+
+
+def test_changed_content_mismatch_rejects_startup_graph(monkeypatch, caplog):
+    events = []
+    _, graphs, entries = _runtime_and_graphs(
+        monkeypatch, events.append, capture_on_request=False
+    )
+    monkeypatch.setattr(
+        graphs,
+        "_synthetic_batch",
+        lambda tokens, *, varied: _batch(
+            "PRIVATE-VARIED" if varied else "PRIVATE-BASE", tokens=tokens
+        ),
+    )
+    comparisons = []
+
+    def parity(*args):
+        comparisons.append(True)
+        return len(comparisons) < 3
+
+    monkeypatch.setattr(graphs, "_same_valid_logits_and_probabilities", parity)
+    with caplog.at_level("WARNING"):
+        graphs.prewarm((128,))
+    assert len(comparisons) == 3
+    assert len(entries) == 1
+    assert graphs._graphs == {}
+    assert graphs._captured_bytes == 0
+    assert events == []
+    assert graphs.logits(_batch("live")) == "eager:live"
+    assert graphs._capture_attempts == 1
+    assert "changed-content" in caplog.text
+    assert "PRIVATE" not in caplog.text
+
+
+def test_changed_mask_layout_rejects_startup_graph(monkeypatch):
+    _, graphs, entries = _runtime_and_graphs(monkeypatch, capture_on_request=False)
+    monkeypatch.setattr(
+        graphs,
+        "_synthetic_batch",
+        lambda tokens, *, varied: _batch("changed", padded=not varied),
+    )
+
+    graphs.prewarm((128,))
+    assert len(entries) == 1
+    assert graphs._graphs == {}
+    assert graphs.logits(_batch("live")) == "eager:live"
+
+
+def test_strict_binding_failure_during_prewarm_stops_startup(monkeypatch):
+    _, graphs, _ = _runtime_and_graphs(monkeypatch, capture_on_request=False)
+    monkeypatch.setattr(
+        graphs,
+        "_synthetic_batch",
+        lambda tokens, *, varied: _batch("startup-varied" if varied else "startup"),
+    )
+
+    def reject_capture(batch, masks):
+        raise graph_module.QwenRocmBindingError("strict FLA tamper")
+
+    monkeypatch.setattr(graphs, "_capture", reject_capture)
+    with pytest.raises(graph_module.QwenRocmBindingError, match="strict FLA tamper"):
+        graphs.prewarm((128,))
+
+
+@pytest.mark.parametrize("tokens", ((), (128, 128), (1,), (257,), (True,), [128]))
+def test_startup_prewarm_rejects_invalid_or_unbounded_shapes(monkeypatch, tokens):
+    _, graphs, entries = _runtime_and_graphs(monkeypatch, capture_on_request=False)
+    with pytest.raises(ValueError, match="prewarm shapes"):
+        graphs.prewarm(tokens)
+    assert not entries
 
 
 def test_graph_metrics_count_only_used_replays_and_bounded_events(monkeypatch):

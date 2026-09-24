@@ -419,6 +419,9 @@ def test_profiled_qwen_graph_receives_verified_artifact_identity(
     assert calls[0][1]["artifact_content_id"] == CONTENT_ID
     assert calls[0][1]["physical_batch_size"] == 8
     assert calls[0][1]["graph_event_recorder"] is recorder
+    assert calls[0][1]["graph_prewarm_padded_tokens"] == (
+        (128,) if profile_id.endswith("Nox-4B") else ()
+    )
 
 
 @pytest.mark.parametrize(

@@ -209,6 +209,9 @@ def _load_family(
                 "enable_rocm_graph": True,
                 "artifact_content_id": artifact.content_id,
                 "graph_event_recorder": graph_event_recorder,
+                "graph_prewarm_padded_tokens": (
+                    kernel_policy.graph_prewarm_padded_tokens
+                ),
             }
             if enable_rocm_graph
             else {}

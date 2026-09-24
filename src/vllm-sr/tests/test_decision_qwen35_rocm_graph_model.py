@@ -60,12 +60,12 @@ def _rows(request_path: Path, model_id: str):
     )
 
 
-def _windows(encoded):
+def _windows(encoded, *, padded_tokens=None):
     options = []
     for offset in range(0, len(encoded) - 7, 8):
         rows = encoded[offset : offset + 8]
         padded = ((max(row.input_tokens for row in rows) + 31) // 32) * 32
-        if padded <= 256:
+        if padded <= 256 and (padded_tokens is None or padded == padded_tokens):
             layout = (padded, any(row.input_tokens != padded for row in rows))
             options.append((layout, rows))
     for index, (layout, first) in enumerate(options):
@@ -97,18 +97,26 @@ def test_short_b8_graph_replays_changed_content_with_bitwise_eager_parity():
         resolved,
         expected_content_id=inputs["CONTENT_ID"],
     )
+    graph_events = []
     runtime = _load_family(
         resolved,
         artifact,
         "rocm",
         physical_batch_size=8,
+        graph_event_recorder=graph_events.append,
     )
     assert runtime.rocm_profile_binding is not None
     assert runtime.rocm_graphs is not None
+    startup_prewarm = resolved.profile.execution["rocm"].graph_prewarm_padded_tokens
+    if startup_prewarm:
+        assert graph_events == ["capture"]
+        assert runtime.rocm_graphs._capture_attempts == 1
     encoded = TorchDecisionRowExecutor(runtime, resolved.profile)._encode_rows(
         _rows(Path(inputs["REQUEST_PATH"]), model_id)
     )
-    first, second = _windows(encoded)
+    first, second = _windows(
+        encoded, padded_tokens=startup_prewarm[0] if startup_prewarm else None
+    )
     torch = runtime.torch
 
     for window in (first, second, first):
@@ -120,6 +128,9 @@ def test_short_b8_graph_replays_changed_content_with_bitwise_eager_parity():
         ):
             ordinary = runtime.model(**batch)
             candidate = runtime.rocm_graphs.logits(batch)
+            if startup_prewarm:
+                assert graph_events[-1] == "replay"
+                assert runtime.rocm_graphs._capture_attempts == 1
             torch.cuda.synchronize(runtime.device)
             expected = _valid_bits(torch, ordinary, batch, runtime.temperature)
             actual = _valid_bits(torch, candidate, batch, runtime.temperature)

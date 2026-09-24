@@ -79,6 +79,7 @@ class QwenRocmBackboneGraphs:
         *,
         artifact_content_id: str,
         event_recorder: Callable[[str], None] | None = None,
+        capture_on_request: bool = True,
     ) -> None:
         import threading  # noqa: PLC0415
 
@@ -96,6 +97,7 @@ class QwenRocmBackboneGraphs:
             or any(
                 character not in "0123456789abcdef" for character in artifact_content_id
             )
+            or type(capture_on_request) is not bool
         ):
             raise ValueError(
                 "ROCm graph needs a verified Qwen artifact and strict profile"
@@ -114,10 +116,135 @@ class QwenRocmBackboneGraphs:
         self._capture_attempts = 0
         self._parity_warnings = 0
         self._event_recorder = event_recorder
+        self._capture_on_request = capture_on_request
 
     def logits(self, batch: dict[str, Any]) -> Any:
         """Return original eager logits or qualified guarded-graph logits."""
 
+        return self._logits(batch, allow_capture=self._capture_on_request)
+
+    def prewarm(self, padded_tokens: tuple[int, ...]) -> None:
+        """Qualify bounded synthetic shapes before the server becomes ready."""
+
+        if (
+            self._capture_on_request
+            or type(padded_tokens) is not tuple
+            or not 1 <= len(padded_tokens) <= _MAX_GRAPHS
+            or any(
+                type(tokens) is not int
+                or tokens < _PADDED_TOKEN_MULTIPLE
+                or tokens > _MAX_PADDED_TOKENS
+                or tokens % _PADDED_TOKEN_MULTIPLE
+                for tokens in padded_tokens
+            )
+            or len(set(padded_tokens)) != len(padded_tokens)
+        ):
+            raise ValueError("Qwen graph prewarm shapes are outside the profile")
+        torch = self.runtime.torch
+        with (
+            self.lock,
+            torch.inference_mode(),
+            torch.autocast(device_type=self.runtime.device.type, dtype=torch.bfloat16),
+        ):
+            for tokens in padded_tokens:
+                try:
+                    qualified = self._qualify_prewarmed_shape(tokens)
+                except QwenRocmBindingError:
+                    raise
+                except (RuntimeError, TypeError, ValueError):
+                    # Optional graph preparation cannot make the eager service
+                    # unavailable. No live request will attempt this capture.
+                    _LOGGER.warning(
+                        "Qwen ROCm graph B%d/T%d startup prewarm failed; using eager",
+                        _PHYSICAL_BATCH,
+                        tokens,
+                    )
+                    continue
+                if not qualified:
+                    _LOGGER.warning(
+                        "Qwen ROCm graph B%d/T%d startup prewarm did not qualify; "
+                        "using eager",
+                        _PHYSICAL_BATCH,
+                        tokens,
+                    )
+
+    def _qualify_prewarmed_shape(self, tokens: int) -> bool:
+        self._logits(self._synthetic_batch(tokens, varied=False), allow_capture=True)
+        key = next(
+            (item for item in self._graphs if item.padded_tokens == tokens), None
+        )
+        if key is None:
+            return False
+        qualified = False
+        try:
+            changed = self._synthetic_batch(tokens, varied=True)
+            masks = self._exact_masks(changed)
+            if self._key(changed, masks) != key:
+                self._reject_for_parity(key, stage="changed-content-layout")
+                return False
+            ordinary = self.runtime.model(**changed)
+            candidate = self._logits_from_hidden(
+                changed, self._replay(self._graphs[key], changed, masks)
+            )
+            if not self._same_valid_logits_and_probabilities(
+                changed, ordinary, candidate
+            ):
+                self._reject_for_parity(key, stage="changed-content")
+                return False
+            self._record_event("capture")
+            qualified = True
+            return True
+        finally:
+            if not qualified:
+                removed = self._graphs.pop(key, None)
+                if removed is not None:
+                    self._captured_bytes -= removed.allocated_bytes
+                self._rejected.add(key)
+
+    def _synthetic_batch(self, padded_tokens: int, *, varied: bool) -> dict[str, Any]:
+        """Exercise the ordinary padded-mask path without user input."""
+
+        torch = self.runtime.torch
+        token = self.runtime.tokenizer.eos_token_id
+        vocab = self.runtime.model.backbone.embed_tokens.weight.shape[0]
+        if type(token) is not int or not 0 <= token < vocab:
+            raise ValueError("Qwen graph prewarm needs a valid EOS token")
+        device = self.runtime.device
+        ids = (
+            torch.arange(
+                _PHYSICAL_BATCH * padded_tokens, dtype=torch.long, device=device
+            )
+            .reshape(_PHYSICAL_BATCH, padded_tokens)
+            .remainder(vocab)
+            if varied
+            else torch.full(
+                (_PHYSICAL_BATCH, padded_tokens),
+                token,
+                dtype=torch.long,
+                device=device,
+            )
+        )
+        padding = 16 if varied else 8
+        attention = torch.ones_like(ids)
+        attention[1:, -padding:] = 0
+        ids[1:, -padding:] = token
+        query = torch.full(
+            (_PHYSICAL_BATCH,), padded_tokens - 1, dtype=torch.long, device=device
+        )
+        query[1:] = padded_tokens - padding - 1
+        return {
+            "input_ids": ids,
+            "attention_mask": attention,
+            "candidate_positions": torch.tensor(
+                [[1, 2]] * _PHYSICAL_BATCH, dtype=torch.long, device=device
+            ),
+            "candidate_mask": torch.ones(
+                (_PHYSICAL_BATCH, 2), dtype=torch.bool, device=device
+            ),
+            "query_positions": query,
+        }
+
+    def _logits(self, batch: dict[str, Any], *, allow_capture: bool) -> Any:
         model = self.runtime.model
         ids = batch["input_ids"]
         if (
@@ -126,6 +253,10 @@ class QwenRocmBackboneGraphs:
             or ids.shape[1] > _MAX_PADDED_TOKENS
             or ids.shape[1] < _PADDED_TOKEN_MULTIPLE
             or ids.shape[1] % _PADDED_TOKEN_MULTIPLE
+        ):
+            return self._fallback(batch)
+        if not allow_capture and not any(
+            key.padded_tokens == ids.shape[1] for key in self._graphs
         ):
             return self._fallback(batch)
         try:
@@ -140,7 +271,8 @@ class QwenRocmBackboneGraphs:
             self._record_event("replay")
             return output
         if (
-            key in self._rejected
+            not allow_capture
+            or key in self._rejected
             or len(self._graphs) >= _MAX_GRAPHS
             or self._capture_attempts >= _MAX_GRAPHS
             or self._captured_bytes >= _MAX_TOTAL_CAPTURE_BYTES
@@ -190,8 +322,9 @@ class QwenRocmBackboneGraphs:
             return self._fallback(batch, ordinary=ordinary)
         self._graphs[key] = captured
         self._captured_bytes += captured.allocated_bytes
-        self._record_event("capture")
-        return ordinary  # First request keeps its exact ordinary-eager result.
+        if self._capture_on_request:
+            self._record_event("capture")
+        return ordinary  # The qualifying call keeps its exact eager result.
 
     def _record_event(self, event: str) -> None:
         if self._event_recorder is not None:

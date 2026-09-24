@@ -349,6 +349,24 @@ def test_optional_graph_refuses_unbound_rocm_model_before_import(
     assert imported == []
 
 
+def test_graph_prewarm_requires_an_enabled_graph_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module", imported.append
+    )
+    with pytest.raises(Qwen35RuntimeError, match="prewarm requires a graph profile"):
+        Qwen35TorchRuntime.load(
+            _artifact(tmp_path),
+            temperature=1.0,
+            max_length=1024,
+            backend="rocm",
+            graph_prewarm_padded_tokens=(128,),
+        )
+    assert imported == []
+
+
 def test_graph_requires_exact_verified_artifact_content_id_before_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

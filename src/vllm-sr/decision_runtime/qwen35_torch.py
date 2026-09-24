@@ -166,6 +166,7 @@ class Qwen35TorchRuntime:
         enable_rocm_graph: bool = False,
         artifact_content_id: str | None = None,
         graph_event_recorder: Callable[[str], None] | None = None,
+        graph_prewarm_padded_tokens: tuple[int, ...] = (),
     ) -> Qwen35TorchRuntime:
         """Load verified data files with the distribution-owned implementation."""
 
@@ -182,6 +183,8 @@ class Qwen35TorchRuntime:
         )
         if type(enable_rocm_graph) is not bool:
             raise Qwen35RuntimeError("Qwen graph policy must be boolean")
+        if graph_prewarm_padded_tokens and not enable_rocm_graph:
+            raise Qwen35RuntimeError("Qwen graph prewarm requires a graph profile")
         if enable_rocm_graph and (
             backend != "rocm"
             or rocm_profile is None
@@ -304,7 +307,10 @@ class Qwen35TorchRuntime:
                 runtime,
                 artifact_content_id=artifact_content_id,
                 event_recorder=graph_event_recorder,
+                capture_on_request=not bool(graph_prewarm_padded_tokens),
             )
+            if graph_prewarm_padded_tokens:
+                runtime.rocm_graphs.prewarm(graph_prewarm_padded_tokens)
         return runtime
 
     def predict_encoded(
