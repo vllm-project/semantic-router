@@ -444,6 +444,9 @@ type Enricher interface {
 	// UpdateUsageCost updates token usage and pricing-derived cost fields for an existing record.
 	UpdateUsageCost(ctx context.Context, id string, usage UsageCost) error
 
+	// UpdateRequestDemandSnapshots replaces bounded request-demand evidence for an existing record.
+	UpdateRequestDemandSnapshots(ctx context.Context, id string, snapshots []RequestDemandSnapshot) error
+
 	// UpdateToolTrace updates the request-local tool-calling timeline for an existing record.
 	UpdateToolTrace(ctx context.Context, id string, trace ToolTrace) error
 }
@@ -632,6 +635,17 @@ func cloneLearningDiagnostics(value *LearningDiagnostics) *LearningDiagnostics {
 	return &cloned
 }
 
+func cloneRequestDemandSnapshots(values []RequestDemandSnapshot) []RequestDemandSnapshot {
+	return append([]RequestDemandSnapshot(nil), values...)
+}
+
+func setRequestDemandSnapshots(record *Record, snapshots []RequestDemandSnapshot) {
+	if record.RouteDiagnostics == nil {
+		record.RouteDiagnostics = &RouteDiagnostics{}
+	}
+	record.RouteDiagnostics.RequestDemandSnapshots = cloneRequestDemandSnapshots(snapshots)
+}
+
 func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	if value == nil {
 		return nil
@@ -640,7 +654,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
-	cloned.RequestDemandSnapshots = append([]RequestDemandSnapshot(nil), value.RequestDemandSnapshots...)
+	cloned.RequestDemandSnapshots = cloneRequestDemandSnapshots(value.RequestDemandSnapshots)
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
 	cloned.AppliedUnknownPolicies = cloneStringMap(value.AppliedUnknownPolicies)

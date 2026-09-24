@@ -426,6 +426,28 @@ func (r *OpenAIRouter) updateRouterReplayStatus(ctx *RequestContext, status int,
 	}
 }
 
+func (r *OpenAIRouter) updateRouterReplayRequestDemand(ctx *RequestContext) {
+	if ctx == nil || ctx.RouterReplayID == "" || len(ctx.RequestDemandSnapshots) == 0 {
+		return
+	}
+
+	recorder := ctx.RouterReplayRecorder
+	if recorder == nil {
+		recorder = r.ReplayRecorder
+	}
+	if recorder == nil {
+		return
+	}
+
+	if err := recorder.UpdateRequestDemandSnapshots(ctx.RouterReplayID, ctx.RequestDemandSnapshots); err != nil {
+		logging.ComponentErrorEvent("extproc", "router_replay_request_demand_update_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"replay_id":  ctx.RouterReplayID,
+			"error":      err.Error(),
+		})
+	}
+}
+
 func (r *OpenAIRouter) finalizeRouterReplay(
 	ctx *RequestContext,
 	state string,
@@ -443,6 +465,7 @@ func (r *OpenAIRouter) finalizeRouterReplay(
 		return
 	}
 
+	r.updateRouterReplayRequestDemand(ctx)
 	if err := recorder.FinalizeLifecycle(ctx.RouterReplayID, state, reason); err != nil {
 		logging.ComponentErrorEvent("extproc", "router_replay_lifecycle_update_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
