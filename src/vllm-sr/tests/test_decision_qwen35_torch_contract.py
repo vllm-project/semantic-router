@@ -344,20 +344,12 @@ def test_optional_graph_refuses_unbound_rocm_model_before_import(
             physical_batch_size=8,
             enable_rocm_graph=True,
             artifact_content_id="a" * 64,
-            graph_model_id=qwen35_torch.EXPERIMENTAL_SOL_GRAPH_MODEL_ID,
         )
     assert imported == []
 
 
-@pytest.mark.parametrize(
-    "model_id",
-    (
-        "llm-semantic-router/Decision-1.0-Nox-4B",
-        "llm-semantic-router/Decision-1.0-Lux-9B",
-    ),
-)
-def test_optional_graph_refuses_non_sol_model_before_import(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model_id: str
+def test_graph_requires_exact_verified_artifact_content_id_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     imported = []
     monkeypatch.setattr(
@@ -371,8 +363,7 @@ def test_optional_graph_refuses_non_sol_model_before_import(
             backend="rocm",
             physical_batch_size=8,
             enable_rocm_graph=True,
-            artifact_content_id="a" * 64,
-            graph_model_id=model_id,
+            artifact_content_id="invalid",
         )
     assert imported == []
 

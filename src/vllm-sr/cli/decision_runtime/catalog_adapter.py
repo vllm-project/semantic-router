@@ -28,7 +28,6 @@ from decision_runtime.catalog_adapter import (
     RuntimeModelResolutionError,
     resolve_decision_runtime_model,
 )
-from decision_runtime.qwen35_torch import EXPERIMENTAL_SOL_GRAPH_MODEL_ID
 from decision_runtime.scheduler import DEFAULT_MAX_CONCURRENCY
 
 from cli.decision_runtime.catalog import (
@@ -52,7 +51,6 @@ _CONTAINER_PORT = 8000
 # Large multi-state requests wait for row credits while the physical backend
 # drains B8 cohorts; the admission queue is independently configurable.
 _DEFAULT_DECISION_MAX_QUEUE = 32
-_EXPERIMENTAL_GRAPH_BATCH_SIZE = 8
 _SHA256_HEX_LENGTH = 64
 _SUPPORTED_CONTAINER_BACKENDS = frozenset({"rocm", "cuda", "cpu"})
 _FAMILY_PYTHON = MappingProxyType(
@@ -94,10 +92,6 @@ class IntegratedDecisionCatalogResolver:
 
         if not isinstance(request, DecisionRuntimeRequest):
             raise DecisionCatalogError("Decision runtime request is invalid")
-        if type(request.experimental_qwen_rocm_graph_b8) is not bool:
-            raise DecisionCatalogError(
-                "experimental Qwen graph opt-in must be a boolean"
-            )
         backend = (
             self.detect_backend() if request.backend == "auto" else request.backend
         )
@@ -157,14 +151,6 @@ class IntegratedDecisionCatalogResolver:
             else request.max_queue
         )
         _validate_resolved_limits(max_batch, max_concurrency, max_queue)
-        if request.experimental_qwen_rocm_graph_b8 and (
-            model.catalog.model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
-            or backend != "rocm"
-            or max_batch != _EXPERIMENTAL_GRAPH_BATCH_SIZE
-        ):
-            raise DecisionCatalogError(
-                "experimental Qwen ROCm graph requires canonical Sol at B8"
-            )
 
         try:
             artifact = self.artifacts.materialize(model)
@@ -211,8 +197,6 @@ class IntegratedDecisionCatalogResolver:
             "--max-queue",
             str(max_queue),
         )
-        if request.experimental_qwen_rocm_graph_b8:
-            command += ("--experimental-qwen-rocm-graph-b8",)
         return ResolvedDecisionRuntime(
             canonical_model=model.catalog.model_id,
             revision=model.catalog.revision,

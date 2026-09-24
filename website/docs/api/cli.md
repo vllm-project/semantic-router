@@ -1029,7 +1029,6 @@ Launch one exact MODEL as a standalone SystemOne service.
 | `--max-batch INTEGER RANGE` | Maximum physical inference batch override.  [x&gt;=1] |
 | `--max-concurrency INTEGER RANGE` | Maximum concurrent request override.  [x&gt;=1] |
 | `--max-queue INTEGER RANGE` | Maximum queued request override.  [x&gt;=0] |
-| `--experimental-qwen-rocm-graph-b8` | Opt in to short-shape B8 ROCm backbone graphs for Decision Sol only. Default: false. |
 | `--cpu-threads INTEGER RANGE` | CPU-only Torch/BLAS threads; default is min(8, container CPU allowance).  [1&lt;=x&lt;=256] |
 | `--gpu-device TEXT` | ROCm-only GPU index visible to this instance (0-9999); default sees all GPUs. |
 | `--instance-name TEXT` | Stable lowercase name for this managed Decision runtime instance. |

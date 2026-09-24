@@ -12,9 +12,11 @@ from __future__ import annotations
 import json
 import math
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import PurePosixPath
+from types import MappingProxyType
 from typing import Any, Literal
 
 RuntimeFamily = Literal["vela", "qwen3.5"]
@@ -24,6 +26,7 @@ PROFILE_SCHEMA_VERSION = 4
 # Initial benchmarked profile value, not a hard upper bound. A profile may tune
 # it after backend/device correctness and performance validation.
 DEFAULT_PHYSICAL_BATCH_SIZE = 8
+SHORT_GRAPH_PHYSICAL_BATCH_SIZE = 8
 _PROFILE_FAMILY_DIRECTORIES = ("vela", "qwen35")
 _DTYPES = frozenset({"bfloat16", "float32"})
 _ASCII_CONTROL_LIMIT = 32
@@ -67,6 +70,13 @@ class PromptPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class BackendExecutionPolicy:
+    """Optional model execution choice for one installed hardware backend."""
+
+    backbone_graph: Literal["short_b8"] | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeProfile:
     """Validated backend configuration selected by an exact catalog revision."""
 
@@ -79,6 +89,17 @@ class RuntimeProfile:
     physical_batch_size: int
     temperature: float | None
     prompt_policy: PromptPolicy
+    execution: Mapping[str, BackendExecutionPolicy]
+
+    def use_short_b8_graph(self, backend: str, physical_batch_size: int) -> bool:
+        """Select a profiled acceleration only for its measured batch shape."""
+
+        policy = self.execution.get(backend)
+        return (
+            policy is not None
+            and policy.backbone_graph == "short_b8"
+            and physical_batch_size == SHORT_GRAPH_PHYSICAL_BATCH_SIZE
+        )
 
 
 def validate_relative_artifact_path(value: object, *, field: str) -> str:
@@ -148,20 +169,18 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
             "Decision runtime profile is not valid JSON"
         ) from error
     root = _mapping(document, "profile")
-    _exact_keys(
-        root,
-        {
-            "schema_version",
-            "family",
-            "artifact",
-            "max_input_tokens",
-            "dtype",
-            "physical_batch_size",
-            "calibration",
-            "prompt_policy",
-        },
-        "profile",
-    )
+    required = {
+        "schema_version",
+        "family",
+        "artifact",
+        "max_input_tokens",
+        "dtype",
+        "physical_batch_size",
+        "calibration",
+        "prompt_policy",
+    }
+    if set(root) not in (required, required | {"execution"}):
+        raise RuntimeProfileError("profile fields do not match the runtime contract")
     if (
         type(root["schema_version"]) is not int
         or root["schema_version"] != PROFILE_SCHEMA_VERSION
@@ -184,6 +203,11 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
     head_dtype = _dtype(dtype["head"], "dtype.head")
     temperature = _parse_calibration(root["calibration"])
     prompt_policy = _parse_prompt_policy(root["prompt_policy"])
+    execution = (
+        _parse_execution(root["execution"], family=family)
+        if "execution" in root
+        else MappingProxyType({})
+    )
 
     return RuntimeProfile(
         revision=revision,
@@ -195,7 +219,21 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
         physical_batch_size=physical_batch_size,
         temperature=temperature,
         prompt_policy=prompt_policy,
+        execution=execution,
     )
+
+
+def _parse_execution(
+    value: object, *, family: RuntimeFamily
+) -> Mapping[str, BackendExecutionPolicy]:
+    execution = _mapping(value, "execution")
+    if set(execution) != {"rocm"} or family != "qwen3.5":
+        raise RuntimeProfileError("execution backend or model family is unsupported")
+    rocm = _mapping(execution["rocm"], "execution.rocm")
+    _exact_keys(rocm, {"backbone_graph"}, "execution.rocm")
+    if rocm["backbone_graph"] != "short_b8":
+        raise RuntimeProfileError("execution.rocm.backbone_graph is unsupported")
+    return MappingProxyType({"rocm": BackendExecutionPolicy("short_b8")})
 
 
 def _parse_artifact(value: object) -> ArtifactSelection:

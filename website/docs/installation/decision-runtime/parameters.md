@@ -62,9 +62,10 @@ make a ROCm kernel support a larger physical batch. See
 | `--detach`, `--restart-policy` | Keep the instance running in the background. Docker restart policy defaults to `no`; `unless-stopped` requires `--detach`. |
 | `--startup-timeout` | Allow more time for model loading and readiness than the default 1,800 seconds. |
 
-## Optional Sol ROCm graph {#experimental-sol-graph}
+## Sol on ROCm
 
-`--experimental-qwen-rocm-graph-b8` enables an experimental graph path only
-for Decision Sol on ROCm with `--max-batch 8`. It is off by default. Compare
-its answers, latency, and throughput with the ordinary Sol path before using
-it for your workload.
+Decision Sol on ROCm automatically reuses the model backbone for repeated,
+short eight-row batches. The first eligible shape is checked against ordinary
+inference and captured before reuse, so that first request can take longer.
+Longer inputs, other batch sizes, and captures that fail validation use ordinary
+inference. No extra flag is needed.

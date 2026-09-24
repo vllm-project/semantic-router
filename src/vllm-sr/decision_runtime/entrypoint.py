@@ -12,7 +12,6 @@ from .cpu_threads import configure_cpu_threads
 from .runtime_factory import MAX_PENDING_ROWS, RuntimeLaunchConfig
 
 _MAX_TCP_PORT = 65535
-_GRAPH_PHYSICAL_BATCH = 8
 
 
 def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
@@ -29,7 +28,6 @@ def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
     parser.add_argument("--max-batch", type=int, required=True)
     parser.add_argument("--max-concurrency", type=int, required=True)
     parser.add_argument("--max-queue", type=int, required=True)
-    parser.add_argument("--experimental-qwen-rocm-graph-b8", action="store_true")
     args = parser.parse_args(argv)
     try:
         ipaddress.ip_address(args.host)
@@ -45,10 +43,6 @@ def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
         parser.error("--max-concurrency must be positive")
     if args.max_queue < 0:
         parser.error("--max-queue must be non-negative")
-    if args.experimental_qwen_rocm_graph_b8 and (
-        args.backend != "rocm" or args.max_batch != _GRAPH_PHYSICAL_BATCH
-    ):
-        parser.error("--experimental-qwen-rocm-graph-b8 requires B8 ROCm")
     return RuntimeLaunchConfig(
         model=args.model,
         revision=args.revision,
@@ -60,7 +54,6 @@ def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
         max_batch=args.max_batch,
         max_concurrency=args.max_concurrency,
         max_queue=args.max_queue,
-        experimental_qwen_rocm_graph_b8=args.experimental_qwen_rocm_graph_b8,
     )
 
 

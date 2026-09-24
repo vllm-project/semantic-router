@@ -1,4 +1,4 @@
-"""Opt-in model-backed ROCm graph parity; requires an external verified artifact.
+"""Model-backed ROCm graph parity; requires an external verified artifact.
 
 Set the DECISION_QWEN_GRAPH_TEST_* inputs only in an isolated validation run.
 No model snapshot, host path, or revision is embedded in this test.
@@ -102,7 +102,6 @@ def test_short_b8_graph_replays_changed_content_with_bitwise_eager_parity():
         artifact,
         "rocm",
         physical_batch_size=8,
-        enable_rocm_graph=True,
     )
     assert runtime.rocm_profile_binding is not None
     assert runtime.rocm_graphs is not None

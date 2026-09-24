@@ -25,7 +25,6 @@ from .runtime_profile import RuntimeProfileError
 from .scheduler import ModelScheduler
 
 MAX_PENDING_ROWS = 4096
-_GRAPH_PHYSICAL_BATCH = 8
 
 
 class RuntimeAssemblyError(RuntimeError):
@@ -44,7 +43,6 @@ class RuntimeLaunchConfig:
     max_batch: int
     max_concurrency: int
     max_queue: int
-    experimental_qwen_rocm_graph_b8: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,14 +72,14 @@ def assemble_runtime(
             model.catalog, model.profile, config.backend, target=target
         )
         load_options = {"physical_batch_size": config.max_batch}
-        if config.experimental_qwen_rocm_graph_b8:
-            load_options["enable_rocm_graph"] = True
-            if metrics is not None:
-                load_options["graph_event_recorder"] = (
-                    lambda event: metrics.record_qwen_rocm_graph_event(
-                        model.catalog.model_id, event
-                    )
+        if metrics is not None and model.profile.use_short_b8_graph(
+            config.backend, config.max_batch
+        ):
+            load_options["graph_event_recorder"] = (
+                lambda event: metrics.record_qwen_rocm_graph_event(
+                    model.catalog.model_id, event
                 )
+            )
         resident = _load_family(model, artifact, config.backend, **load_options)
     except (RuntimeModelResolutionError, RuntimeProfileError, ArtifactError) as error:
         raise RuntimeAssemblyError(str(error)) from error
@@ -126,11 +124,6 @@ def _validate_config(config: RuntimeLaunchConfig) -> None:
         raise RuntimeAssemblyError("Decision launch configuration is invalid")
     if config.backend not in {"cpu", "rocm", "cuda"}:
         raise RuntimeAssemblyError("Decision backend is unsupported")
-    if type(config.experimental_qwen_rocm_graph_b8) is not bool or (
-        config.experimental_qwen_rocm_graph_b8
-        and (config.backend != "rocm" or config.max_batch != _GRAPH_PHYSICAL_BATCH)
-    ):
-        raise RuntimeAssemblyError("experimental Qwen ROCm graph requires B8 ROCm")
     for name, value, minimum, maximum in (
         ("port", config.port, 1, 65535),
         ("max_batch", config.max_batch, 1, MAX_PENDING_ROWS),
@@ -175,12 +168,10 @@ def _load_family(
     backend: Literal["cpu", "rocm", "cuda"],
     *,
     physical_batch_size: int = 8,
-    enable_rocm_graph: bool = False,
     graph_event_recorder: Callable[[str], None] | None = None,
 ):
     profile = model.profile
-    if enable_rocm_graph and profile.family != "qwen3.5":
-        raise RuntimeAssemblyError("experimental ROCm graph is Sol-only")
+    enable_rocm_graph = profile.use_short_b8_graph(backend, physical_batch_size)
     manifest = getattr(artifact, "manifest", None)
     if manifest is None:
         raise RuntimeAssemblyError(
@@ -198,16 +189,7 @@ def _load_family(
             expected_manifest_sha256=manifest.sha256,
         )
     if profile.family == "qwen3.5":
-        from .qwen35_torch import (  # noqa: PLC0415
-            EXPERIMENTAL_SOL_GRAPH_MODEL_ID,
-            Qwen35TorchRuntime,
-        )
-
-        if (
-            enable_rocm_graph
-            and model.catalog.model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
-        ):
-            raise RuntimeAssemblyError("experimental ROCm graph is Sol-only")
+        from .qwen35_torch import Qwen35TorchRuntime  # noqa: PLC0415
 
         if manifest.path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
             raise RuntimeAssemblyError("Qwen release manifest layout is unsupported")
@@ -223,7 +205,6 @@ def _load_family(
             {
                 "enable_rocm_graph": True,
                 "artifact_content_id": artifact.content_id,
-                "graph_model_id": model.catalog.model_id,
                 "graph_event_recorder": graph_event_recorder,
             }
             if enable_rocm_graph

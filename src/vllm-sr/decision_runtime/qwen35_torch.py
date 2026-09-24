@@ -24,7 +24,6 @@ from .release_artifacts import ReleaseArtifactError, verify_release_manifest
 
 QWEN_PROMPT_VERSION = "structured-segmented-candidate-endpoints-global-query-v2"
 SUPPORTED_TRANSFORMERS_VERSION = "5.17.0"
-EXPERIMENTAL_SOL_GRAPH_MODEL_ID = "llm-semantic-router/Decision-1.0-Sol-2B"
 RELEASED_MAX_INPUT_TOKENS = 16_384
 _ROCM_PROFILE_FORMAT = "decision-fla-l2norm-profile-v1"
 _FLA_SOURCE_FILES = ("modules/l2norm.py", "ops/utils/cache.py")
@@ -161,7 +160,6 @@ class Qwen35TorchRuntime:
         expected_manifest_sha256: str | None = None,
         enable_rocm_graph: bool = False,
         artifact_content_id: str | None = None,
-        graph_model_id: str | None = None,
         graph_event_recorder: Callable[[str], None] | None = None,
     ) -> Qwen35TorchRuntime:
         """Load verified data files with the distribution-owned implementation."""
@@ -176,12 +174,11 @@ class Qwen35TorchRuntime:
             physical_batch_size=physical_batch_size,
         )
         if type(enable_rocm_graph) is not bool:
-            raise Qwen35RuntimeError("experimental Qwen graph flag must be boolean")
+            raise Qwen35RuntimeError("Qwen graph policy must be boolean")
         if enable_rocm_graph and (
             backend != "rocm"
             or rocm_profile is None
             or physical_batch_size != _GRAPH_PHYSICAL_BATCH
-            or graph_model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
             or not isinstance(artifact_content_id, str)
             or len(artifact_content_id) != _SHA256_HEX_LENGTH
             or any(
@@ -189,7 +186,7 @@ class Qwen35TorchRuntime:
             )
         ):
             raise Qwen35RuntimeError(
-                "experimental Qwen ROCm graph requires a verified strict B8 profile"
+                "Qwen ROCm graph requires a verified strict B8 profile"
             )
         if backend == "cpu" and expected_manifest_sha256 is None:
             raise Qwen35RuntimeError(

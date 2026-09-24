@@ -53,7 +53,6 @@ def request(**overrides: object) -> DecisionRuntimeRequest:
         "max_batch": None,
         "max_concurrency": None,
         "max_queue": None,
-        "experimental_qwen_rocm_graph_b8": False,
     }
     values.update(overrides)
     return DecisionRuntimeRequest(**values)  # type: ignore[arg-type]
@@ -148,45 +147,38 @@ def test_explicit_tuning_is_forwarded_without_changing_model_identity(
     )
 
 
-def test_sol_graph_opt_in_adds_only_the_explicit_runtime_command_flag(
+def test_sol_default_and_batch_override_keep_the_same_clean_launch_contract(
     tmp_path: Path,
 ) -> None:
     bridge = resolver(tmp_path)
 
-    spec = bridge.resolve(
-        request(model=SOL_MODEL, experimental_qwen_rocm_graph_b8=True)
-    )
+    spec = bridge.resolve(request(model=SOL_MODEL))
+    larger = bridge.resolve(request(model=SOL_MODEL, max_batch=16))
 
     assert spec.canonical_model == SOL_MODEL
     assert spec.backend == "rocm"
     assert spec.max_batch == 8
-    assert spec.command[-1] == "--experimental-qwen-rocm-graph-b8"
-    assert spec.command.count("--experimental-qwen-rocm-graph-b8") == 1
-    assert [item.catalog.model_id for item in bridge.artifacts.calls] == [SOL_MODEL]  # type: ignore[attr-defined]
-
-
-@pytest.mark.parametrize(
-    ("overrides", "message"),
-    (
-        ({"model": MODEL}, "canonical Sol"),
-        ({"model": "llm-semantic-router/Decision-1.0-Nox-4B"}, "canonical Sol"),
-        ({"model": "llm-semantic-router/Decision-1.0-Lux-9B"}, "canonical Sol"),
-        ({"model": SOL_MODEL, "backend": "cuda"}, "no installed|canonical Sol"),
-        ({"model": SOL_MODEL, "max_batch": 16}, "canonical Sol"),
-        ({"model": SOL_MODEL, "experimental_qwen_rocm_graph_b8": "true"}, "boolean"),
-    ),
-)
-def test_graph_opt_in_denies_other_models_backends_and_batches_before_artifact(
-    tmp_path: Path, overrides: dict[str, object], message: str
-) -> None:
-    bridge = resolver(tmp_path)
-
-    with pytest.raises(DecisionCatalogError, match=message):
-        bridge.resolve(
-            request(**{"experimental_qwen_rocm_graph_b8": True, **overrides})
-        )
-
-    assert bridge.artifacts.calls == []  # type: ignore[attr-defined]
+    assert larger.max_batch == 16
+    assert spec.command[-6:] == (
+        "--max-batch",
+        "8",
+        "--max-concurrency",
+        "8",
+        "--max-queue",
+        "32",
+    )
+    assert larger.command[-6:] == (
+        "--max-batch",
+        "16",
+        "--max-concurrency",
+        "8",
+        "--max-queue",
+        "32",
+    )
+    assert [item.catalog.model_id for item in bridge.artifacts.calls] == [
+        SOL_MODEL,
+        SOL_MODEL,
+    ]  # type: ignore[attr-defined]
 
 
 def test_explicit_local_image_id_is_forwarded_without_catalog_image_fallback(

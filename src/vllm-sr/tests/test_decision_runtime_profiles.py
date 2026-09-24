@@ -93,6 +93,9 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
         resolved.profile.prompt_policy.choice_null_description
         == PROMPT_POLICIES[model_id]
     )
+    assert resolved.profile.use_short_b8_graph("rocm", 8) == model_id.endswith("Sol-2B")
+    assert not resolved.profile.use_short_b8_graph("rocm", 16)
+    assert not resolved.profile.use_short_b8_graph("cpu", 8)
 
 
 def test_profile_package_has_exact_catalog_model_set() -> None:
@@ -140,6 +143,30 @@ def test_catalog_new_revision_reuses_model_template(
     assert updated.template_id == resolved.template_id
     assert updated.template_id == model_id.rsplit("/", 1)[-1]
     assert updated.profile.prompt_policy == resolved.profile.prompt_policy
+    assert updated.profile.execution == resolved.profile.execution
+
+
+@pytest.mark.parametrize(
+    "execution",
+    (
+        None,
+        {},
+        {"cuda": {"backbone_graph": "short_b8"}},
+        {"rocm": {"backbone_graph": "unknown"}},
+        {"rocm": {"backbone_graph": "short_b8", "qualified": True}},
+    ),
+)
+def test_execution_policy_rejects_unknown_modes_and_backend_claims(
+    execution: object,
+) -> None:
+    revision = MODELS["llm-semantic-router/Decision-1.0-Sol-2B"][0]
+    document = json.loads(
+        _packaged_profile("llm-semantic-router/Decision-1.0-Sol-2B").read_bytes()
+    )
+    document["execution"] = execution
+
+    with pytest.raises(RuntimeProfileError, match="execution"):
+        parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 
 
 def test_explicit_revision_requires_an_immutable_commit() -> None:

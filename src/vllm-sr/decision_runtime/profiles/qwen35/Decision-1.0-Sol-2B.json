@@ -9,5 +9,6 @@
   },
   "physical_batch_size": 8,
   "calibration": {"temperature": 1.3003552029656025},
-  "prompt_policy": {"choice_null_description": "preserve_json_null"}
+  "prompt_policy": {"choice_null_description": "preserve_json_null"},
+  "execution": {"rocm": {"backbone_graph": "short_b8"}}
 }

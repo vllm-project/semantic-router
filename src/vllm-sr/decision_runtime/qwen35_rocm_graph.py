@@ -1,4 +1,4 @@
-"""Opt-in, instance-local ROCm graphs for short Qwen physical batches.
+"""Instance-local ROCm graphs for profiled short Qwen physical batches.
 
 Only the text backbone is captured. Candidate gathering, the FP32 head,
 calibration, and host synchronization remain eager. Every shape is qualified
