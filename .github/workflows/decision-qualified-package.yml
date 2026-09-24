@@ -42,6 +42,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-published-digest-decision-runtime-cpu-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-harness/decision-cpu
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -145,6 +149,35 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+      - name: Qualify the exact published CPU digest with three live models
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_AUTH_FILE: ${{ runner.temp }}/decision-registry-auth.json
+        run: |
+          set -euo pipefail
+          export PATH="${RUNNER_TEMP}/decision-cli/bin:${PATH}"
+          printf '%s' "$GHCR_TOKEN" | skopeo login --authfile "$REGISTRY_AUTH_FILE" --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          digest="$(<.agent-harness/decision-cpu/published-digest.txt)"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          published_ref="ghcr.io/${owner}/semantic-router/decision-runtime-cpu@${digest}"
+          port="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1]); s.close()')"
+          python3 tools/ci/decision_cpu_qualify.py \
+            --owner "$GITHUB_REPOSITORY_OWNER" \
+            --published-ref "$published_ref" \
+            --output-dir "${RUNNER_TEMP}/decision-cpu-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --port "$port"
+      - name: Preserve CPU model-backed qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: decision-cpu-qualified-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/decision-cpu-${{ github.run_id }}-${{ github.run_attempt }}/qualification.json
+            ${{ runner.temp }}/decision-cpu-${{ github.run_id }}-${{ github.run_attempt }}/models/*.json
+            ${{ runner.temp }}/decision-cpu-${{ github.run_id }}-${{ github.run_attempt }}/raw/**
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
 
   package:
     name: Bind Published Digests and Build Qualified Package
@@ -168,6 +201,10 @@ jobs:
         with:
           name: ci-published-digest-decision-runtime-cpu-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-harness/decision-cpu
+      - uses: actions/download-artifact@v4
+        with:
+          name: decision-cpu-qualified-receipt-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .agent-harness/decision-cpu-qualified
       - uses: actions/download-artifact@v4
         with:
           name: decision-rocm-qualified-receipt-${{ github.run_id }}-${{ github.run_attempt }}
@@ -213,6 +250,7 @@ jobs:
           python3 tools/ci/decision_image_lock_release.py generate \
             --owner "$GITHUB_REPOSITORY_OWNER" \
             --cpu-digest-file .agent-harness/decision-cpu/published-digest.txt \
+            --cpu-receipt .agent-harness/decision-cpu-qualified/qualification.json \
             --rocm-receipt .agent-harness/decision-rocm/qualification.json \
             --rocm-published-ref "$rocm_ref" \
             --output src/vllm-sr/cli/decision_runtime/decision-images.lock.json
@@ -244,6 +282,9 @@ jobs:
           name: decision-qualified-release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .agent-harness/decision-cpu/published-digest.txt
+            .agent-harness/decision-cpu-qualified/qualification.json
+            .agent-harness/decision-cpu-qualified/models/*.json
+            .agent-harness/decision-cpu-qualified/raw/**
             .agent-harness/decision-rocm/qualification.json
             .agent-harness/decision-rocm/models/*.json
             .agent-harness/decision-rocm/raw/**

@@ -3,9 +3,10 @@
 
 Run this in the protected package publication job after both image digests are
 published. The CPU digest file must come from the image publication artifact;
-the ROCm receipt and its six hashed model results must come from the device
-qualification run. This tool checks their binding to the checkout and registry
-content. It cannot establish the trust of the jobs that produced those inputs.
+the CPU receipt must cover three live models on that exact digest. The ROCm
+receipt and its six hashed model results come from device qualification. This
+tool binds both receipts to the checkout and registry content. It cannot
+establish the trust of the jobs that produced those inputs.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+from decision_cpu_receipt import validate_receipt as validate_cpu_receipt
 from decision_rocm_promotion import (
     validate_receipt,
     validate_registry_candidate,
@@ -106,6 +108,7 @@ def validate_release_lock(
     owner: str,
     revision: str,
     cpu_digest_file: Path,
+    cpu_receipt: Path,
     rocm_receipt: Path,
     rocm_published_ref: str,
 ) -> DecisionImageLock:
@@ -116,6 +119,7 @@ def validate_release_lock(
         owner=owner,
         revision=revision,
         cpu_digest_file=cpu_digest_file,
+        cpu_receipt=cpu_receipt,
         rocm_receipt=rocm_receipt,
         rocm_published_ref=rocm_published_ref,
     )
@@ -127,6 +131,7 @@ def _validate_inventory(
     owner: str,
     revision: str,
     cpu_digest_file: Path,
+    cpu_receipt: Path,
     rocm_receipt: Path,
     rocm_published_ref: str,
 ) -> DecisionImageLock:
@@ -142,6 +147,9 @@ def _validate_inventory(
     cpu_ref = _published_ref(owner, "cpu", _read_digest(cpu_digest_file))
     if lock.images["cpu"] != cpu_ref:
         raise ValueError("CPU image differs from the published digest artifact")
+    validate_cpu_receipt(
+        cpu_receipt, owner=owner, revision=revision, published_image=cpu_ref
+    )
 
     receipt = validate_receipt(rocm_receipt, owner=owner, revision=revision)
     qualified_digest = receipt["candidate_ref"].rsplit("@", 1)[1]
@@ -164,6 +172,7 @@ def generate_release_lock(
     owner: str,
     revision: str,
     cpu_digest_file: Path,
+    cpu_receipt: Path,
     rocm_receipt: Path,
     rocm_published_ref: str,
 ) -> DecisionImageLock:
@@ -178,12 +187,16 @@ def generate_release_lock(
         or re.fullmatch(r"[0-9a-f]{40}", revision) is None
     ):
         raise ValueError("release owner or source SHA is invalid")
+    cpu_ref = _published_ref(owner, "cpu", _read_digest(cpu_digest_file))
+    validate_cpu_receipt(
+        cpu_receipt, owner=owner, revision=revision, published_image=cpu_ref
+    )
     receipt = validate_receipt(rocm_receipt, owner=owner, revision=revision)
     document = {
         "schema_version": 1,
         "source_sha": revision,
         "images": {
-            "cpu": _published_ref(owner, "cpu", _read_digest(cpu_digest_file)),
+            "cpu": cpu_ref,
             "rocm": _published_ref(
                 owner, "rocm", receipt["candidate_ref"].rsplit("@", 1)[1]
             ),
@@ -198,6 +211,7 @@ def generate_release_lock(
         owner=owner,
         revision=revision,
         cpu_digest_file=cpu_digest_file,
+        cpu_receipt=cpu_receipt,
         rocm_receipt=rocm_receipt,
         rocm_published_ref=rocm_published_ref,
     )
@@ -266,6 +280,7 @@ def main() -> None:
         operation = commands.add_parser(command)
         operation.add_argument("--owner", required=True)
         operation.add_argument("--cpu-digest-file", required=True, type=Path)
+        operation.add_argument("--cpu-receipt", required=True, type=Path)
         operation.add_argument("--rocm-receipt", required=True, type=Path)
         operation.add_argument("--rocm-published-ref", required=True)
         operation.add_argument(
@@ -293,6 +308,7 @@ def main() -> None:
         "owner": args.owner,
         "revision": source_sha(),
         "cpu_digest_file": args.cpu_digest_file,
+        "cpu_receipt": args.cpu_receipt,
         "rocm_receipt": args.rocm_receipt,
         "rocm_published_ref": args.rocm_published_ref,
     }

@@ -92,6 +92,42 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         )
         self.assertIn("${{ github.run_attempt }}", upload["with"]["name"])
         self.assertIn("/raw/**", upload["with"]["path"])
+        cpu_qualify = next(
+            step
+            for step in rocm["steps"]
+            if "decision_cpu_qualify.py" in step.get("run", "")
+        )
+        cpu_digest_download = next(
+            step
+            for step in rocm["steps"]
+            if step.get("uses", "").startswith("actions/download-artifact@")
+            and step.get("with", {})
+            .get("name", "")
+            .startswith("ci-published-digest-decision-runtime-cpu-")
+        )
+        self.assertLess(
+            rocm["steps"].index(cpu_digest_download), rocm["steps"].index(cpu_qualify)
+        )
+        self.assertLess(
+            rocm["steps"].index(performance_gate), rocm["steps"].index(cpu_qualify)
+        )
+        self.assertEqual(cpu_qualify["env"]["HF_TOKEN"], "${{ secrets.HF_TOKEN }}")
+        self.assertIn('--published-ref "$published_ref"', cpu_qualify["run"])
+        self.assertIn("decision-runtime-cpu@${digest}", cpu_qualify["run"])
+        self.assertIn('--port "$port"', cpu_qualify["run"])
+        self.assertLess(
+            commands.index("decision_perf_release_gate.py validate"),
+            commands.index("decision_cpu_qualify.py"),
+        )
+        cpu_upload = next(
+            step
+            for step in rocm["steps"]
+            if step.get("with", {})
+            .get("name", "")
+            .startswith("decision-cpu-qualified-receipt-")
+        )
+        self.assertIn("/qualification.json", cpu_upload["with"]["path"])
+        self.assertIn("/raw/**", cpu_upload["with"]["path"])
         performance_upload = next(
             step
             for step in rocm["steps"]
@@ -115,6 +151,7 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
             artifacts,
             [
                 "ci-published-digest-decision-runtime-cpu-${{ github.run_id }}-${{ github.run_attempt }}",
+                "decision-cpu-qualified-receipt-${{ github.run_id }}-${{ github.run_attempt }}",
                 "decision-rocm-qualified-receipt-${{ github.run_id }}-${{ github.run_attempt }}",
                 "decision-paired-performance-${{ github.run_id }}-${{ github.run_attempt }}",
             ],
@@ -124,6 +161,7 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
             "decision_rocm_promotion.py",
             "--promote",
             "decision_image_lock_release.py generate",
+            "--cpu-receipt .agent-harness/decision-cpu-qualified/qualification.json",
             'package_contract.py --mode "$MODE" --tag "$TAG"',
             "decision_image_lock_release.py check-dist",
             "decision_perf_release_gate.py validate",
@@ -152,6 +190,10 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
             if step.get("with", {})
             .get("name", "")
             .startswith("decision-qualified-release-evidence-")
+        )
+        self.assertIn(
+            ".agent-harness/decision-cpu-qualified/raw/**",
+            release_evidence["with"]["path"],
         )
         self.assertIn(
             ".agent-harness/decision-rocm/raw/**",
@@ -250,6 +292,7 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('candidate_ref="$(python3 -c ', commands[validate_index])
         self.assertIn('"$receipt")"', commands[validate_index])
         for argument in (
+            '--cpu-receipt "$evidence/.agent-harness/decision-cpu-qualified/qualification.json"',
             '--qualification-receipt "$receipt"',
             '--owner "$GITHUB_REPOSITORY_OWNER"',
             '--candidate-ref "$candidate_ref"',

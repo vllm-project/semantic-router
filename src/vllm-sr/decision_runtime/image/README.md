@@ -84,6 +84,13 @@ immutable source-commit tag, even when the general publisher requests `latest`
 or a release alias.
 Image construction runs import and catalog smoke checks; this does not replace
 real Kai, Lex, and Eos CPU serving tests before making the image a CLI default.
+The protected release workflow now consumes the published CPU manifest digest,
+launches those three models sequentially from that exact image on Linux CPU,
+and records source-bound, hashed `/ready`, `/api/status`, single, and two-state
+batch evidence. Lock generation and final package publication require the
+three-model receipt. Host-side artifact fetching may use a protected token;
+the runtime container receives only the verified read-only artifact mount.
+Insufficient runner memory, storage, or model access fails the release closed.
 
 The ROCm image is approximately 46 GiB in virtual layers. It is intentionally
 absent from ordinary hosted CI build and artifact matrices. Build it from the

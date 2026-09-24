@@ -17,6 +17,7 @@ import tomllib
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import decision_image_lock_release as release
+import decision_cpu_qualify as cpu
 import decision_rocm_promotion as rocm
 
 REVISION = "a" * 40
@@ -34,6 +35,63 @@ CANDIDATE = (
 def _fixture(directory: Path) -> tuple[Path, Path, Path]:
     digest_file = directory / "published-digest.txt"
     digest_file.write_text(CPU_DIGEST + "\n", encoding="ascii")
+    cpu_base, _, _ = cpu.DECISION_RUNTIME_BASES[cpu.IMAGE]
+    cpu_record = {
+        "schema": 1,
+        "image": cpu.IMAGE,
+        "source_sha": REVISION,
+        "base_image": cpu_base,
+        "published_ref": CPU_REF,
+        "backend": "cpu",
+        "platform": "linux/amd64",
+        "models": [],
+    }
+    for index, model_id in enumerate(sorted(cpu.MODEL_IDS)):
+        slug = model_id.rsplit("/", 1)[-1].removeprefix("Decision-1.0-").lower()
+        hashes = {}
+        for filename in cpu.RAW_FILES:
+            relative = f"raw/{slug}/{filename}"
+            file = directory / relative
+            file.parent.mkdir(parents=True, exist_ok=True)
+            payload = (
+                json.dumps(
+                    {
+                        "published_ref": CPU_REF,
+                        "local_image_id": "sha256:" + "e" * 64,
+                    }
+                ).encode()
+                if filename == "image-attestation.json"
+                else f"{model_id}:{filename}".encode()
+            )
+            file.write_bytes(payload)
+            hashes[relative] = cpu._digest(payload)
+        evidence = {
+            "image_ref": CPU_REF,
+            "source_sha": REVISION,
+            "model_id": model_id,
+            "revision": f"{index}" * 40,
+            "artifact_content_id": ARTIFACT,
+            "backend": "cpu",
+            "device": "cpu",
+            "result": "passed",
+            "checks": dict.fromkeys(cpu.REQUIRED_CHECKS, True),
+            "raw_sha256": hashes,
+        }
+        relative = f"cpu-models/{slug}.json"
+        payload = json.dumps(evidence, sort_keys=True).encode()
+        file = directory / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(payload)
+        cpu_record["models"].append(
+            {
+                "id": model_id,
+                "revision": f"{index}" * 40,
+                "artifact_content_id": ARTIFACT,
+                "evidence_file": relative,
+                "evidence_sha256": cpu._digest(payload),
+            }
+        )
+    (directory / "cpu-qualification.json").write_text(json.dumps(cpu_record))
     lock_path = directory / "decision-images.lock.json"
     lock_path.write_text(
         json.dumps(
@@ -103,6 +161,7 @@ class DecisionImageLockReleaseTests(unittest.TestCase):
             owner=OWNER,
             revision=REVISION,
             cpu_digest_file=digest,
+            cpu_receipt=digest.parent / "cpu-qualification.json",
             rocm_receipt=receipt,
             rocm_published_ref=ROCM_REF,
         )
@@ -131,11 +190,37 @@ class DecisionImageLockReleaseTests(unittest.TestCase):
                     owner=OWNER,
                     revision="e" * 40,
                     cpu_digest_file=digest,
+                    cpu_receipt=digest.parent / "cpu-qualification.json",
                     rocm_receipt=receipt,
                     rocm_published_ref=ROCM_REF,
                 )
             digest.write_text("sha256:" + "f" * 64)
             with self.assertRaisesRegex(ValueError, "CPU image differs"):
+                self._validate(lock, digest, receipt)
+
+    def test_cpu_default_requires_live_receipt_for_exact_digest(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            lock, digest, receipt = _fixture(Path(temporary))
+            cpu_receipt = digest.parent / "cpu-qualification.json"
+            cpu_receipt.unlink()
+            with self.assertRaises((OSError, ValueError)):
+                self._validate(lock, digest, receipt)
+            with self.assertRaises((OSError, ValueError)):
+                release.generate_release_lock(
+                    digest.parent / "unqualified-lock.json",
+                    owner=OWNER,
+                    revision=REVISION,
+                    cpu_digest_file=digest,
+                    cpu_receipt=cpu_receipt,
+                    rocm_receipt=receipt,
+                    rocm_published_ref=ROCM_REF,
+                )
+            self.assertFalse((digest.parent / "unqualified-lock.json").exists())
+            _fixture(Path(temporary))
+            document = json.loads(cpu_receipt.read_text())
+            document["published_ref"] = CPU_REF.replace(CPU_DIGEST, ROCM_DIGEST)
+            cpu_receipt.write_text(json.dumps(document))
+            with self.assertRaisesRegex(ValueError, "published image"):
                 self._validate(lock, digest, receipt)
 
     def test_rocm_promotion_must_preserve_qualified_digest(self):
@@ -147,6 +232,7 @@ class DecisionImageLockReleaseTests(unittest.TestCase):
                     owner=OWNER,
                     revision=REVISION,
                     cpu_digest_file=digest,
+                    cpu_receipt=digest.parent / "cpu-qualification.json",
                     rocm_receipt=receipt,
                     rocm_published_ref=ROCM_REF.replace(ROCM_DIGEST, CPU_DIGEST),
                 )
@@ -221,6 +307,7 @@ class DecisionImageLockReleaseTests(unittest.TestCase):
                 "owner": OWNER,
                 "revision": REVISION,
                 "cpu_digest_file": digest,
+                "cpu_receipt": digest.parent / "cpu-qualification.json",
                 "rocm_receipt": receipt,
                 "rocm_published_ref": ROCM_REF,
             }
@@ -262,6 +349,7 @@ class DecisionImageLockReleaseTests(unittest.TestCase):
                     owner=OWNER,
                     revision=REVISION,
                     cpu_digest_file=digest,
+                    cpu_receipt=digest.parent / "cpu-qualification.json",
                     rocm_receipt=receipt,
                     rocm_published_ref=ROCM_REF.replace(ROCM_DIGEST, CPU_DIGEST),
                 )
@@ -279,6 +367,7 @@ class DecisionImageLockReleaseTests(unittest.TestCase):
                     owner=OWNER,
                     revision=REVISION,
                     cpu_digest_file=digest,
+                    cpu_receipt=digest.parent / "cpu-qualification.json",
                     rocm_receipt=receipt,
                     rocm_published_ref=ROCM_REF,
                 )
@@ -297,6 +386,8 @@ class DecisionImageLockReleaseTests(unittest.TestCase):
                 OWNER,
                 "--cpu-digest-file",
                 str(digest),
+                "--cpu-receipt",
+                str(digest.parent / "cpu-qualification.json"),
                 "--rocm-receipt",
                 str(receipt),
                 "--rocm-published-ref",

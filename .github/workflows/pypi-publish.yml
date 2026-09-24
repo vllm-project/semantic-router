@@ -260,6 +260,7 @@ jobs:
           python tools/ci/decision_image_lock_release.py validate \
             --owner "$GITHUB_REPOSITORY_OWNER" \
             --cpu-digest-file "$evidence/.agent-harness/decision-cpu/published-digest.txt" \
+            --cpu-receipt "$evidence/.agent-harness/decision-cpu-qualified/qualification.json" \
             --rocm-receipt "$receipt" \
             --rocm-published-ref "$rocm_ref" --lock "$lock"
           shopt -s nullglob
