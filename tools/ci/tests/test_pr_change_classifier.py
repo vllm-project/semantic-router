@@ -388,7 +388,7 @@ class SelectionTests(unittest.TestCase):
             )
 
     def test_published_model_profiles_plan_their_backend_image(self):
-        for profile in ("vela-omni", "vela-halu"):
+        for profile in ("vela-omni", "vela-halu", "vela-shield"):
             with self.subTest(profile=profile):
                 identifier = f"e2e.{profile}"
                 plan = make_plan([], source_sha=SHA, requested=(identifier,))

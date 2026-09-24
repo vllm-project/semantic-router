@@ -921,6 +921,16 @@ profiles:
       - e2e/testcases/local_classifier_routing.go
       - src/semantic-router/pkg/classification/generic_classifier_local.go
       - src/semantic-router/pkg/classification/native_labels.go
+  structure-routing:
+    display_name: Structure Routing
+    owner: e2e
+    coverage_role: structure-routing
+    selection: pr
+    paths:
+      - e2e/profiles/structure-routing/**
+      - e2e/testcases/structure_routing.go
+      - src/semantic-router/pkg/classification/structure_classifier.go
+      - src/semantic-router/pkg/classification/classifier_signal_structure.go
   external-gateway-responses:
     display_name: External Gateway Responses
     owner: e2e
@@ -1228,6 +1238,18 @@ profiles:
       - candle-binding/src/ffi/instances/grounding.rs
       - onnx-binding/src/instances/grounding.rs
       - tools/models/vela_halu/**
+  vela-shield:
+    display_name: Vela Shield Safety
+    owner: e2e
+    coverage_role: published-shield-safety-model-selection
+    runtime: candle
+    device: cpu
+    selection: pr
+    paths:
+      - e2e/profiles/vela-shield/**
+      - e2e/testcases/vela_shield.go
+      - src/semantic-router/pkg/classification/classifier_signal_safety.go
+      - src/semantic-router/pkg/classification/safety_classifier_local.go
   hallucination:
     display_name: Hallucination Detection
     owner: e2e
