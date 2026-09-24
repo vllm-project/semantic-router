@@ -383,7 +383,7 @@ func (s *ClassificationAPIServer) writeRouterConfigFiles(
 ) bool {
 	release := s.runtimeRegistry.LockConfigPublication()
 	defer release()
-	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
+	if err := writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
 		if errors.Is(err, configwriter.ErrConfigMapChanged) {
 			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_CHANGED", "The ConfigMap changed during this request. Reload the configuration and retry.")
 			return false
@@ -596,6 +596,23 @@ func resolvedConfigMapWriter() (*configwriter.ConfigMapWriter, error) {
 // keeps writing the local file exactly as before: this only branches when the
 // deployment has opted in.
 func writeConfigAtomically(configPath string, yamlBytes []byte) error {
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		// A subPath mount does not advance when the ConfigMap changes. Read the
+		// persisted document rather than comparing every subsequent write with
+		// the stale mounted revision.
+		expected, err := readPersistedSourceConfig(configPath)
+		if err != nil {
+			return fmt.Errorf("read persisted config before ConfigMap update: %w", err)
+		}
+		return writeConfigAtomicallyIfUnchanged(configPath, expected, yamlBytes)
+	}
+	return writeConfigFileAtomically(configPath, yamlBytes)
+}
+
+// writeConfigAtomicallyIfUnchanged preserves the document observed by the
+// request as its compare-and-swap precondition. A concurrent API or external
+// ConfigMap update must not be overwritten by a stale request.
+func writeConfigAtomicallyIfUnchanged(configPath string, expected, yamlBytes []byte) error {
 	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
 		writer, err := resolvedConfigMapWriter()
 		if err != nil {
@@ -603,11 +620,7 @@ func writeConfigAtomically(configPath string, yamlBytes []byte) error {
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
 		defer cancel()
-		mounted, err := os.ReadFile(configPath)
-		if err != nil {
-			return fmt.Errorf("read mounted config before ConfigMap update: %w", err)
-		}
-		if err := writer.WriteIfUnchanged(ctx, target, mounted, yamlBytes); err != nil {
+		if err := writer.WriteIfUnchanged(ctx, target, expected, yamlBytes); err != nil {
 			return err
 		}
 		return nil

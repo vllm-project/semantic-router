@@ -158,6 +158,24 @@ func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 	if updated.Data["config.yaml"] != "routing: {new: true}\n" {
 		t.Fatalf("ConfigMap config.yaml = %q, want the new document", updated.Data["config.yaml"])
 	}
+
+	// A subPath mount remains on its original revision after the first write.
+	// A later request can still update the live ConfigMap, while a request
+	// based on the old revision must fail its compare-and-swap check.
+	second := []byte("routing: {second: true}\n")
+	if err := writeConfigAtomically(configPath, second); err != nil {
+		t.Fatalf("second ConfigMap write with stale mount: %v", err)
+	}
+	if err := writeConfigAtomicallyIfUnchanged(configPath, original, []byte("routing: {stale: true}\n")); !errors.Is(err, configwriter.ErrConfigMapChanged) {
+		t.Fatalf("stale ConfigMap write error = %v, want ErrConfigMapChanged", err)
+	}
+	updated, err = clientset.CoreV1().ConfigMaps(fakeCM.Namespace).Get(t.Context(), fakeCM.Name, metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get ConfigMap after second write: %v", err)
+	}
+	if updated.Data["config.yaml"] != string(second) {
+		t.Fatalf("ConfigMap changed after rejected stale write: got %q, want %q", updated.Data["config.yaml"], second)
+	}
 }
 
 // TestWriteConfigAtomicallyKeepsLocalFileWithoutADeclaredTarget pins the

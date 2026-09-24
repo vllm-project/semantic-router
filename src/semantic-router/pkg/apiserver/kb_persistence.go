@@ -92,7 +92,7 @@ func persistConfigAndSync(
 ) error {
 	release := s.runtimeRegistry.LockConfigPublication()
 	defer release()
-	if err := writeConfigAtomically(paths.sourcePath, yamlBytes); err != nil {
+	if err := writeConfigAtomicallyIfUnchanged(paths.sourcePath, previousData, yamlBytes); err != nil {
 		return err
 	}
 	if paths.usesRuntimeOverride() {
