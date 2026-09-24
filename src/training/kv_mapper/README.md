@@ -105,4 +105,5 @@ PYTHONPATH=. python3 src/training/kv_mapper/eval_report.py \
 ```
 
 `items.json` shape: `metric`, optional `reference` (default `cold`), and
-`arms` mapping arm name to a list of per-item scores of equal length.
+`arms` mapping each arm to records of `{ "id": "example-id", "score": 0.0 }`.
+Every arm must have the same unique example IDs; record order may differ.

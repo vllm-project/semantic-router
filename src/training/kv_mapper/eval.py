@@ -75,7 +75,7 @@ def paired_contrast(
 
 def build_report(
     metric: str,
-    arms: dict[str, list[float] | np.ndarray],
+    arms: dict[str, list[dict[str, Any]]],
     *,
     reference: str = "cold",
     n_boot: int = 10_000,
@@ -83,26 +83,43 @@ def build_report(
 ) -> dict[str, Any]:
     if reference not in arms:
         raise ValueError(f"reference arm {reference!r} missing from {sorted(arms)}")
-    ref = np.asarray(arms[reference], dtype=np.float64)
-    n = ref.size
-    for name, scores in arms.items():
-        arr = np.asarray(scores, dtype=np.float64).reshape(-1)
-        if arr.size != n:
-            raise ValueError(f"arm {name!r} has {arr.size} items, {reference} has {n}")
+    def indexed(name: str, items: list[dict[str, Any]]) -> dict[str, float]:
+        if not isinstance(items, list) or not items:
+            raise ValueError(f"arm {name!r} needs nonempty records with id and score")
+        result = {}
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or "score" not in item:
+                raise ValueError(f"arm {name!r} needs records with nonempty string id and score")
+            if item["id"] in result:
+                raise ValueError(f"duplicate example id {item['id']!r} in arm {name!r}")
+            score = float(item["score"])
+            if not np.isfinite(score):
+                raise ValueError(f"nonfinite score in arm {name!r} for {item['id']!r}")
+            result[item["id"]] = score
+        return result
+
+    by_arm = {name: indexed(name, items) for name, items in arms.items()}
+    ids = list(by_arm[reference])
+    for name, scores in by_arm.items():
+        if scores.keys() != by_arm[reference].keys():
+            raise ValueError(f"arm {name!r} example IDs differ from {reference!r}")
+    ref = np.asarray([by_arm[reference][item_id] for item_id in ids], dtype=np.float64)
+    n = len(ids)
     contrasts = {}
-    for name, scores in arms.items():
+    for name, scores in by_arm.items():
         if name == reference:
             continue
         contrasts[name] = paired_contrast(
-            np.asarray(scores, dtype=np.float64), ref, n_boot=n_boot, seed=seed
+            np.asarray([scores[item_id] for item_id in ids], dtype=np.float64), ref, n_boot=n_boot, seed=seed
         )
     return {
         "metric": metric,
         "reference": reference,
         "n_items": int(n),
+        "example_ids": ids,
         "arm_means": {
-            name: float(np.mean(np.asarray(scores, dtype=np.float64)))
-            for name, scores in arms.items()
+            name: float(np.mean(list(scores.values())))
+            for name, scores in by_arm.items()
         },
         "delta_vs_reference": contrasts,
     }

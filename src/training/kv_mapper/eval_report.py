@@ -20,7 +20,7 @@ def main() -> None:
         "--items",
         type=Path,
         required=True,
-        help="JSON with metric, optional reference, and arms: {name: [per-item scores]}",
+        help="JSON with metric, optional reference, and arms: {name: [{id, score}, ...]}",
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--n-boot", type=int, default=10_000)
