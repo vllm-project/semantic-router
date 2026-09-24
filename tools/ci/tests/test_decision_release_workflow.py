@@ -271,7 +271,7 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
             for step in steps
             if "decision_release_policy.py" in step.get("run", "")
         )
-        self.assertEqual(preflight["if"], "inputs.channel == 'stable'")
+        self.assertNotIn("if", preflight)
         self.assertIn('--expect "$QUALIFIED_DECISION"', preflight["run"])
         validate_index = next(
             index

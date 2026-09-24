@@ -485,6 +485,7 @@ class SelectionTests(unittest.TestCase):
     def test_main_decision_package_never_publishes_without_qualification(self):
         for path in (
             "src/vllm-sr/tests/test_decision_runtime_server.py",
+            "src/vllm-sr/README.md",
             "config/catalog/README.md",
             "website/static/model-catalog/catalog.json",
         ):
