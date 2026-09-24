@@ -45,6 +45,7 @@ def build_message(body: dict) -> dict:
                 "id": "call_mock_lookup",
                 "name": "lookup",
                 "input": {"query": "weather"},
+                "caller": {"type": "direct"},
             }
         ]
         reason = "tool_use"

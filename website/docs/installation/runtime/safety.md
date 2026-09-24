@@ -70,8 +70,9 @@ routing:
         - model: safety-capable-model
 ```
 
-The default Safety labels are `safe` and `unsafe`. A matched signal selects the
-configured handling route. Choose the response for your application: for example,
+The default Safety labels are `safe` and `unsafe`. To use Vela Shield instead of
+Vela Safety, see [Select Vela Shield](../../tutorials/signal/learned/safety.md#select-vela-shield).
+A matched signal selects the configured handling route. Choose the response for your application: for example,
 a person seeking help in a crisis may need support rather than a refusal.
 
 For category-specific policies, add Hazard. It returns independent scores for

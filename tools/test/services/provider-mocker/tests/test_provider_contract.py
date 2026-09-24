@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from http import HTTPStatus
 from pathlib import Path
@@ -230,14 +231,21 @@ async def test_debug_endpoint_preserves_the_native_provider_request() -> None:
         "x-vsr-e2e-added": "observable",
         "x-vsr-test-session-id": session_id,
     }
+    raw_body = json.dumps(body, separators=(",", ":"), sort_keys=True).encode()
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app), base_url="http://simulator"
     ) as client:
-        response = await client.post("/v1/chat/completions", json=body, headers=headers)
+        response = await client.post(
+            "/v1/chat/completions",
+            content=raw_body,
+            headers={**headers, "content-type": "application/json"},
+        )
         assert response.status_code == HTTPStatus.OK
         observed = await client.get("/debug/last-request", headers=headers)
     assert observed.status_code == HTTPStatus.OK
     assert observed.json()["body"] == body
+    assert observed.json()["body_sha256"] == hashlib.sha256(raw_body).hexdigest()
+    assert observed.json()["body_bytes"] == len(raw_body)
     assert observed.json()["headers"] == {
         "x-vsr-e2e-added": "observable",
         "x-vsr-test-session-id": session_id,
