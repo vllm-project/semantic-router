@@ -129,9 +129,7 @@ func TestFallbackSuccessOn503(t *testing.T) {
 	}
 
 	upstreamErrBody := []byte(`{"error":{"message":"The server is temporarily unavailable","type":"server_error"}}`)
-	t.Logf("fallback before: eligible=%t, policy=%+v", router.shouldAttemptFallback(ctx), router.FallbackOrchestrator.Policy())
 	resp := router.handleUpstreamTransportError(upstreamErrBody, ctx)
-	t.Logf("fallback after: record=%+v", ctx.FallbackRecord)
 	if resp == nil {
 		t.Fatal("expected non-nil response from handleUpstreamTransportError")
 	}
