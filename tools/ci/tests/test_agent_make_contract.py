@@ -187,6 +187,58 @@ class HarnessMakeContractTests(unittest.TestCase):
             "AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit", PRECOMMIT_MAKE
         )
 
+    def test_go_bootstrap_rebuilds_a_linter_built_by_an_older_go(self) -> None:
+        pin = (REPO_ROOT / "tools/linter/go/golangci-lint.version").read_text().strip()
+        linter_package = "github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
+        for built_with, expected in (
+            ("go1.26.8", [f"install {linter_package}@v{pin}"]),
+            ("go1.27.0", []),
+            ("go1.28.0", []),
+        ):
+            with (
+                self.subTest(built_with=built_with),
+                tempfile.TemporaryDirectory() as root,
+            ):
+                gopath = Path(root)
+                installs = gopath / "installs.log"
+                (gopath / "bin").mkdir()
+                linter = gopath / "bin" / "golangci-lint"
+                linter.write_text(
+                    f"#!/bin/sh\necho 'golangci-lint has version {pin} "
+                    f"built with {built_with}'\n"
+                )
+                go = gopath / "go"
+                go.write_text(
+                    "#!/bin/sh\n"
+                    'case "$1 $2" in\n'
+                    f'"env GOPATH") echo "{gopath}" ;;\n'
+                    '"env GOVERSION") echo go1.27.1 ;;\n'
+                    f'"version "*) echo "$2: {built_with}" ;;\n'
+                    f'"install "*) echo "$*" >> "{installs}" ;;\n'
+                    "*) exit 1 ;;\n"
+                    "esac\n"
+                )
+                linter.chmod(0o755)
+                go.chmod(0o755)
+                subprocess.run(
+                    [
+                        "make",
+                        "--no-print-directory",
+                        "-f",
+                        "tools/make/agent.mk",
+                        "harness-go-bootstrap",
+                    ],
+                    cwd=REPO_ROOT,
+                    env={**os.environ, "PATH": f"{gopath}:{os.environ['PATH']}"},
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                recorded = (
+                    installs.read_text().splitlines() if installs.exists() else []
+                )
+                self.assertEqual(recorded, expected)
+
     def test_precommit_native_builds_do_not_replace_host_toolchain_outputs(
         self,
     ) -> None:
