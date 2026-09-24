@@ -124,7 +124,7 @@ def test_bridge_materializes_exact_model_and_builds_read_only_launch(
         "--max-concurrency",
         "8",
         "--max-queue",
-        "8",
+        "32",
     )
     assert [item.catalog.model_id for item in bridge.artifacts.calls] == [MODEL]  # type: ignore[attr-defined]
 
