@@ -136,3 +136,14 @@ curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
 只有当两段文本都能哈希回清单中的摘要时才会构建一对任务。影子文本来自采集的摘录，因此影子决策需要开启 `capture_response_body`，并把 `max_capture_bytes` 设得足以容纳完整回答。被截断的摘录，或在存储前被响应阶段插件改写的主模型回答，都会被排除并计为 `arm_text_digest_mismatch`；完全没有文本的一对计为 `arm_text_missing`。提到自身模型名称的回答会被标记为 `names_own_model`，因为任何标签都无法对评审模型隐藏这一点。
 
 任务携带提示词与回答文本，因此该接口需要 `replay.detail` 权限，对没有该权限的调用方直接拒绝，而不是返回脱敏后的任务。评审模型在路由器之外运行。
+
+### 发布数据集与评审结果
+
+`tools/calibration/shadow-dataset` 把清单，以及评审模型针对它返回的评审结果（可选），发布到一个存储目录中。任何挂载为文件系统的对象存储都可以作为该目录。该工具在写入任何内容之前会校验全部输入：清单必须与其自身摘要一致，评审结果必须回答其引用的任务，这些任务必须来自同一份清单，且评审记录中不能出现未定义的字段。
+
+```bash
+make run-shadow-dataset GO_TOOL_ARGS="--dest /mnt/shadow-datasets \
+  --manifest $PWD/manifest.json --tasks $PWD/tasks.json --judgments $PWD/judgments.json"
+```
+
+清单写入 `manifests/<digest>.json`，评审结果写入 `judgments/<manifest digest>/<digest of the set>.json`，旁边附带一份 `.report.json`，统计各类结果、各位置被选中的次数，以及有多少对任务跟随了位置而不是答案。所有名称都由内容决定，因此重复发布相同文件不会产生变化，已发布的名称也永远不会被替换为不同的内容。评审任务只用于校验评审结果，永远不会被发布，因为它们携带提示词与两个回答。不要把数据集提交到本仓库。

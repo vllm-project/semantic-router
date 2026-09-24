@@ -262,6 +262,7 @@ domains:
       - tools/dev/dsl/**
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
+      - tools/calibration/shadow-dataset/**
       - bench/grounded_fusion/fusioneval/**
       - tools/make/go-tools.mk
     checks: [make go-tools-test]
