@@ -80,10 +80,15 @@ func newLiveClassificationService(
 // classifier cannot be closed underneath an in-flight API call.
 func (s *liveClassificationService) acquire() (classificationService, func()) {
 	if s != nil && s.acquirer != nil {
-		if svc, release, ok := s.acquirer(); ok && !isNilClassificationService(svc) {
-			return svc, release
+		if svc, release, ok := s.acquirer(); ok {
+			if !isNilClassificationService(svc) {
+				return svc, release
+			}
+			if release != nil {
+				release()
+			}
 		}
-		if s.fallback != nil {
+		if !isNilClassificationService(s.fallback) {
 			return s.fallback, func() {}
 		}
 		return services.NewPlaceholderClassificationService(), func() {}
@@ -136,7 +141,7 @@ func (s *liveClassificationService) current() classificationService {
 			return svc
 		}
 	}
-	if s != nil && s.fallback != nil {
+	if s != nil && !isNilClassificationService(s.fallback) {
 		return s.fallback
 	}
 	return services.NewPlaceholderClassificationService()

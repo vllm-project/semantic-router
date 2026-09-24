@@ -41,11 +41,12 @@ func TestCurrentFallsBackOnTypedNilService(t *testing.T) {
 
 func TestAcquireFallsBackOnTypedNilService(t *testing.T) {
 	var nilService *services.ClassificationService
+	released := 0
 	live := newLiveClassificationService(
 		services.NewPlaceholderClassificationService(),
 		nil,
 		func() (classificationService, func(), bool) {
-			return nilService, func() {}, true
+			return nilService, func() { released++ }, true
 		},
 	)
 	livePtr, ok := live.(*liveClassificationService)
@@ -56,6 +57,22 @@ func TestAcquireFallsBackOnTypedNilService(t *testing.T) {
 	defer release()
 	if svc == nil {
 		t.Fatal("acquire returned a nil service instead of the fallback")
+	}
+	if released != 1 {
+		t.Fatalf("discarded typed-nil service release called %d times, want 1", released)
+	}
+}
+
+func TestTypedNilStartupFallbackDoesNotPanicOnEval(t *testing.T) {
+	var nilService *services.ClassificationService
+	live := newLiveClassificationService(
+		nilService,
+		func() classificationService { return nilService },
+		func() (classificationService, func(), bool) { return nilService, nil, false },
+	)
+	_, err := live.ClassifyIntentForEval(t.Context(), services.IntentRequest{Text: "hello"})
+	if !errors.Is(err, services.ErrClassifierUnavailable) {
+		t.Fatalf("typed-nil startup fallback eval returned %v, want classifier unavailable", err)
 	}
 }
 
