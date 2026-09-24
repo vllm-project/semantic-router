@@ -29,7 +29,12 @@ from execution_batches import (
     native_batches,
 )
 from provider_mocker_image import IMAGE as MOCKER_IMAGE
-from provider_mocker_image import acquisition, published_from_plan, resolve_published
+from provider_mocker_image import (
+    PublicationUnavailableError,
+    acquisition,
+    published_from_plan,
+    resolve_published,
+)
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,
@@ -387,7 +392,20 @@ def main() -> int:
         requested=tuple(args.verification),
     )
     if published := published_from_plan(plan):
-        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
+        try:
+            plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
+        except PublicationUnavailableError:
+            if profile != "pr":
+                raise
+            # A PR must remain buildable when the immutable fixture tag has
+            # not reached GHCR yet. Main/release stay strict so publication
+            # gaps cannot be hidden in release pipelines.
+            candidate = dict(plan["image_sources"][MOCKER_IMAGE])
+            candidate["source"] = "candidate"
+            plan["image_sources"][MOCKER_IMAGE] = candidate
+            if MOCKER_IMAGE not in plan["build_images"]:
+                plan["build_images"].append(MOCKER_IMAGE)
+                plan["build_images"].sort()
         plan["plan_sha256"] = digest(
             {key: value for key, value in plan.items() if key != "plan_sha256"}
         )

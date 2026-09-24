@@ -133,6 +133,30 @@ class FixturePublicationTests(unittest.TestCase):
             ), self.assertRaises(mocker.PublicationUnavailableError):
                 mocker.resolve_published({"inputs_sha256": "b" * 64})
 
+    def test_pr_falls_back_to_build_when_publication_is_missing(self):
+        with patch(
+            "ci_plan.resolve_published",
+            side_effect=mocker.PublicationUnavailableError("missing"),
+        ):
+            plan = make_plan(
+                ["e2e/testing/run_memory_integration.sh"],
+                source_sha="c" * 40,
+                profile="pr",
+            )
+        self.assertIn(mocker.IMAGE, plan["build_images"])
+        self.assertEqual(plan["image_sources"][mocker.IMAGE]["source"], "candidate")
+
+    def test_main_stays_strict_when_publication_is_missing(self):
+        with patch(
+            "ci_plan.resolve_published",
+            side_effect=mocker.PublicationUnavailableError("missing"),
+        ), self.assertRaises(mocker.PublicationUnavailableError):
+            make_plan(
+                ["e2e/testing/run_memory_integration.sh"],
+                source_sha="c" * 40,
+                profile="main",
+            )
+
     def test_fixture_is_reused_for_all_unrelated_ci_entrypoints(self):
         for profile, full in (
             ("pr", False),
