@@ -17,7 +17,7 @@ from cli.consts import (
     PLATFORM_NVIDIA,
 )
 from cli.container_data_network import router_data_network_commands
-from cli.container_gpu_isolation import router_runtime_env
+from cli.container_gpu_isolation import router_compiler_cache, router_runtime_env
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
@@ -399,6 +399,13 @@ def _build_router_runtime_command(
     storage_secret_names: tuple[str, ...] = (),
 ):
     router_env = router_runtime_env(common_env, normalized_platform)
+    compiler_cache = router_compiler_cache(
+        runtime,
+        router_image,
+        runtime_paths["vllm_sr_dir"],
+        stack_layout.stack_name,
+        normalized_platform,
+    )
     # Names only. Each one is rendered as an inheriting `-e NAME` flag, and the
     # value reaches Docker through the Router child process environment. They
     # stay out of `common_env` on purpose: `_build_dashboard_runtime_env()`
@@ -415,13 +422,14 @@ def _build_router_runtime_command(
     )
     return _build_service_run_command(
         runtime=runtime,
-        image=router_image,
+        image=compiler_cache.image_id if compiler_cache else router_image,
         container_name=stack_layout.router_container_name,
         nofile_limit=nofile_limit,
         network_name=runtime_network_name,
         env_vars=router_env,
         mount_specs=[
             *_runtime_mount_specs(runtime_paths, include_models=True),
+            *([compiler_cache.mount] if compiler_cache else []),
             runtime_paths["log_spool_router_mount"],
         ],
         port_mappings=[
