@@ -170,6 +170,10 @@ func TestDashboardRoutePoliciesKeepSecurityDomainsIndependent(t *testing.T) {
 		{http.MethodPost, "/api/sr-bench/v1/runs/run-1/candidate-plan", []string{auth.PermEvalWrite}},
 		{http.MethodPost, "/api/sr-bench/v1/experiments/exp-0123456789abcdef0123456789abcdef/runs", []string{auth.PermEvalWrite}},
 		{http.MethodGet, "/api/sr-bench/v1/datasets/" + strings.Repeat("a", 64) + "/cases", []string{auth.PermEvalRead}},
+		{http.MethodPost, "/api/sr-bench/v1/dataset-preparations", []string{auth.PermEvalWrite}},
+		{http.MethodGet, "/api/sr-bench/v1/dataset-preparations", []string{auth.PermEvalRead}},
+		{http.MethodGet, "/api/sr-bench/v1/dataset-preparations/options", []string{auth.PermEvalRead}},
+		{http.MethodGet, "/api/sr-bench/v1/dataset-preparations/prep-0123456789abcdef0123456789abcdef", []string{auth.PermEvalRead}},
 	}
 	for _, test := range tests {
 		policy, result := server.routes.LookupRoutePolicy(test.method, test.path)

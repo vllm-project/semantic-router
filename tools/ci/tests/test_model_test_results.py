@@ -33,9 +33,13 @@ def invoke_runner(
             )
         )
         if suite == "runtime" and provider == "candle":
-            expected += (runner.CANDLE_CACHE_TESTS,)
+            expected += (runner.CANDLE_CACHE_TESTS, runner.HALU_CASES)
         if suite == "runtime" and provider == "ort":
-            expected += (("TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride",),)
+            expected += (
+                ("TestOwnedImplicitORTEmbeddingAndExplicitCandleOverride",),
+                runner.OMNI_CASES,
+                *runner.OWNED_OMNI_TESTS.values(),
+            )
         events = [
             [{"Action": "pass", "Test": name} for name in names] for names in expected
         ]
@@ -60,7 +64,7 @@ def invoke_runner(
             if suite == "multimodal"
             else [
                 {"name": name, "env": f"MODEL_{name}", "path": f"/explicit/{name}"}
-                for name in runner.FAMILIES
+                for name in runner.runtime_families(provider)
             ]
         )
     with tempfile.TemporaryDirectory() as directory:
@@ -169,14 +173,20 @@ class ModelResultTests(unittest.TestCase):
                     set(logs),
                     {"native.jsonl", "classification.jsonl"}
                     | (
-                        {"default-execution.jsonl"}
+                        {
+                            "default-execution.jsonl",
+                            "omni.jsonl",
+                            "omni-classification.jsonl",
+                            "omni-cache.jsonl",
+                            "omni-modeldownload.jsonl",
+                        }
                         if provider == "ort"
-                        else {"cache.jsonl"}
+                        else {"cache.jsonl", "grounding.jsonl"}
                     ),
                 )
                 self.assertEqual(
                     [len(result["passed"]) for result in receipt["suites"]],
-                    [10, 9, 1],
+                    [10, 9, 1, 3, 2, 1, 1] if provider == "ort" else [10, 9, 1, 4],
                 )
                 for call in calls:
                     self.assertEqual(
@@ -190,13 +200,13 @@ class ModelResultTests(unittest.TestCase):
     def test_cache_checkpoint_has_a_required_candle_owner(self):
         code, receipt, calls, _ = invoke_runner("runtime", "candle")
         self.assertEqual(code, 0)
-        cache = calls[-1]
+        cache = calls[2]
         self.assertEqual(cache.args[0][-1], "./pkg/cache")
         self.assertEqual(
             cache.kwargs["env"]["VLLM_SR_MMBERT_TEST_MODEL"], "/explicit/Embedding"
         )
         self.assertEqual(
-            receipt["suites"][-1]["expected"], list(runner.CANDLE_CACHE_TESTS)
+            receipt["suites"][2]["expected"], list(runner.CANDLE_CACHE_TESTS)
         )
         profiles = json.loads(
             (runner.ROOT / "tools/ci/core_test_profiles.json").read_text()
@@ -226,10 +236,66 @@ class ModelResultTests(unittest.TestCase):
                     else []
                 )
                 code, receipt, _, _ = invoke_runner(
-                    "runtime", "candle", events=[native, classifiers, cache]
+                    "runtime",
+                    "candle",
+                    events=[
+                        native,
+                        classifiers,
+                        cache,
+                        [
+                            {"Action": "pass", "Test": name}
+                            for name in runner.HALU_CASES
+                        ],
+                    ],
                 )
                 self.assertEqual(code, 1)
                 self.assertFalse(receipt["success"])
+
+    def test_supported_additions_and_owned_omni_cases_are_mandatory(self):
+        for provider in ("candle", "ort"):
+            code, report, calls, _ = invoke_runner("runtime", provider)
+            self.assertEqual(code, 0)
+            inventory = {
+                (suite["package"], name)
+                for suite in report["suites"]
+                for name in suite["expected"]
+            }
+            self.assertEqual(inventory, runner.required_inventory(provider))
+            self.assertEqual(len(report["models"]), 11 if provider == "candle" else 12)
+            env = calls[-1].kwargs["env"]
+            if provider == "candle":
+                self.assertEqual(env["VLLM_SR_REQUIRE_HALU_TESTS"], "1")
+                self.assertEqual(env["VLLM_SR_HALU_REFERENCE"], "")
+            else:
+                self.assertEqual(env["REQUIRE_OMNI_TESTS"], "1")
+                self.assertEqual(env["VELA_OMNI_ARTIFACT"], "/explicit/OmniNano")
+            for index, suite in enumerate(report["suites"][3:], start=3):
+                for missing in suite["expected"]:
+                    for action in (None, "skip", "fail"):
+                        with self.subTest(
+                            provider=provider, case=missing, action=action
+                        ):
+                            events = [
+                                [
+                                    {"Action": "pass", "Test": name}
+                                    for name in item["expected"]
+                                ]
+                                for item in report["suites"]
+                            ]
+                            events[index] = [
+                                item
+                                for item in events[index]
+                                if item["Test"] != missing
+                            ]
+                            if action is not None:
+                                events[index].append(
+                                    {"Action": action, "Test": missing}
+                                )
+                            failed, result, _, _ = invoke_runner(
+                                "runtime", provider, events=events
+                            )
+                            self.assertEqual(failed, 1)
+                            self.assertFalse(result["success"])
 
     def test_published_batch_must_execute_for_both_providers(self):
         expected = set(runner.CLASSIFIER_TESTS)

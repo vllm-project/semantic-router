@@ -118,14 +118,18 @@ func srBenchRouteMethod(path string) (string, bool) {
 		return "", false
 	}
 	switch rest {
-	case "/health", "/catalog", "/datasets", "/datasets/selection", "/targets", "/replay-options", "/comparison-options":
+	case "/health", "/catalog", "/datasets", "/datasets/selection", "/targets", "/replay-options", "/comparison-options", "/dataset-preparations/options":
 		return http.MethodGet, true
 	case "/plans", "/comparisons", "/replays", "/datasets/compose":
 		return http.MethodPost, true
-	case "/runs", "/experiments":
+	case "/runs", "/experiments", "/dataset-preparations":
 		return "GET, POST", true
 	}
 	parts := strings.Split(strings.TrimPrefix(rest, "/"), "/")
+	if len(parts) == 2 && parts[0] == "dataset-preparations" &&
+		strings.HasPrefix(parts[1], "prep-") && validSRBenchHexID(strings.TrimPrefix(parts[1], "prep-"), 32) {
+		return http.MethodGet, true
+	}
 	if len(parts) >= 2 && parts[0] == "experiments" && validSRBenchExperimentID(parts[1]) {
 		if len(parts) == 2 {
 			return "GET, DELETE", true
