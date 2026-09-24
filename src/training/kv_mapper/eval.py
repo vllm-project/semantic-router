@@ -83,13 +83,21 @@ def build_report(
 ) -> dict[str, Any]:
     if reference not in arms:
         raise ValueError(f"reference arm {reference!r} missing from {sorted(arms)}")
+
     def indexed(name: str, items: list[dict[str, Any]]) -> dict[str, float]:
         if not isinstance(items, list) or not items:
             raise ValueError(f"arm {name!r} needs nonempty records with id and score")
         result = {}
         for item in items:
-            if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"] or "score" not in item:
-                raise ValueError(f"arm {name!r} needs records with nonempty string id and score")
+            if (
+                not isinstance(item, dict)
+                or not isinstance(item.get("id"), str)
+                or not item["id"]
+                or "score" not in item
+            ):
+                raise ValueError(
+                    f"arm {name!r} needs records with nonempty string id and score"
+                )
             if item["id"] in result:
                 raise ValueError(f"duplicate example id {item['id']!r} in arm {name!r}")
             score = float(item["score"])
@@ -110,7 +118,10 @@ def build_report(
         if name == reference:
             continue
         contrasts[name] = paired_contrast(
-            np.asarray([scores[item_id] for item_id in ids], dtype=np.float64), ref, n_boot=n_boot, seed=seed
+            np.asarray([scores[item_id] for item_id in ids], dtype=np.float64),
+            ref,
+            n_boot=n_boot,
+            seed=seed,
         )
     return {
         "metric": metric,
