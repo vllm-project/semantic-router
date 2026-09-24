@@ -653,12 +653,11 @@ def _fixture(
                         ("old", "new") if round_number % 2 == 0 else ("new", "old")
                     ):
                         seconds = 1.0 if arm == "old" else new_seconds
-                        latency_only = slowdown == "latency_only" and (
-                            q,
-                            s,
-                            concurrency,
-                            arm,
-                        ) == (32, 1, 32, "new")
+                        latency_only = (
+                            slowdown == "latency_only"
+                            and model_id == sorted(gate.MODEL_IDS)[0]
+                            and (q, s, concurrency, arm) == (32, 1, 32, "new")
+                        )
                         for sequence in range(gate.MIN_WORKFLOWS_PER_ROUND):
                             intervals = _throughput_intervals(
                                 arm=arm,
