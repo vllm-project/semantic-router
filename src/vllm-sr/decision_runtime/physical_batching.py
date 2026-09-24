@@ -279,6 +279,9 @@ class PhysicalBatchBackend(DecisionBackend):
             worker.cancel()
             with suppress(asyncio.CancelledError):
                 await worker
+        close_executor = getattr(self._executor, "aclose", None)
+        if close_executor is not None:
+            await close_executor()
 
     async def _submit(
         self, rows: tuple[PreparedDecisionRow, ...]

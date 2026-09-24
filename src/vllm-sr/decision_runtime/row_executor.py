@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+from concurrent.futures import Executor, ThreadPoolExecutor
 from contextlib import suppress
 from typing import Any
 
-from .backend import BackendContractError, BackendInputTooLargeError
+from .backend import (
+    BackendContractError,
+    BackendInputTooLargeError,
+    BackendUnavailableError,
+)
 from .model_inputs import (
     QWEN_DEFAULT_NO,
     QWEN_DEFAULT_YES,
@@ -39,9 +44,21 @@ class TorchDecisionRowExecutor:
             raise ValueError("resident model input limit differs from its profile")
         self._runtime = runtime
         self._profile = profile
+        # Preparation may occupy every worker in the event loop's default
+        # pool during a burst. Keep the resident model's single forward off
+        # that queue so prepared physical batches can start promptly.
+        self._inference_pool = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="decision-inference"
+        )
+        self._closed = False
+
+    async def aclose(self) -> None:
+        if not self._closed:
+            self._closed = True
+            self._inference_pool.shutdown(wait=True, cancel_futures=True)
 
     async def ready(self) -> bool:
-        return True
+        return not self._closed
 
     async def prepare_rows(
         self, rows: tuple[DecisionRow, ...]
@@ -103,6 +120,8 @@ class TorchDecisionRowExecutor:
     async def predict_rows(
         self, rows: tuple[PreparedDecisionRow, ...]
     ) -> tuple[DecisionRowResult, ...]:
+        if self._closed:
+            raise BackendUnavailableError("Decision row executor is closed")
         if not rows or any(row.batch_key != rows[0].batch_key for row in rows):
             raise BackendContractError("Decision physical batch is incompatible")
         payload_type = (
@@ -117,7 +136,7 @@ class TorchDecisionRowExecutor:
             raise BackendContractError("Decision prepared row identity changed")
         payloads = tuple(item.payload for item in rows)
         predictions = await _finish_thread_operation(
-            self._runtime.predict_encoded, payloads
+            self._runtime.predict_encoded, payloads, executor=self._inference_pool
         )
         if not isinstance(predictions, tuple) or len(predictions) != len(rows):
             raise BackendContractError("Decision model changed the physical batch")
@@ -139,10 +158,18 @@ class TorchDecisionRowExecutor:
         return tuple(results)
 
 
-async def _finish_thread_operation(operation, payloads):
+async def _finish_thread_operation(
+    operation, payloads, *, executor: Executor | None = None
+):
     """Do not abandon a worker thread when its awaiting coroutine is cancelled."""
 
-    task = asyncio.create_task(asyncio.to_thread(operation, payloads))
+    if executor is None:
+        task = asyncio.create_task(asyncio.to_thread(operation, payloads))
+    else:
+        loop = asyncio.get_running_loop()
+        task = asyncio.ensure_future(
+            loop.run_in_executor(executor, operation, payloads)
+        )
     try:
         return await asyncio.shield(task)
     except asyncio.CancelledError:

@@ -4,6 +4,7 @@ import asyncio
 import json
 import sys
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -14,11 +15,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from decision_runtime.artifacts import ArtifactFile, VerifiedArtifact  # noqa: E402
-from decision_runtime.backend import BackendInputTooLargeError  # noqa: E402
+from decision_runtime.backend import (  # noqa: E402
+    BackendInputTooLargeError,
+    BackendUnavailableError,
+    ModelDescriptor,
+)
 from decision_runtime.contracts import SystemOneRequest  # noqa: E402
 from decision_runtime.entrypoint import parse_launch_args  # noqa: E402
 from decision_runtime.metrics import RuntimeMetrics  # noqa: E402
-from decision_runtime.physical_batching import DecisionRow  # noqa: E402
+from decision_runtime.physical_batching import (  # noqa: E402
+    DecisionRow,
+    PhysicalBatchBackend,
+    PreparedDecisionRow,
+)
 from decision_runtime.row_executor import TorchDecisionRowExecutor  # noqa: E402
 from decision_runtime.runtime_factory import (  # noqa: E402
     RuntimeAssemblyError,
@@ -497,6 +506,50 @@ def test_vela_executor_rejects_complete_oversized_row():
     with pytest.raises(BackendInputTooLargeError):
         asyncio.run(executor.prepare_rows((row,)))
     assert resident.calls == []
+
+
+def test_model_forward_is_not_queued_behind_default_pool_preparation():
+    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
+    resident = _RecordingVela(profile.max_input_tokens)
+    executor = TorchDecisionRowExecutor(resident, profile)
+    request = _request("A billing question.")
+    row = DecisionRow(MODEL, request.state, "yes", request.questions["yes"])
+    prepared = (
+        PreparedDecisionRow(
+            row=row,
+            batch_key="vela:noul",
+            payload=executor._encode_rows((row,))[0],
+        ),
+    )
+    started = threading.Event()
+    release = threading.Event()
+
+    def occupy_default_pool():
+        started.set()
+        assert release.wait(timeout=5)
+
+    async def scenario():
+        loop = asyncio.get_running_loop()
+        with ThreadPoolExecutor(max_workers=1) as default_pool:
+            loop.set_default_executor(default_pool)
+            blocker = loop.run_in_executor(None, occupy_default_pool)
+            try:
+                assert started.wait(timeout=1)
+                result = await asyncio.wait_for(executor.predict_rows(prepared), 1)
+                assert result[0].question_id == "yes"
+                assert len(resident.calls) == 1
+            finally:
+                release.set()
+                await blocker
+                backend = PhysicalBatchBackend(
+                    ModelDescriptor(MODEL, "test", "unknown"), executor
+                )
+                await backend.aclose()
+            assert not await executor.ready()
+            with pytest.raises(BackendUnavailableError):
+                await executor.predict_rows(prepared)
+
+    asyncio.run(scenario())
 
 
 def test_cancelled_row_preparation_waits_for_tokenizer_before_releasing_credit():
