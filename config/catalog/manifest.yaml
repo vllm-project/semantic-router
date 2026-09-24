@@ -33,6 +33,11 @@ inventory:
           - ai21/jamba2-mini
           - ai21/jamba-reasoning-3b
           - ai21/jamba-large-1.7
+      - publisher: Ai2 / OLMo
+        representative_models:
+          - ai2/olmo-3-32b-base
+          - ai2/olmo-3-1-32b-think
+          - ai2/olmo-3-1-32b-instruct
       - publisher: Alibaba / Qwen
         representative_models:
           - qwen/qwen3.8-max

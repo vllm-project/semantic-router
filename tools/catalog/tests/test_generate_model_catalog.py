@@ -525,6 +525,142 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             {"score": 0},
         )
 
+    def test_ai2_olmo_creator_has_exact_evidence_buckets_and_real_bindings(
+        self,
+    ) -> None:
+        manifest, resources, _ = catalog.load_and_validate()
+        olmo_models = [
+            "ai2/olmo-3-32b-base",
+            "ai2/olmo-3-1-32b-think",
+            "ai2/olmo-3-1-32b-instruct",
+        ]
+        olmo_model_set = set(olmo_models)
+        creators = {
+            creator["publisher"]: creator["representative_models"]
+            for creator in manifest["inventory"]["physical"]["creators"]
+        }
+        self.assertEqual(creators["Ai2 / OLMo"], olmo_models)
+
+        models = {model["id"]: model for model in resources["models"]}
+        self.assertEqual(
+            {models[model_id]["publisher"] for model_id in olmo_models},
+            {"Ai2 / OLMo"},
+        )
+        self.assertEqual(
+            {model_id: models[model_id]["revision"] for model_id in olmo_models},
+            {
+                "ai2/olmo-3-32b-base": "c2b61dae89a1ad10e4ad5653d0e46b590902607b",
+                "ai2/olmo-3-1-32b-think": "832c3f543499af8fe68b88359501de9cb7840544",
+                "ai2/olmo-3-1-32b-instruct": "ac0587e4a7744a551c059d8cd17ba220bc940dae",
+            },
+        )
+
+        buckets = _evaluation_benchmarks_by_bucket(resources, olmo_model_set)
+        self.assertGreaterEqual(
+            len(buckets[("ai2/olmo-3-32b-base", "unspecified", "vendor_claimed")]),
+            5,
+        )
+        self.assertGreaterEqual(
+            len(buckets[("ai2/olmo-3-1-32b-think", "enabled", "vendor_claimed")]),
+            5,
+        )
+        self.assertGreaterEqual(
+            len(
+                buckets[("ai2/olmo-3-1-32b-instruct", "unspecified", "vendor_claimed")]
+            ),
+            5,
+        )
+
+        anchor_benchmarks = {
+            "tiger-ai-lab/mmlu-pro@1.0.0",
+            "idavidrein/gpqa-diamond@1.0.0",
+            "cais/humanitys-last-exam@1.0.0",
+            "livecodebench/livecodebench@6.0.0",
+            "scicode-bench/scicode@1.0.0",
+            "harbor/terminal-bench@2.1.0",
+        }
+        self.assertEqual(
+            buckets[("ai2/olmo-3-1-32b-think", "enabled", "third_party")],
+            anchor_benchmarks,
+        )
+        anchor_evaluations = [
+            evaluation
+            for evaluation in resources["evaluations"]
+            if evaluation["model"] == "ai2/olmo-3-1-32b-think"
+            and evaluation["evidence"]["provenance"] == "third_party"
+        ]
+        self.assertEqual(len(anchor_evaluations), 6)
+        self.assertEqual(
+            {evaluation["status"] for evaluation in anchor_evaluations},
+            {"withheld"},
+        )
+        self.assertTrue(
+            all(
+                evaluation["subject"]["model_revision"]
+                == "832c3f543499af8fe68b88359501de9cb7840544"
+                and evaluation["subject"]["task_count"] > 0
+                and evaluation["subject"]["task_artifact"].startswith("https://")
+                and evaluation["subject"]["cost_usd"] is None
+                and evaluation["subject"]["latency_ms"] is None
+                for evaluation in anchor_evaluations
+            )
+        )
+        terminal_evaluation = next(
+            evaluation
+            for evaluation in anchor_evaluations
+            if evaluation["benchmark"] == "harbor/terminal-bench@2.1.0"
+        )
+        self.assertEqual(terminal_evaluation["benchmark_profile"], "independent-agent")
+        self.assertEqual(terminal_evaluation["subject"]["dataset_release"], "v2.1")
+        self.assertEqual(terminal_evaluation["subject"]["task_count"], 89)
+        self.assertEqual(terminal_evaluation["metrics"], {"resolved": 0.0})
+
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        vllm_bindings = {
+            binding["catalog"]: binding
+            for binding in providers["vllm"]["models"]
+            if binding["catalog"] in olmo_model_set
+        }
+        self.assertEqual(
+            {model_id: vllm_bindings[model_id]["id"] for model_id in olmo_models},
+            {
+                "ai2/olmo-3-32b-base": "allenai/Olmo-3-1125-32B",
+                "ai2/olmo-3-1-32b-think": "allenai/Olmo-3.1-32B-Think",
+                "ai2/olmo-3-1-32b-instruct": "allenai/Olmo-3.1-32B-Instruct",
+            },
+        )
+        self.assertTrue(
+            all(
+                binding["relationship"] == "self_hosted"
+                for binding in vllm_bindings.values()
+            )
+        )
+        self.assertTrue(
+            all(
+                evaluation["subject"].get("model_revision")
+                == "832c3f543499af8fe68b88359501de9cb7840544"
+                for evaluation in resources["evaluations"]
+                if evaluation["model"] == "ai2/olmo-3-1-32b-think"
+                and evaluation["evidence"]["provenance"] == "third_party"
+            )
+        )
+
+        public_snapshot = json.loads(catalog.render_outputs()[catalog.WEBSITE_OUTPUT])
+        anchor_profiles = {
+            result["index"]: result
+            for result in public_snapshot["index_results"]
+            if result["model"] == "ai2/olmo-3-1-32b-think"
+            and result["reasoning_effort"] == "enabled"
+        }
+        self.assertTrue(
+            all(
+                profile["status"] != "available" for profile in anchor_profiles.values()
+            )
+        )
+        self.assertTrue(
+            all(profile["score"] is None for profile in anchor_profiles.values())
+        )
+
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:
         manifest, resources, _ = catalog.load_and_validate()
         stepfun_models = {
