@@ -2252,7 +2252,7 @@
       "model": "ai2/olmo-3-1-32b-think",
       "observed_at": "2026-09-11",
       "reasoning_effort": "enabled",
-      "status": "available",
+      "status": "withheld",
       "subject": {
         "cost_usd": null,
         "dataset_release": "v1",
@@ -2283,7 +2283,7 @@
       "model": "ai2/olmo-3-1-32b-think",
       "observed_at": "2026-09-11",
       "reasoning_effort": "enabled",
-      "status": "available",
+      "status": "withheld",
       "subject": {
         "cost_usd": null,
         "dataset_release": "diamond",
@@ -2314,7 +2314,7 @@
       "model": "ai2/olmo-3-1-32b-think",
       "observed_at": "2026-09-11",
       "reasoning_effort": "enabled",
-      "status": "available",
+      "status": "withheld",
       "subject": {
         "cost_usd": null,
         "dataset_release": "v1",
@@ -2345,7 +2345,7 @@
       "model": "ai2/olmo-3-1-32b-think",
       "observed_at": "2026-09-11",
       "reasoning_effort": "enabled",
-      "status": "available",
+      "status": "withheld",
       "subject": {
         "cost_usd": null,
         "dataset_release": "v6",
@@ -2376,7 +2376,7 @@
       "model": "ai2/olmo-3-1-32b-think",
       "observed_at": "2026-09-11",
       "reasoning_effort": "enabled",
-      "status": "available",
+      "status": "withheld",
       "subject": {
         "cost_usd": null,
         "dataset_release": "test",
@@ -2407,7 +2407,7 @@
       "model": "ai2/olmo-3-1-32b-think",
       "observed_at": "2026-09-11",
       "reasoning_effort": "enabled",
-      "status": "available",
+      "status": "withheld",
       "subject": {
         "cost_usd": null,
         "dataset_release": "v2.1",
@@ -38541,199 +38541,162 @@
       "components": [
         {
           "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
-          "benchmark_profile": "independent-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
-          "evaluation": "independent/olmo-3-1-32b-think-mmlu-pro@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.763,
-          "status": "available",
-          "value": 0.763,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 1.0
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "general_reasoning": 76.3
-      },
+      "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
       "model": "ai2/olmo-3-1-32b-think",
-      "provenance": [
-        "independent/olmo-3-1-32b-think-mmlu-pro@1.0.0"
-      ],
+      "provenance": [],
       "reasoning_effort": "enabled",
-      "score": 76.3,
-      "status": "available"
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
         {
           "benchmark": "idavidrein/gpqa-diamond@1.0.0",
-          "benchmark_profile": "independent-standard",
+          "benchmark_profile": "published-standard",
           "benchmark_profiles": [
             "independent-standard",
             "published-standard"
           ],
-          "evaluation": "independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0",
+          "evaluation": "ai2/olmo-3-1-32b-think-model-card-gpqa@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.590909090909091,
+          "normalized": 0.575,
           "status": "available",
-          "value": 0.590909090909091,
+          "value": 0.575,
           "weight": 0.5
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
-          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
             "independent-text-only",
             "text-only"
           ],
-          "evaluation": "independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": 0.0625579240037071,
-          "status": "available",
-          "value": 0.0625579240037071,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "frontier_reasoning": 6.25579240037071,
-        "scientific_reasoning": 59.09090909090911
-      },
+      "coverage": 0.5,
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "ai2/olmo-3-1-32b-think",
       "provenance": [
-        "independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0",
-        "independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0"
+        "ai2/olmo-3-1-32b-think-model-card-gpqa@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": 32.67335074563991,
-      "status": "available"
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
         {
           "benchmark": "livecodebench/livecodebench@6.0.0",
-          "benchmark_profile": "independent-code-generation",
           "benchmark_profiles": [
             "independent-code-generation",
             "published-code-generation"
           ],
-          "evaluation": "independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0",
           "metric": "pass_at_1",
-          "normalized": 0.695238095238095,
-          "status": "available",
-          "value": 0.695238095238095,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         },
         {
           "benchmark": "scicode-bench/scicode@1.0.0",
-          "benchmark_profile": "independent-test-288",
           "benchmark_profiles": [
             "independent-test-288",
             "published-standard"
           ],
-          "evaluation": "independent/olmo-3-1-32b-think-scicode@1.0.0",
           "metric": "score",
-          "normalized": 0.293,
-          "status": "available",
-          "value": 0.293,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.5
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "competitive_programming": 69.5238095238095,
-        "scientific_coding": 29.299999999999997
-      },
+      "coverage": 0.0,
       "index": "vllm-sr/coding@1.0.0",
       "model": "ai2/olmo-3-1-32b-think",
-      "provenance": [
-        "independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0",
-        "independent/olmo-3-1-32b-think-scicode@1.0.0"
-      ],
+      "provenance": [],
       "reasoning_effort": "enabled",
-      "score": 49.411904761904744,
-      "status": "available"
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
         {
           "benchmark": "harbor/terminal-bench@2.1.0",
-          "benchmark_profile": "independent-agent",
           "benchmark_profiles": [
             "independent-agent",
             "published-agent"
           ],
-          "evaluation": "independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0",
           "metric": "resolved",
-          "normalized": 0.0,
-          "status": "available",
-          "value": 0.0,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 1.0
         }
       ],
-      "coverage": 1.0,
-      "domains": {
-        "agentic_systems": 0.0
-      },
+      "coverage": 0.0,
       "index": "vllm-sr/agentic@1.0.0",
       "model": "ai2/olmo-3-1-32b-think",
-      "provenance": [
-        "independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0"
-      ],
+      "provenance": [],
       "reasoning_effort": "enabled",
-      "score": 0.0,
-      "status": "available"
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [
         {
           "index": "vllm-sr/general@1.0.0",
-          "normalized": 0.763,
-          "status": "available",
-          "value": 0.763,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.2
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": 0.32673350745639906,
-          "status": "available",
-          "value": 0.32673350745639906,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.4
         },
         {
           "index": "vllm-sr/coding@1.0.0",
-          "normalized": 0.49411904761904746,
-          "status": "available",
-          "value": 0.49411904761904746,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.2
         },
         {
           "index": "vllm-sr/agentic@1.0.0",
-          "normalized": 0.0,
-          "status": "available",
-          "value": 0.0,
+          "normalized": null,
+          "status": "missing",
+          "value": null,
           "weight": 0.2
         }
       ],
-      "coverage": 1.0,
+      "coverage": 0.0,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "ai2/olmo-3-1-32b-think",
       "provenance": [
-        "independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0",
-        "independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0",
-        "independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0",
-        "independent/olmo-3-1-32b-think-mmlu-pro@1.0.0",
-        "independent/olmo-3-1-32b-think-scicode@1.0.0",
-        "independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0"
+        "ai2/olmo-3-1-32b-think-model-card-gpqa@1.0.0"
       ],
       "reasoning_effort": "enabled",
-      "score": 38.21172125063691,
-      "status": "available"
+      "score": null,
+      "status": "missing"
     },
     {
       "components": [

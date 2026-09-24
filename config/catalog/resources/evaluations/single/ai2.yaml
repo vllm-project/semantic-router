@@ -305,7 +305,7 @@
     latency_ms: null
   metrics:
     accuracy: 0.763
-  status: available
+  status: withheld
   observed_at: 2026-09-11
   evidence:
     provenance: third_party
@@ -331,7 +331,7 @@
     latency_ms: null
   metrics:
     accuracy: 0.590909090909091
-  status: available
+  status: withheld
   observed_at: 2026-09-11
   evidence:
     provenance: third_party
@@ -357,7 +357,7 @@
     latency_ms: null
   metrics:
     accuracy: 0.0625579240037071
-  status: available
+  status: withheld
   observed_at: 2026-09-11
   evidence:
     provenance: third_party
@@ -383,7 +383,7 @@
     latency_ms: null
   metrics:
     pass_at_1: 0.695238095238095
-  status: available
+  status: withheld
   observed_at: 2026-09-11
   evidence:
     provenance: third_party
@@ -409,7 +409,7 @@
     latency_ms: null
   metrics:
     score: 0.293
-  status: available
+  status: withheld
   observed_at: 2026-09-11
   evidence:
     provenance: third_party
@@ -435,7 +435,7 @@
     latency_ms: null
   metrics:
     resolved: 0.0
-  status: available
+  status: withheld
   observed_at: 2026-09-11
   evidence:
     provenance: third_party

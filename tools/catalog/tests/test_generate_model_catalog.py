@@ -290,27 +290,6 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             "the official Astra model page does not publish a default effort",
         )
 
-        public_snapshot = json.loads(catalog.render_outputs()[catalog.WEBSITE_OUTPUT])
-        anchor_profiles = {
-            result["index"]: result
-            for result in public_snapshot["index_results"]
-            if result["model"] == "ai2/olmo-3-1-32b-think"
-            and result["reasoning_effort"] == "enabled"
-        }
-        self.assertEqual(
-            anchor_profiles["vllm-sr/agentic@1.0.0"]["status"],
-            "available",
-        )
-        self.assertEqual(
-            anchor_profiles["vllm-sr/agentic@1.0.0"]["score"],
-            0.0,
-        )
-        self.assertEqual(
-            anchor_profiles["vllm-sr/intelligence@1.0.0"]["status"],
-            "available",
-        )
-        self.assertIsNotNone(anchor_profiles["vllm-sr/intelligence@1.0.0"]["score"])
-
         providers = {provider["id"]: provider for provider in resources["providers"]}
         binding = next(
             item
@@ -611,6 +590,10 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             and evaluation["evidence"]["provenance"] == "third_party"
         ]
         self.assertEqual(len(anchor_evaluations), 6)
+        self.assertEqual(
+            {evaluation["status"] for evaluation in anchor_evaluations},
+            {"withheld"},
+        )
         self.assertTrue(
             all(
                 evaluation["subject"]["model_revision"]
@@ -660,6 +643,22 @@ class ModelCatalogCompilerTests(unittest.TestCase):
                 if evaluation["model"] == "ai2/olmo-3-1-32b-think"
                 and evaluation["evidence"]["provenance"] == "third_party"
             )
+        )
+
+        public_snapshot = json.loads(catalog.render_outputs()[catalog.WEBSITE_OUTPUT])
+        anchor_profiles = {
+            result["index"]: result
+            for result in public_snapshot["index_results"]
+            if result["model"] == "ai2/olmo-3-1-32b-think"
+            and result["reasoning_effort"] == "enabled"
+        }
+        self.assertTrue(
+            all(
+                profile["status"] != "available" for profile in anchor_profiles.values()
+            )
+        )
+        self.assertTrue(
+            all(profile["score"] is None for profile in anchor_profiles.values())
         )
 
     def test_stepfun_creator_has_exact_efforts_and_real_bindings(self) -> None:

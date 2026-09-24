@@ -10531,7 +10531,7 @@ evaluations:
     latency_ms: null
   metrics:
     accuracy: 0.763
-  status: available
+  status: withheld
   observed_at: '2026-09-11'
   evidence:
     provenance: third_party
@@ -10557,7 +10557,7 @@ evaluations:
     latency_ms: null
   metrics:
     accuracy: 0.590909090909091
-  status: available
+  status: withheld
   observed_at: '2026-09-11'
   evidence:
     provenance: third_party
@@ -10583,7 +10583,7 @@ evaluations:
     latency_ms: null
   metrics:
     accuracy: 0.0625579240037071
-  status: available
+  status: withheld
   observed_at: '2026-09-11'
   evidence:
     provenance: third_party
@@ -10609,7 +10609,7 @@ evaluations:
     latency_ms: null
   metrics:
     pass_at_1: 0.695238095238095
-  status: available
+  status: withheld
   observed_at: '2026-09-11'
   evidence:
     provenance: third_party
@@ -10635,7 +10635,7 @@ evaluations:
     latency_ms: null
   metrics:
     score: 0.293
-  status: available
+  status: withheld
   observed_at: '2026-09-11'
   evidence:
     provenance: third_party
@@ -10661,7 +10661,7 @@ evaluations:
     latency_ms: null
   metrics:
     resolved: 0.0
-  status: available
+  status: withheld
   observed_at: '2026-09-11'
   evidence:
     provenance: third_party
@@ -38834,154 +38834,6 @@ index_results:
   - ai2/olmo-3-32b-base-model-card-mmlu-pro@1.0.0
   domains:
     general_reasoning: 49.6
-- model: ai2/olmo-3-1-32b-think
-  reasoning_effort: enabled
-  index: vllm-sr/general@1.0.0
-  status: available
-  score: 76.3
-  coverage: 1.0
-  components:
-  - weight: 1.0
-    status: available
-    value: 0.763
-    normalized: 0.763
-    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: independent/olmo-3-1-32b-think-mmlu-pro@1.0.0
-    benchmark_profile: independent-standard
-  provenance:
-  - independent/olmo-3-1-32b-think-mmlu-pro@1.0.0
-  domains:
-    general_reasoning: 76.3
-- model: ai2/olmo-3-1-32b-think
-  reasoning_effort: enabled
-  index: vllm-sr/reasoning@1.0.0
-  status: available
-  score: 32.67335074563991
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.590909090909091
-    normalized: 0.590909090909091
-    benchmark: idavidrein/gpqa-diamond@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-standard
-    - published-standard
-    evaluation: independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0
-    benchmark_profile: independent-standard
-  - weight: 0.5
-    status: available
-    value: 0.0625579240037071
-    normalized: 0.0625579240037071
-    benchmark: cais/humanitys-last-exam@1.0.0
-    metric: accuracy
-    benchmark_profiles:
-    - independent-text-only
-    - text-only
-    evaluation: independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0
-    benchmark_profile: independent-text-only
-  provenance:
-  - independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0
-  - independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0
-  domains:
-    frontier_reasoning: 6.25579240037071
-    scientific_reasoning: 59.09090909090911
-- model: ai2/olmo-3-1-32b-think
-  reasoning_effort: enabled
-  index: vllm-sr/coding@1.0.0
-  status: available
-  score: 49.411904761904744
-  coverage: 1.0
-  components:
-  - weight: 0.5
-    status: available
-    value: 0.695238095238095
-    normalized: 0.695238095238095
-    benchmark: livecodebench/livecodebench@6.0.0
-    metric: pass_at_1
-    benchmark_profiles:
-    - independent-code-generation
-    - published-code-generation
-    evaluation: independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0
-    benchmark_profile: independent-code-generation
-  - weight: 0.5
-    status: available
-    value: 0.293
-    normalized: 0.293
-    benchmark: scicode-bench/scicode@1.0.0
-    metric: score
-    benchmark_profiles:
-    - independent-test-288
-    - published-standard
-    evaluation: independent/olmo-3-1-32b-think-scicode@1.0.0
-    benchmark_profile: independent-test-288
-  provenance:
-  - independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0
-  - independent/olmo-3-1-32b-think-scicode@1.0.0
-  domains:
-    competitive_programming: 69.5238095238095
-    scientific_coding: 29.299999999999997
-- model: ai2/olmo-3-1-32b-think
-  reasoning_effort: enabled
-  index: vllm-sr/agentic@1.0.0
-  status: available
-  score: 0.0
-  coverage: 1.0
-  components:
-  - weight: 1.0
-    status: available
-    value: 0.0
-    normalized: 0.0
-    benchmark: harbor/terminal-bench@2.1.0
-    metric: resolved
-    benchmark_profiles:
-    - independent-agent
-    - published-agent
-    evaluation: independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0
-    benchmark_profile: independent-agent
-  provenance:
-  - independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0
-  domains:
-    agentic_systems: 0.0
-- model: ai2/olmo-3-1-32b-think
-  reasoning_effort: enabled
-  index: vllm-sr/intelligence@1.0.0
-  status: available
-  score: 38.21172125063691
-  coverage: 1.0
-  components:
-  - weight: 0.2
-    status: available
-    value: 0.763
-    normalized: 0.763
-    index: vllm-sr/general@1.0.0
-  - weight: 0.4
-    status: available
-    value: 0.32673350745639906
-    normalized: 0.32673350745639906
-    index: vllm-sr/reasoning@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.49411904761904746
-    normalized: 0.49411904761904746
-    index: vllm-sr/coding@1.0.0
-  - weight: 0.2
-    status: available
-    value: 0.0
-    normalized: 0.0
-    index: vllm-sr/agentic@1.0.0
-  provenance:
-  - independent/olmo-3-1-32b-think-gpqa-diamond@1.0.0
-  - independent/olmo-3-1-32b-think-humanitys-last-exam@1.0.0
-  - independent/olmo-3-1-32b-think-livecodebench-v6@1.0.0
-  - independent/olmo-3-1-32b-think-mmlu-pro@1.0.0
-  - independent/olmo-3-1-32b-think-scicode@1.0.0
-  - independent/olmo-3-1-32b-think-terminalbench-v2-1@1.0.0
 - model: ai21/jamba-reasoning-3b
   reasoning_effort: enabled
   index: vllm-sr/reasoning@1.0.0
