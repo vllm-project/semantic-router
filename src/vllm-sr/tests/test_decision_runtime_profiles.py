@@ -219,6 +219,65 @@ def test_profile_parser_rejects_traversal_and_revision_fields() -> None:
         parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 
 
+@pytest.mark.parametrize(
+    ("field_path", "invalid", "message"),
+    (
+        (("family",), [], "profile.family"),
+        (("family",), {}, "profile.family"),
+        (("dtype", "backbone"), [], "dtype.backbone"),
+        (("dtype", "backbone"), {}, "dtype.backbone"),
+        (("dtype", "head"), [], "dtype.head"),
+        (("dtype", "head"), {}, "dtype.head"),
+        (
+            ("prompt_policy", "choice_null_description"),
+            [],
+            "prompt_policy.choice_null_description",
+        ),
+        (
+            ("prompt_policy", "choice_null_description"),
+            {},
+            "prompt_policy.choice_null_description",
+        ),
+    ),
+)
+def test_profile_parser_rejects_nested_container_values(
+    field_path: tuple[str, ...], invalid: object, message: str
+) -> None:
+    revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
+    document = json.loads(
+        _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B").read_bytes()
+    )
+    target = document
+    for field in field_path[:-1]:
+        target = target[field]
+    target[field_path[-1]] = invalid
+
+    with pytest.raises(RuntimeProfileError, match=message):
+        parse_runtime_profile(json.dumps(document).encode(), revision=revision)
+
+
+def test_profile_parser_rejects_oversized_calibration_without_overflow() -> None:
+    revision = MODELS["llm-semantic-router/Decision-1.0-Eos-0.8B"][0]
+    document = json.loads(
+        _packaged_profile("llm-semantic-router/Decision-1.0-Eos-0.8B").read_bytes()
+    )
+    document["calibration"]["temperature"] = 10**400
+
+    with pytest.raises(RuntimeProfileError, match="calibration.temperature"):
+        parse_runtime_profile(json.dumps(document).encode(), revision=revision)
+
+
+def test_profile_parser_requires_integer_schema_version() -> None:
+    revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
+    document = json.loads(
+        _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B").read_bytes()
+    )
+    document["schema_version"] = 4.0
+
+    with pytest.raises(RuntimeProfileError, match="profile schema"):
+        parse_runtime_profile(json.dumps(document).encode(), revision=revision)
+
+
 def test_physical_batch_is_a_tunable_positive_profile_value() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
     packaged = _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B")

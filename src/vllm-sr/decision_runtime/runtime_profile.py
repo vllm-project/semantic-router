@@ -143,7 +143,7 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
     validate_catalog_revision(revision)
     try:
         document = json.loads(payload)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    except (TypeError, ValueError, RecursionError) as error:
         raise RuntimeProfileError(
             "Decision runtime profile is not valid JSON"
         ) from error
@@ -162,11 +162,14 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
         },
         "profile",
     )
-    if root["schema_version"] != PROFILE_SCHEMA_VERSION:
+    if (
+        type(root["schema_version"]) is not int
+        or root["schema_version"] != PROFILE_SCHEMA_VERSION
+    ):
         raise RuntimeProfileError("unsupported Decision runtime profile schema")
 
     family = root["family"]
-    if family not in {"vela", "qwen3.5"}:
+    if not isinstance(family, str) or family not in {"vela", "qwen3.5"}:
         raise RuntimeProfileError("profile.family is unsupported")
 
     artifact = _parse_artifact(root["artifact"])
@@ -210,21 +213,27 @@ def _parse_calibration(value: object) -> float | None:
     calibration = _mapping(value, "calibration")
     _exact_keys(calibration, {"temperature"}, "calibration")
     temperature = calibration["temperature"]
-    if (
-        isinstance(temperature, bool)
-        or not isinstance(temperature, (int, float))
-        or not math.isfinite(float(temperature))
-        or float(temperature) <= 0.0
-    ):
+    if isinstance(temperature, bool) or not isinstance(temperature, (int, float)):
         raise RuntimeProfileError("calibration.temperature must be positive and finite")
-    return float(temperature)
+    try:
+        temperature_value = float(temperature)
+    except OverflowError as error:
+        raise RuntimeProfileError(
+            "calibration.temperature must be positive and finite"
+        ) from error
+    if not math.isfinite(temperature_value) or temperature_value <= 0.0:
+        raise RuntimeProfileError("calibration.temperature must be positive and finite")
+    return temperature_value
 
 
 def _parse_prompt_policy(value: object) -> PromptPolicy:
     policy = _mapping(value, "prompt_policy")
     _exact_keys(policy, {"choice_null_description"}, "prompt_policy")
     choice_null_description = policy["choice_null_description"]
-    if choice_null_description not in {"render_key", "preserve_json_null"}:
+    if not isinstance(choice_null_description, str) or choice_null_description not in {
+        "render_key",
+        "preserve_json_null",
+    }:
         raise RuntimeProfileError(
             "prompt_policy.choice_null_description is unsupported"
         )
@@ -249,9 +258,9 @@ def _positive_int(value: object, field: str) -> int:
 
 
 def _dtype(value: object, field: str) -> str:
-    if value not in _DTYPES:
+    if not isinstance(value, str) or value not in _DTYPES:
         raise RuntimeProfileError(f"{field} is unsupported")
-    return str(value)
+    return value
 
 
 def validate_catalog_revision(revision: str) -> str:
