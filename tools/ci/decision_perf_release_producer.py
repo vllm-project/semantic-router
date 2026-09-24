@@ -52,8 +52,16 @@ from bench.decision_runtime.semantic_metrics import validate_metrics_url
 from bench.decision_runtime.semantic_runner import _harness_digest
 from bench.decision_runtime.semantic_transport import batch_url
 from bench.decision_runtime.transport import Endpoint, validate_endpoint_url
-from decision_runtime.artifacts import ArtifactError, open_verified_artifact
+from decision_runtime.artifacts import (
+    ArtifactError,
+    open_verified_artifact,
+    parse_artifact_manifest,
+)
 from decision_runtime.catalog_adapter import resolve_decision_runtime_model
+from decision_runtime.runtime_profile import (
+    RuntimeProfileError,
+    validate_relative_artifact_path,
+)
 
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 HASH = re.compile(r"[0-9a-f]{64}\Z")
@@ -68,6 +76,7 @@ MAX_STATUS_BYTES = 1024 * 1024
 MAX_ATTESTATION_BYTES = 16 * 1024
 OLD_ATTESTATION_SCHEMA = "decision-old-baseline-attestation-v1"
 OLD_ATTESTATION_PATH = "/api/decision-baseline-attestation"
+OLD_ARTIFACT_LAYOUT = "full_snapshot_selected_data_v1"
 NEW_MAX_CONCURRENCY = 4
 NEW_MAX_QUEUE = 32
 RAW_FILES = (
@@ -155,7 +164,15 @@ def _docker_inspect(kind: str, identity: str) -> dict:
 
 
 def _mount_digest(source: Path) -> str:
-    """Hash an exact regular file or an ordered, symlink-free directory tree."""
+    """Hash a regular file or an unambiguously framed, symlink-free tree."""
+
+    try:
+        return _unchecked_mount_digest(source)
+    except OSError:
+        raise ProducerError("protected source mount is unreadable") from None
+
+
+def _unchecked_mount_digest(source: Path) -> str:
 
     if source.is_symlink():
         raise ProducerError("protected source mount uses a symlink")
@@ -163,20 +180,36 @@ def _mount_digest(source: Path) -> str:
         return _digest(source)
     if not source.is_dir():
         raise ProducerError("protected source mount is not a regular tree")
-    digest = hashlib.sha256(b"decision-mounted-tree-v1\0")
+    digest = hashlib.sha256(b"decision-mounted-tree-v2\0")
+
+    def frame(value: bytes) -> None:
+        digest.update(len(value).to_bytes(8, "big"))
+        digest.update(value)
+
     for path in sorted(source.rglob("*")):
         relative = path.relative_to(source).as_posix().encode("utf-8")
         if path.is_symlink():
             raise ProducerError("protected source tree contains a symlink")
         mode = path.stat(follow_symlinks=False).st_mode
         if stat.S_ISDIR(mode):
-            digest.update(b"D\0" + relative + b"\0")
+            frame(b"D")
+            frame(relative)
+            digest.update((0).to_bytes(8, "big"))
         elif stat.S_ISREG(mode):
-            digest.update(b"F\0" + relative + b"\0")
+            frame(b"F")
+            frame(relative)
+            size = path.stat(follow_symlinks=False).st_size
+            digest.update(size.to_bytes(8, "big"))
+            observed_size = 0
             with path.open("rb") as handle:
                 while chunk := handle.read(1024 * 1024):
                     digest.update(chunk)
-            digest.update(b"\0")
+                    observed_size += len(chunk)
+            if (
+                observed_size != size
+                or path.stat(follow_symlinks=False).st_size != size
+            ):
+                raise ProducerError("protected source changed while hashing")
         else:
             raise ProducerError("protected source tree contains a special file")
     return digest.hexdigest()
@@ -252,7 +285,7 @@ def _validate_locator(locator: object, *, label: str, destination: str) -> dict:
             and path != destination
             or path != os.path.normpath(path)
         ):
-            raise ProducerError("old core command path is outside its mount")
+            raise ProducerError(f"old {label} command path is outside its mount")
     elif kind != "working_dir":
         raise ProducerError(f"old {label} launch locator is invalid")
     return locator
@@ -545,17 +578,21 @@ def _candidate_process(
         raise ProducerError("candidate environment differs from the approved image")
 
 
-def _verified_old_artifact(source: Path, row: dict) -> None:
+def _verified_old_snapshot(source: Path, core_source: Path, row: dict) -> str:
+    """Bind a complete old code/weight snapshot to qualified selected data."""
+
     try:
         model = resolve_decision_runtime_model(
             row["model_id"], revision=row["revision"], backend="rocm"
         )
         artifact = open_verified_artifact(
-            source, model, expected_content_id=row["artifact_content_id"]
+            default_artifact_cache_root() / "sha256" / row["artifact_content_id"],
+            model,
+            expected_content_id=row["artifact_content_id"],
         )
     except (ArtifactError, ValueError, OSError) as error:
         raise ProducerError(
-            "old artifact mount failed full content verification"
+            "qualified selected-data artifact failed full content verification"
         ) from error
     if (
         artifact.repository_id != row["model_id"]
@@ -564,7 +601,142 @@ def _verified_old_artifact(source: Path, row: dict) -> None:
         or artifact.manifest is None
         or artifact.manifest.sha256 != row["artifact_manifest_sha256"]
     ):
-        raise ProducerError("old artifact mount differs from qualified model snapshot")
+        raise ProducerError("qualified selected-data artifact identity differs")
+    if (
+        source.is_symlink()
+        or not source.is_dir()
+        or core_source.is_symlink()
+        or not core_source.is_dir()
+    ):
+        raise ProducerError("old full snapshot and core must be regular directories")
+
+    def regular_file(root: Path, relative: str) -> Path:
+        try:
+            validate_relative_artifact_path(relative, field="old snapshot file")
+        except RuntimeProfileError as error:
+            raise ProducerError("old snapshot path is invalid") from error
+        path = root / relative
+        if path.is_symlink() or not path.is_file():
+            raise ProducerError("old snapshot file is missing or is a symlink")
+        return path
+
+    try:
+        bindings_path = regular_file(core_source, "BINDINGS.json")
+        if bindings_path.stat().st_size > 1024 * 1024:
+            raise ProducerError("old binding inventory is oversized")
+        bindings = json.loads(
+            bindings_path.read_bytes(),
+            object_pairs_hook=_unique_pairs,
+            parse_constant=_reject_nonfinite,
+        )
+        binding = bindings[row.get("old_model_id", row["model_id"])]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise ProducerError("old binding inventory is invalid") from error
+    manifest_name = artifact.manifest.path
+    if (
+        not isinstance(binding, dict)
+        or binding.get("repo") != row["model_id"]
+        or binding.get("revision") != row["revision"]
+        or binding.get("manifest_file") != manifest_name
+        or binding.get("manifest_sha256") != artifact.manifest.sha256
+        or not isinstance(binding.get("files"), dict)
+        or not binding["files"]
+    ):
+        raise ProducerError("old binding differs from qualified model revision")
+    manifest_path = regular_file(source, manifest_name)
+    manifest_bytes = manifest_path.read_bytes()
+    if (
+        len(manifest_bytes) != artifact.manifest.size_bytes
+        or hashlib.sha256(manifest_bytes).hexdigest() != artifact.manifest.sha256
+    ):
+        raise ProducerError("old full snapshot manifest differs from qualification")
+    try:
+        json.loads(
+            manifest_bytes,
+            object_pairs_hook=_unique_pairs,
+            parse_constant=_reject_nonfinite,
+        )
+        inventory = parse_artifact_manifest(manifest_bytes, manifest_path=manifest_name)
+    except (UnicodeError, ValueError, ArtifactError) as error:
+        raise ProducerError("old full snapshot manifest is invalid") from error
+
+    declared = binding["files"]
+    actual = set()
+    for path in source.rglob("*"):
+        if path.is_symlink():
+            raise ProducerError("old full snapshot contains a symlink")
+        mode = path.stat(follow_symlinks=False).st_mode
+        if stat.S_ISREG(mode):
+            actual.add(path.relative_to(source).as_posix())
+        elif not stat.S_ISDIR(mode):
+            raise ProducerError("old full snapshot contains a special file")
+    if set(declared) != actual or manifest_name not in declared:
+        raise ProducerError("old full snapshot file roster differs from old binding")
+    if not any(
+        relative == "model.py" or relative.endswith("/model.py")
+        for relative in declared
+    ):
+        raise ProducerError("old full snapshot lacks co-located model Python")
+    for relative, reference in declared.items():
+        path = regular_file(source, relative)
+        if (
+            not isinstance(reference, dict)
+            or set(reference) != {"bytes", "sha256"}
+            or type(reference["bytes"]) is not int
+            or reference["bytes"] < 0
+            or not isinstance(reference["sha256"], str)
+            or HASH.fullmatch(reference["sha256"]) is None
+            or path.stat().st_size != reference["bytes"]
+            or _mount_digest(path) != reference["sha256"]
+        ):
+            raise ProducerError("old full snapshot file differs from old binding")
+    if declared[manifest_name] != {
+        "bytes": artifact.manifest.size_bytes,
+        "sha256": artifact.manifest.sha256,
+    }:
+        raise ProducerError("old binding manifest identity differs")
+    inventory_by_path = {item.repository_path: item for item in inventory.values()}
+    if any(
+        declared.get(item.repository_path)
+        != {"bytes": item.size_bytes, "sha256": item.sha256}
+        for item in inventory_by_path.values()
+    ):
+        raise ProducerError("old binding differs from a model-manifest file")
+    selected_files = []
+    for item in artifact.files:
+        old_item = inventory_by_path.get(item.repository_path)
+        if (
+            old_item is None
+            or old_item.sha256 != item.sha256
+            or old_item.size_bytes != item.size_bytes
+            or declared.get(item.repository_path)
+            != {"bytes": item.size_bytes, "sha256": item.sha256}
+        ):
+            raise ProducerError("old selected data differs from qualified artifact")
+        selected_files.append(
+            {
+                "path": item.repository_path,
+                "sha256": old_item.sha256,
+                "size_bytes": old_item.size_bytes,
+            }
+        )
+    observed_receipt = {
+        "schema_version": 2,
+        "repository_id": binding["repo"],
+        "revision": binding["revision"],
+        "manifest": {
+            "path": manifest_name,
+            "sha256": hashlib.sha256(manifest_bytes).hexdigest(),
+            "size_bytes": len(manifest_bytes),
+        },
+        "files": selected_files,
+    }
+    observed_content_id = hashlib.sha256(
+        json.dumps(observed_receipt, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if observed_content_id != artifact.content_id:
+        raise ProducerError("old selected-data content identity differs")
+    return observed_content_id
 
 
 def _container_image(
@@ -577,6 +749,7 @@ def _container_image(
     old_overlay: str | None = None,
     old_artifact: dict | None = None,
     old_attestations: list[dict] | None = None,
+    old_snapshot_proofs: list[dict] | None = None,
     new_artifact_content_id: str | None = None,
     new_physical_batch_size: int | None = None,
     new_model_id: str | None = None,
@@ -644,14 +817,18 @@ def _container_image(
                 "old service mount inventory differs from protected baseline"
             )
         expected = {
-            item.get("destination"): item.get("sha256")
+            item.get("destination"): (item.get("sha256"), item.get("kind"))
             for item in declared
             if isinstance(item, dict)
         }
         if len(expected) != len(declared):
             raise ProducerError("old service mount declarations are invalid")
         observed = set()
+        seen_destinations = set()
         artifact_source = None
+        core_source = None
+        adapter_source = None
+        snapshot_sha256 = None
         core_destination = arm.get("core_mount_destination")
         for mount in mounts:
             if (
@@ -660,10 +837,19 @@ def _container_image(
                 or mount.get("RW") is not False
                 or not isinstance(mount.get("Destination"), str)
                 or mount["Destination"] not in expected
+                or mount["Destination"] in seen_destinations
+                or not isinstance(mount.get("Source"), str)
             ):
                 raise ProducerError("old service has an unattested or writable mount")
-            actual = _mount_digest(Path(mount["Source"]))
-            if actual != expected[mount["Destination"]]:
+            seen_destinations.add(mount["Destination"])
+            source = Path(mount["Source"])
+            declared_digest, declared_kind = expected[mount["Destination"]]
+            if (declared_kind == "file" and not source.is_file()) or (
+                declared_kind == "tree" and not source.is_dir()
+            ):
+                raise ProducerError("old mounted source kind differs")
+            actual = _mount_digest(source)
+            if actual != declared_digest:
                 raise ProducerError("old mounted source changed from protected digest")
             observed.add(actual)
             if (
@@ -671,25 +857,40 @@ def _container_image(
                 and mount["Destination"] == arm["artifact_mount_destination"]
             ):
                 artifact_source = Path(mount["Source"])
+                snapshot_sha256 = actual
+            if mount["Destination"] == core_destination:
+                core_source = Path(mount["Source"])
+            if mount["Destination"] == arm.get("adapter_mount_destination"):
+                adapter_source = Path(mount["Source"])
+        if seen_destinations != set(expected):
+            raise ProducerError(
+                "old service mount inventory differs from protected baseline"
+            )
         if arm.get("core_source_kind") == "mounted":
-            if (
-                core_destination == arm["artifact_mount_destination"]
-                or expected.get(core_destination) != old_core_sha256
-                or old_core_sha256 not in observed
-            ):
-                raise ProducerError("old core mount is not the declared source")
-            _old_core_process(container, arm["core_locator"]["path"])
+            raise ProducerError(
+                "direct old core lacks mandatory loaded-artifact process proof"
+            )
         elif arm.get("core_source_kind") == "mounted_adapter":
             adapter_destination = arm.get("adapter_mount_destination")
             if (
                 old_adapter_sha256 is None
+                or len(declared) != 3
                 or adapter_destination
                 in (None, core_destination, arm["artifact_mount_destination"])
-                or expected.get(adapter_destination) != old_adapter_sha256
+                or expected.get(adapter_destination) != (old_adapter_sha256, "file")
                 or core_destination == arm["artifact_mount_destination"]
-                or expected.get(core_destination) != old_core_sha256
+                or expected.get(core_destination) != (old_core_sha256, "tree")
+                or expected.get(arm["artifact_mount_destination"], (None, None))[1]
+                != "tree"
+                or arm.get("artifact_layout") != OLD_ARTIFACT_LAYOUT
+                or adapter_source is None
+                or not adapter_source.is_file()
+                or core_source is None
+                or not core_source.is_dir()
             ):
-                raise ProducerError("old adapter or imported core mount differs")
+                raise ProducerError(
+                    "old adapter, core, or full snapshot declaration differs"
+                )
             _old_core_process(container, arm["adapter_locator"]["path"])
         elif arm.get("core_source_kind") == "baked":
             raise ProducerError(
@@ -705,9 +906,25 @@ def _container_image(
                 "old source overlay is not attested by a mounted digest"
             )
         if old_artifact is not None:
-            if artifact_source is None:
-                raise ProducerError("old artifact mount is missing")
-            _verified_old_artifact(artifact_source, old_artifact)
+            if (
+                artifact_source is None
+                or core_source is None
+                or snapshot_sha256 is None
+            ):
+                raise ProducerError("old full snapshot or core mount is missing")
+            try:
+                selected_content_id = _verified_old_snapshot(
+                    artifact_source, core_source, old_artifact
+                )
+            except OSError:
+                raise ProducerError("old full snapshot is unreadable") from None
+            if old_snapshot_proofs is not None:
+                old_snapshot_proofs.append(
+                    {
+                        "full_snapshot_sha256": snapshot_sha256,
+                        "selected_data_content_id": selected_content_id,
+                    }
+                )
             _old_launch_locator(
                 container,
                 arm["artifact_locator"],
@@ -808,7 +1025,7 @@ def _status(url: str) -> dict:
 def _validate_config(
     config: dict, *, candidate_ref: str, qualification: dict
 ) -> list[dict]:
-    if config.get("schema_version") != "decision-paired-baseline-v1":
+    if config.get("schema_version") != "decision-paired-baseline-v2":
         raise ProducerError("protected baseline schema is invalid")
     hardware = config.get("hardware")
     if (
@@ -927,6 +1144,7 @@ def _validate_config(
                     or not isinstance(mount.get("destination"), str)
                     or not mount["destination"].startswith("/")
                     or HASH.fullmatch(str(mount.get("sha256", ""))) is None
+                    or mount.get("kind") not in ("file", "tree")
                     for mount in mounts
                 ):
                     raise ProducerError(
@@ -959,6 +1177,15 @@ def _validate_config(
                         "direct old core lacks mandatory loaded-artifact process proof"
                     )
                 elif kind == "mounted_adapter":
+                    if endpoint.get("artifact_layout") != OLD_ARTIFACT_LAYOUT:
+                        raise ProducerError("old full snapshot layout is required")
+                    if endpoint.get("artifact_locator") != {
+                        "kind": "argument",
+                        "flag": "--artifact-root",
+                    }:
+                        raise ProducerError(
+                            "old full snapshot launch argument is required"
+                        )
                     port = endpoint.get("api_container_port")
                     if type(port) is not int or not 1 <= port <= 65535:
                         raise ProducerError("old API container port is invalid")
@@ -970,7 +1197,8 @@ def _validate_config(
                         "old adapter source digest",
                     )
                     if (
-                        core_destination not in destinations
+                        len(mounts) != 3
+                        or core_destination not in destinations
                         or adapter_destination not in destinations
                         or len(
                             {
@@ -981,17 +1209,23 @@ def _validate_config(
                         )
                         != 3
                         or next(
-                            mount["sha256"]
+                            (mount["sha256"], mount["kind"])
                             for mount in mounts
                             if mount["destination"] == core_destination
                         )
-                        != row["old_core_source_sha256"]
+                        != (row["old_core_source_sha256"], "tree")
                         or next(
-                            mount["sha256"]
+                            (mount["sha256"], mount["kind"])
                             for mount in mounts
                             if mount["destination"] == adapter_destination
                         )
-                        != adapter_sha
+                        != (adapter_sha, "file")
+                        or next(
+                            mount["kind"]
+                            for mount in mounts
+                            if mount["destination"] == artifact_destination
+                        )
+                        != "tree"
                     ):
                         raise ProducerError(
                             "old adapter or imported core declaration is invalid"
@@ -1001,6 +1235,10 @@ def _validate_config(
                         label="adapter",
                         destination=adapter_destination,
                     )
+                    if endpoint["adapter_locator"]["path"] != adapter_destination:
+                        raise ProducerError(
+                            "old adapter must execute its exact file mount"
+                        )
                     _import_locator(endpoint.get("core_locator"), core_destination)
                 elif kind == "baked":
                     raise ProducerError(
@@ -1300,6 +1538,7 @@ def produce(args: argparse.Namespace) -> Path:
     }
     for row in rows:
         old_attestations: list[dict] = []
+        old_snapshot_proofs: list[dict] = []
         old_id = _container_image(
             row["old"],
             source_sha=None,
@@ -1309,6 +1548,7 @@ def produce(args: argparse.Namespace) -> Path:
             old_overlay=row["old_arm_overlay"],
             old_artifact=row,
             old_attestations=old_attestations,
+            old_snapshot_proofs=old_snapshot_proofs,
         )
         new_id = _container_image(
             row["new"],
@@ -1341,6 +1581,12 @@ def produce(args: argparse.Namespace) -> Path:
         model = {
             "model_id": row["model_id"],
             "old_core_source_kind": row["old"]["core_source_kind"],
+            "old_artifact_layout": row["old"]["artifact_layout"],
+            "old_full_snapshot_sha256": next(
+                mount["sha256"]
+                for mount in row["old"]["mounts"]
+                if mount["destination"] == row["old"]["artifact_mount_destination"]
+            ),
             "same_old_new_revision": row["revision"],
             "same_old_new_artifact_content_id": row["artifact_content_id"],
             "artifact_metadata_sha256": row["artifact_metadata_sha256"],
@@ -1392,6 +1638,7 @@ def produce(args: argparse.Namespace) -> Path:
                 old_overlay=row["old_arm_overlay"],
                 old_artifact=row,
                 old_attestations=old_attestations,
+                old_snapshot_proofs=old_snapshot_proofs,
             )
             != old_id
             or _container_image(
@@ -1406,6 +1653,14 @@ def produce(args: argparse.Namespace) -> Path:
             != new_id
         ):
             raise ProducerError("protected service identity changed during measurement")
+        if (
+            len(old_snapshot_proofs) != 2
+            or old_snapshot_proofs[0] != old_snapshot_proofs[1]
+            or old_snapshot_proofs[0]["selected_data_content_id"]
+            != row["artifact_content_id"]
+        ):
+            raise ProducerError("old full snapshot changed during measurement")
+        model["old_snapshot_verifications"] = old_snapshot_proofs
         if len(old_attestations) == 2:
             path = (
                 args.output_dir

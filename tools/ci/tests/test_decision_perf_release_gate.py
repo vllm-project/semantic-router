@@ -504,6 +504,18 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
         model = {
             "model_id": model_id,
             "old_core_source_kind": "mounted_adapter",
+            "old_artifact_layout": "full_snapshot_selected_data_v1",
+            "old_full_snapshot_sha256": "4" * 64,
+            "old_snapshot_verifications": [
+                {
+                    "full_snapshot_sha256": "4" * 64,
+                    "selected_data_content_id": "1" * 64,
+                },
+                {
+                    "full_snapshot_sha256": "4" * 64,
+                    "selected_data_content_id": "1" * 64,
+                },
+            ],
             "same_old_new_revision": MODEL_REVISION,
             "same_old_new_artifact_content_id": "1" * 64,
             "artifact_metadata_sha256": "2" * 64,
@@ -1007,6 +1019,36 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         self.report["schema_version"] = "decision-paired-release-v4"
         self.write_report()
         with self.assertRaisesRegex(ValueError, "performance report schema"):
+            self.validate()
+
+    def test_old_v5_schema_is_rejected_even_with_full_snapshot_proof(self) -> None:
+        self.report["schema_version"] = "decision-paired-release-v5"
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "performance report schema"):
+            self.validate()
+
+    def test_full_snapshot_proof_is_required_and_bound_to_declaration(self) -> None:
+        model = self.report["models"][0]
+        self.validate()
+        original = copy.deepcopy(model)
+        model.pop("old_snapshot_verifications")
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "old snapshot verifications"):
+            self.validate()
+        model.update(copy.deepcopy(original))
+        model["old_snapshot_verifications"][1]["full_snapshot_sha256"] = "5" * 64
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "declared old full snapshot"):
+            self.validate()
+        model.update(copy.deepcopy(original))
+        model["old_snapshot_verifications"][1]["selected_data_content_id"] = "5" * 64
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "old selected-data content identity"):
+            self.validate()
+        model.update(copy.deepcopy(original))
+        model["old_artifact_layout"] = "data_only"
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "old artifact layout"):
             self.validate()
 
     def test_imported_old_core_attestations_are_bound_to_raw_evidence(self) -> None:

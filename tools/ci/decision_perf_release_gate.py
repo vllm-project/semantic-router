@@ -21,7 +21,7 @@ from typing import Any
 from decision_rocm_promotion import MODEL_IDS, validate_receipt
 from decision_timed_semantics import validate_timed_semantics
 
-SCHEMA = "decision-paired-release-v5"
+SCHEMA = "decision-paired-release-v6"
 RAW_SCHEMA = "decision-semantic-workload-v2"
 ARRIVAL_POLICY = (
     "the same ordered logical workflows are submitted per arm and round; "
@@ -1590,6 +1590,48 @@ def validate_report(
             qualified[model_id].get("artifact_content_id"),
             model_id + " qualified artifact",
         )
+        _same(
+            model.get("old_artifact_layout"),
+            "full_snapshot_selected_data_v1",
+            model_id + " old artifact layout",
+        )
+        old_snapshot_digest = _hex(
+            model.get("old_full_snapshot_sha256"),
+            model_id + " declared old full snapshot",
+            HASH,
+        )
+        snapshot_verifications = _list(
+            model.get("old_snapshot_verifications"),
+            model_id + " old snapshot verifications",
+        )
+        if len(snapshot_verifications) != 2 or any(
+            not isinstance(value, dict)
+            or set(value) != {"full_snapshot_sha256", "selected_data_content_id"}
+            for value in snapshot_verifications
+        ):
+            raise ValueError(model_id + " needs two full-snapshot verifications")
+        for verification in snapshot_verifications:
+            _hex(
+                verification["full_snapshot_sha256"],
+                model_id + " old full snapshot",
+                HASH,
+            )
+            _same(
+                verification["full_snapshot_sha256"],
+                old_snapshot_digest,
+                model_id + " declared old full snapshot",
+            )
+            _same(
+                _hex(
+                    verification["selected_data_content_id"],
+                    model_id + " old selected data",
+                    HASH,
+                ),
+                model["same_old_new_artifact_content_id"],
+                model_id + " old selected-data content identity",
+            )
+        if snapshot_verifications[0] != snapshot_verifications[1]:
+            raise ValueError(model_id + " old full snapshot changed during measurement")
         if model.get("old_core_source_kind") == "mounted_adapter" and all(
             field in model
             for field in (

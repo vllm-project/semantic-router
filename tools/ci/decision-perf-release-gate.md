@@ -11,8 +11,9 @@ python3 tools/ci/decision_perf_release_gate.py validate \
   --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
 ```
 
-The performance report schema is `decision-paired-release-v5`. It requires
-live old process proof for all six models; v4 receipts cannot qualify.
+The performance report schema is `decision-paired-release-v6`. It requires
+live old process and full-snapshot proof for all six models; v4/v5 receipts
+cannot qualify.
 
 The gate expects exactly six Decision model IDs, each measured at 32 questions
 and 1 state, 8 questions and 8 states, and 32 questions and 32 states. Every
@@ -82,21 +83,32 @@ image ID, entrypoint, process, and executed source tree before baked-core
 release qualification may be enabled. A directly executed mounted core is also
 ineligible because it does not attest the live loaded artifact. The required
 reviewed HTTP adapter uses `old.core_source_kind: mounted_adapter`: its adapter
-and core are distinct
-read-only mounts checked against `old_adapter_source_sha256` and
-`old_core_source_sha256` from this run's protected configuration. PID 1 must
-execute the mounted adapter. The producer hashes
-every read-only bind mount before and after measurement. Independently, an old
-artifact mount is mandatory:
-the producer reopens its receipt and self-manifest, verifies the selected
-model-file inventory byte-for-byte against the candidate-qualified content ID
-and manifest hash, and checks that the declared old launch argument,
-environment variable, or working directory names that mount. A local-only old
-image must remain present on
-the protected runner for later audit; its content-addressed ID does not make
-the old source redistributable.
+and core are distinct read-only mounts checked against
+`old_adapter_source_sha256` and `old_core_source_sha256` from this run's
+protected configuration. A third read-only tree mount holds the complete
+historical model snapshot, with co-located data and model Python. PID 1 must
+execute the mounted adapter. Exactly these three old mounts are allowed; the
+adapter must be a single file mount at its executed path. The producer hashes
+every typed bind mount before and after measurement. It independently reopens
+the candidate-qualified data-only artifact, then verifies the old core's
+binding inventory, complete
+snapshot roster, manifest, and every bound file by size and SHA256. For each
+selected qualified data file it compares the old path, size, and freshly
+computed SHA256, reconstructs the selected-data content ID, and requires
+exact equality with qualification. It parses metadata but never imports or
+executes model-repository Python. The full snapshot has its own tree digest;
+it is not misrepresented as a data-only materialization. A local-only old
+image must remain present on the protected runner for later audit; its
+content-addressed ID does not make the old source redistributable.
+The core mount's `BINDINGS.json` entry keyed by `old_model_id` (or `model_id`)
+must declare `repo`, `revision`, `manifest_file`, `manifest_sha256`, and a
+complete `files` map from relative path to `{ "bytes": ..., "sha256": ... }`.
+Every regular snapshot file must be bound, including co-located `model.py`,
+and each self-manifest entry must agree with that binding. Unselected
+historical source files remain in the full snapshot and are verified, not
+copied into the candidate's data-only cache.
 
-The protected file has `schema_version: decision-paired-baseline-v1`, a
+The protected file has `schema_version: decision-paired-baseline-v2`, a
 public-safe `hardware` label, one canonical `gpu_device` index,
 `gpu_exclusivity: dedicated_gpu_no_unrelated_compute`, and exactly six
 `models` entries. Both containers must expose that exact
@@ -124,22 +136,26 @@ Optional `old_model_id`, `old_response_mode` (`decision_v1` or
 explicit loopback ports. The producer verifies each metrics port belongs to
 the same inspected container as its API port. The new runtime serves metrics
 on its API listener, so its two URLs must have the same origin. Every old bind
-mount must appear in `old.mounts` as a
-`destination` and `sha256` digest; writable or undeclared mounts fail. A file
-digest is SHA256 of its bytes. A directory digest is SHA256 of the prefix
-`decision-mounted-tree-v1` followed by a null byte, then each sorted entry's
-type (`D` or `F`), null byte, relative POSIX path, and null byte; files append
-their bytes and a null byte. `old_arm_overlay` is `none` or `sha256:` plus a
-digest found in that mount inventory. The artifact metadata digest must match
-the locally verified content-addressed artifact receipt. `old.artifact_mount_destination`
-must name one of those read-only mounts, and `old.artifact_locator` must be
-`{"kind":"argument","flag":"--model"}` for an exact Docker entrypoint/Cmd
-flag value, `{"kind":"environment","name":"MODEL_ROOT"}` for an exact
-container environment value, or `{"kind":"working_dir"}` for an exact
-working directory. The flag and environment names are examples; the protected
-configuration must match the real audited baseline launch contract. Nested or
-overlapping old mounts are rejected so a later bind mount cannot shadow the
-verified artifact tree. Keep endpoint, container, and credential details only
+mount must appear in `old.mounts` with `destination`, `kind` (`file` or
+`tree`), and `sha256`; writable, untyped, or undeclared mounts fail. A file
+digest is SHA256 of its bytes, and its declared kind prevents it from standing
+in for a tree. A tree digest is SHA256 of the domain separator
+`decision-mounted-tree-v2` and a null byte, then each sorted entry's type and
+relative POSIX path as eight-byte big-endian length-prefixed fields. Each
+directory appends a zero content length; each file appends its eight-byte
+content length followed by its exact bytes. Symlinks and special files fail.
+The old delimiter-concatenated v1 tree digest is not accepted because two
+different trees could have identical input streams. `old_arm_overlay` is
+`none` or `sha256:` plus a digest found in that mount inventory. The artifact
+metadata digest must match the locally verified content-addressed artifact
+receipt.
+`old.artifact_mount_destination` must name the full-snapshot tree mount. Set
+`old.artifact_layout: full_snapshot_selected_data_v1` and
+`old.artifact_locator: {"kind":"argument","flag":"--artifact-root"}`;
+Docker's declared launch must pass that mount as the exact flag value, and the
+adapter must derive the same root from its resident loaded engine object.
+Nested or overlapping old mounts are rejected so a later bind mount cannot
+shadow the verified artifact tree. Keep endpoint, container, and credential details only
 in the protected file and environment.
 For `mounted_adapter`, use
 `old.adapter_locator: {"kind":"command_path","path":"/adapter/server.py"}`
@@ -167,8 +183,10 @@ then repeats the challenge after measurement. Before archiving the proof, the
 producer replaces container-internal path and private module strings with their
 SHA256 digests. It verifies path containment against the protected mount
 declarations; the gate checks that both observations match the declared path
-digests. Both redacted observations and their file digest travel with the
-report. The gate requires these fields for every model; older
+digests. The report also carries the declared full-snapshot tree digest and
+two matching pre/post snapshot verifications that bind it to the selected-data
+content ID. Both redacted process observations and their file digest travel
+with the report. The gate requires these fields for every model; older
 performance receipts without live process proof fail validation. An adapter
 without this endpoint cannot qualify.
 The old preview protocol does not guarantee an artifact-status endpoint, so
@@ -176,8 +194,18 @@ the protected provisioner must also establish that the old process actually
 loaded the declared revision and artifact bytes. A matching read-only tree and
 launch declaration narrow that trust boundary but are not loaded-artifact
 attestation from HTTP alone. Even a live adapter report depends on its reviewed
-implementation: external hashing cannot prove tensors resident in GPU memory.
-Source/mount hashes and semantic parity alone cannot prove weight identity.
+implementation: external hashing cannot prove tensors resident in GPU memory,
+and a privileged host operator can transiently alter bind sources between
+pre/post checks. The pinned image, interpreter, imported libraries, historical
+loader, reviewed adapter, protected-runner isolation, and loaded-object
+derivation remain trusted. Source/mount hashes and semantic parity alone
+cannot prove weight identity. If any old binding revision differs from
+qualification, the producer fails closed; full-snapshot layout does not waive
+same-revision qualification for all six models.
+The adapter may add the attestation route, but its reviewed serving path must
+retain the historical loader, admission, evaluation, and response behavior;
+the producer's hash and nonce checks cannot establish that behavioral
+equivalence on their own.
 
 The performance report names the candidate digest. Both protected validation
 steps independently revalidate the ROCm qualification receipt and join its
