@@ -131,10 +131,13 @@ func isNonPublicReaderTarget(host string) bool {
 	if host == "" {
 		return true
 	}
-	for _, label := range strings.Split(host, ".") {
+	labels := strings.Split(host, ".")
+	for _, label := range labels {
 		if label == "" {
 			return true
 		}
+	}
+	for _, label := range labels {
 		base := "0123456789"
 		if strings.HasPrefix(label, "0x") {
 			label = strings.TrimPrefix(label, "0x")
@@ -185,6 +188,9 @@ func fetchOpenWeb(plan openWebFetchPlan, rejectRevoked func() bool) (*OpenWebRes
 		log.Printf("[OpenWeb] Strategy 1: Trying direct fetch...")
 		result, err := fetchWebDirect(plan.request.URL, plan.timeout, plan.maxLength)
 		if err == nil {
+			if rejectRevoked() {
+				return nil, true, nil
+			}
 			log.Printf("[OpenWeb] Direct fetch succeeded")
 			return result, false, nil
 		}
@@ -213,6 +219,9 @@ func fetchOpenWeb(plan openWebFetchPlan, rejectRevoked func() bool) (*OpenWebRes
 	)
 	if err != nil {
 		return nil, false, err
+	}
+	if rejectRevoked() {
+		return nil, true, nil
 	}
 
 	log.Printf("[OpenWeb] Jina Reader fetch succeeded")

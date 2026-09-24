@@ -389,6 +389,9 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 			http.Error(w, fmt.Sprintf("failed to encode remote config: %v", err), http.StatusInternalServerError)
 			return
 		}
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(SetupImportRemoteResponse{

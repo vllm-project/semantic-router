@@ -119,6 +119,9 @@ func FetchRawHandler() http.HandlerFunc {
 			_ = json.NewEncoder(w).Encode(FetchRawResponse{Error: "remote returned empty content"})
 			return
 		}
+		if dashboardauth.RejectRevokedMutation(w, r) {
+			return
+		}
 
 		log.Printf("[FetchRaw] Success, %d bytes from %s", len(body), redactURLForLog(targetURL))
 

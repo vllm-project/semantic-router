@@ -7,13 +7,16 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -131,6 +134,123 @@ func TestFetchRawPermissionRevokedDuringBodyDoesNotFetch(t *testing.T) {
 	}
 	if got := providerCalls.Load(); got != 0 {
 		t.Fatalf("fetch calls after permission revocation = %d", got)
+	}
+}
+
+func TestOutboundResultsPermissionRevokedDuringSlowResponse(t *testing.T) {
+	setupPayload := mustJSONRaw(t, createValidSetupPatch())
+	tests := []struct {
+		name         string
+		path         string
+		handler      func(*testing.T) http.Handler
+		requestBody  func(string) any
+		responseBody []byte
+	}{
+		{
+			name:    "OpenWeb direct fetch",
+			path:    "/api/tools/open-web",
+			handler: func(*testing.T) http.Handler { return OpenWebHandler() },
+			requestBody: func(target string) any {
+				return OpenWebRequest{URL: target}
+			},
+			responseBody: []byte("<html><body>revoked-page-content</body></html>"),
+		},
+		{
+			name:    "FetchRaw",
+			path:    "/api/tools/fetch-raw",
+			handler: func(*testing.T) http.Handler { return FetchRawHandler() },
+			requestBody: func(target string) any {
+				return FetchRawRequest{URL: target}
+			},
+			responseBody: []byte("revoked-raw-content"),
+		},
+		{
+			name: "setup remote import",
+			path: "/api/setup/import-remote",
+			handler: func(t *testing.T) http.Handler {
+				configPath := createBootstrapSetupConfig(t, t.TempDir())
+				return SetupImportRemoteHandler(configPath, setupmode.New(configPath, false))
+			},
+			requestBody: func(target string) any {
+				return SetupImportRemoteRequest{URL: target}
+			},
+			responseBody: setupPayload,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// These globals are test-only policy inputs. The fixture is reachable
+			// through a public-looking hostname whose one allowed answer is loopback.
+			allowLoopbackForTest(t)
+			withInwardResolver(t, "127.0.0.1")
+
+			upstreamReached := make(chan struct{})
+			releaseUpstream := make(chan struct{})
+			var releaseOnce sync.Once
+			unblock := func() { releaseOnce.Do(func() { close(releaseUpstream) }) }
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+				}
+				close(upstreamReached)
+				<-releaseUpstream
+				_, _ = w.Write(tt.responseBody)
+			}))
+			defer func() {
+				unblock()
+				server.Close()
+			}()
+
+			parsed, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := "http://public-fetch.example:" + parsed.Port() + "/document"
+			body, err := json.Marshal(tt.requestBody(target))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			var permitted atomic.Bool
+			permitted.Store(true)
+			request := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(string(body)))
+			request = request.WithContext(dashboardauth.WithPermissionRevalidator(request.Context(), func(context.Context) error {
+				if !permitted.Load() {
+					return errors.New("permission revoked during upstream response")
+				}
+				return nil
+			}))
+			handler := tt.handler(t)
+			response := httptest.NewRecorder()
+			done := make(chan struct{})
+			go func() {
+				handler.ServeHTTP(response, request)
+				close(done)
+			}()
+
+			select {
+			case <-upstreamReached:
+			case <-done:
+				t.Fatalf("handler returned before reaching the upstream: %d %s", response.Code, response.Body.String())
+			case <-time.After(10 * time.Second):
+				t.Fatal("handler did not reach the upstream")
+			}
+			permitted.Store(false)
+			unblock()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("handler did not finish after the upstream responded")
+			}
+			if response.Code != http.StatusForbidden {
+				t.Fatalf("revoked permission status = %d, body = %s", response.Code, response.Body.String())
+			}
+			if strings.Contains(response.Body.String(), "revoked-") || strings.Contains(response.Body.String(), "providers") {
+				t.Fatalf("revoked request returned upstream content: %s", response.Body.String())
+			}
+		})
 	}
 }
 
