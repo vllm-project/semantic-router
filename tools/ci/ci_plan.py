@@ -411,8 +411,9 @@ def main() -> int:
         draft=args.draft,
         requested=tuple(args.verification),
     )
+    had_published_fixture = published_from_plan(plan) is not None
     resolve_published_fixture(plan, args.profile)
-    if published_from_plan(plan):
+    if had_published_fixture:
         plan["plan_sha256"] = digest(
             {key: value for key, value in plan.items() if key != "plan_sha256"}
         )
