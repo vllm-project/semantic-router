@@ -58,7 +58,8 @@ profile, an arrival-jitter bound, and repeated runs; this exploratory mode
 does not assert a no-regression floor or qualify the protected release gate.
 
 Every successful throughput response from **both** arms is checked after timing against
-the untimed audit, including the old preview's original per-answer token
+its own untimed audit; new responses must also remain within the old/new
+parity tolerance. This includes the old preview's original per-answer token
 counts when applicable. A mismatch suppresses the ratio and the affected
 workflow earns no successful decisions. `samples.jsonl` and the receipt give
 body-free status and hashes; the exact captured request and response bodies

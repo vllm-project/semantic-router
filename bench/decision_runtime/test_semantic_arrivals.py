@@ -328,7 +328,7 @@ class ArrivalLoopbackTests(TestCase):
             server.invalid_batch = False
             server.legacy_preview = index == 0
             server.token_delta = 0
-            server.probability_shift = 0.0
+            server.probability_shift = 0.009 if index == 1 else 0.0
             server.choice_flip = False
             server.metrics_lock = threading.Lock()
             server.metrics = {}
@@ -420,7 +420,8 @@ class ArrivalLoopbackTests(TestCase):
                 response_sha256=hashlib.sha256(old_bytes).hexdigest(),
             )
             new_body = json.loads(new_sample.response_body)
-            new_body["results"][0]["answers"]["q0000"]["noul"] += 0.02
+            # Still within 0.01 of old 0.5, but >0.01 from new audit 0.509.
+            new_body["results"][0]["answers"]["q0000"]["noul"] = 0.498
             new_bytes = wire_bytes(new_body)
             changed_new = replace(
                 new_sample,
