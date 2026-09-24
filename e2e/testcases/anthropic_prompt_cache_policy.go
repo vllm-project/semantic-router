@@ -9,9 +9,10 @@ import (
 	"net/http"
 	"time"
 
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
-	"k8s.io/client-go/kubernetes"
 )
 
 const (
@@ -97,8 +98,8 @@ func validatePromptCachePolicyInsertion(
 		!bytes.Contains(response.Body, []byte("data: [DONE]"))) {
 		return fmt.Errorf("prompt cache stream is invalid: %s", truncateString(string(response.Body), 600))
 	}
-	if err := expectPromptCacheReceipt(response.Headers, "inserted", "", "2", ""); err != nil {
-		return fmt.Errorf("prompt cache insertion receipt: %w", err)
+	if receiptErr := expectPromptCacheReceipt(response.Headers, "inserted", "", "2", ""); receiptErr != nil {
+		return fmt.Errorf("prompt cache insertion receipt: %w", receiptErr)
 	}
 	forwarded, err := lastProviderSimulatorRequest(ctx, backendSession, sessionID)
 	if err != nil {
@@ -155,8 +156,8 @@ func validatePromptCachePolicyEmptyInstruction(
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("empty instruction request returned HTTP %d: %s", response.StatusCode, truncateString(string(response.Body), 600))
 	}
-	if err := expectPromptCacheReceipt(response.Headers, "inserted", "", "1", ""); err != nil {
-		return fmt.Errorf("empty instruction receipt: %w", err)
+	if receiptErr := expectPromptCacheReceipt(response.Headers, "inserted", "", "1", ""); receiptErr != nil {
+		return fmt.Errorf("empty instruction receipt: %w", receiptErr)
 	}
 	forwarded, err := lastProviderSimulatorRequest(ctx, backendSession, sessionID)
 	if err != nil {
@@ -204,8 +205,8 @@ func validatePromptCachePolicyCallerPrecedence(
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("caller marker request returned HTTP %d: %s", response.StatusCode, truncateString(string(response.Body), 600))
 	}
-	if err := expectPromptCacheReceipt(response.Headers, "preserved", "caller_markers", "", "1"); err != nil {
-		return fmt.Errorf("caller marker receipt: %w", err)
+	if receiptErr := expectPromptCacheReceipt(response.Headers, "preserved", "caller_markers", "", "1"); receiptErr != nil {
+		return fmt.Errorf("caller marker receipt: %w", receiptErr)
 	}
 	forwarded, err := lastProviderSimulatorRequest(ctx, backendSession, sessionID)
 	if err != nil {
@@ -254,8 +255,8 @@ func validateDisabledPromptCachePolicy(
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("disabled prompt cache request returned HTTP %d: %s", response.StatusCode, truncateString(string(response.Body), 600))
 	}
-	if err := expectPromptCacheReceipt(response.Headers, "", "", "", ""); err != nil {
-		return fmt.Errorf("disabled prompt cache receipt: %w", err)
+	if receiptErr := expectPromptCacheReceipt(response.Headers, "", "", "", ""); receiptErr != nil {
+		return fmt.Errorf("disabled prompt cache receipt: %w", receiptErr)
 	}
 	forwarded, err := lastProviderSimulatorRequest(ctx, backendSession, sessionID)
 	if err != nil {
@@ -474,7 +475,8 @@ func promptCacheBlockMarkerTTL(blocks []forwardedCacheBlock) string {
 
 func promptCacheMessageMarkerCount(messages []struct {
 	Content []forwardedCacheBlock `json:"content"`
-}) int {
+},
+) int {
 	count := 0
 	for _, message := range messages {
 		count += promptCacheBlockMarkerCount(message.Content)
@@ -484,7 +486,8 @@ func promptCacheMessageMarkerCount(messages []struct {
 
 func promptCacheToolMarkerCount(tools []struct {
 	CacheControl *forwardedCacheControl `json:"cache_control"`
-}) int {
+},
+) int {
 	count := 0
 	for _, tool := range tools {
 		if tool.CacheControl != nil {
@@ -496,7 +499,8 @@ func promptCacheToolMarkerCount(tools []struct {
 
 func promptCacheToolMarkerTTL(tools []struct {
 	CacheControl *forwardedCacheControl `json:"cache_control"`
-}) string {
+},
+) string {
 	for _, tool := range tools {
 		if tool.CacheControl != nil {
 			return tool.CacheControl.TTL
