@@ -31,7 +31,12 @@ def select_source_layers(
     k: int,
 ) -> list[list[int]]:
     """One shared top-k list per target, from per-head OLS R² averaged over K/V."""
-    if not source_keys or not target_keys or len(source_keys) != len(source_values) or len(target_keys) != len(target_values):
+    if (
+        not source_keys
+        or not target_keys
+        or len(source_keys) != len(source_values)
+        or len(target_keys) != len(target_values)
+    ):
         raise ValueError("K/V layer counts must match and be nonempty")
     if not 1 <= k <= len(source_keys):
         raise ValueError(f"k must be between 1 and {len(source_keys)}")
@@ -39,9 +44,16 @@ def select_source_layers(
     for target_k, target_v in zip(target_keys, target_values):
         scores = []
         for source_k, source_v in zip(source_keys, source_values):
-            head_scores = np.concatenate((ols_r2_per_head(source_k, target_k), ols_r2_per_head(source_v, target_v)))
+            head_scores = np.concatenate(
+                (
+                    ols_r2_per_head(source_k, target_k),
+                    ols_r2_per_head(source_v, target_v),
+                )
+            )
             scores.append(float(head_scores.mean()))
-        selected.append([int(i) for i in np.argsort(-np.asarray(scores), kind="stable")[:k]])
+        selected.append(
+            [int(i) for i in np.argsort(-np.asarray(scores), kind="stable")[:k]]
+        )
     return selected
 
 
@@ -65,7 +77,9 @@ def fit_full_head(
             x = stack_source_full_head(src_layers, idxs)
             y = tgt_layers[t].reshape(-1, dy)
             if x.shape[0] != y.shape[0]:
-                raise ValueError(f"source and target token counts differ for target layer {t}: {x.shape[0]} vs {y.shape[0]}")
+                raise ValueError(
+                    f"source and target token counts differ for target layer {t}: {x.shape[0]} vs {y.shape[0]}"
+                )
             acc[t].add(x, y)
     tensors: dict[str, np.ndarray] = {}
     for t, bank in enumerate(acc):
