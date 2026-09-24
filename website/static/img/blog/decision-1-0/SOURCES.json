@@ -75,6 +75,12 @@
       "origin": "Frame 2.0 of the 60-second flow-fix launch film; original rotating die retained with increased title spacing"
     },
     {
+      "file": "tetris-poster.png",
+      "sha256": "f4f599211f1f00758bcc9b57cd9b83a50085dfec1b7980ab92c14631994608ac",
+      "source_urls": [],
+      "origin": "Frame 4.5 of the user-provided Tetris demo; source master SHA-256 d9bd6d0db6f57bafc7de4ce1fa913f03eaf2db482d7ba803b06266ae1aef68d1"
+    },
+    {
       "file": "readout.png",
       "sha256": "fb6b3d1cf149a1a3ccb584eb1c213df73c07bcd328732b4238928e2a2a4af085",
       "source_urls": [
@@ -126,6 +132,21 @@
     "batch": "128 contexts \u00d7 4 questions illustrates Kai/Lex SDK submission capacity, not simultaneous forwards or measured throughput.",
     "edit": "Original rotating die with increased title spacing; 4 seconds of full-HUD Doom; 4 seconds of chess; 9 seconds of multi-object typed outputs; 5 seconds of ONE CALL; ranking 6 seconds; matrix 4 seconds; six coherent model modules; one-forward-pass schematic; connected two-branch family with the official HF logo."
   },
+  "demo_videos": [
+    {
+      "path": "/videos/decision-1-0/decision-1-0-tetris.mp4",
+      "sha256": "58f07b3039868aaebcaea3aab756ef6bf7d7fea6c4e9d63123cad2b8d30c3eb8",
+      "bytes": 4384906,
+      "duration_seconds": 45.766667,
+      "width": 1146,
+      "height": 1080,
+      "fps": 30,
+      "master_sha256": "d9bd6d0db6f57bafc7de4ce1fa913f03eaf2db482d7ba803b06266ae1aef68d1",
+      "poster": "/img/blog/decision-1-0/tetris-poster.png",
+      "transcode": "H.264 High profile, Level 4.0, yuv420p, AAC-LC, fast-start MP4; original audio retained through AAC transcoding.",
+      "context": "User-provided side-by-side Tetris visualization labeled Jev Cloud, Kai-0.6B Local, and Lux-9B Local. On-screen latency values are part of the supplied recording; they were not independently reproduced and are not a standardized benchmark."
+    }
+  ],
   "benchmark": {
     "source": "https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/resolve/c22a05deaf2c4c492465f7e7048ed80f0d342e81/metrics/benchmark.json",
     "sha256": "f25b1a00871e9a75143ae19ef420a80ee18983e07bd5cbafe690c8d61ff95e56",
