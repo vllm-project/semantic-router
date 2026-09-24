@@ -1,11 +1,13 @@
 package router
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
@@ -50,10 +52,16 @@ func registerEnabledOpenClawRoutes(mux routeRegistrar, openClawHandler *handlers
 	}{
 		{"/api/openclaw/status", openClawHandler.StatusHandler()},
 		{"/api/openclaw/skills", openClawHandler.SkillsHandler()},
-		{"/api/openclaw/token", openClawHandler.TokenHandler()},
 	} {
 		registerRouteFunc(mux, auth.ProtectedRoute(route.path, auth.PermOpenClawRead, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, http.MethodGet), route.handler)
 	}
+	// The gateway token authorizes direct control of a container. Treat it as a
+	// management credential even though the HTTP method is GET.
+	registerRouteFunc(mux, auth.Route("/api/openclaw/token", auth.RoutePolicy{
+		Method: http.MethodGet, Permission: auth.PermOpenClaw,
+		AuditMode: auth.AuditRequired, AuditAction: "openclaw.token.read",
+		Sensitivity: auth.SensitivitySecret, ResourceOwner: auth.ResourceOwnerOpenClaw,
+	}), openClawHandler.TokenHandler())
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/next-port", auth.PermOpenClaw, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw, http.MethodGet), openClawHandler.NextPortHandler())
 	registerOpenClawCollection(mux, "/api/openclaw/teams", "openclaw.team.create", openClawHandler.TeamsHandler())
 	registerOpenClawItem(mux, "/api/openclaw/teams/{id}", "openclaw.team", openClawHandler.TeamByIDHandler())
@@ -67,10 +75,16 @@ func registerEnabledOpenClawRoutes(mux routeRegistrar, openClawHandler *handlers
 	), roomHandler)
 	registerRouteFunc(mux, auth.Route("/api/openclaw/rooms/{id}/messages",
 		auth.ReadPolicy(http.MethodGet, auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw),
-		auth.MutationPolicy(http.MethodPost, auth.PermOpenClawRead, "openclaw.room.message", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
+		auth.MutationPolicy(http.MethodPost, auth.PermOpenClaw, "openclaw.room.message", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
 	), roomHandler)
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/rooms/{id}/stream", auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw, http.MethodGet), roomHandler)
-	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/rooms/{id}/ws", auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw, http.MethodGet), roomHandler)
+	// The WebSocket accepts send_message and surface_event frames, so its
+	// handshake needs the same permission as the HTTP message mutation.
+	registerRouteFunc(mux, auth.Route("/api/openclaw/rooms/{id}/ws", auth.RoutePolicy{
+		Method: http.MethodGet, Permission: auth.PermOpenClaw,
+		AuditMode: auth.AuditRequired, AuditAction: "openclaw.room.ws.connect",
+		Sensitivity: auth.SensitivitySecret, ResourceOwner: auth.ResourceOwnerOpenClaw,
+	}), roomHandler)
 	for _, route := range []struct {
 		path, action string
 		handler      http.HandlerFunc
@@ -101,7 +115,9 @@ func registerOpenClawItem(mux routeRegistrar, path, action string, handler http.
 
 func registerOpenClawProxyRoute(mux routeRegistrar, openClawHandler *handlers.OpenClawHandler) {
 	var proxyCache sync.Map // map[string]http.Handler
-	registerRouteFunc(mux, auth.ProtectedRoute("/embedded/openclaw/", auth.PermOpenClawRead, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, http.MethodGet), func(w http.ResponseWriter, r *http.Request) {
+	// Embedded OpenClaw includes a bidirectional gateway WebSocket. Read-only
+	// Dashboard roles must not gain container-control access through this proxy.
+	registerRouteFunc(mux, auth.ProtectedRoute("/embedded/openclaw/", auth.PermOpenClaw, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, http.MethodGet), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -148,8 +164,42 @@ func registerOpenClawProxyRoute(mux routeRegistrar, openClawHandler *handlers.Op
 			r.Header.Set("X-OpenClaw-Room-Id", roomID)
 		}
 
+		if _, authenticated := auth.AuthFromContext(r); authenticated {
+			if err := auth.RevalidateRequest(r); err != nil {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+				// The proxy relays control messages in both directions after the
+				// handshake. Cancel its request context when the session loses
+				// permission so the proxy closes both hijacked connections.
+				ctx, cancel := context.WithCancel(r.Context())
+				defer cancel()
+				go revalidateOpenClawProxyConnection(r, cancel, ctx.Done())
+				r = r.WithContext(ctx)
+			}
+		}
 		handler.(http.Handler).ServeHTTP(w, r)
 	})
+}
+
+func revalidateOpenClawProxyConnection(r *http.Request, cancel context.CancelFunc, done <-chan struct{}) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			checkCtx, stopCheck := context.WithTimeout(context.WithoutCancel(r.Context()), 3*time.Second)
+			err := auth.RevalidateRequest(r.WithContext(checkCtx))
+			stopCheck()
+			if err != nil {
+				cancel()
+				return
+			}
+		}
+	}
 }
 
 func registerDisabledOpenClawRoutes(mux routeRegistrar) {

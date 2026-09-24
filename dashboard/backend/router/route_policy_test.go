@@ -1,17 +1,35 @@
 package router
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
+
+func TestOpenClawProxyClosesConnectionAfterPermissionRevocation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ctx = auth.WithPermissionRevalidator(ctx, func(context.Context) error {
+		return errors.New("permission revoked")
+	})
+	r := httptest.NewRequest(http.MethodGet, "/embedded/openclaw/worker-1/", nil).WithContext(ctx)
+	go revalidateOpenClawProxyConnection(r, cancel, ctx.Done())
+	select {
+	case <-ctx.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("proxy context stayed active after permission revocation")
+	}
+}
 
 func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 	server := setupRouteInventoryServer(t)
@@ -50,10 +68,24 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 		{http.MethodPatch, "/api/admin/users/user-1", auth.PermUsersManage},
 		{http.MethodGet, "/api/openclaw/teams", auth.PermOpenClawRead},
 		{http.MethodPost, "/api/openclaw/teams", auth.PermOpenClaw},
+		{http.MethodGet, "/api/openclaw/rooms/room-1/messages", auth.PermOpenClawRead},
+		{http.MethodPost, "/api/openclaw/rooms/room-1/messages", auth.PermOpenClaw},
+		{http.MethodGet, "/api/openclaw/rooms/room-1/ws", auth.PermOpenClaw},
+		{http.MethodGet, "/api/openclaw/token", auth.PermOpenClaw},
+		{http.MethodGet, "/embedded/openclaw/worker-1/", auth.PermOpenClaw},
 	} {
 		policy, result := server.routePolicies.LookupRoutePolicy(test.method, test.path)
 		if result != auth.RouteFound || policy.Permission != test.permission {
 			t.Errorf("%s %s: lookup=%v permission=%q, want %q", test.method, test.path, result, policy.Permission, test.permission)
+		}
+	}
+	for _, test := range []struct{ path, action string }{
+		{"/api/openclaw/token", "openclaw.token.read"},
+		{"/api/openclaw/rooms/room-1/ws", "openclaw.room.ws.connect"},
+	} {
+		policy, result := server.routePolicies.LookupRoutePolicy(http.MethodGet, test.path)
+		if result != auth.RouteFound || policy.AuditMode != auth.AuditRequired || policy.AuditAction != test.action {
+			t.Errorf("GET %s audit policy=%+v lookup=%v, want %q", test.path, policy, result, test.action)
 		}
 	}
 	for _, path := range []string{"/api/unmapped", "/api/router/api/v1/observability/replays/record-1/unmapped", "/api/services-status"} {

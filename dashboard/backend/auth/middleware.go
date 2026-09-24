@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -384,7 +386,7 @@ func isSRBenchRunAction(path, action string) bool {
 func openclawPermission(method, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/embedded/openclaw/"):
-		return PermOpenClawRead, true
+		return PermOpenClaw, true
 	case strings.HasPrefix(path, "/api/openclaw/mcp"):
 		return PermMcpManage, true
 	case hasAnyPrefix(path,
@@ -393,14 +395,17 @@ func openclawPermission(method, path string) (string, bool) {
 		"/api/openclaw/stop",
 		"/api/openclaw/containers/",
 		"/api/openclaw/next-port",
+		"/api/openclaw/token",
 	):
+		return PermOpenClaw, true
+	case strings.HasPrefix(path, "/api/openclaw/rooms/") &&
+		(strings.HasSuffix(path, "/ws") || (method == http.MethodPost && strings.HasSuffix(path, "/messages"))):
 		return PermOpenClaw, true
 	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
 		return PermOpenClawRead, true
 	case hasAnyPrefix(path,
 		"/api/openclaw/status",
 		"/api/openclaw/skills",
-		"/api/openclaw/token",
 	):
 		return PermOpenClawRead, true
 	case hasAnyPrefix(path,
@@ -584,6 +589,14 @@ func (w *auditResponseWriter) Flush() {
 
 func (w *auditResponseWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
+}
+
+func (w *auditResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, buffered, err := http.NewResponseController(w.ResponseWriter).Hijack()
+	if err == nil {
+		w.status = http.StatusSwitchingProtocols
+	}
+	return conn, buffered, err
 }
 
 func (w *auditResponseWriter) statusCodeOr200() int {
