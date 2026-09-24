@@ -31,16 +31,13 @@ def calibration_windows(
     if seq_len <= 0 or num_sequences <= 0:
         raise ValueError("seq_len and num_sequences must be positive")
     step = resolve_stride(window_stride, seq_len)
-    tokens: list[int] = []
     emitted = 0
     for document in tokenized_documents:
-        tokens.extend(document)
-        while len(tokens) >= seq_len:
-            yield tokens[:seq_len]
+        for start in range(0, len(document) - seq_len + 1, step):
+            yield document[start : start + seq_len]
             emitted += 1
             if emitted == num_sequences:
                 return
-            del tokens[:step]
     raise ValueError(
         f"corpus provided only {emitted} complete windows; requested {num_sequences}"
     )
@@ -96,6 +93,7 @@ class ActivationRunMeta:
     head_dim: int
     precision: str
     rope_stripped_on_keys: bool = True
+    document_window_policy: str = "within_document"
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -110,7 +108,9 @@ def write_run_metadata(out_dir: Path, meta: ActivationRunMeta) -> Path:
     path = out_dir / "run.json"
     payload = json.dumps(meta.to_dict(), indent=2, sort_keys=True) + "\n"
     if path.exists() and path.read_text() != payload:
-        raise ValueError("existing run metadata differs; choose another output directory")
+        raise ValueError(
+            "existing run metadata differs; choose another output directory"
+        )
     if not path.exists():
         temp = path.with_suffix(".tmp")
         temp.write_text(payload)
@@ -125,10 +125,14 @@ def read_run_metadata(out_dir: Path) -> ActivationRunMeta:
 def token_fingerprint(windows: np.ndarray) -> str:
     """Stable digest of the exact token IDs and their two-dimensional shape."""
     canonical = np.ascontiguousarray(windows, dtype="<i8")
-    return hashlib.sha256(np.asarray(canonical.shape, dtype="<i8").tobytes() + canonical.tobytes()).hexdigest()
+    return hashlib.sha256(
+        np.asarray(canonical.shape, dtype="<i8").tobytes() + canonical.tobytes()
+    ).hexdigest()
 
 
-def write_activation_chunk(path: Path, keys: list[np.ndarray], values: list[np.ndarray]) -> None:
+def write_activation_chunk(
+    path: Path, keys: list[np.ndarray], values: list[np.ndarray]
+) -> None:
     """Write one sampled sequence atomically, with a digest for safe resume."""
     if len(keys) != len(values) or not keys:
         raise ValueError("chunk needs matching, nonempty K/V layers")
@@ -141,14 +145,22 @@ def write_activation_chunk(path: Path, keys: list[np.ndarray], values: list[np.n
     path.with_suffix(".sha256").write_text(digest + "\n")
 
 
-def validate_activation_chunk(path: Path, n_layers: int, n_rows: int, n_heads: int, head_dim: int) -> bool:
+def validate_activation_chunk(
+    path: Path, n_layers: int, n_rows: int, n_heads: int, head_dim: int
+) -> bool:
     if not path.exists():
         return False
     digest_path = path.with_suffix(".sha256")
-    if not digest_path.exists() or hashlib.sha256(path.read_bytes()).hexdigest() != digest_path.read_text().strip():
+    if (
+        not digest_path.exists()
+        or hashlib.sha256(path.read_bytes()).hexdigest()
+        != digest_path.read_text().strip()
+    ):
         raise ValueError(f"corrupt or incomplete activation chunk: {path}")
     expected = (n_layers, n_rows, n_heads, head_dim)
     with np.load(path, allow_pickle=False) as chunk:
         if chunk["keys"].shape != expected or chunk["values"].shape != expected:
-            raise ValueError(f"activation chunk {path} does not match expected shape {expected}")
+            raise ValueError(
+                f"activation chunk {path} does not match expected shape {expected}"
+            )
     return True

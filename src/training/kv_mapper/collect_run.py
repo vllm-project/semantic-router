@@ -49,7 +49,10 @@ def _corpus_windows(args: argparse.Namespace, tokenizer):
     from datasets import load_dataset
 
     corpus = load_dataset(
-        args.corpus, args.dataset_config, split="train", streaming=True,
+        args.corpus,
+        args.dataset_config,
+        split="train",
+        streaming=True,
         revision=args.dataset_revision,
     ).shuffle(seed=args.seed, buffer_size=10_000)
     documents = (
@@ -57,18 +60,26 @@ def _corpus_windows(args: argparse.Namespace, tokenizer):
         for row in corpus
         if row.get("text")
     )
-    return list(calibration_windows(
-        documents, seq_len=args.seq_len, window_stride=args.window_stride,
-        num_sequences=args.num_sequences,
-    ))
+    return list(
+        calibration_windows(
+            documents,
+            seq_len=args.seq_len,
+            window_stride=args.window_stride,
+            num_sequences=args.num_sequences,
+        )
+    )
 
 
-def _capture_windows(model, windows, device, n_kv_heads, head_dim, layers, token_step, out_dir):
+def _capture_windows(
+    model, windows, device, n_kv_heads, head_dim, layers, token_step, out_dir
+):
     for index, window in enumerate(windows):
         path = out_dir / f"{index:06d}.npz"
         n_rows = len(range(0, len(window), token_step))
         try:
-            if validate_activation_chunk(path, len(layers), n_rows, n_kv_heads, head_dim):
+            if validate_activation_chunk(
+                path, len(layers), n_rows, n_kv_heads, head_dim
+            ):
                 continue
         except ValueError:
             # A Spot interruption may leave the chunk without its checksum.
@@ -89,7 +100,9 @@ def main() -> None:
     parser.add_argument("--target-revision", required=True)
     parser.add_argument("--source-device", default="cuda:0")
     parser.add_argument("--target-device", default="cuda:1")
-    parser.add_argument("--dtype", choices=("float16", "fp16", "bfloat16", "bf16"), default="bf16")
+    parser.add_argument(
+        "--dtype", choices=("float16", "fp16", "bfloat16", "bf16"), default="bf16"
+    )
     parser.add_argument("--num-kv-heads", type=int, required=True)
     parser.add_argument("--head-dim", type=int, required=True)
     parser.add_argument("--source-layer-subset", default="all")
@@ -107,7 +120,12 @@ def main() -> None:
 
     if args.fitting_token_step <= 0:
         parser.error("--fitting-token-step must be positive")
-    dtype = {"float16": torch.float16, "fp16": torch.float16, "bfloat16": torch.bfloat16, "bf16": torch.bfloat16}[args.dtype]
+    dtype = {
+        "float16": torch.float16,
+        "fp16": torch.float16,
+        "bfloat16": torch.bfloat16,
+        "bf16": torch.bfloat16,
+    }[args.dtype]
     src_model, tok = _load_lm(
         args.source_model, args.source_revision, args.source_device, dtype
     )
@@ -116,7 +134,9 @@ def main() -> None:
     out = args.output_dir
     token_path = out / "tokens.npy"
     if token_path.exists() and not (out / "run.json").exists():
-        raise ValueError("saved token windows have no run metadata; choose another output directory")
+        raise ValueError(
+            "saved token windows have no run metadata; choose another output directory"
+        )
     if token_path.exists():
         windows = np.load(token_path, allow_pickle=False)
     else:
@@ -126,21 +146,35 @@ def main() -> None:
     token_sha = token_fingerprint(windows)
     from transformers import AutoConfig, AutoTokenizer
 
-    tgt_tok = AutoTokenizer.from_pretrained(args.target_model, revision=args.target_revision, trust_remote_code=True)
+    tgt_tok = AutoTokenizer.from_pretrained(
+        args.target_model, revision=args.target_revision, trust_remote_code=True
+    )
     if tok.get_vocab() != tgt_tok.get_vocab():
-        raise ValueError("source and target tokenizers differ; paired token windows require the same vocabulary")
-    n_tgt = AutoConfig.from_pretrained(args.target_model, revision=args.target_revision, trust_remote_code=True).num_hidden_layers
+        raise ValueError(
+            "source and target tokenizers differ; paired token windows require the same vocabulary"
+        )
+    n_tgt = AutoConfig.from_pretrained(
+        args.target_model, revision=args.target_revision, trust_remote_code=True
+    ).num_hidden_layers
     tgt_layers = parse_layer_subset(args.target_layer_subset, n_tgt)
     meta = ActivationRunMeta(
-        corpus=args.corpus, dataset_config=args.dataset_config,
+        corpus=args.corpus,
+        dataset_config=args.dataset_config,
         dataset_revision=args.dataset_revision,
-        source_model=args.source_model, source_revision=args.source_revision,
-        target_model=args.target_model, target_revision=args.target_revision,
-        seed=args.seed, seq_len=args.seq_len,
-        window_stride=args.window_stride, fitting_token_step=args.fitting_token_step,
-        token_sha256=token_sha, num_sequences=len(windows),
-        source_layers=src_layers, target_layers=tgt_layers,
-        num_kv_heads=args.num_kv_heads, head_dim=args.head_dim,
+        source_model=args.source_model,
+        source_revision=args.source_revision,
+        target_model=args.target_model,
+        target_revision=args.target_revision,
+        seed=args.seed,
+        seq_len=args.seq_len,
+        window_stride=args.window_stride,
+        fitting_token_step=args.fitting_token_step,
+        token_sha256=token_sha,
+        num_sequences=len(windows),
+        source_layers=src_layers,
+        target_layers=tgt_layers,
+        num_kv_heads=args.num_kv_heads,
+        head_dim=args.head_dim,
         precision=args.dtype,
     )
     write_run_metadata(out, meta)
@@ -149,17 +183,31 @@ def main() -> None:
             np.save(stream, windows)
         token_path.with_suffix(".tmp").replace(token_path)
     _capture_windows(
-        src_model, windows, args.source_device, args.num_kv_heads,
-        args.head_dim, src_layers, args.fitting_token_step, out / "source",
+        src_model,
+        windows,
+        args.source_device,
+        args.num_kv_heads,
+        args.head_dim,
+        src_layers,
+        args.fitting_token_step,
+        out / "source",
     )
     del src_model
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    tgt_model, _ = _load_lm(args.target_model, args.target_revision, args.target_device, dtype)
+    tgt_model, _ = _load_lm(
+        args.target_model, args.target_revision, args.target_device, dtype
+    )
     _capture_windows(
-        tgt_model, windows, args.target_device, args.num_kv_heads,
-        args.head_dim, tgt_layers, args.fitting_token_step, out / "target",
+        tgt_model,
+        windows,
+        args.target_device,
+        args.num_kv_heads,
+        args.head_dim,
+        tgt_layers,
+        args.fitting_token_step,
+        out / "target",
     )
 
 
