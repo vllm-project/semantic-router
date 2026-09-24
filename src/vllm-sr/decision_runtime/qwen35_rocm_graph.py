@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -25,10 +26,8 @@ _MAX_GRAPHS = 2
 _MAX_CAPTURE_BYTES = 512 << 20
 _MAX_TOTAL_CAPTURE_BYTES = 768 << 20
 _MIN_FREE_HBM_BYTES = 8 << 30
-
-
-class QwenRocmGraphError(RuntimeError):
-    """Optional graph capture could not be proven safe for this process."""
+_MAX_PARITY_WARNINGS = 4
+_LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -108,6 +107,7 @@ class QwenRocmBackboneGraphs:
         self._rejected: set[_GraphKey] = set()
         self._captured_bytes = 0
         self._capture_attempts = 0
+        self._parity_warnings = 0
 
     def logits(self, batch: dict[str, Any]) -> Any:
         """Return original eager logits or qualified guarded-graph logits."""
@@ -142,10 +142,8 @@ class QwenRocmBackboneGraphs:
         ordinary = model(**batch)
         mapped = model(**{**batch, "attention_mask": masks})
         if not self._same_valid_logits_and_probabilities(batch, ordinary, mapped):
-            self._rejected.add(key)
-            raise QwenRocmGraphError(
-                "Qwen graph exact-mask qualification changed valid logits or probabilities"
-            )
+            self._reject_for_parity(key, stage="exact-mask")
+            return ordinary
         torch = self.runtime.torch
         if torch.cuda.mem_get_info(self.runtime.device)[0] < _MIN_FREE_HBM_BYTES:
             self._rejected.add(key)
@@ -180,13 +178,25 @@ class QwenRocmBackboneGraphs:
             batch, self._replay(captured, batch, masks)
         )
         if not self._same_valid_logits_and_probabilities(batch, ordinary, candidate):
-            self._rejected.add(key)
-            raise QwenRocmGraphError(
-                "Qwen graph replay changed valid logits or probabilities"
-            )
+            self._reject_for_parity(key, stage="captured-replay")
+            return ordinary
         self._graphs[key] = captured
         self._captured_bytes += captured.allocated_bytes
         return ordinary  # First request keeps its exact ordinary-eager result.
+
+    def _reject_for_parity(self, key: _GraphKey, *, stage: str) -> None:
+        """Disable one graph key and log at most four content-free warnings."""
+
+        self._rejected.add(key)
+        if self._parity_warnings < _MAX_PARITY_WARNINGS:
+            _LOGGER.warning(
+                "Qwen ROCm graph %s valid-logit/probability parity mismatch; "
+                "using eager for B%d/T%d",
+                stage,
+                key.physical_batch,
+                key.padded_tokens,
+            )
+            self._parity_warnings += 1
 
     def _exact_masks(self, batch: dict[str, Any]) -> dict[str, Any | None]:
         from transformers.masking_utils import (  # noqa: PLC0415

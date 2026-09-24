@@ -236,8 +236,13 @@ def test_strict_binding_failure_during_capture_is_not_hidden(monkeypatch):
         graphs.logits(_batch("A"))
 
 
-@pytest.mark.parametrize("qualifying_mask", (True, False))
-def test_parity_failure_never_publishes_graph(monkeypatch, qualifying_mask):
+@pytest.mark.parametrize(
+    ("qualifying_mask", "stage"),
+    ((True, "exact-mask"), (False, "captured-replay")),
+)
+def test_parity_failure_rejects_graph_and_returns_eager_with_content_free_warning(
+    monkeypatch, caplog, qualifying_mask, stage
+):
     _, graphs, entries = _runtime_and_graphs(monkeypatch)
     calls = []
 
@@ -248,12 +253,27 @@ def test_parity_failure_never_publishes_graph(monkeypatch, qualifying_mask):
     monkeypatch.setattr(
         graphs, "_same_valid_logits_and_probabilities", mismatch_on_selected_pass
     )
-    with pytest.raises(
-        graph_module.QwenRocmGraphError, match="logits or probabilities"
-    ):
-        graphs.logits(_batch("A"))
+    with caplog.at_level("WARNING"):
+        assert graphs.logits(_batch("PRIVATE-QUESTION")) == "eager:PRIVATE-QUESTION"
+        assert graphs.logits(_batch("PRIVATE-QUESTION")) == "eager:PRIVATE-QUESTION"
     assert not graphs._graphs
     assert len(entries) == (0 if qualifying_mask else 1)
+    assert len(caplog.records) == 1
+    assert stage in caplog.text
+    assert "B8/T128" in caplog.text
+    assert "PRIVATE-QUESTION" not in caplog.text
+
+
+def test_parity_warning_count_is_bounded_across_rejected_shapes(monkeypatch, caplog):
+    _, graphs, _ = _runtime_and_graphs(monkeypatch)
+    monkeypatch.setattr(
+        graphs, "_same_valid_logits_and_probabilities", lambda *args: False
+    )
+    with caplog.at_level("WARNING"):
+        for tokens in (32, 64, 96, 128, 160):
+            assert graphs.logits(_batch("private", tokens=tokens)) == "eager:private"
+    assert len(caplog.records) == graph_module._MAX_PARITY_WARNINGS
+    assert "private" not in caplog.text
 
 
 def test_cancelled_thread_keeps_graph_lock_until_host_completion(monkeypatch):
