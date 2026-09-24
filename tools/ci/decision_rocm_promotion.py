@@ -3,7 +3,7 @@
 
 The ROCm image is too large for the ordinary hosted-runner artifact handoff.
 This tool is the explicit device-qualified promotion seam; its default action
-is read-only validation. Run it from a protected main or stable-tag checkout
+is read-only validation. Run it from a protected main or release-tag checkout
 after the candidate was built and tested and pushed to a staging registry.
 """
 
@@ -38,7 +38,9 @@ REQUIRED_CHECKS = frozenset(
 )
 SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
-STABLE_TAG_REF = re.compile(r"refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\Z")
+STABLE_TAG_REF = re.compile(
+    r"refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?\Z"
+)
 RAW_FILES = frozenset(
     {
         "drun-launch.txt",

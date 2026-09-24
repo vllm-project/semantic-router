@@ -249,7 +249,12 @@ class ROCmPromotionTests(unittest.TestCase):
                 )
                 Path(arguments[arguments.index("--digestfile") + 1]).write_text(DIGEST)
 
-            for ref in ("refs/heads/main", "refs/tags/v1.2.3"):
+            for ref in (
+                "refs/heads/main",
+                "refs/tags/v1.2.3",
+                "refs/tags/v1.2.3-rc1",
+                "refs/tags/v1.2.3+build.1",
+            ):
                 with (
                     patch.dict(
                         os.environ,
@@ -268,6 +273,26 @@ class ROCmPromotionTests(unittest.TestCase):
                         "ghcr.io/example/semantic-router/decision-runtime-rocm@"
                         + DIGEST,
                     )
+
+            for ref in (
+                "refs/tags/v1.2.3-",
+                "refs/tags/v1.2.3/rc1",
+                "refs/tags/v1.2.3-rc1/evil",
+            ):
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "GITHUB_REF": ref,
+                            "GITHUB_REPOSITORY": "example/semantic-router",
+                            "GITHUB_EVENT_NAME": "push",
+                            "GITHUB_SHA": REVISION,
+                            "RUNNER_TEMP": tmp,
+                        },
+                    ),
+                    self.assertRaisesRegex(ValueError, "protected exact-source push"),
+                ):
+                    rocm.promote(record, owner="example")
 
 
 if __name__ == "__main__":
