@@ -51,8 +51,21 @@ offsets. Throughput counts complete successful workflows and divides their
 decisions by the sum of each round's first scheduled arrival to last completion
 window. A client scheduling miss above `--max-arrival-jitter-ms`, a failed
 workflow, or mismatched model revision/hardware/network scope suppresses the
-old/new ratios. The mode does not assert a no-regression floor, collect timed
-semantic bodies or server metrics, or qualify the protected release gate.
+old/new ratios. An offer rate below both services' capacity can give a
+decisions-per-second ratio near 1 even when their completion latencies differ.
+Any no-regression interpretation needs a predeclared saturating arrival
+profile, an arrival-jitter bound, and repeated runs; this exploratory mode
+does not assert a no-regression floor or qualify the protected release gate.
+
+Every successful throughput response from **both** arms is checked after timing against
+the untimed audit, including the old preview's original per-answer token
+counts when applicable. A mismatch suppresses the ratio and the affected
+workflow earns no successful decisions. `samples.jsonl` and the receipt give
+body-free status and hashes; the exact captured request and response bodies
+are in `timed-semantic.jsonl.gz` for replay. The sidecar is bounded to 80 MiB
+decompressed and 1 MiB/2 MiB per request/response. A cap breach makes the
+comparison ineligible. The synthetic bodies still require inspection before
+publication. This mode does not collect server metrics.
 
 ## Synthetic semantic workloads
 
