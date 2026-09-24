@@ -7,6 +7,10 @@ import unittest
 from pathlib import Path
 
 import numpy as np
+from safetensors.numpy import save_file
+
+# Direct unittest discovery also runs this file without installing the package.
+# ruff: noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT))
@@ -14,12 +18,12 @@ sys.path.insert(0, str(REPO_ROOT))
 from src.training.kv_mapper.artifact import (
     CompatibilitySpec,
     Manifest,
+    _write_checksums,
     read_artifact,
     tensor_keys_for_layers,
     verify_compatibility,
     write_artifact,
 )
-from src.training.kv_mapper.artifact import _write_checksums
 from src.training.kv_mapper.mapper_id import make_mapper_id
 
 COMPAT_MISMATCHES = (
@@ -105,11 +109,10 @@ class ArtifactContractTests(unittest.TestCase):
                     if name != "target.0.k.b"
                 },
             ):
-                with self.subTest(keys=set(bad)):
-                    with self.assertRaisesRegex(ValueError, "mapper tensor"):
-                        write_artifact(out, manifest, bad)
-
-            from safetensors.numpy import save_file
+                with self.subTest(keys=set(bad)), self.assertRaisesRegex(
+                    ValueError, "mapper tensor"
+                ):
+                    write_artifact(out, manifest, bad)
 
             write_artifact(out, manifest, tensors)
             bad = dict(tensors)
@@ -122,9 +125,10 @@ class ArtifactContractTests(unittest.TestCase):
     def test_rejects_invalid_source_layer_selection(self) -> None:
         manifest = _synthetic_manifest()
         manifest.source_layers_per_target["v"]["0"] = [0, 1, 1]
-        with tempfile.TemporaryDirectory() as directory:
-            with self.assertRaisesRegex(ValueError, "shared source layers"):
-                write_artifact(Path(directory), manifest, _synthetic_tensors())
+        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(
+            ValueError, "shared source layers"
+        ):
+            write_artifact(Path(directory), manifest, _synthetic_tensors())
 
     def test_roundtrip_three_layers(self) -> None:
         manifest = _synthetic_manifest()
@@ -167,7 +171,7 @@ class ArtifactContractTests(unittest.TestCase):
                 "",
                 lines[0] + "\n",
                 lines[1] + "\n",
-                "\n".join(lines + [lines[0]]) + "\n",
+                "\n".join([*lines, lines[0]]) + "\n",
             ):
                 with self.subTest(contents=contents):
                     (out / "SHA256SUMS").write_text(contents)

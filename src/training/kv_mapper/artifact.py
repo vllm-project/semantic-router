@@ -9,12 +9,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from safetensors.numpy import load_file, save_file
 
 from src.training.kv_mapper.mapper_id import normalize_precision
 
 WEIGHTS_FILE = "weights.safetensors"
 MANIFEST_FILE = "manifest.json"
 CHECKSUMS_FILE = "SHA256SUMS"
+CHECKSUM_ENTRY_FIELDS = 2
+SHA256_HEX_LENGTH = 64
 
 
 @dataclass(frozen=True)
@@ -141,8 +144,6 @@ def write_artifact(
 ) -> None:
     validate_artifact(manifest, tensors)
     out_dir.mkdir(parents=True, exist_ok=True)
-    from safetensors.numpy import save_file
-
     save_file(tensors, str(out_dir / WEIGHTS_FILE))
     (out_dir / MANIFEST_FILE).write_text(
         json.dumps(manifest.to_dict(), indent=2, sort_keys=True) + "\n"
@@ -159,8 +160,6 @@ def read_artifact(out_dir: Path) -> tuple[Manifest, dict[str, np.ndarray]]:
         raise FileNotFoundError(f"missing {weights_path}")
     verify_checksums(out_dir)
     manifest = Manifest.from_dict(json.loads(manifest_path.read_text()))
-    from safetensors.numpy import load_file
-
     tensors = dict(load_file(str(weights_path)))
     validate_artifact(manifest, tensors)
     return manifest, tensors
@@ -219,13 +218,13 @@ def verify_checksums(out_dir: Path) -> None:
     required = {MANIFEST_FILE, WEIGHTS_FILE}
     for line in sums_path.read_text().splitlines():
         parts = line.split()
-        if len(parts) != 2:
+        if len(parts) != CHECKSUM_ENTRY_FIELDS:
             raise ValueError(f"invalid checksum entry in {sums_path}: {line!r}")
         digest, name = parts
         if (
             name not in required
             or name in checksums
-            or len(digest) != 64
+            or len(digest) != SHA256_HEX_LENGTH
             or any(char not in "0123456789abcdefABCDEF" for char in digest)
         ):
             raise ValueError(f"invalid checksum entry for {name} in {sums_path}")
