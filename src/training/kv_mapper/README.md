@@ -45,10 +45,14 @@ python3 -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
 
 `collect.py` is the run metadata and window/layer-subset contract (numpy, CI).
 `hooks.py` attaches k_norm/k_proj and v_proj hooks and reads K after RMSNorm
-and before RoPE. `collect_run.py` loads both models and writes `run.json` plus
-`activations.pt`. It streams and shuffles the requested corpus with `--seed`,
-then captures `--num-sequences` token windows of `--seq-len` with `--stride`.
-Each saved layer tensor has shape `(num_sequences, seq_len, num_kv_heads, head_dim)`.
+and before RoPE. `collect_run.py` writes `run.json`, `tokens.npy`, and atomic
+per-sequence chunks under `source/` and `target/`. It streams and shuffles the
+pinned corpus with `--seed`, then captures `--num-sequences` token windows of
+`--seq-len` with `--window-stride`. `--fitting-token-step` selects every fourth
+token from each distinct sequence by default. Each chunk stores K and V with
+shape `(layers, sampled_tokens, num_kv_heads, head_dim)` in float32. Chunks have
+SHA-256 sidecars and are checked before a resumed run skips them. `run.json`
+records the exact token fingerprint, dataset revision, and fitting recipe.
 The models must use the same tokenizer vocabulary so positions stay paired.
 That script needs torch, transformers, and datasets; it is not part of
 `make test-training-contracts`.
@@ -57,14 +61,15 @@ That script needs torch, transformers, and datasets; it is not part of
 PYTHONPATH=. python3 src/training/kv_mapper/collect_run.py \
   --source-model Qwen/Qwen3-14B --source-revision <sha> \
   --target-model Qwen/Qwen3-32B --target-revision <sha> \
-  --num-kv-heads 8 --head-dim 128 \
-  --source-layer-subset 0:8 --output-dir /tmp/kv-collect
+  --dataset-revision <sha> --dtype bf16 \
+  --num-kv-heads 8 --head-dim 128 --output-dir /tmp/kv-collect
 ```
 
 ## Fit
 
-`fit.py` ranks source layers by Pearson correlation, fits a centered ridge with
-bias (keys and values separately), and writes the A1 directory via
+`fit.py` ranks source layers by single-source per-head affine OLS R² averaged
+over K and V, then fits a centered ridge with bias (keys and values separately),
+and writes the A1 directory via
 `write_fitted_artifact`.
 
 ```bash
