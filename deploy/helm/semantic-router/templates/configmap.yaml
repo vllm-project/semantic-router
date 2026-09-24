@@ -78,6 +78,7 @@
 {{- $_ := set $config "version" "v0.3" -}}
 {{- end -}}
 {{- $liveConfig := include "semantic-router.liveConfig" . -}}
+{{- $configMapPolicy := .Values.configMap | default (dict) -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -86,7 +87,7 @@ metadata:
   labels:
     {{- include "semantic-router.labels" . | nindent 4 }}
   annotations:
-    semantic-router.vllm.ai/chart-config-revision: {{ .Values.configMap.applyValuesRevision | default "" | quote }}
+    semantic-router.vllm.ai/chart-config-revision: {{ get $configMapPolicy "applyValuesRevision" | default "" | quote }}
 data:
   {{- if ne (trim $liveConfig) "" }}
   config.yaml: {{ $liveConfig | toJson }}
