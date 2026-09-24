@@ -72,6 +72,24 @@ Get the namespace
 {{- end }}
 
 {{/*
+Get the router ConfigMap name
+*/}}
+{{- define "semantic-router.configMapName" -}}
+{{- printf "%s-config" (include "semantic-router.fullname" .) }}
+{{- end }}
+
+{{/*
+Get the dashboard service account name
+*/}}
+{{- define "semantic-router.dashboardServiceAccountName" -}}
+{{- if .Values.serviceAccount.create }}
+{{- printf "%s-dashboard" (include "semantic-router.fullname" .) }}
+{{- else }}
+{{- default "default" .Values.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
 Get the PVC name
 */}}
 {{- define "semantic-router.pvcName" -}}

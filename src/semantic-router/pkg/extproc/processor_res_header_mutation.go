@@ -150,7 +150,21 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 
 	inbound := normalizeProtocol(string(ctx.SourceFormat))
 	outbound := normalizeProtocol(string(ctx.TargetFormat))
+	value, included := formatProtocolDiagnostics(diagnostics)
+	for _, diagnostic := range diagnostics[:included] {
+		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
+	}
+	builder.addString(headers.VSRProtocolWarnings, value)
+}
 
+// formatProtocolDiagnostics is shared by the early header phase and the
+// buffered body phase. The latter can discover diagnostics after Envoy has
+// already asked for response headers, so it must replace the warning header
+// with the full bounded list without counting early diagnostics twice.
+func formatProtocolDiagnostics(diagnostics llmprotocol.Diagnostics) (string, int) {
+	if len(diagnostics) == 0 {
+		return "", 0
+	}
 	// Reserve the largest possible truncation trailer before appending entries.
 	// A single diagnostic obeys the same bound as a longer warning list.
 	trailerBudget := len(fmt.Sprintf("%s;%s;count=%d", llmprotocol.DiagnosticTruncated, "diagnostics_truncated", len(diagnostics))) + 1
@@ -170,7 +184,6 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 			sb.WriteByte(',')
 		}
 		sb.WriteString(entry)
-		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
 	}
 
 	if truncatedAt >= 0 {
@@ -185,7 +198,11 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 		sb.WriteString(trailer)
 	}
 
-	builder.addString(headers.VSRProtocolWarnings, sb.String())
+	included := len(diagnostics)
+	if truncatedAt >= 0 {
+		included = truncatedAt
+	}
+	return sb.String(), included
 }
 
 func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {

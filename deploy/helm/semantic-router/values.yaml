@@ -168,7 +168,8 @@ nodeSelector: {}
 tolerations: []
 # Affinity rules
 affinity: {}
-# Extra volumes for custom mounts (e.g., ML models via hostPath)
+# Extra volumes for custom mounts (e.g., a shared model cache via hostPath).
+# When extraVolumeMounts claims /app/models, it replaces the default model volume.
 extraVolumes: []
 # Example:
 #   - name: ml-models
@@ -176,7 +177,8 @@ extraVolumes: []
 #       path: /mnt/ml-models
 #       type: DirectoryOrCreate
 
-# Extra volume mounts
+# Extra volume mounts. A mount at /app/models replaces the default emptyDir/PVC
+# mount; supply its matching volume through extraVolumes.
 extraVolumeMounts: []
 # Example:
 #   - name: ml-models

@@ -14,6 +14,7 @@ spec:
       labels:
         app: semantic-router-dashboard
     spec:
+      serviceAccountName: semantic-router-dashboard
       containers:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:latest
@@ -62,8 +63,16 @@ spec:
                   optional: true
             - name: ROUTER_CONFIG_PATH
               value: /app/config/config.yaml
+            - name: DASHBOARD_CONFIG_DIR
+              value: /app/data
             - name: VLLM_SR_RECIPE_STORE_DIR
               value: /app/data/recipe-store
+            - name: VLLM_SR_K8S_CONFIGMAP_NAME
+              value: semantic-router-config
+            - name: VLLM_SR_K8S_CONFIGMAP_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: ML_PIPELINE_ENABLED
               value: "false"
             - name: OPENCLAW_ENABLED

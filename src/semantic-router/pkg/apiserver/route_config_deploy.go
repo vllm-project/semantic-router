@@ -3,8 +3,7 @@
 package apiserver
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +17,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -174,7 +174,7 @@ func (s *ClassificationAPIServer) loadCompatibleRollbackSource(
 	sourcePath string,
 	backupCfg *config.RouterConfig,
 ) ([]byte, bool) {
-	existingData, err := os.ReadFile(sourcePath)
+	existingData, err := readPersistedSourceConfig(sourcePath)
 	if err != nil && !os.IsNotExist(err) {
 		s.writeErrorResponse(
 			w,
@@ -218,7 +218,7 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 	afterAttempt uint64,
 ) {
 	etag := configDocumentETag(backupData)
-	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(runtimePath, afterAttempt)
+	runtimeHash, runtimeStatus := s.waitForRuntimeConfigActivation(runtimePath, backupData, afterAttempt)
 	statusCode := http.StatusOK
 	status := "success"
 	message := fmt.Sprintf("Rolled back to version %s. Router reload is active.", version)
@@ -226,6 +226,10 @@ func (s *ClassificationAPIServer) writeRollbackSuccess(
 		statusCode = http.StatusAccepted
 		status = "accepted"
 		message = fmt.Sprintf("Rolled back to version %s on disk; runtime activation is pending. Poll /api/v1/config/hash until activation_status is active.", version)
+	} else if runtimeStatus == "persisted" {
+		statusCode = http.StatusAccepted
+		status = "accepted"
+		message = fmt.Sprintf("Rolled back to version %s in the Kubernetes ConfigMap; it takes effect on the router's next restart.", version)
 	} else if runtimeStatus == "failed" {
 		statusCode = http.StatusServiceUnavailable
 		status = "activation_failed"
@@ -347,7 +351,7 @@ func (s *ClassificationAPIServer) handleConfigGet(w http.ResponseWriter, r *http
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	data, err := os.ReadFile(paths.sourcePath)
+	data, err := readPersistedSourceConfig(paths.sourcePath)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read config: %v", err))
 		return
@@ -461,25 +465,59 @@ func (s *ClassificationAPIServer) handleConfigHash(w http.ResponseWriter, _ *htt
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	data, err := os.ReadFile(paths.sourcePath)
+	sourceHash, runtimeHash, kubernetesTarget, err := s.resolveConfigSourceAndRuntimeHash(paths)
 	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read config: %v", err))
+		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", err.Error())
 		return
 	}
 
-	hash := sha256.Sum256(data)
-	runtimeHash, err := configFileHash(paths.runtimePath)
-	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("Failed to read runtime config: %v", err))
-		return
-	}
 	activeHash := s.activeConfigDocumentHash()
 	status := s.configActivationStatus(runtimeHash, activeHash)
+	if kubernetesTarget && status != "active" {
+		// A mismatch here can never resolve by polling: the ConfigMap write
+		// never touches the running process, so only a restart picks it up.
+		status = "persisted"
+	}
 	s.writeJSONResponse(w, http.StatusOK, configHashResponse{
-		SourceConfigHash:     hex.EncodeToString(hash[:]),
+		SourceConfigHash:     sourceHash,
 		GeneratedRuntimeHash: runtimeHash,
 		ActiveRuntimeHash:    activeHash,
 		ActivationStatus:     status,
 		Activation:           s.configActivation(runtimeHash),
 	})
+}
+
+// resolveConfigSourceAndRuntimeHash reads the current source and runtime
+// document hashes. On a Kubernetes ConfigMap target, both come from the
+// ConfigMap itself (the single document that backs the mounted file, per
+// issue #3688): the mounted file is read-only and never reflects an API
+// write, so reading it here would report stale hashes indefinitely.
+func (s *ClassificationAPIServer) resolveConfigSourceAndRuntimeHash(paths configPersistencePaths) (sourceHash, runtimeHash string, kubernetesTarget bool, err error) {
+	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		writer, writerErr := resolvedConfigMapWriter()
+		if writerErr != nil {
+			return "", "", true, fmt.Errorf("config write target is declared but no Kubernetes client is available: %w", writerErr)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+		defer cancel()
+		data, found, readErr := writer.Read(ctx, target)
+		if readErr != nil {
+			return "", "", true, fmt.Errorf("failed to read config ConfigMap: %w", readErr)
+		}
+		if !found {
+			return "", "", true, nil
+		}
+		hash := configDocumentETagHash(data)
+		return hash, hash, true, nil
+	}
+
+	data, err := os.ReadFile(paths.sourcePath)
+	if err != nil {
+		return "", "", false, fmt.Errorf("failed to read config: %w", err)
+	}
+	runtimeHash, err = configFileHash(paths.runtimePath)
+	if err != nil {
+		return "", "", false, fmt.Errorf("failed to read runtime config: %w", err)
+	}
+	return configDocumentETagHash(data), runtimeHash, false, nil
 }

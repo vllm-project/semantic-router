@@ -246,8 +246,8 @@ the locked chart dependencies.
 | env[2].valueFrom.secretKeyRef.key | string | `"token"` |  |
 | env[2].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
 | env[2].valueFrom.secretKeyRef.optional | bool | `true` |  |
-| extraVolumeMounts | list | `[]` |  |
-| extraVolumes | list | `[]` |  |
+| extraVolumeMounts | list | `[]` | Extra Router mounts. A mount at `/app/models` replaces the default model volume mount. |
+| extraVolumes | list | `[]` | Volumes for custom mounts; provide a matching volume when replacing `/app/models`. |
 | fullnameOverride | string | `""` | Override the full name of the chart |
 | global.imageRegistry | string | `""` | Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com) |
 | global.namespace | string | `""` | Namespace for all resources (if not specified, uses Release.Namespace) |
@@ -437,8 +437,13 @@ activation on the reconciling replica. A failed subsequent candidate reports
 Status persistence failures are retried without rebuilding a successful generation.
 The startup probe retains its configurable 60-minute default model-download budget.
 
-The mounted ConfigMap is immutable through the Router management API. Config
-mutation endpoints return HTTP 403 with `CONFIG_READ_ONLY` for read-only files or
-Kubernetes CR-managed configuration. Update the owning CR or ConfigMap through
-Kubernetes; ConfigMap `subPath` changes require a rollout. Writable local-file
-configuration continues to support management API updates.
+For chart-managed file configuration, Router management writes update the named
+ConfigMap through the Kubernetes API. A successful write returns HTTP 202 with
+`activation_status: persisted`; the existing `subPath` mount and active Router
+generation stay on the prior document until the Router deployment is rolled
+out. `/api/v1/config/hash` reads the saved ConfigMap and reports when activation
+becomes active. A second mutation on a stale Pod returns HTTP 409
+`CONFIG_ROLLOUT_REQUIRED`, preventing it from overwriting the saved change.
+Kubernetes CR-managed configuration remains read-only through this API. Keep
+the canonical Helm values in sync with API edits before the next Helm upgrade,
+which otherwise renders the earlier values back into the ConfigMap.

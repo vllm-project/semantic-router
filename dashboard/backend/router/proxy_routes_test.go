@@ -55,17 +55,14 @@ func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
 	_, pattern := mux.Handler(req)
-	if pattern != "/api/" {
-		t.Fatalf("matched route = %q, want generic API fallback %q", pattern, "/api/")
+	if pattern != "" {
+		t.Fatalf("matched route = %q, want no API fallback", pattern)
 	}
 
 	recorder := httptest.NewRecorder()
 	mux.ServeHTTP(recorder, req)
-	if recorder.Code != http.StatusBadGateway {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadGateway)
-	}
-	if !strings.Contains(recorder.Body.String(), "No API handler configured for this path") {
-		t.Fatalf("response body = %q, want generic API fallback", recorder.Body.String())
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
 	}
 }
 

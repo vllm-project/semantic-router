@@ -21,6 +21,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	ctx *RequestContext,
 	completionLatency time.Duration,
 ) *ext_proc.ProcessingResponse {
+	diagnosticsBeforeBody := len(ctx.ProtocolDiagnostics)
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
@@ -52,6 +53,14 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
 	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
+	lateDiagnostics := ctx.ProtocolDiagnostics[diagnosticsBeforeBody:]
+	if !ctx.VSRCacheHit {
+		inbound := normalizeProtocol(string(ctx.SourceFormat))
+		outbound := normalizeProtocol(string(ctx.TargetFormat))
+		for _, diagnostic := range lateDiagnostics {
+			recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
+		}
+	}
 	if blocked != nil {
 		return blocked
 	}
@@ -61,6 +70,10 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		response.GetResponseBody().GetResponse().HeaderMutation = &ext_proc.HeaderMutation{
 			SetHeaders: headerOptions,
 		}
+	}
+	if len(lateDiagnostics) > 0 && !ctx.VSRCacheHit {
+		value, _ := formatProtocolDiagnostics(ctx.ProtocolDiagnostics)
+		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, value)
 	}
 	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, finalBody)
@@ -294,6 +307,14 @@ func addResponseCostHeaders(ctx *RequestContext, response *ext_proc.ProcessingRe
 // setResponseBodyHeader sets one response header from the body phase, merging
 // with any header mutation the response already carries.
 func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value string) {
+	setResponseBodyHeaderWithAction(response, key, value, core.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD)
+}
+
+func setResponseBodyHeaderOverwrite(response *ext_proc.ProcessingResponse, key, value string) {
+	setResponseBodyHeaderWithAction(response, key, value, core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD)
+}
+
+func setResponseBodyHeaderWithAction(response *ext_proc.ProcessingResponse, key, value string, action core.HeaderValueOption_HeaderAppendAction) {
 	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
 	if !ok {
 		return
@@ -306,6 +327,7 @@ func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value str
 			Key:      key,
 			RawValue: []byte(value),
 		},
+		AppendAction: action,
 	}
 	if hm := bodyResponse.ResponseBody.Response.HeaderMutation; hm != nil {
 		hm.SetHeaders = append(hm.SetHeaders, opt)

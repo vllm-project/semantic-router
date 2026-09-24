@@ -229,7 +229,7 @@ func archiveDeployDSL(configDir string, dsl string) {
 // into empty data would let a deploy or rollback overwrite an unreadable live
 // config with no snapshot, and the nil result also disables the runtime restore.
 func readLiveConfig(configPath string) ([]byte, error) {
-	data, err := os.ReadFile(configPath)
+	data, err := readPersistedDashboardConfig(configPath)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -280,7 +280,11 @@ func versionsLocalList(w http.ResponseWriter, configPath string) {
 }
 
 func listConfigVersions(configPath string) ([]ConfigVersion, error) {
-	backupDir := configBackupDir(filepath.Dir(configPath))
+	configDir := strings.TrimSpace(os.Getenv("DASHBOARD_CONFIG_DIR"))
+	if configDir == "" {
+		configDir = filepath.Dir(configPath)
+	}
+	backupDir := configBackupDir(configDir)
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
 		return nil, err

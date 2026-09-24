@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -239,6 +240,9 @@ func SetupActivateHandler(
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
 			log.Printf("Setup activation aborted, config backup failed: %v", backupErr)
 			http.Error(w, "Setup activation aborted: the config backup could not be written with owner-only permissions.", http.StatusInternalServerError)
@@ -246,7 +250,17 @@ func SetupActivateHandler(
 		}
 
 		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
-			http.Error(w, "Failed to write the setup configuration", http.StatusInternalServerError)
+			writeConfigPersistenceError(w, writeErr)
+			return
+		}
+		if configActivationDeferred() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(w).Encode(SetupActivateResponse{
+				Status:    "persisted",
+				SetupMode: true,
+				Message:   "Setup saved to the Kubernetes ConfigMap. Roll out Router and Envoy to activate it.",
+			})
 			return
 		}
 
@@ -324,6 +338,9 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		resp, err := client.Do(remoteReq)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to fetch remote config: %v", err), http.StatusBadGateway)

@@ -5,7 +5,6 @@ package apiserver
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -170,7 +169,7 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 
 	paths := resolveConfigPersistencePaths(s.configPath)
 	baseDir := knowledgeBaseConfigBaseDir(cfg, s.configPath)
-	existingData, err := os.ReadFile(paths.sourcePath)
+	existingData, err := readPersistedSourceConfig(paths.sourcePath)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("failed to read config: %v", err))
 		return
@@ -207,7 +206,7 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 		removeTxn.Commit()
 		committed = true
 	}
-	activation, status := s.knowledgeBaseActivationStatus(paths.runtimePath, http.StatusOK)
+	activation, status := s.knowledgeBaseActivationStatus(paths.runtimePath, updatedYAML, http.StatusOK)
 	s.writeJSONResponse(w, status, knowledgeBaseDeleteResponse{
 		knowledgeBaseActivation: activation,
 		Status:                  "deleted",
@@ -280,7 +279,7 @@ func (s *ClassificationAPIServer) persistManagedKnowledgeBase(
 ) error {
 	paths := resolveConfigPersistencePaths(s.configPath)
 	baseDir := knowledgeBaseConfigBaseDir(cfg, s.configPath)
-	existingData, err := os.ReadFile(paths.sourcePath)
+	existingData, err := readPersistedSourceConfig(paths.sourcePath)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("failed to read config: %v", err))
 		return err
@@ -328,7 +327,7 @@ func (s *ClassificationAPIServer) persistManagedKnowledgeBase(
 		s.writeErrorResponse(w, http.StatusInternalServerError, "KB_READ_ERROR", err.Error())
 		return err
 	}
-	activation, status := s.knowledgeBaseActivationStatus(paths.runtimePath, successStatus)
+	activation, status := s.knowledgeBaseActivationStatus(paths.runtimePath, updatedYAML, successStatus)
 	document.knowledgeBaseActivation = activation
 	s.writeJSONResponse(w, status, document)
 	return nil

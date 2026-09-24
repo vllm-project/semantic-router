@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/middleware"
@@ -26,7 +27,7 @@ func newOpenClawHandler(cfg *config.Config, wf *workflowstore.Store) *handlers.O
 }
 
 func registerOpenClawRoutes(
-	mux *http.ServeMux,
+	mux routeRegistrar,
 	cfg *config.Config,
 	openClawHandler *handlers.OpenClawHandler,
 ) {
@@ -42,26 +43,65 @@ func registerOpenClawRoutes(
 	log.Printf("OpenClaw feature disabled")
 }
 
-func registerEnabledOpenClawRoutes(mux *http.ServeMux, openClawHandler *handlers.OpenClawHandler) {
-	mux.HandleFunc("/api/openclaw/status", openClawHandler.StatusHandler())
-	mux.HandleFunc("/api/openclaw/skills", openClawHandler.SkillsHandler())
-	mux.HandleFunc("/api/openclaw/teams", openClawHandler.TeamsHandler())
-	mux.HandleFunc("/api/openclaw/teams/", openClawHandler.TeamByIDHandler())
-	mux.HandleFunc("/api/openclaw/workers", openClawHandler.WorkersHandler())
-	mux.HandleFunc("/api/openclaw/workers/", openClawHandler.WorkerByIDHandler())
-	mux.HandleFunc("/api/openclaw/rooms", openClawHandler.RoomsHandler())
-	mux.HandleFunc("/api/openclaw/rooms/", openClawHandler.RoomByIDHandler())
-	mux.HandleFunc("/api/openclaw/provision", openClawHandler.ProvisionHandler())
-	mux.HandleFunc("/api/openclaw/start", openClawHandler.StartHandler())
-	mux.HandleFunc("/api/openclaw/stop", openClawHandler.StopHandler())
-	mux.HandleFunc("/api/openclaw/token", openClawHandler.TokenHandler())
-	mux.HandleFunc("/api/openclaw/next-port", openClawHandler.NextPortHandler())
-	mux.HandleFunc("/api/openclaw/containers/", openClawHandler.DeleteHandler())
+func registerEnabledOpenClawRoutes(mux routeRegistrar, openClawHandler *handlers.OpenClawHandler) {
+	for _, route := range []struct {
+		path    string
+		handler http.HandlerFunc
+	}{
+		{"/api/openclaw/status", openClawHandler.StatusHandler()},
+		{"/api/openclaw/skills", openClawHandler.SkillsHandler()},
+		{"/api/openclaw/token", openClawHandler.TokenHandler()},
+	} {
+		registerRouteFunc(mux, auth.ProtectedRoute(route.path, auth.PermOpenClawRead, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, http.MethodGet), route.handler)
+	}
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/next-port", auth.PermOpenClaw, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw, http.MethodGet), openClawHandler.NextPortHandler())
+	registerOpenClawCollection(mux, "/api/openclaw/teams", "openclaw.team.create", openClawHandler.TeamsHandler())
+	registerOpenClawItem(mux, "/api/openclaw/teams/{id}", "openclaw.team", openClawHandler.TeamByIDHandler())
+	registerOpenClawCollection(mux, "/api/openclaw/workers", "openclaw.worker.create", openClawHandler.WorkersHandler())
+	registerOpenClawItem(mux, "/api/openclaw/workers/{id}", "openclaw.worker", openClawHandler.WorkerByIDHandler())
+	registerOpenClawCollection(mux, "/api/openclaw/rooms", "openclaw.room.create", openClawHandler.RoomsHandler())
+	roomHandler := openClawHandler.RoomByIDHandler()
+	registerRouteFunc(mux, auth.Route("/api/openclaw/rooms/{id}",
+		auth.ReadPolicy(http.MethodGet, auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw),
+		auth.MutationPolicy(http.MethodDelete, auth.PermOpenClaw, "openclaw.room.delete", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 64<<10),
+	), roomHandler)
+	registerRouteFunc(mux, auth.Route("/api/openclaw/rooms/{id}/messages",
+		auth.ReadPolicy(http.MethodGet, auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw),
+		auth.MutationPolicy(http.MethodPost, auth.PermOpenClawRead, "openclaw.room.message", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
+	), roomHandler)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/rooms/{id}/stream", auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw, http.MethodGet), roomHandler)
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/rooms/{id}/ws", auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw, http.MethodGet), roomHandler)
+	for _, route := range []struct {
+		path, action string
+		handler      http.HandlerFunc
+	}{
+		{"/api/openclaw/provision", "openclaw.provision", openClawHandler.ProvisionHandler()},
+		{"/api/openclaw/start", "openclaw.start", openClawHandler.StartHandler()},
+		{"/api/openclaw/stop", "openclaw.stop", openClawHandler.StopHandler()},
+	} {
+		registerRouteFunc(mux, auth.ProtectedMutationRoute(route.path, auth.PermOpenClaw, route.action, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20, http.MethodPost), route.handler)
+	}
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/openclaw/containers/{name}", auth.PermOpenClaw, "openclaw.container.delete", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 64<<10, http.MethodDelete), openClawHandler.DeleteHandler())
 }
 
-func registerOpenClawProxyRoute(mux *http.ServeMux, openClawHandler *handlers.OpenClawHandler) {
+func registerOpenClawCollection(mux routeRegistrar, path, action string, handler http.HandlerFunc) {
+	registerRouteFunc(mux, auth.Route(path,
+		auth.ReadPolicy(http.MethodGet, auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw),
+		auth.MutationPolicy(http.MethodPost, auth.PermOpenClaw, action, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
+	), handler)
+}
+
+func registerOpenClawItem(mux routeRegistrar, path, action string, handler http.HandlerFunc) {
+	registerRouteFunc(mux, auth.Route(path,
+		auth.ReadPolicy(http.MethodGet, auth.PermOpenClawRead, auth.SensitivitySensitive, auth.ResourceOwnerOpenClaw),
+		auth.MutationPolicy(http.MethodPut, auth.PermOpenClaw, action+".update", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
+		auth.MutationPolicy(http.MethodDelete, auth.PermOpenClaw, action+".delete", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 64<<10),
+	), handler)
+}
+
+func registerOpenClawProxyRoute(mux routeRegistrar, openClawHandler *handlers.OpenClawHandler) {
 	var proxyCache sync.Map // map[string]http.Handler
-	mux.HandleFunc("/embedded/openclaw/", func(w http.ResponseWriter, r *http.Request) {
+	registerRouteFunc(mux, auth.ProtectedRoute("/embedded/openclaw/", auth.PermOpenClawRead, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, http.MethodGet), func(w http.ResponseWriter, r *http.Request) {
 		if middleware.HandleCORSPreflight(w, r) {
 			return
 		}
@@ -112,17 +152,16 @@ func registerOpenClawProxyRoute(mux *http.ServeMux, openClawHandler *handlers.Op
 	})
 }
 
-func registerDisabledOpenClawRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/api/openclaw/status", writeOpenClawArray)
-	mux.HandleFunc("/api/openclaw/teams", writeOpenClawArray)
-	mux.HandleFunc("/api/openclaw/workers", writeOpenClawArray)
-	mux.HandleFunc("/api/openclaw/rooms", writeOpenClawArray)
-	mux.HandleFunc("/api/openclaw/rooms/", func(w http.ResponseWriter, r *http.Request) {
+func registerDisabledOpenClawRoutes(mux routeRegistrar) {
+	for _, path := range []string{"/api/openclaw/status", "/api/openclaw/teams", "/api/openclaw/workers", "/api/openclaw/rooms"} {
+		registerRouteFunc(mux, auth.ProtectedRoute(path, auth.PermOpenClawRead, auth.SensitivityOperational, auth.ResourceOwnerOpenClaw, http.MethodGet), writeOpenClawArray)
+	}
+	registerRouteFunc(mux, auth.ProtectedRoute("/api/openclaw/rooms/{id}", auth.PermOpenClawRead, auth.SensitivityOperational, auth.ResourceOwnerOpenClaw, http.MethodGet), func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		http.Error(w, `{"error":"OpenClaw feature disabled"}`, http.StatusServiceUnavailable)
 	})
-	mux.HandleFunc(
-		"/embedded/openclaw/",
+	registerRouteFunc(mux,
+		auth.ProtectedRoute("/embedded/openclaw/", auth.PermOpenClawRead, auth.SensitivityOperational, auth.ResourceOwnerOpenClaw, http.MethodGet),
 		serviceUnavailableHTMLHandler("OpenClaw", "OPENCLAW_ENABLED", "true"),
 	)
 }

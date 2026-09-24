@@ -160,6 +160,49 @@ python3 deploy/helm/check-model-runtime.py "$TEMP_DIR/model-runtime-template.yam
 log_success "Model deployments, input/admission budgets and isolated bindings are preserved"
 echo ""
 
+log_info "Testing custom workspace models mount rendering..."
+cat > "$TEMP_DIR/workspace-models-values.yaml" <<'YAML'
+extraVolumes:
+  - name: workspace-models
+    hostPath:
+      path: /opt/semantic-router/workspace-models
+      type: DirectoryOrCreate
+extraVolumeMounts:
+  - name: workspace-models
+    mountPath: /app/models
+YAML
+helm template workspace-release "$CHART_PATH" \
+    -f "$TEMP_DIR/workspace-models-values.yaml" \
+    > "$TEMP_DIR/workspace-models-template.yaml"
+python3 - "$TEMP_DIR/default-template.yaml" "$TEMP_DIR/workspace-models-template.yaml" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+
+def router_pod(path):
+    for document in yaml.safe_load_all(Path(path).read_text(encoding="utf-8")):
+        if (
+            document
+            and document.get("kind") == "Deployment"
+            and document["metadata"]["labels"].get("app.kubernetes.io/component") == "router"
+        ):
+            return document["spec"]["template"]["spec"]
+    raise AssertionError(f"Router Deployment missing from {path}")
+
+
+default_pod, workspace_pod = map(router_pod, sys.argv[1:])
+for pod, expected_name in ((default_pod, "models-volume"), (workspace_pod, "workspace-models")):
+    mounts = [mount for mount in pod["containers"][0]["volumeMounts"] if mount["mountPath"] == "/app/models"]
+    assert len(mounts) == 1 and mounts[0]["name"] == expected_name, mounts
+    volumes = [volume for volume in pod["volumes"] if volume["name"] == expected_name]
+    assert len(volumes) == 1, volumes
+assert all(volume["name"] != "models-volume" for volume in workspace_pod["volumes"])
+PY
+log_success "Custom /app/models mount replaces the default model volume"
+echo ""
+
 
 
 # Test 4: Validate YAML syntax
