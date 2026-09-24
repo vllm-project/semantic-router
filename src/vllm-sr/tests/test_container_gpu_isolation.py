@@ -11,7 +11,6 @@ from cli.container_gpu_isolation import (
 )
 from cli.runtime_stack import resolve_runtime_stack
 
-
 IMAGE_A = "sha256:" + "a" * 64
 IMAGE_B = "sha256:" + "b" * 64
 

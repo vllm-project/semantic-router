@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from click.testing import CliRunner
 from cli.algorithms import (
     AlgorithmConfig,
     FusionAlgorithmConfig,
@@ -28,6 +27,7 @@ from cli.models import (
     UserConfig,
 )
 from cli.validator import validate_user_config
+from click.testing import CliRunner
 from pydantic import ValidationError as PydanticValidationError
 
 
