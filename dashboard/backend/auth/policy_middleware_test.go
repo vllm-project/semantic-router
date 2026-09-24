@@ -54,7 +54,8 @@ ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, permissi
 		if err != nil || perms[permission] {
 			t.Fatalf("%s revoke: perms=%v err=%v", permission, perms, err)
 		}
-		if _, err := svc.store.db.Exec(`UPDATE user_permissions SET allowed=1 WHERE user_id=? AND permission_key=?`, user.ID, permission); err != nil {
+		_, err = svc.store.db.Exec(`UPDATE user_permissions SET allowed=1 WHERE user_id=? AND permission_key=?`, user.ID, permission)
+		if err != nil {
 			t.Fatal(err)
 		}
 		perms, err = svc.store.GetEffectivePermissions(t.Context(), RoleRead, user.ID)

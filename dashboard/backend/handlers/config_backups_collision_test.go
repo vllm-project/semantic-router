@@ -32,15 +32,15 @@ func TestVersionedConfigBackupsNeverReplaceOneAnother(t *testing.T) {
 		version string
 		want    string
 	}{{firstVersion, "first baseline"}, {secondVersion, "second baseline"}} {
-		got, err := readConfigBackup(configDir, tc.version)
-		if err != nil || string(got) != tc.want {
-			t.Fatalf("version %s = %q, error %v; want %q", tc.version, got, err, tc.want)
+		got, readErr := readConfigBackup(configDir, tc.version)
+		if readErr != nil || string(got) != tc.want {
+			t.Fatalf("version %s = %q, error %v; want %q", tc.version, got, readErr, tc.want)
 		}
 	}
 
 	firstPath := filepath.Join(backupDir, "config."+firstVersion+".yaml")
-	if err := writeConfigSnapshotExclusive(firstPath, []byte("clobber")); !errors.Is(err, os.ErrExist) {
-		t.Fatalf("existing backup replacement error = %v, want os.ErrExist", err)
+	if writeErr := writeConfigSnapshotExclusive(firstPath, []byte("clobber")); !errors.Is(writeErr, os.ErrExist) {
+		t.Fatalf("existing backup replacement error = %v, want os.ErrExist", writeErr)
 	}
 	unchanged, err := os.ReadFile(firstPath)
 	if err != nil || !bytes.Equal(unchanged, []byte("first baseline")) {
@@ -49,11 +49,11 @@ func TestVersionedConfigBackupsNeverReplaceOneAnother(t *testing.T) {
 
 	legacyVersion := "20260923-110000"
 	legacyPath := filepath.Join(backupDir, "config."+legacyVersion+".yaml")
-	if err := os.WriteFile(legacyPath, []byte("legacy baseline"), 0o600); err != nil {
-		t.Fatal(err)
+	if writeErr := os.WriteFile(legacyPath, []byte("legacy baseline"), 0o600); writeErr != nil {
+		t.Fatal(writeErr)
 	}
-	if got, err := readConfigBackup(configDir, legacyVersion); err != nil || string(got) != "legacy baseline" {
-		t.Fatalf("legacy rollback version = %q, error %v", got, err)
+	if got, readErr := readConfigBackup(configDir, legacyVersion); readErr != nil || string(got) != "legacy baseline" {
+		t.Fatalf("legacy rollback version = %q, error %v", got, readErr)
 	}
 	versions, err := listConfigVersions(filepath.Join(configDir, "config.yaml"))
 	if err != nil || len(versions) != 3 {

@@ -79,9 +79,9 @@ func TestStaleConfigMapDeployAndRollbackLeaveBaselineBackupUntouched(t *testing.
           use_reasoning: false
 `
 	deploy := func(dsl string) *httptest.ResponseRecorder {
-		body, err := json.Marshal(DeployRequest{YAML: deployYAML, DSL: dsl})
-		if err != nil {
-			t.Fatal(err)
+		body, marshalErr := json.Marshal(DeployRequest{YAML: deployYAML, DSL: dsl})
+		if marshalErr != nil {
+			t.Fatal(marshalErr)
 		}
 		response := httptest.NewRecorder()
 		DeployHandler(configPath, false, configDir)(response, httptest.NewRequest(http.MethodPost, "/api/router/config/deploy", bytes.NewReader(body)))
@@ -92,8 +92,8 @@ func TestStaleConfigMapDeployAndRollbackLeaveBaselineBackupUntouched(t *testing.
 		t.Fatalf("first deploy = HTTP %d: %s", first.Code, first.Body.String())
 	}
 	var result DeployResponse
-	if err := json.Unmarshal(first.Body.Bytes(), &result); err != nil || result.Version == "" {
-		t.Fatalf("first deploy result = %+v, error %v", result, err)
+	if unmarshalErr := json.Unmarshal(first.Body.Bytes(), &result); unmarshalErr != nil || result.Version == "" {
+		t.Fatalf("first deploy result = %+v, error %v", result, unmarshalErr)
 	}
 	assertSingleBaselineBackup(t, configDir, mounted)
 
@@ -102,8 +102,8 @@ func TestStaleConfigMapDeployAndRollbackLeaveBaselineBackupUntouched(t *testing.
 		t.Fatalf("stale deploy = HTTP %d: %s", second.Code, second.Body.String())
 	}
 	assertSingleBaselineBackup(t, configDir, mounted)
-	if dsl, err := os.ReadFile(archivedDSLPath(configDir)); err != nil || string(dsl) != "first DSL" {
-		t.Fatalf("stale deploy changed DSL archive = %q, error %v", dsl, err)
+	if dsl, readErr := os.ReadFile(archivedDSLPath(configDir)); readErr != nil || string(dsl) != "first DSL" {
+		t.Fatalf("stale deploy changed DSL archive = %q, error %v", dsl, readErr)
 	}
 
 	rollbackBody, err := json.Marshal(map[string]string{"version": result.Version})

@@ -243,8 +243,8 @@ func SetupActivateHandler(
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if _, err := checkConfigMapMutationFresh(configPath); err != nil {
-			writeConfigPersistenceError(w, err)
+		if _, freshErr := checkConfigMapMutationFresh(configPath); freshErr != nil {
+			writeConfigPersistenceError(w, freshErr)
 			return
 		}
 		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {

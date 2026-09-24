@@ -91,10 +91,11 @@ func TestFreshStoreReadsSeededActiveProjection(t *testing.T) {
 	}
 
 	const sqliteTimestamp = "2026-09-23 10:18:22"
-	if _, err := store.db.Exec(
+	_, err = store.db.Exec(
 		`UPDATE config_projection_active SET updated_at = ? WHERE id = 1`,
 		sqliteTimestamp,
-	); err != nil {
+	)
+	if err != nil {
 		t.Fatalf("write SQLite timestamp: %v", err)
 	}
 	active, err = store.GetActiveProjection()
