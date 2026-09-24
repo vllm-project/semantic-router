@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+MIN_CHOICES = 2
+
 
 def kv_fit_metrics(pred: np.ndarray, true: np.ndarray) -> dict[str, float]:
     pred = np.asarray(pred, dtype=np.float64)
@@ -134,6 +136,35 @@ def build_report(
         },
         "delta_vs_reference": contrasts,
     }
+
+
+def choice_accuracy_arms(
+    items: list[dict[str, Any]],
+    arm_names: list[str],
+    *,
+    length_normalized: bool,
+) -> dict[str, list[dict[str, Any]]]:
+    """Score choices by total or per-token ending log probability."""
+    result = {name: [] for name in arm_names}
+    for item in items:
+        lengths = np.asarray(item["ending_token_counts"], dtype=np.int64)
+        label = int(item["label"])
+        if lengths.ndim != 1 or lengths.size < MIN_CHOICES or np.any(lengths <= 0):
+            raise ValueError(f"invalid ending token counts for {item['id']!r}")
+        if not 0 <= label < lengths.size:
+            raise ValueError(f"invalid choice label for {item['id']!r}")
+        for name in arm_names:
+            means = np.asarray(item["scores"][name], dtype=np.float64)
+            if means.shape != lengths.shape or not np.isfinite(means).all():
+                raise ValueError(f"invalid {name!r} choice scores for {item['id']!r}")
+            choice_scores = means if length_normalized else means * lengths
+            result[name].append(
+                {
+                    "id": item["id"],
+                    "score": float(int(np.argmax(choice_scores) == label)),
+                }
+            )
+    return result
 
 
 def write_report(path: Path, report: dict[str, Any]) -> Path:
