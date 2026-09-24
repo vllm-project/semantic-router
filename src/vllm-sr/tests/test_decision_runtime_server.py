@@ -558,6 +558,55 @@ def test_model_forward_is_not_queued_behind_default_pool_preparation():
     asyncio.run(scenario())
 
 
+def test_backend_shutdown_waits_for_active_inference_thread():
+    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
+    resident = _RecordingVela(profile.max_input_tokens)
+    original_predict = resident.predict_encoded
+    started = threading.Event()
+    release = threading.Event()
+    finished = threading.Event()
+
+    def blocking_predict(rows):
+        started.set()
+        try:
+            assert release.wait(timeout=5)
+            return original_predict(rows)
+        finally:
+            finished.set()
+
+    resident.predict_encoded = blocking_predict
+    executor = TorchDecisionRowExecutor(resident, profile)
+    backend = PhysicalBatchBackend(
+        ModelDescriptor(MODEL, "test", "unknown"),
+        executor,
+        physical_batch_size=1,
+    )
+    request = SystemOneRequest.model_validate(
+        {
+            "model": MODEL,
+            "state": "A billing question.",
+            "questions": {"yes": {"type": "noul", "instructions": "Is this urgent?"}},
+        }
+    )
+
+    async def scenario():
+        caller = asyncio.create_task(backend.infer(request))
+        try:
+            assert await asyncio.wait_for(asyncio.to_thread(started.wait), timeout=2)
+            closing = asyncio.create_task(backend.aclose())
+            await asyncio.sleep(0)
+            assert not closing.done()
+        finally:
+            release.set()
+        await closing
+        with pytest.raises(BackendUnavailableError):
+            await caller
+        assert finished.is_set()
+        assert not await executor.ready()
+
+    asyncio.run(scenario())
+
+
 def test_cancelled_row_preparation_waits_for_tokenizer_before_releasing_credit():
     from decision_runtime.scheduler import ModelScheduler  # noqa: PLC0415
 
