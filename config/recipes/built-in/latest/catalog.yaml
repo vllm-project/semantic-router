@@ -3296,6 +3296,19 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+  - catalog: tencent/hunyuan-7b-instruct
+    relationship: self_hosted
+    id: tencent/Hunyuan-7B-Instruct
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    restrictions:
+      minimum_vllm_version: 0.10.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
   - catalog: zai/glm-5.1
     relationship: self_hosted
     id: zai-org/GLM-5.1
@@ -8007,6 +8020,45 @@ models:
   - open_weights
   - hybrid_reasoning
   - moe
+  - efficient
+- id: tencent/hunyuan-7b-instruct
+  display_name: Hunyuan 7B Instruct
+  description: Open-weight hybrid-reasoning dense 7B model with 256K context.
+  kind: physical
+  publisher: Tencent / Hunyuan
+  presentation:
+    logo: package:tencent
+    monogram: H
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct
+    license: Tencent-Hunyuan-7B
+  family: hunyuan
+  parameter_size: 7B
+  revision: 6fd6ecb05e76589bc43b79f49e3619445c6b4593
+  released_at: '2025-07-30'
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - reasoning
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Tencent Hunyuan
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+  tags:
+  - open_weights
+  - hybrid_reasoning
+  - dense
   - efficient
 - id: thinking-machines/inkling
   display_name: Inkling
@@ -34179,6 +34231,108 @@ evaluations:
     provenance: vendor_claimed
     verification: claimed
     source: https://huggingface.co/tencent/Hunyuan-A13B-Instruct
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-aime-2024@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.811
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-aime-2025@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.753
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-math@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.937
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.601
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-olympiadbench@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: opencompass/olympiadbench@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.765
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
+    redistributable: true
+- id: tencent/hunyuan-7b-instruct-model-card-ifeval@1.0.0
+  model: tencent/hunyuan-7b-instruct
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Hunyuan-7B-Instruct
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.793
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md
     redistributable: true
 - id: independent/inkling-aa-briefcase@1.0.0
   model: thinking-machines/inkling

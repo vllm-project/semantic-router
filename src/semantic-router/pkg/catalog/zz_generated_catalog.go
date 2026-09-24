@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:4c0cf8ff60118137bcf645b9d37a40ba8610bb9a1fa6875d7a6510419f97d3fa"
+const builtInCatalogDigest = "sha256:5d6ceb83cd651c68bcc578759d5230e88a13e84b2e56b38acc24d2f4d0ff26e6"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -32529,6 +32529,138 @@ const builtInCatalogJSON = `{
       "subject": {
         "source_kind": "official_model_card",
         "variant": "Hunyuan-A13B-Instruct"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.811
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.753
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "hendrycks/math@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-math@1.0.0",
+      "metrics": {
+        "accuracy": 0.937
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.601
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "opencompass/olympiadbench@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-olympiadbench@1.0.0",
+      "metrics": {
+        "accuracy": 0.765
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "verification": "claimed"
+      },
+      "id": "tencent/hunyuan-7b-instruct-model-card-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.793
+      },
+      "model": "tencent/hunyuan-7b-instruct",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "Hunyuan-7B-Instruct"
       }
     },
     {
@@ -79215,6 +79347,322 @@ const builtInCatalogJSON = `{
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.601,
+          "status": "available",
+          "value": 0.601,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [
+        "tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "tencent/hunyuan-7b-instruct",
+      "provenance": [
+        "tencent/hunyuan-7b-instruct-model-card-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "thinking-machines/inkling",
       "provenance": [],
       "reasoning_effort": "minimal",
@@ -92116,6 +92564,56 @@ const builtInCatalogJSON = `{
       "capabilities": [
         "chat",
         "reasoning",
+        "long_context"
+      ],
+      "description": "Open-weight hybrid-reasoning dense 7B model with 256K context.",
+      "display_name": "Hunyuan 7B Instruct",
+      "distribution": {
+        "license": "Tencent-Hunyuan-7B",
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct",
+        "type": "open_weights"
+      },
+      "family": "hunyuan",
+      "id": "tencent/hunyuan-7b-instruct",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 262144
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "7B",
+      "presentation": {
+        "logo": "package:tencent",
+        "monochrome": false,
+        "monogram": "H"
+      },
+      "publisher": "Tencent / Hunyuan",
+      "released_at": "2025-07-30",
+      "revision": "6fd6ecb05e76589bc43b79f49e3619445c6b4593",
+      "tags": [
+        "open_weights",
+        "hybrid_reasoning",
+        "dense",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Tencent Hunyuan",
+        "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
         "tools",
         "structured_output",
         "vision",
@@ -97585,6 +98083,24 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/tencent/Hunyuan-A13B-Instruct",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "tencent/hunyuan-7b-instruct",
+          "id": "tencent/Hunyuan-7B-Instruct",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "minimum_vllm_version": "0.10.0"
+          },
+          "verification": {
+            "source": "https://huggingface.co/tencent/Hunyuan-7B-Instruct/blob/6fd6ecb05e76589bc43b79f49e3619445c6b4593/README.md",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
           }
         },
         {
