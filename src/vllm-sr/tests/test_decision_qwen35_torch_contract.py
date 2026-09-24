@@ -616,15 +616,15 @@ def test_native_rocm_loader_keeps_bf16_body_and_fp32_head(
         lambda *a: calls.append(("native", None)),
     )
 
-    options = dict(
-        temperature=1.0,
-        max_length=1024,
-        backend="rocm",
-        gated_delta_kernel_policy="native_torch",
-        native_rocm_max_physical_batch_size=8,
-        physical_batch_size=8,
-        expected_manifest_sha256="a" * 64,
-    )
+    options = {
+        "temperature": 1.0,
+        "max_length": 1024,
+        "backend": "rocm",
+        "gated_delta_kernel_policy": "native_torch",
+        "native_rocm_max_physical_batch_size": 8,
+        "physical_batch_size": 8,
+        "expected_manifest_sha256": "a" * 64,
+    }
     if head_dtype == "bf16":
         with pytest.raises(Qwen35RuntimeError, match="candidate-head storage"):
             Qwen35TorchRuntime.load(root, **options)
