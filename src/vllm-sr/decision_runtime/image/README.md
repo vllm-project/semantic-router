@@ -21,8 +21,10 @@ instance. Sol, Nox, and Lux retain the accelerated path and its strict ROCm FLA
 launch-profile checks. The Eos choice follows its stable runtime profile across
 model revisions; model-file versions and hashes come from the selected
 artifact's verified manifest. A successful image build does not establish ROCm
-semantic parity or performance. Those require live model-backed evidence for
-the exact candidate image and source commit.
+semantic parity or performance. Static inspection of the installed Transformers
+source confirms the intended kernel dispatch but is not a substitute for live
+GPU semantic and performance qualification of the exact candidate image and
+source commit.
 
 The six packaged profiles use stable model names and carry implementation
 policy. Their historical manifest digest, size, and file inventory fields are

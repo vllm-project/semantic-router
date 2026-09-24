@@ -244,7 +244,7 @@ class Qwen35TorchRuntime:
             model = _decision_model(torch, backbone, head)
             model.to(selected).eval()
             if effective_kernel_policy == "native_torch":
-                _install_cpu_reference_kernels(model, modeling)
+                _install_instance_native_gated_delta_kernels(model, modeling)
             tokenizer = transformers.AutoTokenizer.from_pretrained(
                 root,
                 local_files_only=True,
@@ -403,7 +403,7 @@ def _decision_model(torch, backbone, head):
     return DecisionModel()
 
 
-def _install_cpu_reference_kernels(model, modeling) -> None:
+def _install_instance_native_gated_delta_kernels(model, modeling) -> None:
     """Bind native PyTorch GatedDeltaNet functions to one model instance.
 
     Transformers can select installed FLA and causal-conv packages, including

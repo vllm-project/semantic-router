@@ -23,7 +23,7 @@ from decision_runtime.qwen35_torch import (  # noqa: E402
     Qwen35TorchRuntime,
     QwenRocmProfileBinding,
     _bind_rocm_profile,
-    _install_cpu_reference_kernels,
+    _install_instance_native_gated_delta_kernels,
     _validate_configuration,
     _validate_device,
     _validated_rocm_profile,
@@ -480,7 +480,7 @@ def test_cpu_loader_converts_verified_body_to_fp32(
     monkeypatch.setattr(qwen35_torch, "_decision_model", lambda *a: FakeModule())
     monkeypatch.setattr(
         qwen35_torch,
-        "_install_cpu_reference_kernels",
+        "_install_instance_native_gated_delta_kernels",
         lambda *a: calls.append("cpu-reference"),
     )
 
@@ -617,7 +617,7 @@ def test_native_gated_delta_binding_is_instance_local_in_fla_process() -> None:
     modeling, native_layer, accelerated_layer = _native_kernel_surface()
     model = SimpleNamespace(modules=lambda: (native_layer,))
 
-    _install_cpu_reference_kernels(model, modeling)
+    _install_instance_native_gated_delta_kernels(model, modeling)
 
     assert native_layer.forward(None) == "native"
     assert native_layer.norm.forward(None, None) == "native norm"
@@ -651,7 +651,7 @@ def test_native_binding_rejects_changed_source_signature_before_mutation(changed
         modeling.torch_chunk_gated_delta_rule = incompatible_kernel
 
     with pytest.raises(Qwen35RuntimeError, match="native Qwen"):
-        _install_cpu_reference_kernels(
+        _install_instance_native_gated_delta_kernels(
             SimpleNamespace(modules=lambda: (layer,)), modeling
         )
 
@@ -668,7 +668,7 @@ def test_native_binding_rejects_mixed_subclass_layers_before_mutation():
 
     modified = ModifiedLayer()
     with pytest.raises(Qwen35RuntimeError, match="modified or offloaded"):
-        _install_cpu_reference_kernels(
+        _install_instance_native_gated_delta_kernels(
             SimpleNamespace(modules=lambda: (layer, modified)), modeling
         )
 
