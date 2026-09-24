@@ -38,10 +38,8 @@ ROUNDS = 3
 PHYSICAL_BATCH = 8  # Current untuned qualification ceiling, not a report-wide size.
 PHYSICAL_BATCH_BUCKETS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
 MIN_WORKFLOWS_PER_ROUND = 32
-HIGH_LOAD_SHAPES = ((8, 8), (32, 32))
-OVERALL_HIGH_LOAD_THROUGHPUT_GAIN_GOAL = 1.05
-MIN_MODEL_HIGH_LOAD_THROUGHPUT_RATIO = 1.00
-MIN_ACCEPTABLE_HIGH_LOAD_THROUGHPUT_RATIO = 0.95
+HIGH_LOAD_SHAPES = ((8, 8), (32, 32))  # Graph replay and batching proof cells.
+MIN_HIGH_LOAD_THROUGHPUT_RATIO = 1.00
 MAX_SEMANTIC_PROBABILITY_DELTA = 0.010000001
 HIGH_LOAD_MIN_CONCURRENCY = 8
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -1883,29 +1881,21 @@ def validate_report(
         # The arms perform the same logical work, but old fanout and new batch
         # have different HTTP submissions and no shared scheduled-arrival trace.
         # Workflow latency is diagnostic, never an alternative release win.
-        for shape in shapes:
-            for cell in shape["cells"]:
-                if (
-                    cell["concurrency"] >= HIGH_LOAD_MIN_CONCURRENCY
-                    and cell["new_over_old_decisions_per_second"]
-                    < MIN_ACCEPTABLE_HIGH_LOAD_THROUGHPUT_RATIO
-                ):
-                    raise ValueError(
-                        model_id + " has a material high-load throughput regression"
-                    )
         high_load_shape_ratios = {
-            f"q{q}_s{s}_c32": indexed[q, s]["cells"][-1][
+            f"q{q}_s{s}_c{cell['concurrency']}": cell[
                 "new_over_old_decisions_per_second"
             ]
-            for q, s in HIGH_LOAD_SHAPES
+            for q, s in SHAPES
+            for cell in indexed[q, s]["cells"]
+            if cell["concurrency"] >= HIGH_LOAD_MIN_CONCURRENCY
         }
+        for cell_name, ratio in high_load_shape_ratios.items():
+            if ratio < MIN_HIGH_LOAD_THROUGHPUT_RATIO:
+                raise ValueError(
+                    f"{model_id} has a high-load throughput regression at "
+                    f"{cell_name} against its selected historical snapshot"
+                )
         model_high_load_geomean = _geometric_mean(list(high_load_shape_ratios.values()))
-        if model_high_load_geomean < MIN_MODEL_HIGH_LOAD_THROUGHPUT_RATIO:
-            raise ValueError(
-                model_id
-                + " has a high-load throughput regression against its selected "
-                "historical snapshot"
-            )
         for q, s in HIGH_LOAD_SHAPES:
             if (
                 indexed[q, s]["cells"][-1]["new_observed_rows_per_physical_batch"]
@@ -1927,11 +1917,6 @@ def validate_report(
     if len(new_images) != 1:
         raise ValueError("six models must use one immutable new runtime image")
     summary["high_load_throughput_geomean"] = _geometric_mean(all_high_load_ratios)
-    summary["high_load_throughput_gain_goal"] = OVERALL_HIGH_LOAD_THROUGHPUT_GAIN_GOAL
-    summary["high_load_throughput_gain_goal_met"] = (
-        summary["high_load_throughput_geomean"]
-        >= OVERALL_HIGH_LOAD_THROUGHPUT_GAIN_GOAL
-    )
     return summary
 
 

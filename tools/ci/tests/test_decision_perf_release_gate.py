@@ -1084,12 +1084,16 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         self.assertEqual(set(result["models"]), gate.MODEL_IDS)
         self.assertEqual(result["source_sha"], SOURCE)
         self.assertAlmostEqual(result["high_load_throughput_geomean"], 1.6)
-        self.assertEqual(result["high_load_throughput_gain_goal"], 1.05)
-        self.assertTrue(result["high_load_throughput_gain_goal_met"])
+        self.assertNotIn("high_load_throughput_gain_goal", result)
+        self.assertNotIn("high_load_throughput_gain_goal_met", result)
         for model in result["models"].values():
             self.assertEqual(
                 set(model["high_load_shape_ratios"]),
-                {"q8_s8_c32", "q32_s32_c32"},
+                {
+                    f"q{q}_s{s}_c{concurrency}"
+                    for q, s in gate.SHAPES
+                    for concurrency in (8, 32)
+                },
             )
             self.assertAlmostEqual(model["high_load_throughput_geomean"], 1.6)
 
@@ -1895,13 +1899,13 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "graph event delta differs"):
             self.validate()
 
-    def test_modest_gain_with_bounded_cell_regression_qualifies(self) -> None:
+    def test_modest_gain_in_every_high_load_cell_qualifies(self) -> None:
         ratios = {
-            (model_id, q, s, 32): 1.06
+            (model_id, q, s, concurrency): 1.06
             for model_id in gate.MODEL_IDS
-            for q, s in gate.HIGH_LOAD_SHAPES
+            for q, s in gate.SHAPES
+            for concurrency in (8, 32)
         }
-        ratios[(sorted(gate.MODEL_IDS)[0], 32, 1, 8)] = 0.96
         self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
         result = self.validate()
         self.assertAlmostEqual(result["high_load_throughput_geomean"], 1.06)
@@ -1910,26 +1914,33 @@ class DecisionPerformanceGateTests(unittest.TestCase):
             for ratio in model["high_load_shape_ratios"].values():
                 self.assertAlmostEqual(ratio, 1.06)
 
-    def test_flat_model_qualifies_when_other_models_raise_overall_gain(self) -> None:
+    def test_single_state_c8_regression_blocks_despite_other_gains(self) -> None:
+        ratios = {(sorted(gate.MODEL_IDS)[0], 32, 1, 8): 0.96}
+        self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
+        with self.assertRaisesRegex(
+            ValueError, "high-load throughput regression at q32_s1_c8"
+        ):
+            self.validate()
+
+    def test_flat_model_qualifies_without_aggregate_gain_requirement(self) -> None:
         self.path, self.report = _fixture(self.root, slowdown="no_gain")
         result = self.validate()
         self.assertAlmostEqual(
             result["models"][sorted(gate.MODEL_IDS)[0]]["high_load_throughput_geomean"],
             1.0,
         )
-        self.assertGreaterEqual(result["high_load_throughput_geomean"], 1.05)
-        self.assertTrue(result["high_load_throughput_gain_goal_met"])
+        self.assertGreater(result["high_load_throughput_geomean"], 1.0)
 
-    def test_all_models_at_throughput_parity_qualify_below_gain_goal(self) -> None:
+    def test_all_models_at_throughput_parity_qualify_without_gain(self) -> None:
         ratios = {
-            (model_id, q, s, 32): 1.0
+            (model_id, q, s, concurrency): 1.0
             for model_id in gate.MODEL_IDS
-            for q, s in gate.HIGH_LOAD_SHAPES
+            for q, s in gate.SHAPES
+            for concurrency in (8, 32)
         }
         self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
         result = self.validate()
         self.assertAlmostEqual(result["high_load_throughput_geomean"], 1.0)
-        self.assertFalse(result["high_load_throughput_gain_goal_met"])
         self.assertTrue(
             all(
                 math.isclose(model["high_load_throughput_geomean"], 1.0)
@@ -1937,35 +1948,34 @@ class DecisionPerformanceGateTests(unittest.TestCase):
             )
         )
 
-    def test_latency_only_change_does_not_count_as_throughput_gain(self) -> None:
+    def test_latency_only_change_does_not_replace_throughput_parity(self) -> None:
         ratios = {
-            (model_id, q, s, 32): 1.0
+            (model_id, q, s, concurrency): 1.0
             for model_id in gate.MODEL_IDS
-            for q, s in gate.HIGH_LOAD_SHAPES
+            for q, s in gate.SHAPES
+            for concurrency in (8, 32)
         }
         self.path, self.report = _fixture(
             self.root, slowdown="latency_only", throughput_ratios=ratios
         )
         result = self.validate()
         self.assertAlmostEqual(result["high_load_throughput_geomean"], 1.0)
-        self.assertFalse(result["high_load_throughput_gain_goal_met"])
 
-    def test_bounded_shape_slowdown_qualifies_below_overall_gain_goal(self) -> None:
+    def test_multi_state_c32_regression_blocks_despite_model_gain(self) -> None:
         ratios = {
-            (model_id, q, s, 32): 1.0
+            (model_id, q, s, concurrency): 1.0
             for model_id in gate.MODEL_IDS
-            for q, s in gate.HIGH_LOAD_SHAPES
+            for q, s in gate.SHAPES
+            for concurrency in (8, 32)
         }
         first_model = sorted(gate.MODEL_IDS)[0]
         ratios[(first_model, 8, 8, 32)] = 1.20
         ratios[(first_model, 32, 32, 32)] = 0.96
         self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
-        result = self.validate()
-        self.assertGreater(
-            result["models"][first_model]["high_load_throughput_geomean"], 1.0
-        )
-        self.assertLess(result["high_load_throughput_geomean"], 1.05)
-        self.assertFalse(result["high_load_throughput_gain_goal_met"])
+        with self.assertRaisesRegex(
+            ValueError, "high-load throughput regression at q32_s32_c32"
+        ):
+            self.validate()
 
     def test_one_model_below_parity_blocks_even_with_aggregate_gain(self) -> None:
         ratios = {
@@ -1975,16 +1985,26 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
         with self.assertRaisesRegex(
             ValueError,
-            "high-load throughput regression against its selected historical snapshot",
+            "high-load throughput regression at q8_s8_c32",
         ):
             self.validate()
 
     def test_high_load_regression_blocks_release(self) -> None:
         self.path, self.report = _fixture(self.root, slowdown="regression")
         with self.assertRaisesRegex(
-            ValueError, "material high-load throughput regression"
+            ValueError, "high-load throughput regression at q32_s1_c8"
         ):
             self.validate()
+
+    def test_concurrency_one_throughput_remains_diagnostic(self) -> None:
+        ratios = {(sorted(gate.MODEL_IDS)[0], 32, 1, 1): 0.80}
+        self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
+        result = self.validate()
+        self.assertAlmostEqual(result["high_load_throughput_geomean"], 1.6)
+        self.assertNotIn(
+            "q32_s1_c1",
+            result["models"][sorted(gate.MODEL_IDS)[0]]["high_load_shape_ratios"],
+        )
 
     def test_interleaved_waves_must_match_raw_workflow_times(self) -> None:
         shape = self.report["models"][0]["shapes"][0]

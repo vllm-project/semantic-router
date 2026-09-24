@@ -41,22 +41,19 @@ new runtime image source, benchmark source, and checked out source must match
 the current commit. The gate verifies zero failed workflows, no parity
 mismatches, matching decision counts, recomputed throughput and latency
 percentiles, correct alternating wave timing, and positive physical batch
-counter deltas. High-load cells must show actual batching above one row per
-physical batch. Every concurrency 8 or 32 cell, including the single-state
-shape, must retain at least 95% of its old-arm decisions/sec throughput.
+counter deltas. The two multi-state, concurrency-32 cells must show actual
+batching above one row per physical batch.
 
-The hard model throughput gate is predeclared over all six models and both
-multi-state shapes: 8 questions/8 states and 32 questions/32 states, each at
-concurrency 32. For each of these 12 fixed cells, divide the new-arm
-decisions/sec by the old-arm decisions/sec measured against that model's same
-selected historical snapshot. Each model's equal-weight geometric mean of its
-two ratios must be at least 1.00. A gain in another model cannot offset a
-model below parity. An individual model may be flat, subject to the 0.95 floor
-in every concurrency 8 or 32 cell. The equal-weight geometric mean of all 12
-ratios is reported, and reaching 1.05 is an aspirational gain goal rather than
-a release condition. The qualification summary publishes that mean, whether
-it reached the goal, each model's mean, and both shape ratios for every model;
-no best-performing shape is selected after measurement.
+The hard throughput gate is predeclared for each of the six models at all
+three shapes and both concurrency 8 and 32: 36 fixed cells in total. For each
+cell, divide the new-arm decisions/sec by the old-arm decisions/sec measured
+against that model's same selected historical snapshot. Every ratio must be
+at least 1.00. A gain in another cell or model cannot offset a loss. A flat
+model qualifies; a gain is useful but not required. Concurrency-1 throughput
+and all latency results are diagnostic. The qualification summary publishes
+all six high-load ratios and their equal-weight geometric mean for every
+model, plus the equal-weight geometric mean of all 36 ratios as a diagnostic.
+There is no aggregate gain threshold or post-measurement shape selection.
 
 Each candidate model declares `new_runtime_variant: eager` or
 `sol_rocm_graph_b8` in the protected input and the report. Only canonical
@@ -71,16 +68,16 @@ This evidence does not replace the same-snapshot semantic checks, per-model
 throughput parity gate, or the six-model run.
 
 Three alternating old/new rounds per cell limit order effects but do not
-establish formal statistical noninferiority. The model gate uses the measured
-point estimate without a below-parity tolerance; the 0.95 cell floor is a
-fixed material-regression guard, not a confidence bound or permission for a
-model-level regression. If results are borderline or noisy, treat them as
-inconclusive and obtain a fresh complete paired protected run against the same
-selected historical snapshot before promotion. Retain all attempts and never
-choose favorable rounds, shapes, models, or runs after seeing the results. A
+establish formal statistical noninferiority. The gate uses each measured
+point estimate without a below-parity tolerance; any high-load cell below
+1.00 blocks that run. If results are borderline or noisy, obtain a fresh
+complete paired protected run against the same selected historical snapshot
+and conditions. Retain and report every attempt, investigate any measured
+loss, and never select favorable rounds, cells, models, or runs after seeing
+the results. A passing rerun does not erase a loss in an earlier receipt. A
 future confidence-based gate would need a predeclared sample size and a
 one-sided lower bound on the paired log-throughput ratio at or above zero for
-each model.
+every qualifying cell.
 
 The measurement compares synthetic
 HTTP workflows, not task accuracy. Multi-state results compare the old
@@ -294,8 +291,8 @@ ordered logical case IDs, shape, concurrency, phase, and round; the gate
 recomputes it from paired workflow records. This identifies equal logical
 work, not a common scheduled-arrival epoch or matching admission times. Until
 the harness can provide such a shared timed-arrival trace, the release gate
-accepts only an equal-total-work high-load decisions/sec gain; it does not
-accept or report p95 latency improvement as an alternative win. Three
+judges only equal-total-work high-load decisions/sec non-regression; it does
+not accept or report p95 latency improvement as an alternative win. Three
 throughput rounds alternate old/new wave order. The new
 runtime must attest scheduler concurrency 4 and queue 32; the physical batch
 size is recorded per model from the running launch. The gate records this arrival scope and checks the resulting raw
