@@ -151,6 +151,33 @@ def test_assembly_reopens_artifact_before_loading(monkeypatch, tmp_path: Path):
     assert [event[0] for event in events] == ["resolve"]
 
 
+def test_eos_native_rocm_b16_fails_before_artifact_or_gpu_load(
+    monkeypatch, tmp_path: Path
+) -> None:
+    from decision_runtime import runtime_factory  # noqa: PLC0415
+
+    model_id = "llm-semantic-router/Decision-1.0-Eos-0.8B"
+    revision = "e" * 40
+    profile = load_runtime_profile("Decision-1.0-Eos-0.8B", revision=revision)
+    monkeypatch.setattr(
+        runtime_factory,
+        "resolve_decision_runtime_model",
+        lambda *args, **kwargs: SimpleNamespace(profile=profile),
+    )
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("B16 must fail before artifact, GPU, or model loading")
+
+    monkeypatch.setattr(runtime_factory, "open_verified_artifact", unexpected)
+    monkeypatch.setattr(runtime_factory, "_device_target", unexpected)
+    monkeypatch.setattr(runtime_factory, "_load_family", unexpected)
+
+    with pytest.raises(RuntimeAssemblyError, match="qualified maximum 8"):
+        assemble_runtime(
+            _config(tmp_path, model=model_id, revision=revision, max_batch=16)
+        )
+
+
 @pytest.mark.parametrize(
     ("profile_id", "revision", "expected_manifest"),
     [
@@ -191,6 +218,7 @@ def test_qwen_loader_uses_verified_manifest_layout(
     assert calls[0][1]["temperature"] == profile.temperature
     assert calls[0][1]["max_length"] == profile.max_input_tokens
     assert calls[0][1]["gated_delta_kernel_policy"] == profile.qwen_gated_delta_kernel
+    assert calls[0][1]["native_rocm_max_physical_batch_size"] is None
     assert calls[0][1]["expected_manifest_sha256"] == (
         profile.artifact.manifest.sha256 if expected_manifest else None
     )
@@ -218,6 +246,7 @@ def test_eos_native_policy_does_not_gate_a_new_model_manifest(
     runtime_factory._load_family(SimpleNamespace(profile=profile), artifact, "rocm")
 
     assert calls[0]["gated_delta_kernel_policy"] == "native_torch"
+    assert calls[0]["native_rocm_max_physical_batch_size"] == 8
     assert calls[0]["expected_manifest_sha256"] == "d" * 64
     assert calls[0]["temperature"] == 1.25
     assert calls[0]["rocm_profile_binder"] is None
@@ -252,6 +281,9 @@ def test_qwen_rocm_fla_binder_only_follows_accelerated_policy(
     )
 
     assert calls[0]["gated_delta_kernel_policy"] == expected_policy
+    assert calls[0]["native_rocm_max_physical_batch_size"] == (
+        8 if expected_policy == "native_torch" else None
+    )
     assert (calls[0]["rocm_profile_binder"] is None) == (
         expected_policy == "native_torch"
     )

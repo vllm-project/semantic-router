@@ -95,6 +95,10 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
         == PROMPT_POLICIES[model_id]
     )
     assert resolved.profile.qwen_gated_delta_kernel == KERNEL_POLICIES[model_id]
+    capability = resolved.profile.qwen_native_rocm_capability
+    assert (capability.max_physical_batch_size if capability else None) == (
+        8 if model_id.endswith("Eos-0.8B") else None
+    )
 
 
 def test_profile_package_has_exact_catalog_model_set() -> None:
@@ -143,6 +147,10 @@ def test_catalog_new_revision_reuses_model_template(
         updated.profile.qwen_gated_delta_kernel
         == resolved.profile.qwen_gated_delta_kernel
     )
+    assert (
+        updated.profile.qwen_native_rocm_capability
+        == resolved.profile.qwen_native_rocm_capability
+    )
 
 
 def test_qwen_kernel_policy_is_profile_scoped_across_model_revisions() -> None:
@@ -165,6 +173,60 @@ def test_qwen_kernel_policy_is_explicit_and_closed() -> None:
     document["kernel_policy"] = {"gated_delta": "unknown"}
     with pytest.raises(RuntimeProfileError, match="gated_delta is unsupported"):
         parse_runtime_profile(json.dumps(document).encode(), revision="f" * 40)
+
+
+def test_native_rocm_batch_capability_is_required_and_revision_independent() -> None:
+    packaged = resources.files("decision_runtime.profiles").joinpath(
+        "Decision-1.0-Eos-0.8B.json"
+    )
+    document = json.loads(packaged.read_bytes())
+    for revision in ("a" * 40, "f" * 40):
+        profile = parse_runtime_profile(
+            json.dumps(document).encode(), revision=revision
+        )
+        profile.require_physical_batch_size("rocm", 8)
+        for size in (9, 16):
+            with pytest.raises(
+                UnsupportedRuntimeBackendError, match="qualified maximum 8"
+            ):
+                profile.require_physical_batch_size("rocm", size)
+        # The ROCm envelope does not impose a CPU product limit.
+        profile.require_physical_batch_size("cpu", 16)
+
+    # A later, independently evidenced envelope can be expressed in the same
+    # model-family profile without listing model-file revisions in code.
+    document["kernel_policy"]["native_rocm"]["max_physical_batch_size"] = 16
+    expanded = parse_runtime_profile(json.dumps(document).encode(), revision="b" * 40)
+    expanded.require_physical_batch_size("rocm", 16)
+
+
+@pytest.mark.parametrize("value", (None, 0, True, "8", -1))
+def test_native_rocm_batch_capability_rejects_missing_or_invalid_maximum(value) -> None:
+    packaged = resources.files("decision_runtime.profiles").joinpath(
+        "Decision-1.0-Eos-0.8B.json"
+    )
+    document = json.loads(packaged.read_bytes())
+    if value is None:
+        del document["kernel_policy"]["native_rocm"]
+        message = "kernel_policy fields do not match"
+    else:
+        document["kernel_policy"]["native_rocm"]["max_physical_batch_size"] = value
+        message = "max_physical_batch_size"
+    with pytest.raises(RuntimeProfileError, match=message):
+        parse_runtime_profile(json.dumps(document).encode(), revision="f" * 40)
+
+
+def test_accelerated_qwen_policy_rejects_native_rocm_batch_envelope() -> None:
+    packaged = resources.files("decision_runtime.profiles").joinpath(
+        "Decision-1.0-Sol-2B.json"
+    )
+    document = json.loads(packaged.read_bytes())
+    document["kernel_policy"]["native_rocm"] = {"max_physical_batch_size": 8}
+    with pytest.raises(RuntimeProfileError, match="kernel_policy fields do not match"):
+        parse_runtime_profile(json.dumps(document).encode(), revision="f" * 40)
+
+    accelerated = load_runtime_profile("Decision-1.0-Sol-2B", revision="f" * 40)
+    accelerated.require_physical_batch_size("rocm", 16)
 
 
 def test_explicit_revision_requires_an_immutable_commit() -> None:

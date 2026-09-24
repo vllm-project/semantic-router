@@ -61,6 +61,7 @@ def assemble_runtime(
         model = resolve_decision_runtime_model(
             config.model, revision=config.revision, backend=config.backend
         )
+        model.profile.require_physical_batch_size(config.backend, config.max_batch)
         artifact = open_verified_artifact(
             config.artifact_root,
             model,
@@ -183,6 +184,7 @@ def _load_family(
             )
         if manifest.path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
             raise RuntimeAssemblyError("Qwen release manifest layout is unsupported")
+        native_rocm = profile.qwen_native_rocm_capability
         binder = None
         if backend == "rocm" and policy == "accelerated":
             from .qwen35_rocm_binder import (  # noqa: PLC0415
@@ -198,6 +200,11 @@ def _load_family(
             backend=backend,
             gated_delta_kernel_policy=policy,
             physical_batch_size=physical_batch_size,
+            native_rocm_max_physical_batch_size=(
+                native_rocm.max_physical_batch_size
+                if backend == "rocm" and native_rocm is not None
+                else None
+            ),
             rocm_profile_binder=binder,
             expected_manifest_sha256=(
                 manifest.sha256 if manifest.path == "MODEL_MANIFEST.json" else None

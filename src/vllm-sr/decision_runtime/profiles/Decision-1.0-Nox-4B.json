@@ -1,5 +1,5 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "family": "qwen3.5",
   "kernel_policy": {"gated_delta": "accelerated"},
   "artifact": {

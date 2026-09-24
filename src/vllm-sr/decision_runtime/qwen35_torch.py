@@ -157,6 +157,7 @@ class Qwen35TorchRuntime:
         device: str | None = None,
         attention: str = "sdpa",
         physical_batch_size: int = 8,
+        native_rocm_max_physical_batch_size: int | None = None,
         rocm_profile_binder: QwenRocmProfileBinder | None = None,
         expected_manifest_sha256: str | None = None,
     ) -> Qwen35TorchRuntime:
@@ -171,6 +172,7 @@ class Qwen35TorchRuntime:
             gated_delta_kernel_policy=gated_delta_kernel_policy,
             attention=attention,
             physical_batch_size=physical_batch_size,
+            native_rocm_max_physical_batch_size=native_rocm_max_physical_batch_size,
         )
         if backend == "cpu" and expected_manifest_sha256 is None:
             raise Qwen35RuntimeError(
@@ -593,6 +595,7 @@ def _validate_configuration(
     gated_delta_kernel_policy: str,
     attention: str,
     physical_batch_size: int,
+    native_rocm_max_physical_batch_size: int | None = None,
 ) -> ValidatedQwenRocmProfile | None:
     if backend not in {"cpu", "rocm", "cuda"}:
         raise Qwen35RuntimeError("Qwen Torch backend must be cpu, rocm, or cuda")
@@ -619,6 +622,17 @@ def _validate_configuration(
         or physical_batch_size < 1
     ):
         raise Qwen35RuntimeError("Qwen physical batch size is invalid")
+    if backend == "rocm" and gated_delta_kernel_policy == "native_torch":
+        maximum = native_rocm_max_physical_batch_size
+        if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 1:
+            raise Qwen35RuntimeError(
+                "Qwen native Torch ROCm requires a qualified physical-batch maximum"
+            )
+        if physical_batch_size > maximum:
+            raise Qwen35RuntimeError(
+                "Qwen native Torch ROCm physical batch size "
+                f"{physical_batch_size} exceeds qualified maximum {maximum}"
+            )
     metadata = _read_json(root / "decision_config.json")
     if metadata.get("prompt_version") != QWEN_PROMPT_VERSION:
         raise Qwen35RuntimeError("unsupported Qwen Decision prompt version")

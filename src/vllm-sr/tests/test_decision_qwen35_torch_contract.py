@@ -240,6 +240,43 @@ def test_rocm_profile_rejects_uncovered_physical_batch_before_torch_import(
         )
 
 
+@pytest.mark.parametrize("maximum", (None, 0, True, "8"))
+def test_native_rocm_loader_requires_batch_capability_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, maximum
+) -> None:
+    imported = []
+    monkeypatch.setattr(qwen35_torch.importlib, "import_module", imported.append)
+    with pytest.raises(Qwen35RuntimeError, match="qualified physical-batch maximum"):
+        Qwen35TorchRuntime.load(
+            _artifact(tmp_path),
+            temperature=1.0,
+            max_length=1024,
+            backend="rocm",
+            gated_delta_kernel_policy="native_torch",
+            physical_batch_size=8,
+            native_rocm_max_physical_batch_size=maximum,
+        )
+    assert imported == []
+
+
+def test_native_rocm_loader_rejects_b16_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    imported = []
+    monkeypatch.setattr(qwen35_torch.importlib, "import_module", imported.append)
+    with pytest.raises(Qwen35RuntimeError, match="qualified maximum 8"):
+        Qwen35TorchRuntime.load(
+            _artifact(tmp_path),
+            temperature=1.0,
+            max_length=1024,
+            backend="rocm",
+            gated_delta_kernel_policy="native_torch",
+            physical_batch_size=16,
+            native_rocm_max_physical_batch_size=8,
+        )
+    assert imported == []
+
+
 def test_profile_validates_supported_envelope_and_fla_sources(tmp_path: Path) -> None:
     root = _profiled_artifact(tmp_path)
     profile_path = root / "runtime-profile/profile.json"
@@ -680,7 +717,12 @@ def test_native_binding_rejects_mixed_subclass_layers_before_mutation():
 def test_native_policy_does_not_consume_fla_model_profile(tmp_path: Path) -> None:
     root = _artifact(tmp_path)
     (root / "runtime.json").write_text(
-        json.dumps({"normalization_profile": {"kind": "untrusted-fla-profile"}})
+        json.dumps(
+            {
+                "normalization_profile": {"kind": "untrusted-fla-profile"},
+                "qualified_runtime": {"flash_linear_attention": "0.5.2"},
+            }
+        )
     )
 
     assert (
@@ -692,9 +734,21 @@ def test_native_policy_does_not_consume_fla_model_profile(tmp_path: Path) -> Non
             gated_delta_kernel_policy="native_torch",
             attention="sdpa",
             physical_batch_size=8,
+            native_rocm_max_physical_batch_size=8,
         )
         is None
     )
+    with pytest.raises(Qwen35RuntimeError, match="qualified maximum 8"):
+        _validate_configuration(
+            root,
+            temperature=1.0,
+            max_length=1024,
+            backend="rocm",
+            gated_delta_kernel_policy="native_torch",
+            attention="sdpa",
+            physical_batch_size=16,
+            native_rocm_max_physical_batch_size=8,
+        )
     with pytest.raises(Qwen35RuntimeError, match="profile specification"):
         _validate_configuration(
             root,
@@ -705,3 +759,18 @@ def test_native_policy_does_not_consume_fla_model_profile(tmp_path: Path) -> Non
             attention="sdpa",
             physical_batch_size=8,
         )
+
+
+def test_native_rocm_batch_capability_does_not_limit_cpu(tmp_path: Path) -> None:
+    assert (
+        _validate_configuration(
+            _artifact(tmp_path),
+            temperature=1.0,
+            max_length=1024,
+            backend="cpu",
+            gated_delta_kernel_policy="native_torch",
+            attention="sdpa",
+            physical_batch_size=16,
+        )
+        is None
+    )

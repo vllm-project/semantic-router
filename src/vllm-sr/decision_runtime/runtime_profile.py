@@ -24,7 +24,7 @@ RuntimeBackendName = Literal["rocm", "cuda", "cpu", "mlx"]
 ChoiceNullDescriptionPolicy = Literal["render_key", "preserve_json_null"]
 QwenGatedDeltaKernel = Literal["native_torch", "accelerated"]
 
-PROFILE_SCHEMA_VERSION = 3
+PROFILE_SCHEMA_VERSION = 4
 # Initial benchmarked profile value, not a hard upper bound. A profile may tune
 # it after backend/device correctness and performance validation.
 DEFAULT_PHYSICAL_BATCH_SIZE = 8
@@ -81,6 +81,13 @@ class PromptPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class NativeRocmKernelCapability:
+    """Physical-batch envelope qualified for native Qwen kernels on ROCm."""
+
+    max_physical_batch_size: int
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeProfile:
     """Validated backend configuration selected by an exact catalog revision."""
 
@@ -94,6 +101,7 @@ class RuntimeProfile:
     temperature: float | None
     prompt_policy: PromptPolicy
     qwen_gated_delta_kernel: QwenGatedDeltaKernel | None
+    qwen_native_rocm_capability: NativeRocmKernelCapability | None
     backends: Mapping[RuntimeBackendName, BackendQualification]
 
     def require_backend(
@@ -113,6 +121,24 @@ class RuntimeProfile:
                 f"{backend_name!r} target {target!r}"
             )
         return qualification
+
+    def require_physical_batch_size(self, backend: str, size: int) -> None:
+        """Reject launch batches outside an implementation's qualified envelope."""
+
+        if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+            raise RuntimeProfileError("physical batch size must be a positive integer")
+        if backend != "rocm" or self.qwen_gated_delta_kernel != "native_torch":
+            return
+        capability = self.qwen_native_rocm_capability
+        if capability is None:
+            raise UnsupportedRuntimeBackendError(
+                "Qwen native Torch ROCm has no qualified physical-batch envelope"
+            )
+        if size > capability.max_physical_batch_size:
+            raise UnsupportedRuntimeBackendError(
+                "Qwen native Torch ROCm physical batch size "
+                f"{size} exceeds qualified maximum {capability.max_physical_batch_size}"
+            )
 
 
 def validate_relative_artifact_path(value: object, *, field: str) -> str:
@@ -205,11 +231,13 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
     head_dtype = _dtype(dtype["head"], "dtype.head")
     temperature = _parse_calibration(root["calibration"])
     prompt_policy = _parse_prompt_policy(root["prompt_policy"])
-    qwen_gated_delta_kernel = (
-        _parse_qwen_kernel_policy(root["kernel_policy"])
-        if family == "qwen3.5"
-        else None
-    )
+    if family == "qwen3.5":
+        qwen_gated_delta_kernel, qwen_native_rocm_capability = (
+            _parse_qwen_kernel_policy(root["kernel_policy"])
+        )
+    else:
+        qwen_gated_delta_kernel = None
+        qwen_native_rocm_capability = None
     backends = _parse_backends(root["backends"])
 
     return RuntimeProfile(
@@ -223,6 +251,7 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
         temperature=temperature,
         prompt_policy=prompt_policy,
         qwen_gated_delta_kernel=qwen_gated_delta_kernel,
+        qwen_native_rocm_capability=qwen_native_rocm_capability,
         backends=backends,
     )
 
@@ -286,13 +315,24 @@ def _parse_prompt_policy(value: object) -> PromptPolicy:
     return PromptPolicy(choice_null_description=choice_null_description)
 
 
-def _parse_qwen_kernel_policy(value: object) -> QwenGatedDeltaKernel:
+def _parse_qwen_kernel_policy(
+    value: object,
+) -> tuple[QwenGatedDeltaKernel, NativeRocmKernelCapability | None]:
     policy = _mapping(value, "kernel_policy")
-    _exact_keys(policy, {"gated_delta"}, "kernel_policy")
-    selected = policy["gated_delta"]
+    selected = policy.get("gated_delta")
     if selected not in {"native_torch", "accelerated"}:
         raise RuntimeProfileError("kernel_policy.gated_delta is unsupported")
-    return selected
+    if selected == "accelerated":
+        _exact_keys(policy, {"gated_delta"}, "kernel_policy")
+        return selected, None
+    _exact_keys(policy, {"gated_delta", "native_rocm"}, "kernel_policy")
+    native_rocm = _mapping(policy["native_rocm"], "kernel_policy.native_rocm")
+    _exact_keys(native_rocm, {"max_physical_batch_size"}, "kernel_policy.native_rocm")
+    maximum = _positive_int(
+        native_rocm["max_physical_batch_size"],
+        "kernel_policy.native_rocm.max_physical_batch_size",
+    )
+    return selected, NativeRocmKernelCapability(maximum)
 
 
 def _parse_backends(

@@ -1,7 +1,10 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "family": "qwen3.5",
-  "kernel_policy": {"gated_delta": "native_torch"},
+  "kernel_policy": {
+    "gated_delta": "native_torch",
+    "native_rocm": {"max_physical_batch_size": 8}
+  },
   "artifact": {
     "manifest": {
       "path": "MODEL_MANIFEST.json",

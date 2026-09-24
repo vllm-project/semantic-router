@@ -26,6 +26,12 @@ source confirms the intended kernel dispatch but is not a substitute for live
 GPU semantic and performance qualification of the exact candidate image and
 source commit.
 
+The Eos native Torch ROCm profile separately caps `--max-batch` at 8 physical
+rows, the current strict-semantic envelope. A larger launch batch is rejected
+before model loading; raising that profile limit requires new old-reference
+semantic and performance evidence for the exact candidate, not a model-file
+revision allowlist. Sol, Nox, and Lux keep their independent strict FLA guard.
+
 The six packaged profiles use stable model names and carry implementation
 policy. Their historical manifest digest, size, and file inventory fields are
 retained for synthetic tests; production artifact resolution observes the
