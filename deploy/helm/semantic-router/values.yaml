@@ -529,6 +529,10 @@ env:
         name: hf-token-secret
         key: token
         optional: true # Alternative env var name used by huggingface-cli
+  # Model-download endpoint for clusters without a direct route to the hub
+  # (point it at an approved mirror); the canonical endpoint is the default
+  - name: HF_ENDPOINT
+    value: "https://huggingface.co"
 
 # Additional container env entries merged after `env` (e.g. E2E-only toggles).
 extraEnv: []
