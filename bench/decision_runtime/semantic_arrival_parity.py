@@ -14,7 +14,7 @@ from typing import Any, TextIO
 
 from tools.ci import decision_timed_semantics as timed_semantics
 
-from .legacy_projection import project_legacy_preview
+from .historical_preview_projection import project_legacy_preview
 from .semantic_cases import WorkloadCase
 from .semantic_transport import HttpSample
 

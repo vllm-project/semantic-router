@@ -88,7 +88,7 @@ in environment variables named by `--old-token-env` and `--new-token-env`.
   --new-model-revision <new-model-commit> \
   --old-hardware 'MI300X x1' --new-hardware 'MI300X x1' \
   --old-network-scope loopback --new-network-scope loopback \
-  --old-physical-batch-size 1 --new-physical-batch-size 32 \
+  --old-physical-batch-size 8 --new-physical-batch-size 8 \
   --new-metrics-url 'http://127.0.0.1:<new-port>/metrics' \
   --question-counts 1,8,32 --state-counts 1,8,32 \
   --concurrencies 1,8,32 --variants 4 --seed 17 \
@@ -151,6 +151,8 @@ This projection happens **after** the complete old HTTP body is timed and its
 raw hash recorded. The receipt identifies the adapter and does not claim
 identical wire bytes or confidence semantics. Other old envelopes fail closed;
 do not use this flag for a current strict `drun` service.
+This benchmark-only response projection is not old-process or artifact
+attestation; the protected release producer verifies those separately.
 
 `--parity-policy require` is the default. A contract, token, label, or numeric
 parity failure writes `audit.jsonl` and an audit-only `receipt.json`, exits 1,

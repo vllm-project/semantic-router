@@ -44,7 +44,7 @@ SOURCE_FILES = (
     "__init__.py",
     "__main__.py",
     "cases.py",
-    "legacy_projection.py",
+    "historical_preview_projection.py",
     "transport.py",
     "report.py",
     "semantic_cases.py",

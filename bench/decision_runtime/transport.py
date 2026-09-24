@@ -24,7 +24,7 @@ from decision_runtime.contracts import (
 
 # isort: on
 
-from .legacy_projection import project_legacy_preview
+from .historical_preview_projection import project_legacy_preview
 
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 

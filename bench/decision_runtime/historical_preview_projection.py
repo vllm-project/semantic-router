@@ -1,4 +1,4 @@
-"""Audited, benchmark-only projection of the old Decision preview envelope.
+"""Audited, benchmark-only projection of the historical preview envelope.
 
 Projection runs after the complete HTTP response has been timed and hashed. It
 does not change the old service, the request bytes, or the response digest in a

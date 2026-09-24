@@ -14,7 +14,7 @@ from pydantic import ValidationError
 # semantic_cases initializes the source checkout's runtime-contract path.
 # isort: off
 from .semantic_cases import RequestSpec
-from .legacy_projection import project_legacy_preview
+from .historical_preview_projection import project_legacy_preview
 from .transport import Endpoint, OPENER, _consume, validate_endpoint_url
 from decision_runtime.contracts import (
     ResponseContractError,

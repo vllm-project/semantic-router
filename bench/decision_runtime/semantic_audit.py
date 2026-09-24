@@ -22,7 +22,7 @@ from pydantic import ValidationError
 # semantic_cases initializes the source checkout's runtime-contract path.
 # isort: off
 from .semantic_cases import RequestSpec, WorkloadCase
-from .legacy_projection import project_legacy_preview
+from .historical_preview_projection import project_legacy_preview
 from .report import percentile
 from .transport import Endpoint, OPENER, _consume
 from decision_runtime.contracts import (

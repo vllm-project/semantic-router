@@ -28,7 +28,7 @@ from decision_runtime.contracts import (
 
 from . import semantic_runner
 from .__main__ import main
-from .legacy_projection import project_legacy_preview
+from .historical_preview_projection import project_legacy_preview
 from .semantic_cases import generate_cases
 from .semantic_metrics import MetricCapture, MetricsError, _parse_snapshot
 from .semantic_report import build_semantic_matrix
