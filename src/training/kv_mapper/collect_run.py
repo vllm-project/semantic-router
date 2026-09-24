@@ -67,8 +67,13 @@ def _capture_windows(model, windows, device, n_kv_heads, head_dim, layers, token
     for index, window in enumerate(windows):
         path = out_dir / f"{index:06d}.npz"
         n_rows = len(range(0, len(window), token_step))
-        if validate_activation_chunk(path, len(layers), n_rows, n_kv_heads, head_dim):
-            continue
+        try:
+            if validate_activation_chunk(path, len(layers), n_rows, n_kv_heads, head_dim):
+                continue
+        except ValueError:
+            # A Spot interruption may leave the chunk without its checksum.
+            path.unlink(missing_ok=True)
+            path.with_suffix(".sha256").unlink(missing_ok=True)
         ids = torch.tensor([window], dtype=torch.long, device=device)
         captured = capture_kv(model, ids, n_kv_heads, head_dim, layers)
         keys = [tensor[::token_step].numpy() for tensor in captured.keys]
