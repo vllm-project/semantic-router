@@ -46,8 +46,9 @@ modalities rather than claim full recipe coverage.
 
 ## Dashboard access
 
-`--minimal` omits Dashboard. Local Docker publishes its port on all interfaces by
-default; set `VLLM_SR_DASHBOARD_HOST_BIND=127.0.0.1` for a loopback-only trial.
+`--minimal` omits Dashboard. Local Docker publishes its port on loopback by
+default; set `VLLM_SR_DASHBOARD_HOST_BIND=0.0.0.0` only when external access is
+intended.
 Inspect actual port bindings before opening access. Preserve authentication state
 when updating a stack and reuse an existing valid session where available.
 
