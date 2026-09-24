@@ -107,7 +107,7 @@ request crosses three routing layers:
 client
   -> AI Gateway (e.g. Envoy AI Gateway / LiteLLM / agentgateway)
   -> Semantic Router ExtProc
-  -> Inference Router / pool scheduler (e.g. vLLM Router / llm-d / AIBrix gateway)
+  -> Inference Router / pool scheduler (e.g. llm-d / vLLM Router / AIBrix gateway)
   -> model replica
 ```
 
@@ -115,7 +115,7 @@ client
 | --- | --- | --- |
 | **AI Gateway** | Client ingress, provider translation, credentials, rate limits, and traffic policy. | [Envoy AI Gateway](../installation/k8s/ai-gateway), [LiteLLM](https://docs.litellm.ai/docs/simple_proxy), [agentgateway](../installation/k8s/agentgateway) |
 | **Semantic Router** | Logical model or model pool selection from request intent and policy, through recipes and decisions. The choice is written to `x-selected-model`. | vLLM Semantic Router |
-| **Inference Router** | Healthy replica or endpoint selection inside the selected pool. | [vLLM Router](https://github.com/vllm-project/router), [llm-d](../installation/k8s/llm-d), [AIBrix](../installation/k8s/aibrix) |
+| **Inference Router** | Healthy replica or endpoint selection inside the selected pool. | [llm-d](../installation/k8s/llm-d), [vLLM Router](https://github.com/vllm-project/router), [AIBrix gateway](../installation/k8s/aibrix) |
 
 Envoy AI Gateway and agentgateway call Semantic Router through ExtProc.
 [Kubernetes Gateways](../installation/k8s/gateways) and

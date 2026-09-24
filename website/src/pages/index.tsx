@@ -1,6 +1,7 @@
 import React from 'react'
 import clsx from 'clsx'
 import Head from '@docusaurus/Head'
+import Link from '@docusaurus/Link'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
@@ -219,7 +220,50 @@ const momScorecards = [
   },
 ]
 
+type ExampleProduct = {
+  label: string
+  to?: string
+}
+
+function ExampleProducts({ products }: { products: ExampleProduct[] }): JSX.Element {
+  return (
+    <span className="site-prose">
+      {products.map((product, index) => (
+        <React.Fragment key={product.label}>
+          {index > 0 && ', '}
+          {product.to ? <Link to={product.to}>{product.label}</Link> : product.label}
+        </React.Fragment>
+      ))}
+    </span>
+  )
+}
+
 const alternativeComparison = [
+  {
+    capability: translate({
+      id: 'homepage.alternatives.examples.capability',
+      message: 'Examples',
+    }),
+    semanticRouter: 'vLLM Semantic Router',
+    aiGateway: (
+      <ExampleProducts
+        products={[
+          { label: 'Envoy AI Gateway', to: '/docs/installation/k8s/ai-gateway' },
+          { label: 'LiteLLM' },
+          { label: 'agentgateway', to: '/docs/installation/k8s/agentgateway' },
+        ]}
+      />
+    ),
+    llmd: (
+      <ExampleProducts
+        products={[
+          { label: 'llm-d', to: '/docs/installation/k8s/llm-d' },
+          { label: 'vLLM Router' },
+          { label: 'AIBrix gateway', to: '/docs/installation/k8s/aibrix' },
+        ]}
+      />
+    ),
+  },
   {
     capability: translate({
       id: 'homepage.alternatives.decides.capability',
@@ -303,7 +347,7 @@ const alternativeComparison = [
     }),
     aiGateway: translate({
       id: 'homepage.alternatives.receipt.aiGateway',
-      message: 'None',
+      message: 'Varies by implementation',
     }),
     llmd: translate({
       id: 'homepage.alternatives.receipt.llmd',
@@ -421,8 +465,7 @@ function AlternativesSection(): JSX.Element {
             <p>
               <Translate id="homepage.alternatives.description">
                 What the Router owns next to an AI Gateway and an Inference
-                Router such as llm-d. The three components make no overlapping
-                decisions.
+                Router. The three components make no overlapping decisions.
               </Translate>
             </p>
           </header>

@@ -97,6 +97,8 @@ particular category or backend solely from the prompt wording.
 
 Correlate the request with Gateway, Router, and provider logs. A successful HTTP
 response alone does not prove that the intended route or scheduler handled it.
+When an Inference Router such as llm-d, vLLM Router, or the AIBrix gateway picks
+the replica, include its logs as well.
 
 ```bash
 kubectl logs -n <router-namespace> deployment/<router-deployment> --since=5m
