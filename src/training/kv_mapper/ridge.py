@@ -59,7 +59,10 @@ class RidgeAccumulator:
         sw = self.sw
         xtx_c = self.xtx - np.outer(self.sx, self.sx) / sw
         xty_c = self.xty - np.outer(self.sx, self.sy) / sw
-        a = xtx_c + alpha * np.eye(self.dx)
-        weight, *_ = np.linalg.lstsq(a, xty_c, rcond=None)
+        a = (xtx_c + xtx_c.T) / 2 + alpha * np.eye(self.dx)
+        if alpha > 0:
+            weight = np.linalg.solve(a, xty_c)
+        else:
+            weight, *_ = np.linalg.lstsq(a, xty_c, rcond=None)
         bias = self.sy / sw - (self.sx / sw) @ weight
         return weight.astype(np.float32), bias.astype(np.float32)
