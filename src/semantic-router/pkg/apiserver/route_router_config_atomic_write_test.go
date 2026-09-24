@@ -160,8 +160,8 @@ func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 	}
 
 	// A subPath mount remains on its original revision after the first write.
-	// A later request can still update the live ConfigMap, while a request
-	// based on the old revision must fail its compare-and-swap check.
+	// The low-level writer must compare the live revision, while an API
+	// mutation still requires a rollout before accepting another request.
 	second := []byte("routing: {second: true}\n")
 	if err := writeConfigAtomically(configPath, second); err != nil {
 		t.Fatalf("second ConfigMap write with stale mount: %v", err)

@@ -99,7 +99,9 @@ func TestConfigMutationRetriesSameHashAfterFailedActivation(t *testing.T) {
 				if operation == "rollback" {
 					const version = "20260802-120000"
 					backupDir := filepath.Join(filepath.Dir(path), ".vllm-sr", "config-backups")
-					recordConfigBackup(backupDir, version, candidate, configVersionSourceAPI)
+					if backupErr := recordConfigBackup(backupDir, version, candidate, configVersionSourceAPI); backupErr != nil {
+						t.Fatal(backupErr)
+					}
 					method, route = http.MethodPost, apiConfigRollbackPath
 					payload = routerConfigRollbackRequest{Version: version}
 				}

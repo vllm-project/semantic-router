@@ -730,7 +730,9 @@ func TestConfigCleanupBackupsRemovesSourceSidecar(t *testing.T) {
 		); err != nil {
 			t.Fatalf("write backup: %v", err)
 		}
-		writeConfigVersionSource(backupDir, version, configVersionSourceAPI)
+		if sourceErr := writeConfigVersionSource(backupDir, version, configVersionSourceAPI); sourceErr != nil {
+			t.Fatal(sourceErr)
+		}
 	}
 
 	configCleanupBackups(backupDir)

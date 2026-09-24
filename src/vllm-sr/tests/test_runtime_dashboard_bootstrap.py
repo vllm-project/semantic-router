@@ -5,6 +5,11 @@ from cli.container_start import _build_dashboard_runtime_env
 from cli.runtime_stack import resolve_runtime_stack
 
 
+@pytest.fixture(autouse=True)
+def local_dashboard_bind_by_default(monkeypatch):
+    monkeypatch.delenv("VLLM_SR_DASHBOARD_HOST_BIND", raising=False)
+
+
 def test_dashboard_open_bootstrap_defaults_true_without_admin(monkeypatch):
     monkeypatch.delenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", raising=False)
     monkeypatch.delenv("DASHBOARD_ADMIN_EMAIL", raising=False)
@@ -99,7 +104,7 @@ def test_dashboard_open_bootstrap_defaults_true_with_partial_admin(
 
 @pytest.mark.parametrize(
     ("host_bind", "expected"),
-    [(None, "0.0.0.0"), ("127.0.0.1", "127.0.0.1")],
+    [(None, "127.0.0.1"), ("127.0.0.1", "127.0.0.1"), ("::1", "::1")],
 )
 def test_dashboard_docker_published_address(monkeypatch, host_bind, expected):
     if host_bind is None:
@@ -143,3 +148,62 @@ def test_dashboard_docker_rejects_invalid_published_address(monkeypatch):
     monkeypatch.setenv("VLLM_SR_DASHBOARD_HOST_BIND", "192.0.2.1")
     with pytest.raises(ValueError, match="VLLM_SR_DASHBOARD_HOST_BIND"):
         container_start._dashboard_host_bind_address()
+
+
+@pytest.mark.parametrize("host_bind", ["0.0.0.0", "::"])
+def test_public_dashboard_requires_explicit_bootstrap_or_admin(monkeypatch, host_bind):
+    monkeypatch.setenv("VLLM_SR_DASHBOARD_HOST_BIND", host_bind)
+    monkeypatch.delenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", raising=False)
+    monkeypatch.delenv("DASHBOARD_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("DASHBOARD_ADMIN_PASSWORD", raising=False)
+
+    with pytest.raises(ValueError, match="DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true"):
+        _build_dashboard_runtime_env(
+            common_env={},
+            listener_port=8899,
+            stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+        )
+
+
+@pytest.mark.parametrize("host_bind", ["0.0.0.0", "::"])
+def test_public_dashboard_accepts_seeded_admin(monkeypatch, host_bind):
+    monkeypatch.setenv("VLLM_SR_DASHBOARD_HOST_BIND", host_bind)
+    monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "admin@example.com")
+    monkeypatch.setenv("DASHBOARD_ADMIN_PASSWORD", "secret")
+    monkeypatch.delenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", raising=False)
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env={},
+        listener_port=8899,
+        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+    )
+    assert "DASHBOARD_ALLOW_OPEN_BOOTSTRAP" not in dashboard_env
+
+
+@pytest.mark.parametrize("host_bind", ["0.0.0.0", "::"])
+def test_public_dashboard_accepts_explicit_open_bootstrap(monkeypatch, host_bind):
+    monkeypatch.setenv("VLLM_SR_DASHBOARD_HOST_BIND", host_bind)
+    monkeypatch.setenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", "true")
+    monkeypatch.delenv("DASHBOARD_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("DASHBOARD_ADMIN_PASSWORD", raising=False)
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env={},
+        listener_port=8899,
+        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+    )
+    assert dashboard_env["DASHBOARD_ALLOW_OPEN_BOOTSTRAP"] == "true"
+
+
+def test_public_dashboard_rejects_disabled_bootstrap_without_admin(monkeypatch):
+    monkeypatch.setenv("VLLM_SR_DASHBOARD_HOST_BIND", "0.0.0.0")
+    monkeypatch.setenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", "false")
+    monkeypatch.delenv("DASHBOARD_ADMIN_EMAIL", raising=False)
+    monkeypatch.delenv("DASHBOARD_ADMIN_PASSWORD", raising=False)
+
+    with pytest.raises(ValueError, match="DASHBOARD_ADMIN_EMAIL"):
+        _build_dashboard_runtime_env(
+            common_env={},
+            listener_port=8899,
+            stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+        )

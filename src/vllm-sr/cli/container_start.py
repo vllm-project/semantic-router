@@ -517,7 +517,7 @@ def _listener_host_address(listener: dict) -> str:
 
 def _dashboard_host_bind_address() -> str:
     """Select the Docker host address for the Dashboard's published port."""
-    address = os.getenv("VLLM_SR_DASHBOARD_HOST_BIND", "0.0.0.0").strip()
+    address = os.getenv("VLLM_SR_DASHBOARD_HOST_BIND", "127.0.0.1").strip()
     if address not in {"0.0.0.0", "127.0.0.1", "::", "::1"}:
         raise ValueError(
             "VLLM_SR_DASHBOARD_HOST_BIND must be an explicit wildcard or loopback IP"
@@ -710,10 +710,19 @@ def _build_dashboard_runtime_env(
     bootstrap_policy_env = "DASHBOARD_ALLOW_OPEN_BOOTSTRAP"
     if bootstrap_policy_env in os.environ:
         dashboard_env[bootstrap_policy_env] = os.environ[bootstrap_policy_env]
-    elif bootstrap_policy_env not in dashboard_env:
-        bootstrap_email = dashboard_env.get("DASHBOARD_ADMIN_EMAIL", "").strip()
-        bootstrap_password = dashboard_env.get("DASHBOARD_ADMIN_PASSWORD", "").strip()
-        if not (bootstrap_email and bootstrap_password):
+    bootstrap_email = dashboard_env.get("DASHBOARD_ADMIN_EMAIL", "").strip()
+    bootstrap_password = dashboard_env.get("DASHBOARD_ADMIN_PASSWORD", "").strip()
+    if not (bootstrap_email and bootstrap_password):
+        if _dashboard_host_bind_address() in {"0.0.0.0", "::"}:
+            if dashboard_env.get(bootstrap_policy_env) != "true":
+                raise ValueError(
+                    "Publishing Dashboard on all interfaces requires "
+                    "DASHBOARD_ADMIN_EMAIL and DASHBOARD_ADMIN_PASSWORD, or "
+                    "an explicit DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true opt-in"
+                )
+        elif bootstrap_policy_env not in dashboard_env:
+            # Keep dashboard-first setup usable on the local machine without
+            # opening first-admin registration on the network by default.
             dashboard_env[bootstrap_policy_env] = "true"
 
     dashboard_env["TARGET_ROUTER_API_URL"] = (

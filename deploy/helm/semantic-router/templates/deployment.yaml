@@ -108,6 +108,9 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          # Retain Router API config versions across ConfigMap rollout restarts.
+          - name: VLLM_SR_CONFIG_BACKUP_DIR
+            value: /app/models/.vllm-sr/config-backups
           - name: POD_NAMESPACE
             valueFrom:
               fieldRef:

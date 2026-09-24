@@ -366,13 +366,14 @@ func cloneYAMLValue(value any) any {
 	}
 }
 
-func (s *ClassificationAPIServer) recordRouterConfigArtifacts(sourceConfigPath string, existingData []byte) (string, string) {
-	configDir := configPersistenceBaseDir(sourceConfigPath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
+func (s *ClassificationAPIServer) recordRouterConfigArtifacts(sourceConfigPath string, existingData []byte) (string, string, error) {
+	backupDir := configBackupDir(sourceConfigPath)
 	version := nextConfigVersion(backupDir, time.Now())
-	recordConfigBackup(backupDir, version, existingData, configVersionSourceAPI)
+	if err := recordConfigBackup(backupDir, version, existingData, configVersionSourceAPI); err != nil {
+		return "", "", err
+	}
 
-	return version, backupDir
+	return version, backupDir, nil
 }
 
 func (s *ClassificationAPIServer) writeRouterConfigFiles(
@@ -412,7 +413,11 @@ func (s *ClassificationAPIServer) commitRouterConfigDocument(
 	action string,
 	message string,
 ) bool {
-	version, backupDir := s.recordRouterConfigArtifacts(paths.sourcePath, previousData)
+	version, backupDir, err := s.recordRouterConfigArtifacts(paths.sourcePath, previousData)
+	if err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BACKUP_ERROR", fmt.Sprintf("Failed to back up existing config: %v", err))
+		return false
+	}
 	afterAttempt := s.configActivationAttempt()
 	if !s.writeRouterConfigFiles(w, paths, previousData, yamlBytes) {
 		return false

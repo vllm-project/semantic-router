@@ -231,6 +231,14 @@ for pod, expected_name in ((default_pod, "models-volume"), (workspace_pod, "work
     assert len(mounts) == 1 and mounts[0]["name"] == expected_name, mounts
     volumes = [volume for volume in pod["volumes"] if volume["name"] == expected_name]
     assert len(volumes) == 1, volumes
+    backup_env = [
+        entry for entry in pod["containers"][0]["env"]
+        if entry["name"] == "VLLM_SR_CONFIG_BACKUP_DIR"
+    ]
+    assert len(backup_env) == 1, backup_env
+    assert backup_env[0]["value"] == "/app/models/.vllm-sr/config-backups", backup_env
+default_models = next(volume for volume in default_pod["volumes"] if volume["name"] == "models-volume")
+assert "persistentVolumeClaim" in default_models, default_models
 assert all(volume["name"] != "models-volume" for volume in workspace_pod["volumes"])
 PY
 log_success "Custom /app/models mount replaces the default model volume"

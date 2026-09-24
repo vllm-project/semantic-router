@@ -99,8 +99,7 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	configDir := configPersistenceBaseDir(paths.sourcePath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
+	backupDir := configBackupDir(paths.sourcePath)
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
 
 	backupData, backupCfg, ok := s.loadRollbackBackup(
@@ -124,7 +123,10 @@ func (s *ClassificationAPIServer) handleConfigRollback(w http.ResponseWriter, r 
 	}
 
 	// Back up current config before rollback.
-	recordConfigBackup(backupDir, nextConfigVersion(backupDir, time.Now()), existingData, configVersionSourceRollback)
+	if err := recordConfigBackup(backupDir, nextConfigVersion(backupDir, time.Now()), existingData, configVersionSourceRollback); err != nil {
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BACKUP_ERROR", fmt.Sprintf("Failed to back up existing config: %v", err))
+		return
+	}
 
 	afterAttempt := s.configActivationAttempt()
 	if !s.writeRouterConfigFiles(w, paths, existingData, backupData) {
@@ -278,14 +280,17 @@ func (s *ClassificationAPIServer) handleConfigVersions(w http.ResponseWriter, _ 
 	}
 
 	paths := resolveConfigPersistencePaths(s.configPath)
-	configDir := configPersistenceBaseDir(paths.sourcePath)
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
+	backupDir := configBackupDir(paths.sourcePath)
 
 	versions := []RouterConfigVersionEntry{}
 
 	entries, err := os.ReadDir(backupDir)
 	if err != nil {
-		s.writeJSONResponse(w, http.StatusOK, versions)
+		if os.IsNotExist(err) {
+			s.writeJSONResponse(w, http.StatusOK, versions)
+			return
+		}
+		s.writeErrorResponse(w, http.StatusInternalServerError, "BACKUP_READ_ERROR", fmt.Sprintf("Failed to read config backups: %v", err))
 		return
 	}
 
@@ -405,27 +410,27 @@ func configVersionSourcePath(backupDir, version string) string {
 	return filepath.Join(backupDir, fmt.Sprintf("config.%s.source", version))
 }
 
-func writeConfigVersionSource(backupDir, version string, source configVersionSource) {
-	if err := writePrivateConfigArtifact(configVersionSourcePath(backupDir, version), []byte(source+"\n")); err != nil {
-		logging.Warnf("Failed to write config backup source metadata: %v", err)
-	}
+func writeConfigVersionSource(backupDir, version string, source configVersionSource) error {
+	return writePrivateConfigArtifact(configVersionSourcePath(backupDir, version), []byte(source+"\n"))
 }
 
-func recordConfigBackup(backupDir, version string, data []byte, source configVersionSource) {
+func recordConfigBackup(backupDir, version string, data []byte, source configVersionSource) error {
 	if len(data) == 0 {
-		return
+		return nil
 	}
 	if err := ensurePrivateConfigBackupDir(backupDir); err != nil {
-		logging.Warnf("Failed to prepare private config backup directory: %v", err)
-		return
+		return fmt.Errorf("prepare private config backup directory: %w", err)
 	}
 	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
 	if err := writePrivateConfigArtifact(backupFile, data); err != nil {
-		logging.Warnf("Failed to create config backup: %v", err)
-		return
+		return fmt.Errorf("create config backup: %w", err)
 	}
-	writeConfigVersionSource(backupDir, version, source)
+	if err := writeConfigVersionSource(backupDir, version, source); err != nil {
+		_ = os.Remove(backupFile)
+		return fmt.Errorf("write config backup source metadata: %w", err)
+	}
 	logging.Infof("Config backup created: %s", backupFile)
+	return nil
 }
 
 func ensurePrivateConfigBackupDir(backupDir string) error {
@@ -436,10 +441,25 @@ func ensurePrivateConfigBackupDir(backupDir string) error {
 }
 
 func writePrivateConfigArtifact(path string, data []byte) error {
-	if err := os.WriteFile(path, data, 0o600); err != nil {
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
 		return err
 	}
-	return os.Chmod(path, 0o600)
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return err
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return err
+	}
+	return nil
 }
 
 func readConfigVersionSource(backupDir, version string) configVersionSource {

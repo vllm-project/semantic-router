@@ -178,6 +178,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: VLLM_SR_CONFIG_BACKUP_DIR
+          value: "/app/models/.vllm-sr/config-backups"
         - name: HF_HOME
           value: "/app/cache/hf"
         - name: TRANSFORMERS_CACHE

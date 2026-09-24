@@ -447,8 +447,12 @@ becomes active. A second mutation on a stale Pod returns HTTP 409
 Kubernetes CR-managed configuration remains read-only through this API. Keep
 the canonical Helm values in sync with API edits before the next Helm upgrade,
 which otherwise renders the earlier values back into the ConfigMap.
-When the Dashboard is enabled, its PVC retains config backups across the
-required rollout, so Dashboard rollback can still find earlier versions.
+The Router stores its config versions under `/app/models/.vllm-sr/config-backups`.
+The default models PVC keeps Router rollback versions available after the
+required rollout. A custom `/app/models` mount must be writable and persistent
+for durable config versions and rollback; `persistence.enabled=false` uses
+ephemeral storage suitable only for disposable demos. When the Dashboard is
+enabled, its separate PVC retains Dashboard config backups.
 Managed knowledge base assets need a writable, persistent directory in
 addition to the YAML document; their mutation API returns
 `KB_ASSET_STORAGE_READ_ONLY` on ConfigMap-backed deployments.
