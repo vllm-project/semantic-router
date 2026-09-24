@@ -271,7 +271,15 @@ def test_qwen_loader_uses_verified_manifest_layout(
 
     profile = load_runtime_profile(profile_id, revision=revision)
     model = SimpleNamespace(profile=profile)
-    artifact = SimpleNamespace(data_root=tmp_path, manifest=_observed_manifest(profile))
+    calibration_path = "temperature.json" if expected_manifest else "runtime.json"
+    (tmp_path / calibration_path).write_text(
+        json.dumps({"temperature": profile.temperature}), encoding="utf-8"
+    )
+    artifact = SimpleNamespace(
+        data_root=tmp_path,
+        files=(ArtifactFile(calibration_path, calibration_path, "b" * 64, 1),),
+        manifest=_observed_manifest(profile),
+    )
     calls = []
     sentinel = object()
 
