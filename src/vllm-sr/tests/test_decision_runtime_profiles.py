@@ -15,7 +15,6 @@ from decision_runtime.catalog_adapter import (
 from decision_runtime.runtime_profile import (
     DEFAULT_PHYSICAL_BATCH_SIZE,
     RuntimeProfileError,
-    UnsupportedRuntimeBackendError,
     load_runtime_profile,
     parse_runtime_profile,
 )
@@ -68,6 +67,14 @@ PROMPT_POLICIES = {
 }
 
 
+def _packaged_profile(model_id: str):
+    family = MODELS[model_id][1]
+    directory = "vela" if family == "vela" else "qwen35"
+    return resources.files("decision_runtime.profiles").joinpath(
+        directory, f"{model_id.rsplit('/', 1)[-1]}.json"
+    )
+
+
 @pytest.mark.parametrize("model_id", MODELS)
 def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
     revision, family, max_tokens, temperature = MODELS[model_id]
@@ -91,7 +98,10 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
 def test_profile_package_has_exact_catalog_model_set() -> None:
     profile_files = {
         item.name.removesuffix(".json")
-        for item in resources.files("decision_runtime.profiles").iterdir()
+        for family in ("vela", "qwen35")
+        for item in resources.files("decision_runtime.profiles")
+        .joinpath(family)
+        .iterdir()
         if item.name.endswith(".json")
     }
 
@@ -157,20 +167,14 @@ def test_catalog_adapter_fails_closed_on_family_mismatch(
 
 
 def test_unqualified_backends_and_targets_are_rejected() -> None:
-    profile = load_runtime_profile(
-        "Decision-1.0-Kai-0.6B",
-        revision=MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0],
-    )
-
-    profile.require_backend("rocm", target="gfx942")
-    with pytest.raises(UnsupportedRuntimeBackendError):
-        profile.require_backend("cuda")
-    with pytest.raises(UnsupportedRuntimeBackendError):
-        profile.require_backend("cpu")
-    with pytest.raises(UnsupportedRuntimeBackendError):
-        profile.require_backend("mlx")
-    with pytest.raises(UnsupportedRuntimeBackendError):
-        profile.require_backend("rocm", target="gfx1100")
+    model_id = "llm-semantic-router/Decision-1.0-Kai-0.6B"
+    resolve_decision_runtime_model(model_id, backend="rocm", target="gfx942")
+    with pytest.raises(RuntimeModelResolutionError, match="no installed"):
+        resolve_decision_runtime_model(model_id, backend="cuda")
+    with pytest.raises(RuntimeModelResolutionError, match="no installed"):
+        resolve_decision_runtime_model(model_id, backend="mlx")
+    with pytest.raises(RuntimeModelResolutionError, match="unsupported"):
+        resolve_decision_runtime_model(model_id, backend="rocm", target="gfx1100")
     with pytest.raises(
         RuntimeModelResolutionError, match="requires an explicit backend"
     ):
@@ -197,9 +201,7 @@ def test_runtime_owned_backend_capabilities_cover_six_rocm_and_sub_1b_cpu() -> N
 
 def test_profile_parser_rejects_traversal_and_revision_fields() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
-    packaged = resources.files("decision_runtime.profiles").joinpath(
-        "Decision-1.0-Kai-0.6B.json"
-    )
+    packaged = _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B")
     document = json.loads(packaged.read_bytes())
     document["artifact"]["files"][0] = "../weights.safetensors"
 
@@ -214,9 +216,7 @@ def test_profile_parser_rejects_traversal_and_revision_fields() -> None:
 
 def test_physical_batch_is_a_tunable_positive_profile_value() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
-    packaged = resources.files("decision_runtime.profiles").joinpath(
-        "Decision-1.0-Kai-0.6B.json"
-    )
+    packaged = _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B")
     document = json.loads(packaged.read_bytes())
     document["physical_batch_size"] = 4
 
@@ -225,32 +225,13 @@ def test_physical_batch_is_a_tunable_positive_profile_value() -> None:
     assert profile.physical_batch_size == 4
 
 
-@pytest.mark.parametrize("model_id", MODELS)
-def test_cpu_is_explicit_and_unqualified_until_hardware_evidence(model_id: str) -> None:
-    revision = MODELS[model_id][0]
-    profile = load_runtime_profile(model_id.rsplit("/", 1)[-1], revision=revision)
-    cpu = profile.backends["cpu"]
-    assert not cpu.qualified
-    assert cpu.targets == ()
-    if model_id.endswith(("Kai-0.6B", "Lex-0.6B", "Eos-0.8B")):
-        assert cpu.backbone_dtype == "float32"
-    else:
-        assert cpu.backbone_dtype is None
-
-
-def test_profile_rejects_qualified_backend_without_dtype() -> None:
+def test_model_profile_rejects_backend_qualification_declarations() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
-    packaged = resources.files("decision_runtime.profiles").joinpath(
-        "Decision-1.0-Kai-0.6B.json"
-    )
+    packaged = _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B")
     document = json.loads(packaged.read_bytes())
-    document["backends"]["cpu"] = {
-        "qualified": True,
-        "targets": ["x86_64"],
-        "backbone_dtype": None,
-    }
+    document["backends"] = {"cpu": {"qualified": True}}
 
-    with pytest.raises(RuntimeProfileError, match="dtype is required"):
+    with pytest.raises(RuntimeProfileError, match="fields do not match"):
         parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 
 

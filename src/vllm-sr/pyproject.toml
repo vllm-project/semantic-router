@@ -69,7 +69,7 @@ sdist = "build_support.SDist"
 "cli.templates" = ["*.yaml", "*.json", "*.ini"]
 "cli.model_assets" = ["**/*.yaml", "**/*.md", "**/*.dsl"]
 "cli.decision_runtime" = ["decision-images.lock.json"]
-"decision_runtime.profiles" = ["*.json"]
+"decision_runtime.profiles" = ["vela/*.json", "qwen35/*.json"]
 
 
 [tool.pytest.ini_options]

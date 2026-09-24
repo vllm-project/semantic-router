@@ -12,22 +12,19 @@ from __future__ import annotations
 import json
 import math
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import PurePosixPath
-from types import MappingProxyType
 from typing import Any, Literal
 
 RuntimeFamily = Literal["vela", "qwen3.5"]
-RuntimeBackendName = Literal["rocm", "cuda", "cpu", "mlx"]
 ChoiceNullDescriptionPolicy = Literal["render_key", "preserve_json_null"]
 
-PROFILE_SCHEMA_VERSION = 2
+PROFILE_SCHEMA_VERSION = 3
 # Initial benchmarked profile value, not a hard upper bound. A profile may tune
 # it after backend/device correctness and performance validation.
 DEFAULT_PHYSICAL_BATCH_SIZE = 8
-_BACKEND_NAMES = ("rocm", "cuda", "cpu", "mlx")
+_PROFILE_FAMILY_DIRECTORIES = ("vela", "qwen35")
 _DTYPES = frozenset({"bfloat16", "float32"})
 _ASCII_CONTROL_LIMIT = 32
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -64,15 +61,6 @@ class ArtifactSelection:
 
 
 @dataclass(frozen=True, slots=True)
-class BackendQualification:
-    """Evidence gate for one runtime implementation and its device targets."""
-
-    qualified: bool
-    targets: tuple[str, ...]
-    backbone_dtype: str | None
-
-
-@dataclass(frozen=True, slots=True)
 class PromptPolicy:
     """Model-specific prompt rendering that must not be inferred by a backend."""
 
@@ -92,25 +80,6 @@ class RuntimeProfile:
     physical_batch_size: int
     temperature: float | None
     prompt_policy: PromptPolicy
-    backends: Mapping[RuntimeBackendName, BackendQualification]
-
-    def require_backend(
-        self, backend: str, *, target: str | None = None
-    ) -> BackendQualification:
-        """Return a qualified backend or fail closed before model loading."""
-
-        backend_name = backend.strip()
-        qualification = self.backends.get(backend_name)  # type: ignore[arg-type]
-        if qualification is None or not qualification.qualified:
-            raise UnsupportedRuntimeBackendError(
-                f"revision {self.revision} is not qualified for {backend_name!r}"
-            )
-        if target is not None and target not in qualification.targets:
-            raise UnsupportedRuntimeBackendError(
-                f"revision {self.revision} is not qualified for "
-                f"{backend_name!r} target {target!r}"
-            )
-        return qualification
 
 
 def validate_relative_artifact_path(value: object, *, field: str) -> str:
@@ -144,20 +113,29 @@ def load_runtime_profile(profile_id: str, *, revision: str) -> RuntimeProfile:
         or re.fullmatch(r"[A-Za-z][A-Za-z0-9._-]*", profile_id) is None
     ):
         raise RuntimeProfileError("Decision runtime profile ID is invalid")
-    resource = resources.files("decision_runtime.profiles").joinpath(
-        f"{profile_id}.json"
+    root = resources.files("decision_runtime.profiles")
+    matches = tuple(
+        (directory, resource)
+        for directory in _PROFILE_FAMILY_DIRECTORIES
+        if (resource := root.joinpath(directory, f"{profile_id}.json")).is_file()
     )
-    if not resource.is_file():
+    if len(matches) != 1:
         raise RuntimeProfileError(
-            f"no packaged Decision runtime profile for model {profile_id}"
+            f"expected one packaged Decision runtime profile for model {profile_id}"
         )
     try:
-        payload = resource.read_bytes()
+        payload = matches[0][1].read_bytes()
     except OSError as error:
         raise RuntimeProfileError(
             f"could not read Decision runtime profile for model {profile_id}"
         ) from error
-    return parse_runtime_profile(payload, revision=revision)
+    profile = parse_runtime_profile(payload, revision=revision)
+    directory = "vela" if profile.family == "vela" else "qwen35"
+    if matches[0][0] != directory:
+        raise RuntimeProfileError(
+            "Decision profile is in the wrong model-family directory"
+        )
+    return profile
 
 
 def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
@@ -182,7 +160,6 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
             "physical_batch_size",
             "calibration",
             "prompt_policy",
-            "backends",
         },
         "profile",
     )
@@ -205,7 +182,6 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
     head_dtype = _dtype(dtype["head"], "dtype.head")
     temperature = _parse_calibration(root["calibration"])
     prompt_policy = _parse_prompt_policy(root["prompt_policy"])
-    backends = _parse_backends(root["backends"])
 
     return RuntimeProfile(
         revision=revision,
@@ -217,7 +193,6 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
         physical_batch_size=physical_batch_size,
         temperature=temperature,
         prompt_policy=prompt_policy,
-        backends=backends,
     )
 
 
@@ -278,46 +253,6 @@ def _parse_prompt_policy(value: object) -> PromptPolicy:
             "prompt_policy.choice_null_description is unsupported"
         )
     return PromptPolicy(choice_null_description=choice_null_description)
-
-
-def _parse_backends(
-    value: object,
-) -> Mapping[RuntimeBackendName, BackendQualification]:
-    backends = _mapping(value, "backends")
-    _exact_keys(backends, set(_BACKEND_NAMES), "backends")
-    parsed: dict[RuntimeBackendName, BackendQualification] = {}
-    for name in _BACKEND_NAMES:
-        raw = _mapping(backends[name], f"backends.{name}")
-        _exact_keys(raw, {"qualified", "targets", "backbone_dtype"}, f"backends.{name}")
-        qualified = raw["qualified"]
-        targets = raw["targets"]
-        dtype = raw["backbone_dtype"]
-        if not isinstance(qualified, bool):
-            raise RuntimeProfileError(f"backends.{name}.qualified must be a boolean")
-        if (
-            not isinstance(targets, list)
-            or any(not isinstance(item, str) or not item.strip() for item in targets)
-            or len(targets) != len(set(targets))
-        ):
-            raise RuntimeProfileError(
-                f"backends.{name}.targets must contain unique nonblank strings"
-            )
-        if qualified != bool(targets):
-            raise RuntimeProfileError(
-                f"backends.{name} must list targets exactly when it is qualified"
-            )
-        if dtype is not None:
-            dtype = _dtype(dtype, f"backends.{name}.backbone_dtype")
-        if qualified and dtype is None:
-            raise RuntimeProfileError(
-                f"backends.{name}.backbone_dtype is required when qualified"
-            )
-        parsed[name] = BackendQualification(  # type: ignore[literal-required]
-            qualified=qualified,
-            targets=tuple(targets),
-            backbone_dtype=dtype,
-        )
-    return MappingProxyType(parsed)
 
 
 def _mapping(value: object, field: str) -> dict[str, Any]:

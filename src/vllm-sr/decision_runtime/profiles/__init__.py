@@ -1,1 +1,1 @@
-"""Packaged, immutable Decision runtime profiles keyed by catalog revision."""
+"""Family-partitioned model templates; hardware qualification lives in runtime code."""

@@ -1,10 +1,10 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "family": "vela",
   "artifact": {
     "manifest": {
       "path": "native/MANIFEST.json",
-      "sha256": "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4",
+      "sha256": "f288d873999832a3f37c6a7c4268c2ab309691e621794dbf7acab891acbbb7e6",
       "size_bytes": 4326
     },
     "files": [
@@ -28,11 +28,5 @@
   },
   "physical_batch_size": 8,
   "calibration": null,
-  "prompt_policy": {"choice_null_description": "render_key"},
-  "backends": {
-    "rocm": {"qualified": true, "targets": ["gfx942"], "backbone_dtype": "float32"},
-    "cuda": {"qualified": false, "targets": [], "backbone_dtype": "float32"},
-    "cpu": {"qualified": false, "targets": [], "backbone_dtype": "float32"},
-    "mlx": {"qualified": false, "targets": [], "backbone_dtype": null}
-  }
+  "prompt_policy": {"choice_null_description": "render_key"}
 }
