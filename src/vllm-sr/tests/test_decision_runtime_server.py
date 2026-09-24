@@ -515,15 +515,18 @@ def test_vela_executor_rejects_complete_oversized_row():
 
 
 def test_model_forward_is_not_queued_behind_default_pool_preparation():
-    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
-    resident = _RecordingVela(profile.max_input_tokens)
+    profile = load_runtime_profile(
+        "Decision-1.0-Eos-0.8B",
+        revision="3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+    )
+    resident = _RecordingQwen(profile.max_input_tokens)
     executor = TorchDecisionRowExecutor(resident, profile)
     request = _request("A billing question.")
     row = DecisionRow(MODEL, request.state, "yes", request.questions["yes"])
     prepared = (
         PreparedDecisionRow(
             row=row,
-            batch_key="vela:noul",
+            batch_key="qwen3.5",
             payload=executor._encode_rows((row,))[0],
         ),
     )
@@ -559,8 +562,11 @@ def test_model_forward_is_not_queued_behind_default_pool_preparation():
 
 
 def test_backend_shutdown_waits_for_active_inference_thread():
-    profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
-    resident = _RecordingVela(profile.max_input_tokens)
+    profile = load_runtime_profile(
+        "Decision-1.0-Eos-0.8B",
+        revision="3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd",
+    )
+    resident = _RecordingQwen(profile.max_input_tokens)
     original_predict = resident.predict_encoded
     started = threading.Event()
     release = threading.Event()
@@ -671,6 +677,26 @@ class _QwenTokenizer:
         assert options["truncation"] is False
         self.segments.extend(texts)
         return {"input_ids": [[ord(char) % 100 + 1 for char in text] for text in texts]}
+
+
+class _RecordingQwen:
+    def __init__(self, max_length: int) -> None:
+        self.max_length = max_length
+        self.tokenizer = _QwenTokenizer()
+        self.calls = []
+
+    def predict_encoded(self, rows):
+        self.calls.append(rows)
+        return tuple(
+            SimpleNamespace(
+                question_id=row.question_id,
+                type=row.type,
+                probabilities=(1.0 / len(row.candidate_positions),)
+                * len(row.candidate_positions),
+                input_tokens=row.input_tokens,
+            )
+            for row in rows
+        )
 
 
 def test_qwen_executor_can_score_mixed_types_in_one_forward():

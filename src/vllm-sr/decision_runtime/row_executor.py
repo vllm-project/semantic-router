@@ -44,18 +44,21 @@ class TorchDecisionRowExecutor:
             raise ValueError("resident model input limit differs from its profile")
         self._runtime = runtime
         self._profile = profile
-        # Preparation may occupy every worker in the event loop's default
-        # pool during a burst. Keep the resident model's single forward off
-        # that queue so prepared physical batches can start promptly.
-        self._inference_pool = ThreadPoolExecutor(
-            max_workers=1, thread_name_prefix="decision-inference"
+        # Qwen preparation may occupy every default-pool worker during a
+        # burst. Give its single resident forward a separate worker, while
+        # Vela keeps its existing default-pool path.
+        self._inference_pool = (
+            ThreadPoolExecutor(max_workers=1, thread_name_prefix="decision-inference")
+            if profile.family == "qwen3.5"
+            else None
         )
         self._closed = False
 
     async def aclose(self) -> None:
         if not self._closed:
             self._closed = True
-            self._inference_pool.shutdown(wait=True, cancel_futures=True)
+            if self._inference_pool is not None:
+                self._inference_pool.shutdown(wait=True, cancel_futures=True)
 
     async def ready(self) -> bool:
         return not self._closed
