@@ -6,6 +6,7 @@ import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+from collections.abc import Iterable, Iterator
 
 import numpy as np
 
@@ -15,6 +16,32 @@ def resolve_stride(stride: int, seq_len: int) -> int:
     if stride <= 0:
         return seq_len
     return min(int(stride), seq_len)
+
+
+def calibration_windows(
+    tokenized_documents: Iterable[list[int]],
+    *,
+    seq_len: int,
+    stride: int,
+    num_sequences: int,
+) -> Iterator[list[int]]:
+    """Yield exact-length token windows from the selected corpus documents."""
+    if seq_len <= 0 or num_sequences <= 0:
+        raise ValueError("seq_len and num_sequences must be positive")
+    step = resolve_stride(stride, seq_len)
+    tokens: list[int] = []
+    emitted = 0
+    for document in tokenized_documents:
+        tokens.extend(document)
+        while len(tokens) >= seq_len:
+            yield tokens[:seq_len]
+            emitted += 1
+            if emitted == num_sequences:
+                return
+            del tokens[:step]
+    raise ValueError(
+        f"corpus provided only {emitted} complete windows; requested {num_sequences}"
+    )
 
 
 def as_bshd_numpy(out: np.ndarray, n_kv: int, head_dim: int) -> np.ndarray:

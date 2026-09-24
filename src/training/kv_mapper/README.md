@@ -46,7 +46,11 @@ python3 -m unittest discover -s src/training/kv_mapper/tests -p 'test_*.py'
 `collect.py` is the run metadata and window/layer-subset contract (numpy, CI).
 `hooks.py` attaches k_norm/k_proj and v_proj hooks and reads K after RMSNorm
 and before RoPE. `collect_run.py` loads both models and writes `run.json` plus
-`activations.pt`. That script needs torch and transformers; it is not part of
+`activations.pt`. It streams and shuffles the requested corpus with `--seed`,
+then captures `--num-sequences` token windows of `--seq-len` with `--stride`.
+Each saved layer tensor has shape `(num_sequences, seq_len, num_kv_heads, head_dim)`.
+The models must use the same tokenizer vocabulary so positions stay paired.
+That script needs torch, transformers, and datasets; it is not part of
 `make test-training-contracts`.
 
 ```bash

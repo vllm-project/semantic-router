@@ -15,6 +15,7 @@ sys.path.insert(0, str(REPO_ROOT))
 
 from src.training.kv_mapper.collect import (
     ActivationRunMeta,
+    calibration_windows,
     parse_layer_subset,
     write_run_metadata,
 )
@@ -41,6 +42,35 @@ def _load_lm(model_id: str, revision: str, device: str, dtype: torch.dtype):
     return model, tok
 
 
+def _corpus_windows(args: argparse.Namespace, tokenizer):
+    from datasets import load_dataset
+
+    corpus = load_dataset(
+        args.corpus, args.dataset_config, split="train", streaming=True
+    ).shuffle(seed=args.seed, buffer_size=10_000)
+    documents = (
+        tokenizer(row["text"], add_special_tokens=False)["input_ids"]
+        for row in corpus
+        if row.get("text")
+    )
+    return list(calibration_windows(
+        documents, seq_len=args.seq_len, stride=args.stride,
+        num_sequences=args.num_sequences,
+    ))
+
+
+def _capture_windows(model, windows, device, n_kv_heads, head_dim, layers):
+    keys = [[] for _ in layers]
+    values = [[] for _ in layers]
+    for window in windows:
+        ids = torch.tensor([window], dtype=torch.long, device=device)
+        captured = capture_kv(model, ids, n_kv_heads, head_dim, layers)
+        for index, (key, value) in enumerate(zip(captured.keys, captured.values)):
+            keys[index].append(key)
+            values[index].append(value)
+    return [torch.stack(items) for items in keys], [torch.stack(items) for items in values]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-model", required=True)
@@ -60,7 +90,6 @@ def main() -> None:
     parser.add_argument("--seq-len", type=int, default=1024)
     parser.add_argument("--stride", type=int, default=1024)
     parser.add_argument("--num-sequences", type=int, default=8)
-    parser.add_argument("--prompt", default="The quick brown fox jumps over the lazy dog. " * 64)
     parser.add_argument("--output-dir", type=Path, required=True)
     args = parser.parse_args()
 
@@ -72,27 +101,25 @@ def main() -> None:
     )
     n_src = len(src_model.model.layers)
     src_layers = parse_layer_subset(args.source_layer_subset, n_src)
-    ids = tok(
-        args.prompt,
-        add_special_tokens=False,
-        truncation=True,
-        max_length=args.seq_len,
-        return_tensors="pt",
-    )["input_ids"].to(args.source_device)
-    src_kv = capture_kv(
-        src_model, ids, args.num_kv_heads, args.head_dim, src_layers
+    windows = _corpus_windows(args, tok)
+    src_keys, src_values = _capture_windows(
+        src_model, windows, args.source_device, args.num_kv_heads,
+        args.head_dim, src_layers,
     )
     del src_model
-    torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
 
-    tgt_model, _ = _load_lm(
+    tgt_model, tgt_tok = _load_lm(
         args.target_model, args.target_revision, args.target_device, dtype
     )
+    if tok.get_vocab() != tgt_tok.get_vocab():
+        raise ValueError("source and target tokenizers differ; paired token windows require the same vocabulary")
     n_tgt = len(tgt_model.model.layers)
     tgt_layers = parse_layer_subset(args.target_layer_subset, n_tgt)
-    tgt_ids = ids.to(args.target_device)
-    tgt_kv = capture_kv(
-        tgt_model, tgt_ids, args.num_kv_heads, args.head_dim, tgt_layers
+    tgt_keys, tgt_values = _capture_windows(
+        tgt_model, windows, args.target_device, args.num_kv_heads,
+        args.head_dim, tgt_layers,
     )
 
     out = args.output_dir
@@ -107,7 +134,7 @@ def main() -> None:
         seed=args.seed,
         seq_len=args.seq_len,
         stride=args.stride,
-        num_sequences=args.num_sequences,
+        num_sequences=len(windows),
         source_layers=src_layers,
         target_layers=tgt_layers,
         num_kv_heads=args.num_kv_heads,
@@ -117,18 +144,18 @@ def main() -> None:
     write_run_metadata(out, meta)
     torch.save(
         {
-            "source_keys": src_kv.keys,
-            "source_values": src_kv.values,
-            "target_keys": tgt_kv.keys,
-            "target_values": tgt_kv.values,
+            "source_keys": src_keys,
+            "source_values": src_values,
+            "target_keys": tgt_keys,
+            "target_values": tgt_values,
         },
         out / "activations.pt",
     )
     (out / "shapes.json").write_text(
         json.dumps(
             {
-                "source_keys": [list(t.shape) for t in src_kv.keys],
-                "target_keys": [list(t.shape) for t in tgt_kv.keys],
+                "source_keys": [list(t.shape) for t in src_keys],
+                "target_keys": [list(t.shape) for t in tgt_keys],
             },
             indent=2,
         )

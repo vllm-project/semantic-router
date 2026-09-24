@@ -14,6 +14,7 @@ import numpy as np
 from src.training.kv_mapper.collect import (
     ActivationRunMeta,
     as_bshd_numpy,
+    calibration_windows,
     parse_layer_subset,
     read_run_metadata,
     resolve_stride,
@@ -22,6 +23,17 @@ from src.training.kv_mapper.collect import (
 
 
 class CollectContractTests(unittest.TestCase):
+    def test_calibration_windows_use_requested_count_and_stride(self) -> None:
+        documents = [[0, 1, 2], [3, 4, 5, 6, 7, 8, 9]]
+        self.assertEqual(
+            list(calibration_windows(documents, seq_len=4, stride=2, num_sequences=3)),
+            [[0, 1, 2, 3], [2, 3, 4, 5], [4, 5, 6, 7]],
+        )
+
+    def test_calibration_windows_reject_short_corpus(self) -> None:
+        with self.assertRaisesRegex(ValueError, "only 1 complete windows"):
+            list(calibration_windows([[0, 1, 2, 3]], seq_len=4, stride=4, num_sequences=2))
+
     def test_stride_defaults_to_disjoint_windows(self) -> None:
         self.assertEqual(resolve_stride(0, 1024), 1024)
         self.assertEqual(resolve_stride(4096, 1024), 1024)
