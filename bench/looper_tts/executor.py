@@ -18,26 +18,20 @@ import json
 import math
 import threading
 import time
+from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (
     Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
     Protocol,
-    Sequence,
-    Tuple,
 )
 
 import requests
 
 from . import SCHEMA_VERSION
 from .accounting import (
-    BudgetExhausted,
+    BudgetExhaustedError,
     BudgetLedger,
     BudgetSnapshot,
     Pricing,
@@ -50,7 +44,6 @@ from .accounting import (
 from .plan import validate_plan
 from .records import validate_records
 from .validation import ContractError, digest, load_json, write_json
-
 
 RUNTIME_SCHEMA_VERSION = "looper-tts-runtime.v1"
 DEFAULT_TIMEOUT_SECONDS = 600
@@ -65,8 +58,8 @@ class ProviderResponse:
     reasoning: str = ""
     usage: Usage = field(default_factory=Usage)
     raw: Any = None
-    latency_ms: Optional[float] = None
-    error: Optional[str] = None
+    latency_ms: float | None = None
+    error: str | None = None
 
 
 class Provider(Protocol):
@@ -94,7 +87,7 @@ class RequestsProvider:
         endpoint: str,
         api_key: str = "",
         timeout: int = DEFAULT_TIMEOUT_SECONDS,
-        headers: Optional[Mapping[str, str]] = None,
+        headers: Mapping[str, str] | None = None,
     ):
         endpoint = endpoint.strip().rstrip("/")
         if not endpoint:
@@ -122,7 +115,7 @@ class RequestsProvider:
         seed: int,
         stage: str,
     ) -> ProviderResponse:
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "model": model,
             "messages": list(messages),
             "temperature": temperature,
@@ -150,7 +143,7 @@ class RequestsProvider:
         if response.status_code != requests.codes.ok:
             return ProviderResponse(
                 latency_ms=latency_ms,
-                error="HTTP {}: {}".format(response.status_code, response.text[:500]),
+                error=f"HTTP {response.status_code}: {response.text[:500]}",
             )
         try:
             body = response.json()
@@ -182,14 +175,14 @@ class DeterministicProvider:
 
     def __init__(
         self,
-        fail_models: Optional[Iterable[str]] = None,
+        fail_models: Iterable[str] | None = None,
         omit_usage: bool = False,
         completion_tokens: int = 8,
     ):
         self.fail_models = set(fail_models or ())
         self.omit_usage = omit_usage
         self.completion_tokens = max(0, int(completion_tokens))
-        self.calls: List[Tuple[str, str]] = []
+        self.calls: list[tuple[str, str]] = []
         self._lock = threading.Lock()
 
     def chat(
@@ -249,7 +242,7 @@ class DeterministicProvider:
         )
 
 
-def _response_text(body: Mapping[str, Any]) -> Tuple[str, str]:
+def _response_text(body: Mapping[str, Any]) -> tuple[str, str]:
     try:
         choice = body["choices"][0]
         message = choice["message"]
@@ -264,9 +257,9 @@ def _response_text(body: Mapping[str, Any]) -> Tuple[str, str]:
 
 @dataclass
 class _CallOutcome:
-    response: Optional[ProviderResponse]
-    call_ids: List[str]
-    error: Optional[str] = None
+    response: ProviderResponse | None
+    call_ids: list[str]
+    error: str | None = None
 
 
 @dataclass
@@ -276,11 +269,11 @@ class _ItemState:
     item_id: str
     budget: Mapping[str, Any]
     ledger: BudgetLedger
-    calls: List[Dict[str, Any]] = field(default_factory=list)
-    events: List[Dict[str, Any]] = field(default_factory=list)
-    candidate_scores: List[Dict[str, Any]] = field(default_factory=list)
-    attempt_numbers: Dict[Tuple[str, str], int] = field(default_factory=dict)
-    budget_error: Optional[str] = None
+    calls: list[dict[str, Any]] = field(default_factory=list)
+    events: list[dict[str, Any]] = field(default_factory=list)
+    candidate_scores: list[dict[str, Any]] = field(default_factory=list)
+    attempt_numbers: dict[tuple[str, str], int] = field(default_factory=dict)
+    budget_error: str | None = None
     budget_exhausted: bool = False
     lock: threading.RLock = field(default_factory=threading.RLock)
 
@@ -294,7 +287,7 @@ class LooperTTSExecutor:
         provider: Provider,
         output_dir: Path,
         retries: int = 0,
-        max_output_tokens: Optional[int] = None,
+        max_output_tokens: int | None = None,
         max_workers: int = 8,
     ):
         validate_plan(dict(plan))
@@ -323,12 +316,12 @@ class LooperTTSExecutor:
         self.items = {item["id"]: item for item in config["dataset"]["items"]}
         self.budgets = {budget["id"]: budget for budget in config["budgets"]}
         self.scorer_id = config["scorer"]["id"]
-        self._receipt_cells: List[Dict[str, Any]] = []
+        self._receipt_cells: list[dict[str, Any]] = []
 
-    def run(self) -> Dict[str, Any]:
+    def run(self) -> dict[str, Any]:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._receipt_cells.clear()
-        records: Dict[str, Any] = {
+        records: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
             "experiment_id": self.plan["experiment_id"],
             "evidence_kind": self.plan["config"]["dataset"]["evidence_kind"],
@@ -364,7 +357,7 @@ class LooperTTSExecutor:
 
     def _run_item(
         self, cell: Mapping[str, Any], item: Mapping[str, Any]
-    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], Dict[str, Any]]:
+    ) -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, Any]]:
         budget = self.budgets[cell["budget_id"]]
         state = _ItemState(
             experiment_id=self.plan["experiment_id"],
@@ -465,7 +458,7 @@ class LooperTTSExecutor:
         self, state: _ItemState, arm: Mapping[str, Any], prompt: str, seed: int
     ) -> _CallOutcome:
         threshold = float(arm["parameters"]["threshold"])
-        last: Optional[_CallOutcome] = None
+        last: _CallOutcome | None = None
         for index, model_id in enumerate(arm["model_ids"]):
             generated = self._call(
                 state,
@@ -511,11 +504,11 @@ class LooperTTSExecutor:
     def _run_remom(
         self, state: _ItemState, arm: Mapping[str, Any], prompt: str, seed: int
     ) -> _CallOutcome:
-        schedule = list(arm["parameters"]["breadth"]) + [1]
-        references: List[str] = []
-        all_candidates: List[ProviderResponse] = []
-        all_call_ids: List[str] = []
-        final_response: Optional[ProviderResponse] = None
+        schedule = [*arm["parameters"]["breadth"], 1]
+        references: list[str] = []
+        all_candidates: list[ProviderResponse] = []
+        all_call_ids: list[str] = []
+        final_response: ProviderResponse | None = None
         for round_index, width in enumerate(schedule):
             is_final = round_index == len(schedule) - 1
             stage = "synthesize" if is_final else "generate"
@@ -615,7 +608,7 @@ class LooperTTSExecutor:
                 state.budget_error or "Fusion panel produced no usable response",
             )
         panel_block = "\n---\n".join(
-            "[{}]\n{}".format(panel_ids[index], response.content)
+            f"[{panel_ids[index]}]\n{response.content}"
             for index, response in panel_entries
         )
         panel_hash = digest(
@@ -653,7 +646,7 @@ class LooperTTSExecutor:
         )
         # _CallOutcome is intentionally small; attach the optional panel hash
         # for the normalized result without changing its public constructor.
-        setattr(outcome, "panel_sha256", panel_hash)
+        outcome.panel_sha256 = panel_hash
         return outcome
 
     def _parallel_calls(
@@ -663,7 +656,7 @@ class LooperTTSExecutor:
         model_ids: Sequence[str],
         prompt: str,
         seed: int,
-    ) -> List[_CallOutcome]:
+    ) -> list[_CallOutcome]:
         if len(model_ids) <= 1:
             attempt_base = self._reserve_attempt_block(state, stage, model_ids[0])
             return [
@@ -677,7 +670,7 @@ class LooperTTSExecutor:
                 )
             ]
         workers = min(self.max_workers, len(model_ids))
-        results: List[Optional[_CallOutcome]] = [None] * len(model_ids)
+        results: list[_CallOutcome | None] = [None] * len(model_ids)
         attempt_bases = [
             self._reserve_attempt_block(state, stage, model_id)
             for model_id in model_ids
@@ -713,12 +706,12 @@ class LooperTTSExecutor:
         model_id: str,
         messages: Sequence[Mapping[str, str]],
         seed: int,
-        attempt_base: Optional[int] = None,
+        attempt_base: int | None = None,
     ) -> _CallOutcome:
         model = self.models[model_id]
         max_tokens = self._max_output_tokens(state.budget)
-        call_ids: List[str] = []
-        last_error: Optional[str] = None
+        call_ids: list[str] = []
+        last_error: str | None = None
         if attempt_base is None:
             attempt_base = self._reserve_attempt_block(state, stage, model_id)
         for retry_index in range(self.retries + 1):
@@ -736,7 +729,7 @@ class LooperTTSExecutor:
             estimate = estimate_total_tokens(messages, max_tokens)
             try:
                 reservation = state.ledger.reserve(call_id, estimate)
-            except BudgetExhausted as error:
+            except BudgetExhaustedError as error:
                 state.budget_exhausted = True
                 state.budget_error = str(error)
                 return _CallOutcome(None, call_ids, str(error))
@@ -820,7 +813,7 @@ class LooperTTSExecutor:
         attempt: int,
         response: ProviderResponse,
         settlement: Settlement,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         raw_path = None
         if response.error is None:
             raw_path = self._write_raw(state.cell_id, state.item_id, call_id, response)
@@ -874,7 +867,7 @@ class LooperTTSExecutor:
     @staticmethod
     def _event_record(
         call: Mapping[str, Any], settlement: Settlement, model: Mapping[str, Any]
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         cost = cost_for_usage(settlement.usage, Pricing.from_model(model))
         return {
             "call_id": call["id"],
@@ -890,7 +883,7 @@ class LooperTTSExecutor:
             "latency_ms": call["latency_ms"],
         }
 
-    def _runtime_receipt(self) -> Dict[str, Any]:
+    def _runtime_receipt(self) -> dict[str, Any]:
         totals = {
             "calls": 0,
             "tokens": 0,
@@ -938,7 +931,7 @@ class LooperTTSExecutor:
         item: Mapping[str, Any],
         error: str,
         budget_exhausted: bool,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         return {
             "id": digest(
                 {
@@ -963,7 +956,7 @@ class LooperTTSExecutor:
         }
 
 
-def _messages(prompt: str) -> List[Dict[str, str]]:
+def _messages(prompt: str) -> list[dict[str, str]]:
     return [{"role": "user", "content": prompt}]
 
 
@@ -978,18 +971,14 @@ def _verification_prompt(prompt: str, answer: str) -> str:
 
 
 def _judge_prompt(prompt: str, panel: str) -> str:
-    return "Compare the panel answers and identify the correct answer. Return concise analysis.\n\nQuestion:\n{}\n\nPanel:\n{}".format(
-        prompt, panel
-    )
+    return f"Compare the panel answers and identify the correct answer. Return concise analysis.\n\nQuestion:\n{prompt}\n\nPanel:\n{panel}"
 
 
 def _synthesis_prompt(prompt: str, panel: str, judge: str) -> str:
-    return "Synthesize one final answer to the question using the panel and judge analysis.\n\nQuestion:\n{}\n\nPanel:\n{}\n\nJudge analysis:\n{}".format(
-        prompt, panel, judge
-    )
+    return f"Synthesize one final answer to the question using the panel and judge analysis.\n\nQuestion:\n{prompt}\n\nPanel:\n{panel}\n\nJudge analysis:\n{judge}"
 
 
-def _confidence_score(response: Optional[ProviderResponse]) -> Optional[float]:
+def _confidence_score(response: ProviderResponse | None) -> float | None:
     if response is None:
         return None
     text = response.content.strip()
@@ -1015,7 +1004,7 @@ def _derived_seed(seed: int, *parts: Any) -> int:
     return int.from_bytes(hashlib.sha256(payload).digest()[:4], "big") & 0x7FFFFFFF
 
 
-def _snapshot_record(snapshot: BudgetSnapshot) -> Dict[str, Any]:
+def _snapshot_record(snapshot: BudgetSnapshot) -> dict[str, Any]:
     return {
         "calls": snapshot.calls,
         "active_calls": snapshot.active_calls,
@@ -1034,7 +1023,7 @@ _STAGE_ORDER = {
 }
 
 
-def _call_sort_key(call: Mapping[str, Any]) -> Tuple[Any, ...]:
+def _call_sort_key(call: Mapping[str, Any]) -> tuple[Any, ...]:
     return (
         _STAGE_ORDER.get(call.get("stage"), 99),
         str(call.get("model_id", "")),
@@ -1043,7 +1032,7 @@ def _call_sort_key(call: Mapping[str, Any]) -> Tuple[Any, ...]:
     )
 
 
-def _event_sort_key(event: Mapping[str, Any]) -> Tuple[Any, ...]:
+def _event_sort_key(event: Mapping[str, Any]) -> tuple[Any, ...]:
     return (
         _STAGE_ORDER.get(event.get("stage"), 99),
         str(event.get("model_id", "")),
@@ -1084,13 +1073,13 @@ def _artifact_component(value: str) -> str:
 def execute_manifest(
     manifest_path: Path,
     output_dir: Path,
-    endpoint: Optional[str] = None,
+    endpoint: str | None = None,
     api_key: str = "",
     retries: int = 0,
-    max_output_tokens: Optional[int] = None,
+    max_output_tokens: int | None = None,
     timeout: int = DEFAULT_TIMEOUT_SECONDS,
     fake: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Load a saved manifest and execute it.
 
     ``fake=True`` is intentionally explicit; it produces synthetic smoke

@@ -4,7 +4,7 @@ import threading
 import unittest
 
 from .accounting import (
-    BudgetExhausted,
+    BudgetExhaustedError,
     BudgetLedger,
     Usage,
     estimate_prompt_tokens,
@@ -48,8 +48,8 @@ class AccountingTests(unittest.TestCase):
 
         def worker(index):
             try:
-                reservation = ledger.reserve("call-{}".format(index), 6)
-            except BudgetExhausted:
+                reservation = ledger.reserve(f"call-{index}", 6)
+            except BudgetExhaustedError:
                 with lock:
                     rejected.append(index)
                 return

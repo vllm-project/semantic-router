@@ -23,8 +23,9 @@ from __future__ import annotations
 import json
 import math
 import threading
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Dict, Mapping, Optional
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -36,16 +37,16 @@ class Usage:
     ``None``.
     """
 
-    prompt_tokens: Optional[int] = None
-    completion_tokens: Optional[int] = None
-    total_tokens: Optional[int] = None
+    prompt_tokens: int | None = None
+    completion_tokens: int | None = None
+    total_tokens: int | None = None
 
     @classmethod
-    def from_mapping(cls, value: Any) -> "Usage":
+    def from_mapping(cls, value: Any) -> Usage:
         if not isinstance(value, Mapping):
             return cls()
 
-        def integer(name: str) -> Optional[int]:
+        def integer(name: str) -> int | None:
             raw = value.get(name)
             if raw is None or isinstance(raw, bool):
                 return None
@@ -68,7 +69,7 @@ class Usage:
             total_tokens=integer("total_tokens"),
         )
 
-    def as_record(self) -> Dict[str, Optional[int]]:
+    def as_record(self) -> dict[str, int | None]:
         return {
             "prompt_tokens": self.prompt_tokens,
             "completion_tokens": self.completion_tokens,
@@ -84,7 +85,7 @@ class Usage:
         )
 
     @property
-    def budget_total(self) -> Optional[int]:
+    def budget_total(self) -> int | None:
         """Return the best known total for budget settlement."""
         if self.total_tokens is not None:
             return self.total_tokens
@@ -97,11 +98,11 @@ class Usage:
 class Pricing:
     """USD rates from one manifest model entry."""
 
-    input_per_million: Optional[float] = None
-    output_per_million: Optional[float] = None
+    input_per_million: float | None = None
+    output_per_million: float | None = None
 
     @classmethod
-    def from_model(cls, model: Mapping[str, Any]) -> "Pricing":
+    def from_model(cls, model: Mapping[str, Any]) -> Pricing:
         raw = model.get("pricing", {})
         if not isinstance(raw, Mapping):
             return cls()
@@ -111,7 +112,7 @@ class Pricing:
         )
 
 
-def _finite_rate(value: Any) -> Optional[float]:
+def _finite_rate(value: Any) -> float | None:
     if value is None or isinstance(value, bool):
         return None
     if isinstance(value, (int, float)) and math.isfinite(float(value)) and value >= 0:
@@ -119,7 +120,7 @@ def _finite_rate(value: Any) -> Optional[float]:
     return None
 
 
-def cost_for_usage(usage: Usage, pricing: Pricing) -> Optional[float]:
+def cost_for_usage(usage: Usage, pricing: Pricing) -> float | None:
     """Calculate USD cost only when both billable token fields are known."""
     if (
         usage.prompt_tokens is None
@@ -148,7 +149,7 @@ def estimate_prompt_tokens(messages: Any) -> int:
         separators=(",", ":"),
         allow_nan=False,
     ).encode("utf-8")
-    return max(1, int(math.ceil(len(encoded) / 4.0)))
+    return max(1, math.ceil(len(encoded) / 4.0))
 
 
 def estimate_total_tokens(messages: Any, max_output_tokens: int) -> int:
@@ -167,7 +168,7 @@ class BudgetSnapshot:
     exhausted: bool
 
 
-class BudgetExhausted(RuntimeError):
+class BudgetExhaustedError(RuntimeError):
     """Raised when a call cannot be admitted under the cell's envelope."""
 
     def __init__(self, reason: str, snapshot: BudgetSnapshot):
@@ -215,7 +216,7 @@ class BudgetLedger:
         self._reserved_tokens = 0
         self._unknown_usage_calls = 0
         self._exhausted = False
-        self._reservations: Dict[str, Reservation] = {}
+        self._reservations: dict[str, Reservation] = {}
 
     def snapshot(self) -> BudgetSnapshot:
         with self._lock:
@@ -238,13 +239,13 @@ class BudgetLedger:
                 raise ValueError("duplicate active call_id: " + call_id)
             if self._calls >= self.max_calls:
                 self._exhausted = True
-                raise BudgetExhausted("maximum calls reached", self.snapshot())
+                raise BudgetExhaustedError("maximum calls reached", self.snapshot())
             if (
                 self._tokens + self._reserved_tokens + estimated_tokens
                 > self.max_total_tokens
             ):
                 self._exhausted = True
-                raise BudgetExhausted(
+                raise BudgetExhaustedError(
                     "estimated token reservation exceeds limit", self.snapshot()
                 )
             reservation = Reservation(call_id, estimated_tokens)
@@ -266,8 +267,7 @@ class BudgetLedger:
                 )
             self._active_calls -= 1
             self._reserved_tokens -= active.estimated_tokens
-            if self._reserved_tokens < 0:  # defensive invariant for custom callers
-                self._reserved_tokens = 0
+            self._reserved_tokens = max(0, self._reserved_tokens)
             charged = parsed.budget_total
             known = charged is not None
             if not known:

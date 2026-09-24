@@ -5,8 +5,8 @@ import json
 import tempfile
 import threading
 import unittest
-from unittest.mock import patch
 from pathlib import Path
+from unittest.mock import patch
 
 from .executor import (
     DeterministicProvider,
@@ -17,7 +17,6 @@ from .executor import (
 from .plan import build_plan
 from .records import validate_records
 from .validation import ContractError, load_json, write_json
-
 
 EXAMPLE = Path(__file__).parent / "testdata" / "synthetic.json"
 
