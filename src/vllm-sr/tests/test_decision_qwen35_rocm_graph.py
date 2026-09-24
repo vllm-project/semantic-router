@@ -17,7 +17,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from decision_runtime import qwen35_rocm_graph as graph_module  # noqa: E402
 from decision_runtime.metrics import RuntimeMetrics  # noqa: E402
 from decision_runtime.qwen35_torch import Qwen35TorchRuntime  # noqa: E402
-from decision_runtime.row_executor import _finish_thread_inference  # noqa: E402
+from decision_runtime.row_executor import _finish_thread_operation  # noqa: E402
 
 
 class _Tensor:
@@ -329,12 +329,12 @@ def test_cancelled_thread_keeps_graph_lock_until_host_completion(monkeypatch):
 
     async def exercise():
         first = asyncio.create_task(
-            _finish_thread_inference(runtime.predict_encoded, ("first",))
+            _finish_thread_operation(runtime.predict_encoded, ("first",))
         )
         assert await asyncio.to_thread(started.wait, 2)
         first.cancel()
         second = asyncio.create_task(
-            _finish_thread_inference(runtime.predict_encoded, ("second",))
+            _finish_thread_operation(runtime.predict_encoded, ("second",))
         )
         try:
             await asyncio.sleep(0.05)
