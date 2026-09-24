@@ -49,7 +49,7 @@ class TorchDecisionRowExecutor:
         if not rows:
             raise BackendContractError("a Decision request contains no rows")
         try:
-            encoded = await asyncio.to_thread(self._encode_rows, rows)
+            encoded = await _finish_thread_operation(self._encode_rows, rows)
         except ValueError as error:
             if "max_length" in str(error) or "no room for state" in str(error):
                 raise BackendInputTooLargeError(str(error)) from error
@@ -116,7 +116,7 @@ class TorchDecisionRowExecutor:
         ):
             raise BackendContractError("Decision prepared row identity changed")
         payloads = tuple(item.payload for item in rows)
-        predictions = await _finish_thread_inference(
+        predictions = await _finish_thread_operation(
             self._runtime.predict_encoded, payloads
         )
         if not isinstance(predictions, tuple) or len(predictions) != len(rows):
@@ -139,8 +139,8 @@ class TorchDecisionRowExecutor:
         return tuple(results)
 
 
-async def _finish_thread_inference(operation, payloads):
-    """Do not let cancellation start another forward before this one finishes."""
+async def _finish_thread_operation(operation, payloads):
+    """Do not abandon a worker thread when its awaiting coroutine is cancelled."""
 
     task = asyncio.create_task(asyncio.to_thread(operation, payloads))
     try:

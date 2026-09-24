@@ -166,6 +166,8 @@ def create_app(
         model: str,
         operation: Callable[[], Awaitable[EvaluationResponseT]],
         http_response: Response,
+        *,
+        row_cost: int,
     ) -> EvaluationResponseT | JSONResponse:
         started = time.perf_counter()
         outcome = "internal_error"
@@ -175,6 +177,7 @@ def create_app(
             response = await runtime_scheduler.run(
                 model,
                 operation,
+                row_cost=row_cost,
             )
             if attested_artifact is not None:
                 # These internal transport headers bind this successful result
@@ -247,6 +250,7 @@ def create_app(
             payload.model,
             lambda: engine.evaluate(payload),
             response,
+            row_cost=len(payload.questions),
         )
 
     @app.post("/v1/decision/batches", response_model=SystemOneBatchResponse)
@@ -263,6 +267,7 @@ def create_app(
             payload.model,
             lambda: engine.evaluate_batch(payload),
             response,
+            row_cost=len(payload.states) * len(payload.questions),
         )
 
     @app.get("/api/status")
@@ -282,8 +287,10 @@ def create_app(
                     "model": snapshot.model,
                     "running": snapshot.running,
                     "queued": snapshot.queued,
+                    "active_rows": snapshot.active_rows,
                     "max_concurrency": snapshot.max_concurrency,
                     "max_queue": snapshot.max_queue,
+                    "max_active_rows": snapshot.max_active_rows,
                 }
                 for snapshot in snapshots
             ],
