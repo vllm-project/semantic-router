@@ -1434,6 +1434,16 @@ providers:
       status: claimed
       verified_at: '2026-09-07'
       source: https://docs.mistral.ai/models/mistral-large-3-25-12
+  - catalog: mistral/ministral-3-14b-instruct
+    relationship: first_party
+    id: ministral-14b-2512
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://docs.mistral.ai/models/ministral-3-14b-25-12
 - id: moonshot
   display_name: Moonshot AI
   description: Kimi models through an OpenAI-style API.
@@ -3562,6 +3572,17 @@ providers:
       status: claimed
       verified_at: '2026-09-09'
       source: https://huggingface.co/mistralai/Mistral-Small-3.2-24B-Instruct-2506
+  - catalog: mistral/ministral-3-14b-instruct
+    relationship: self_hosted
+    id: mistralai/Ministral-3-14B-Instruct-2512
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
   - catalog: nvidia/nemotron-3-nano-30b-a3b
     relationship: self_hosted
     id: nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16
@@ -6520,6 +6541,48 @@ models:
   - dense
   - efficient
   released_at: '2025-06-19'
+- id: mistral/ministral-3-14b-instruct
+  display_name: Ministral 3 14B Instruct
+  description: Largest Ministral 3 instruction checkpoint, with vision, for edge and local deployment.
+  kind: physical
+  publisher: Mistral AI
+  presentation:
+    logo: package:mistral
+    monogram: M
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512
+    license: Apache-2.0
+  family: ministral-3
+  parameter_size: 14B
+  revision: 29439f81c2be264d8d393273f99e7db9c0961120
+  lifecycle: active
+  limits:
+    context_window_size: 262144
+  capabilities:
+  - chat
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  verification:
+    authority: Mistral AI
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512/blob/29439f81c2be264d8d393273f99e7db9c0961120/README.md
+  tags:
+  - open_weights
+  - multimodal
+  - dense
+  - efficient
+  released_at: '2025-12-02'
 - id: moonshot/kimi-k3
   display_name: Kimi K3
   description: Moonshot AI native multimodal MoE model for long-context agents.
@@ -22684,6 +22747,222 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/models/mistral-small-3-2
+    redistributable: true
+- id: mistral/ministral-3-14b-instruct-model-card-math@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: hendrycks/math@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: Ministral-3-14B-Instruct-2512
+    source_kind: official_model_card
+    aggregation: maj@1
+  metrics:
+    accuracy: 0.904
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/mistralai/Ministral-3-14B-Instruct-2512/blob/29439f81c2be264d8d393273f99e7db9c0961120/README.md
+    redistributable: true
+- id: independent/ministral-3-14b-gpqa-diamond@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    accuracy: 0.571717171717172
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-humanitys-last-exam@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    accuracy: 0.046339202965709
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-scicode@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    score: 0.238425925925926
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-critpt@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-omniscience@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    index: -66.36666666666666
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-artificial-analysis-long-context-reasoning@1.1.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    score: 0.263333333333333
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-terminalbench-v2-1@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    resolved: 0.0973782771535581
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-tau3-banking@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: tau-bench/tau3-banking@1.0.0
+  benchmark_profile: independent-agent
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    score: 0.065979381443299
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-ifbench@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    accuracy: 0.320408163265306
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-aime-2025@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.3
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
+    redistributable: true
+- id: independent/ministral-3-14b-mmmu-pro@1.0.0
+  model: mistral/ministral-3-14b-instruct
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: standard-10
+  reasoning_effort: disabled
+  subject:
+    source_model: Ministral 3 14B
+    source_model_slug: ministral-3-14b
+    run_kind: independent
+  metrics:
+    accuracy: 0.498265895953757
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/ministral-3-14b
     redistributable: true
 - id: moonshot/kimi-k2-5-model-card-scicode@1.0.0
   model: moonshot/kimi-k2.5
@@ -42664,6 +42943,63 @@ index_results:
   - independent/mistral-small-3.2-scicode@1.0.0
   - independent/mistral-small-3.2-terminal-bench-2.1@1.0.0
   - mistral/mistral-small-3.2-model-card-mmlu-pro@1.0.0
+- model: mistral/ministral-3-14b-instruct
+  reasoning_effort: disabled
+  index: vllm-sr/reasoning@1.0.0
+  status: available
+  score: 30.90281873414405
+  coverage: 1.0
+  components:
+  - weight: 0.5
+    status: available
+    value: 0.571717171717172
+    normalized: 0.571717171717172
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/ministral-3-14b-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.5
+    status: available
+    value: 0.046339202965709
+    normalized: 0.046339202965709
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-text-only
+    - text-only
+    evaluation: independent/ministral-3-14b-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-text-only
+  provenance:
+  - independent/ministral-3-14b-gpqa-diamond@1.0.0
+  - independent/ministral-3-14b-humanitys-last-exam@1.0.0
+  domains:
+    frontier_reasoning: 4.6339202965709
+    scientific_reasoning: 57.1717171717172
+- model: mistral/ministral-3-14b-instruct
+  reasoning_effort: disabled
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 9.73782771535581
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.0973782771535581
+    normalized: 0.0973782771535581
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: independent/ministral-3-14b-terminalbench-v2-1@1.0.0
+    benchmark_profile: independent-agent
+  provenance:
+  - independent/ministral-3-14b-terminalbench-v2-1@1.0.0
+  domains:
+    agentic_systems: 9.73782771535581
 - model: moonshot/kimi-k3
   reasoning_effort: low
   index: vllm-sr/reasoning@1.0.0
