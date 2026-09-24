@@ -8,8 +8,8 @@ boundary. The CLI resolves the exact catalog ID and revision, verifies and
 materializes selected **data-only** model files into a content-addressed
 artifact, and mounts that artifact read-only into a backend-matched image.
 Model-repository Python is not executed in the new runtime. A missing release
-image lock without an explicit image override, unsupported device, changed
-manifest, or incompatible profile fails before model service becomes ready.
+image lock without an explicit image override, unsupported device, manifest
+integrity mismatch, or incompatible profile fails before service becomes ready.
 
 Inside the container, an owned Vela or Qwen 3.5 loader verifies the mounted
 artifact again and keeps one model resident. The HTTP layer validates a

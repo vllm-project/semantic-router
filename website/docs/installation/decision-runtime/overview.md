@@ -8,15 +8,22 @@ not the Router's decision-rule engine: `vllm-sr drun` runs one pinned model per
 instance and serves the [SystemOne and batch APIs](./api.md). Run separate
 instances, on separate ports, when you need more than one model.
 
-## Choose an image before launching
+## Start one model
 
-A released CLI can select a default image only after its package contains a
-qualified, digest-pinned Decision image inventory. A source checkout or staging
-wheel does not contain that release inventory. Its default-image launch fails
-closed; it is not evidence that a published image exists.
+With a released CLI that contains a qualified, digest-pinned Decision image,
+start one model on an available supported backend:
 
-For source or isolated validation, first build or obtain the matching Decision
-Docker image and inspect its **full local image ID**:
+```bash
+vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
+  --backend auto --port 8001 --instance-name kai-8001 --detach
+```
+
+The command fails closed if the installed package has no qualified image for
+the detected backend. Source checkouts and staging wheels do not ship a default
+image inventory.
+
+For source or isolated validation, [build the matching Decision image](https://github.com/vllm-project/semantic-router/tree/main/src/vllm-sr/decision_runtime/image)
+and inspect its **full local Docker image ID**. Then pass that exact ID:
 
 ```bash
 IMAGE_ID=$(docker image inspect --format '{{.Id}}' YOUR_LOCAL_DECISION_IMAGE)
