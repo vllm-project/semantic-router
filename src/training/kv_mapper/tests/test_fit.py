@@ -40,14 +40,24 @@ class RidgeFitTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             acc.solve_affine(0.01)
 
-    def test_pearson_selects_linear_source_layer(self) -> None:
+    def test_ols_selects_mixed_head_source_for_both_channels(self) -> None:
         rng = np.random.RandomState(1)
-        seq, n_kv, d = 64, 2, 4
-        src = [rng.randn(seq, n_kv, d).astype(np.float32) for _ in range(3)]
-        tgt = [src[1] * 2.0, src[2] * 3.0]
-        top = select_source_layers(src, tgt, k=1)
+        seq, n_kv, d = 128, 2, 4
+        keys = [rng.randn(seq, n_kv, d).astype(np.float32) for _ in range(3)]
+        values = [rng.randn(seq, n_kv, d).astype(np.float32) for _ in range(3)]
+        # The target is a rotation: same-dimension Pearson would miss it.
+        rotation = np.roll(np.eye(d), 1, axis=0)
+        target_k = [keys[1] @ rotation, keys[2] @ rotation]
+        target_v = [values[1] @ rotation, values[2] @ rotation]
+        top = select_source_layers(keys, target_k, values, target_v, k=1)
         self.assertEqual(top[0][0], 1)
         self.assertEqual(top[1][0], 2)
+
+    def test_fit_rejects_mismatched_token_counts(self) -> None:
+        source = [np.zeros((5, 2, 4), dtype=np.float32)]
+        target = [np.zeros((4, 2, 4), dtype=np.float32)]
+        with self.assertRaisesRegex(ValueError, "token counts differ"):
+            fit_full_head([(source, target)], [[0]], n_kv_heads=2, head_dim=4, ridge_alpha=0.01)
 
     def test_fit_writes_a1_artifact(self) -> None:
         rng = np.random.RandomState(2)
