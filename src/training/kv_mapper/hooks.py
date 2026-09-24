@@ -7,6 +7,9 @@ from dataclasses import dataclass
 import torch
 from torch import Tensor, nn
 
+KV_LAYOUT_RANK = 4
+FLAT_KV_LAYOUT_RANK = 3
+
 
 @dataclass
 class CapturedKV:
@@ -18,7 +21,7 @@ class CapturedKV:
 
 def as_bshd(out: Tensor, n_kv: int, head_dim: int) -> Tensor:
     """Normalize hook output to (batch, seq, n_kv, head_dim)."""
-    if out.dim() == 4:
+    if out.dim() == KV_LAYOUT_RANK:
         _batch, a, c, d = out.shape
         if c == n_kv and d == head_dim:
             return out
@@ -27,7 +30,7 @@ def as_bshd(out: Tensor, n_kv: int, head_dim: int) -> Tensor:
         raise ValueError(
             f"Unexpected 4D KV {tuple(out.shape)}; want n_kv={n_kv} head_dim={head_dim}"
         )
-    if out.dim() != 3:
+    if out.dim() != FLAT_KV_LAYOUT_RANK:
         raise ValueError(f"Unexpected KV rank {out.dim()} shape {tuple(out.shape)}")
     return out.view(out.shape[0], out.shape[1], n_kv, head_dim)
 
@@ -105,7 +108,7 @@ def capture_kv(
         keys.append(slot["k"][0].float().cpu())
         values.append(slot["v"][0].float().cpu())
     seq = keys[0].shape[0]
-    for i, (key, value) in enumerate(zip(keys, values)):
+    for i, (key, value) in enumerate(zip(keys, values, strict=True)):
         if key.shape != (seq, n_kv, head_dim) or value.shape != (seq, n_kv, head_dim):
             raise ValueError(
                 f"layer {indices[i]} KV {tuple(key.shape)} / {tuple(value.shape)} "

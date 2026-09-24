@@ -9,6 +9,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from datasets import load_dataset
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
+# Direct execution resolves repository imports after adding the repository root.
+# ruff: noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
@@ -26,8 +31,6 @@ from src.training.kv_mapper.hooks import capture_kv
 
 
 def _load_lm(model_id: str, revision: str, device: str, dtype: torch.dtype):
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-
     tok = AutoTokenizer.from_pretrained(
         model_id, revision=revision, trust_remote_code=True
     )
@@ -46,8 +49,6 @@ def _load_lm(model_id: str, revision: str, device: str, dtype: torch.dtype):
 
 
 def _corpus_windows(args: argparse.Namespace, tokenizer):
-    from datasets import load_dataset
-
     corpus = load_dataset(
         args.corpus,
         args.dataset_config,
@@ -144,8 +145,6 @@ def main() -> None:
     if windows.shape != (args.num_sequences, args.seq_len):
         raise ValueError(f"token windows have unexpected shape {windows.shape}")
     token_sha = token_fingerprint(windows)
-    from transformers import AutoConfig, AutoTokenizer
-
     tgt_tok = AutoTokenizer.from_pretrained(
         args.target_model, revision=args.target_revision, trust_remote_code=True
     )
