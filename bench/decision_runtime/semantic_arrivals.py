@@ -7,17 +7,19 @@ existing ``semantic`` mode and does not qualify these receipts.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import time
 from collections import deque
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
 from .cases import MODELS
+from .semantic_arrival_parity import TimedSemanticEvidence
 from .semantic_audit import audit_cohorts
 from .semantic_cases import WorkloadCase, cohort_sha256, generate_cases
 from .semantic_report import percentile
@@ -40,6 +42,7 @@ from .transport import Endpoint, validate_endpoint_url
 SCHEMA = "decision-semantic-arrivals-v1"
 TRACE_SCHEMA = "decision-logical-arrival-traces-v1"
 Measure = Callable[..., HttpSample]
+MAX_WAVE_CAPTURE_BYTES = 80 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -80,6 +83,20 @@ def trace_record(
     }
     canonical = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
     return {**payload, "sha256": hashlib.sha256(canonical).hexdigest()}
+
+
+def _arrival_harness_digest() -> str:
+    digest = hashlib.sha256(bytes.fromhex(_harness_digest()))
+    for path in (
+        Path(__file__),
+        Path(__file__).with_name("semantic_arrival_parity.py"),
+        Path(__file__).resolve().parents[2] / "tools/ci/decision_timed_semantics.py",
+    ):
+        digest.update(path.name.encode("utf-8"))
+        digest.update(b"\x00")
+        digest.update(path.read_bytes())
+        digest.update(b"\x00")
+    return digest.hexdigest()
 
 
 def _ranks(values: list[float]) -> dict[str, float | None]:
@@ -163,12 +180,15 @@ def run_arrival_wave(
 
     def specs_for(case: WorkloadCase) -> tuple[Any, ...]:
         return case.old_singles if arm == "old" else (case.new_request,)
+
     wave_start_ns = time.perf_counter_ns()
     arrived: dict[int, int] = {}
     pending: dict[int, deque[Any]] = {}
     ready: deque[int] = deque()
     active: dict[Future[HttpSample], tuple[Arrival, Any, int]] = {}
     samples: list[HttpSample] = []
+    captured_body_bytes = 0
+    client_completed_ns: dict[tuple[int, str | None], int] = {}
     next_arrival = 0
     peak_dispatched = 0
     peak_pending_http = 0
@@ -205,6 +225,7 @@ def run_arrival_wave(
                     round_number=round_,
                     sequence=sequence,
                     timeout_seconds=timeout,
+                    capture_response=phase == "throughput",
                 )
                 active[future] = (item, spec, submitted_ns)
                 peak_dispatched = max(peak_dispatched, len(active))
@@ -225,13 +246,28 @@ def run_arrival_wave(
                 for future in completed:
                     item, spec, submitted_ns = active.pop(future)
                     try:
-                        samples.append(future.result())
+                        sample = future.result()
                     except Exception:
-                        samples.append(
-                            _failed_sample(
-                                arm, phase, round_, c, item, spec, submitted_ns
-                            )
+                        sample = _failed_sample(
+                            arm, phase, round_, c, item, spec, submitted_ns
                         )
+                    if (
+                        sample.request_body is not None
+                        and sample.response_body is not None
+                    ):
+                        body_bytes = len(sample.request_body) + len(
+                            sample.response_body
+                        )
+                        if captured_body_bytes + body_bytes <= MAX_WAVE_CAPTURE_BYTES:
+                            captured_body_bytes += body_bytes
+                        else:
+                            sample = replace(
+                                sample, request_body=None, response_body=None
+                            )
+                    samples.append(sample)
+                    client_completed_ns[item.sequence, spec.state_id] = max(
+                        time.perf_counter_ns(), sample.ended_ns
+                    )
             elif next_arrival < len(trace):
                 delay = (
                     wave_start_ns
@@ -253,7 +289,10 @@ def run_arrival_wave(
         planned_ns = wave_start_ns + item.offset_ns
         arrived_ns = arrived[item.sequence]
         first_send_ns = min(call.started_ns for call in calls)
-        completed_ns = max(call.ended_ns for call in calls)
+        last_body_ns = max(call.ended_ns for call in calls)
+        completed_ns = max(
+            client_completed_ns[call.sequence, call.state_id] for call in calls
+        )
         errors = sorted(
             call.error_code for call in calls if call.error_code is not None
         )
@@ -269,10 +308,12 @@ def run_arrival_wave(
                 "scheduled_ns": planned_ns,
                 "arrived_ns": arrived_ns,
                 "first_send_ns": first_send_ns,
+                "last_body_ns": last_body_ns,
                 "completed_ns": completed_ns,
                 "arrival_jitter_ms": (arrived_ns - planned_ns) / 1e6,
                 "client_queue_ms": (first_send_ns - arrived_ns) / 1e6,
                 "latency_ms": (completed_ns - planned_ns) / 1e6,
+                "post_body_validation_ms": (completed_ns - last_body_ns) / 1e6,
                 "success": not errors,
                 "error_codes": errors,
             }
@@ -294,6 +335,7 @@ def run_arrival_wave(
         ),
         "peak_dispatched_http": peak_dispatched,
         "peak_pending_http": peak_pending_http,
+        "captured_timed_body_bytes": captured_body_bytes,
         "max_arrival_jitter_ms": max(item["arrival_jitter_ms"] for item in workflows),
     }
     return samples, workflows, wave
@@ -366,6 +408,7 @@ def _record_wave(
     *,
     trace_sha256: str,
     origin_ns: int,
+    timed_semantic_statuses: dict[tuple[int, str | None], str] | None = None,
 ) -> None:
     arrivals = {item["sequence"]: item for item in workflows}
     for sample in samples:
@@ -377,6 +420,10 @@ def _record_wave(
         record["http_wait_from_arrival_ms"] = (
             sample.started_ns - workflow["arrived_ns"]
         ) / 1e6
+        if timed_semantic_statuses is not None:
+            record["timed_semantic_status"] = timed_semantic_statuses[
+                sample.sequence, sample.state_id
+            ]
         samples_handle.write(json.dumps(record, sort_keys=True) + "\n")
     for workflow in workflows:
         record = {
@@ -388,12 +435,46 @@ def _record_wave(
                 "scheduled_offset_ms": (workflow["scheduled_ns"] - origin_ns) / 1e6,
                 "arrived_offset_ms": (workflow["arrived_ns"] - origin_ns) / 1e6,
                 "first_send_offset_ms": (workflow["first_send_ns"] - origin_ns) / 1e6,
+                "last_body_offset_ms": (workflow["last_body_ns"] - origin_ns) / 1e6,
                 "completed_offset_ms": (workflow["completed_ns"] - origin_ns) / 1e6,
             }
         )
         workflows_handle.write(json.dumps(record, sort_keys=True) + "\n")
     samples_handle.flush()
     workflows_handle.flush()
+
+
+def _apply_timed_semantics(
+    workflows: list[dict[str, Any]],
+    wave: dict[str, Any],
+    statuses: dict[tuple[int, str | None], str],
+    evidence_summary: dict[str, Any],
+) -> None:
+    """Count a workflow only when every timed HTTP body matches its audit."""
+
+    for workflow in workflows:
+        call_statuses = [
+            status
+            for (sequence, _state_id), status in statuses.items()
+            if sequence == workflow["sequence"]
+        ]
+        if len(call_statuses) != workflow["http_calls"]:
+            call_statuses.append("timed_evidence_identity_mismatch")
+        failures = sorted(
+            {
+                status
+                for status in call_statuses
+                if status != "passed" and status != "http_failure"
+            }
+        )
+        if failures:
+            workflow["success"] = False
+            workflow["error_codes"] = sorted(set(workflow["error_codes"] + failures))
+    wave["successful_workflows"] = sum(item["success"] for item in workflows)
+    wave["successful_decisions"] = sum(
+        item["decisions"] for item in workflows if item["success"]
+    )
+    wave["timed_semantics"] = evidence_summary
 
 
 def run_semantic_arrivals(args: argparse.Namespace) -> int:
@@ -455,16 +536,18 @@ def run_semantic_arrivals(args: argparse.Namespace) -> int:
         json.dumps(trace_document, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     trace_sha256 = hashlib.sha256(trace_path.read_bytes()).hexdigest()
-    with (args.output_dir / "audit.jsonl").open("w", encoding="utf-8") as handle:
+    audit_path = args.output_dir / "audit.jsonl"
+    with audit_path.open("w", encoding="utf-8") as handle:
         audit = audit_cohorts(
             cohorts,
             old,
             new_single,
             new_batch,
             timeout=args.timeout,
-            probability_tolerance=args.probability_tolerance,
+            probability_tolerance=0.01,
             output_handle=handle,
         )
+    audit_sha256 = hashlib.sha256(audit_path.read_bytes()).hexdigest()
     receipt_base = {
         "schema_version": SCHEMA,
         "scope": "exploratory paired fixed-arrival Decision HTTP workflow performance; not release evidence",
@@ -476,13 +559,12 @@ def run_semantic_arrivals(args: argparse.Namespace) -> int:
             "old_response_mode": args.old_response_mode,
         },
         "source_commit": _source_commit(),
-        "harness_sha256": hashlib.sha256(
-            bytes.fromhex(_harness_digest()) + Path(__file__).read_bytes()
-        ).hexdigest(),
+        "harness_sha256": _arrival_harness_digest(),
         "cohort_sha256": hashlib.sha256(
             b"\x00".join(cohort_sha256(cases).encode() for cases in cohorts.values())
         ).hexdigest(),
         "arrival_traces_sha256": trace_sha256,
+        "audit_sha256": audit_sha256,
         "settings": {
             "question_counts": args.question_counts,
             "state_counts": args.state_counts,
@@ -495,9 +577,11 @@ def run_semantic_arrivals(args: argparse.Namespace) -> int:
             "max_arrival_jitter_ms": args.max_arrival_jitter_ms,
             "http_concurrency_unit": "maximum dispatched HTTP calls per arm",
             "arrival_policy": "fixed logical workflow releases, identical sealed trace per arm; old state singles use round-robin dispatch",
-            "latency_boundary": "scheduled logical arrival through last complete HTTP response",
+            "latency_boundary": "scheduled logical arrival through request-relative HTTP response contract validation; audit parity is checked afterwards",
             "timeout_seconds": args.timeout,
             "seed": args.seed,
+            "timed_semantic_policy": "both arms, every throughput response, against the sealed untimed audit; fixed absolute probability tolerance 0.01",
+            "timed_semantic_archive": "bounded private-review gzip sidecar; not safe to publish without inspection",
         },
         "audit": audit,
     }
@@ -508,6 +592,13 @@ def run_semantic_arrivals(args: argparse.Namespace) -> int:
         )
         return 1
 
+    audit_rows = [
+        json.loads(line) for line in audit_path.read_text(encoding="utf-8").splitlines()
+    ]
+    audited_cases = {row["case_id"]: row for row in audit_rows}
+    if len(audited_cases) != len(audit_rows):
+        raise ValueError("audited arrival cases are duplicated")
+
     origin_ns = time.perf_counter_ns()
     shapes = []
     with (
@@ -517,7 +608,11 @@ def run_semantic_arrivals(args: argparse.Namespace) -> int:
         (args.output_dir / "workflows.jsonl").open(
             "w", encoding="utf-8"
         ) as workflows_handle,
+        gzip.open(
+            args.output_dir / "timed-semantic.jsonl.gz", "wt", encoding="utf-8"
+        ) as evidence_handle,
     ):
+        timed_evidence = TimedSemanticEvidence(evidence_handle)
         for (q, s), _cases in cohorts.items():
             for c in args.concurrencies:
                 workflows: list[dict[str, Any]] = []
@@ -553,6 +648,25 @@ def run_semantic_arrivals(args: argparse.Namespace) -> int:
                                 new_batch=new_batch,
                                 timeout=args.timeout,
                             )
+                            semantic_statuses = None
+                            if phase == "throughput":
+                                semantic_statuses, evidence_summary = (
+                                    timed_evidence.validate_wave(
+                                        samples,
+                                        trace,
+                                        audited_cases,
+                                        arm=arm,
+                                        model_id=args.model,
+                                        old_model_id=old_model_id,
+                                        old_response_mode=args.old_response_mode,
+                                    )
+                                )
+                                _apply_timed_semantics(
+                                    wave_workflows,
+                                    wave,
+                                    semantic_statuses,
+                                    evidence_summary,
+                                )
                             _record_wave(
                                 samples_handle,
                                 workflows_handle,
@@ -560,6 +674,7 @@ def run_semantic_arrivals(args: argparse.Namespace) -> int:
                                 wave_workflows,
                                 trace_sha256=trace_hash,
                                 origin_ns=origin_ns,
+                                timed_semantic_statuses=semantic_statuses,
                             )
                             wave["wave_start_offset_ms"] = (
                                 wave.pop("wave_start_ns") - origin_ns
@@ -603,11 +718,22 @@ def run_semantic_arrivals(args: argparse.Namespace) -> int:
                 )
     if hashlib.sha256(trace_path.read_bytes()).hexdigest() != trace_sha256:
         raise ValueError("sealed arrival trace changed during measurement")
+    if hashlib.sha256(audit_path.read_bytes()).hexdigest() != audit_sha256:
+        raise ValueError("sealed semantic audit changed during measurement")
     receipt = {
         **receipt_base,
         "status": "measured",
         "measured_at_utc": datetime.now(timezone.utc).isoformat(),
         "shapes": shapes,
+        "timed_semantic_evidence": {
+            "archive": "timed-semantic.jsonl.gz",
+            "sha256": hashlib.sha256(
+                (args.output_dir / "timed-semantic.jsonl.gz").read_bytes()
+            ).hexdigest(),
+            "archived_http": timed_evidence.archived,
+            "uncompressed_bytes": timed_evidence.uncompressed_bytes,
+            "max_uncompressed_bytes": 80 * 1024 * 1024,
+        },
     }
     receipt_path = args.output_dir / "receipt.json"
     receipt_path.write_text(
@@ -665,6 +791,5 @@ def add_arrival_parser(commands: argparse._SubParsersAction) -> None:
         default=50.0,
         help="Mark ratios ineligible if the client misses an arrival by more than this.",
     )
-    run.add_argument("--probability-tolerance", type=_nonnegative_float, default=0.01)
     run.add_argument("--output-dir", required=True, type=Path)
     run.set_defaults(handler=run_semantic_arrivals)

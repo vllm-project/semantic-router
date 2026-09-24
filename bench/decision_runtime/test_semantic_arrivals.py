@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import gzip
+import hashlib
+import io
 import json
 import threading
 import time
+from dataclasses import replace
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,14 +16,17 @@ from unittest import TestCase
 
 from .__main__ import main
 from .cases import MODELS
+from .semantic_arrival_parity import TimedSemanticEvidence
 from .semantic_arrivals import (
+    _apply_timed_semantics,
     make_trace,
     run_arrival_wave,
     summarize_arrivals,
     trace_record,
 )
-from .semantic_cases import generate_cases
-from .semantic_transport import HttpSample
+from .semantic_audit import audit_case
+from .semantic_cases import generate_cases, wire_bytes
+from .semantic_transport import HttpSample, measure_http
 from .test_semantic import _Handler
 from .transport import Endpoint
 
@@ -74,6 +81,7 @@ class ArrivalSchedulerTests(TestCase):
             round_number,
             sequence,
             timeout_seconds,
+            capture_response,
         ):
             submitted.append(sequence)
             started = time.perf_counter_ns()
@@ -264,6 +272,21 @@ class ArrivalLoopbackTests(TestCase):
                 traces = json.loads((output / "arrival-traces.json").read_text())
                 self.assertEqual(receipt["status"], "measured")
                 self.assertEqual(receipt["audit"]["status"], "passed")
+                self.assertEqual(
+                    receipt["timed_semantic_evidence"]["archived_http"], 112
+                )
+                archive = output / "timed-semantic.jsonl.gz"
+                self.assertEqual(
+                    hashlib.sha256(archive.read_bytes()).hexdigest(),
+                    receipt["timed_semantic_evidence"]["sha256"],
+                )
+                with gzip.open(archive, "rt", encoding="utf-8") as handle:
+                    evidence_rows = [json.loads(line) for line in handle]
+                self.assertEqual(len(evidence_rows), 112)
+                self.assertEqual({row["arm"] for row in evidence_rows}, {"old", "new"})
+                self.assertEqual(
+                    {row["validation_status"] for row in evidence_rows}, {"passed"}
+                )
                 self.assertEqual(len(receipt["shapes"]), 4)
                 self.assertEqual(len(traces["traces"]), 12)
                 self.assertTrue(
@@ -290,6 +313,144 @@ class ArrivalLoopbackTests(TestCase):
                             [item["case_id"] for item in trace["arrivals"]],
                         )
                         self.assertTrue(all(row["success"] for row in pair))
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join(timeout=2)
+
+    def test_timed_old_and_new_drift_make_workflows_ineligible(self) -> None:
+        servers = [ThreadingHTTPServer(("127.0.0.1", 0), _Handler) for _ in range(2)]
+        threads = []
+        for index, server in enumerate(servers):
+            server.bodies = []
+            server.invalid_batch = False
+            server.legacy_preview = index == 0
+            server.token_delta = 0
+            server.probability_shift = 0.0
+            server.choice_flip = False
+            server.metrics_lock = threading.Lock()
+            server.metrics = {}
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            threads.append(thread)
+        try:
+            old = Endpoint(
+                "old",
+                f"http://127.0.0.1:{servers[0].server_port}/v1/systemone",
+                None,
+                "legacy_preview",
+            )
+            new_single = Endpoint(
+                "new",
+                f"http://127.0.0.1:{servers[1].server_port}/v1/systemone",
+                None,
+            )
+            new_batch = Endpoint(
+                "new",
+                f"http://127.0.0.1:{servers[1].server_port}/v1/decision/batches",
+                None,
+            )
+            case = generate_cases(
+                MODELS[0],
+                MODELS[0],
+                question_count=3,
+                state_count=2,
+                variants=1,
+                seed=17,
+            )[0]
+            audit, _ = audit_case(
+                case,
+                old,
+                new_single,
+                new_batch,
+                timeout=2,
+                probability_tolerance=0.01,
+            )
+            self.assertTrue(audit["passed"])
+            trace = make_trace((case,), 1, 17, 0)
+            old_samples = [
+                measure_http(
+                    old,
+                    spec,
+                    case_id=case.id,
+                    concurrency=2,
+                    phase="throughput",
+                    round_number=0,
+                    sequence=0,
+                    timeout_seconds=2,
+                    capture_response=True,
+                )
+                for spec in case.old_singles
+            ]
+            new_sample = measure_http(
+                new_batch,
+                case.new_request,
+                case_id=case.id,
+                concurrency=2,
+                phase="throughput",
+                round_number=0,
+                sequence=0,
+                timeout_seconds=2,
+                capture_response=True,
+            )
+            evidence = TimedSemanticEvidence(io.StringIO())
+            kwargs = {
+                "model_id": MODELS[0],
+                "old_model_id": MODELS[0],
+                "old_response_mode": "legacy_preview",
+            }
+            old_statuses, _ = evidence.validate_wave(
+                old_samples, trace, {case.id: audit}, arm="old", **kwargs
+            )
+            new_statuses, _ = evidence.validate_wave(
+                [new_sample], trace, {case.id: audit}, arm="new", **kwargs
+            )
+            self.assertEqual(set(old_statuses.values()), {"passed"})
+            self.assertEqual(set(new_statuses.values()), {"passed"})
+
+            old_body = json.loads(old_samples[0].response_body)
+            old_body["answers"]["q0000"]["input_tokens"] += 1
+            old_body["answers"]["q0001"]["input_tokens"] -= 1
+            old_bytes = wire_bytes(old_body)
+            changed_old = replace(
+                old_samples[0],
+                response_body=old_bytes,
+                response_sha256=hashlib.sha256(old_bytes).hexdigest(),
+            )
+            new_body = json.loads(new_sample.response_body)
+            new_body["results"][0]["answers"]["q0000"]["noul"] += 0.02
+            new_bytes = wire_bytes(new_body)
+            changed_new = replace(
+                new_sample,
+                response_body=new_bytes,
+                response_sha256=hashlib.sha256(new_bytes).hexdigest(),
+            )
+            old_statuses, _ = evidence.validate_wave(
+                [changed_old, old_samples[1]],
+                trace,
+                {case.id: audit},
+                arm="old",
+                **kwargs,
+            )
+            new_statuses, summary = evidence.validate_wave(
+                [changed_new], trace, {case.id: audit}, arm="new", **kwargs
+            )
+            self.assertIn("timed_semantic_mismatch", old_statuses.values())
+            self.assertIn("timed_semantic_mismatch", new_statuses.values())
+            self.assertEqual(summary["validated_http"], 0)
+            workflow = {
+                "sequence": 0,
+                "http_calls": 1,
+                "success": True,
+                "decisions": case.decisions,
+                "error_codes": [],
+            }
+            wave = {"successful_workflows": 1, "successful_decisions": case.decisions}
+            _apply_timed_semantics([workflow], wave, new_statuses, summary)
+            self.assertFalse(workflow["success"])
+            self.assertEqual(wave["successful_decisions"], 0)
         finally:
             for server in servers:
                 server.shutdown()
