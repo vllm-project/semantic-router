@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import io
 import json
@@ -600,6 +601,56 @@ class DecisionPairedProducerTests(unittest.TestCase):
         with self.assertRaisesRegex(producer.ProducerError, "ambiguous"):
             producer._declared_launch_batch(container)
 
+    def test_live_candidate_status_attests_eight_requests_and_row_credits(
+        self,
+    ) -> None:
+        row = {
+            "model_id": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+            "revision": "1" * 40,
+            "artifact_content_id": "2" * 64,
+            "artifact_manifest_sha256": "3" * 64,
+        }
+        status = {
+            "status": "ready",
+            "models": [row["model_id"]],
+            "artifact": {
+                "model": row["model_id"],
+                "revision": row["revision"],
+                "content_sha256": row["artifact_content_id"],
+                "manifest_sha256": row["artifact_manifest_sha256"],
+            },
+            "scheduler": [
+                {
+                    "model": row["model_id"],
+                    "max_concurrency": 8,
+                    "max_queue": 32,
+                    "max_active_rows": 4096,
+                }
+            ],
+        }
+        expected = {
+            "max_concurrency": 8,
+            "max_queue": 32,
+            "max_active_rows": 4096,
+        }
+        self.assertEqual(producer._candidate_scheduler(status, row), expected)
+        for field, invalid in (
+            ("max_concurrency", 4),
+            ("max_queue", 8),
+            ("max_active_rows", 1024),
+            ("max_active_rows", None),
+        ):
+            with self.subTest(field=field, invalid=invalid):
+                bad = copy.deepcopy(status)
+                if invalid is None:
+                    bad["scheduler"][0].pop(field)
+                else:
+                    bad["scheduler"][0][field] = invalid
+                with self.assertRaisesRegex(
+                    producer.ProducerError, "live candidate artifact or scheduler"
+                ):
+                    producer._candidate_scheduler(bad, row)
+
     def test_candidate_must_execute_the_approved_drun_process(self) -> None:
         model_id = "llm-semantic-router/Decision-1.0-Kai-0.6B"
         revision = "1" * 40
@@ -625,7 +676,7 @@ class DecisionPairedProducerTests(unittest.TestCase):
             "--max-batch",
             "8",
             "--max-concurrency",
-            "4",
+            "8",
             "--max-queue",
             "32",
         ]
@@ -664,6 +715,22 @@ class DecisionPairedProducerTests(unittest.TestCase):
                 gpu_device="0",
                 runtime_variant="eager",
             )
+            command[command.index("--max-concurrency") + 1] = "4"
+            container["Config"]["Cmd"] = command[:]
+            with self.assertRaisesRegex(
+                producer.ProducerError, "approved drun entrypoint"
+            ):
+                producer._candidate_process(
+                    container,
+                    image,
+                    model_id=model_id,
+                    revision=revision,
+                    artifact_content_id=artifact,
+                    physical_batch_size=8,
+                    gpu_device="0",
+                    runtime_variant="eager",
+                )
+            command[command.index("--max-concurrency") + 1] = "8"
             container["Config"]["Cmd"] = [
                 "python3",
                 "-c",
@@ -710,7 +777,7 @@ class DecisionPairedProducerTests(unittest.TestCase):
             "--max-batch",
             "8",
             "--max-concurrency",
-            "4",
+            "8",
             "--max-queue",
             "32",
             "--experimental-qwen-rocm-graph-b8",

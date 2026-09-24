@@ -34,6 +34,10 @@ from decision_perf_release_gate import (
     ARRIVAL_POLICY,
     CONCURRENCIES,
     MIN_WORKFLOWS_PER_ROUND,
+    NEW_MAX_ACTIVE_ROWS,
+    NEW_MAX_CONCURRENCY,
+    NEW_MAX_QUEUE,
+    NEW_SCHEDULER_POLICY,
     PHYSICAL_BATCH,
     ROUNDS,
     RUNTIME_VARIANTS,
@@ -79,8 +83,6 @@ MAX_ATTESTATION_BYTES = 16 * 1024
 OLD_ATTESTATION_SCHEMA = "decision-old-baseline-attestation-v1"
 OLD_ATTESTATION_PATH = "/api/decision-baseline-attestation"
 OLD_ARTIFACT_LAYOUT = "full_snapshot_selected_data_v1"
-NEW_MAX_CONCURRENCY = 4
-NEW_MAX_QUEUE = 32
 RAW_FILES = (
     "receipt.json",
     "audit.jsonl",
@@ -1083,6 +1085,32 @@ def _status(url: str) -> dict:
     return result
 
 
+def _candidate_scheduler(status: dict, row: dict) -> dict:
+    artifact = status.get("artifact", {})
+    scheduler = status.get("scheduler", [])
+    if (
+        status.get("status") != "ready"
+        or status.get("models") != [row["model_id"]]
+        or not isinstance(artifact, dict)
+        or artifact.get("model") != row["model_id"]
+        or artifact.get("revision") != row["revision"]
+        or artifact.get("content_sha256") != row["artifact_content_id"]
+        or artifact.get("manifest_sha256") != row["artifact_manifest_sha256"]
+        or not isinstance(scheduler, list)
+        or len(scheduler) != 1
+        or not isinstance(scheduler[0], dict)
+        or scheduler[0].get("model") != row["model_id"]
+        or scheduler[0].get("max_concurrency") != NEW_MAX_CONCURRENCY
+        or scheduler[0].get("max_queue") != NEW_MAX_QUEUE
+        or scheduler[0].get("max_active_rows") != NEW_MAX_ACTIVE_ROWS
+    ):
+        raise ProducerError("live candidate artifact or scheduler identity differs")
+    return {
+        field: scheduler[0][field]
+        for field in ("max_concurrency", "max_queue", "max_active_rows")
+    }
+
+
 def _validate_config(
     config: dict, *, candidate_ref: str, qualification: dict
 ) -> list[dict]:
@@ -1603,7 +1631,8 @@ def produce(args: argparse.Namespace) -> Path:
             "arrival_policy": ARRIVAL_POLICY,
             "new_max_concurrency": NEW_MAX_CONCURRENCY,
             "new_max_queue": NEW_MAX_QUEUE,
-            "scheduler_policy": "new runtime admits at most four requests and queues at most 32; HTTP c1/c8/c32 is client-side",
+            "new_max_active_rows": NEW_MAX_ACTIVE_ROWS,
+            "scheduler_policy": NEW_SCHEDULER_POLICY,
         },
         "protected_baseline_config_sha256": _digest(args.baseline_config),
         "models": [],
@@ -1635,22 +1664,7 @@ def produce(args: argparse.Namespace) -> Path:
         if old_id == new_id:
             raise ProducerError("old and new runtime images are identical")
         status = _status(row["new"]["url"])
-        artifact = status.get("artifact", {})
-        scheduler = status.get("scheduler", [])
-        if (
-            status.get("status") != "ready"
-            or status.get("models") != [row["model_id"]]
-            or artifact.get("model") != row["model_id"]
-            or artifact.get("revision") != row["revision"]
-            or artifact.get("content_sha256") != row["artifact_content_id"]
-            or artifact.get("manifest_sha256") != row["artifact_manifest_sha256"]
-            or not isinstance(scheduler, list)
-            or len(scheduler) != 1
-            or scheduler[0].get("model") != row["model_id"]
-            or scheduler[0].get("max_concurrency") != NEW_MAX_CONCURRENCY
-            or scheduler[0].get("max_queue") != NEW_MAX_QUEUE
-        ):
-            raise ProducerError("live candidate artifact or scheduler identity differs")
+        new_scheduler = _candidate_scheduler(status, row)
         model = {
             "model_id": row["model_id"],
             "old_core_source_kind": row["old"]["core_source_kind"],
@@ -1671,9 +1685,7 @@ def produce(args: argparse.Namespace) -> Path:
             "old_physical_batch_size": row["old_physical_batch_size"],
             "new_physical_batch_size": row["new_physical_batch_size"],
             "new_runtime_variant": row["new_runtime_variant"],
-            "new_scheduler": {
-                field: scheduler[0][field] for field in ("max_concurrency", "max_queue")
-            },
+            "new_scheduler": new_scheduler,
             "shapes": [],
         }
         if row["old"]["core_source_kind"] == "mounted_adapter":

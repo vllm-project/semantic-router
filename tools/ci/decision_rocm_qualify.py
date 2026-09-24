@@ -58,6 +58,7 @@ MODEL_NAMES = tuple(
 PHYSICAL_BATCH = 8
 MAX_CONCURRENCY = 8
 MAX_QUEUE = 32
+MAX_ACTIVE_ROWS = 4096
 CONCURRENT_REQUESTS = 8
 CONCURRENT_QUESTIONS = 8
 WIDE_QUESTIONS = 32
@@ -286,6 +287,7 @@ def _check_status(status: dict, *, model: str, revision: str, artifact: str) -> 
         or scheduler[0].get("model") != model
         or scheduler[0].get("max_concurrency") != MAX_CONCURRENCY
         or scheduler[0].get("max_queue") != MAX_QUEUE
+        or scheduler[0].get("max_active_rows") != MAX_ACTIVE_ROWS
     ):
         raise QualificationError("live status does not attest the launched artifact")
 
