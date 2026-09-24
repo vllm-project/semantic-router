@@ -295,6 +295,12 @@ def test_qwen_loader_uses_verified_manifest_layout(
     assert calls[0][1]["expected_manifest_sha256"] == (
         artifact.manifest.sha256 if expected_manifest else None
     )
+    assert calls[0][1]["gated_delta_kernel_policy"] == (
+        "native_torch" if profile_id == "Decision-1.0-Eos-0.8B" else "accelerated"
+    )
+    assert calls[0][1]["native_rocm_max_physical_batch_size"] == (
+        8 if profile_id == "Decision-1.0-Eos-0.8B" else None
+    )
 
 
 def test_opt_in_qwen_graph_receives_verified_artifact_identity(

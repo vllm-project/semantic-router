@@ -93,6 +93,15 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
         resolved.profile.prompt_policy.choice_null_description
         == PROMPT_POLICIES[model_id]
     )
+    if family == "qwen3.5":
+        assert resolved.profile.qwen_kernel_policy is not None
+        expected = "native_torch" if "Eos-0.8B" in model_id else "accelerated"
+        assert resolved.profile.qwen_kernel_policy.gated_delta == expected
+        assert resolved.profile.qwen_kernel_policy.rocm_max_physical_batch_size == (
+            8 if expected == "native_torch" else None
+        )
+    else:
+        assert resolved.profile.qwen_kernel_policy is None
 
 
 def test_profile_package_has_exact_catalog_model_set() -> None:
@@ -140,6 +149,7 @@ def test_catalog_new_revision_reuses_model_template(
     assert updated.template_id == resolved.template_id
     assert updated.template_id == model_id.rsplit("/", 1)[-1]
     assert updated.profile.prompt_policy == resolved.profile.prompt_policy
+    assert updated.profile.qwen_kernel_policy == resolved.profile.qwen_kernel_policy
 
 
 def test_explicit_revision_requires_an_immutable_commit() -> None:
@@ -295,6 +305,47 @@ def test_model_profile_rejects_backend_qualification_declarations() -> None:
     document = json.loads(packaged.read_bytes())
     document["backends"] = {"cpu": {"qualified": True}}
 
+    with pytest.raises(RuntimeProfileError, match="fields do not match"):
+        parse_runtime_profile(json.dumps(document).encode(), revision=revision)
+
+
+@pytest.mark.parametrize(
+    ("policy", "message"),
+    (
+        (
+            {"gated_delta": "native_torch", "rocm_max_physical_batch_size": 0},
+            "positive integer",
+        ),
+        (
+            {"gated_delta": "native_torch", "rocm_max_physical_batch_size": True},
+            "positive integer",
+        ),
+        (
+            {"gated_delta": "accelerated", "rocm_max_physical_batch_size": 8},
+            "requires native_torch",
+        ),
+        ({"gated_delta": [], "rocm_max_physical_batch_size": 8}, "gated_delta"),
+    ),
+)
+def test_qwen_kernel_policy_rejects_invalid_envelopes(policy, message) -> None:
+    revision = MODELS["llm-semantic-router/Decision-1.0-Eos-0.8B"][0]
+    document = json.loads(
+        _packaged_profile("llm-semantic-router/Decision-1.0-Eos-0.8B").read_bytes()
+    )
+    document["kernel_policy"] = policy
+    with pytest.raises(RuntimeProfileError, match=message):
+        parse_runtime_profile(json.dumps(document).encode(), revision=revision)
+
+
+def test_vela_profile_cannot_select_qwen_kernel() -> None:
+    revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
+    document = json.loads(
+        _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B").read_bytes()
+    )
+    document["kernel_policy"] = {
+        "gated_delta": "native_torch",
+        "rocm_max_physical_batch_size": 8,
+    }
     with pytest.raises(RuntimeProfileError, match="fields do not match"):
         parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 

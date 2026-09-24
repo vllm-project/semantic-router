@@ -144,6 +144,7 @@ class Qwen35TorchRuntime:
     max_length: int
     backend: Literal["cpu", "rocm", "cuda"]
     rocm_profile_binding: QwenRocmProfileBinding | None
+    gated_delta_kernel_policy: Literal["native_torch", "accelerated"] = "accelerated"
     rocm_graphs: Any | None = None
 
     @classmethod
@@ -154,6 +155,10 @@ class Qwen35TorchRuntime:
         temperature: float,
         max_length: int,
         backend: Literal["cpu", "rocm", "cuda"],
+        gated_delta_kernel_policy: Literal[
+            "native_torch", "accelerated"
+        ] = "accelerated",
+        native_rocm_max_physical_batch_size: int | None = None,
         device: str | None = None,
         attention: str = "sdpa",
         physical_batch_size: int = 8,
@@ -172,6 +177,8 @@ class Qwen35TorchRuntime:
             temperature=temperature,
             max_length=max_length,
             backend=backend,
+            gated_delta_kernel_policy=gated_delta_kernel_policy,
+            native_rocm_max_physical_batch_size=native_rocm_max_physical_batch_size,
             attention=attention,
             physical_batch_size=physical_batch_size,
         )
@@ -260,8 +267,8 @@ class Qwen35TorchRuntime:
             head.load_state_dict(head_state, strict=True)
             model = _decision_model(torch, backbone, head)
             model.to(selected).eval()
-            if backend == "cpu":
-                _install_cpu_reference_kernels(model, modeling)
+            if backend == "cpu" or gated_delta_kernel_policy == "native_torch":
+                _install_instance_native_gated_delta_kernels(model, modeling)
             tokenizer = transformers.AutoTokenizer.from_pretrained(
                 root,
                 local_files_only=True,
@@ -289,6 +296,9 @@ class Qwen35TorchRuntime:
             max_length=max_length,
             backend=backend,
             rocm_profile_binding=binding,
+            gated_delta_kernel_policy=(
+                "native_torch" if backend == "cpu" else gated_delta_kernel_policy
+            ),
         )
         if enable_rocm_graph:
             from .qwen35_rocm_graph import QwenRocmBackboneGraphs  # noqa: PLC0415
@@ -441,11 +451,11 @@ def _decision_model(torch, backbone, head):
     return DecisionModel()
 
 
-def _install_cpu_reference_kernels(model, modeling) -> None:
-    """Bind native PyTorch GatedDeltaNet functions to one CPU model instance.
+def _install_instance_native_gated_delta_kernels(model, modeling) -> None:
+    """Bind native PyTorch GatedDeltaNet functions to one model instance.
 
-    Transformers can otherwise select installed FLA and causal-conv packages
-    for CPU tensors.  Their reference functions live in the pinned Transformers
+    Transformers can select installed FLA and causal-conv packages, including
+    for CPU tensors. Their reference functions live in the pinned Transformers
     module; no model-repository code or module-global replacement is used.
     """
 
@@ -457,33 +467,100 @@ def _install_cpu_reference_kernels(model, modeling) -> None:
         or forward.__closure__ is not None
         or Path(forward.__code__.co_filename).name != source_name
     ):
-        raise Qwen35RuntimeError("native Qwen CPU forward is unavailable")
-    names = (
-        "causal_conv1d_fn",
-        "causal_conv1d_update",
-        "torch_chunk_gated_delta_rule",
-        "torch_recurrent_gated_delta_rule",
-    )
+        raise Qwen35RuntimeError("native Qwen GatedDeltaNet forward is unavailable")
+    if not _native_signature_matches(
+        forward,
+        (
+            ("self", inspect.Parameter.empty),
+            ("hidden_states", inspect.Parameter.empty),
+            ("cache_params", None),
+            ("attention_mask", None),
+            ("kwargs", Ellipsis),
+        ),
+    ):
+        raise Qwen35RuntimeError("native Qwen GatedDeltaNet signature changed")
+    names = {
+        "causal_conv1d_fn": (
+            ("hidden_states", inspect.Parameter.empty),
+            ("weight", inspect.Parameter.empty),
+            ("bias", None),
+            ("activation", None),
+            ("kwargs", Ellipsis),
+        ),
+        "causal_conv1d_update": (
+            ("hidden_states", inspect.Parameter.empty),
+            ("conv_state", inspect.Parameter.empty),
+            ("weight", inspect.Parameter.empty),
+            ("bias", None),
+            ("activation", None),
+        ),
+        "torch_chunk_gated_delta_rule": (
+            ("query", inspect.Parameter.empty),
+            ("key", inspect.Parameter.empty),
+            ("value", inspect.Parameter.empty),
+            ("g", inspect.Parameter.empty),
+            ("beta", inspect.Parameter.empty),
+            ("chunk_size", 64),
+            ("initial_state", None),
+            ("output_final_state", False),
+            ("use_qk_l2norm_in_kernel", False),
+            ("kwargs", Ellipsis),
+        ),
+        "torch_recurrent_gated_delta_rule": (
+            ("query", inspect.Parameter.empty),
+            ("key", inspect.Parameter.empty),
+            ("value", inspect.Parameter.empty),
+            ("g", inspect.Parameter.empty),
+            ("beta", inspect.Parameter.empty),
+            ("initial_state", None),
+            ("output_final_state", False),
+            ("use_qk_l2norm_in_kernel", False),
+            ("kwargs", Ellipsis),
+        ),
+    }
     if any(name not in forward.__code__.co_names for name in names):
-        raise Qwen35RuntimeError("native Qwen CPU forward contract changed")
+        raise Qwen35RuntimeError("native Qwen GatedDeltaNet contract changed")
     namespace = dict(forward.__globals__)
-    for name in names:
+    for name, signature in names.items():
         selected = inspect.unwrap(getattr(modeling, name, None))
         if (
             not isinstance(selected, types.FunctionType)
+            or selected.__closure__ is not None
             or Path(selected.__code__.co_filename).name != source_name
+            or not _native_signature_matches(selected, signature)
         ):
-            raise Qwen35RuntimeError(f"native Qwen CPU function is unavailable: {name}")
+            raise Qwen35RuntimeError(f"native Qwen function is unavailable: {name}")
         namespace[name] = selected
+
+    norm_type = modeling.Qwen3_5RMSNormGated
+    norm_forward = inspect.unwrap(norm_type.forward)
+    if (
+        not isinstance(norm_forward, types.FunctionType)
+        or norm_forward.__closure__ is not None
+        or Path(norm_forward.__code__.co_filename).name != source_name
+        or not _native_signature_matches(
+            norm_forward,
+            (
+                ("self", inspect.Parameter.empty),
+                ("hidden_states", inspect.Parameter.empty),
+                ("gate", inspect.Parameter.empty),
+            ),
+        )
+    ):
+        raise Qwen35RuntimeError("native Qwen gated norm forward is unavailable")
 
     layers = [layer for layer in model.modules() if isinstance(layer, layer_type)]
     if not layers or any(
-        hasattr(layer, "_hf_hook")
+        type(layer) is not layer_type
+        or hasattr(layer, "_hf_hook")
         or hasattr(layer.conv1d, "_hf_hook")
         or "forward" in layer.__dict__
+        or type(layer.norm) is not norm_type
+        or hasattr(layer.norm, "_hf_hook")
+        or "forward" in layer.norm.__dict__
         for layer in layers
     ):
-        raise Qwen35RuntimeError("Qwen CPU layers are modified or offloaded")
+        raise Qwen35RuntimeError("Qwen GatedDeltaNet layers are modified or offloaded")
     local_forward = types.FunctionType(
         forward.__code__,
         namespace,
@@ -494,6 +571,33 @@ def _install_cpu_reference_kernels(model, modeling) -> None:
     local_forward.__kwdefaults__ = forward.__kwdefaults__
     for layer in layers:
         layer.forward = types.MethodType(local_forward, layer)
+        layer.norm.forward = types.MethodType(norm_forward, layer.norm)
+
+
+def _native_signature_matches(
+    function: types.FunctionType, expected: tuple[tuple[str, object], ...]
+) -> bool:
+    """Reject source changes before binding reference functions to an instance."""
+
+    try:
+        parameters = tuple(inspect.signature(function).parameters.values())
+    except (TypeError, ValueError):
+        return False
+    if len(parameters) != len(expected):
+        return False
+    for actual, (name, default) in zip(parameters, expected, strict=True):
+        kind = (
+            inspect.Parameter.VAR_KEYWORD
+            if default is Ellipsis
+            else inspect.Parameter.POSITIONAL_OR_KEYWORD
+        )
+        if (
+            actual.name != name
+            or actual.kind is not kind
+            or (default is not Ellipsis and actual.default != default)
+        ):
+            return False
+    return True
 
 
 def _collate(torch, rows, tokenizer, *, device):
@@ -534,11 +638,20 @@ def _validate_configuration(
     temperature: float,
     max_length: int,
     backend: str,
+    gated_delta_kernel_policy: str = "accelerated",
+    native_rocm_max_physical_batch_size: int | None = None,
     attention: str,
     physical_batch_size: int,
 ) -> ValidatedQwenRocmProfile | None:
     if backend not in {"cpu", "rocm", "cuda"}:
         raise Qwen35RuntimeError("Qwen Torch backend must be cpu, rocm, or cuda")
+    if not isinstance(
+        gated_delta_kernel_policy, str
+    ) or gated_delta_kernel_policy not in {
+        "native_torch",
+        "accelerated",
+    }:
+        raise Qwen35RuntimeError("Qwen gated-delta kernel policy is unsupported")
     if attention != "sdpa":
         raise Qwen35RuntimeError("Qwen Decision releases require SDPA attention")
     if (
@@ -560,6 +673,17 @@ def _validate_configuration(
         or physical_batch_size < 1
     ):
         raise Qwen35RuntimeError("Qwen physical batch size is invalid")
+    if backend == "rocm" and gated_delta_kernel_policy == "native_torch":
+        maximum = native_rocm_max_physical_batch_size
+        if isinstance(maximum, bool) or not isinstance(maximum, int) or maximum < 1:
+            raise Qwen35RuntimeError(
+                "Qwen native Torch ROCm requires a qualified physical-batch maximum"
+            )
+        if physical_batch_size > maximum:
+            raise Qwen35RuntimeError(
+                "Qwen native Torch ROCm physical batch size "
+                f"{physical_batch_size} exceeds qualified maximum {maximum}"
+            )
     metadata = _read_json(root / "decision_config.json")
     if metadata.get("prompt_version") != QWEN_PROMPT_VERSION:
         raise Qwen35RuntimeError("unsupported Qwen Decision prompt version")
@@ -572,7 +696,7 @@ def _validate_configuration(
     ):
         if not (root / relative).is_file():
             raise Qwen35RuntimeError(f"verified Qwen artifact is missing {relative}")
-    if backend == "rocm":
+    if backend == "rocm" and gated_delta_kernel_policy == "accelerated":
         profile = _validated_rocm_profile(root, metadata)
         if profile is not None and (
             physical_batch_size > profile.physical_batch_size_max
