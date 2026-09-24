@@ -356,7 +356,7 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
     assert "0.0.0.0:9099:8899" in envoy_cmd
     assert "127.0.0.1:50251:50051" in router_cmd
     assert "127.0.0.1:9390:9190" in router_cmd
-    assert "8900:8700" in dashboard_cmd
+    assert "0.0.0.0:8900:8700" in dashboard_cmd
     assert "127.0.0.1:8280:8080" in router_cmd
 
 
