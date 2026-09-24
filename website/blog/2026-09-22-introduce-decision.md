@@ -109,6 +109,15 @@ Start with the model that fits your workload. Keep the questions, options, and r
 
 Input budgets cover the complete state, question, and candidate descriptions. The model cards document each release's architecture and runtime requirements.
 
+<ArticleVideo
+  src="/videos/decision-1-0/decision-1-0-nox-4b-robot-arm.mp4"
+  poster="/img/blog/decision-1-0/nox-4b-robot-arm-poster.png"
+  title="Nox-4B action selection in a robot-arm simulation"
+  landscape
+>
+  Nox-4B chooses actions step by step in a robot-arm simulation; the on-screen number is model latency for that step.
+</ArticleVideo>
+
 ## Three answers your software can use
 
 **Choice** picks an option. **Noul** judges a condition. **Score** applies an ordered rubric. Together, they cover the decisions inside a much larger workflow.
