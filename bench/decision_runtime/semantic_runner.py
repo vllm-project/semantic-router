@@ -680,6 +680,8 @@ def run_semantic_matrix(args: argparse.Namespace) -> int:
 
 
 def add_parsers(commands: argparse._SubParsersAction) -> None:
+    from .semantic_arrivals import add_arrival_parser
+
     run = commands.add_parser(
         "semantic", help="measure synthetic mixed-question and multi-state workflows"
     )
@@ -747,3 +749,4 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     matrix.add_argument("--receipts", nargs="+", required=True, type=Path)
     matrix.add_argument("--output", type=Path)
     matrix.set_defaults(handler=run_semantic_matrix)
+    add_arrival_parser(commands)
