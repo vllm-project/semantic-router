@@ -23,6 +23,29 @@ MAX_REQUEST_BYTES = 1024 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 
+def _new_audit_reference(audited: dict[str, Any]) -> dict[str, Any]:
+    """Project new audit values into the comparator's reference fields."""
+
+    states = []
+    for state in audited["states"]:
+        answers = []
+        for answer in state["answers"]:
+            expected = dict(answer)
+            if answer["type"] == "noul":
+                expected["old_probability"] = answer["new_probability"]
+            else:
+                expected["old_probabilities"] = answer["new_probabilities"]
+                if answer["type"] == "choice":
+                    expected["old_outcome"] = answer["new_outcome"]
+                elif answer["type"] == "score":
+                    expected["old_score"] = answer["new_score"]
+                else:
+                    raise ValueError("timed audit answer type is invalid")
+            answers.append(expected)
+        states.append({**state, "answers": answers})
+    return {"states": states}
+
+
 def _compare_sample(
     sample: HttpSample,
     case: WorkloadCase,
@@ -88,14 +111,24 @@ def _compare_sample(
         ):
             raise ValueError("timed legacy question tokens differ")
         parsed = project_legacy_preview(parsed, spec.request)
+    request = timed_semantics._json(request_body)
     timed_semantics._compare_body(
         parsed,
-        timed_semantics._json(request_body),
+        request,
         reference,
         expected_model,
         case.question_count,
         state_count,
     )
+    if sample.arm == "new":
+        timed_semantics._compare_body(
+            parsed,
+            request,
+            _new_audit_reference(audited),
+            expected_model,
+            case.question_count,
+            state_count,
+        )
 
 
 class TimedSemanticEvidence:
