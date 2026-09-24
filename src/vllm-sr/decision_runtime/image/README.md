@@ -22,12 +22,11 @@ versions and hashes are read from the selected artifact's own verified manifest,
 not a revision allowlist compiled into the image.
 
 The six packaged model profiles are partitioned by the Vela and Qwen3.5
-families. They contain artifact selection, model-specific prompt/calibration
+families. They contain the manifest location, model-specific prompt/calibration
 policy, and initial batch/input settings. Hardware execution capability is
 owned separately by the runtime, not repeated as a potentially stale model
-profile flag. Historical manifest digests and sizes in the templates are
-fixtures; production artifact resolution observes the selected snapshot's
-manifest and selects files from that inventory.
+profile flag. Artifact resolution observes the selected snapshot's manifest
+and selects files from that inventory, including its complete weight layout.
 
 ## Build
 

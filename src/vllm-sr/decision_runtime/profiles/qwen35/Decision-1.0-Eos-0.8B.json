@@ -1,22 +1,7 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "family": "qwen3.5",
-  "artifact": {
-    "manifest": {
-      "path": "MODEL_MANIFEST.json",
-      "sha256": "4f1886e3df327cb0726086df1f41f1ab584ecc7ab80c0e065e68c7cb8dc96ec6",
-      "size_bytes": 2627
-    },
-    "files": [
-      "backbone/config.json",
-      "backbone/model.safetensors",
-      "decision_config.json",
-      "decision_head.safetensors",
-      "runtime.json",
-      "tokenizer.json",
-      "tokenizer_config.json"
-    ]
-  },
+  "artifact": {"manifest_path": "MODEL_MANIFEST.json"},
   "max_input_tokens": 16384,
   "dtype": {
     "backbone": "bfloat16",

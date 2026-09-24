@@ -22,6 +22,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
 from .catalog_adapter import ResolvedRuntimeModel
+from .release_artifacts import ReleaseArtifactError, select_qwen_weight_files
 from .runtime_profile import (
     ArtifactManifestIdentity,
     RuntimeProfileError,
@@ -32,7 +33,6 @@ from .runtime_profile import (
 _RECEIPT = ".vllm-sr-artifact.json"
 _RECEIPT_SCHEMA = 2
 _SHA256_HEX_LENGTH = 64
-_QWEN_SHARD = re.compile(r"backbone/model-(\d{5})-of-(\d{5})\.safetensors")
 _REPOSITORY_CODE_SUFFIXES = frozenset(
     {".py", ".pyc", ".pyo", ".so", ".dylib", ".dll", ".sh", ".bash"}
 )
@@ -132,7 +132,7 @@ class ArtifactResolver:
             raise ArtifactError(
                 "resolved artifact identity does not match the catalog model"
             )
-        manifest_path = model.profile.artifact.manifest.path
+        manifest_path = model.profile.artifact.manifest_path
         manifest_source = self.fetcher.fetch(
             repository_id=model.repository_id,
             revision=model.catalog.revision,
@@ -388,7 +388,7 @@ def _manifest_identity_from_receipt(
     raw = value.get("manifest")
     if not isinstance(raw, dict) or set(raw) != {"path", "sha256", "size_bytes"}:
         raise ArtifactIntegrityError("artifact receipt manifest is invalid")
-    if raw["path"] != model.profile.artifact.manifest.path:
+    if raw["path"] != model.profile.artifact.manifest_path:
         raise ArtifactIntegrityError("artifact manifest layout is unsupported")
     digest, size_bytes = raw["sha256"], raw["size_bytes"]
     if (
@@ -447,7 +447,7 @@ def _select_profile_files(
             item.repository_path,
             inert_guard=(
                 model.profile.family == "qwen3.5"
-                and model.profile.artifact.manifest.path == "bundle-manifest.json"
+                and model.profile.artifact.manifest_path == "bundle-manifest.json"
                 and path == _INERT_QWEN_GUARD
             ),
         )
@@ -464,12 +464,16 @@ def _select_artifact_files(
     selection seam. Production loaders only accept the three known layouts.
     """
 
-    manifest_path = model.profile.artifact.manifest.path
+    manifest_path = model.profile.artifact.manifest_path
     if manifest_path not in {
         "native/MANIFEST.json",
         "MODEL_MANIFEST.json",
         "bundle-manifest.json",
     }:
+        if not model.profile.artifact.files:
+            raise ArtifactManifestError(
+                "Decision artifact manifest layout is unsupported"
+            )
         return _select_profile_files(model, inventory)
 
     if model.profile.family == "vela":
@@ -506,24 +510,10 @@ def _select_artifact_files(
             "runtime-profile/l2norm_fwd_kernel.json",
             _INERT_QWEN_GUARD,
         }
-        if "backbone/model.safetensors" in inventory:
-            if "backbone/model.safetensors.index.json" in inventory:
-                raise ArtifactManifestError("Qwen weight layout is ambiguous")
-            required.add("backbone/model.safetensors")
-        else:
-            required.add("backbone/model.safetensors.index.json")
-            shards = {
-                name: _QWEN_SHARD.fullmatch(name)
-                for name in inventory
-                if name.startswith("backbone/model-") and name.endswith(".safetensors")
-            }
-            if not shards or any(match is None for match in shards.values()):
-                raise ArtifactManifestError("Qwen sharded weight layout is invalid")
-            total = {int(match.group(2)) for match in shards.values() if match}
-            indexes = {int(match.group(1)) for match in shards.values() if match}
-            if len(total) != 1 or indexes != set(range(1, next(iter(total)) + 1)):
-                raise ArtifactManifestError("Qwen weight shards are incomplete")
-            required.update(shards)
+        try:
+            required.update(select_qwen_weight_files(inventory))
+        except ReleaseArtifactError as error:
+            raise ArtifactManifestError(str(error)) from error
     else:  # pragma: no cover - family parser closes this path
         raise ArtifactManifestError("Decision artifact family is unsupported")
 

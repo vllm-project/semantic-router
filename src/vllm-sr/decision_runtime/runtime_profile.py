@@ -20,14 +20,13 @@ from typing import Any, Literal
 RuntimeFamily = Literal["vela", "qwen3.5"]
 ChoiceNullDescriptionPolicy = Literal["render_key", "preserve_json_null"]
 
-PROFILE_SCHEMA_VERSION = 3
+PROFILE_SCHEMA_VERSION = 4
 # Initial benchmarked profile value, not a hard upper bound. A profile may tune
 # it after backend/device correctness and performance validation.
 DEFAULT_PHYSICAL_BATCH_SIZE = 8
 _PROFILE_FAMILY_DIRECTORIES = ("vela", "qwen35")
 _DTYPES = frozenset({"bfloat16", "float32"})
 _ASCII_CONTROL_LIMIT = 32
-_SHA256 = re.compile(r"[0-9a-f]{64}")
 _REVISION = re.compile(r"[0-9a-f]{40}")
 
 
@@ -41,11 +40,7 @@ class UnsupportedRuntimeBackendError(RuntimeProfileError):
 
 @dataclass(frozen=True, slots=True)
 class ArtifactManifestIdentity:
-    """Template manifest path and historical fixture identity.
-
-    Production artifact resolution observes the selected snapshot's manifest
-    digest and size. These packaged values never gate a newer model revision.
-    """
+    """Observed manifest identity from one selected immutable snapshot."""
 
     path: str
     sha256: str
@@ -54,10 +49,14 @@ class ArtifactManifestIdentity:
 
 @dataclass(frozen=True, slots=True)
 class ArtifactSelection:
-    """Manifest-relative data files consumed by vLLM-SR-owned runtime code."""
+    """Manifest location for one model-family layout.
 
-    manifest: ArtifactManifestIdentity
-    files: tuple[str, ...]
+    ``files`` is an explicit selection seam for alternate in-memory test
+    layouts. Packaged profiles select files from the snapshot manifest instead.
+    """
+
+    manifest_path: str
+    files: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -198,34 +197,11 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
 
 def _parse_artifact(value: object) -> ArtifactSelection:
     artifact = _mapping(value, "artifact")
-    _exact_keys(artifact, {"manifest", "files"}, "artifact")
-    manifest = _mapping(artifact["manifest"], "artifact.manifest")
-    _exact_keys(manifest, {"path", "sha256", "size_bytes"}, "artifact.manifest")
+    _exact_keys(artifact, {"manifest_path"}, "artifact")
     manifest_path = validate_relative_artifact_path(
-        manifest["path"], field="artifact.manifest.path"
+        artifact["manifest_path"], field="artifact.manifest_path"
     )
-    manifest_sha256 = _digest(manifest["sha256"], "artifact.manifest.sha256")
-    manifest_size = _positive_int(
-        manifest["size_bytes"], "artifact.manifest.size_bytes"
-    )
-
-    raw_files = artifact["files"]
-    if not isinstance(raw_files, list) or not raw_files:
-        raise RuntimeProfileError("artifact.files must be a non-empty list")
-    selected = tuple(
-        validate_relative_artifact_path(item, field="artifact.files[]")
-        for item in raw_files
-    )
-    if len(set(selected)) != len(selected):
-        raise RuntimeProfileError("artifact.files contains duplicate paths")
-    return ArtifactSelection(
-        manifest=ArtifactManifestIdentity(
-            path=manifest_path,
-            sha256=manifest_sha256,
-            size_bytes=manifest_size,
-        ),
-        files=selected,
-    )
+    return ArtifactSelection(manifest_path=manifest_path)
 
 
 def _parse_calibration(value: object) -> float | None:
@@ -269,12 +245,6 @@ def _exact_keys(value: dict[str, Any], expected: set[str], field: str) -> None:
 def _positive_int(value: object, field: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
         raise RuntimeProfileError(f"{field} must be a positive integer")
-    return value
-
-
-def _digest(value: object, field: str) -> str:
-    if not isinstance(value, str) or _SHA256.fullmatch(value) is None:
-        raise RuntimeProfileError(f"{field} must be a lowercase SHA-256 digest")
     return value
 
 

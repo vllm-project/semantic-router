@@ -1,27 +1,7 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "family": "qwen3.5",
-  "artifact": {
-    "manifest": {
-      "path": "bundle-manifest.json",
-      "sha256": "1498cc7aa42f5884ab6ca828b5c23f23d4965b7e950a2ef86d530eed99ad78f1",
-      "size_bytes": 6549
-    },
-    "files": [
-      "backbone/config.json",
-      "backbone/model.safetensors",
-      "chat_template.jinja",
-      "code/profile_guard.py",
-      "decision_config.json",
-      "decision_head.safetensors",
-      "runtime-profile/l2norm_fwd_kernel.json",
-      "runtime-profile/profile.json",
-      "runtime.json",
-      "temperature.json",
-      "tokenizer.json",
-      "tokenizer_config.json"
-    ]
-  },
+  "artifact": {"manifest_path": "bundle-manifest.json"},
   "max_input_tokens": 16384,
   "dtype": {
     "backbone": "bfloat16",

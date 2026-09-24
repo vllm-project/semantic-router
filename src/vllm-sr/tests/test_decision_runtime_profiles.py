@@ -203,9 +203,14 @@ def test_profile_parser_rejects_traversal_and_revision_fields() -> None:
     revision = MODELS["llm-semantic-router/Decision-1.0-Kai-0.6B"][0]
     packaged = _packaged_profile("llm-semantic-router/Decision-1.0-Kai-0.6B")
     document = json.loads(packaged.read_bytes())
-    document["artifact"]["files"][0] = "../weights.safetensors"
+    document["artifact"]["manifest_path"] = "../weights.safetensors"
 
     with pytest.raises(RuntimeProfileError, match="unsafe path"):
+        parse_runtime_profile(json.dumps(document).encode(), revision=revision)
+
+    document = json.loads(packaged.read_bytes())
+    document["artifact"]["files"] = ["backbone/model.safetensors"]
+    with pytest.raises(RuntimeProfileError, match="fields do not match"):
         parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 
     document = json.loads(packaged.read_bytes())

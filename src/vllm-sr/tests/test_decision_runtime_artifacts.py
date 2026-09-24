@@ -26,11 +26,22 @@ from decision_runtime.catalog_adapter import (
     resolve_decision_runtime_model,
 )
 from decision_runtime.runtime_profile import (
-    ArtifactManifestIdentity,
     ArtifactSelection,
 )
 
 MODEL_ID = "llm-semantic-router/Decision-1.0-Kai-0.6B"
+VELA_REQUIRED_FILES = (
+    "INVENTORY.json",
+    "STATE_LAYOUT.json",
+    "choice_encoder.safetensors",
+    "decision_config.json",
+    "decision_heads.safetensors",
+    "encoder/config.json",
+    "encoder/model.safetensors",
+    "score_encoder.safetensors",
+    "tokenizer/tokenizer.json",
+    "tokenizer/tokenizer_config.json",
+)
 
 
 @dataclass
@@ -84,11 +95,7 @@ def _fixture_model(
 
     base = resolve_decision_runtime_model(MODEL_ID)
     artifact = ArtifactSelection(
-        manifest=ArtifactManifestIdentity(
-            path="artifact/MANIFEST.json",
-            sha256=_sha256(manifest_payload),
-            size_bytes=len(manifest_payload),
-        ),
+        manifest_path="artifact/MANIFEST.json",
         files=selected,
     )
     model = replace(base, profile=replace(base.profile, artifact=artifact))
@@ -209,6 +216,65 @@ def test_qwen_file_selection_accepts_new_weight_shards_without_repo_code() -> No
     inventory.pop("backbone/model-00002-of-00002.safetensors")
     with pytest.raises(ArtifactManifestError, match="incomplete"):
         _select_artifact_files(model, inventory)
+
+
+def test_eos_new_revision_materializes_three_shards_from_its_own_manifest(
+    tmp_path: Path,
+) -> None:
+    model = resolve_decision_runtime_model(
+        "llm-semantic-router/Decision-1.0-Eos-0.8B", revision="c" * 40
+    )
+    names = (
+        "backbone/config.json",
+        "backbone/model.safetensors.index.json",
+        "backbone/model-00001-of-00003.safetensors",
+        "backbone/model-00002-of-00003.safetensors",
+        "backbone/model-00003-of-00003.safetensors",
+        "decision_config.json",
+        "decision_head.safetensors",
+        "runtime.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "code/untrusted.py",
+    )
+    source = tmp_path / "source"
+    source.mkdir()
+    files = {}
+    inventory = {}
+    for name in names:
+        payload = f"snapshot:{name}".encode()
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(payload)
+        files[name] = path
+        inventory[name] = {"bytes": len(payload), "sha256": _sha256(payload)}
+    manifest = json.dumps({"files": inventory}, sort_keys=True).encode()
+    manifest_path = source / "MODEL_MANIFEST.json"
+    manifest_path.write_bytes(manifest)
+    files["MODEL_MANIFEST.json"] = manifest_path
+
+    artifact = ArtifactResolver(FakeFetcher(files), tmp_path / "cache").materialize(
+        model
+    )
+    assert artifact.manifest is not None
+    assert artifact.manifest.sha256 == _sha256(manifest)
+    assert artifact.revision == "c" * 40
+    assert {
+        item.manifest_path
+        for item in artifact.files
+        if item.manifest_path.endswith(".safetensors")
+    } >= {
+        "backbone/model-00001-of-00003.safetensors",
+        "backbone/model-00002-of-00003.safetensors",
+        "backbone/model-00003-of-00003.safetensors",
+    }
+    assert not (artifact.root / "code/untrusted.py").exists()
+    assert (
+        open_verified_artifact(
+            artifact.root, model, expected_content_id=artifact.content_id
+        )
+        == artifact
+    )
 
 
 def test_concurrent_materialization_converges_on_one_complete_view(
@@ -341,22 +407,12 @@ def test_manifest_identity_is_observed_from_the_selected_revision(
     tmp_path: Path,
 ) -> None:
     model, fetcher = _fixture_model(tmp_path)
-    manifest = model.profile.artifact.manifest
-    model = replace(
-        model,
-        profile=replace(
-            model.profile,
-            artifact=replace(
-                model.profile.artifact,
-                manifest=replace(manifest, sha256="0" * 64),
-            ),
-        ),
-    )
+    manifest_bytes = fetcher.files["artifact/MANIFEST.json"].read_bytes()
 
     verified = ArtifactResolver(fetcher, tmp_path / "cache").materialize(model)
     assert verified.manifest is not None
-    assert verified.manifest.sha256 == manifest.sha256
-    assert verified.manifest.sha256 != model.profile.artifact.manifest.sha256
+    assert verified.manifest.path == model.profile.artifact.manifest_path
+    assert verified.manifest.sha256 == _sha256(manifest_bytes)
     assert (
         open_verified_artifact(
             verified.root, model, expected_content_id=verified.content_id
@@ -380,9 +436,7 @@ def test_new_commit_with_valid_self_manifest_needs_no_packaged_profile(
     revision = "c" * 40
     model = resolve_decision_runtime_model(MODEL_ID, revision=revision)
     assert model.template_id == "Decision-1.0-Kai-0.6B"
-    payloads = {
-        name: f"snapshot:{name}".encode() for name in model.profile.artifact.files
-    }
+    payloads = {name: f"snapshot:{name}".encode() for name in VELA_REQUIRED_FILES}
     manifest_payload = json.dumps(
         {
             "files": {

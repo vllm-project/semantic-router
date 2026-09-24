@@ -25,8 +25,8 @@ The catalog supplies each model's default immutable revision. To use another
 revision of the **same** model, pass its full 40-character commit SHA with
 `--revision`. At launch, the host materializes and verifies that revision's
 selected data files and manifest; the runtime verifies the mounted files again
-before loading. The packaged profile's historical manifest identity is not a
-strict allowlist of model-file hashes for future revisions. A different
+before loading. The packaged profile records a manifest location, while each
+selected snapshot supplies the manifest hash, file inventory, and sizes. A different
 architecture, prompt contract, or hardware kernel still has to pass structural
 and device checks.
 

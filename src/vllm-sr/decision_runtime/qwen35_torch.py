@@ -34,7 +34,6 @@ _FLA_NUM_STAGES = 3
 _SHA256_HEX_LENGTH = 64
 INFERENCE_FILES = (
     "backbone/config.json",
-    "backbone/model.safetensors",
     "decision_config.json",
     "decision_head.safetensors",
     "runtime.json",
@@ -201,6 +200,7 @@ class Qwen35TorchRuntime:
                     manifest_name="MODEL_MANIFEST.json",
                     expected_sha256=expected_manifest_sha256,
                     required_files=INFERENCE_FILES,
+                    qwen_weight_layout=True,
                 )
             except ReleaseArtifactError as error:
                 raise Qwen35RuntimeError(

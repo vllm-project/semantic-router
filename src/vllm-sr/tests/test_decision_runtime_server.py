@@ -36,6 +36,10 @@ REVISION = "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
 CONTENT_ID = "a" * 64
 
 
+def _observed_manifest(profile):
+    return ArtifactManifestIdentity(profile.artifact.manifest_path, "d" * 64, 100)
+
+
 def _config(root: Path, **changes) -> RuntimeLaunchConfig:
     values = {
         "model": MODEL,
@@ -204,7 +208,7 @@ def test_graph_assembly_wires_events_to_the_server_metrics(monkeypatch, tmp_path
         data_root=tmp_path,
         revision=sol_revision,
         content_id=CONTENT_ID,
-        manifest=profile.artifact.manifest,
+        manifest=_observed_manifest(profile),
     )
     resident = SimpleNamespace(max_length=profile.max_input_tokens, tokenizer=object())
 
@@ -267,7 +271,7 @@ def test_qwen_loader_uses_verified_manifest_layout(
 
     profile = load_runtime_profile(profile_id, revision=revision)
     model = SimpleNamespace(profile=profile)
-    artifact = SimpleNamespace(data_root=tmp_path)
+    artifact = SimpleNamespace(data_root=tmp_path, manifest=_observed_manifest(profile))
     calls = []
     sentinel = object()
 
@@ -281,7 +285,7 @@ def test_qwen_loader_uses_verified_manifest_layout(
     assert calls[0][1]["temperature"] == profile.temperature
     assert calls[0][1]["max_length"] == profile.max_input_tokens
     assert calls[0][1]["expected_manifest_sha256"] == (
-        profile.artifact.manifest.sha256 if expected_manifest else None
+        artifact.manifest.sha256 if expected_manifest else None
     )
 
 
@@ -301,7 +305,7 @@ def test_opt_in_qwen_graph_receives_verified_artifact_identity(
     artifact = SimpleNamespace(
         data_root=tmp_path,
         content_id=CONTENT_ID,
-        manifest=profile.artifact.manifest,
+        manifest=_observed_manifest(profile),
     )
     calls = []
     monkeypatch.setattr(runtime_factory, "_qwen_temperature", lambda *a, **k: 1.0)
@@ -397,7 +401,9 @@ def test_vela_loader_receives_native_data_root_and_manifest_digest(
 
     profile = load_runtime_profile(PROFILE_ID, revision=REVISION)
     model = SimpleNamespace(profile=profile)
-    artifact = SimpleNamespace(data_root=tmp_path / "native")
+    artifact = SimpleNamespace(
+        data_root=tmp_path / "native", manifest=_observed_manifest(profile)
+    )
     calls = []
 
     def load(root, **options):
@@ -410,7 +416,7 @@ def test_vela_loader_receives_native_data_root_and_manifest_digest(
     assert calls[0][1] == {
         "max_length": profile.max_input_tokens,
         "backend": "cpu",
-        "expected_manifest_sha256": profile.artifact.manifest.sha256,
+        "expected_manifest_sha256": artifact.manifest.sha256,
     }
 
 

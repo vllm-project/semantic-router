@@ -1,10 +1,11 @@
 # Decision model profiles
 
 `vela/` and `qwen35/` contain one data-only template per model. A template owns
-the files consumed from a selected snapshot, prompt policy, calibration,
-input limit, dtype, and initial physical batch size. The catalog supplies the
-canonical model ID and selected revision; changing model files does not require
-editing a hardcoded digest or version in the runtime.
+the manifest location, prompt policy, calibration fallback, input limit, dtype,
+and initial physical batch size. The catalog supplies the canonical model ID
+and selected revision. The family artifact selector reads the selected
+snapshot's manifest to choose model files, including a complete Qwen weight
+layout; changing weight shards does not require editing a packaged file list.
 
 Hardware execution capability is not a model-file property. It lives in
 `../backend_capabilities.py` and the family loaders. This avoids a second,

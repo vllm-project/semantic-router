@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Collection
 from pathlib import Path
+
+_QWEN_SHARD = re.compile(r"backbone/model-(\d{5})-of-(\d{5})\.safetensors")
 
 
 class ReleaseArtifactError(ValueError):
@@ -18,6 +21,7 @@ def verify_release_manifest(
     manifest_name: str,
     expected_sha256: str,
     required_files: tuple[str, ...],
+    qwen_weight_layout: bool = False,
 ) -> None:
     """Bind inference files to a trusted manifest digest from the caller.
 
@@ -47,6 +51,9 @@ def verify_release_manifest(
     if not isinstance(files, dict):
         raise ReleaseArtifactError("release manifest has no file inventory")
 
+    if qwen_weight_layout:
+        required_files += select_qwen_weight_files(files)
+
     for relative in required_files:
         entry = files.get(relative)
         if not isinstance(entry, dict):
@@ -75,3 +82,30 @@ def verify_release_manifest(
             ) from error
         if actual.hexdigest() != digest:
             raise ReleaseArtifactError(f"release file digest mismatch: {relative}")
+
+
+def select_qwen_weight_files(file_names: Collection[str]) -> tuple[str, ...]:
+    """Select a complete, unambiguous Qwen weight layout from one manifest."""
+
+    single = "backbone/model.safetensors"
+    index = "backbone/model.safetensors.index.json"
+    shards = {
+        name: _QWEN_SHARD.fullmatch(name)
+        for name in file_names
+        if name.startswith("backbone/model-") and name.endswith(".safetensors")
+    }
+    if single in file_names:
+        if index in file_names or shards:
+            raise ReleaseArtifactError("Qwen weight layout is ambiguous")
+        return (single,)
+    if (
+        index not in file_names
+        or not shards
+        or any(match is None for match in shards.values())
+    ):
+        raise ReleaseArtifactError("Qwen sharded weight layout is invalid")
+    totals = {int(match.group(2)) for match in shards.values() if match}
+    numbers = {int(match.group(1)) for match in shards.values() if match}
+    if len(totals) != 1 or numbers != set(range(1, next(iter(totals)) + 1)):
+        raise ReleaseArtifactError("Qwen weight shards are incomplete")
+    return (index, *sorted(shards))

@@ -179,7 +179,11 @@ def _load_family(
     profile = model.profile
     if enable_rocm_graph and profile.family != "qwen3.5":
         raise RuntimeAssemblyError("experimental ROCm graph is Sol-only")
-    manifest = getattr(artifact, "manifest", None) or profile.artifact.manifest
+    manifest = getattr(artifact, "manifest", None)
+    if manifest is None:
+        raise RuntimeAssemblyError(
+            "verified Decision artifact has no manifest identity"
+        )
     if profile.family == "vela":
         from .vela_torch import VelaTorchRuntime  # noqa: PLC0415
 

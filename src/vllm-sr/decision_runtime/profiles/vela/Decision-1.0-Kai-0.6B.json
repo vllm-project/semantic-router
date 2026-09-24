@@ -1,26 +1,7 @@
 {
-  "schema_version": 3,
+  "schema_version": 4,
   "family": "vela",
-  "artifact": {
-    "manifest": {
-      "path": "native/MANIFEST.json",
-      "sha256": "c1bf07ab1c4c3fa1f819256d3de858d1ed87869bdfa663553280d7e78b88bee4",
-      "size_bytes": 4326
-    },
-    "files": [
-      "INVENTORY.json",
-      "STATE_LAYOUT.json",
-      "choice_encoder.safetensors",
-      "decision_config.json",
-      "decision_heads.safetensors",
-      "encoder/config.json",
-      "encoder/model.safetensors",
-      "score_encoder.safetensors",
-      "tokenizer/special_tokens_map.json",
-      "tokenizer/tokenizer.json",
-      "tokenizer/tokenizer_config.json"
-    ]
-  },
+  "artifact": {"manifest_path": "native/MANIFEST.json"},
   "max_input_tokens": 1024,
   "dtype": {
     "backbone": "float32",
