@@ -11,6 +11,9 @@ python3 tools/ci/decision_perf_release_gate.py validate \
   --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
 ```
 
+The performance report schema is `decision-paired-release-v5`. It requires
+live old process proof for all six models; v4 receipts cannot qualify.
+
 The gate expects exactly six Decision model IDs, each measured at 32 questions
 and 1 state, 8 questions and 8 states, and 32 questions and 32 states. Every
 shape needs concurrency 1, 8, and 32. Each concurrency cell needs three
@@ -76,11 +79,13 @@ image, `old.core_source_kind` would be `baked`, but the current producer
 rejects that path: an image label alone is only an identity declaration. A
 future trusted protected provisioner must separately attest the immutable
 image ID, entrypoint, process, and executed source tree before baked-core
-release qualification may be enabled. For
-host-mounted old source, `old.core_source_kind` is `mounted`; the declared
-`core_mount_destination` must have the exact `old_core_source_sha256` digest and
-`core_locator` must identify the executed source path in the running
-container-init process. The producer hashes
+release qualification may be enabled. A directly executed mounted core is also
+ineligible because it does not attest the live loaded artifact. The required
+reviewed HTTP adapter uses `old.core_source_kind: mounted_adapter`: its adapter
+and core are distinct
+read-only mounts checked against `old_adapter_source_sha256` and
+`old_core_source_sha256` from this run's protected configuration. PID 1 must
+execute the mounted adapter. The producer hashes
 every read-only bind mount before and after measurement. Independently, an old
 artifact mount is mandatory:
 the producer reopens its receipt and self-manifest, verifies the selected
@@ -134,20 +139,45 @@ container environment value, or `{"kind":"working_dir"}` for an exact
 working directory. The flag and environment names are examples; the protected
 configuration must match the real audited baseline launch contract. Nested or
 overlapping old mounts are rejected so a later bind mount cannot shadow the
-verified artifact tree. For a mounted core, `old.core_locator` must be
-`{"kind":"command_path","path":"/mounted/core/server.py"}`. The path must lie
-inside the declared core mount and be either the executable or the script
-immediately following a Python interpreter in both Docker's entrypoint/Cmd
-and the live container-init process command line. An unrelated environment
-variable, flag, or unused path argument does not qualify the
-old core. Keep endpoint,
-container, and credential details only in the protected file and environment.
+verified artifact tree. Keep endpoint, container, and credential details only
+in the protected file and environment.
+For `mounted_adapter`, use
+`old.adapter_locator: {"kind":"command_path","path":"/adapter/server.py"}`
+and `old.core_locator:
+{"kind":"python_import","module":"old_core","path":"/core/old_core.py"}`.
+Both paths must stay inside their respective, non-overlapping mounts. The
+adapter path must be the executable or the script immediately following a
+Python interpreter in both Docker's declared launch and the live container-init
+command line. A static mount of the core that the adapter never imports cannot
+qualify. Set `old.api_container_port` to the old service's actual container
+listener port; the producer requires its sole `127.0.0.1` host binding to match
+the declared `/v1/systemone` URL. The attestation URL uses this same host port.
+The
+adapter must expose `GET /api/decision-baseline-attestation?challenge=<64 hex>`
+on the same loopback listener as `/v1/systemone`. Redirects, non-200 status,
+and non-JSON media types fail. Its bounded JSON response
+must echo the challenge, report container PID 1 and its `/proc/1/stat` start
+ticks, the adapter path and SHA256, the actual imported module name/file and
+core mount digest, and the loaded model's ID, revision, artifact root and
+content ID. The protected provisioner must review the adapter's source and
+ensure these values are derived from the live imported module and loaded model
+object rather than copied from request or configuration. The producer checks
+the response against the host-side PID, mount digests, and qualified artifact,
+then repeats the challenge after measurement. Before archiving the proof, the
+producer replaces container-internal path and private module strings with their
+SHA256 digests. It verifies path containment against the protected mount
+declarations; the gate checks that both observations match the declared path
+digests. Both redacted observations and their file digest travel with the
+report. The gate requires these fields for every model; older
+performance receipts without live process proof fail validation. An adapter
+without this endpoint cannot qualify.
 The old preview protocol does not guarantee an artifact-status endpoint, so
 the protected provisioner must also establish that the old process actually
 loaded the declared revision and artifact bytes. A matching read-only tree and
 launch declaration narrow that trust boundary but are not loaded-artifact
-attestation from HTTP alone. Source/mount hashes and semantic parity alone
-cannot prove weight identity.
+attestation from HTTP alone. Even a live adapter report depends on its reviewed
+implementation: external hashing cannot prove tensors resident in GPU memory.
+Source/mount hashes and semantic parity alone cannot prove weight identity.
 
 The performance report names the candidate digest. Both protected validation
 steps independently revalidate the ROCm qualification receipt and join its

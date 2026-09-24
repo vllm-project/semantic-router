@@ -17,13 +17,14 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import shutil
 import stat
 import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit
-from urllib.request import HTTPRedirectHandler, ProxyHandler, build_opener
+from urllib.request import HTTPRedirectHandler, ProxyHandler, Request, build_opener
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -64,6 +65,9 @@ GPU_INDEX = re.compile(r"(?:0|[1-9][0-9]{0,3})\Z")
 MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}\Z")
 ARGUMENT_FLAG = re.compile(r"--[A-Za-z][A-Za-z0-9-]*\Z")
 MAX_STATUS_BYTES = 1024 * 1024
+MAX_ATTESTATION_BYTES = 16 * 1024
+OLD_ATTESTATION_SCHEMA = "decision-old-baseline-attestation-v1"
+OLD_ATTESTATION_PATH = "/api/decision-baseline-attestation"
 NEW_MAX_CONCURRENCY = 4
 NEW_MAX_QUEUE = 32
 RAW_FILES = (
@@ -234,13 +238,13 @@ def _validate_locator(locator: object, *, label: str, destination: str) -> dict:
     if not isinstance(locator, dict):
         raise ProducerError(f"old {label} launch locator is missing")
     kind = locator.get("kind")
-    if label == "core" and kind != "command_path":
+    if label in ("core", "adapter") and kind != "command_path":
         raise ProducerError("old core must be the running process script or executable")
     if kind == "argument":
         _require(locator.get("flag"), ARGUMENT_FLAG, f"{label} argument")
     elif kind == "environment":
         _require(locator.get("name"), ENV_NAME, f"{label} environment")
-    elif kind == "command_path" and label == "core":
+    elif kind == "command_path" and label in ("core", "adapter"):
         path = locator.get("path")
         if (
             not isinstance(path, str)
@@ -273,6 +277,37 @@ def _running_command(container: dict) -> list[str]:
     return words
 
 
+def _process_start_ticks(container: dict) -> int:
+    """Bind a live attestation to Docker's container-init process lifetime."""
+
+    pid = container.get("State", {}).get("Pid")
+    if type(pid) is not int or pid < 1:
+        raise ProducerError("old container process identity is unavailable")
+    try:
+        stat_line = (Path("/proc") / str(pid) / "stat").read_text(encoding="ascii")
+        closing = stat_line.rfind(")")
+        if closing < 0:
+            raise ProducerError("old container process lifetime is unavailable")
+        fields = stat_line[closing + 2 :].split()
+        start_ticks = int(fields[19])
+        status = (Path("/proc") / str(pid) / "status").read_text(encoding="ascii")
+        namespaces = [
+            line.split()[1:]
+            for line in status.splitlines()
+            if line.startswith("NSpid:")
+        ]
+    except (OSError, UnicodeError, IndexError, ValueError) as error:
+        raise ProducerError("old container process lifetime is unavailable") from error
+    if (
+        not namespaces
+        or not namespaces[0]
+        or namespaces[0][-1] != "1"
+        or start_ticks < 1
+    ):
+        raise ProducerError("old container init is not PID 1 in its namespace")
+    return start_ticks
+
+
 def _old_core_process(container: dict, core_path: str) -> None:
     """Require PID 1 to execute the mounted source, not merely mention it."""
 
@@ -299,6 +334,114 @@ def _old_core_process(container: dict, core_path: str) -> None:
     ):
         return
     raise ProducerError("old mounted core is not the executed process source")
+
+
+def _import_locator(locator: object, destination: str) -> dict:
+    if not isinstance(locator, dict) or locator.get("kind") != "python_import":
+        raise ProducerError("old imported core locator is invalid")
+    path = locator.get("path")
+    module = locator.get("module")
+    if (
+        not isinstance(path, str)
+        or (path != destination and not path.startswith(destination.rstrip("/") + "/"))
+        or path != os.path.normpath(path)
+        or not isinstance(module, str)
+        or re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*", module)
+        is None
+    ):
+        raise ProducerError("old imported core path or module is invalid")
+    return locator
+
+
+def _old_live_attestation(container: dict, arm: dict, row: dict) -> dict:
+    """Validate live imports and return proof with private paths redacted."""
+
+    start_ticks = _process_start_ticks(container)
+    declared_command = _running_command(container)
+    challenge = secrets.token_hex(32)
+    base = arm["url"].rsplit("/v1/systemone", 1)[0]
+    request = Request(
+        base + OLD_ATTESTATION_PATH + "?challenge=" + challenge,
+        headers=(
+            {"Authorization": "Bearer " + os.environ[row["old_token_env"]]}
+            if row.get("old_token_env")
+            else {}
+        ),
+    )
+    try:
+        with LOOPBACK_OPENER.open(request, timeout=30) as response:
+            media_type = (
+                response.headers.get("Content-Type", "")
+                .split(";", 1)[0]
+                .strip()
+                .lower()
+            )
+            if response.status != 200 or media_type != "application/json":
+                raise ProducerError("old live attestation is not a JSON 200 response")
+            payload = response.read(MAX_ATTESTATION_BYTES + 1)
+    except OSError as error:
+        raise ProducerError("old live attestation endpoint is unavailable") from error
+    if len(payload) > MAX_ATTESTATION_BYTES:
+        raise ProducerError("old live attestation exceeds evidence limit")
+    try:
+        evidence = json.loads(
+            payload, object_pairs_hook=_unique_pairs, parse_constant=_reject_nonfinite
+        )
+    except (UnicodeError, ValueError) as error:
+        raise ProducerError("old live attestation is invalid JSON") from error
+    if not isinstance(evidence, dict) or set(evidence) != {
+        "schema_version",
+        "challenge",
+        "pid",
+        "process_start_ticks",
+        "adapter_path",
+        "adapter_sha256",
+        "imported_module",
+        "imported_core_path",
+        "core_mount_sha256",
+        "loaded_artifact_root",
+        "loaded_artifact_content_id",
+        "model_id",
+        "revision",
+    }:
+        raise ProducerError("old live attestation has an invalid contract")
+    if (
+        type(evidence["pid"]) is not int
+        or type(evidence["process_start_ticks"]) is not int
+    ):
+        raise ProducerError("old live process identity has an invalid type")
+    expected = {
+        "schema_version": OLD_ATTESTATION_SCHEMA,
+        "challenge": challenge,
+        "pid": 1,
+        "process_start_ticks": start_ticks,
+        "adapter_path": arm["adapter_locator"]["path"],
+        "adapter_sha256": row["old_adapter_source_sha256"],
+        "imported_module": arm["core_locator"]["module"],
+        "imported_core_path": arm["core_locator"]["path"],
+        "core_mount_sha256": row["old_core_source_sha256"],
+        "loaded_artifact_root": arm["artifact_mount_destination"],
+        "loaded_artifact_content_id": row["artifact_content_id"],
+        "model_id": row["model_id"],
+        "revision": row["revision"],
+    }
+    if evidence != expected:
+        raise ProducerError("old live import or loaded artifact identity differs")
+    if (
+        _process_start_ticks(container) != start_ticks
+        or _running_command(container) != declared_command
+    ):
+        raise ProducerError("old container init changed during live attestation")
+    for field in (
+        "adapter_path",
+        "imported_module",
+        "imported_core_path",
+        "loaded_artifact_root",
+    ):
+        evidence[field + "_sha256"] = hashlib.sha256(
+            evidence.pop(field).encode()
+        ).hexdigest()
+    return evidence
 
 
 def _declared_launch_batch(container: dict) -> int:
@@ -430,8 +573,10 @@ def _container_image(
     source_sha: str | None,
     gpu_device: str,
     old_core_sha256: str | None = None,
+    old_adapter_sha256: str | None = None,
     old_overlay: str | None = None,
     old_artifact: dict | None = None,
+    old_attestations: list[dict] | None = None,
     new_artifact_content_id: str | None = None,
     new_physical_batch_size: int | None = None,
     new_model_id: str | None = None,
@@ -534,6 +679,18 @@ def _container_image(
             ):
                 raise ProducerError("old core mount is not the declared source")
             _old_core_process(container, arm["core_locator"]["path"])
+        elif arm.get("core_source_kind") == "mounted_adapter":
+            adapter_destination = arm.get("adapter_mount_destination")
+            if (
+                old_adapter_sha256 is None
+                or adapter_destination
+                in (None, core_destination, arm["artifact_mount_destination"])
+                or expected.get(adapter_destination) != old_adapter_sha256
+                or core_destination == arm["artifact_mount_destination"]
+                or expected.get(core_destination) != old_core_sha256
+            ):
+                raise ProducerError("old adapter or imported core mount differs")
+            _old_core_process(container, arm["adapter_locator"]["path"])
         elif arm.get("core_source_kind") == "baked":
             raise ProducerError(
                 "old baked core requires independent protected process/source attestation"
@@ -608,6 +765,20 @@ def _container_image(
             raise ProducerError(
                 "candidate API URL is not bound to its approved runtime listener"
             )
+    elif (
+        old_core_sha256 is not None and arm.get("core_source_kind") == "mounted_adapter"
+    ):
+        if old_artifact is None:
+            raise ProducerError("old artifact attestation is required")
+        api_port = arm.get("api_container_port")
+        if type(api_port) is not int or not 1 <= api_port <= 65535:
+            raise ProducerError("old API container port is invalid")
+        expected_binding = [{"HostIp": "127.0.0.1", "HostPort": str(url.port)}]
+        if ports.get(f"{api_port}/tcp") != expected_binding:
+            raise ProducerError("old API listener is not the declared container port")
+        evidence = _old_live_attestation(container, arm, old_artifact)
+        if old_attestations is not None:
+            old_attestations.append(evidence)
     metrics_url = arm.get("metrics_url")
     if metrics_url is not None:
         metrics = urlsplit(metrics_url)
@@ -784,23 +955,53 @@ def _validate_config(
                 )
                 kind = endpoint.get("core_source_kind")
                 if kind == "mounted":
+                    raise ProducerError(
+                        "direct old core lacks mandatory loaded-artifact process proof"
+                    )
+                elif kind == "mounted_adapter":
+                    port = endpoint.get("api_container_port")
+                    if type(port) is not int or not 1 <= port <= 65535:
+                        raise ProducerError("old API container port is invalid")
                     core_destination = endpoint.get("core_mount_destination")
+                    adapter_destination = endpoint.get("adapter_mount_destination")
+                    adapter_sha = _require(
+                        row.get("old_adapter_source_sha256"),
+                        HASH,
+                        "old adapter source digest",
+                    )
                     if (
-                        core_destination == artifact_destination
-                        or core_destination not in destinations
+                        core_destination not in destinations
+                        or adapter_destination not in destinations
+                        or len(
+                            {
+                                core_destination,
+                                adapter_destination,
+                                artifact_destination,
+                            }
+                        )
+                        != 3
                         or next(
                             mount["sha256"]
                             for mount in mounts
                             if mount["destination"] == core_destination
                         )
                         != row["old_core_source_sha256"]
+                        or next(
+                            mount["sha256"]
+                            for mount in mounts
+                            if mount["destination"] == adapter_destination
+                        )
+                        != adapter_sha
                     ):
-                        raise ProducerError("old mounted core declaration is invalid")
+                        raise ProducerError(
+                            "old adapter or imported core declaration is invalid"
+                        )
                     _validate_locator(
-                        endpoint.get("core_locator"),
-                        label="core",
-                        destination=core_destination,
+                        endpoint.get("adapter_locator"),
+                        label="adapter",
+                        destination=adapter_destination,
                     )
+                    _import_locator(endpoint.get("core_locator"), core_destination)
                 elif kind == "baked":
                     raise ProducerError(
                         "old baked core requires independent protected process/source attestation"
@@ -1098,13 +1299,16 @@ def produce(args: argparse.Namespace) -> Path:
         "models": [],
     }
     for row in rows:
+        old_attestations: list[dict] = []
         old_id = _container_image(
             row["old"],
             source_sha=None,
             gpu_device=config["gpu_device"],
             old_core_sha256=row["old_core_source_sha256"],
+            old_adapter_sha256=row.get("old_adapter_source_sha256"),
             old_overlay=row["old_arm_overlay"],
             old_artifact=row,
+            old_attestations=old_attestations,
         )
         new_id = _container_image(
             row["new"],
@@ -1136,6 +1340,7 @@ def produce(args: argparse.Namespace) -> Path:
             raise ProducerError("live candidate artifact or scheduler identity differs")
         model = {
             "model_id": row["model_id"],
+            "old_core_source_kind": row["old"]["core_source_kind"],
             "same_old_new_revision": row["revision"],
             "same_old_new_artifact_content_id": row["artifact_content_id"],
             "artifact_metadata_sha256": row["artifact_metadata_sha256"],
@@ -1151,6 +1356,22 @@ def produce(args: argparse.Namespace) -> Path:
             },
             "shapes": [],
         }
+        if row["old"]["core_source_kind"] == "mounted_adapter":
+            model["old_adapter_source_sha256"] = row["old_adapter_source_sha256"]
+            model["old_source_declaration"] = {
+                "adapter_path_sha256": hashlib.sha256(
+                    row["old"]["adapter_locator"]["path"].encode()
+                ).hexdigest(),
+                "imported_core_path_sha256": hashlib.sha256(
+                    row["old"]["core_locator"]["path"].encode()
+                ).hexdigest(),
+                "imported_module_sha256": hashlib.sha256(
+                    row["old"]["core_locator"]["module"].encode()
+                ).hexdigest(),
+                "artifact_mount_path_sha256": hashlib.sha256(
+                    row["old"]["artifact_mount_destination"].encode()
+                ).hexdigest(),
+            }
         for q, s in SHAPES:
             work = (
                 args.output_dir
@@ -1167,8 +1388,10 @@ def produce(args: argparse.Namespace) -> Path:
                 source_sha=None,
                 gpu_device=config["gpu_device"],
                 old_core_sha256=row["old_core_source_sha256"],
+                old_adapter_sha256=row.get("old_adapter_source_sha256"),
                 old_overlay=row["old_arm_overlay"],
                 old_artifact=row,
+                old_attestations=old_attestations,
             )
             != old_id
             or _container_image(
@@ -1183,6 +1406,22 @@ def produce(args: argparse.Namespace) -> Path:
             != new_id
         ):
             raise ProducerError("protected service identity changed during measurement")
+        if len(old_attestations) == 2:
+            path = (
+                args.output_dir
+                / "raw"
+                / (row["model_id"].rsplit("/", 1)[-1].lower() + "-old-attestation.json")
+            )
+            model["old_attestation_path"] = path.relative_to(args.output_dir).as_posix()
+            model["old_attestation_sha256"] = _write(
+                path,
+                {
+                    "schema_version": OLD_ATTESTATION_SCHEMA,
+                    "observations": old_attestations,
+                },
+            )
+        else:
+            raise ProducerError("old live process proof is incomplete")
         report["models"].append(model)
     report_path = args.output_dir / "report.json"
     _write(report_path, report)

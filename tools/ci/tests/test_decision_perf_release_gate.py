@@ -27,6 +27,10 @@ HARNESS = "f" * 64
 CANDIDATE_REF = "ghcr.io/example/decision-runtime-rocm@sha256:" + "6" * 64
 
 
+def _text_sha(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+
 def _qualification() -> dict:
     return {
         "source_sha": SOURCE,
@@ -499,11 +503,19 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
         }
         model = {
             "model_id": model_id,
+            "old_core_source_kind": "mounted_adapter",
             "same_old_new_revision": MODEL_REVISION,
             "same_old_new_artifact_content_id": "1" * 64,
             "artifact_metadata_sha256": "2" * 64,
             "artifact_manifest_sha256": "3" * 64,
             "old_core_source_sha256": OLD_CORE,
+            "old_adapter_source_sha256": "7" * 64,
+            "old_source_declaration": {
+                "adapter_path_sha256": _text_sha("/adapter.py"),
+                "imported_core_path_sha256": _text_sha("/core.py"),
+                "imported_module_sha256": _text_sha("old_core"),
+                "artifact_mount_path_sha256": _text_sha("/artifact"),
+            },
             "old_arm_overlay": "none",
             "old_image_id": OLD_IMAGE,
             "new_image_id": NEW_IMAGE,
@@ -513,6 +525,33 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
             "shapes": [],
         }
         slug = model_id.rsplit("/", 1)[-1].lower()
+        old_observation = {
+            "schema_version": "decision-old-baseline-attestation-v1",
+            "challenge": "8" * 64,
+            "pid": 1,
+            "process_start_ticks": 12345,
+            "adapter_path_sha256": _text_sha("/adapter.py"),
+            "adapter_sha256": model["old_adapter_source_sha256"],
+            "imported_module_sha256": _text_sha("old_core"),
+            "imported_core_path_sha256": _text_sha("/core.py"),
+            "core_mount_sha256": OLD_CORE,
+            "loaded_artifact_root_sha256": _text_sha("/artifact"),
+            "loaded_artifact_content_id": model["same_old_new_artifact_content_id"],
+            "model_id": model_id,
+            "revision": MODEL_REVISION,
+        }
+        old_attestation = root / "raw" / f"{slug}-old-attestation.json"
+        model["old_attestation_path"] = str(old_attestation.relative_to(root))
+        model["old_attestation_sha256"] = _save(
+            old_attestation,
+            {
+                "schema_version": "decision-old-baseline-attestation-v1",
+                "observations": [
+                    old_observation,
+                    {**old_observation, "challenge": "9" * 64},
+                ],
+            },
+        )
         for q, s in gate.SHAPES:
             directory = root / "raw" / f"{slug}-q{q}s{s}"
             case_ids = list(timed_semantics.canonical_request_bodies(model_id, q, s))
@@ -949,6 +988,78 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         result = self.validate(run_id="42", run_attempt="1")
         self.assertEqual(set(result["models"]), gate.MODEL_IDS)
         self.assertEqual(result["source_sha"], SOURCE)
+
+    def test_old_v4_report_without_live_process_proof_is_rejected(self) -> None:
+        model = self.report["models"][0]
+        for field in (
+            "old_core_source_kind",
+            "old_adapter_source_sha256",
+            "old_source_declaration",
+            "old_attestation_path",
+            "old_attestation_sha256",
+        ):
+            model.pop(field)
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "mandatory live old process proof"):
+            self.validate()
+
+    def test_old_v4_schema_is_rejected_even_with_current_proof_fields(self) -> None:
+        self.report["schema_version"] = "decision-paired-release-v4"
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "performance report schema"):
+            self.validate()
+
+    def test_imported_old_core_attestations_are_bound_to_raw_evidence(self) -> None:
+        model = self.report["models"][0]
+        adapter_sha = "7" * 64
+        observation = {
+            "schema_version": "decision-old-baseline-attestation-v1",
+            "challenge": "8" * 64,
+            "pid": 1,
+            "process_start_ticks": 12345,
+            "adapter_path_sha256": _text_sha("/adapter.py"),
+            "adapter_sha256": adapter_sha,
+            "imported_module_sha256": _text_sha("old_core"),
+            "imported_core_path_sha256": _text_sha("/core.py"),
+            "core_mount_sha256": OLD_CORE,
+            "loaded_artifact_root_sha256": _text_sha("/artifact"),
+            "loaded_artifact_content_id": model["same_old_new_artifact_content_id"],
+            "model_id": model["model_id"],
+            "revision": MODEL_REVISION,
+        }
+        evidence_path = self.root / "raw" / "old-attestation.json"
+        evidence = {
+            "schema_version": "decision-old-baseline-attestation-v1",
+            "observations": [observation, {**observation, "challenge": "9" * 64}],
+        }
+        model["old_adapter_source_sha256"] = adapter_sha
+        model["old_attestation_path"] = "raw/old-attestation.json"
+        model["old_attestation_sha256"] = _save(evidence_path, evidence)
+        self.write_report()
+        self.validate()
+        evidence["observations"][1]["pid"] = True
+        model["old_attestation_sha256"] = _save(evidence_path, evidence)
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "old pid"):
+            self.validate()
+        evidence["observations"][1]["pid"] = 1
+        evidence["observations"][1]["imported_core_path_sha256"] = _text_sha(
+            "/unused.py"
+        )
+        model["old_attestation_sha256"] = _save(evidence_path, evidence)
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "imported_core_path_sha256"):
+            self.validate()
+        evidence["observations"][1]["imported_core_path_sha256"] = _text_sha("/core.py")
+        evidence["observations"][1]["loaded_artifact_content_id"] = "0" * 64
+        model["old_attestation_sha256"] = _save(evidence_path, evidence)
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "loaded_artifact_content_id"):
+            self.validate()
+        evidence["observations"][1] = {**observation, "challenge": "9" * 64}
+        _save(evidence_path, evidence)
+        with self.assertRaisesRegex(ValueError, "content changed"):
+            self.validate()
 
     def test_timed_concurrent_evidence_cannot_omit_or_duplicate_a_workflow(
         self,

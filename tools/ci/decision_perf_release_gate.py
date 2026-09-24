@@ -21,7 +21,7 @@ from typing import Any
 from decision_rocm_promotion import MODEL_IDS, validate_receipt
 from decision_timed_semantics import validate_timed_semantics
 
-SCHEMA = "decision-paired-release-v4"
+SCHEMA = "decision-paired-release-v5"
 RAW_SCHEMA = "decision-semantic-workload-v2"
 ARRIVAL_POLICY = (
     "the same ordered logical workflows are submitted per arm and round; "
@@ -1590,6 +1590,115 @@ def validate_report(
             qualified[model_id].get("artifact_content_id"),
             model_id + " qualified artifact",
         )
+        if model.get("old_core_source_kind") == "mounted_adapter" and all(
+            field in model
+            for field in (
+                "old_adapter_source_sha256",
+                "old_source_declaration",
+                "old_attestation_path",
+                "old_attestation_sha256",
+            )
+        ):
+            declaration = _mapping(
+                model["old_source_declaration"], model_id + " old source declaration"
+            )
+            if set(declaration) != {
+                "adapter_path_sha256",
+                "imported_core_path_sha256",
+                "imported_module_sha256",
+                "artifact_mount_path_sha256",
+            }:
+                raise ValueError(model_id + " old source declaration is invalid")
+            for field, digest in declaration.items():
+                _hex(digest, model_id + " old " + field, HASH)
+            adapter_sha = _hex(
+                model.get("old_adapter_source_sha256"),
+                model_id + " old adapter source",
+                HASH,
+            )
+            attestation_path = _evidence(
+                path.parent,
+                model.get("old_attestation_path"),
+                model.get("old_attestation_sha256"),
+                model_id + " old live attestation",
+            )
+            attestation = _read_json(attestation_path)
+            _same(
+                attestation.get("schema_version"),
+                "decision-old-baseline-attestation-v1",
+                model_id + " old attestation schema",
+            )
+            observations = _list(
+                attestation.get("observations"), model_id + " old observations"
+            )
+            if len(observations) != 2 or any(
+                not isinstance(row, dict) for row in observations
+            ):
+                raise ValueError(model_id + " needs pre/post old process attestations")
+            if observations[0] == observations[1]:
+                raise ValueError(model_id + " old process attestations were replayed")
+            for observation in observations:
+                if set(observation) != {
+                    "schema_version",
+                    "challenge",
+                    "pid",
+                    "process_start_ticks",
+                    "adapter_path_sha256",
+                    "adapter_sha256",
+                    "imported_module_sha256",
+                    "imported_core_path_sha256",
+                    "core_mount_sha256",
+                    "loaded_artifact_root_sha256",
+                    "loaded_artifact_content_id",
+                    "model_id",
+                    "revision",
+                }:
+                    raise ValueError(
+                        model_id + " old process attestation fields differ"
+                    )
+                if (
+                    _integer(observation.get("pid"), model_id + " old pid", minimum=1)
+                    != 1
+                ):
+                    raise ValueError(model_id + " old attested process is not PID 1")
+                for key, expected in (
+                    ("schema_version", "decision-old-baseline-attestation-v1"),
+                    ("pid", 1),
+                    ("adapter_sha256", adapter_sha),
+                    ("core_mount_sha256", model["old_core_source_sha256"]),
+                    (
+                        "loaded_artifact_content_id",
+                        model["same_old_new_artifact_content_id"],
+                    ),
+                    ("model_id", model_id),
+                    ("revision", model["same_old_new_revision"]),
+                    ("adapter_path_sha256", declaration["adapter_path_sha256"]),
+                    ("imported_module_sha256", declaration["imported_module_sha256"]),
+                    (
+                        "imported_core_path_sha256",
+                        declaration["imported_core_path_sha256"],
+                    ),
+                    (
+                        "loaded_artifact_root_sha256",
+                        declaration["artifact_mount_path_sha256"],
+                    ),
+                ):
+                    _same(observation.get(key), expected, model_id + " old live " + key)
+                _hex(observation.get("challenge"), model_id + " old challenge", HASH)
+                _integer(
+                    observation.get("process_start_ticks"),
+                    model_id + " old start ticks",
+                    minimum=1,
+                )
+            if observations[0]["challenge"] == observations[1]["challenge"]:
+                raise ValueError(model_id + " old process challenge was reused")
+            if (
+                observations[0]["process_start_ticks"]
+                != observations[1]["process_start_ticks"]
+            ):
+                raise ValueError(model_id + " old process changed during measurement")
+        else:
+            raise ValueError(model_id + " lacks mandatory live old process proof")
         if not model.get("old_arm_overlay"):
             raise ValueError(model_id + " old arm overlay is missing")
         old_batch = _integer(

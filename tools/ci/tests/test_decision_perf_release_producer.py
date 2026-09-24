@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import shutil
 import sys
@@ -354,28 +355,33 @@ class DecisionPairedProducerTests(unittest.TestCase):
                     "Ports": {"8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8123"}]}
                 },
             }
-            with patch.object(
-                producer,
-                "_docker_inspect",
-                side_effect=lambda kind, identity: (
-                    image if kind == "image" else container
+            with (
+                patch.object(
+                    producer,
+                    "_docker_inspect",
+                    side_effect=lambda kind, identity: (
+                        image if kind == "image" else container
+                    ),
                 ),
-            ), patch.object(
-                producer, "resolve_decision_runtime_model", return_value=object()
-            ), patch.object(
-                producer,
-                "_running_command",
-                side_effect=lambda inspected: inspected["Config"]["Cmd"],
-            ), patch.object(
-                producer,
-                "open_verified_artifact",
-                return_value=SimpleNamespace(
-                    repository_id=artifact_row["model_id"],
-                    revision=artifact_row["revision"],
-                    content_id=content_id,
-                    manifest=SimpleNamespace(sha256=manifest_sha),
+                patch.object(
+                    producer, "resolve_decision_runtime_model", return_value=object()
                 ),
-            ) as verified:
+                patch.object(
+                    producer,
+                    "_running_command",
+                    side_effect=lambda inspected: inspected["Config"]["Cmd"],
+                ),
+                patch.object(
+                    producer,
+                    "open_verified_artifact",
+                    return_value=SimpleNamespace(
+                        repository_id=artifact_row["model_id"],
+                        revision=artifact_row["revision"],
+                        content_id=content_id,
+                        manifest=SimpleNamespace(sha256=manifest_sha),
+                    ),
+                ) as verified,
+            ):
                 self.assertEqual(
                     producer._container_image(
                         arm,
@@ -463,12 +469,15 @@ class DecisionPairedProducerTests(unittest.TestCase):
                     "--model",
                     "/artifact",
                 ]
-                with patch.object(
-                    producer,
-                    "_running_command",
-                    return_value=["python", "baked.py", "--model", "/artifact"],
-                ), self.assertRaisesRegex(
-                    producer.ProducerError, "running process differs"
+                with (
+                    patch.object(
+                        producer,
+                        "_running_command",
+                        return_value=["python", "baked.py", "--model", "/artifact"],
+                    ),
+                    self.assertRaisesRegex(
+                        producer.ProducerError, "running process differs"
+                    ),
                 ):
                     producer._container_image(
                         arm,
@@ -494,6 +503,338 @@ class DecisionPairedProducerTests(unittest.TestCase):
                         old_core_sha256=digest,
                         old_artifact=artifact_row,
                     )
+
+    def test_imported_core_requires_a_separate_adapter_and_live_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            adapter = root / "adapter.py"
+            core = root / "core.py"
+            artifact = root / "artifact"
+            adapter.write_text("adapter\n")
+            core.write_text("core\n")
+            artifact.mkdir()
+            (artifact / "weights.bin").write_bytes(b"weights")
+            adapter_sha = producer._mount_digest(adapter)
+            core_sha = producer._mount_digest(core)
+            arm = {
+                "image_ref": IMAGE,
+                "container_id": CONTAINER,
+                "url": "http://127.0.0.1:8123/v1/systemone",
+                "api_container_port": 8000,
+                "core_source_kind": "mounted_adapter",
+                "adapter_mount_destination": "/adapter.py",
+                "adapter_locator": {"kind": "command_path", "path": "/adapter.py"},
+                "core_mount_destination": "/core.py",
+                "core_locator": {
+                    "kind": "python_import",
+                    "path": "/core.py",
+                    "module": "old_core",
+                },
+                "artifact_mount_destination": "/artifact",
+                "artifact_locator": {"kind": "argument", "flag": "--model"},
+                "mounts": [
+                    {"destination": "/adapter.py", "sha256": adapter_sha},
+                    {"destination": "/core.py", "sha256": core_sha},
+                    {
+                        "destination": "/artifact",
+                        "sha256": producer._mount_digest(artifact),
+                    },
+                ],
+            }
+            row = {
+                "model_id": "example/model",
+                "revision": "1" * 40,
+                "artifact_content_id": "f" * 64,
+                "artifact_manifest_sha256": "e" * 64,
+                "old_core_source_sha256": core_sha,
+                "old_adapter_source_sha256": adapter_sha,
+            }
+            command = ["python", "/adapter.py", "--model", "/artifact"]
+            container = {
+                "Id": CONTAINER,
+                "Image": IMAGE,
+                "Config": {"Env": ["ROCR_VISIBLE_DEVICES=0"], "Cmd": command},
+                "State": {"Running": True, "Pid": 12345},
+                "HostConfig": {
+                    "Devices": [
+                        {"PathOnHost": "/dev/kfd", "PathInContainer": "/dev/kfd"},
+                        {"PathOnHost": "/dev/dri", "PathInContainer": "/dev/dri"},
+                    ]
+                },
+                "Mounts": [
+                    {
+                        "Type": "bind",
+                        "RW": False,
+                        "Source": str(source),
+                        "Destination": dest,
+                    }
+                    for source, dest in (
+                        (adapter, "/adapter.py"),
+                        (core, "/core.py"),
+                        (artifact, "/artifact"),
+                    )
+                ],
+                "NetworkSettings": {
+                    "Ports": {"8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8123"}]}
+                },
+            }
+            evidence: list[dict] = []
+            with (
+                patch.object(
+                    producer,
+                    "_docker_inspect",
+                    side_effect=lambda kind, identity: (
+                        {"Id": IMAGE, "Config": {"Labels": {}}}
+                        if kind == "image"
+                        else container
+                    ),
+                ),
+                patch.object(producer, "_running_command", return_value=command),
+                patch.object(producer, "_verified_old_artifact"),
+                patch.object(
+                    producer, "_old_live_attestation", return_value={"live": True}
+                ) as live,
+            ):
+                self.assertEqual(
+                    producer._container_image(
+                        arm,
+                        source_sha=None,
+                        gpu_device="0",
+                        old_core_sha256=core_sha,
+                        old_adapter_sha256=adapter_sha,
+                        old_artifact=row,
+                        old_attestations=evidence,
+                    ),
+                    IMAGE,
+                )
+                self.assertEqual(evidence, [{"live": True}])
+                live.assert_called_once()
+                # Identical static mount digests cannot establish that the
+                # running adapter imported the mounted core at all.
+                live.side_effect = producer.ProducerError("core was not imported")
+                with self.assertRaisesRegex(producer.ProducerError, "not imported"):
+                    producer._container_image(
+                        arm,
+                        source_sha=None,
+                        gpu_device="0",
+                        old_core_sha256=core_sha,
+                        old_adapter_sha256=adapter_sha,
+                        old_artifact=row,
+                    )
+                live.side_effect = None
+                container["NetworkSettings"]["Ports"]["8000/tcp"] = [
+                    {"HostIp": "127.0.0.1", "HostPort": "8124"}
+                ]
+                container["NetworkSettings"]["Ports"]["9000/tcp"] = [
+                    {"HostIp": "127.0.0.1", "HostPort": "8123"}
+                ]
+                with self.assertRaisesRegex(
+                    producer.ProducerError, "declared container port"
+                ):
+                    producer._container_image(
+                        arm,
+                        source_sha=None,
+                        gpu_device="0",
+                        old_core_sha256=core_sha,
+                        old_adapter_sha256=adapter_sha,
+                        old_artifact=row,
+                    )
+                container["NetworkSettings"]["Ports"]["8000/tcp"] = [
+                    {"HostIp": "127.0.0.1", "HostPort": "8123"}
+                ]
+                container["NetworkSettings"]["Ports"].pop("9000/tcp")
+                container["Mounts"][0]["RW"] = True
+                with self.assertRaisesRegex(
+                    producer.ProducerError, "unattested or writable"
+                ):
+                    producer._container_image(
+                        arm,
+                        source_sha=None,
+                        gpu_device="0",
+                        old_core_sha256=core_sha,
+                        old_adapter_sha256=adapter_sha,
+                        old_artifact=row,
+                    )
+                container["Mounts"][0]["RW"] = False
+                core.write_text("substituted core\n")
+                with self.assertRaisesRegex(
+                    producer.ProducerError, "mounted source changed"
+                ):
+                    producer._container_image(
+                        arm,
+                        source_sha=None,
+                        gpu_device="0",
+                        old_core_sha256=core_sha,
+                        old_adapter_sha256=adapter_sha,
+                        old_artifact=row,
+                    )
+            with self.assertRaisesRegex(producer.ProducerError, "imported core path"):
+                producer._import_locator(
+                    {
+                        "kind": "python_import",
+                        "path": "/other/core.py",
+                        "module": "old_core",
+                    },
+                    "/core",
+                )
+
+    def test_live_proof_rejects_stale_challenge_wrong_import_and_artifact(self) -> None:
+        arm = {
+            "url": "http://127.0.0.1:8123/v1/systemone",
+            "adapter_locator": {"path": "/adapter.py"},
+            "core_locator": {"module": "old_core", "path": "/core.py"},
+            "artifact_mount_destination": "/artifact",
+        }
+        row = {
+            "old_adapter_source_sha256": "a" * 64,
+            "old_core_source_sha256": "b" * 64,
+            "artifact_content_id": "c" * 64,
+            "model_id": "example/model",
+            "revision": "d" * 40,
+        }
+        expected = {
+            "schema_version": producer.OLD_ATTESTATION_SCHEMA,
+            "challenge": "e" * 64,
+            "pid": 1,
+            "process_start_ticks": 123456,
+            "adapter_path": "/adapter.py",
+            "adapter_sha256": row["old_adapter_source_sha256"],
+            "imported_module": "old_core",
+            "imported_core_path": "/core.py",
+            "core_mount_sha256": row["old_core_source_sha256"],
+            "loaded_artifact_root": "/artifact",
+            "loaded_artifact_content_id": row["artifact_content_id"],
+            "model_id": row["model_id"],
+            "revision": row["revision"],
+        }
+
+        class AttestationResponse(io.BytesIO):
+            def __init__(
+                self,
+                value: dict,
+                *,
+                status: int = 200,
+                media_type: str = "application/json",
+            ) -> None:
+                super().__init__(json.dumps(value).encode())
+                self.status = status
+                self.headers = {"Content-Type": media_type}
+
+        def serve(
+            value: dict, *, status: int = 200, media_type: str = "application/json"
+        ) -> SimpleNamespace:
+            def open_proof(request, timeout):
+                self.assertEqual(
+                    request.full_url,
+                    "http://127.0.0.1:8123/api/decision-baseline-attestation?challenge="
+                    + "e" * 64,
+                )
+                self.assertEqual(timeout, 30)
+                return AttestationResponse(value, status=status, media_type=media_type)
+
+            return SimpleNamespace(open=open_proof)
+
+        with (
+            patch.object(producer, "_process_start_ticks", return_value=123456),
+            patch.object(
+                producer, "_running_command", return_value=["python", "/adapter.py"]
+            ),
+            patch.object(producer.secrets, "token_hex", return_value="e" * 64),
+        ):
+            for field, bad in (
+                ("challenge", "f" * 64),
+                ("imported_core_path", "/unrelated.py"),
+                ("loaded_artifact_content_id", "f" * 64),
+                ("process_start_ticks", 123457),
+            ):
+                with self.subTest(field=field):
+                    with patch.object(
+                        producer, "LOOPBACK_OPENER", serve({**expected, field: bad})
+                    ):
+                        with self.assertRaisesRegex(
+                            producer.ProducerError, "identity differs"
+                        ):
+                            producer._old_live_attestation(
+                                {"State": {"Pid": 12345}}, arm, row
+                            )
+            with (
+                patch.object(
+                    producer, "LOOPBACK_OPENER", serve({**expected, "pid": True})
+                ),
+                self.assertRaisesRegex(producer.ProducerError, "invalid type"),
+            ):
+                producer._old_live_attestation({"State": {"Pid": 12345}}, arm, row)
+            with patch.object(producer, "LOOPBACK_OPENER", serve(expected)):
+                archived = {
+                    key: value
+                    for key, value in expected.items()
+                    if key
+                    not in (
+                        "adapter_path",
+                        "imported_module",
+                        "imported_core_path",
+                        "loaded_artifact_root",
+                    )
+                }
+                for field in (
+                    "adapter_path",
+                    "imported_module",
+                    "imported_core_path",
+                    "loaded_artifact_root",
+                ):
+                    archived[field + "_sha256"] = hashlib.sha256(
+                        expected[field].encode()
+                    ).hexdigest()
+                self.assertEqual(
+                    producer._old_live_attestation({"State": {"Pid": 12345}}, arm, row),
+                    archived,
+                )
+            for status, media_type in ((302, "application/json"), (200, "text/plain")):
+                with self.subTest(status=status, media_type=media_type):
+                    with patch.object(
+                        producer,
+                        "LOOPBACK_OPENER",
+                        serve(expected, status=status, media_type=media_type),
+                    ):
+                        with self.assertRaisesRegex(
+                            producer.ProducerError, "JSON 200 response"
+                        ):
+                            producer._old_live_attestation(
+                                {"State": {"Pid": 12345}}, arm, row
+                            )
+            with (
+                patch.object(producer, "LOOPBACK_OPENER", serve(expected)),
+                patch.object(
+                    producer, "_process_start_ticks", side_effect=[123456, 123457]
+                ),
+                self.assertRaisesRegex(producer.ProducerError, "changed during"),
+            ):
+                producer._old_live_attestation({"State": {"Pid": 12345}}, arm, row)
+
+    def test_live_process_identity_requires_container_pid_one(self) -> None:
+        stat_line = "12345 (python) " + " ".join(["S"] + ["0"] * 18 + ["45678"])
+        container = {"State": {"Pid": 12345}}
+        with patch.object(
+            Path,
+            "read_text",
+            autospec=True,
+            side_effect=lambda path, **kwargs: (
+                stat_line if path.name == "stat" else "NSpid:\t12345\t1\n"
+            ),
+        ):
+            self.assertEqual(producer._process_start_ticks(container), 45678)
+        with (
+            patch.object(
+                Path,
+                "read_text",
+                autospec=True,
+                side_effect=lambda path, **kwargs: (
+                    stat_line if path.name == "stat" else "NSpid:\t12345\n"
+                ),
+            ),
+            self.assertRaisesRegex(producer.ProducerError, "not PID 1"),
+        ):
+            producer._process_start_ticks(container)
 
 
 if __name__ == "__main__":
