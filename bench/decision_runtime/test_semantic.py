@@ -26,6 +26,7 @@ from decision_runtime.contracts import (
     validate_response_for_request,
 )
 
+from . import semantic_runner
 from .__main__ import main
 from .legacy_projection import project_legacy_preview
 from .semantic_cases import generate_cases
@@ -333,9 +334,8 @@ class SemanticTests(TestCase):
                     "1",
                     "--timed-semantic-evidence",
                 )
-                with patch(
-                    "bench.decision_runtime.semantic_runner.MAX_TIMED_SEMANTIC_EVIDENCE_BYTES",
-                    1,
+                with patch.object(
+                    semantic_runner, "MAX_TIMED_SEMANTIC_EVIDENCE_BYTES", 1
                 ):
                     self.assertEqual(main(args), 2)
                 self.assertFalse((output / "receipt.json").exists())
@@ -358,9 +358,8 @@ class SemanticTests(TestCase):
                     "1",
                     "--timed-semantic-evidence",
                 )
-                with patch(
-                    "bench.decision_runtime.semantic_runner.MAX_TIMED_SEMANTIC_COMPRESSED_BYTES",
-                    1,
+                with patch.object(
+                    semantic_runner, "MAX_TIMED_SEMANTIC_COMPRESSED_BYTES", 1
                 ):
                     self.assertEqual(main(args), 2)
                 self.assertFalse((output / "receipt.json").exists())
