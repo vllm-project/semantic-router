@@ -11,6 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
+from unittest.mock import patch
 
 # cases initializes the source checkout's runtime-contract path.
 # isort: off
@@ -30,7 +31,17 @@ from .legacy_projection import project_legacy_preview
 from .semantic_cases import generate_cases
 from .semantic_metrics import MetricCapture, MetricsError, _parse_snapshot
 from .semantic_report import build_semantic_matrix
-from tools.ci.decision_timed_semantics import canonical_request_bodies
+from .semantic_runner import (
+    MAX_TIMED_SEMANTIC_COMPRESSED_BYTES,
+    MAX_TIMED_SEMANTIC_EVIDENCE_BYTES,
+    TIMED_SEMANTIC_CONCURRENCIES,
+)
+from tools.ci.decision_timed_semantics import (
+    MAX_ARCHIVE_BYTES,
+    MAX_COMPRESSED_ARCHIVE_BYTES,
+    TIMED_CONCURRENCIES,
+    canonical_request_bodies,
+)
 
 
 def _answer(question, *, probability_shift=0.0, choice_flip=False):
@@ -221,7 +232,9 @@ class GraphMetricTests(TestCase):
             "\n".join((event, event)),
         ):
             with self.subTest(bad=bad):
-                with self.assertRaisesRegex(MetricsError, "metrics_invalid_graph_events"):
+                with self.assertRaisesRegex(
+                    MetricsError, "metrics_invalid_graph_events"
+                ):
                     _parse_snapshot("\n".join([*base, bad]).encode(), "c" * 64, model)
 
 
@@ -243,7 +256,13 @@ class SemanticTests(TestCase):
                         canonical_request_bodies(model, questions, states),
                     )
 
-    def test_timed_high_concurrency_archive_contains_exact_http_bodies(self):
+    def test_timed_all_concurrency_archive_contains_exact_http_bodies(self):
+        self.assertEqual(TIMED_SEMANTIC_CONCURRENCIES, TIMED_CONCURRENCIES)
+        self.assertEqual(MAX_TIMED_SEMANTIC_EVIDENCE_BYTES, MAX_ARCHIVE_BYTES)
+        self.assertEqual(
+            MAX_TIMED_SEMANTIC_COMPRESSED_BYTES,
+            MAX_COMPRESSED_ARCHIVE_BYTES,
+        )
         servers, threads = self._servers()
         try:
             with TemporaryDirectory() as directory:
@@ -258,8 +277,8 @@ class SemanticTests(TestCase):
                 self.assertEqual(main(args), 0)
                 with gzip.open(output / "timed-semantic.jsonl.gz", "rt") as handle:
                     rows = [json.loads(line) for line in handle]
-                self.assertEqual(len(rows), 4 * 2 * 2 * 2)
-                self.assertEqual({row["concurrency"] for row in rows}, {8, 32})
+                self.assertEqual(len(rows), 4 * 2 * 2 * 3)
+                self.assertEqual({row["concurrency"] for row in rows}, {1, 8, 32})
                 samples = [
                     json.loads(line)
                     for line in (output / "samples.jsonl").read_text().splitlines()
@@ -293,6 +312,56 @@ class SemanticTests(TestCase):
                         )
                     ]
                     self.assertEqual(len(matched), 1)
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_timed_c1_archive_writer_fails_closed_at_raw_limit(self):
+        servers, threads = self._servers()
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(
+                    servers,
+                    output,
+                    "--concurrencies",
+                    "1",
+                    "--timed-semantic-evidence",
+                )
+                with patch(
+                    "bench.decision_runtime.semantic_runner.MAX_TIMED_SEMANTIC_EVIDENCE_BYTES",
+                    1,
+                ):
+                    self.assertEqual(main(args), 2)
+                self.assertFalse((output / "receipt.json").exists())
+        finally:
+            for server in servers:
+                server.shutdown()
+                server.server_close()
+            for thread in threads:
+                thread.join()
+
+    def test_timed_c1_archive_writer_fails_closed_at_compressed_limit(self):
+        servers, threads = self._servers()
+        try:
+            with TemporaryDirectory() as directory:
+                output = Path(directory) / "run"
+                args = self._run_args(
+                    servers,
+                    output,
+                    "--concurrencies",
+                    "1",
+                    "--timed-semantic-evidence",
+                )
+                with patch(
+                    "bench.decision_runtime.semantic_runner.MAX_TIMED_SEMANTIC_COMPRESSED_BYTES",
+                    1,
+                ):
+                    self.assertEqual(main(args), 2)
+                self.assertFalse((output / "receipt.json").exists())
         finally:
             for server in servers:
                 server.shutdown()

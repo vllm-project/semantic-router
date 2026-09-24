@@ -920,7 +920,7 @@ def _fixture(
                 if (
                     sample["arm"] == "new"
                     and sample["phase"] == "throughput"
-                    and sample["concurrency"] in (8, 32)
+                    and sample["concurrency"] in gate.CONCURRENCIES
                 ):
                     timed_body = _timed_response(model_id, q, s, sample["case_id"])
                     sample["response_sha256"] = hashlib.sha256(timed_body).hexdigest()
@@ -1083,6 +1083,7 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         )
 
     def test_complete_six_model_paired_measurement_passes(self) -> None:
+        self.assertEqual(gate.CONCURRENCIES, timed_semantics.TIMED_CONCURRENCIES)
         result = self.validate(run_id="42", run_attempt="1")
         self.assertEqual(set(result["models"]), gate.MODEL_IDS)
         self.assertEqual(result["source_sha"], SOURCE)
@@ -1210,13 +1211,19 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "content changed"):
             self.validate()
 
-    def test_timed_concurrent_evidence_cannot_omit_or_duplicate_a_workflow(
+    def test_timed_all_cell_evidence_cannot_omit_or_duplicate_a_workflow(
         self,
     ) -> None:
         shape = self.report["models"][0]["shapes"][2]
         records = self.timed_records(shape)
-        self.assertEqual(len(records), 2 * gate.ROUNDS * gate.MIN_WORKFLOWS_PER_ROUND)
-        for changed in (records[:-1], [*records, records[0]]):
+        self.assertEqual(len(records), 3 * gate.ROUNDS * gate.MIN_WORKFLOWS_PER_ROUND)
+        first_c1 = next(
+            index for index, row in enumerate(records) if row["concurrency"] == 1
+        )
+        for changed in (
+            [*records[:first_c1], *records[first_c1 + 1 :]],
+            [*records, records[first_c1]],
+        ):
             with self.subTest(records=len(changed)):
                 self.write_timed_records(shape, changed)
                 with self.assertRaisesRegex(
@@ -1299,6 +1306,7 @@ class DecisionPerformanceGateTests(unittest.TestCase):
     def test_timed_response_token_usage_must_match_sealed_audit(self) -> None:
         shape = self.report["models"][0]["shapes"][0]
         records = self.timed_records(shape)
+        self.assertEqual(records[0]["concurrency"], 1)
         body = json.loads(base64.b64decode(records[0]["response_base64"]))
         body["usage"]["input_tokens"] += 1
         wire = json.dumps(body).encode()
@@ -1324,11 +1332,48 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "timed semantic input token usage"):
             self.validate()
 
+    def test_timed_c1_answer_drift_blocks_a_hard_speed_cell(self) -> None:
+        shape = self.report["models"][0]["shapes"][0]
+        records = self.timed_records(shape)
+        record = next(
+            row
+            for row in records
+            if row["concurrency"] == 1
+            and json.loads(base64.b64decode(row["response_base64"]))["answers"][
+                "q0000"
+            ]["type"]
+            == "noul"
+        )
+        body = json.loads(base64.b64decode(record["response_base64"]))
+        body["answers"]["q0000"]["noul"] = 0.75
+        wire = json.dumps(body).encode()
+        record["response_base64"] = base64.b64encode(wire).decode()
+        record["response_sha256"] = hashlib.sha256(wire).hexdigest()
+        sample_path = self.root / shape["raw_samples_path"]
+        samples = [json.loads(line) for line in sample_path.read_text().splitlines()]
+        target = next(
+            row
+            for row in samples
+            if row["arm"] == "new"
+            and row["phase"] == "throughput"
+            and row["concurrency"] == 1
+            and row["round"] == record["round"]
+            and row["sequence"] == record["sequence"]
+        )
+        target["response_sha256"] = record["response_sha256"]
+        sample_path.write_text("\n".join(json.dumps(row) for row in samples) + "\n")
+        shape["raw_samples_sha256"] = hashlib.sha256(
+            sample_path.read_bytes()
+        ).hexdigest()
+        self.write_timed_records(shape, records)
+        with self.assertRaisesRegex(ValueError, "timed semantic probability tolerance"):
+            self.validate()
+
     def test_compressed_timed_archive_has_a_decompression_limit(self) -> None:
         shape = self.report["models"][0]["shapes"][0]
         path = self.root / shape["raw_timed_semantic_path"]
         with gzip.open(path, "wb") as handle:
-            for _ in range(81):
+            for _ in range(timed_semantics.MAX_ARCHIVE_BYTES // (1024 * 1024) + 1):
                 handle.write(b"x" * (1024 * 1024))
         shape["raw_timed_semantic_sha256"] = hashlib.sha256(
             path.read_bytes()
@@ -1347,6 +1392,7 @@ class DecisionPerformanceGateTests(unittest.TestCase):
                 shape["raw_timed_semantic_path"],
                 hashlib.sha256(path.read_bytes()).hexdigest(),
                 "timed archive",
+                max_bytes=timed_semantics.MAX_COMPRESSED_ARCHIVE_BYTES,
             )
         with self.assertRaisesRegex(ValueError, "compressed archive is too large"):
             timed_semantics._read_archive(path)

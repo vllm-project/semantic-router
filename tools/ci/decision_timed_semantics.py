@@ -1,6 +1,6 @@
 """Check exact timed response bodies against the sealed sequential audit.
 
-The protected benchmark retains every new-arm throughput wave at c8 and c32.
+The protected benchmark retains every new-arm throughput wave at c1, c8, and c32.
 Its compressed records contain the original request and response
 bodies, so the gate independently checks both wire hashes and the full
 request-relative response contract before comparing every answer.
@@ -20,11 +20,12 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
 
-MAX_ARCHIVE_BYTES = 80 * 1024 * 1024
-MAX_COMPRESSED_ARCHIVE_BYTES = 16 * 1024 * 1024
+MAX_ARCHIVE_BYTES = 120 * 1024 * 1024
+MAX_COMPRESSED_ARCHIVE_BYTES = 24 * 1024 * 1024
 MAX_REQUEST_BYTES = 1024 * 1024
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 PROBABILITY_TOLERANCE = 0.01
+TIMED_CONCURRENCIES = (1, 8, 32)
 RESPONSE_MATH_TOLERANCE = 2e-5
 _TOPICS = ("billing", "shipping", "account", "service", "returns", "access")
 _CHANNELS = ("chat", "email", "phone")
@@ -491,7 +492,7 @@ def validate_timed_semantics(
     model_id: str,
     rounds: int,
 ) -> int:
-    """Require one exact body for every new c8/c32 measured workflow."""
+    """Require one exact body for every new c1/c8/c32 measured workflow."""
 
     references = _reference(audit_rows, q, s)
     canonical_requests = canonical_request_bodies(model_id, q, s)
@@ -500,7 +501,7 @@ def validate_timed_semantics(
         if (
             sample.get("arm") == "new"
             and sample.get("phase") == "throughput"
-            and sample.get("concurrency") in (8, 32)
+            and sample.get("concurrency") in TIMED_CONCURRENCIES
         ):
             key = (sample["concurrency"], sample["round"], sample["sequence"])
             if key in expected:
@@ -508,10 +509,10 @@ def validate_timed_semantics(
             expected[key] = sample
     if not expected or {key[:2] for key in expected} != {
         (concurrency, round_number)
-        for concurrency in (8, 32)
+        for concurrency in TIMED_CONCURRENCIES
         for round_number in range(rounds)
     }:
-        raise ValueError("timed semantic c8/c32 sample inventory is incomplete")
+        raise ValueError("timed semantic c1/c8/c32 sample inventory is incomplete")
     content = _read_archive(path)
     seen: set[tuple[int, int, int]] = set()
     for line in content.splitlines():
@@ -529,7 +530,7 @@ def validate_timed_semantics(
             raise ValueError("timed semantic record shape differs")
         if (
             type(record["concurrency"]) is not int
-            or record["concurrency"] not in (8, 32)
+            or record["concurrency"] not in TIMED_CONCURRENCIES
             or type(record["sequence"]) is not int
             or record["sequence"] < 0
             or type(record["round"]) is not int
@@ -570,5 +571,5 @@ def validate_timed_semantics(
             _json(body_bytes), _json(request_bytes), reference, model_id, q, s
         )
     if seen != set(expected):
-        raise ValueError("timed semantic c8/c32 archive is incomplete")
+        raise ValueError("timed semantic c1/c8/c32 archive is incomplete")
     return len(seen) * q * s

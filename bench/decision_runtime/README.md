@@ -131,17 +131,20 @@ metadata before publication.
 
 Protected paired release runs additionally pass `--timed-semantic-evidence`.
 This writes `timed-semantic.jsonl.gz` with the exact new-arm HTTP request and
-response bodies from every throughput wave at concurrency 8 and 32, linked to
+response bodies from every throughput wave at concurrency 1, 8, and 32, linked to
 each timed sample by case, round, sequence, request hash, and response hash.
 The release gate recomputes both body hashes, validates the response against
 the request criteria, and compares every answer with the sealed old-arm audit
 at the same probability, Choice, Score, and input-token policy. New-arm
 output-token counts must remain equal to its formal audit; the old preview's
 different output-token accounting is not treated as parity. The archive has an
-80 MiB decompressed limit, a 16 MiB compressed limit, a 1 MiB per-request limit,
+120 MiB decompressed limit, a 24 MiB compressed limit, a 1 MiB per-request limit,
 and a 2 MiB per-response limit. These are synthetic cases, but the optional
 archive does contain request and response bodies and should be reviewed before
 publication.
+The protected c1/c8/c32 grid has three captured concurrency cells instead of
+two; its 120/24 MiB archive caps are the prior 80/16 MiB caps scaled by 3/2.
+An oversized archive fails closed rather than skipping responses.
 
 Optional `--old-metrics-url` and `--new-metrics-url` accept each service's
 `GET /metrics` address. For every throughput wave, the runner takes a snapshot
