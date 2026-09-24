@@ -334,6 +334,11 @@ IMAGE_REGISTRY ?= $(shell \
   fi)
 VELA_OMNI_VARIANTS ?= nano
 VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
+# Minimum GPU architecture the NVIDIA image is compiled for; unset keeps the
+# Dockerfile default.
+ifneq ($(CUDA_COMPUTE_CAP),)
+VLLM_SR_BUILD_ARGS += --build-arg CUDA_COMPUTE_CAP=$(CUDA_COMPUTE_CAP)
+endif
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
