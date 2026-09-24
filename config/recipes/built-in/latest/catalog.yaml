@@ -3650,6 +3650,17 @@ providers:
       status: claimed
       verified_at: '2026-09-17'
       source: https://huggingface.co/ibm-granite/granite-4.2-3b
+  - catalog: nvidia/nemotron-cascade-8b
+    relationship: self_hosted
+    id: nvidia/Nemotron-Cascade-8B
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://huggingface.co/nvidia/Nemotron-Cascade-8B
 - id: volcengine-ark
   display_name: Volcengine Ark
   description: ByteDance Seed and Doubao models through the Ark OpenAI-compatible API.
@@ -6952,6 +6963,47 @@ models:
   - moe
   - efficient
   released_at: '2025-12-15'
+- id: nvidia/nemotron-cascade-8b
+  display_name: Nemotron Cascade 8B
+  description: Compact NVIDIA reasoning model with thinking and instruct modes, post-trained from Qwen3-8B-Base.
+  kind: physical
+  publisher: NVIDIA
+  presentation:
+    logo: package:nvidia
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B
+    license: NVIDIA-Open-Model-License
+  family: nemotron-cascade
+  reasoning_family: nemotron-thinking-toggle
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 32768
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - coding
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: NVIDIA
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B
+  tags:
+  - open_weights
+  - reasoning
+  - coding
+  - dense
+  - efficient
+  released_at: '2025-12-08'
 - id: openai/gpt-6-astra
   display_name: GPT-6 Astra
   description: OpenAI flagship model for complex reasoning, coding, computer use, research, and document creation.
@@ -24997,6 +25049,129 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/models/nvidia-nemotron-3-nano-30b-a3b-reasoning
+    redistributable: true
+- id: nvidia/nemotron-cascade-8b-model-card-mmlu-pro@1.0.0
+  model: nvidia/nemotron-cascade-8b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-8B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.757
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B/blob/276a779fe0c1fe2d63a68fd573fec7b4b0a1907e/README.md
+    redistributable: true
+- id: nvidia/nemotron-cascade-8b-model-card-gpqa-diamond@1.0.0
+  model: nvidia/nemotron-cascade-8b
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-8B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.665
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B/blob/276a779fe0c1fe2d63a68fd573fec7b4b0a1907e/README.md
+    redistributable: true
+- id: nvidia/nemotron-cascade-8b-model-card-ifeval@1.0.0
+  model: nvidia/nemotron-cascade-8b
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-8B
+    source_kind: official_model_card
+    metric_variant: strict_prompt
+  metrics:
+    accuracy: 0.902
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B/blob/276a779fe0c1fe2d63a68fd573fec7b4b0a1907e/README.md
+    redistributable: true
+- id: nvidia/nemotron-cascade-8b-model-card-aime@2024.0.0
+  model: nvidia/nemotron-cascade-8b
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-8B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.895
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B/blob/276a779fe0c1fe2d63a68fd573fec7b4b0a1907e/README.md
+    redistributable: true
+- id: nvidia/nemotron-cascade-8b-model-card-aime@2025.0.0
+  model: nvidia/nemotron-cascade-8b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-8B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.801
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B/blob/276a779fe0c1fe2d63a68fd573fec7b4b0a1907e/README.md
+    redistributable: true
+- id: nvidia/nemotron-cascade-8b-model-card-livecodebench@6.0.0
+  model: nvidia/nemotron-cascade-8b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-8B
+    source_kind: official_model_card
+    dataset_release: v6
+    problem_window: 2024-08_to_2025-05
+  metrics:
+    pass_at_1: 0.711
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B/blob/276a779fe0c1fe2d63a68fd573fec7b4b0a1907e/README.md
+    redistributable: true
+- id: nvidia/nemotron-cascade-8b-model-card-swe-bench-verified@1.0.0
+  model: nvidia/nemotron-cascade-8b
+  benchmark: swe-bench/verified@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: Nemotron-Cascade-8B
+    source_kind: official_model_card
+    swe_harness: Agentless
+  metrics:
+    resolved: 0.372
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B/blob/276a779fe0c1fe2d63a68fd573fec7b4b0a1907e/README.md
     redistributable: true
 - id: independent/gpt-5-4-non-reasoning-critpt@1.0.0
   model: openai/gpt-5.4
@@ -43756,6 +43931,28 @@ index_results:
   - independent/nemotron-3-nano-30b-a3b-terminal-bench-2.1@1.0.0
   - mmlu-pro-leaderboard/nemotron-3-nano-30b-a3b@1.0.0
   - nvidia/nemotron-3-nano-livecodebench-v6@1.0.0
+- model: nvidia/nemotron-cascade-8b
+  reasoning_effort: unspecified
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 75.7
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.757
+    normalized: 0.757
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: nvidia/nemotron-cascade-8b-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - nvidia/nemotron-cascade-8b-model-card-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 75.7
 - model: openai/gpt-6-astra
   reasoning_effort: low
   index: vllm-sr/reasoning@1.0.0

@@ -775,3 +775,14 @@ models:
     status: claimed
     verified_at: 2026-09-17
     source: https://huggingface.co/ibm-granite/granite-4.2-3b
+- catalog: nvidia/nemotron-cascade-8b
+  relationship: self_hosted
+  id: nvidia/Nemotron-Cascade-8B
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  lifecycle: active
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/nvidia/Nemotron-Cascade-8B
