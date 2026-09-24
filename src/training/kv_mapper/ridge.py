@@ -1,58 +1,26 @@
-"""Pearson top-k and centered ridge. NumPy only so CI can run without a GPU."""
+"""Per-head OLS layer scores and centered ridge. NumPy only for CPU CI."""
 
 from __future__ import annotations
 
 import numpy as np
 
 
-class PearsonAccumulator:
-    """Scalar Pearson r between flattened K or V of each (src, tgt) layer pair."""
-
-    def __init__(self, n_src: int, n_tgt: int) -> None:
-        self.n_src = n_src
-        self.n_tgt = n_tgt
-        self.n = np.zeros((n_src, n_tgt), dtype=np.int64)
-        self.sx = np.zeros((n_src, n_tgt), dtype=np.float64)
-        self.sy = np.zeros((n_src, n_tgt), dtype=np.float64)
-        self.sxx = np.zeros((n_src, n_tgt), dtype=np.float64)
-        self.syy = np.zeros((n_src, n_tgt), dtype=np.float64)
-        self.sxy = np.zeros((n_src, n_tgt), dtype=np.float64)
-
-    def add(self, src_layers: list[np.ndarray], tgt_layers: list[np.ndarray]) -> None:
-        src = src_layers[: self.n_src]
-        tgt = tgt_layers[: self.n_tgt]
-        widths = {tuple(t.shape[1:]) for t in src + tgt}
-        if len(widths) != 1:
-            raise ValueError(
-                f"Pearson needs one (n_kv, head_dim) for both models, got {sorted(widths)}"
-            )
-        nseq = min(int(src[0].shape[0]), int(tgt[0].shape[0]))
-        x = np.stack([t[:nseq].reshape(-1).astype(np.float64) for t in src])
-        y = np.stack([t[:nseq].reshape(-1).astype(np.float64) for t in tgt])
-        feat = x.shape[1]
-        self.n += feat
-        self.sx += x.sum(1)[:, None]
-        self.sy += y.sum(1)[None, :]
-        self.sxx += (x * x).sum(1)[:, None]
-        self.syy += (y * y).sum(1)[None, :]
-        self.sxy += x @ y.T
-
-    def corr(self) -> np.ndarray:
-        n = np.maximum(self.n, 1)
-        mx = self.sx / n
-        my = self.sy / n
-        cov = self.sxy / n - mx * my
-        vx = np.maximum(self.sxx / n - mx * mx, 1e-12)
-        vy = np.maximum(self.syy / n - my * my, 1e-12)
-        return cov / np.sqrt(vx * vy)
-
-    def topk(self, k: int) -> list[list[int]]:
-        r = np.abs(self.corr())
-        out: list[list[int]] = []
-        for j in range(self.n_tgt):
-            order = np.argsort(-r[:, j])[:k]
-            out.append([int(i) for i in order])
-        return out
+def ols_r2_per_head(source: np.ndarray, target: np.ndarray) -> np.ndarray:
+    """Single-source affine OLS R² for each KV head, across tokens and dimensions."""
+    source = np.asarray(source, dtype=np.float64)
+    target = np.asarray(target, dtype=np.float64)
+    if source.shape != target.shape or source.ndim != 3 or source.shape[0] < 2:
+        raise ValueError(f"OLS needs matching (tokens, heads, dim), got {source.shape} and {target.shape}")
+    scores = np.empty(source.shape[1], dtype=np.float64)
+    for head in range(source.shape[1]):
+        x, y = source[:, head, :], target[:, head, :]
+        x_centered = x - x.mean(axis=0)
+        y_centered = y - y.mean(axis=0)
+        weight, *_ = np.linalg.lstsq(x_centered, y_centered, rcond=None)
+        residual = y_centered - x_centered @ weight
+        total = np.square(y_centered).sum()
+        scores[head] = 1.0 - np.square(residual).sum() / total if total > 0 else 0.0
+    return scores
 
 
 class RidgeAccumulator:
@@ -71,6 +39,8 @@ class RidgeAccumulator:
     def add(self, x: np.ndarray, y: np.ndarray) -> None:
         x64 = np.ascontiguousarray(x, dtype=np.float64)
         y64 = np.ascontiguousarray(y, dtype=np.float64)
+        if x64.ndim != 2 or y64.ndim != 2 or x64.shape != (y64.shape[0], self.dx) or y64.shape[1] != self.dy:
+            raise ValueError(f"Ridge needs matching rows and widths ({self.dx}, {self.dy}), got {x64.shape} and {y64.shape}")
         n = x64.shape[0]
         self.xtx += x64.T @ x64
         self.xty += x64.T @ y64
@@ -84,6 +54,8 @@ class RidgeAccumulator:
             raise RuntimeError(
                 f"Ridge has no rows (dx={self.dx}, dy={self.dy})"
             )
+        if alpha < 0:
+            raise ValueError("ridge alpha must be nonnegative")
         sw = self.sw
         xtx_c = self.xtx - np.outer(self.sx, self.sx) / sw
         xty_c = self.xty - np.outer(self.sx, self.sy) / sw
