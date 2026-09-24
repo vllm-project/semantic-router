@@ -123,6 +123,30 @@ class ArtifactContractTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "checksum"):
                 read_artifact(out)
 
+    def test_missing_or_duplicate_checksum_entries_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            out = Path(directory) / "artifact"
+            write_artifact(out, _synthetic_manifest(), _synthetic_tensors())
+            lines = (out / "SHA256SUMS").read_text().splitlines()
+            for contents in ("", lines[0] + "\n", lines[1] + "\n", "\n".join(lines + [lines[0]]) + "\n"):
+                with self.subTest(contents=contents):
+                    (out / "SHA256SUMS").write_text(contents)
+                    with self.assertRaisesRegex(ValueError, "checksum"):
+                        read_artifact(out)
+
+    def test_precision_aliases_are_canonical(self) -> None:
+        manifest = _synthetic_manifest()
+        verify_compatibility(manifest, _compat(precision="float16"))
+        self.assertEqual(manifest.compatibility.precision, "fp16")
+        self.assertEqual(_compat(precision="bfloat16").precision, "bf16")
+        self.assertIn("-bf16-", make_mapper_id(
+            pair_slug="pair", variant="full_head", precision="bfloat16",
+            source_revision="abc123", target_revision="def456",
+            source_tp=1, target_tp=1, n_kv_heads=8,
+        ))
+        with self.assertRaisesRegex(ValueError, "unsupported mapper precision"):
+            _compat(precision="float128")
+
 
 if __name__ == "__main__":
     unittest.main()

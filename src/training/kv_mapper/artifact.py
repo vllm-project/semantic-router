@@ -10,6 +10,8 @@ from typing import Any
 
 import numpy as np
 
+from src.training.kv_mapper.mapper_id import normalize_precision
+
 WEIGHTS_FILE = "weights.safetensors"
 MANIFEST_FILE = "manifest.json"
 CHECKSUMS_FILE = "SHA256SUMS"
@@ -30,6 +32,9 @@ class CompatibilitySpec:
     head_order: str
     num_kv_heads: int
     head_dim: int
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "precision", normalize_precision(self.precision))
 
 
 @dataclass
@@ -155,10 +160,22 @@ def verify_checksums(out_dir: Path) -> None:
     sums_path = out_dir / CHECKSUMS_FILE
     if not sums_path.is_file():
         raise FileNotFoundError(f"missing {sums_path}")
+    checksums: dict[str, str] = {}
+    required = {MANIFEST_FILE, WEIGHTS_FILE}
     for line in sums_path.read_text().splitlines():
-        if not line.strip():
-            continue
-        digest, name = line.split(maxsplit=1)
+        parts = line.split()
+        if len(parts) != 2:
+            raise ValueError(f"invalid checksum entry in {sums_path}: {line!r}")
+        digest, name = parts
+        if name not in required or name in checksums or len(digest) != 64 or any(
+            char not in "0123456789abcdefABCDEF" for char in digest
+        ):
+            raise ValueError(f"invalid checksum entry for {name} in {sums_path}")
+        checksums[name] = digest
+    if set(checksums) != required:
+        missing = sorted(required - set(checksums))
+        raise ValueError(f"missing checksum entries for {missing} in {sums_path}")
+    for name, digest in checksums.items():
         path = out_dir / name
-        if _sha256_file(path) != digest:
+        if _sha256_file(path) != digest.lower():
             raise ValueError(f"checksum mismatch for {name} in {out_dir}")
