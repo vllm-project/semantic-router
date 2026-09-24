@@ -58,12 +58,15 @@ from a fresh clean checkout and verify the wheel's catalog resources and image
 smoke; `source-state=clean` alone does not attest ignored developer-side
 `cli/model_assets` files.
 
-The CLI accepts only an image reference of the form
-`registry/repository@sha256:<manifest-digest>`. A local `docker build` image ID
-is not a registry manifest digest. Publish a validated candidate through the
-release workflow, record its registry digest, then pass that digest to
-`vllm-sr drun run MODEL --backend BACKEND --image REFERENCE`. Source checkouts
-deliberately have no default image inventory. Release packaging may inject
+The CLI accepts a published reference of the form
+`registry/repository@sha256:<manifest-digest>`, or an exact local Docker image
+ID for explicit, no-pull validation on that host (`--image-pull-policy never`
+with Docker). A local `docker build` image ID is not a registry manifest digest
+and does not qualify a release. Publish a
+validated candidate through the release workflow, record its registry digest,
+then pass that digest to `vllm-sr drun run MODEL --backend BACKEND --image REFERENCE`.
+Source checkouts deliberately have no default image inventory. Release
+packaging may inject
 `cli/decision_runtime/decision-images.lock.json` only after backend, model,
 performance, and supply-chain qualification of the exact image digests.
 
