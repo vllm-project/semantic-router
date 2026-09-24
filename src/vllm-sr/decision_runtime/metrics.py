@@ -66,7 +66,7 @@ class RuntimeMetrics:
             self._physical_batch_sizes[(model, bucket)] += 1
 
     def record_qwen_rocm_graph_event(self, model: str, event: str) -> None:
-        """Count one bounded Sol ROCm graph outcome without request content."""
+        """Count one profiled Qwen ROCm graph outcome without request content."""
 
         if event not in QWEN_ROCM_GRAPH_EVENTS:
             raise ValueError("unsupported Qwen ROCm graph event")
@@ -186,7 +186,7 @@ class RuntimeMetrics:
         graph_metric = "decision_runtime_qwen_rocm_graph_events_total"
         lines.extend(
             (
-                f"# HELP {graph_metric} Sol ROCm qualified capture, "
+                f"# HELP {graph_metric} Profiled Qwen ROCm graph capture, "
                 "used replay, and eager fallback events.",
                 f"# TYPE {graph_metric} counter",
             )

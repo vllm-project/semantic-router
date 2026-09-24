@@ -28,9 +28,9 @@ order. It does not change what the questions mean.
 `--max-batch` is a separate control: it limits rows per model forward, not
 incoming requests. Its default is eight for every model. A larger value on
 ROCm needs a supported kernel profile and a check of answers, memory use, and
-performance on the selected model and device. Sol on ROCm automatically
-accelerates eligible short eight-row batches after
-validating and capturing each shape. The first eligible request can take longer;
+performance on the selected model and device. Models with the ROCm graph profile
+automatically accelerate eligible short eight-row batches after validating and
+capturing each shape. The first eligible request can take longer;
 measure both cold starts and steady traffic when comparing configurations.
 
 ## Measure a change

@@ -218,19 +218,27 @@ def test_assembly_rejects_eos_rocm_batch_before_artifact_reopen(
     assert artifact_calls == []
 
 
-def test_graph_assembly_wires_events_to_the_server_metrics(monkeypatch, tmp_path: Path):
+@pytest.mark.parametrize(
+    ("profile_id", "revision"),
+    (
+        ("Decision-1.0-Sol-2B", "0665a41108e8f0b33a9515c98311c45947b99399"),
+        ("Decision-1.0-Nox-4B", "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4"),
+    ),
+)
+def test_graph_assembly_wires_events_to_the_server_metrics(
+    monkeypatch, tmp_path: Path, profile_id: str, revision: str
+):
     from decision_runtime import runtime_factory  # noqa: PLC0415
 
-    sol_model = "llm-semantic-router/Decision-1.0-Sol-2B"
-    sol_revision = "0665a41108e8f0b33a9515c98311c45947b99399"
-    profile = load_runtime_profile("Decision-1.0-Sol-2B", revision=sol_revision)
+    model_id = f"llm-semantic-router/{profile_id}"
+    profile = load_runtime_profile(profile_id, revision=revision)
     model = SimpleNamespace(
-        catalog=SimpleNamespace(model_id=sol_model),
+        catalog=SimpleNamespace(model_id=model_id),
         profile=profile,
     )
     artifact = SimpleNamespace(
         data_root=tmp_path,
-        revision=sol_revision,
+        revision=revision,
         content_id=CONTENT_ID,
         manifest=_observed_manifest(profile),
     )
@@ -255,14 +263,14 @@ def test_graph_assembly_wires_events_to_the_server_metrics(monkeypatch, tmp_path
     assemble_runtime(
         _config(
             tmp_path,
-            model=sol_model,
-            revision=sol_revision,
+            model=model_id,
+            revision=revision,
             max_batch=8,
         ),
         metrics=metrics,
     )
     assert (
-        f'decision_runtime_qwen_rocm_graph_events_total{{model="{sol_model}",'
+        f'decision_runtime_qwen_rocm_graph_events_total{{model="{model_id}",'
         'event="replay"} 1'
     ) in metrics.render(())
 
@@ -367,18 +375,22 @@ def test_eos_rocm_execution_policy_reaches_family_loader(monkeypatch, tmp_path: 
     assert "enable_rocm_graph" not in options
 
 
+@pytest.mark.parametrize(
+    ("profile_id", "revision"),
+    (
+        ("Decision-1.0-Sol-2B", "0665a41108e8f0b33a9515c98311c45947b99399"),
+        ("Decision-1.0-Nox-4B", "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4"),
+    ),
+)
 def test_profiled_qwen_graph_receives_verified_artifact_identity(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, profile_id: str, revision: str
 ):
     from decision_runtime import qwen35_torch, runtime_factory  # noqa: PLC0415
 
-    profile = load_runtime_profile(
-        "Decision-1.0-Sol-2B",
-        revision="0665a41108e8f0b33a9515c98311c45947b99399",
-    )
+    profile = load_runtime_profile(profile_id, revision=revision)
     model = SimpleNamespace(
         profile=profile,
-        catalog=SimpleNamespace(model_id="llm-semantic-router/Decision-1.0-Sol-2B"),
+        catalog=SimpleNamespace(model_id=f"llm-semantic-router/{profile_id}"),
     )
     artifact = SimpleNamespace(
         data_root=tmp_path,
@@ -412,7 +424,7 @@ def test_profiled_qwen_graph_receives_verified_artifact_identity(
 @pytest.mark.parametrize(
     ("profile_id", "revision", "backend", "batch"),
     (
-        ("Decision-1.0-Nox-4B", "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4", "rocm", 8),
+        ("Decision-1.0-Nox-4B", "0bb833504965c0eabdb9630b7bbd385cb2fe5cd4", "rocm", 16),
         ("Decision-1.0-Lux-9B", "bd45a30aee8c84032791c245c70f86dee5389cc8", "rocm", 8),
         ("Decision-1.0-Sol-2B", "0665a41108e8f0b33a9515c98311c45947b99399", "rocm", 16),
         ("Decision-1.0-Sol-2B", "0665a41108e8f0b33a9515c98311c45947b99399", "cpu", 8),

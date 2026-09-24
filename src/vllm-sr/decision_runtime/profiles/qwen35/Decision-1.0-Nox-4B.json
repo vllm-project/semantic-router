@@ -10,5 +10,5 @@
   "physical_batch_size": 8,
   "calibration": {"temperature": 1.3231350559653137},
   "prompt_policy": {"choice_null_description": "render_key"},
-  "execution": {"rocm": {"job_turn_batches": 4}}
+  "execution": {"rocm": {"job_turn_batches": 4, "backbone_graph": "short_b8"}}
 }

@@ -64,10 +64,11 @@ before preparing model files. See
 | `--detach`, `--restart-policy` | Keep the instance running in the background. Docker restart policy defaults to `no`; `unless-stopped` requires `--detach`. |
 | `--startup-timeout` | Allow more time for model loading and readiness than the default 1,800 seconds. |
 
-## Sol on ROCm
+## Short-batch acceleration on ROCm
 
-Decision Sol on ROCm automatically reuses the model backbone for repeated,
-short eight-row batches. The first eligible shape is checked against ordinary
-inference and captured before reuse, so that first request can take longer.
+Models with this ROCm profile automatically reuse the model backbone for
+repeated, short eight-row batches. The first eligible shape is checked against
+ordinary inference and captured before reuse, so that first request can take
+longer.
 Longer inputs, other batch sizes, and captures that fail validation use ordinary
 inference. No extra flag is needed.
