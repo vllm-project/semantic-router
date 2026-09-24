@@ -6,6 +6,10 @@ and initial physical batch size. The catalog supplies the canonical model ID
 and selected revision. The family artifact selector reads the selected
 snapshot's manifest to choose model files, including a complete Qwen weight
 layout; changing weight shards does not require editing a packaged file list.
+An optional Qwen kernel policy selects instance-local native GatedDeltaNet
+execution for Eos; other Qwen profiles retain the accelerated path. The native
+ROCm policy also bounds the physical batch size until larger shapes pass
+numerical and performance validation.
 
 Hardware execution capability is not a model-file property. It lives in
 `../backend_capabilities.py` and the family loaders. This avoids a second,
