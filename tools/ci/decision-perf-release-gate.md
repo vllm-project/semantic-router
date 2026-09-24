@@ -89,7 +89,12 @@ protected configuration. A third read-only tree mount holds the complete
 historical model snapshot, with co-located data and model Python. PID 1 must
 execute the mounted adapter. Exactly these three old mounts are allowed; the
 adapter must be a single file mount at its executed path. The producer hashes
-every typed bind mount before and after measurement. It independently reopens
+every typed bind mount before and after measurement. Each host source must be
+an absolute canonical path with no symlink ancestor, and the protected runner
+must expose the live container PID under host `/proc` so the producer can match
+the source device/inode to the actual bind mount before and after hashing.
+This prevents a retargeted host path from being hashed instead of the running
+service's mounted object. It independently reopens
 the candidate-qualified data-only artifact, then verifies the old core's
 binding inventory, complete
 snapshot roster, manifest, and every bound file by size and SHA256. For each

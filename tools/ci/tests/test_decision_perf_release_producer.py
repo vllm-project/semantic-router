@@ -236,6 +236,31 @@ class DecisionPairedProducerTests(unittest.TestCase):
             self.assertNotEqual(
                 producer._mount_digest(one), producer._mount_digest(two)
             )
+            alias = root / "alias"
+            alias.symlink_to(one, target_is_directory=True)
+            with self.assertRaisesRegex(producer.ProducerError, "not canonical"):
+                producer._mount_digest(alias / "a")
+
+    def test_bind_identity_matches_the_live_mounted_inode(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "adapter.py"
+            source.write_text("adapter\n", encoding="utf-8")
+            proc_root = root / "proc"
+            mounted = proc_root / "123" / "root" / "adapter.py"
+            mounted.parent.mkdir(parents=True)
+            mounted.hardlink_to(source)
+            container = {"State": {"Pid": 123}}
+
+            producer._verify_bind_inode(
+                container, source, "/adapter.py", proc_root=proc_root
+            )
+            mounted.unlink()
+            mounted.write_text("different inode\n", encoding="utf-8")
+            with self.assertRaisesRegex(producer.ProducerError, "live mounted inode"):
+                producer._verify_bind_inode(
+                    container, source, "/adapter.py", proc_root=proc_root
+                )
 
     def test_old_baseline_v1_input_is_rejected(self) -> None:
         with self.assertRaisesRegex(producer.ProducerError, "baseline schema"):
@@ -793,6 +818,7 @@ class DecisionPairedProducerTests(unittest.TestCase):
                     ),
                 ),
                 patch.object(producer, "_running_command", return_value=command),
+                patch.object(producer, "_verify_bind_inode") as bind_identity,
                 patch.object(
                     producer,
                     "_verified_old_snapshot",
@@ -816,6 +842,7 @@ class DecisionPairedProducerTests(unittest.TestCase):
                     IMAGE,
                 )
                 self.assertEqual(evidence, [{"live": True}])
+                self.assertEqual(bind_identity.call_count, 9)
                 self.assertEqual(
                     snapshot_proofs,
                     [

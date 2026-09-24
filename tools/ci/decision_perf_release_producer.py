@@ -167,9 +167,47 @@ def _mount_digest(source: Path) -> str:
     """Hash a regular file or an unambiguously framed, symlink-free tree."""
 
     try:
+        if (
+            not source.is_absolute()
+            or source == Path("/")
+            or source.resolve(strict=True) != source
+        ):
+            raise ProducerError("protected source mount path is not canonical")
         return _unchecked_mount_digest(source)
     except OSError:
         raise ProducerError("protected source mount is unreadable") from None
+
+
+def _verify_bind_inode(
+    container: dict, source: Path, destination: str, *, proc_root: Path = Path("/proc")
+) -> None:
+    """Require host Source to name the inode actually bound into live PID 1."""
+
+    pid = (container.get("State") or {}).get("Pid")
+    if type(pid) is not int or pid < 1:
+        raise ProducerError("old container process identity is unavailable")
+    if (
+        not destination.startswith("/")
+        or destination == "/"
+        or destination != os.path.normpath(destination)
+    ):
+        raise ProducerError("old bind destination is invalid")
+    mounted = proc_root / str(pid) / "root" / destination.lstrip("/")
+    try:
+        source_stat = source.stat(follow_symlinks=False)
+        mounted_stat = mounted.stat(follow_symlinks=False)
+    except OSError:
+        raise ProducerError("old bind inode is unavailable") from None
+    if (
+        source_stat.st_dev,
+        source_stat.st_ino,
+        stat.S_IFMT(source_stat.st_mode),
+    ) != (
+        mounted_stat.st_dev,
+        mounted_stat.st_ino,
+        stat.S_IFMT(mounted_stat.st_mode),
+    ):
+        raise ProducerError("old bind source differs from the live mounted inode")
 
 
 def _unchecked_mount_digest(source: Path) -> str:
@@ -830,6 +868,7 @@ def _container_image(
         adapter_source = None
         snapshot_sha256 = None
         core_destination = arm.get("core_mount_destination")
+        bind_sources: list[tuple[Path, str]] = []
         for mount in mounts:
             if (
                 not isinstance(mount, dict)
@@ -842,15 +881,25 @@ def _container_image(
             ):
                 raise ProducerError("old service has an unattested or writable mount")
             seen_destinations.add(mount["Destination"])
-            source = Path(mount["Source"])
+            source_text = mount["Source"]
+            if (
+                not source_text.startswith("/")
+                or source_text == "/"
+                or source_text != os.path.normpath(source_text)
+            ):
+                raise ProducerError("old bind source path is not canonical")
+            source = Path(source_text)
             declared_digest, declared_kind = expected[mount["Destination"]]
             if (declared_kind == "file" and not source.is_file()) or (
                 declared_kind == "tree" and not source.is_dir()
             ):
                 raise ProducerError("old mounted source kind differs")
+            _verify_bind_inode(container, source, mount["Destination"])
             actual = _mount_digest(source)
+            _verify_bind_inode(container, source, mount["Destination"])
             if actual != declared_digest:
                 raise ProducerError("old mounted source changed from protected digest")
+            bind_sources.append((source, mount["Destination"]))
             observed.add(actual)
             if (
                 old_artifact is not None
@@ -918,6 +967,8 @@ def _container_image(
                 )
             except OSError:
                 raise ProducerError("old full snapshot is unreadable") from None
+            for source, destination in bind_sources:
+                _verify_bind_inode(container, source, destination)
             if old_snapshot_proofs is not None:
                 old_snapshot_proofs.append(
                     {
