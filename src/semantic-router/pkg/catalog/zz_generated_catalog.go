@@ -98729,9 +98729,9 @@ const builtInCatalogJSON = `{
           ],
           "relationship": "first_party",
           "verification": {
-            "source": "https://www.volcengine.com/docs/82379/1795150",
+            "source": "https://www.volcengine.com/docs/82379/1330310",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-24"
           }
         }
       ],
