@@ -50,7 +50,7 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 					t.Errorf("%s %s uses unknown permission %q", policy.Method, contract.Pattern, permission)
 				}
 			}
-			if policy.AuditMode != auth.AuditNone && policy.AuditAction == "" {
+			if policy.AuditAction == "" {
 				t.Errorf("%s %s has no audit action", policy.Method, contract.Pattern)
 			}
 		}
@@ -102,6 +102,15 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 
 func TestOutboundDashboardRoutesRevalidateBeforeUse(t *testing.T) {
 	server := setupRouteInventoryServer(t)
+	for _, path := range []string{
+		"/api/router/api/v1/routing/preview",
+		"/api/router/api/v1/plugins/rag/preview",
+	} {
+		policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, path)
+		if lookup != auth.RouteFound || !policy.Revalidate || policy.MaxBodyBytes == 0 || policy.AuditAction == "" {
+			t.Errorf("POST %s policy=%+v lookup=%v, want bounded body, live revalidation, and audit metadata", path, policy, lookup)
+		}
+	}
 	for _, test := range []struct {
 		path, action string
 	}{

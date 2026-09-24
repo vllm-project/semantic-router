@@ -105,12 +105,18 @@ func ReadPolicy(
 	sensitivity Sensitivity,
 	owner ResourceOwner,
 ) RoutePolicy {
+	auditMode := AuditNone
+	if sensitivity == SensitivitySecret {
+		auditMode = AuditRequired
+	}
 	return RoutePolicy{
 		Method:        method,
 		Permission:    permission,
-		AuditMode:     AuditNone,
+		AuditMode:     auditMode,
+		AuditAction:   permission + ".read",
 		Sensitivity:   sensitivity,
 		ResourceOwner: owner,
+		Revalidate:    method != "GET" && method != "HEAD",
 	}
 }
 
@@ -147,9 +153,13 @@ func ProtectedRoute(
 	owner ResourceOwner,
 	methods ...string,
 ) RouteContract {
+	policies := make([]RoutePolicy, 0, len(methods))
+	for _, method := range methods {
+		policies = append(policies, ReadPolicy(method, permission, sensitivity, owner))
+	}
 	return RouteContract{
 		Pattern:  pattern,
-		Policies: policiesForMethods(permission, AuditNone, "", sensitivity, owner, false, false, NoBodyLimit, false, methods...),
+		Policies: policies,
 	}
 }
 
@@ -315,13 +325,15 @@ func ValidateRouteContract(contract RouteContract) error {
 			if strings.TrimSpace(policy.Permission) != "" {
 				return fmt.Errorf("public route %q %s must not require a permission", pattern, method)
 			}
-			if len(policy.AdditionalPermissions) != 0 || policy.AuditMode != AuditNone || policy.Sensitivity != SensitivityPublic || policy.ResourceOwner != ResourceOwnerPublic {
+			if len(policy.AdditionalPermissions) != 0 || policy.AuditMode != AuditNone || strings.TrimSpace(policy.AuditAction) != "" || policy.Sensitivity != SensitivityPublic || policy.ResourceOwner != ResourceOwnerPublic {
 				return fmt.Errorf("public route %q %s has privileged metadata", pattern, method)
 			}
 		} else if strings.TrimSpace(policy.Permission) == "" {
 			return fmt.Errorf("protected route %q %s has no permission", pattern, method)
 		} else if policy.Sensitivity == SensitivityPublic || !slices.Contains(AllPermissions, policy.Permission) {
 			return fmt.Errorf("protected route %q %s has invalid permission or sensitivity", pattern, method)
+		} else if strings.TrimSpace(policy.AuditAction) == "" {
+			return fmt.Errorf("protected route %q %s has no audit action", pattern, method)
 		}
 		for _, permission := range policy.AdditionalPermissions {
 			if permission == policy.Permission || !slices.Contains(AllPermissions, permission) {
@@ -330,6 +342,9 @@ func ValidateRouteContract(contract RouteContract) error {
 		}
 		if policy.AuditMode != AuditNone && policy.AuditMode != AuditRequired && policy.AuditMode != AuditDelegated {
 			return fmt.Errorf("route %q %s has invalid audit mode %q", pattern, method, policy.AuditMode)
+		}
+		if !policy.Public && policy.Sensitivity == SensitivitySecret && policy.AuditMode == AuditNone {
+			return fmt.Errorf("secret route %q %s requires an audit mode", pattern, method)
 		}
 		if policy.AuditMode != AuditNone && strings.TrimSpace(policy.AuditAction) == "" {
 			return fmt.Errorf("route %q %s requires an audit action", pattern, method)

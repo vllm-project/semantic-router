@@ -44,6 +44,46 @@ func TestPolicyMuxRejectsRegistrationWithoutPolicy(t *testing.T) {
 	mux.HandleFunc("/api/unbound", func(http.ResponseWriter, *http.Request) {})
 }
 
+func TestProtectedRouteRequiresAuditActionAtRegistration(t *testing.T) {
+	incomplete := Route("/api/incomplete", RoutePolicy{
+		Method: http.MethodGet, Permission: PermConfigRead,
+		AuditMode: AuditNone, Sensitivity: SensitivitySensitive, ResourceOwner: ResourceOwnerConfig,
+	})
+	if err := ValidateRouteContract(incomplete); err == nil {
+		t.Fatal("protected route without an audit action was accepted")
+	}
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("protected route without an audit action did not fail registration")
+			}
+		}()
+		NewPolicyMux().HandlePolicyFunc(incomplete, func(http.ResponseWriter, *http.Request) {})
+	}()
+	secretWithoutAudit := Route("/api/secret", RoutePolicy{
+		Method: http.MethodGet, Permission: PermConfigRead, AuditMode: AuditNone,
+		AuditAction: "config.read", Sensitivity: SensitivitySecret, ResourceOwner: ResourceOwnerConfig,
+	})
+	if err := ValidateRouteContract(secretWithoutAudit); err == nil {
+		t.Fatal("secret read without auditing was accepted")
+	}
+	for _, contract := range []RouteContract{
+		ProtectedRoute("/api/config", PermConfigRead, SensitivitySensitive, ResourceOwnerConfig, http.MethodGet),
+		ProtectedBoundedRoute("/api/config/preview", PermConfigDeploy, SensitivitySensitive, ResourceOwnerConfig, 1024, http.MethodPost),
+	} {
+		if err := ValidateRouteContract(contract); err != nil {
+			t.Fatalf("complete route %q was rejected: %v", contract.Pattern, err)
+		}
+		if contract.Policies[0].AuditAction == "" {
+			t.Errorf("route %q has no audit action", contract.Pattern)
+		}
+	}
+	bounded := ProtectedBoundedRoute("/api/config/preview", PermConfigDeploy, SensitivitySensitive, ResourceOwnerConfig, 1024, http.MethodPost)
+	if policy := bounded.Policies[0]; policy.AuditMode != AuditNone || !policy.Revalidate {
+		t.Fatalf("read-style POST lacks live revalidation or unexpectedly emits audit writes: %+v", policy)
+	}
+}
+
 func TestIndependentPermissionGrantAndRevoke(t *testing.T) {
 	svc := newTestAuthService(t)
 	user := newTestUser(t, svc, "policy-grants@example.com", RoleRead, "active")
@@ -64,6 +104,87 @@ ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, permissi
 		if err != nil || !perms[permission] {
 			t.Fatalf("%s grant: perms=%v err=%v", permission, perms, err)
 		}
+	}
+}
+
+func TestIndependentPermissionsAtProtectedRoutes(t *testing.T) {
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "policy-route-grants@example.com", RoleRead, "active")
+	type routeCase struct {
+		method, path, permission string
+		owner                    ResourceOwner
+	}
+	routes := []routeCase{
+		{http.MethodPost, "/api/router/config/update", PermConfigWrite, ResourceOwnerConfig},
+		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", PermReplayRead, ResourceOwnerReplay},
+		{http.MethodPost, "/api/router/api/v1/observability/outcomes", PermFeedbackSubmit, ResourceOwnerFeedback},
+		{http.MethodPost, "/api/router/v1/chat/completions", PermInferenceRun, ResourceOwnerInference},
+		{http.MethodPost, "/api/ml-pipeline/train", PermMlPipeline, ResourceOwnerML},
+		{http.MethodPost, "/api/openclaw/rooms", PermOpenClaw, ResourceOwnerOpenClaw},
+	}
+	mux := NewPolicyMux()
+	allow := func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }
+	for _, route := range routes {
+		if route.method == http.MethodGet {
+			mux.HandlePolicyFunc(ProtectedRoute(route.path, route.permission, SensitivitySecret, route.owner, route.method), allow)
+			continue
+		}
+		mux.HandlePolicyFunc(ProtectedMutationRoute(route.path, route.permission, route.permission+".test", SensitivitySensitive, route.owner, 1024, route.method), allow)
+	}
+	mux.Seal()
+	handler := AuthenticateRequest(svc, mux)(mux)
+	for _, route := range routes {
+		if _, err := svc.store.db.Exec(`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,0)
+ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, route.permission); err != nil {
+			t.Fatal(err)
+		}
+	}
+	requestStatus := func(route routeCase) int {
+		t.Helper()
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, newAuthenticatedRequest(t, svc, user, route.method, route.path, `{}`))
+		return response.Code
+	}
+	for _, granted := range routes {
+		if _, err := svc.store.db.Exec(`UPDATE user_permissions SET allowed=1 WHERE user_id=? AND permission_key=?`, user.ID, granted.permission); err != nil {
+			t.Fatal(err)
+		}
+		for _, route := range routes {
+			want := http.StatusForbidden
+			if route.permission == granted.permission {
+				want = http.StatusNoContent
+			}
+			if got := requestStatus(route); got != want {
+				t.Errorf("grant %s: %s %s returned %d, want %d", granted.permission, route.method, route.path, got, want)
+			}
+		}
+		if _, err := svc.store.db.Exec(`UPDATE user_permissions SET allowed=0 WHERE user_id=? AND permission_key=?`, user.ID, granted.permission); err != nil {
+			t.Fatal(err)
+		}
+		if got := requestStatus(granted); got != http.StatusForbidden {
+			t.Errorf("revoked %s still reached %s: %d", granted.permission, granted.path, got)
+		}
+	}
+}
+
+func TestSecretReadProducesRouteAudit(t *testing.T) {
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "policy-read-audit@example.com", RoleRead, "active")
+	mux := NewPolicyMux()
+	contract := ProtectedRoute("/api/replays/record-1", PermReplayRead, SensitivitySecret, ResourceOwnerReplay, http.MethodGet)
+	mux.HandlePolicyFunc(contract, func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	mux.Seal()
+	response := httptest.NewRecorder()
+	AuthenticateRequest(svc, mux)(mux).ServeHTTP(response, newAuthenticatedRequest(t, svc, user, http.MethodGet, contract.Pattern, ""))
+	if response.Code != http.StatusNoContent {
+		t.Fatalf("secret read returned %d", response.Code)
+	}
+	var action string
+	if err := svc.store.db.QueryRow(`SELECT action FROM user_audit_logs WHERE user_id=? ORDER BY id DESC LIMIT 1`, user.ID).Scan(&action); err != nil {
+		t.Fatal(err)
+	}
+	if action != contract.Policies[0].AuditAction {
+		t.Fatalf("audit action=%q, want %q", action, contract.Policies[0].AuditAction)
 	}
 }
 
@@ -207,6 +328,44 @@ ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, PermInfe
 	select {
 	case <-called:
 		t.Fatal("revoked mutation reached handler")
+	default:
+	}
+}
+
+func TestReadStylePostRejectsRevocationWhileBodyIsPaused(t *testing.T) {
+	svc := newTestAuthService(t)
+	user := newTestUser(t, svc, "policy-paused-preview@example.com", RoleRead, "active")
+	mux := NewPolicyMux()
+	policy := ReadPolicy(http.MethodPost, PermEvalRun, SensitivitySensitive, ResourceOwnerEvaluation)
+	policy.MaxBodyBytes = 1024
+	called := make(chan struct{}, 1)
+	mux.HandlePolicyFunc(Route("/api/preview", policy), func(w http.ResponseWriter, _ *http.Request) {
+		called <- struct{}{}
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.Seal()
+	request := newAuthenticatedRequest(t, svc, user, http.MethodPost, "/api/preview", "")
+	body := &pausedBody{entered: make(chan struct{}), release: make(chan struct{}), body: strings.NewReader("{}")}
+	request.Body = body
+	response := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		AuthenticateRequest(svc, mux)(mux).ServeHTTP(response, request)
+		close(done)
+	}()
+	<-body.entered
+	if _, err := svc.store.db.Exec(`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,0)
+ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, PermEvalRun); err != nil {
+		t.Fatal(err)
+	}
+	close(body.release)
+	<-done
+	if response.Code != http.StatusForbidden {
+		t.Fatalf("status=%d, want forbidden", response.Code)
+	}
+	select {
+	case <-called:
+		t.Fatal("revoked preview reached handler")
 	default:
 	}
 }
