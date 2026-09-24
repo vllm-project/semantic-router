@@ -111,7 +111,10 @@ def write_run_metadata(out_dir: Path, meta: ActivationRunMeta) -> Path:
     payload = json.dumps(meta.to_dict(), indent=2, sort_keys=True) + "\n"
     if path.exists() and path.read_text() != payload:
         raise ValueError("existing run metadata differs; choose another output directory")
-    path.write_text(payload)
+    if not path.exists():
+        temp = path.with_suffix(".tmp")
+        temp.write_text(payload)
+        os.replace(temp, path)
     return path
 
 
