@@ -26,7 +26,8 @@ instance before starting the next. A failed check exits nonzero and does not
 write the final `qualification.json`.
 
 For every model the producer checks the detached `drun` launch identity,
-`/ready`, live `/api/status` model and artifact identity, and response contracts
+`/ready`, live `/api/status` model and artifact identity plus scheduler limits
+(concurrency 8, queue 32, active-row credits 4096), and response contracts
 for a mixed Noul/Choice/Score single request, a two-state batch, a 32-question
 single request, and an eight-state batch. It also sends eight concurrent
 eight-question requests and records end-to-end p50/p95 latency, wall time,

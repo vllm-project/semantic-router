@@ -24,7 +24,7 @@ from decision_timed_semantics import (
     validate_timed_semantics,
 )
 
-SCHEMA = "decision-paired-release-v8"
+SCHEMA = "decision-paired-release-v9"
 RAW_SCHEMA = "decision-semantic-workload-v2"
 SOL_GRAPH_MODEL_ID = "llm-semantic-router/Decision-1.0-Sol-2B"
 RUNTIME_VARIANTS = frozenset({"eager", "sol_rocm_graph_b8"})
@@ -37,6 +37,13 @@ ARRIVAL_POLICY = (
 )
 SHAPES = ((32, 1), (8, 8), (32, 32))
 CONCURRENCIES = (1, 8, 32)
+NEW_MAX_CONCURRENCY = 8
+NEW_MAX_QUEUE = 32
+NEW_MAX_ACTIVE_ROWS = 4096
+NEW_SCHEDULER_POLICY = (
+    "new runtime admits at most eight requests, queues at most 32, and limits "
+    "active rows to 4096; HTTP c1/c8/c32 is client-side"
+)
 ROUNDS = 3
 PHYSICAL_BATCH = 8  # Current untuned qualification ceiling, not a report-wide size.
 PHYSICAL_BATCH_BUCKETS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
@@ -1642,8 +1649,22 @@ def validate_report(
         "both service containers running during alternating waves; HBM residency unmeasured",
         "service residency scope",
     )
-    _same(environment.get("new_max_concurrency"), 4, "new scheduler concurrency")
-    _same(environment.get("new_max_queue"), 32, "new scheduler queue")
+    _same(
+        environment.get("new_max_concurrency"),
+        NEW_MAX_CONCURRENCY,
+        "new scheduler concurrency",
+    )
+    _same(environment.get("new_max_queue"), NEW_MAX_QUEUE, "new scheduler queue")
+    _same(
+        environment.get("new_max_active_rows"),
+        NEW_MAX_ACTIVE_ROWS,
+        "new scheduler active-row credit limit",
+    )
+    _same(
+        environment.get("scheduler_policy"),
+        NEW_SCHEDULER_POLICY,
+        "new scheduler policy",
+    )
     if "AMD Instinct" not in str(
         environment.get("hardware", "")
     ) or "loopback" not in str(environment.get("network", "")):
@@ -1862,7 +1883,11 @@ def validate_report(
             raise ValueError(model_id + " candidate runtime variant is invalid")
         _same(
             model.get("new_scheduler"),
-            {"max_concurrency": 4, "max_queue": 32},
+            {
+                "max_concurrency": NEW_MAX_CONCURRENCY,
+                "max_queue": NEW_MAX_QUEUE,
+                "max_active_rows": NEW_MAX_ACTIVE_ROWS,
+            },
             model_id + " new scheduler policy",
         )
         old_image = _hex(model.get("old_image_id"), model_id + " old image", IMAGE_ID)

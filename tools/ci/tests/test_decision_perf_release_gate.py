@@ -510,8 +510,10 @@ def _fixture(
             "gpu_exclusivity": "dedicated_gpu_no_unrelated_compute; externally attested by protected runner",
             "gpu_clock_policy": "unobserved",
             "service_residency": "both service containers running during alternating waves; HBM residency unmeasured",
-            "new_max_concurrency": 4,
+            "new_max_concurrency": 8,
             "new_max_queue": 32,
+            "new_max_active_rows": 4096,
+            "scheduler_policy": "new runtime admits at most eight requests, queues at most 32, and limits active rows to 4096; HTTP c1/c8/c32 is client-side",
         },
         "models": [],
     }
@@ -560,7 +562,11 @@ def _fixture(
             "new_image_id": NEW_IMAGE,
             "old_physical_batch_size": gate.PHYSICAL_BATCH,
             "new_physical_batch_size": gate.PHYSICAL_BATCH,
-            "new_scheduler": {"max_concurrency": 4, "max_queue": 32},
+            "new_scheduler": {
+                "max_concurrency": 8,
+                "max_queue": 32,
+                "max_active_rows": 4096,
+            },
             "shapes": [],
         }
         slug = model_id.rsplit("/", 1)[-1].lower()
@@ -1108,6 +1114,51 @@ class DecisionPerformanceGateTests(unittest.TestCase):
                 },
             )
             self.assertAlmostEqual(model["high_load_throughput_geomean"], 1.6)
+
+    def test_legacy_four_request_scheduler_receipt_is_rejected(self) -> None:
+        baseline = copy.deepcopy(self.report)
+        self.report["environment"]["new_max_concurrency"] = 4
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "new scheduler concurrency"):
+            self.validate()
+
+        self.report = copy.deepcopy(baseline)
+        self.report["models"][0]["new_scheduler"]["max_concurrency"] = 4
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "new scheduler policy"):
+            self.validate()
+
+    def test_active_row_credit_limit_must_match_live_candidate(self) -> None:
+        baseline = copy.deepcopy(self.report)
+        for invalid in (None, 1024):
+            with self.subTest(environment=invalid):
+                self.report = copy.deepcopy(baseline)
+                if invalid is None:
+                    self.report["environment"].pop("new_max_active_rows")
+                else:
+                    self.report["environment"]["new_max_active_rows"] = invalid
+                self.write_report()
+                with self.assertRaisesRegex(
+                    ValueError, "new scheduler active-row credit limit"
+                ):
+                    self.validate()
+            with self.subTest(model=invalid):
+                self.report = copy.deepcopy(baseline)
+                if invalid is None:
+                    self.report["models"][0]["new_scheduler"].pop("max_active_rows")
+                else:
+                    self.report["models"][0]["new_scheduler"][
+                        "max_active_rows"
+                    ] = invalid
+                self.write_report()
+                with self.assertRaisesRegex(ValueError, "new scheduler policy"):
+                    self.validate()
+
+    def test_previous_v8_scheduler_schema_is_rejected(self) -> None:
+        self.report["schema_version"] = "decision-paired-release-v8"
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "performance report schema"):
+            self.validate()
 
     def test_old_v4_report_without_live_process_proof_is_rejected(self) -> None:
         model = self.report["models"][0]

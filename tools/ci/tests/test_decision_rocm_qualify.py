@@ -55,11 +55,13 @@ class FakeRuntimeIO:
         self,
         *,
         bad_status: bool = False,
+        bad_row_limit: bool = False,
         bad_response: bool = False,
         missing_forward: bool = False,
         no_coalescing: bool = False,
     ):
         self.bad_status = bad_status
+        self.bad_row_limit = bad_row_limit
         self.bad_response = bad_response
         self.missing_forward = missing_forward
         self.no_coalescing = no_coalescing
@@ -123,6 +125,9 @@ class FakeRuntimeIO:
                             "queued": 0,
                             "max_concurrency": qualify.MAX_CONCURRENCY,
                             "max_queue": qualify.MAX_QUEUE,
+                            "max_active_rows": (
+                                1024 if self.bad_row_limit else qualify.MAX_ACTIVE_ROWS
+                            ),
                         }
                     ],
                 }
@@ -241,6 +246,20 @@ class ROCmQualificationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             options = self._options(Path(temporary))
             io = FakeRuntimeIO(bad_status=True)
+            with (
+                patch.object(qualify, "source_sha", return_value=SOURCE),
+                patch.object(qualify, "_require_clean_source"),
+                patch.object(qualify, "_require_free_port"),
+                self.assertRaisesRegex(qualify.QualificationError, "live status"),
+            ):
+                qualify.qualify_all(options, io=io, inspect_candidate=lambda _: None)
+            self.assertFalse((options.output_dir / "qualification.json").exists())
+            self.assertEqual([command[2] for command in io.commands], ["run", "stop"])
+
+    def test_wrong_active_row_credit_limit_does_not_qualify(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            options = self._options(Path(temporary))
+            io = FakeRuntimeIO(bad_row_limit=True)
             with (
                 patch.object(qualify, "source_sha", return_value=SOURCE),
                 patch.object(qualify, "_require_clean_source"),

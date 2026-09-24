@@ -11,8 +11,8 @@ python3 tools/ci/decision_perf_release_gate.py validate \
   --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
 ```
 
-The performance report schema is `decision-paired-release-v8`. It requires
-live old process and full-snapshot proof for all six models; v4/v5/v6/v7 receipts
+The performance report schema is `decision-paired-release-v9`. It requires
+live old process and full-snapshot proof for all six models; v4/v5/v6/v7/v8 receipts
 cannot qualify.
 
 The gate expects exactly six Decision model IDs, each measured at 32 questions
@@ -111,7 +111,8 @@ declared running container to `127.0.0.1`. The new image must match a registry
 reference pinned with `@sha256:`; the protected old image may instead use an
 exact local Docker `sha256:` image ID when redistribution is unavailable. The
 producer checks the candidate image's clean source label, exact `drun` command
-and environment, live container-init process, and artifact/scheduler status,
+and environment, live container-init process, and `/api/status` artifact and
+scheduler identity (concurrency 8, queue 32, active-row credit limit 4096),
 and requires the loopback API/metrics URL to map to the process's port 8000.
 It then performs a separate untimed
 preflight before each tracked semantic benchmark. An old preview service may
@@ -301,9 +302,13 @@ the harness can provide such a shared timed-arrival trace, the release gate
 judges only equal-total-work per-cell decisions/sec non-regression; it does
 not accept or report p95 latency improvement as an alternative win. Three
 throughput rounds alternate old/new wave order. The new
-runtime must attest scheduler concurrency 4 and queue 32; the physical batch
-size is recorded per model from the running launch. The gate records this arrival scope and checks the resulting raw
-workflow intervals, successes, throughput, and physical batch counters.
+runtime must attest scheduler concurrency 8, queue 32, and an active-row
+credit limit of 4096 from its live `/api/status`. The producer records all
+three limits per model, and the gate rejects a report with the former 4/32
+policy or a missing or different row limit. The physical batch size is
+recorded per model from the running launch. The gate records this arrival
+scope and checks the resulting raw workflow intervals, successes, throughput,
+and physical batch counters.
 Each new-arm throughput round must account for one row preparation per
 successful workflow and one physical row per successful decision. The gate
 checks the configured per-model batch capacity against every round, requires
