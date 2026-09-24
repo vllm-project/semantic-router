@@ -349,6 +349,26 @@ def previous_release(version: str, tags: list[str]) -> str:
     return max(candidates)[1]
 
 
+def resolve_published_fixture(plan: dict, profile: str) -> None:
+    published = published_from_plan(plan)
+    if not published:
+        return
+    try:
+        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
+    except PublicationUnavailableError:
+        if profile != "pr":
+            raise
+        # A PR must remain buildable when the immutable fixture tag has
+        # not reached GHCR yet. Main/release stay strict so publication
+        # gaps cannot be hidden in release pipelines.
+        candidate = dict(plan["image_sources"][MOCKER_IMAGE])
+        candidate["source"] = "candidate"
+        plan["image_sources"][MOCKER_IMAGE] = candidate
+        if MOCKER_IMAGE not in plan["build_images"]:
+            plan["build_images"].append(MOCKER_IMAGE)
+            plan["build_images"].sort()
+
+
 def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "previous-release":
         parser = argparse.ArgumentParser(
@@ -391,21 +411,8 @@ def main() -> int:
         draft=args.draft,
         requested=tuple(args.verification),
     )
-    if published := published_from_plan(plan):
-        try:
-            plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
-        except PublicationUnavailableError:
-            if profile != "pr":
-                raise
-            # A PR must remain buildable when the immutable fixture tag has
-            # not reached GHCR yet. Main/release stay strict so publication
-            # gaps cannot be hidden in release pipelines.
-            candidate = dict(plan["image_sources"][MOCKER_IMAGE])
-            candidate["source"] = "candidate"
-            plan["image_sources"][MOCKER_IMAGE] = candidate
-            if MOCKER_IMAGE not in plan["build_images"]:
-                plan["build_images"].append(MOCKER_IMAGE)
-                plan["build_images"].sort()
+    resolve_published_fixture(plan, args.profile)
+    if published_from_plan(plan):
         plan["plan_sha256"] = digest(
             {key: value for key, value in plan.items() if key != "plan_sha256"}
         )

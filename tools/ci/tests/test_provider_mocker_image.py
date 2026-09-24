@@ -14,7 +14,7 @@ from urllib.error import HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import provider_mocker_image as mocker
-from ci_plan import make_plan
+from ci_plan import make_plan, resolve_published_fixture
 from image_artifacts import publication_tags
 
 
@@ -143,6 +143,7 @@ class FixturePublicationTests(unittest.TestCase):
                 source_sha="c" * 40,
                 profile="pr",
             )
+            resolve_published_fixture(plan, "pr")
         self.assertIn(mocker.IMAGE, plan["build_images"])
         self.assertEqual(plan["image_sources"][mocker.IMAGE]["source"], "candidate")
 
@@ -151,11 +152,12 @@ class FixturePublicationTests(unittest.TestCase):
             "ci_plan.resolve_published",
             side_effect=mocker.PublicationUnavailableError("missing"),
         ), self.assertRaises(mocker.PublicationUnavailableError):
-            make_plan(
+            plan = make_plan(
                 ["e2e/testing/run_memory_integration.sh"],
                 source_sha="c" * 40,
                 profile="main",
             )
+            resolve_published_fixture(plan, "main")
 
     def test_fixture_is_reused_for_all_unrelated_ci_entrypoints(self):
         for profile, full in (
