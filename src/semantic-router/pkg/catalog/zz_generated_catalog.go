@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:4c0cf8ff60118137bcf645b9d37a40ba8610bb9a1fa6875d7a6510419f97d3fa"
+const builtInCatalogDigest = "sha256:18b175b6102d3a22d7745b34af73b61615bb3221d7decb3eae101f99e6966d18"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -94693,13 +94693,73 @@ const builtInCatalogJSON = `{
       },
       "category": "model_api",
       "conformance": {
-        "status": "unverified"
+        "status": "live_verified",
+        "verified_at": "2026-09-22"
       },
       "default_base_url": "https://api.groq.com/openai/v1",
       "default_protocol": "openai/chat-completions@1",
       "description": "Low-latency hosted inference.",
       "display_name": "Groq",
       "id": "groq",
+      "models": [
+        {
+          "catalog": "openai/gpt-oss-120b",
+          "id": "openai/gpt-oss-120b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.6,
+            "currency": "USD",
+            "prompt_per_1m": 0.15
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "openai/gpt-oss-20b",
+          "id": "openai/gpt-oss-20b",
+          "lifecycle": "active",
+          "pricing": {
+            "completion_per_1m": 0.3,
+            "currency": "USD",
+            "prompt_per_1m": 0.075
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        },
+        {
+          "catalog": "qwen/qwen3.8-27b",
+          "id": "qwen/qwen3.8-27b",
+          "lifecycle": "experimental",
+          "pricing": {
+            "completion_per_1m": 4.0,
+            "currency": "USD",
+            "prompt_per_1m": 0.8
+          },
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "managed_cloud",
+          "verification": {
+            "source": "https://console.groq.com/docs/models",
+            "status": "reproduced",
+            "verified_at": "2026-09-22"
+          }
+        }
+      ],
       "presentation": {
         "logo": "package:groq",
         "monochrome": true,
