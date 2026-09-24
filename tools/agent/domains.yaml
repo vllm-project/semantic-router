@@ -1140,6 +1140,18 @@ profiles:
       - candle-binding/src/ffi/instances/grounding.rs
       - onnx-binding/src/instances/grounding.rs
       - tools/models/vela_halu/**
+  vela-shield:
+    display_name: Vela Shield Safety
+    owner: e2e
+    coverage_role: published-shield-safety-model-selection
+    runtime: candle
+    device: cpu
+    selection: pr
+    paths:
+      - e2e/profiles/vela-shield/**
+      - e2e/testcases/vela_shield.go
+      - src/semantic-router/pkg/classification/classifier_signal_safety.go
+      - src/semantic-router/pkg/classification/safety_classifier_local.go
   hallucination:
     display_name: Hallucination Detection
     owner: e2e
