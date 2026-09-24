@@ -32,7 +32,7 @@ func TestModelVerificationSessionRevokedDuringBodyDoesNotCallProvider(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.CreateUser(t.Context(), "revocation@example.test", "Revocation Test", hash, dashboardauth.RoleWrite, "active"); err != nil {
+	if _, err = store.CreateUser(t.Context(), "revocation@example.test", "Revocation Test", hash, dashboardauth.RoleWrite, "active"); err != nil {
 		t.Fatal(err)
 	}
 	token, _, err := service.Login(t.Context(), "revocation@example.test", password)

@@ -197,7 +197,7 @@ func TestInferenceStreamStopsWhenLiveAuthorizationIsRevoked(t *testing.T) {
 			defer store.Close()
 			svc := auth.NewService(store, "inference-stream-secret", 1)
 			const email, password = "stream@example.com", "test-admin-password"
-			if err := svc.EnsureBootstrapAdmin(context.Background(), email, password, "Stream Admin"); err != nil {
+			if err = svc.EnsureBootstrapAdmin(context.Background(), email, password, "Stream Admin"); err != nil {
 				t.Fatal(err)
 			}
 			token, user, err := svc.Login(context.Background(), email, password)
