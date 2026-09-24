@@ -243,6 +243,10 @@ func SetupActivateHandler(
 		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
+		if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+			writeConfigPersistenceError(w, err)
+			return
+		}
 		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
 			log.Printf("Setup activation aborted, config backup failed: %v", backupErr)
 			http.Error(w, "Setup activation aborted: the config backup could not be written with owner-only permissions.", http.StatusInternalServerError)

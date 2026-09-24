@@ -161,26 +161,16 @@ func readPersistedDashboardConfig(configPath string) ([]byte, error) {
 // plain Docker) keeps writing the local file exactly as before.
 func writeConfigAtomically(configPath string, yamlData []byte) error {
 	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		mounted, err := checkConfigMapMutationFresh(configPath)
+		if err != nil {
+			return err
+		}
 		writer, err := resolvedConfigMapWriter()
 		if err != nil {
 			return fmt.Errorf("config write target is declared but no Kubernetes client is available: %w", err)
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
 		defer cancel()
-		mounted, err := os.ReadFile(configPath)
-		if err != nil {
-			return fmt.Errorf("read mounted config before ConfigMap update: %w", err)
-		}
-		persisted, found, err := writer.Read(ctx, target)
-		if err != nil {
-			return fmt.Errorf("read config ConfigMap before update: %w", err)
-		}
-		if !found {
-			return os.ErrNotExist
-		}
-		if !bytes.Equal(mounted, persisted) {
-			return errConfigRolloutRequired
-		}
 		return writer.WriteIfUnchanged(ctx, target, mounted, yamlData)
 	}
 
@@ -213,6 +203,38 @@ func writeConfigAtomically(configPath string, yamlData []byte) error {
 		_ = dir.Close()
 	}
 	return nil
+}
+
+// checkConfigMapMutationFresh must run before creating a backup or DSL archive
+// as well as at the final write. A stale subPath mount otherwise lets a
+// rejected second request replace a valid backup with newer ConfigMap bytes.
+// The final WriteIfUnchanged still protects the gap after this read.
+func checkConfigMapMutationFresh(configPath string) ([]byte, error) {
+	target, ok := configwriter.ConfigMapTargetFromEnv()
+	if !ok {
+		return nil, nil
+	}
+	writer, err := resolvedConfigMapWriter()
+	if err != nil {
+		return nil, fmt.Errorf("resolve config ConfigMap client: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+	defer cancel()
+	mounted, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("read mounted config before ConfigMap update: %w", err)
+	}
+	persisted, found, err := writer.Read(ctx, target)
+	if err != nil {
+		return nil, fmt.Errorf("read config ConfigMap before update: %w", err)
+	}
+	if !found {
+		return nil, os.ErrNotExist
+	}
+	if !bytes.Equal(mounted, persisted) {
+		return nil, errConfigRolloutRequired
+	}
+	return mounted, nil
 }
 
 func restorePreviousRuntimeConfig(configPath string, configDir string, previousData []byte) error {

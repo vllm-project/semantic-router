@@ -271,6 +271,10 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	if auth.RejectRevokedMutation(w, r) {
 		return
 	}
+	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+		writeConfigPersistenceError(w, err)
+		return
+	}
 
 	// Step 3: Create backup of current config
 	version, backupErr := createConfigBackup(configDir, existingData)
@@ -523,6 +527,10 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	}
 
 	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
+	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+		writeConfigPersistenceError(w, err)
 		return
 	}
 

@@ -70,6 +70,46 @@ func writeConfigSnapshot(path string, data []byte) error {
 	return syncSnapshotDirectory(filepath.Dir(path))
 }
 
+// Backup versions must never replace one another, including when two writes
+// fall in the same timestamp tick. Linking a synced temporary file publishes
+// the complete 0600 snapshot atomically and fails if the version exists.
+func writeConfigSnapshotExclusive(path string, data []byte) error {
+	temp, err := createConfigSnapshotTemp(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(temp.Name()) }()
+	if err := writeAndCloseSnapshotTemp(temp, data); err != nil {
+		return err
+	}
+	if err := os.Link(temp.Name(), path); err != nil {
+		return err
+	}
+	if err := os.Remove(temp.Name()); err != nil {
+		return err
+	}
+	return syncSnapshotDirectory(filepath.Dir(path))
+}
+
+const configBackupVersionLayout = "20060102-150405.000000000"
+
+func writeVersionedConfigBackup(backupDir string, data []byte, now time.Time) (string, error) {
+	base := now.Format(configBackupVersionLayout)
+	for attempt := 0; attempt < 1000; attempt++ {
+		version := base
+		if attempt > 0 {
+			version = fmt.Sprintf("%s-%03d", base, attempt)
+		}
+		path := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
+		err := writeConfigSnapshotExclusive(path, data)
+		if errors.Is(err, os.ErrExist) {
+			continue
+		}
+		return version, err
+	}
+	return "", fmt.Errorf("no available config backup version for %s", base)
+}
+
 func syncSnapshotDirectory(dir string) error {
 	directory, err := os.Open(dir)
 	if err != nil {
@@ -185,16 +225,16 @@ func createConfigBackup(configDir string, existingData []byte) (string, error) {
 	}
 	repairConfigSnapshotPermissions(configDir)
 
-	version := time.Now().Format("20060102-150405")
+	now := time.Now()
 	if len(existingData) == 0 {
-		return version, nil
+		return now.Format(configBackupVersionLayout), nil
 	}
 
-	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := writeConfigSnapshot(backupFile, existingData); err != nil {
+	version, err := writeVersionedConfigBackup(backupDir, existingData, now)
+	if err != nil {
 		return "", fmt.Errorf("write config backup: %w", err)
 	}
-	log.Printf("[Deploy] Config backup created: %s", backupFile)
+	log.Printf("[Deploy] Config backup created: %s", filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version)))
 
 	return version, nil
 }
@@ -260,9 +300,7 @@ func snapshotCurrentConfigBeforeRollback(configPath string, configDir string) ([
 	}
 	repairConfigSnapshotPermissions(configDir)
 
-	currentVersion := time.Now().Format("20060102-150405")
-	preRollbackFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", currentVersion))
-	if err := writeConfigSnapshot(preRollbackFile, existingData); err != nil {
+	if _, err := writeVersionedConfigBackup(backupDir, existingData, time.Now()); err != nil {
 		return nil, fmt.Errorf("snapshot current config before rollback: %w", err)
 	}
 
@@ -302,6 +340,10 @@ func listConfigVersions(configPath string) ([]ConfigVersion, error) {
 		timestamp := versionStr
 		if t, parseErr := time.Parse("20060102-150405", versionStr); parseErr == nil {
 			timestamp = t.Format("2006-01-02 15:04:05")
+		} else if len(versionStr) >= len(configBackupVersionLayout) {
+			if t, preciseErr := time.Parse(configBackupVersionLayout, versionStr[:len(configBackupVersionLayout)]); preciseErr == nil {
+				timestamp = t.Format("2006-01-02 15:04:05.000000000")
+			}
 		}
 
 		versions = append(versions, ConfigVersion{
