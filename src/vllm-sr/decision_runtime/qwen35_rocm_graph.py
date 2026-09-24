@@ -12,7 +12,7 @@ import inspect
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .qwen35_rocm_binder import (
     QwenRocmBindingError,
@@ -74,6 +74,7 @@ class QwenRocmBackboneGraphs:
         runtime: Qwen35TorchRuntime,
         *,
         artifact_content_id: str,
+        event_recorder: Callable[[str], None] | None = None,
     ) -> None:
         import threading  # noqa: PLC0415
 
@@ -108,6 +109,7 @@ class QwenRocmBackboneGraphs:
         self._captured_bytes = 0
         self._capture_attempts = 0
         self._parity_warnings = 0
+        self._event_recorder = event_recorder
 
     def logits(self, batch: dict[str, Any]) -> Any:
         """Return original eager logits or qualified guarded-graph logits."""
@@ -121,33 +123,35 @@ class QwenRocmBackboneGraphs:
             or ids.shape[1] < 32
             or ids.shape[1] % 32
         ):
-            return model(**batch)
+            return self._fallback(batch)
         try:
             masks = self._exact_masks(batch)
             key = self._key(batch, masks)
         except (AttributeError, RuntimeError, TypeError, ValueError):
             # An unrecognized pinned-helper mask layout never enters a graph.
-            return model(**batch)
+            return self._fallback(batch)
         entry = self._graphs.get(key)
         if entry is not None:
-            return self._logits_from_hidden(batch, self._replay(entry, batch, masks))
+            output = self._logits_from_hidden(batch, self._replay(entry, batch, masks))
+            self._record_event("replay")
+            return output
         if (
             key in self._rejected
             or len(self._graphs) >= _MAX_GRAPHS
             or self._capture_attempts >= _MAX_GRAPHS
             or self._captured_bytes >= _MAX_TOTAL_CAPTURE_BYTES
         ):
-            return model(**batch)
+            return self._fallback(batch)
 
         ordinary = model(**batch)
         mapped = model(**{**batch, "attention_mask": masks})
         if not self._same_valid_logits_and_probabilities(batch, ordinary, mapped):
             self._reject_for_parity(key, stage="exact-mask")
-            return ordinary
+            return self._fallback(batch, ordinary=ordinary)
         torch = self.runtime.torch
         if torch.cuda.mem_get_info(self.runtime.device)[0] < _MIN_FREE_HBM_BYTES:
             self._rejected.add(key)
-            return ordinary
+            return self._fallback(batch, ordinary=ordinary)
         before = torch.cuda.memory_allocated(self.runtime.device)
         before_reserved = torch.cuda.memory_reserved(self.runtime.device)
         torch.cuda.reset_peak_memory_stats(self.runtime.device)
@@ -158,7 +162,7 @@ class QwenRocmBackboneGraphs:
             raise
         except (RuntimeError, NotImplementedError):
             self._rejected.add(key)
-            return ordinary
+            return self._fallback(batch, ordinary=ordinary)
         captured.allocated_bytes = max(
             0,
             torch.cuda.memory_allocated(self.runtime.device) - before,
@@ -173,16 +177,26 @@ class QwenRocmBackboneGraphs:
             or torch.cuda.mem_get_info(self.runtime.device)[0] < _MIN_FREE_HBM_BYTES
         ):
             self._rejected.add(key)
-            return ordinary
+            return self._fallback(batch, ordinary=ordinary)
         candidate = self._logits_from_hidden(
             batch, self._replay(captured, batch, masks)
         )
         if not self._same_valid_logits_and_probabilities(batch, ordinary, candidate):
             self._reject_for_parity(key, stage="captured-replay")
-            return ordinary
+            return self._fallback(batch, ordinary=ordinary)
         self._graphs[key] = captured
         self._captured_bytes += captured.allocated_bytes
+        self._record_event("capture")
         return ordinary  # First request keeps its exact ordinary-eager result.
+
+    def _record_event(self, event: str) -> None:
+        if self._event_recorder is not None:
+            self._event_recorder(event)
+
+    def _fallback(self, batch: dict[str, Any], *, ordinary: Any = None) -> Any:
+        output = self.runtime.model(**batch) if ordinary is None else ordinary
+        self._record_event("fallback")
+        return output
 
     def _reject_for_parity(self, key: _GraphKey, *, stage: str) -> None:
         """Disable one graph key and log at most four content-free warnings."""

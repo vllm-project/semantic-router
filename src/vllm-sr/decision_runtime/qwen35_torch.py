@@ -16,7 +16,7 @@ import types
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Literal, Protocol
+from typing import Any, Callable, Literal, Protocol
 
 from .qwen35_inputs import EncodedQwenRow
 from .release_artifacts import ReleaseArtifactError, verify_release_manifest
@@ -161,6 +161,7 @@ class Qwen35TorchRuntime:
         enable_rocm_graph: bool = False,
         artifact_content_id: str | None = None,
         graph_model_id: str | None = None,
+        graph_event_recorder: Callable[[str], None] | None = None,
     ) -> Qwen35TorchRuntime:
         """Load verified data files with the distribution-owned implementation."""
 
@@ -291,7 +292,9 @@ class Qwen35TorchRuntime:
             from .qwen35_rocm_graph import QwenRocmBackboneGraphs  # noqa: PLC0415
 
             runtime.rocm_graphs = QwenRocmBackboneGraphs(
-                runtime, artifact_content_id=artifact_content_id
+                runtime,
+                artifact_content_id=artifact_content_id,
+                event_recorder=graph_event_recorder,
             )
         return runtime
 
