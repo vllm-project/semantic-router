@@ -76,17 +76,18 @@ func TestWebSocketProxyClosesBothConnectionsOnRequestCancellation(t *testing.T) 
 	}
 	defer client.Close()
 	_ = client.SetDeadline(time.Now().Add(2 * time.Second))
-	if _, err := fmt.Fprintf(client,
+	if _, writeErr := fmt.Fprintf(client,
 		"GET /embedded/openclaw/worker/ws HTTP/1.1\r\nHost: %s\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n",
 		strings.TrimPrefix(server.URL, "http://"),
-	); err != nil {
-		t.Fatalf("write upgrade request: %v", err)
+	); writeErr != nil {
+		t.Fatalf("write upgrade request: %v", writeErr)
 	}
 	clientReader := bufio.NewReader(client)
 	response, err := http.ReadResponse(clientReader, &http.Request{Method: http.MethodGet})
 	if err != nil {
 		t.Fatalf("read upgrade response: %v", err)
 	}
+	defer response.Body.Close()
 	if response.StatusCode != http.StatusSwitchingProtocols {
 		t.Fatalf("upgrade status = %d", response.StatusCode)
 	}

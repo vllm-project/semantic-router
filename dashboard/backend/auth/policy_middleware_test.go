@@ -154,6 +154,9 @@ func TestAuditedWebSocketHandshakeRecordsSwitchingProtocols(t *testing.T) {
 		"ws"+strings.TrimPrefix(server.URL, "http")+"/api/openclaw/rooms/room-1/ws",
 		http.Header{"Authorization": []string{"Bearer " + token}},
 	)
+	if response != nil && response.Body != nil {
+		defer response.Body.Close()
+	}
 	if err != nil {
 		t.Fatalf("audited websocket handshake: %v", err)
 	}
