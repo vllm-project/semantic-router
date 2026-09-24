@@ -303,6 +303,9 @@ func decodeAnthropicContentStart(wire anthropicEventWire) (llmprotocol.Event, er
 	if wire.ContentBlock == nil {
 		return event, nil
 	}
+	if err := validateAnthropicToolCaller(wire.ContentBlock.Caller, true); err != nil {
+		return llmprotocol.Event{}, err
+	}
 	event.ItemID = wire.ContentBlock.ID
 	switch wire.ContentBlock.Type {
 	case "tool_use":
