@@ -30,7 +30,7 @@ func registerSRBenchRoutes(mux routeRegistrar, cfg *config.Config) {
 	if err != nil {
 		cfg.SRBenchUnavailableReason = "sr-bench service configuration is invalid."
 		log.Printf("sr-bench proxy configuration is invalid")
-		registerRouteGroup(mux, srBenchRouteContracts(), notFound)
+		registerRouteGroup(mux, srBenchRouteContracts(), http.HandlerFunc(notFound))
 		return
 	}
 	if strings.TrimSpace(token) != "" {

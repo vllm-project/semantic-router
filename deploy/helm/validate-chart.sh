@@ -71,6 +71,39 @@ else
 fi
 echo ""
 
+# A Dashboard config edit on Kubernetes is saved to a ConfigMap and activated
+# after rollout. The backup history needed for rollback must outlive that pod.
+log_info "Testing default Dashboard backup persistence..."
+helm template dashboard-release "$CHART_PATH" --set dashboard.enabled=true \
+    > "$TEMP_DIR/dashboard-default-template.yaml"
+python3 - "$TEMP_DIR/dashboard-default-template.yaml" <<'PY'
+import sys
+import yaml
+
+documents = [doc for doc in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")) if isinstance(doc, dict)]
+dashboard = next(
+    doc for doc in documents
+    if doc.get("kind") == "Deployment"
+    and doc.get("metadata", {}).get("labels", {}).get("app.kubernetes.io/component") == "dashboard"
+)
+claims = [
+    doc for doc in documents
+    if doc.get("kind") == "PersistentVolumeClaim"
+    and doc.get("metadata", {}).get("labels", {}).get("app.kubernetes.io/component") == "dashboard"
+]
+assert len(claims) == 1, "Dashboard backup PVC must render when Dashboard is enabled"
+pod = dashboard["spec"]["template"]["spec"]
+mounts = pod["containers"][0]["volumeMounts"]
+assert any(mount.get("name") == "dashboard-data" and mount.get("mountPath") == "/app/data" for mount in mounts)
+assert any(
+    volume.get("name") == "dashboard-data"
+    and volume.get("persistentVolumeClaim", {}).get("claimName") == claims[0]["metadata"]["name"]
+    for volume in pod["volumes"]
+)
+PY
+log_success "Dashboard config backups survive a rollout by default"
+echo ""
+
 # Test 3: Canonical config override must be atomic and preserve explicit gates
 log_info "Testing atomic canonical Router config rendering..."
 cp deploy/helm/testdata/backend-target-values.yaml "$TEMP_DIR/canonical-config.yaml"

@@ -137,7 +137,7 @@ the locked chart dependencies.
 | dashboard.jwtSecret.existingSecretKey | string | `"jwt-secret"` | Key within existingSecret holding the JWT signing secret. |
 | dashboard.persistence.accessMode | string | `"ReadWriteOnce"` | Access mode for the dashboard-local state PVC |
 | dashboard.persistence.annotations | object | `{}` | Annotations for the dashboard-local state PVC |
-| dashboard.persistence.enabled | bool | `false` | Persist dashboard-local SQLite state for auth/session/workflow data. This is restart-safe for one dashboard replica, not a shared HA session store. |
+| dashboard.persistence.enabled | bool | `true` | Persist dashboard-local auth/session/workflow state and config backups. ConfigMap edits require a rollout, so backups must survive pod replacement for the rollback API to remain usable. Set false only for disposable demos. |
 | dashboard.persistence.existingClaim | string | `""` | Existing PVC to mount for dashboard-local state |
 | dashboard.persistence.mountPath | string | `"/app/data"` | Container mount path for dashboard-local state |
 | dashboard.persistence.size | string | `"1Gi"` | Requested dashboard-local state size |
@@ -447,3 +447,8 @@ becomes active. A second mutation on a stale Pod returns HTTP 409
 Kubernetes CR-managed configuration remains read-only through this API. Keep
 the canonical Helm values in sync with API edits before the next Helm upgrade,
 which otherwise renders the earlier values back into the ConfigMap.
+When the Dashboard is enabled, its PVC retains config backups across the
+required rollout, so Dashboard rollback can still find earlier versions.
+Managed knowledge base assets need a writable, persistent directory in
+addition to the YAML document; their mutation API returns
+`KB_ASSET_STORAGE_READ_ONLY` on ConfigMap-backed deployments.

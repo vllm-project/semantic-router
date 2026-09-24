@@ -78,7 +78,7 @@ func (m *PolicyMux) Handle(pattern string, handler http.Handler) {
 	panic(fmt.Sprintf("route %q requires a policy contract", pattern))
 }
 
-func (m *PolicyMux) HandleFunc(pattern string, handler http.HandlerFunc) {
+func (m *PolicyMux) HandleFunc(pattern string, handler func(http.ResponseWriter, *http.Request)) {
 	panic(fmt.Sprintf("route %q requires a policy contract", pattern))
 }
 

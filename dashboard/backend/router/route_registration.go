@@ -15,7 +15,7 @@ import (
 // passes PolicyMux, which refuses any registration without a complete policy.
 type routeRegistrar interface {
 	Handle(string, http.Handler)
-	HandleFunc(string, http.HandlerFunc)
+	HandleFunc(string, func(http.ResponseWriter, *http.Request))
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 

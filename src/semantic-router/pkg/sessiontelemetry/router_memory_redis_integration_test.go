@@ -57,7 +57,9 @@ func TestRedisSessionStoreMergeRoundTrip(t *testing.T) {
 		storagetest.Unavailable(t, "redis", err)
 	}
 
-	now := time.Now().UTC()
+	// Keep synthetic event times in the past: the outcome window deliberately
+	// drops future timestamps, and the two replica offsets below are positive.
+	now := time.Now().UTC().Add(-5 * time.Second)
 	// Production persists through Merge even when the key does not exist yet.
 	if err := first.Merge(RouterSessionSnapshot{SessionID: freshID, CurrentModel: "first-model", LastSeen: now}, time.Minute); err != nil {
 		t.Fatalf("Merge fresh session: %v", err)

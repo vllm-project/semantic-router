@@ -614,9 +614,10 @@ dashboard:
       memory: "128Mi"
       cpu: "100m"
   persistence:
-    # -- Persist dashboard-local SQLite state for auth/session/workflow data.
-    # This is restart-safe for one dashboard replica, not a shared HA session store.
-    enabled: false
+    # -- Persist dashboard-local auth/session/workflow state and config backups.
+    # ConfigMap edits require a rollout, so backups must survive pod replacement
+    # for the rollback API to remain usable. Set false only for disposable demos.
+    enabled: true
     # -- Existing PVC to mount for dashboard-local state.
     existingClaim: ""
     # -- Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "".

@@ -56,7 +56,7 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 }
 
 type RouteRegistrar interface {
-	HandleFunc(string, http.HandlerFunc)
+	HandleFunc(string, func(http.ResponseWriter, *http.Request))
 }
 
 func registerAdminPolicy(mux RouteRegistrar, contract RouteContract, handler http.HandlerFunc) {

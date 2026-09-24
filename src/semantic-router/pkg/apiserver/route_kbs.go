@@ -8,7 +8,19 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
+
+func (s *ClassificationAPIServer) rejectConfigMapKnowledgeBaseMutation(w http.ResponseWriter) bool {
+	if _, managed := configwriter.ConfigMapTargetFromEnv(); !managed {
+		return false
+	}
+	// Managed KB definitions and embedding assets live under the config base
+	// directory. A ConfigMap update can persist the YAML reference, but it cannot
+	// persist these files through a pod rollout. Reject before staging anything.
+	s.writeErrorResponse(w, http.StatusForbidden, "KB_ASSET_STORAGE_READ_ONLY", "Managed knowledge base assets cannot be edited on this ConfigMap-backed deployment. Update the knowledge base source and roll out the deployment.")
+	return true
+}
 
 func (s *ClassificationAPIServer) handleListKnowledgeBases(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.currentConfig()
@@ -48,6 +60,9 @@ func (s *ClassificationAPIServer) handleGetKnowledgeBase(w http.ResponseWriter, 
 }
 
 func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	if s.rejectConfigMapKnowledgeBaseMutation(w) {
+		return
+	}
 	guard, ok := s.acquireConfigMutationGuard(w)
 	if !ok {
 		return
@@ -92,6 +107,9 @@ func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	if s.rejectConfigMapKnowledgeBaseMutation(w) {
+		return
+	}
 	guard, ok := s.acquireConfigMutationGuard(w)
 	if !ok {
 		return
@@ -150,6 +168,9 @@ func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	if s.rejectConfigMapKnowledgeBaseMutation(w) {
+		return
+	}
 	guard, ok := s.acquireConfigMutationGuard(w)
 	if !ok {
 		return
