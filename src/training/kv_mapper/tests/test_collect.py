@@ -18,6 +18,9 @@ from src.training.kv_mapper.collect import (
     parse_layer_subset,
     read_run_metadata,
     resolve_stride,
+    token_fingerprint,
+    validate_activation_chunk,
+    write_activation_chunk,
     write_run_metadata,
 )
 
@@ -26,17 +29,17 @@ class CollectContractTests(unittest.TestCase):
     def test_calibration_windows_use_requested_count_and_stride(self) -> None:
         documents = [[0, 1, 2], [3, 4, 5, 6, 7, 8, 9]]
         self.assertEqual(
-            list(calibration_windows(documents, seq_len=4, stride=2, num_sequences=3)),
+            list(calibration_windows(documents, seq_len=4, window_stride=2, num_sequences=3)),
             [[0, 1, 2, 3], [2, 3, 4, 5], [4, 5, 6, 7]],
         )
 
     def test_calibration_windows_reject_short_corpus(self) -> None:
         with self.assertRaisesRegex(ValueError, "only 1 complete windows"):
-            list(calibration_windows([[0, 1, 2, 3]], seq_len=4, stride=4, num_sequences=2))
+            list(calibration_windows([[0, 1, 2, 3]], seq_len=4, window_stride=4, num_sequences=2))
 
     def test_stride_defaults_to_disjoint_windows(self) -> None:
         self.assertEqual(resolve_stride(0, 1024), 1024)
-        self.assertEqual(resolve_stride(4096, 1024), 1024)
+        self.assertEqual(resolve_stride(4096, 1024), 4096)
         self.assertEqual(resolve_stride(4, 1024), 4)
 
     def test_as_bshd_layouts(self) -> None:
@@ -58,13 +61,16 @@ class CollectContractTests(unittest.TestCase):
         meta = ActivationRunMeta(
             corpus="HuggingFaceFW/fineweb-edu",
             dataset_config="sample-10BT",
+            dataset_revision="dataset-sha",
             source_model="Qwen/Qwen3-14B",
             source_revision="abc123",
             target_model="Qwen/Qwen3-32B",
             target_revision="def456",
             seed=42,
             seq_len=1024,
-            stride=1024,
+            window_stride=1024,
+            fitting_token_step=4,
+            token_sha256="token-sha",
             num_sequences=8,
             source_layers=[0, 1],
             target_layers=list(range(4)),
@@ -81,6 +87,22 @@ class CollectContractTests(unittest.TestCase):
         self.assertTrue(got.rope_stripped_on_keys)
         self.assertEqual(raw["seed"], 42)
         self.assertEqual(raw["corpus"], "HuggingFaceFW/fineweb-edu")
+
+    def test_disjoint_windows_and_sampled_chunk_resume(self) -> None:
+        windows = np.asarray(list(calibration_windows([list(range(12))], seq_len=4, window_stride=4, num_sequences=3)))
+        np.testing.assert_array_equal(windows[:, 0], [0, 4, 8])
+        self.assertEqual(token_fingerprint(windows), token_fingerprint(windows.copy()))
+        self.assertNotEqual(token_fingerprint(windows), token_fingerprint(windows[:, ::-1]))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "source" / "000000.npz"
+            sample = np.arange(8, dtype=np.float32).reshape(2, 1, 4)
+            write_activation_chunk(path, [sample], [sample + 1])
+            self.assertTrue(validate_activation_chunk(path, 1, 2, 1, 4))
+            with self.assertRaisesRegex(ValueError, "expected shape"):
+                validate_activation_chunk(path, 1, 4, 1, 4)
+            path.write_bytes(b"corrupt")
+            with self.assertRaisesRegex(ValueError, "corrupt"):
+                validate_activation_chunk(path, 1, 2, 1, 4)
 
 
 if __name__ == "__main__":

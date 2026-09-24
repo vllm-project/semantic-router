@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import hashlib
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -12,23 +14,23 @@ import numpy as np
 
 
 def resolve_stride(stride: int, seq_len: int) -> int:
-    """Token step between window starts. <=0 or >= seq_len means non-overlapping."""
-    if stride <= 0:
-        return seq_len
-    return min(int(stride), seq_len)
+    """Token step between window starts; zero requests disjoint windows."""
+    if stride < 0:
+        raise ValueError("window stride must be nonnegative")
+    return stride or seq_len
 
 
 def calibration_windows(
     tokenized_documents: Iterable[list[int]],
     *,
     seq_len: int,
-    stride: int,
+    window_stride: int,
     num_sequences: int,
 ) -> Iterator[list[int]]:
     """Yield exact-length token windows from the selected corpus documents."""
     if seq_len <= 0 or num_sequences <= 0:
         raise ValueError("seq_len and num_sequences must be positive")
-    step = resolve_stride(stride, seq_len)
+    step = resolve_stride(window_stride, seq_len)
     tokens: list[int] = []
     emitted = 0
     for document in tokenized_documents:
@@ -77,13 +79,16 @@ def parse_layer_subset(spec: str | None, n_layers: int) -> list[int]:
 class ActivationRunMeta:
     corpus: str
     dataset_config: str
+    dataset_revision: str
     source_model: str
     source_revision: str
     target_model: str
     target_revision: str
     seed: int
     seq_len: int
-    stride: int
+    window_stride: int
+    fitting_token_step: int
+    token_sha256: str
     num_sequences: int
     source_layers: list[int]
     target_layers: list[int]
@@ -103,9 +108,44 @@ class ActivationRunMeta:
 def write_run_metadata(out_dir: Path, meta: ActivationRunMeta) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / "run.json"
-    path.write_text(json.dumps(meta.to_dict(), indent=2, sort_keys=True) + "\n")
+    payload = json.dumps(meta.to_dict(), indent=2, sort_keys=True) + "\n"
+    if path.exists() and path.read_text() != payload:
+        raise ValueError("existing run metadata differs; choose another output directory")
+    path.write_text(payload)
     return path
 
 
 def read_run_metadata(out_dir: Path) -> ActivationRunMeta:
     return ActivationRunMeta.from_dict(json.loads((out_dir / "run.json").read_text()))
+
+
+def token_fingerprint(windows: np.ndarray) -> str:
+    """Stable digest of the exact token IDs and their two-dimensional shape."""
+    canonical = np.ascontiguousarray(windows, dtype="<i8")
+    return hashlib.sha256(np.asarray(canonical.shape, dtype="<i8").tobytes() + canonical.tobytes()).hexdigest()
+
+
+def write_activation_chunk(path: Path, keys: list[np.ndarray], values: list[np.ndarray]) -> None:
+    """Write one sampled sequence atomically, with a digest for safe resume."""
+    if len(keys) != len(values) or not keys:
+        raise ValueError("chunk needs matching, nonempty K/V layers")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(".tmp")
+    with temp.open("wb") as stream:
+        np.savez(stream, keys=np.stack(keys), values=np.stack(values))
+    digest = hashlib.sha256(temp.read_bytes()).hexdigest()
+    os.replace(temp, path)
+    path.with_suffix(".sha256").write_text(digest + "\n")
+
+
+def validate_activation_chunk(path: Path, n_layers: int, n_rows: int, n_heads: int, head_dim: int) -> bool:
+    if not path.exists():
+        return False
+    digest_path = path.with_suffix(".sha256")
+    if not digest_path.exists() or hashlib.sha256(path.read_bytes()).hexdigest() != digest_path.read_text().strip():
+        raise ValueError(f"corrupt or incomplete activation chunk: {path}")
+    expected = (n_layers, n_rows, n_heads, head_dim)
+    with np.load(path, allow_pickle=False) as chunk:
+        if chunk["keys"].shape != expected or chunk["values"].shape != expected:
+            raise ValueError(f"activation chunk {path} does not match expected shape {expected}")
+    return True
