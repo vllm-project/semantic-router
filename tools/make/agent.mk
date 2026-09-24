@@ -25,6 +25,7 @@ AGENT_PRIMARY_WORKTREE ?= $(if $(filter %/.git,$(AGENT_GIT_COMMON_DIR)),$(patsub
 AGENT_WORKTREE_VENV ?= $(CURDIR)/.venv-agent
 AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_PYTHON ?= $(AGENT_VENV)/bin/python
+AGENT_BOOTSTRAP_PYTHON ?= python3
 AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 AGENT_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.agent-requirements.txt
 AGENT_DOCS_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.docs-requirements.txt
@@ -74,9 +75,10 @@ harness-check: $(HARNESS_BOOTSTRAP_DEPS) test-tiny-model ## Validate the domain 
 	fi
 
 harness-venv-install: ## Install the repository check dependencies
-	@if [ ! -x "$(AGENT_PYTHON)" ]; then \
+	@if ! "$(AGENT_PYTHON)" -c 'import sys; sys.exit(sys.version_info < (3, 10))' 2>/dev/null; then \
+		"$(AGENT_BOOTSTRAP_PYTHON)" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else "Error: %s needs Python 3.10 or newer, but %s is Python %d.%d.%d at %s. Set AGENT_BOOTSTRAP_PYTHON to a newer interpreter, for example AGENT_BOOTSTRAP_PYTHON=python3.12." % (tuple(sys.argv[1:]) + sys.version_info[:3] + (sys.executable,)))' "$(AGENT_VENV)" "$(AGENT_BOOTSTRAP_PYTHON)" || exit 1; \
 		echo "Creating $(AGENT_VENV)..."; \
-		python3 -m venv "$(AGENT_VENV)"; \
+		"$(AGENT_BOOTSTRAP_PYTHON)" -m venv --clear "$(AGENT_VENV)"; \
 	fi
 	@if [ ! -f "$(AGENT_REQUIREMENTS_STAMP)" ] || \
 		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)" || \
