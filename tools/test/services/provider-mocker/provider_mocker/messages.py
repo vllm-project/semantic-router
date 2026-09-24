@@ -13,11 +13,12 @@ router = APIRouter()
 
 @router.post("/v1/messages")
 async def messages(request: Request):
+    raw_body = await request.body()
     body, error = await parse_provider_request(request, "anthropic_messages")
     if error is not None:
         return error
     session = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session, body, request.headers)
+    request.app.state.request_store.record(session, body, request.headers, raw_body)
     await apply_fixture_delay()
     if contains_text(body["messages"], "__mock_provider_error__"):
         return JSONResponse(
