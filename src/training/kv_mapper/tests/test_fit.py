@@ -30,9 +30,7 @@ class RidgeFitTests(unittest.TestCase):
         acc = RidgeAccumulator(dx, dy)
         acc.add(x, y)
         w_hat, b_hat = acc.solve_affine(1e-8)
-        self.assertLess(
-            np.linalg.norm(w_hat - weight) / np.linalg.norm(weight), 1e-4
-        )
+        self.assertLess(np.linalg.norm(w_hat - weight) / np.linalg.norm(weight), 1e-4)
         self.assertLess(np.linalg.norm(b_hat - bias), 1e-3)
 
     def test_empty_ridge_raises(self) -> None:
@@ -57,7 +55,9 @@ class RidgeFitTests(unittest.TestCase):
         source = [np.zeros((5, 2, 4), dtype=np.float32)]
         target = [np.zeros((4, 2, 4), dtype=np.float32)]
         with self.assertRaisesRegex(ValueError, "token counts differ"):
-            fit_full_head([(source, target)], [[0]], n_kv_heads=2, head_dim=4, ridge_alpha=0.01)
+            fit_full_head(
+                [(source, target)], [[0]], n_kv_heads=2, head_dim=4, ridge_alpha=0.01
+            )
 
     def test_fit_writes_a1_artifact(self) -> None:
         rng = np.random.RandomState(2)

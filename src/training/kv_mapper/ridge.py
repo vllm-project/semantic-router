@@ -10,7 +10,9 @@ def ols_r2_per_head(source: np.ndarray, target: np.ndarray) -> np.ndarray:
     source = np.asarray(source, dtype=np.float64)
     target = np.asarray(target, dtype=np.float64)
     if source.shape != target.shape or source.ndim != 3 or source.shape[0] < 2:
-        raise ValueError(f"OLS needs matching (tokens, heads, dim), got {source.shape} and {target.shape}")
+        raise ValueError(
+            f"OLS needs matching (tokens, heads, dim), got {source.shape} and {target.shape}"
+        )
     scores = np.empty(source.shape[1], dtype=np.float64)
     for head in range(source.shape[1]):
         x, y = source[:, head, :], target[:, head, :]
@@ -39,8 +41,15 @@ class RidgeAccumulator:
     def add(self, x: np.ndarray, y: np.ndarray) -> None:
         x64 = np.ascontiguousarray(x, dtype=np.float64)
         y64 = np.ascontiguousarray(y, dtype=np.float64)
-        if x64.ndim != 2 or y64.ndim != 2 or x64.shape != (y64.shape[0], self.dx) or y64.shape[1] != self.dy:
-            raise ValueError(f"Ridge needs matching rows and widths ({self.dx}, {self.dy}), got {x64.shape} and {y64.shape}")
+        if (
+            x64.ndim != 2
+            or y64.ndim != 2
+            or x64.shape != (y64.shape[0], self.dx)
+            or y64.shape[1] != self.dy
+        ):
+            raise ValueError(
+                f"Ridge needs matching rows and widths ({self.dx}, {self.dy}), got {x64.shape} and {y64.shape}"
+            )
         n = x64.shape[0]
         self.xtx += x64.T @ x64
         self.xty += x64.T @ y64
@@ -51,9 +60,7 @@ class RidgeAccumulator:
 
     def solve_affine(self, alpha: float) -> tuple[np.ndarray, np.ndarray]:
         if self.n == 0 or self.sw <= 0:
-            raise RuntimeError(
-                f"Ridge has no rows (dx={self.dx}, dy={self.dy})"
-            )
+            raise RuntimeError(f"Ridge has no rows (dx={self.dx}, dy={self.dy})")
         if alpha < 0:
             raise ValueError("ridge alpha must be nonnegative")
         sw = self.sw
