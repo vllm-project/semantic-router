@@ -9,6 +9,9 @@ from pathlib import Path
 
 import numpy as np
 
+# Direct unittest discovery also runs this file without installing the package.
+# ruff: noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -34,9 +37,10 @@ class EvalContractTests(unittest.TestCase):
             (np.ones((2, 3)), np.ones((3, 2))),
             ([], []),
         ):
-            with self.subTest(pred_shape=np.shape(pred), true_shape=np.shape(true)):
-                with self.assertRaisesRegex(ValueError, "matching nonempty shapes"):
-                    kv_fit_metrics(pred, true)
+            with self.subTest(
+                pred_shape=np.shape(pred), true_shape=np.shape(true)
+            ), self.assertRaisesRegex(ValueError, "matching nonempty shapes"):
+                kv_fit_metrics(pred, true)
 
     def test_length_mismatch_raises(self) -> None:
         with self.assertRaises(ValueError):

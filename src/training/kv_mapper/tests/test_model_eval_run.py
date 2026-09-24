@@ -5,6 +5,9 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+# Torch and Transformers are optional in the contract test environment.
+# ruff: noqa: PLC0415
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -67,7 +70,7 @@ class ModelEvalRunTests(unittest.TestCase):
         with torch.inference_mode():
             mapped = _mapped_pairs(slots, model, manifest, weights, torch.float32)
         for (mapped_k, mapped_v, _), (true_k, true_v) in zip(
-            mapped, _cache_pairs(output.past_key_values)
+            mapped, _cache_pairs(output.past_key_values), strict=True
         ):
             self.assertTrue(torch.equal(mapped_k, true_k))
             self.assertTrue(torch.equal(mapped_v, true_v))

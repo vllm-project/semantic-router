@@ -11,6 +11,15 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from datasets import load_dataset
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers.cache_utils import DynamicCache, DynamicLayer
+from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb
+
+# Direct execution resolves repository imports after adding the repository root.
+# ruff: noqa: E402
+
+MIN_CONTEXT_TOKENS = 2
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT))
@@ -21,8 +30,6 @@ from src.training.kv_mapper.hooks import attach_pre_rope_hooks, remove_hooks
 
 
 def _load_model(name: str, revision: str, device: str, dtype: torch.dtype):
-    from transformers import AutoModelForCausalLM
-
     model = AutoModelForCausalLM.from_pretrained(
         name, revision=revision, torch_dtype=dtype, low_cpu_mem_usage=True
     )
@@ -32,8 +39,6 @@ def _load_model(name: str, revision: str, device: str, dtype: torch.dtype):
 
 
 def _examples(revision: str, count: int, seed: int):
-    from datasets import load_dataset
-
     data = load_dataset(
         "Rowan/hellaswag", split="validation", revision=revision, streaming=True
     )
@@ -43,15 +48,15 @@ def _examples(revision: str, count: int, seed: int):
     for row_index, row in enumerate(data):
         if row["label"] in ("", None):
             continue
-        row = dict(row)
-        row["_eval_id"] = f"validation:{row_index}"
+        selected_row = dict(row)
+        selected_row["_eval_id"] = f"validation:{row_index}"
         seen += 1
         if len(examples) < count:
-            examples.append(row)
+            examples.append(selected_row)
         else:
             slot = rng.randrange(seen)
             if slot < count:
-                examples[slot] = row
+                examples[slot] = selected_row
     if len(examples) != count:
         raise ValueError(f"only {len(examples)} labeled HellaSwag rows available")
     return sorted(examples, key=lambda row: int(row["ind"]))
@@ -62,8 +67,6 @@ def _cache_pairs(cache):
 
 
 def _rotate_keys(model, keys: torch.Tensor) -> torch.Tensor:
-    from transformers.models.qwen3.modeling_qwen3 import apply_rotary_pos_emb
-
     # keys are (seq, heads, dim) before RoPE; DynamicCache uses (1, heads, seq, dim).
     key = keys.transpose(0, 1).unsqueeze(0)
     positions = torch.arange(key.shape[-2], device=key.device).unsqueeze(0)
@@ -115,13 +118,11 @@ def _raw_pairs(source: dict, target, n_target: int, dtype):
 def _continuation_score(
     model, prefix_pairs, last_context_id: int, ending_ids: list[int]
 ) -> float:
-    from transformers.cache_utils import DynamicCache, DynamicLayer
-
     cache = DynamicCache()
     cache.layers = [DynamicLayer.from_tensors(k, v) for k, v in prefix_pairs]
     cache.num_hidden_layers = len(prefix_pairs)
     ids = torch.tensor(
-        [[last_context_id] + ending_ids[:-1]], device=model.device, dtype=torch.long
+        [[last_context_id, *ending_ids[:-1]]], device=model.device, dtype=torch.long
     )
     out = model(input_ids=ids, past_key_values=cache, use_cache=True)
     answers = torch.tensor(ending_ids, device=model.device, dtype=torch.long)
@@ -135,8 +136,6 @@ def _relative_error(pred: torch.Tensor, true: torch.Tensor) -> float:
 
 @torch.inference_mode()
 def run(args) -> dict:
-    from transformers import AutoTokenizer
-
     manifest, tensors = read_artifact(args.artifact)
     compat = manifest.compatibility
     dtype = {"bf16": torch.bfloat16, "fp16": torch.float16}[compat.precision]
@@ -171,7 +170,7 @@ def run(args) -> dict:
     for item_index, row in enumerate(examples):
         item_id = row["_eval_id"]
         context_ids = tokenizer.encode(row["ctx"], add_special_tokens=False)
-        if len(context_ids) < 2:
+        if len(context_ids) < MIN_CONTEXT_TOKENS:
             raise ValueError(f"context too short for {item_id}")
         endings = [
             tokenizer.encode(" " + text, add_special_tokens=False)
@@ -217,7 +216,7 @@ def run(args) -> dict:
             "raw_source": raw,
             "zero": zero,
         }
-        for name in kv_errors:
+        for name, error_rows in kv_errors.items():
             err_k, err_v = [], []
             for layer in range(len(cold)):
                 true_k = target_slots[layer]["k"].transpose(1, 2)
@@ -235,7 +234,7 @@ def run(args) -> dict:
                     pred_k, pred_v = torch.zeros_like(true_k), torch.zeros_like(true_v)
                 err_k.append(_relative_error(pred_k, true_k))
                 err_v.append(_relative_error(pred_v, true_v))
-            kv_errors[name].append(
+            error_rows.append(
                 {
                     "id": item_id,
                     "key_rel_err": float(np.mean(err_k)),
