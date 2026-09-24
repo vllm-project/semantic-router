@@ -7,7 +7,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 from .artifacts import ArtifactError, VerifiedArtifact, open_verified_artifact
 from .backend import ModelDescriptor
@@ -74,6 +74,12 @@ def assemble_runtime(
         load_options = {"physical_batch_size": config.max_batch}
         if config.experimental_qwen_rocm_graph_b8:
             load_options["enable_rocm_graph"] = True
+            if metrics is not None:
+                load_options["graph_event_recorder"] = (
+                    lambda event: metrics.record_qwen_rocm_graph_event(
+                        model.catalog.model_id, event
+                    )
+                )
         resident = _load_family(model, artifact, config.backend, **load_options)
     except (RuntimeModelResolutionError, RuntimeProfileError, ArtifactError) as error:
         raise RuntimeAssemblyError(str(error)) from error
@@ -167,6 +173,7 @@ def _load_family(
     *,
     physical_batch_size: int = 8,
     enable_rocm_graph: bool = False,
+    graph_event_recorder: Callable[[str], None] | None = None,
 ):
     profile = model.profile
     if enable_rocm_graph and profile.family != "qwen3.5":
@@ -210,6 +217,7 @@ def _load_family(
                 "enable_rocm_graph": True,
                 "artifact_content_id": artifact.content_id,
                 "graph_model_id": model.catalog.model_id,
+                "graph_event_recorder": graph_event_recorder,
             }
             if enable_rocm_graph
             else {}

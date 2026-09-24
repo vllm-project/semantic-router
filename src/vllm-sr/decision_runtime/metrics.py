@@ -9,6 +9,7 @@ from collections.abc import Iterable
 from .scheduler import SchedulerSnapshot
 
 PHYSICAL_BATCH_SIZE_BUCKETS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
+QWEN_ROCM_GRAPH_EVENTS = frozenset({"capture", "replay", "fallback"})
 
 
 class RuntimeMetrics:
@@ -26,6 +27,7 @@ class RuntimeMetrics:
         self._physical_batch_rows: dict[str, int] = defaultdict(int)
         self._physical_batch_seconds: dict[str, float] = defaultdict(float)
         self._physical_batch_sizes: dict[tuple[str, int | str], int] = defaultdict(int)
+        self._qwen_rocm_graph_events: dict[tuple[str, str], int] = defaultdict(int)
 
     def record_http(self, route: str, status: int, elapsed_seconds: float) -> None:
         key = (route, str(status))
@@ -63,6 +65,14 @@ class RuntimeMetrics:
             self._physical_batch_seconds[model] += elapsed_seconds
             self._physical_batch_sizes[(model, bucket)] += 1
 
+    def record_qwen_rocm_graph_event(self, model: str, event: str) -> None:
+        """Count one bounded Sol ROCm graph outcome without request content."""
+
+        if event not in QWEN_ROCM_GRAPH_EVENTS:
+            raise ValueError("unsupported Qwen ROCm graph event")
+        with self._lock:
+            self._qwen_rocm_graph_events[(model, event)] += 1
+
     def render(self, scheduler: Iterable[SchedulerSnapshot]) -> str:
         with self._lock:
             http_count = dict(self._http_count)
@@ -75,6 +85,7 @@ class RuntimeMetrics:
             physical_batch_rows = dict(self._physical_batch_rows)
             physical_batch_seconds = dict(self._physical_batch_seconds)
             physical_batch_sizes = dict(self._physical_batch_sizes)
+            graph_events = dict(self._qwen_rocm_graph_events)
 
         lines = [
             "# HELP decision_runtime_http_requests_total HTTP requests by route and status.",
@@ -171,6 +182,18 @@ class RuntimeMetrics:
             labels = f'model="{_escape(model)}"'
             lines.append(f"{histogram}_count{{{labels}}} {count}")
             lines.append(f"{histogram}_sum{{{labels}}} {physical_batch_rows[model]}")
+
+        graph_metric = "decision_runtime_qwen_rocm_graph_events_total"
+        lines.extend(
+            (
+                f"# HELP {graph_metric} Sol ROCm qualified capture, "
+                "used replay, and eager fallback events.",
+                f"# TYPE {graph_metric} counter",
+            )
+        )
+        for (model, event), value in sorted(graph_events.items()):
+            labels = f'model="{_escape(model)}",event="{event}"'
+            lines.append(f"{graph_metric}{{{labels}}} {value}")
 
         snapshots = tuple(scheduler)
         for metric, attribute, help_text in (

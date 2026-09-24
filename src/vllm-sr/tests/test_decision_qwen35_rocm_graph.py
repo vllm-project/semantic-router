@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from decision_runtime import qwen35_rocm_graph as graph_module  # noqa: E402
+from decision_runtime.metrics import RuntimeMetrics  # noqa: E402
 from decision_runtime.qwen35_torch import Qwen35TorchRuntime  # noqa: E402
 from decision_runtime.row_executor import _finish_thread_inference  # noqa: E402
 
@@ -54,7 +55,7 @@ class _Graph:
         self.replays += 1
 
 
-def _runtime_and_graphs(monkeypatch):
+def _runtime_and_graphs(monkeypatch, event_recorder=None):
     model = _Model()
     cuda = SimpleNamespace(
         mem_get_info=lambda device: (16 << 30, 256 << 30),
@@ -82,7 +83,9 @@ def _runtime_and_graphs(monkeypatch):
             unknown_key_guard_enforced=True,
         ),
     )
-    graphs = graph_module.QwenRocmBackboneGraphs(runtime, artifact_content_id="a" * 64)
+    graphs = graph_module.QwenRocmBackboneGraphs(
+        runtime, artifact_content_id="a" * 64, event_recorder=event_recorder
+    )
     runtime.rocm_graphs = graphs
     monkeypatch.setattr(graphs, "_exact_masks", lambda batch: batch["masks"])
     monkeypatch.setattr(
@@ -150,9 +153,31 @@ def test_changed_content_replays_copy_every_static_id_and_mask(monkeypatch):
     ]
 
 
+def test_graph_metrics_count_only_used_replays_and_bounded_events(monkeypatch):
+    metrics = RuntimeMetrics()
+    model_id = "llm-semantic-router/Decision-1.0-Sol-2B"
+    _, graphs, _ = _runtime_and_graphs(
+        monkeypatch,
+        lambda event: metrics.record_qwen_rocm_graph_event(model_id, event),
+    )
+    assert graphs.logits(_batch("short", rows=7)) == "eager:short"
+    # Qualification replays internally but returns the original eager logits.
+    assert graphs.logits(_batch("A")) == "eager:A"
+    assert graphs.logits(_batch("B")) == "graph:B"
+    rendered = metrics.render(())
+    prefix = f'decision_runtime_qwen_rocm_graph_events_total{{model="{model_id}",event='
+    assert f'{prefix}"fallback"}} 1' in rendered
+    assert f'{prefix}"capture"}} 1' in rendered
+    assert f'{prefix}"replay"}} 1' in rendered
+    with pytest.raises(ValueError, match="unsupported Qwen ROCm graph event"):
+        metrics.record_qwen_rocm_graph_event(model_id, "unbounded")
+
+
 def test_replay_guard_failure_never_calls_captured_graph(monkeypatch):
-    _, graphs, entries = _runtime_and_graphs(monkeypatch)
+    events = []
+    _, graphs, entries = _runtime_and_graphs(monkeypatch, events.append)
     graphs.logits(_batch("A"))
+    assert events == ["capture"]
     before = entries[0].graph.replays
 
     def reject(*args, **kwargs):
@@ -162,6 +187,7 @@ def test_replay_guard_failure_never_calls_captured_graph(monkeypatch):
     with pytest.raises(graph_module.QwenRocmBindingError, match="profile changed"):
         graphs.logits(_batch("B"))
     assert entries[0].graph.replays == before
+    assert events == ["capture"]
 
 
 def test_shape_mask_and_memory_bounds_fall_back_to_eager(monkeypatch):
