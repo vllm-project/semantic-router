@@ -39,7 +39,7 @@ PHYSICAL_BATCH = 8  # Current untuned qualification ceiling, not a report-wide s
 PHYSICAL_BATCH_BUCKETS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
 MIN_WORKFLOWS_PER_ROUND = 32
 HIGH_LOAD_SHAPES = ((8, 8), (32, 32))  # Graph replay and batching proof cells.
-MIN_HIGH_LOAD_THROUGHPUT_RATIO = 1.00
+MIN_CELL_THROUGHPUT_RATIO = 1.00
 MAX_SEMANTIC_PROBABILITY_DELTA = 0.010000001
 HIGH_LOAD_MIN_CONCURRENCY = 8
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -1881,6 +1881,19 @@ def validate_report(
         # The arms perform the same logical work, but old fanout and new batch
         # have different HTTP submissions and no shared scheduled-arrival trace.
         # Workflow latency is diagnostic, never an alternative release win.
+        throughput_shape_ratios = {
+            f"q{q}_s{s}_c{cell['concurrency']}": cell[
+                "new_over_old_decisions_per_second"
+            ]
+            for q, s in SHAPES
+            for cell in indexed[q, s]["cells"]
+        }
+        for cell_name, ratio in throughput_shape_ratios.items():
+            if ratio < MIN_CELL_THROUGHPUT_RATIO:
+                raise ValueError(
+                    f"{model_id} has a throughput regression at "
+                    f"{cell_name} against its selected historical snapshot"
+                )
         high_load_shape_ratios = {
             f"q{q}_s{s}_c{cell['concurrency']}": cell[
                 "new_over_old_decisions_per_second"
@@ -1889,12 +1902,6 @@ def validate_report(
             for cell in indexed[q, s]["cells"]
             if cell["concurrency"] >= HIGH_LOAD_MIN_CONCURRENCY
         }
-        for cell_name, ratio in high_load_shape_ratios.items():
-            if ratio < MIN_HIGH_LOAD_THROUGHPUT_RATIO:
-                raise ValueError(
-                    f"{model_id} has a high-load throughput regression at "
-                    f"{cell_name} against its selected historical snapshot"
-                )
         model_high_load_geomean = _geometric_mean(list(high_load_shape_ratios.values()))
         for q, s in HIGH_LOAD_SHAPES:
             if (
@@ -1907,6 +1914,7 @@ def validate_report(
         all_high_load_ratios.extend(high_load_shape_ratios.values())
         summary["models"][model_id] = {
             "new_runtime_variant": variant,
+            "throughput_shape_ratios": throughput_shape_ratios,
             "high_load_shape_ratios": high_load_shape_ratios,
             "high_load_throughput_geomean": model_high_load_geomean,
             "high_load_graph_replays": {
