@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import numpy as np
 
+KV_TENSOR_RANK = 3
+MATRIX_RANK = 2
+MIN_OLS_ROWS = 2
+
 
 def ols_r2_per_head(source: np.ndarray, target: np.ndarray) -> np.ndarray:
     """Single-source affine OLS R² for each KV head, across tokens and dimensions."""
     source = np.asarray(source, dtype=np.float64)
     target = np.asarray(target, dtype=np.float64)
-    if source.shape != target.shape or source.ndim != 3 or source.shape[0] < 2:
+    if (
+        source.shape != target.shape
+        or source.ndim != KV_TENSOR_RANK
+        or source.shape[0] < MIN_OLS_ROWS
+    ):
         raise ValueError(
             f"OLS needs matching (tokens, heads, dim), got {source.shape} and {target.shape}"
         )
@@ -42,8 +50,8 @@ class RidgeAccumulator:
         x64 = np.ascontiguousarray(x, dtype=np.float64)
         y64 = np.ascontiguousarray(y, dtype=np.float64)
         if (
-            x64.ndim != 2
-            or y64.ndim != 2
+            x64.ndim != MATRIX_RANK
+            or y64.ndim != MATRIX_RANK
             or x64.shape != (y64.shape[0], self.dx)
             or y64.shape[1] != self.dy
         ):

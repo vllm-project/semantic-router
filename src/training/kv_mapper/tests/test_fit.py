@@ -7,6 +7,9 @@ from pathlib import Path
 
 import numpy as np
 
+# Direct unittest discovery also runs this file without installing the package.
+# ruff: noqa: E402
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPO_ROOT))
 

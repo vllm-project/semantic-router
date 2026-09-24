@@ -41,9 +41,9 @@ def select_source_layers(
     if not 1 <= k <= len(source_keys):
         raise ValueError(f"k must be between 1 and {len(source_keys)}")
     selected = []
-    for target_k, target_v in zip(target_keys, target_values):
+    for target_k, target_v in zip(target_keys, target_values, strict=True):
         scores = []
-        for source_k, source_v in zip(source_keys, source_values):
+        for source_k, source_v in zip(source_keys, source_values, strict=True):
             head_scores = np.concatenate(
                 (
                     ols_r2_per_head(source_k, target_k),
