@@ -20,6 +20,8 @@ METRIC_NAMES = {
     "decision_runtime_physical_batch_rows_total": "physical_batch_rows",
 }
 BUCKET_NAME = "decision_runtime_physical_batch_size_bucket"
+GRAPH_EVENT_NAME = "decision_runtime_qwen_rocm_graph_events_total"
+GRAPH_EVENTS = ("capture", "replay", "fallback")
 HTTP_OK = 200
 LINE = re.compile(
     r"(?P<name>[A-Za-z_:][A-Za-z0-9_:]*)(?:\{(?P<labels>[^}]*)\})?\s+"
@@ -59,12 +61,14 @@ class MetricSnapshot:
     sha256: str
     counters: dict[str, float]
     buckets: dict[str, float]
+    graph_events: dict[str, float]
 
     def public_record(self) -> dict[str, object]:
         return {
             "response_sha256": self.sha256,
             "counters": self.counters,
             "physical_batch_size_buckets": self.buckets,
+            "graph_events": self.graph_events,
         }
 
 
@@ -79,7 +83,9 @@ class MetricCapture:
     after: MetricSnapshot | None
     error_code: str | None
 
-    def delta(self) -> tuple[dict[str, float], dict[str, float]] | None:
+    def delta(
+        self,
+    ) -> tuple[dict[str, float], dict[str, float], dict[str, float]] | None:
         if self.before is None or self.after is None or self.error_code is not None:
             return None
         counters = {
@@ -88,13 +94,24 @@ class MetricCapture:
         }
         if set(self.before.buckets) != set(self.after.buckets):
             return None
+        if set(self.before.graph_events) != set(GRAPH_EVENTS) or set(
+            self.after.graph_events
+        ) != set(GRAPH_EVENTS):
+            return None
         buckets = {
             key: self.after.buckets[key] - self.before.buckets[key]
             for key in self.before.buckets
         }
-        if any(value < 0 for value in (*counters.values(), *buckets.values())):
+        graph_events = {
+            key: self.after.graph_events[key] - self.before.graph_events[key]
+            for key in GRAPH_EVENTS
+        }
+        if any(
+            value < 0
+            for value in (*counters.values(), *buckets.values(), *graph_events.values())
+        ):
             return None
-        return counters, buckets
+        return counters, buckets, graph_events
 
     def public_record(self) -> dict[str, object]:
         delta = self.delta()
@@ -107,7 +124,11 @@ class MetricCapture:
             "before": self.before.public_record() if self.before else None,
             "after": self.after.public_record() if self.after else None,
             "delta": (
-                {"counters": delta[0], "physical_batch_size_buckets": delta[1]}
+                {
+                    "counters": delta[0],
+                    "physical_batch_size_buckets": delta[1],
+                    "graph_events": delta[2],
+                }
                 if delta is not None
                 else None
             ),
@@ -127,17 +148,26 @@ def _parse_snapshot(body: bytes, sha256: str, model: str) -> MetricSnapshot:
         raise MetricsError("metrics_invalid_text") from error
     counters: dict[str, float] = {}
     buckets: dict[str, float] = {}
+    graph_events = dict.fromkeys(GRAPH_EVENTS, 0.0)
+    observed_graph_events: set[str] = set()
     for line in lines:
         if not line or line.startswith("#"):
             continue
         name = line.split("{", 1)[0].split(" ", 1)[0]
-        if name not in METRIC_NAMES and name != BUCKET_NAME:
+        if name not in METRIC_NAMES and name not in (BUCKET_NAME, GRAPH_EVENT_NAME):
             continue
         match = LINE.fullmatch(line)
         if match is None:
             raise MetricsError("metrics_invalid_text")
         label_text = match.group("labels") or ""
-        labels = dict(LABEL.findall(label_text))
+        label_pairs = LABEL.findall(label_text)
+        labels = dict(label_pairs)
+        if name == GRAPH_EVENT_NAME and (
+            len(label_pairs) != 2
+            or len(labels) != 2
+            or ",".join(f'{key}="{value}"' for key, value in label_pairs) != label_text
+        ):
+            raise MetricsError("metrics_invalid_graph_events")
         if labels.get("model") != model:
             continue
         value = float(match.group("value"))
@@ -148,6 +178,17 @@ def _parse_snapshot(body: bytes, sha256: str, model: str) -> MetricSnapshot:
             if le is None or le in buckets:
                 raise MetricsError("metrics_invalid_histogram")
             buckets[le] = value
+        elif name == GRAPH_EVENT_NAME:
+            event = labels.get("event")
+            if (
+                set(labels) != {"model", "event"}
+                or event not in GRAPH_EVENTS
+                or event in observed_graph_events
+                or not value.is_integer()
+            ):
+                raise MetricsError("metrics_invalid_graph_events")
+            observed_graph_events.add(event)
+            graph_events[event] = value
         else:
             key = METRIC_NAMES[name]
             if key in counters:
@@ -157,7 +198,12 @@ def _parse_snapshot(body: bytes, sha256: str, model: str) -> MetricSnapshot:
         raise MetricsError("metrics_missing_counter")
     if "+Inf" not in buckets:
         raise MetricsError("metrics_missing_histogram")
-    return MetricSnapshot(sha256=sha256, counters=counters, buckets=buckets)
+    return MetricSnapshot(
+        sha256=sha256,
+        counters=counters,
+        buckets=buckets,
+        graph_events=graph_events,
+    )
 
 
 def read_snapshot(
@@ -207,6 +253,10 @@ def summarize_captures(
         key: sum(delta[1].get(key, 0) for delta in deltas if delta is not None)
         for key in sorted(bucket_keys)
     }
+    graph_totals = {
+        key: sum(delta[2][key] for delta in deltas if delta is not None)
+        for key in GRAPH_EVENTS
+    }
     batches = counter_totals["physical_batches"]
     valid_denominator = successful_decisions > 0 and failed_workflows == 0
     return {
@@ -214,6 +264,7 @@ def summarize_captures(
         "rounds": len(captures),
         "counter_deltas": counter_totals,
         "physical_batch_size_bucket_deltas": bucket_totals,
+        "graph_event_deltas": graph_totals,
         "normalization_decisions": successful_decisions if valid_denominator else None,
         "row_preparation_seconds_per_decision": (
             counter_totals["row_preparation_seconds"] / successful_decisions

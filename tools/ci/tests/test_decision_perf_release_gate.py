@@ -402,6 +402,7 @@ def _refresh_metric_hash(snapshot: dict) -> None:
     content = {
         "counters": snapshot["counters"],
         "physical_batch_size_buckets": snapshot["physical_batch_size_buckets"],
+        "graph_events": snapshot["graph_events"],
     }
     snapshot["response_sha256"] = hashlib.sha256(
         json.dumps(content, sort_keys=True, separators=(",", ":")).encode()
@@ -414,10 +415,14 @@ def _metric_record(
     concurrency: int,
     round_number: int,
     cumulative: dict[str, float],
+    bucket_cumulative: dict[str, int],
+    graph_cumulative: dict[str, int],
+    graph_replays: int,
+    graph_fallbacks: int,
+    rows_per_batch: int,
 ) -> dict:
     rows_per_round = gate.MIN_WORKFLOWS_PER_ROUND * q * s
-    batches = rows_per_round // 4
-    previous_batches = int(cumulative["physical_batches"])
+    batches = rows_per_round // rows_per_batch
     values = {
         "row_preparation_seconds": 0.1,
         "row_preparations": gate.MIN_WORKFLOWS_PER_ROUND,
@@ -427,26 +432,33 @@ def _metric_record(
     before = dict(cumulative)
     after = {name: before[name] + value for name, value in values.items()}
     cumulative.update(after)
+    before_graph = dict(graph_cumulative)
+    graph_delta = {"capture": 0, "replay": graph_replays, "fallback": graph_fallbacks}
+    after_graph = {
+        name: before_graph[name] + graph_delta[name] for name in gate.GRAPH_EVENTS
+    }
+    graph_cumulative.update(after_graph)
 
-    def buckets(count: int) -> dict:
-        return {
-            **{
-                str(bound): count if bound >= 4 else 0
-                for bound in gate.PHYSICAL_BATCH_BUCKETS
-            },
-            "+Inf": count,
-        }
+    before_buckets = dict(bucket_cumulative)
+    delta_buckets = {
+        **{
+            str(bound): batches if bound >= rows_per_batch else 0
+            for bound in gate.PHYSICAL_BATCH_BUCKETS
+        },
+        "+Inf": batches,
+    }
+    after_buckets = {
+        bound: before_buckets[bound] + delta_buckets[bound] for bound in before_buckets
+    }
+    bucket_cumulative.update(after_buckets)
 
-    before_buckets = buckets(previous_batches)
-    after_buckets = buckets(previous_batches + batches)
-    delta_buckets = buckets(batches)
-
-    def snapshot(counters: dict, histogram: dict) -> dict:
+    def snapshot(counters: dict, histogram: dict, graph_events: dict) -> dict:
         # The fixture models one immutable /metrics response per hash. Reusing
         # one hash for changing cumulative counters would be impossible on wire.
         content = {
             "counters": counters,
             "physical_batch_size_buckets": histogram,
+            "graph_events": graph_events,
         }
         _refresh_metric_hash(content)
         return content
@@ -457,11 +469,12 @@ def _metric_record(
         "state_count": s,
         "concurrency": concurrency,
         "round": round_number,
-        "before": snapshot(before, before_buckets),
-        "after": snapshot(after, after_buckets),
+        "before": snapshot(before, before_buckets, before_graph),
+        "after": snapshot(after, after_buckets, after_graph),
         "delta": {
             "counters": values,
             "physical_batch_size_buckets": delta_buckets,
+            "graph_events": graph_delta,
         },
         "error_code": None,
     }
@@ -472,6 +485,8 @@ def _fixture(
     *,
     slowdown: str | None = None,
     throughput_ratios: dict[tuple[str, int, int, int], float] | None = None,
+    graph_models: frozenset[str] = frozenset(),
+    graph_replay_rounds: dict[tuple[str, int, int, int, int], int] | None = None,
 ) -> tuple[Path, dict]:
     report = {
         "schema_version": gate.SCHEMA,
@@ -506,8 +521,14 @@ def _fixture(
             "physical_batches": 0,
             "physical_batch_rows": 0,
         }
+        bucket_snapshot = dict.fromkeys(
+            (*map(str, gate.PHYSICAL_BATCH_BUCKETS), "+Inf"), 0
+        )
+        graph_snapshot = dict.fromkeys(gate.GRAPH_EVENTS, 0)
+        graph_enabled = model_id in graph_models
         model = {
             "model_id": model_id,
+            "new_runtime_variant": "sol_rocm_graph_b8" if graph_enabled else "eager",
             "old_core_source_kind": "mounted_adapter",
             "old_artifact_layout": "full_snapshot_selected_data_v1",
             "old_full_snapshot_sha256": "4" * 64,
@@ -580,6 +601,14 @@ def _fixture(
             raw_cells = []
             offset_ms = 0.0
             for concurrency in gate.CONCURRENCIES:
+                graph_replays_total = 0
+                rows_per_batch = (
+                    8
+                    if graph_enabled
+                    and concurrency == 32
+                    and (q, s) in gate.HIGH_LOAD_SHAPES
+                    else 4
+                )
                 new_seconds = 0.625
                 if model_id == sorted(gate.MODEL_IDS)[0]:
                     if slowdown in ("no_gain", "latency_only"):
@@ -597,7 +626,7 @@ def _fixture(
                 old = _arm(q, s, 1.0, concurrency, "old")
                 new = _arm(q, s, new_seconds, concurrency, "new")
                 total_rows = gate.MIN_WORKFLOWS_PER_ROUND * gate.ROUNDS * q * s
-                total_batches = total_rows // 4
+                total_batches = total_rows // rows_per_batch
                 if (
                     slowdown == "latency_only"
                     and model_id == sorted(gate.MODEL_IDS)[0]
@@ -696,8 +725,36 @@ def _fixture(
                                 )
                             )
                         offset_ms += seconds * 1000
+                    batches_per_round = (
+                        gate.MIN_WORKFLOWS_PER_ROUND * q * s // rows_per_batch
+                    )
+                    replay_key = (model_id, q, s, concurrency, round_number)
+                    default_replays = (
+                        batches_per_round
+                        if graph_enabled and rows_per_batch == 8
+                        else 0
+                    )
+                    replay_count = (
+                        graph_replay_rounds.get(replay_key, default_replays)
+                        if graph_enabled and graph_replay_rounds is not None
+                        else default_replays
+                    )
+                    if not 0 <= replay_count <= batches_per_round:
+                        raise ValueError("invalid graph replay fixture count")
+                    graph_replays_total += replay_count
                     metrics.append(
-                        _metric_record(q, s, concurrency, round_number, metric_snapshot)
+                        _metric_record(
+                            q,
+                            s,
+                            concurrency,
+                            round_number,
+                            metric_snapshot,
+                            bucket_snapshot,
+                            graph_snapshot,
+                            replay_count,
+                            batches_per_round - replay_count if graph_enabled else 0,
+                            rows_per_batch,
+                        )
                     )
                 summary = {
                     "comparison": {
@@ -727,17 +784,30 @@ def _fixture(
                                 },
                                 "physical_batch_size_bucket_deltas": {
                                     **{
-                                        str(bound): total_batches if bound >= 4 else 0
+                                        str(bound): total_batches
+                                        if bound >= rows_per_batch
+                                        else 0
                                         for bound in gate.PHYSICAL_BATCH_BUCKETS
                                     },
                                     "+Inf": total_batches,
+                                },
+                                "graph_event_deltas": {
+                                    "capture": 0,
+                                    "replay": graph_replays_total,
+                                    "fallback": (
+                                        total_batches - graph_replays_total
+                                        if graph_enabled
+                                        else 0
+                                    ),
                                 },
                                 "normalization_decisions": 96 * q * s,
                                 "row_preparation_seconds_per_decision": 0.30000000000000004
                                 / (96 * q * s),
                                 "row_preparations_per_decision": 1 / (q * s),
                                 "physical_batch_rows_per_decision": 1.0,
-                                "observed_rows_per_physical_batch": 4.0,
+                                "observed_rows_per_physical_batch": float(
+                                    rows_per_batch
+                                ),
                             },
                         }
                     },
@@ -758,9 +828,10 @@ def _fixture(
                         "new": _compact_arm(new),
                         "new_over_old_decisions_per_second": 1 / new_seconds,
                         "old_over_new_low_load_p50_ms": 1.0,
-                        "new_observed_rows_per_physical_batch": 4.0,
+                        "new_observed_rows_per_physical_batch": float(rows_per_batch),
                         "new_physical_batches": total_batches,
                         "new_physical_batch_rows": total_rows,
+                        "new_graph_replays": graph_replays_total,
                     }
                 )
             raw = {
@@ -965,9 +1036,9 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         if field == "state":
             request["state"]["message"] = "A substituted but valid message"
         else:
-            request["questions"]["q0001"]["criteria"][
-                "billing"
-            ] = "A substituted but valid criterion"
+            request["questions"]["q0001"]["criteria"]["billing"] = (
+                "A substituted but valid criterion"
+            )
         body = json.dumps(request, sort_keys=True, separators=(",", ":")).encode()
         digest = hashlib.sha256(body).hexdigest()
         for record in records:
@@ -1731,9 +1802,9 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         shape = self.report["models"][0]["shapes"][1]
         raw_path = self.root / shape["raw_receipt_path"]
         raw = json.loads(raw_path.read_text())
-        raw["shapes"][0]["summary"]["comparison"][
-            "type"
-        ] = "identical_single_request_bytes"
+        raw["shapes"][0]["summary"]["comparison"]["type"] = (
+            "identical_single_request_bytes"
+        )
         shape["raw_receipt_sha256"] = _save(raw_path, raw)
         self.write_report()
         with self.assertRaisesRegex(ValueError, "protocol is mislabeled"):
@@ -1750,6 +1821,78 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         self.report["models"][0]["new_physical_batch_size"] = 16
         self.write_report()
         with self.assertRaisesRegex(ValueError, "independent tuning qualification"):
+            self.validate()
+
+    def test_sol_graph_variant_requires_replay_in_each_timed_high_load_round(
+        self,
+    ) -> None:
+        sol = gate.SOL_GRAPH_MODEL_ID
+        self.path, self.report = _fixture(self.root, graph_models=frozenset({sol}))
+        result = self.validate()
+        self.assertEqual(
+            result["models"][sol]["new_runtime_variant"], "sol_rocm_graph_b8"
+        )
+        self.assertTrue(
+            all(
+                value > 0
+                for value in result["models"][sol]["high_load_graph_replays"].values()
+            )
+        )
+        self.path, self.report = _fixture(
+            self.root,
+            graph_models=frozenset({sol}),
+            graph_replay_rounds={(sol, 8, 8, 32, 1): 0},
+        )
+        with self.assertRaisesRegex(ValueError, "no timed high-load replay"):
+            self.validate()
+
+    def test_graph_variant_and_eager_zero_are_enforced(self) -> None:
+        sol = gate.SOL_GRAPH_MODEL_ID
+        self.report["models"][0].pop("new_runtime_variant")
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "runtime variant"):
+            self.validate()
+        self.path, self.report = _fixture(self.root)
+        self.report["models"][0]["new_runtime_variant"] = "sol_rocm_graph_b8"
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "runtime variant"):
+            self.validate()
+        self.path, self.report = _fixture(self.root)
+        next(row for row in self.report["models"] if row["model_id"] == sol)[
+            "new_runtime_variant"
+        ] = "sol_rocm_graph_b8"
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "no timed high-load replay"):
+            self.validate()
+        self.path, self.report = _fixture(self.root, graph_models=frozenset({sol}))
+        next(row for row in self.report["models"] if row["model_id"] == sol)[
+            "new_runtime_variant"
+        ] = "eager"
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "eager candidate emitted graph events"):
+            self.validate()
+
+    def test_graph_event_delta_cannot_be_fabricated_in_raw_capture(self) -> None:
+        sol = gate.SOL_GRAPH_MODEL_ID
+        self.path, self.report = _fixture(self.root, graph_models=frozenset({sol}))
+        model = next(row for row in self.report["models"] if row["model_id"] == sol)
+        model["shapes"][1]["cells"][2]["new_graph_replays"] += 1
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "new graph replay count"):
+            self.validate()
+        self.path, self.report = _fixture(self.root, graph_models=frozenset({sol}))
+        model = next(row for row in self.report["models"] if row["model_id"] == sol)
+        shape = model["shapes"][1]
+        path = self.root / shape["raw_metrics_path"]
+        rows = [json.loads(line) for line in path.read_text().splitlines()]
+        row = next(
+            item for item in rows if item["concurrency"] == 32 and item["round"] == 0
+        )
+        row["delta"]["graph_events"]["replay"] += 1
+        path.write_text("\n".join(json.dumps(item) for item in rows) + "\n")
+        shape["raw_metrics_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.write_report()
+        with self.assertRaisesRegex(ValueError, "graph event delta differs"):
             self.validate()
 
     def test_modest_gain_with_bounded_cell_regression_qualifies(self) -> None:

@@ -11,8 +11,8 @@ python3 tools/ci/decision_perf_release_gate.py validate \
   --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
 ```
 
-The performance report schema is `decision-paired-release-v6`. It requires
-live old process and full-snapshot proof for all six models; v4/v5 receipts
+The performance report schema is `decision-paired-release-v7`. It requires
+live old process and full-snapshot proof for all six models; v4/v5/v6 receipts
 cannot qualify.
 
 The gate expects exactly six Decision model IDs, each measured at 32 questions
@@ -57,6 +57,18 @@ ratios is reported, and reaching 1.05 is an aspirational gain goal rather than
 a release condition. The qualification summary publishes that mean, whether
 it reached the goal, each model's mean, and both shape ratios for every model;
 no best-performing shape is selected after measurement.
+
+Each candidate model declares `new_runtime_variant: eager` or
+`sol_rocm_graph_b8` in the protected input and the report. Only canonical
+Decision Sol at B8 may use the graph variant. The producer checks the exact
+declared Docker command and live PID 1 command before and after measurement;
+the graph flag is the sole additional argument for that variant. The graph is
+off for every `eager` model. Timed `/metrics` captures record capture, replay,
+and eager-fallback counters. The gate requires all candidate graph counters to
+stay zero for eager variants. For graph Sol, each concurrency-32 round in both
+multi-state shapes must contain a replay. A warmup-only replay does not count.
+This evidence does not replace the same-snapshot semantic checks, per-model
+throughput parity gate, or the six-model run.
 
 Three alternating old/new rounds per cell limit order effects but do not
 establish formal statistical noninferiority. The model gate uses the measured
@@ -137,7 +149,7 @@ and each self-manifest entry must agree with that binding. Unselected
 historical source files remain in the full snapshot and are verified, not
 copied into the candidate's data-only cache.
 
-The protected file has `schema_version: decision-paired-baseline-v2`, a
+The protected file has `schema_version: decision-paired-baseline-v3`, a
 public-safe `hardware` label, one canonical `gpu_device` index,
 `gpu_exclusivity: dedicated_gpu_no_unrelated_compute`, and exactly six
 `models` entries. Both containers must expose that exact
@@ -146,7 +158,7 @@ mapping on the protected host. Each entry
 contains `model_id`, `revision`, `artifact_content_id`,
 `artifact_metadata_sha256`, `artifact_manifest_sha256`,
 `old_core_source_sha256`, `old_physical_batch_size`,
-`new_physical_batch_size`, and an
+`new_physical_batch_size`, `new_runtime_variant`, and an
 `old_arm_overlay` digest or `none`. The producer reads the running candidate
 container's exact `--max-batch` launch argument and requires it to match this
 per-model value. The report and raw benchmark receipt record both old and new

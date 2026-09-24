@@ -281,12 +281,14 @@ class DecisionPairedProducerTests(unittest.TestCase):
                 )
 
     def test_old_baseline_v1_input_is_rejected(self) -> None:
-        with self.assertRaisesRegex(producer.ProducerError, "baseline schema"):
-            producer._validate_config(
-                {"schema_version": "decision-paired-baseline-v1"},
-                candidate_ref=REF,
-                qualification={},
-            )
+        for version in ("v1", "v2"):
+            with self.subTest(version=version):
+                with self.assertRaisesRegex(producer.ProducerError, "baseline schema"):
+                    producer._validate_config(
+                        {"schema_version": f"decision-paired-baseline-{version}"},
+                        candidate_ref=REF,
+                        qualification={},
+                    )
 
     def test_full_snapshot_config_requires_three_typed_mounts_and_exact_adapter(
         self,
@@ -317,6 +319,7 @@ class DecisionPairedProducerTests(unittest.TestCase):
                 "old_adapter_source_sha256": "b" * 64,
                 "old_physical_batch_size": 8,
                 "new_physical_batch_size": 8,
+                "new_runtime_variant": "eager",
                 "old_arm_overlay": "none",
                 "old": {
                     "url": "http://127.0.0.1:8123/v1/systemone",
@@ -357,7 +360,7 @@ class DecisionPairedProducerTests(unittest.TestCase):
                 },
             }
             config = {
-                "schema_version": "decision-paired-baseline-v2",
+                "schema_version": "decision-paired-baseline-v3",
                 "hardware": "AMD Instinct MI300X",
                 "gpu_device": "0",
                 "gpu_exclusivity": "dedicated_gpu_no_unrelated_compute",
@@ -384,6 +387,15 @@ class DecisionPairedProducerTests(unittest.TestCase):
                     ),
                     [row],
                 )
+                for invalid in (None, [], "sol_rocm_graph_b8", "unknown"):
+                    row["new_runtime_variant"] = invalid
+                    with self.assertRaisesRegex(
+                        producer.ProducerError, "runtime variant"
+                    ):
+                        producer._validate_config(
+                            config, candidate_ref=REF, qualification=qualification
+                        )
+                row["new_runtime_variant"] = "eager"
                 row["old"]["mounts"][0]["kind"] = "tree"
                 with self.assertRaisesRegex(
                     producer.ProducerError, "adapter or imported core"
@@ -650,6 +662,7 @@ class DecisionPairedProducerTests(unittest.TestCase):
                 artifact_content_id=artifact,
                 physical_batch_size=8,
                 gpu_device="0",
+                runtime_variant="eager",
             )
             container["Config"]["Cmd"] = [
                 "python3",
@@ -669,7 +682,92 @@ class DecisionPairedProducerTests(unittest.TestCase):
                     artifact_content_id=artifact,
                     physical_batch_size=8,
                     gpu_device="0",
+                    runtime_variant="eager",
                 )
+
+    def test_graph_variant_requires_exact_sol_process(self) -> None:
+        model_id = producer.SOL_GRAPH_MODEL_ID
+        revision = "1" * 40
+        artifact = "2" * 64
+        command = [
+            "/opt/vllm-sr/venvs/qwen35/bin/python",
+            "-m",
+            "decision_runtime.entrypoint",
+            "--model",
+            model_id,
+            "--revision",
+            revision,
+            "--backend",
+            "rocm",
+            "--artifact-root",
+            "/opt/vllm-sr/decision-artifact",
+            "--artifact-content-id",
+            artifact,
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "8000",
+            "--max-batch",
+            "8",
+            "--max-concurrency",
+            "4",
+            "--max-queue",
+            "32",
+            "--experimental-qwen-rocm-graph-b8",
+        ]
+        image = {
+            "Config": {
+                "Entrypoint": [],
+                "Env": ["TOKENIZERS_PARALLELISM=false"],
+                "WorkingDir": "/opt/vllm-sr",
+                "User": "root",
+            }
+        }
+        container = {
+            "Config": {
+                "Entrypoint": [],
+                "Cmd": command[:],
+                "Env": ["TOKENIZERS_PARALLELISM=false", "ROCR_VISIBLE_DEVICES=0"],
+                "WorkingDir": "/opt/vllm-sr",
+                "User": "root",
+            }
+        }
+        with (
+            patch.object(
+                producer,
+                "resolve_decision_runtime_model",
+                return_value=SimpleNamespace(profile=SimpleNamespace(family="qwen3.5")),
+            ),
+            patch.object(
+                producer,
+                "_running_command",
+                side_effect=lambda _: container["Config"]["Cmd"],
+            ),
+        ):
+
+            def check(variant: str, selected_model: str = model_id) -> None:
+                producer._candidate_process(
+                    container,
+                    image,
+                    model_id=selected_model,
+                    revision=revision,
+                    artifact_content_id=artifact,
+                    physical_batch_size=8,
+                    gpu_device="0",
+                    runtime_variant=variant,
+                )
+
+            check("sol_rocm_graph_b8")
+            with self.assertRaisesRegex(producer.ProducerError, "approved drun"):
+                check("eager")
+            with self.assertRaisesRegex(producer.ProducerError, "canonical Sol"):
+                check("sol_rocm_graph_b8", "llm-semantic-router/Decision-1.0-Nox-4B")
+            container["Config"]["Cmd"].append("--unreviewed")
+            with self.assertRaisesRegex(producer.ProducerError, "approved drun"):
+                check("sol_rocm_graph_b8")
+            container["Config"]["Cmd"] = command[:-1]
+            with self.assertRaisesRegex(producer.ProducerError, "approved drun"):
+                check("sol_rocm_graph_b8")
 
     def test_direct_mounted_core_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
