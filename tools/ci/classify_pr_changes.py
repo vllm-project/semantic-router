@@ -21,6 +21,7 @@ from verification_catalog import full_cpu_ids, profile_image_dependencies
 
 PRODUCTION_RELEASE_IMAGES = (
     "dashboard",
+    "decision-runtime-cpu",
     "extproc",
     "extproc-rocm",
     "operator",
@@ -29,6 +30,8 @@ PRODUCTION_RELEASE_IMAGES = (
     "vllm-sr-cuda",
     "vllm-sr-rocm",
 )
+# The 46 GiB ROCm runtime stays outside hosted OCI artifact matrices.
+# Stable releases bind its separately qualified, published digest.
 NIGHTLY_IMAGES = (
     *PRODUCTION_RELEASE_IMAGES,
     "vllm-sr-sim",

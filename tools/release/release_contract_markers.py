@@ -5,18 +5,15 @@ from __future__ import annotations
 MarkerSet = tuple[tuple[str, str], ...]
 
 
-def upgrade_runbook_fixture_markers(
-    *, release_version: str, sim_version: str, helm_chart_ref: str
-) -> MarkerSet:
-    release_tag = f"v{release_version}"
+def upgrade_runbook_fixture_markers(*, helm_chart_ref: str) -> MarkerSet:
     return (
         (
             "Helm chart existence check",
-            f"helm show chart {helm_chart_ref} --version {release_version}",
+            f"helm show chart {helm_chart_ref} --version ",
         ),
         ("Helm upgrade command", "helm upgrade semantic-router"),
         ("Helm chart reference", helm_chart_ref),
-        ("Helm upgrade version pin", f"--version {release_version}"),
+        ("Helm upgrade version pin", "--version "),
         ("Helm safe value merge flag", "--reset-then-reuse-values"),
         (
             "Helm rollback command",
@@ -28,21 +25,18 @@ def upgrade_runbook_fixture_markers(
         ),
         (
             "Docker digest lookup",
-            "DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}'",
+            "DIGEST=$(docker buildx imagetools inspect",
         ),
         (
-            "Make Docker release pull",
-            f"make docker-pull-release DOCKER_TAG={release_tag}",
+            "Docker index digest format",
+            "--format '{{.Manifest.Digest}}'",
         ),
+        ("Versioned Docker image pull", "docker pull ghcr.io/"),
+        ("Helm values image pin", 'tag: "v'),
+        ("Python CLI upgrade pin", "pip install --upgrade vllm-sr=="),
         (
-            "Make Helm version upgrade",
-            f"make helm-upgrade-version CHART_VERSION={release_version}",
-        ),
-        ("Helm values image pin", f'tag: "{release_tag}"'),
-        ("Python CLI upgrade pin", f"pip install --upgrade vllm-sr=={release_version}"),
-        (
-            "Fleet simulator upgrade pin",
-            f"pip install --upgrade vllm-sr-sim=={sim_version}",
+            "Fleet simulator upgrade selection",
+            "pip install --upgrade --pre vllm-sr-sim==<published-version>",
         ),
     )
 
@@ -81,14 +75,13 @@ def sim_release_notes_markers() -> MarkerSet:
     )
 
 
-def sim_upgrade_docs_markers(sim_version: str) -> MarkerSet:
+def sim_upgrade_docs_markers() -> MarkerSet:
     return (
         (
-            "vllm-sr-sim upgrade command",
-            f"pip install --upgrade vllm-sr-sim=={sim_version}",
+            "vllm-sr-sim version discovery",
+            "python -m pip index versions --pre vllm-sr-sim",
         ),
-        ("vllm-sr-sim independent release tag", "`vllm-sr-sim-v<version>`"),
-        ("vllm-sr-sim publish workflow", "pypi-publish-vllm-sr-sim.yml"),
+        ("vllm-sr-sim independent version stream", "independent version stream"),
     )
 
 
@@ -115,11 +108,11 @@ def candle_crate_workflow_markers() -> MarkerSet:
         ),
         (
             "Candle crate publish dry run",
-            "cargo publish --dry-run --no-default-features --verbose",
+            "cargo publish --dry-run --locked --no-default-features --verbose",
         ),
         (
             "Candle crate publish command",
-            "cargo publish --no-default-features --verbose",
+            "cargo publish --locked --no-default-features --verbose",
         ),
         (
             "Candle static release artifact",

@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 710" role="img" aria-labelledby="title description">
+  <title id="title">A Decision Runtime request from caller to answer</title>
+  <desc id="description">Four steps: an application or Gateway sends a SystemOne or batch request; the Decision Runtime API validates and admits it; one resident model scores compatible questions, possibly in a bounded batch; the runtime returns answers with the original question IDs.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#4777b6" />
+    </marker>
+  </defs>
+  <g font-family="Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif">
+    <rect x="24" y="20" width="552" height="140" rx="18" fill="#eef7ff" stroke="#9ac7ed" stroke-width="2" />
+    <rect x="24" y="195" width="552" height="140" rx="18" fill="#f2f4ff" stroke="#aebcf0" stroke-width="2" />
+    <rect x="24" y="370" width="552" height="140" rx="18" fill="#f1f9f4" stroke="#a7d6b4" stroke-width="2" />
+    <rect x="24" y="545" width="552" height="140" rx="18" fill="#fff8ed" stroke="#edc896" stroke-width="2" />
+
+    <path d="M 300 167 V 188" fill="none" stroke="#4777b6" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)" />
+    <path d="M 300 342 V 363" fill="none" stroke="#4777b6" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)" />
+    <path d="M 300 517 V 538" fill="none" stroke="#4777b6" stroke-width="3" stroke-linecap="round" marker-end="url(#arrow)" />
+
+    <text x="56" y="52" fill="#245b88" font-size="17" font-weight="700">1  SEND</text>
+    <text x="56" y="84" fill="#142a3b" font-size="27" font-weight="700">Your app or Gateway</text>
+    <text x="56" y="116" fill="#30485a" font-size="21">State + questions</text>
+    <text x="56" y="145" fill="#30485a" font-size="21">SystemOne or batch API</text>
+
+    <text x="56" y="227" fill="#4554a1" font-size="17" font-weight="700">2  CHECK</text>
+    <text x="56" y="259" fill="#142a3b" font-size="27" font-weight="700">Decision Runtime API</text>
+    <text x="56" y="291" fill="#30485a" font-size="21">Validate model and input</text>
+    <text x="56" y="320" fill="#30485a" font-size="21">Admit within capacity</text>
+
+    <text x="56" y="402" fill="#37734b" font-size="17" font-weight="700">3  SCORE</text>
+    <text x="56" y="434" fill="#142a3b" font-size="27" font-weight="700">Resident model</text>
+    <text x="56" y="466" fill="#30485a" font-size="21">One model per instance</text>
+    <text x="56" y="495" fill="#30485a" font-size="21">Compatible work may batch</text>
+
+    <text x="56" y="577" fill="#9b6320" font-size="17" font-weight="700">4  RETURN</text>
+    <text x="56" y="609" fill="#142a3b" font-size="27" font-weight="700">Your answer</text>
+    <text x="56" y="641" fill="#30485a" font-size="21">Scores by question ID</text>
+    <text x="56" y="670" fill="#30485a" font-size="21">Model + usage</text>
+  </g>
+</svg>

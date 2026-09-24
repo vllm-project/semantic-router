@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vllm-sr"
-version = "0.3.0"
+version = "0.3.1"
 description = "vLLM Semantic Router - Intelligent routing for Mixture-of-Models"
 authors = [{name = "vLLM-SR Team"}]
 readme = "README.md"
@@ -34,13 +34,19 @@ dependencies = [
 
 [project.optional-dependencies]
 bench = ["pyarrow>=18.0.0", "tomli>=2.0.1; python_version < '3.11'"]
+decision-runtime = [
+    "fastapi>=0.115.0,<1",
+    "uvicorn>=0.30.0,<1",
+]
 dev = [
     "pytest>=8.4.1",
     "black>=22.0.0",
+    "httpx>=0.28.0,<1",
 ]
 
 [project.scripts]
 vllm-sr = "cli.main:main"
+vllm-sr-decision-runtime = "decision_runtime.entrypoint:main"
 
 [project.urls]
 Homepage = "https://github.com/vllm-project/vllm-semantic-router"
@@ -49,8 +55,11 @@ Repository = "https://github.com/vllm-project/vllm-semantic-router"
 Issues = "https://github.com/vllm-project/vllm-semantic-router/issues"
 
 [tool.setuptools]
-packages = ["cli", "cli.commands", "cli.templates", "cli.model_assets", "cli.sr_bench", "cli.config_schema"]
 include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cli*", "decision_runtime*"]
 
 [tool.setuptools.cmdclass]
 build_py = "build_support.BuildPy"
@@ -59,6 +68,8 @@ sdist = "build_support.SDist"
 [tool.setuptools.package-data]
 "cli.templates" = ["*.yaml", "*.json", "*.ini"]
 "cli.model_assets" = ["**/*.yaml", "**/*.md", "**/*.dsl"]
+"cli.decision_runtime" = ["decision-images.lock.json"]
+"decision_runtime.profiles" = ["vela/*.json", "qwen35/*.json"]
 
 
 [tool.pytest.ini_options]

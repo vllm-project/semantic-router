@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from http import HTTPStatus
 from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlencode
@@ -126,13 +127,13 @@ class RegistryClient:
 def resolve_published(record: dict, client: RegistryClient | None = None) -> dict:
     fingerprint = record["inputs_sha256"]
     tag = input_tag(fingerprint)
+    client = client or RegistryClient()
     try:
-        client = client or RegistryClient()
         manifest, digest = client.document("manifests", tag)
     except HTTPError as error:
-        if error.code in {401, 403, 404}:
+        if error.code == HTTPStatus.NOT_FOUND:
             raise PublicationUnavailableError(
-                f"Qualified provider-mocker {tag} is unavailable; complete its main publication first"
+                f"Qualified provider-mocker {tag} has not been published"
             ) from error
         raise
     images = []

@@ -7,6 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import tomllib
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "tools" / "ci" / "docker-build-args.sh"
 
@@ -47,7 +49,13 @@ class DockerBuildArgumentTests(unittest.TestCase):
             IS_NIGHTLY="true",
             NIGHTLY_DATE="20260806",
         )
-        self.assertIn("DASHBOARD_VERSION=v0.3.0-nightly.20260806.", output)
+        project = tomllib.loads(
+            (REPO_ROOT / "src" / "vllm-sr" / "pyproject.toml").read_text(
+                encoding="utf-8"
+            )
+        )
+        version = project["project"]["version"]
+        self.assertIn(f"DASHBOARD_VERSION=v{version}-nightly.20260806.", output)
 
     def test_dashboard_source_revision_is_the_full_git_commit(self) -> None:
         output = run_resolver(

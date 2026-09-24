@@ -29,7 +29,12 @@ from execution_batches import (
     native_batches,
 )
 from provider_mocker_image import IMAGE as MOCKER_IMAGE
-from provider_mocker_image import acquisition, published_from_plan, resolve_published
+from provider_mocker_image import (
+    PublicationUnavailableError,
+    acquisition,
+    published_from_plan,
+    resolve_published,
+)
 from verification_catalog import (
     catalog_errors,
     full_cpu_ids,
@@ -72,9 +77,12 @@ def make_plan(
     draft: bool = False,
     base_sha: str = "",
     requested: tuple[str, ...] = (),
+    decision_runtime_images: bool = False,
 ) -> dict:
     if profile not in PROFILES:
         raise ValueError(f"unknown CI profile: {profile}")
+    if decision_runtime_images and profile == "pr":
+        raise ValueError("Decision publication is unavailable in the PR CI profile")
     if len(source_sha) != GIT_SHA_LENGTH or any(
         c not in "0123456789abcdef" for c in source_sha
     ):
@@ -143,11 +151,36 @@ def make_plan(
         verifications.append(record)
     publish_images = []
     if profile == "main":
-        publish_images = list(selection.publish_images)
+        publish_images = [
+            image
+            for image in selection.publish_images
+            if decision_runtime_images or image != "decision-runtime-cpu"
+        ]
     elif profile == "nightly":
-        publish_images = list(NIGHTLY_IMAGES)
+        publish_images = [
+            image
+            for image in NIGHTLY_IMAGES
+            if decision_runtime_images or image != "decision-runtime-cpu"
+        ]
     elif profile == "release":
-        publish_images = list(PRODUCTION_RELEASE_IMAGES)
+        publish_images = [
+            image
+            for image in PRODUCTION_RELEASE_IMAGES
+            if decision_runtime_images or image != "decision-runtime-cpu"
+        ]
+    publish_python = profile == "release" or (
+        profile == "main"
+        and not selection.signals["docs_only"]
+        and not selection.test_only
+        and bool({"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains))
+    )
+    if (
+        profile == "main"
+        and decision_runtime_images
+        and publish_python
+        and "decision-runtime-cpu" not in publish_images
+    ):
+        publish_images.append("decision-runtime-cpu")
     images = sorted(
         set(selection.pr_images if ids else ())
         | set(publish_images)
@@ -184,13 +217,7 @@ def make_plan(
         "publish_images": publish_images,
         "publish_helm": profile in {"nightly", "release"}
         or (profile == "main" and selection.signals["helm"]),
-        "publish_python": profile == "release"
-        or (
-            profile == "main"
-            and bool(
-                {"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains)
-            )
-        ),
+        "publish_python": publish_python,
         "multiarch": bool(publish_images),
         "not_applicable": load_catalog()["full_cpu"]["excluded"],
         "quality_context": dict(selection.signals),
@@ -202,6 +229,27 @@ def make_plan(
     plan["expected_dispatch_jobs"] = expected_dispatch_jobs(plan)
     plan["plan_sha256"] = digest(plan)
     return plan
+
+
+def resolve_image_sources(plan: dict) -> dict:
+    """Resolve fixture reuse once; build exact inputs if its tag is absent."""
+
+    published = published_from_plan(plan)
+    if published is None:
+        return plan
+    resolved = {**plan, "image_sources": dict(plan["image_sources"])}
+    try:
+        resolved["image_sources"][MOCKER_IMAGE] = resolve_published(published)
+    except PublicationUnavailableError:
+        resolved["image_sources"][MOCKER_IMAGE] = {**published, "source": "candidate"}
+        resolved["build_images"] = sorted({*plan["build_images"], MOCKER_IMAGE})
+        if plan["profile"] == "main":
+            resolved["publish_images"] = sorted({*plan["publish_images"], MOCKER_IMAGE})
+            resolved["multiarch"] = bool(resolved["publish_images"])
+    resolved["plan_sha256"] = digest(
+        {key: value for key, value in resolved.items() if key != "plan_sha256"}
+    )
+    return resolved
 
 
 def component_batches(verifications: list[dict]) -> list[dict]:
@@ -368,29 +416,28 @@ def main() -> int:
     parser.add_argument("--head", required=True)
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--draft", action="store_true")
+    parser.add_argument("--decision-runtime-images", action="store_true")
     parser.add_argument("--verification", action="append", default=[])
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--github-output", type=Path)
     parser.add_argument("paths", nargs="*")
     args = parser.parse_args()
-    plan = make_plan(
-        (
-            args.paths
-            if args.verification
-            else args.paths or git_changed_files(args.base, args.head)
-        ),
-        source_sha=args.head,
-        base_sha=args.base,
-        profile=args.profile,
-        full=args.full,
-        draft=args.draft,
-        requested=tuple(args.verification),
-    )
-    if published := published_from_plan(plan):
-        plan["image_sources"][MOCKER_IMAGE] = resolve_published(published)
-        plan["plan_sha256"] = digest(
-            {key: value for key, value in plan.items() if key != "plan_sha256"}
+    plan = resolve_image_sources(
+        make_plan(
+            (
+                args.paths
+                if args.verification
+                else args.paths or git_changed_files(args.base, args.head)
+            ),
+            source_sha=args.head,
+            base_sha=args.base,
+            profile=args.profile,
+            full=args.full,
+            draft=args.draft,
+            requested=tuple(args.verification),
+            decision_runtime_images=args.decision_runtime_images,
         )
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(plan, indent=2) + "\n")
     if args.github_output:

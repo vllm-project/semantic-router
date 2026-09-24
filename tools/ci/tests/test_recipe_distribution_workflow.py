@@ -112,8 +112,9 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertNotIn("managed-recipe-release-assets", release_text)
         self.assertNotIn("release-assets/recipes", release_text)
         self.assertNotIn(".vllm-sr-recipe.zip", release_text)
-        self.assertIn(
-            "needs: [validate, gate, docker, helm, pypi, crate]", release_text
+        self.assertEqual(
+            needs(self.release_workflow.jobs["release-notes"]),
+            {"validate", "gate", "docker", "helm", "pypi", "decision_pypi", "crate"},
         )
         self.assertIn("They are not published", release_text)
         self.assertIn("as separate GitHub Release assets", release_text)

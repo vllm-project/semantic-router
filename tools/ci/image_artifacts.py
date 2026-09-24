@@ -16,8 +16,24 @@ from pathlib import Path
 import provider_mocker_image as mocker
 
 DUAL = ["linux/amd64", "linux/arm64"]
+DECISION_RUNTIME_BASES = {
+    "decision-runtime-cpu": (
+        "python@sha256:229a2c5bfa27522db7815ea81f9bed70af17ccb9de9fc7ad142b1877b5830d36",
+        "cpu",
+        "https://download.pytorch.org/whl/cpu",
+    ),
+    "decision-runtime-rocm": (
+        "vllm/vllm-openai-rocm@sha256:1fd21abe66455b4df5a2e83629e97cdcc9d58913b16052d8118b92b239792339",
+        "rocm",
+        "",
+    ),
+}
 DEFINITIONS = {
     "dashboard": (".", "dashboard/backend/Dockerfile", DUAL),
+    **{
+        name: (".", "src/vllm-sr/decision_runtime/image/Dockerfile", ["linux/amd64"])
+        for name in DECISION_RUNTIME_BASES
+    },
     "extproc": (".", "tools/docker/Dockerfile.extproc", DUAL),
     "extproc-rocm": (".", "tools/docker/Dockerfile.extproc-rocm", ["linux/amd64"]),
     mocker.IMAGE: (mocker.CONTEXT, mocker.CONTEXT + "/Dockerfile", DUAL),
@@ -48,6 +64,57 @@ def source_sha() -> str:
     if os.environ.get("GITHUB_SHA", actual) != actual:
         raise ValueError("Checkout differs from the workflow source revision")
     return actual
+
+
+def decision_build_args(image: str, revision: str) -> tuple[str, ...]:
+    """Bind a Decision image to one immutable base and one source commit."""
+    if image not in DECISION_RUNTIME_BASES:
+        raise ValueError(f"Not a Decision runtime image: {image}")
+    if not re.fullmatch(r"[0-9a-f]{40}", revision):
+        raise ValueError("Decision runtime image requires a full source SHA")
+    base, backend, torch_index = DECISION_RUNTIME_BASES[image]
+    return (
+        f"BASE_IMAGE={base}",
+        "PYTHON_BIN=python3",
+        f"BACKEND={backend}",
+        f"TORCH_INDEX_URL={torch_index}",
+        f"SOURCE_REVISION={revision}",
+        "SOURCE_STATE=clean",
+    )
+
+
+def verify_decision_build(manifest: dict, archive: Path, image: str) -> None:
+    """Reject a stale base, changed backend, or spoofed source label."""
+    expected = dict(
+        item.split("=", 1) for item in decision_build_args(image, source_sha())
+    )
+    recorded: dict[str, str] = {}
+    for item in manifest.get("build_args", []):
+        if not isinstance(item, str) or "=" not in item:
+            raise ValueError("Decision image build arguments are malformed")
+        key, value = item.split("=", 1)
+        if not key or key in recorded:
+            raise ValueError("Decision image build arguments are duplicated")
+        recorded[key] = value
+    if any(recorded.get(key) != value for key, value in expected.items()):
+        raise ValueError("Decision image build arguments differ from pinned source")
+
+    base, backend, _ = DECISION_RUNTIME_BASES[image]
+    required_labels = {
+        "org.opencontainers.image.base.name": base,
+        "org.opencontainers.image.revision": manifest["source_sha"],
+        "ai.vllm-sr.decision.source-state": "clean",
+        "ai.vllm-sr.decision.backend": backend,
+    }
+    with tarfile.open(archive) as source:
+        for descriptor in manifest["images"]:
+            digest = descriptor["config"]
+            member = source.extractfile("blobs/sha256/" + digest.split(":", 1)[1])
+            if member is None:
+                raise ValueError("Decision image configuration is missing")
+            labels = json.load(member).get("config", {}).get("Labels", {})
+            if any(labels.get(key) != value for key, value in required_labels.items()):
+                raise ValueError("Decision image source or backend labels differ")
 
 
 def oci_images(path: Path) -> list[dict]:
@@ -105,6 +172,8 @@ def verify(directory: Path, image: str) -> dict:
         archive
     ):
         raise ValueError("Image artifact content differs from its receipt")
+    if image in DECISION_RUNTIME_BASES:
+        verify_decision_build(manifest, archive, image)
     if image == mocker.IMAGE:
         if manifest.get("inputs_sha256") != mocker.input_fingerprint():
             raise ValueError("provider-mocker build inputs differ from this checkout")
@@ -156,6 +225,14 @@ def verify_loaded_image(archive: Path, expected: dict, actual: dict) -> None:
 def publication_tags(
     image: str, mode: str, tag: str, latest: bool, date: str
 ) -> list[str]:
+    if image == "decision-runtime-rocm":
+        raise ValueError("Decision ROCm is not supported by the hosted image publisher")
+    if image == "decision-runtime-cpu":
+        if mode not in {"main", "nightly", "release"}:
+            raise ValueError("PR artifacts cannot be published")
+        # This is a source-tagged candidate, not a qualified CLI default.
+        # Do not publish a latest/version alias without a digest binding.
+        return [source_sha()]
     if image == mocker.IMAGE:
         if mode != "main":
             raise ValueError(
@@ -181,7 +258,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "command",
-        choices=["definition", "seal", "load", "promote", "verify", "acquire"],
+        choices=[
+            "definition",
+            "build-args",
+            "seal",
+            "load",
+            "promote",
+            "verify",
+            "acquire",
+        ],
     )
     parser.add_argument("--image", choices=sorted(DEFINITIONS))
     parser.add_argument("--images", default="[]", help="JSON list, used by load")
@@ -256,6 +341,9 @@ def main() -> None:
         return
     if not args.image:
         parser.error("--image is required")
+    if args.command == "build-args":
+        print("\n".join(decision_build_args(args.image, source_sha())))
+        return
     context, dockerfile, supported = DEFINITIONS[args.image]
     platforms = supported if args.multiarch else ["linux/amd64"]
     if args.command == "definition":
@@ -325,9 +413,10 @@ def main() -> None:
                     print(json.dumps({"reused_qualified_publication": existing["ref"]}))
                     return
             owner = os.environ["GITHUB_REPOSITORY_OWNER"].lower()
-            for tag in publication_tags(
+            tags = publication_tags(
                 args.image, args.mode, args.tag, args.latest, manifest["date"]
-            ):
+            )
+            for tag in tags:
                 subprocess.run(
                     [
                         "skopeo",
@@ -340,6 +429,30 @@ def main() -> None:
                         f"docker://ghcr.io/{owner}/semantic-router/{args.image}:{tag}",
                     ],
                     check=True,
+                )
+            if args.image == "decision-runtime-cpu":
+                digest = (args.directory / "published-digest.txt").read_text().strip()
+                if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                    raise ValueError("Decision publication returned an invalid digest")
+                if len(tags) != 1 or tags[0] != manifest["source_sha"]:
+                    raise ValueError("Decision publication must use its source SHA")
+                if [item["platform"] for item in manifest["images"]] != ["linux/amd64"]:
+                    raise ValueError(
+                        "Decision CPU publication has an unexpected platform"
+                    )
+                receipt = {
+                    "schema_version": 1,
+                    "image": args.image,
+                    "source_sha": manifest["source_sha"],
+                    "mode": args.mode,
+                    "tag": args.tag,
+                    "digest": digest,
+                    "ref": f"ghcr.io/{owner}/semantic-router/{args.image}@{digest}",
+                    "archive_sha256": manifest["sha256"],
+                    "platform": "linux/amd64",
+                }
+                (args.directory / "published.json").write_text(
+                    json.dumps(receipt, indent=2) + "\n"
                 )
         print(json.dumps(manifest, indent=2))
 

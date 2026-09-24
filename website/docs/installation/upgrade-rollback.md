@@ -125,7 +125,8 @@ For Kubernetes manifests, pin to the digest, not the tag:
 image: ghcr.io/vllm-project/semantic-router/extproc@sha256:<digest>
 ```
 
-Published versioned images for a full release:
+Versioned image repositories vary by release. Check that a tag exists before
+using it:
 
 | Image | Typical owner |
 |-------|---------------|
@@ -133,6 +134,7 @@ Published versioned images for a full release:
 | `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm router ExtProc runtime |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | Local/runtime CLI image |
 | `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm local/runtime CLI image |
+| `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:<published-release-tag>` | CUDA local/runtime CLI image, when published for the chosen release |
 | `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard backend/frontend image |
 | `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator image |
 | `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.3.0` | Operator bundle image |

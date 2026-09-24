@@ -4,12 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+import yaml
 from release_contract_markers import (
     candle_crate_workflow_markers,
     candle_release_notes_markers,
@@ -21,6 +21,14 @@ from release_contract_markers import (
 from snapshot_model_catalog import release_snapshot_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+CI_TOOLS_ROOT = REPO_ROOT / "tools/ci"
+if str(CI_TOOLS_ROOT) not in sys.path:
+    sys.path.insert(0, str(CI_TOOLS_ROOT))
+
+from classify_pr_changes import PRODUCTION_RELEASE_IMAGES  # noqa: E402
+from image_artifacts import DEFINITIONS as IMAGE_DEFINITIONS  # noqa: E402
+from image_artifacts import publication_tags  # noqa: E402
+
 PYPROJECT_PATH = REPO_ROOT / "src/vllm-sr/pyproject.toml"
 SIM_PYPROJECT_PATH = REPO_ROOT / "src/fleet-sim/pyproject.toml"
 CANDLE_CARGO_PATH = REPO_ROOT / "candle-binding/Cargo.toml"
@@ -28,6 +36,7 @@ CANDLE_LOCK_PATH = REPO_ROOT / "candle-binding/Cargo.lock"
 HELM_CHART_PATH = REPO_ROOT / "deploy/helm/semantic-router/Chart.yaml"
 HELM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/helm-publish.yml"
 DOCKER_PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/docker-publish.yml"
+CI_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/ci.yml"
 RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
 SIM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pypi-publish-vllm-sr-sim.yml"
 PUBLISH_CRATE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/publish-crate.yml"
@@ -41,7 +50,6 @@ SEMVER_RE = re.compile(
     r"^(?P<major>[0-9]+)\.(?P<minor>[0-9]+)\.(?P<patch>[0-9]+)"
     r"(?:[-+][0-9A-Za-z.-]+)?$"
 )
-RELEASE_IMAGES_RE = re.compile(r"^\s+images:\s+'(\[[^']+\])'", re.MULTILINE)
 
 
 @dataclass(frozen=True)
@@ -175,20 +183,39 @@ def validate_release_catalog(errors: list[str], version: str) -> str:
 
 
 def parse_release_images() -> tuple[str, ...]:
-    match = RELEASE_IMAGES_RE.search(read_text(RELEASE_WORKFLOW_PATH))
-    if match is None:
-        raise ValueError(
-            "could not find the release image inventory in release workflow"
-        )
-    images = sorted(json.loads(match.group(1)))
-    docker_workflow = read_text(DOCKER_PUBLISH_WORKFLOW_PATH)
-    missing = [image for image in images if f"{image})" not in docker_workflow]
+    """Follow the Release job's CI output back to the canonical image inventory."""
+
+    try:
+        release = yaml.safe_load(read_text(RELEASE_WORKFLOW_PATH))
+        ci = yaml.safe_load(read_text(CI_WORKFLOW_PATH))
+        publisher = yaml.safe_load(read_text(DOCKER_PUBLISH_WORKFLOW_PATH))
+        release_ci = release["jobs"]["ci"]
+        release_docker = release["jobs"]["docker"]
+        ci_plan = ci["jobs"]["plan"]
+        publish = publisher["jobs"]["publish"]
+    except (KeyError, TypeError, yaml.YAMLError) as error:
+        raise ValueError("release image workflow is invalid") from error
+    if (
+        release_ci.get("uses") != "./.github/workflows/ci.yml"
+        or release_ci.get("with", {}).get("profile") != "release"
+        or release_docker.get("uses") != "./.github/workflows/docker-publish.yml"
+        or release_docker.get("with", {}).get("images")
+        != "${{ needs.ci.outputs.publish_images }}"
+        or "ci" not in release_docker.get("needs", [])
+        or ci_plan.get("uses") != "./.github/workflows/ci-changes.yml"
+        or publish.get("strategy", {}).get("matrix", {}).get("image")
+        != "${{ fromJSON(inputs.images) }}"
+    ):
+        raise ValueError("release images must come from the shared release CI plan")
+
+    images = tuple(sorted(PRODUCTION_RELEASE_IMAGES))
+    missing = set(images) - IMAGE_DEFINITIONS.keys()
     if missing:
         raise ValueError(
-            "release images are missing from the canonical Docker publisher: "
-            + ", ".join(missing)
+            "release images are missing from the canonical image definitions: "
+            + ", ".join(sorted(missing))
         )
-    return tuple(images)
+    return images
 
 
 def collect_contract() -> ReleaseContract:
@@ -277,12 +304,19 @@ def validate_upgrade_docs_images(
 ) -> None:
     upgrade_docs = read_text(UPGRADE_ROLLBACK_DOC_PATH)
     for image in release_images:
-        image_ref = f"{GHCR_IMAGE_PREFIX}/{image}:v{version}"
-        if image_ref in upgrade_docs:
+        release_tag = f"v{version}"
+        if release_tag not in publication_tags(
+            image, "release", release_tag, False, ""
+        ):
+            # Decision CPU is published by source SHA and selected by the CLI.
+            continue
+        image_ref = f"{GHCR_IMAGE_PREFIX}/{image}:"
+        reference = re.escape(image_ref) + r"(?:v\d+\.\d+\.\d+|<published-release-tag>)"
+        if re.search(reference, upgrade_docs):
             continue
         message = (
-            "upgrade and rollback docs do not include full tagged release image "
-            f"'{image_ref}'"
+            "upgrade and rollback docs do not show a versioned reference for "
+            f"release image '{image}'"
         )
         errors.append(f"{UPGRADE_ROLLBACK_DOC_PATH.relative_to(REPO_ROOT)}: {message}")
         emit_github_error(
@@ -290,15 +324,11 @@ def validate_upgrade_docs_images(
         )
 
 
-def validate_upgrade_runbook_fixtures(
-    errors: list[str], contract: ReleaseContract, release_version: str
-) -> None:
+def validate_upgrade_runbook_fixtures(errors: list[str]) -> None:
     require_markers(
         errors,
         UPGRADE_ROLLBACK_DOC_PATH,
         upgrade_runbook_fixture_markers(
-            release_version=release_version,
-            sim_version=contract.sim_version,
             helm_chart_ref=HELM_CHART_REF,
         ),
     )
@@ -312,10 +342,8 @@ def validate_sim_release_notes(errors: list[str]) -> None:
     require_markers(errors, RELEASE_WORKFLOW_PATH, sim_release_notes_markers())
 
 
-def validate_sim_upgrade_docs(errors: list[str], sim_version: str) -> None:
-    require_markers(
-        errors, UPGRADE_ROLLBACK_DOC_PATH, sim_upgrade_docs_markers(sim_version)
-    )
+def validate_sim_upgrade_docs(errors: list[str]) -> None:
+    require_markers(errors, UPGRADE_ROLLBACK_DOC_PATH, sim_upgrade_docs_markers())
 
 
 def validate_candle_crate_workflow(errors: list[str]) -> None:
@@ -357,9 +385,10 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
         expected,
     )
 
-    if contract.helm_app_version != "latest":
+    if re.fullmatch(r"v\d+\.\d+\.\d+", contract.helm_app_version) is None:
         message = (
-            "source chart appVersion must stay 'latest'; release tags override it in CI"
+            "source chart appVersion must pin a stable release tag; "
+            "publication overrides it for each channel"
         )
         errors.append(f"{HELM_CHART_PATH.relative_to(REPO_ROOT)}: {message}")
         emit_github_error(HELM_CHART_PATH, "Helm appVersion contract mismatch", message)
@@ -367,10 +396,10 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
     validate_helm_workflow(errors)
     validate_release_notes_images(errors, contract.release_images)
     validate_upgrade_docs_images(errors, contract.release_images, expected)
-    validate_upgrade_runbook_fixtures(errors, contract, expected)
+    validate_upgrade_runbook_fixtures(errors)
     validate_sim_release_workflow(errors)
     validate_sim_release_notes(errors)
-    validate_sim_upgrade_docs(errors, contract.sim_version)
+    validate_sim_upgrade_docs(errors)
     validate_candle_crate_workflow(errors)
     validate_candle_release_notes(errors)
     # An explicit version is the publication boundary used by release.yml and

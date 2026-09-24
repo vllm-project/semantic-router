@@ -14,6 +14,88 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "release"))
 import check_version_contract as release_contract  # noqa: E402
 
 
+class ReleaseImageContractTests(unittest.TestCase):
+    def test_release_images_follow_the_shared_release_plan(self) -> None:
+        self.assertEqual(
+            release_contract.parse_release_images(),
+            tuple(sorted(release_contract.PRODUCTION_RELEASE_IMAGES)),
+        )
+
+    def test_release_rejects_a_static_or_unrelated_image_inventory(self) -> None:
+        original = release_contract.RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8")
+        dynamic = "${{ needs.ci.outputs.publish_images }}"
+        self.assertIn(dynamic, original)
+        altered = original.replace(dynamic, '["vllm-sr"]', 1)
+
+        def read_text(path: Path) -> str:
+            return (
+                altered
+                if path == release_contract.RELEASE_WORKFLOW_PATH
+                else path.read_text()
+            )
+
+        with (
+            mock.patch.object(release_contract, "read_text", side_effect=read_text),
+            self.assertRaisesRegex(ValueError, "shared release CI plan"),
+        ):
+            release_contract.parse_release_images()
+
+    def test_release_rejects_a_nonrelease_ci_profile(self) -> None:
+        original = release_contract.RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8")
+        self.assertIn("profile: release", original)
+        altered = original.replace("profile: release", "profile: pr", 1)
+
+        def read_text(path: Path) -> str:
+            return (
+                altered
+                if path == release_contract.RELEASE_WORKFLOW_PATH
+                else path.read_text()
+            )
+
+        with (
+            mock.patch.object(release_contract, "read_text", side_effect=read_text),
+            self.assertRaisesRegex(ValueError, "shared release CI plan"),
+        ):
+            release_contract.parse_release_images()
+
+    def test_source_contract_accepts_the_current_release_runbook(self) -> None:
+        _, errors = release_contract.validate(None)
+        self.assertEqual(errors, [])
+
+    def test_runbook_checks_published_image_names_without_fabricating_cpu_tag(
+        self,
+    ) -> None:
+        images = ("decision-runtime-cpu", "vllm-sr-cuda")
+        errors: list[str] = []
+        release_contract.validate_upgrade_docs_images(errors, images, "0.3.0")
+        self.assertEqual(errors, [])
+
+        original = release_contract.UPGRADE_ROLLBACK_DOC_PATH.read_text(
+            encoding="utf-8"
+        )
+        altered = original.replace(
+            "ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:<published-release-tag>",
+            "vllm-sr-cuda image",
+            1,
+        )
+
+        def read_text(path: Path) -> str:
+            return (
+                altered
+                if path == release_contract.UPGRADE_ROLLBACK_DOC_PATH
+                else path.read_text()
+            )
+
+        with (
+            mock.patch.object(release_contract, "read_text", side_effect=read_text),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            errors = []
+            release_contract.validate_upgrade_docs_images(errors, images, "0.3.0")
+        self.assertEqual(len(errors), 1)
+        self.assertIn("vllm-sr-cuda", errors[0])
+
+
 class ReleaseCatalogContractTests(unittest.TestCase):
     def _validate_manifest(
         self, content: str | None, *, version: str = "9.8.7"

@@ -34,3 +34,15 @@
       method: GET
       path: /v1/models
   capabilities: [chat, streaming, tools, usage]
+- id: typesafe/systemone@1
+  display_name: TypeSafe SystemOne
+  wire_format: typesafe.systemone.v1
+  default_base_path: /v1
+  operations:
+    - id: create
+      method: POST
+      path: /v1/systemone
+    - id: list_models
+      method: GET
+      path: /v1/models
+  capabilities: [decision, noul, choice, score, usage]

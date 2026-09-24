@@ -7,6 +7,14 @@ on:
         description: Promote the exact distribution qualified by package-check.yml.
         type: boolean
         default: false
+      decision_runtime:
+        description: Bind published Decision images to the final package.
+        type: boolean
+        default: false
+      decision_rocm_qualification:
+        description: Verified six-model ROCm qualification for a stable release.
+        type: string
+        default: ""
       channel:
         description: Package channel, stable for releases or dev for validated main commits.
         required: false
@@ -30,7 +38,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish to TestPyPI.
+        description: Version to publish as a source-build TestPyPI preview (without released Decision image defaults).
         required: true
         type: string
       tag:
@@ -201,33 +209,83 @@ jobs:
   pypi:
     name: Publish to PyPI
     if: >-
-      !cancelled() && !failure()
+      always() && !cancelled()
+      && (needs.build.result == 'success' || inputs.prebuilt-dist)
+      && (!inputs.decision_runtime || inputs.prebuilt-dist)
       && github.repository == 'vllm-project/semantic-router'
       && github.event_name == 'push'
       && ((inputs.channel == 'dev' && github.ref == 'refs/heads/main')
         || (inputs.channel == 'stable' && startsWith(github.ref, 'refs/tags/v')))
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
           name: vllm-sr-dist
-          path: dist
+          path: ${{ inputs.decision_runtime && '.agent-harness/qualified-package' || 'dist' }}
 
-      - name: Verify qualified source and package content
+      - uses: actions/download-artifact@v4
+        if: inputs.decision_runtime
+        with:
+          name: ci-published-decision-runtime-cpu
+          path: .agent-harness/decision-image
+
+      - name: Prepare Decision-enabled package
+        if: inputs.decision_runtime
+        env:
+          MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
+          TAG: ${{ inputs.tag }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DECISION_ROCM_QUALIFICATION: ${{ inputs.decision_rocm_qualification }}
+        run: |
+          set -euo pipefail
+          python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+          printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          python tools/ci/package_contract.py --mode "$MODE" --tag "$TAG" \
+            --base-ref "$GITHUB_SHA" --output .agent-harness/bound-package \
+            --qualified-dist .agent-harness/qualified-package \
+            --decision-image-receipt .agent-harness/decision-image/published.json \
+            --verify-registry
+          mv .agent-harness/bound-package/dist dist
+
+      - name: Verify prebuilt distribution
         if: inputs.prebuilt-dist
         env:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}
-        run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
+          DECISION_RUNTIME: ${{ inputs.decision_runtime }}
+        run: |
+          args=()
+          if [[ "$DECISION_RUNTIME" == true ]]; then args+=(--require-decision-images); fi
+          python tools/ci/package_contract.py --verify-dist --output dist \
+            --mode "$MODE" --tag "$TAG" "${args[@]}"
       - run: pip install twine
 
       - name: Publish verified package
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/*.whl dist/*.tar.gz --skip-existing
+          DECISION_RUNTIME: ${{ inputs.decision_runtime }}
+        run: |
+          if [[ "$DECISION_RUNTIME" == true ]]; then
+            twine upload dist/*.whl dist/*.tar.gz
+          else
+            twine upload dist/*.whl dist/*.tar.gz --skip-existing
+          fi
+      - uses: actions/upload-artifact@v4
+        if: inputs.decision_runtime
+        with:
+          name: vllm-sr-bound-dist
+          path: dist/
+          if-no-files-found: error

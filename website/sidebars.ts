@@ -388,6 +388,18 @@ const sidebars: SidebarsConfig = {
             'installation/runtime/lifecycle-diagnostics',
           ],
         },
+        {
+          type: 'category',
+          label: 'Decision Runtime',
+          link: { type: 'doc', id: 'installation/decision-runtime/overview' },
+          items: [
+            'installation/decision-runtime/models',
+            'installation/decision-runtime/parameters',
+            'installation/decision-runtime/api',
+            'installation/decision-runtime/architecture',
+            'installation/decision-runtime/optimization',
+          ],
+        },
       ],
     },
     {
@@ -508,6 +520,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'api/cli',
+        'api/decision-runtime',
         'api/router',
         'api/configuration-schema',
         'api/apiserver',
