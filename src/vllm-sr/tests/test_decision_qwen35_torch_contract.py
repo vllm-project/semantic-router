@@ -23,7 +23,8 @@ from decision_runtime.qwen35_torch import (  # noqa: E402
     Qwen35TorchRuntime,
     QwenRocmProfileBinding,
     _bind_rocm_profile,
-    _install_cpu_reference_kernels,
+    _install_instance_native_gated_delta_kernels,
+    _validate_configuration,
     _validate_device,
     _validated_rocm_profile,
 )
@@ -528,7 +529,7 @@ def test_cpu_loader_converts_verified_body_to_fp32(
     monkeypatch.setattr(qwen35_torch, "_decision_model", lambda *a: FakeModule())
     monkeypatch.setattr(
         qwen35_torch,
-        "_install_cpu_reference_kernels",
+        "_install_instance_native_gated_delta_kernels",
         lambda *a: calls.append("cpu-reference"),
     )
 
@@ -552,63 +553,311 @@ def test_cpu_loader_converts_verified_body_to_fp32(
         )
 
 
-def test_cpu_reference_binding_is_instance_local() -> None:
-    def reference_kernel():
-        return "reference"
+@pytest.mark.parametrize("head_dtype", ("fp32", "bf16"))
+def test_native_rocm_loader_keeps_bf16_body_and_fp32_head(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, head_dtype: str
+) -> None:
+    root = _artifact(tmp_path)
+    calls = []
+    monkeypatch.setattr(qwen35_torch, "verify_release_manifest", lambda *a, **k: None)
 
-    reference_kernel = FunctionType(
-        reference_kernel.__code__.replace(co_filename="modeling_qwen3_5.py"),
-        {},
-        "causal_conv1d_fn",
+    class FakeModule:
+        def __init__(self, dtype="fp32"):
+            self.dtype = dtype
+            self.config = SimpleNamespace(hidden_size=16, use_cache=True)
+
+        def load_state_dict(self, *args, **kwargs):
+            pass
+
+        def to(self, device):
+            return self
+
+        def eval(self):
+            return self
+
+        def parameters(self):
+            return (SimpleNamespace(dtype=self.dtype),)
+
+    def from_pretrained(*args, **kwargs):
+        calls.append(("backbone", kwargs["dtype"]))
+        return FakeModule(kwargs["dtype"])
+
+    fake_torch = SimpleNamespace(
+        float32="fp32",
+        bfloat16="bf16",
+        device=lambda name: SimpleNamespace(type="cuda"),
+        version=SimpleNamespace(hip="7.2"),
+        cuda=SimpleNamespace(is_available=lambda: True, is_bf16_supported=lambda: True),
+    )
+    fake_transformers = SimpleNamespace(
+        __version__=qwen35_torch.SUPPORTED_TRANSFORMERS_VERSION,
+        AutoTokenizer=SimpleNamespace(from_pretrained=lambda *a, **k: object()),
+    )
+    modules = {
+        "torch": fake_torch,
+        "transformers": fake_transformers,
+        "safetensors.torch": SimpleNamespace(load_file=lambda *a, **k: {}),
+    }
+    monkeypatch.setattr(qwen35_torch, "_required_module", modules.__getitem__)
+    monkeypatch.setattr(
+        qwen35_torch.importlib,
+        "import_module",
+        lambda name: SimpleNamespace(
+            Qwen3_5TextModel=SimpleNamespace(from_pretrained=from_pretrained)
+        ),
+    )
+    monkeypatch.setattr(
+        qwen35_torch, "_candidate_head", lambda *a: FakeModule(head_dtype)
+    )
+    monkeypatch.setattr(qwen35_torch, "_decision_model", lambda *a: FakeModule())
+    monkeypatch.setattr(
+        qwen35_torch,
+        "_install_instance_native_gated_delta_kernels",
+        lambda *a: calls.append(("native", None)),
     )
 
-    @wraps(reference_kernel)
-    def accelerated_kernel():
-        return "accelerator"
+    options = dict(
+        temperature=1.0,
+        max_length=1024,
+        backend="rocm",
+        gated_delta_kernel_policy="native_torch",
+        native_rocm_max_physical_batch_size=8,
+        physical_batch_size=8,
+        expected_manifest_sha256="a" * 64,
+    )
+    if head_dtype == "bf16":
+        with pytest.raises(Qwen35RuntimeError, match="candidate-head storage"):
+            Qwen35TorchRuntime.load(root, **options)
+    else:
+        runtime = Qwen35TorchRuntime.load(root, **options)
+        assert runtime.gated_delta_kernel_policy == "native_torch"
+        assert runtime.rocm_profile_binding is None
+    assert calls == [("backbone", "bf16"), ("native", None)]
 
-    def reference_forward(self):
-        # These names are supplied by FunctionType's globals below, as in the model.
+
+def _native_kernel_surface():
+    """Small pinned-signature source stand-ins with an accelerated dispatch."""
+
+    def source(function):
+        return FunctionType(
+            function.__code__.replace(co_filename="modeling_qwen3_5.py"),
+            function.__globals__,
+            function.__name__,
+            function.__defaults__,
+        )
+
+    def conv_fn(hidden_states, weight, bias=None, activation=None, **kwargs):
+        return "native"
+
+    def conv_update(hidden_states, conv_state, weight, bias=None, activation=None):
+        return "native"
+
+    def chunk(
+        query,
+        key,
+        value,
+        g,
+        beta,
+        chunk_size=64,
+        initial_state=None,
+        output_final_state=False,
+        use_qk_l2norm_in_kernel=False,
+        **kwargs,
+    ):
+        return "native"
+
+    def recurrent(
+        query,
+        key,
+        value,
+        g,
+        beta,
+        initial_state=None,
+        output_final_state=False,
+        use_qk_l2norm_in_kernel=False,
+        **kwargs,
+    ):
+        return "native"
+
+    def norm_forward(self, hidden_states, gate):
+        return "native norm"
+
+    conv_fn = source(conv_fn)
+    conv_update = source(conv_update)
+    chunk = source(chunk)
+    recurrent = source(recurrent)
+    norm_forward = source(norm_forward)
+
+    @wraps(conv_fn)
+    def accelerated_conv(*args, **kwargs):
+        return "accelerated"
+
+    @wraps(norm_forward)
+    def accelerated_norm(*args, **kwargs):
+        return "accelerated norm"
+
+    def original_forward(
+        self, hidden_states, cache_params=None, attention_mask=None, **kwargs
+    ):
         _ = (
             causal_conv1d_update,  # noqa: F821
             torch_chunk_gated_delta_rule,  # noqa: F821
             torch_recurrent_gated_delta_rule,  # noqa: F821
         )
-        return causal_conv1d_fn()  # noqa: F821
+        return causal_conv1d_fn(hidden_states, None)  # noqa: F821
 
-    reference_forward = FunctionType(
-        reference_forward.__code__.replace(co_filename="modeling_qwen3_5.py"),
+    original_forward = FunctionType(
+        original_forward.__code__.replace(co_filename="modeling_qwen3_5.py"),
         {
-            "causal_conv1d_fn": accelerated_kernel,
-            "causal_conv1d_update": accelerated_kernel,
-            "torch_chunk_gated_delta_rule": accelerated_kernel,
-            "torch_recurrent_gated_delta_rule": accelerated_kernel,
+            "causal_conv1d_fn": accelerated_conv,
+            "causal_conv1d_update": accelerated_conv,
+            "torch_chunk_gated_delta_rule": accelerated_conv,
+            "torch_recurrent_gated_delta_rule": accelerated_conv,
         },
         "forward",
+        original_forward.__defaults__,
     )
 
-    @wraps(reference_forward)
-    def accelerated_forward(self):
-        return "accelerator"
+    @wraps(original_forward)
+    def accelerated_forward(*args, **kwargs):
+        return "accelerated"
+
+    class FakeNorm:
+        forward = accelerated_norm
 
     class FakeLayer:
         forward = accelerated_forward
 
         def __init__(self):
             self.conv1d = object()
+            self.norm = FakeNorm()
 
-    layer = FakeLayer()
-    other = FakeLayer()
     modeling = SimpleNamespace(
         Qwen3_5GatedDeltaNet=FakeLayer,
-        causal_conv1d_fn=accelerated_kernel,
-        causal_conv1d_update=reference_kernel,
-        torch_chunk_gated_delta_rule=reference_kernel,
-        torch_recurrent_gated_delta_rule=reference_kernel,
+        Qwen3_5RMSNormGated=FakeNorm,
+        causal_conv1d_fn=accelerated_conv,
+        causal_conv1d_update=conv_update,
+        torch_chunk_gated_delta_rule=chunk,
+        torch_recurrent_gated_delta_rule=recurrent,
     )
-    model = SimpleNamespace(modules=lambda: (layer,))
+    return modeling, FakeLayer(), FakeLayer()
 
-    _install_cpu_reference_kernels(model, modeling)
 
-    assert layer.forward() == "reference"
-    assert other.forward() == "accelerator"
-    assert modeling.causal_conv1d_fn is accelerated_kernel
+def test_native_gated_delta_binding_is_instance_local_in_fla_process() -> None:
+    modeling, native_layer, accelerated_layer = _native_kernel_surface()
+    model = SimpleNamespace(modules=lambda: (native_layer,))
+
+    _install_instance_native_gated_delta_kernels(model, modeling)
+
+    assert native_layer.forward(None) == "native"
+    assert native_layer.norm.forward(None, None) == "native norm"
+    assert accelerated_layer.forward(None) == "accelerated"
+    assert accelerated_layer.norm.forward(None, None) == "accelerated norm"
+    assert modeling.Qwen3_5GatedDeltaNet.forward(None, None) == "accelerated"
+    assert modeling.Qwen3_5RMSNormGated.forward(None, None, None) == "accelerated norm"
+    assert modeling.causal_conv1d_fn(None, None) == "accelerated"
+
+
+@pytest.mark.parametrize("changed", ("forward", "norm", "kernel"))
+def test_native_binding_rejects_changed_source_signature_before_mutation(changed):
+    modeling, layer, other = _native_kernel_surface()
+    if changed == "forward":
+
+        def incompatible_forward(self, hidden_states):
+            return "native"
+
+        modeling.Qwen3_5GatedDeltaNet.forward = incompatible_forward
+    elif changed == "norm":
+
+        def incompatible_norm(self, hidden_states):
+            return "native"
+
+        modeling.Qwen3_5RMSNormGated.forward = incompatible_norm
+    else:
+
+        def incompatible_kernel(query, key):
+            return "native"
+
+        modeling.torch_chunk_gated_delta_rule = incompatible_kernel
+
+    with pytest.raises(Qwen35RuntimeError, match="native Qwen"):
+        _install_instance_native_gated_delta_kernels(
+            SimpleNamespace(modules=lambda: (layer,)), modeling
+        )
+
+    assert "forward" not in layer.__dict__
+    assert "forward" not in layer.norm.__dict__
+    assert "forward" not in other.__dict__
+
+
+def test_native_binding_rejects_mixed_subclass_layers_before_mutation():
+    modeling, layer, _ = _native_kernel_surface()
+
+    class ModifiedLayer(modeling.Qwen3_5GatedDeltaNet):
+        pass
+
+    modified = ModifiedLayer()
+    with pytest.raises(Qwen35RuntimeError, match="modified or offloaded"):
+        _install_instance_native_gated_delta_kernels(
+            SimpleNamespace(modules=lambda: (layer, modified)), modeling
+        )
+
+    assert "forward" not in layer.__dict__
+    assert "forward" not in layer.norm.__dict__
+    assert "forward" not in modified.__dict__
+
+
+def test_eos_native_rocm_policy_ignores_unneeded_fla_profile(tmp_path: Path) -> None:
+    root = _artifact(tmp_path)
+    (root / "runtime.json").write_text(
+        json.dumps({"normalization_profile": {"kind": "untrusted-fla-profile"}})
+    )
+    assert (
+        _validate_configuration(
+            root,
+            temperature=1.0,
+            max_length=1024,
+            backend="rocm",
+            gated_delta_kernel_policy="native_torch",
+            native_rocm_max_physical_batch_size=8,
+            attention="sdpa",
+            physical_batch_size=8,
+        )
+        is None
+    )
+    with pytest.raises(Qwen35RuntimeError, match="qualified maximum 8"):
+        _validate_configuration(
+            root,
+            temperature=1.0,
+            max_length=1024,
+            backend="rocm",
+            gated_delta_kernel_policy="native_torch",
+            native_rocm_max_physical_batch_size=8,
+            attention="sdpa",
+            physical_batch_size=16,
+        )
+    with pytest.raises(Qwen35RuntimeError, match="profile specification"):
+        _validate_configuration(
+            root,
+            temperature=1.0,
+            max_length=1024,
+            backend="rocm",
+            gated_delta_kernel_policy="accelerated",
+            attention="sdpa",
+            physical_batch_size=8,
+        )
+
+
+def test_native_rocm_batch_cap_does_not_restrict_cpu(tmp_path: Path) -> None:
+    assert (
+        _validate_configuration(
+            _artifact(tmp_path),
+            temperature=1.0,
+            max_length=1024,
+            backend="cpu",
+            gated_delta_kernel_policy="native_torch",
+            attention="sdpa",
+            physical_batch_size=16,
+        )
+        is None
+    )

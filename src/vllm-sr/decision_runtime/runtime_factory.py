@@ -208,6 +208,9 @@ def _load_family(
             and model.catalog.model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
         ):
             raise RuntimeAssemblyError("experimental ROCm graph is Sol-only")
+        kernel_policy = profile.qwen_kernel_policy
+        if kernel_policy is None:
+            raise RuntimeAssemblyError("Qwen runtime has no kernel policy")
 
         if manifest.path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
             raise RuntimeAssemblyError("Qwen release manifest layout is unsupported")
@@ -234,6 +237,8 @@ def _load_family(
             temperature=temperature,
             max_length=profile.max_input_tokens,
             backend=backend,
+            gated_delta_kernel_policy=kernel_policy.gated_delta,
+            native_rocm_max_physical_batch_size=kernel_policy.rocm_max_physical_batch_size,
             physical_batch_size=physical_batch_size,
             rocm_profile_binder=binder,
             expected_manifest_sha256=(

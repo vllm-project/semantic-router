@@ -9,5 +9,9 @@
   },
   "physical_batch_size": 8,
   "calibration": {"temperature": 1.0389139156246665},
-  "prompt_policy": {"choice_null_description": "preserve_json_null"}
+  "prompt_policy": {"choice_null_description": "preserve_json_null"},
+  "kernel_policy": {
+    "gated_delta": "native_torch",
+    "rocm_max_physical_batch_size": 8
+  }
 }

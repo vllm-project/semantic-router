@@ -19,6 +19,7 @@ from typing import Any, Literal
 
 RuntimeFamily = Literal["vela", "qwen3.5"]
 ChoiceNullDescriptionPolicy = Literal["render_key", "preserve_json_null"]
+QwenGatedDeltaKernel = Literal["native_torch", "accelerated"]
 
 PROFILE_SCHEMA_VERSION = 4
 # Initial benchmarked profile value, not a hard upper bound. A profile may tune
@@ -67,6 +68,14 @@ class PromptPolicy:
 
 
 @dataclass(frozen=True, slots=True)
+class QwenKernelPolicy:
+    """Model-selected GatedDeltaNet implementation and ROCm batch envelope."""
+
+    gated_delta: QwenGatedDeltaKernel
+    rocm_max_physical_batch_size: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class RuntimeProfile:
     """Validated backend configuration selected by an exact catalog revision."""
 
@@ -79,6 +88,7 @@ class RuntimeProfile:
     physical_batch_size: int
     temperature: float | None
     prompt_policy: PromptPolicy
+    qwen_kernel_policy: QwenKernelPolicy | None
 
 
 def validate_relative_artifact_path(value: object, *, field: str) -> str:
@@ -148,20 +158,19 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
             "Decision runtime profile is not valid JSON"
         ) from error
     root = _mapping(document, "profile")
-    _exact_keys(
-        root,
-        {
-            "schema_version",
-            "family",
-            "artifact",
-            "max_input_tokens",
-            "dtype",
-            "physical_batch_size",
-            "calibration",
-            "prompt_policy",
-        },
-        "profile",
-    )
+    fields = {
+        "schema_version",
+        "family",
+        "artifact",
+        "max_input_tokens",
+        "dtype",
+        "physical_batch_size",
+        "calibration",
+        "prompt_policy",
+    }
+    if root.get("family") == "qwen3.5" and "kernel_policy" in root:
+        fields.add("kernel_policy")
+    _exact_keys(root, fields, "profile")
     if (
         type(root["schema_version"]) is not int
         or root["schema_version"] != PROFILE_SCHEMA_VERSION
@@ -184,6 +193,13 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
     head_dtype = _dtype(dtype["head"], "dtype.head")
     temperature = _parse_calibration(root["calibration"])
     prompt_policy = _parse_prompt_policy(root["prompt_policy"])
+    qwen_kernel_policy = None
+    if family == "qwen3.5":
+        qwen_kernel_policy = (
+            _parse_qwen_kernel_policy(root["kernel_policy"])
+            if "kernel_policy" in root
+            else QwenKernelPolicy("accelerated", None)
+        )
 
     return RuntimeProfile(
         revision=revision,
@@ -195,6 +211,7 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
         physical_batch_size=physical_batch_size,
         temperature=temperature,
         prompt_policy=prompt_policy,
+        qwen_kernel_policy=qwen_kernel_policy,
     )
 
 
@@ -238,6 +255,29 @@ def _parse_prompt_policy(value: object) -> PromptPolicy:
             "prompt_policy.choice_null_description is unsupported"
         )
     return PromptPolicy(choice_null_description=choice_null_description)
+
+
+def _parse_qwen_kernel_policy(value: object) -> QwenKernelPolicy:
+    policy = _mapping(value, "kernel_policy")
+    _exact_keys(
+        policy,
+        {"gated_delta", "rocm_max_physical_batch_size"},
+        "kernel_policy",
+    )
+    selected = policy["gated_delta"]
+    maximum = policy["rocm_max_physical_batch_size"]
+    if not isinstance(selected, str) or selected not in {
+        "native_torch",
+        "accelerated",
+    }:
+        raise RuntimeProfileError("kernel_policy.gated_delta is unsupported")
+    if selected == "native_torch":
+        maximum = _positive_int(maximum, "kernel_policy.rocm_max_physical_batch_size")
+    elif maximum is not None:
+        raise RuntimeProfileError(
+            "kernel_policy.rocm_max_physical_batch_size requires native_torch"
+        )
+    return QwenKernelPolicy(selected, maximum)
 
 
 def _mapping(value: object, field: str) -> dict[str, Any]:
