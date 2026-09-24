@@ -25,6 +25,7 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 

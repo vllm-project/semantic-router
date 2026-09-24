@@ -180,7 +180,7 @@ func run(opt options) error {
 		return fmt.Errorf("read manifest: %w", err)
 	}
 	var plan manifest
-	if err := json.Unmarshal(data, &plan); err != nil {
+	if err = json.Unmarshal(data, &plan); err != nil {
 		return fmt.Errorf("parse manifest: %w", err)
 	}
 	if plan.SchemaVersion != "looper-tts.v1" || plan.ExperimentID == "" || plan.ConfigSHA256 == "" || plan.Config.Dataset.EvidenceKind == "" {
@@ -189,7 +189,7 @@ func run(opt options) error {
 	if opt.TimeoutSeconds <= 0 {
 		return fmt.Errorf("--timeout must be positive")
 	}
-	if err := os.MkdirAll(opt.Output, 0o755); err != nil {
+	if err = os.MkdirAll(opt.Output, 0o755); err != nil {
 		return err
 	}
 
@@ -428,7 +428,7 @@ func executeAlgorithm(
 	}
 	if len(arm.ModelIDs) > 0 {
 		model := modelByID[arm.ModelIDs[0]]
-		request.Model = openai.ChatModel(model.Model)
+		request.Model = model.Model
 		request.Temperature = openai.Float(model.Sampling.Temperature)
 		request.TopP = openai.Float(model.Sampling.TopP)
 	}
