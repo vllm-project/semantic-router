@@ -35,7 +35,9 @@ def test_amd_compiler_cache_reuses_only_the_same_stack_and_image(tmp_path, monke
     state = tmp_path / ".vllm-sr"
     state.mkdir(mode=0o700)
 
-    first = router_compiler_cache("docker", "router:latest", str(state), "stack-a", "amd")
+    first = router_compiler_cache(
+        "docker", "router:latest", str(state), "stack-a", "amd"
+    )
     assert first is not None
     assert first.image_id == IMAGE_A
     assert first.mount.endswith(f":{COMGR_CACHE_CONTAINER_PATH}:z")
@@ -45,20 +47,28 @@ def test_amd_compiler_cache_reuses_only_the_same_stack_and_image(tmp_path, monke
     assert cache_path.parent.stat().st_mode & 0o777 == 0o700
     cache_path.joinpath("warmup").write_text("cached")
 
-    again = router_compiler_cache("docker", "router:latest", str(state), "stack-a", "amd")
+    again = router_compiler_cache(
+        "docker", "router:latest", str(state), "stack-a", "amd"
+    )
     assert again == first
     assert cache_path.joinpath("warmup").read_text() == "cached"
 
-    other_stack = router_compiler_cache("docker", "router:latest", str(state), "stack-b", "amd")
+    other_stack = router_compiler_cache(
+        "docker", "router:latest", str(state), "stack-b", "amd"
+    )
     assert other_stack is not None and other_stack.mount != first.mount
 
     inspected_image = IMAGE_B
-    other_image = router_compiler_cache("docker", "router:latest", str(state), "stack-a", "amd")
+    other_image = router_compiler_cache(
+        "docker", "router:latest", str(state), "stack-a", "amd"
+    )
     assert other_image is not None and other_image.mount != first.mount
     assert other_image.image_id == IMAGE_B
 
 
-def test_amd_compiler_cache_skips_uninspectable_image_and_other_platforms(tmp_path, monkeypatch):
+def test_amd_compiler_cache_skips_uninspectable_image_and_other_platforms(
+    tmp_path, monkeypatch
+):
     calls = []
 
     def inspect(command, **kwargs):
@@ -67,9 +77,15 @@ def test_amd_compiler_cache_skips_uninspectable_image_and_other_platforms(tmp_pa
 
     monkeypatch.setattr(container_gpu_isolation.subprocess, "run", inspect)
     state = tmp_path / ".vllm-sr"
-    assert router_compiler_cache("docker", "router:latest", str(state), "a", "cpu") is None
+    assert (
+        router_compiler_cache("docker", "router:latest", str(state), "a", "cpu")
+        is None
+    )
     assert calls == []
-    assert router_compiler_cache("docker", "router:latest", str(state), "a", "amd") is None
+    assert (
+        router_compiler_cache("docker", "router:latest", str(state), "a", "amd")
+        is None
+    )
     assert len(calls) == 1
     assert not state.exists()
 
@@ -88,7 +104,9 @@ def test_amd_compiler_cache_rejects_symlinked_private_cache(tmp_path, monkeypatc
         router_compiler_cache("docker", "router:latest", str(state), "a", "amd")
 
 
-def test_router_command_pins_amd_image_and_mounts_its_compiler_cache(tmp_path, monkeypatch):
+def test_router_command_pins_amd_image_and_mounts_its_compiler_cache(
+    tmp_path, monkeypatch
+):
     cache = container_gpu_isolation.AMDCompilerCache(
         image_id=IMAGE_A,
         mount=f"{tmp_path}/cache:{COMGR_CACHE_CONTAINER_PATH}:z",
@@ -100,7 +118,9 @@ def test_router_command_pins_amd_image_and_mounts_its_compiler_cache(tmp_path, m
         "source_config_path": str(tmp_path / "config.yaml"),
         "log_spool_logs_root": str(tmp_path / "logs"),
         "models_dir": str(tmp_path / "models"),
-        "log_spool_router_mount": f"{tmp_path}/router.log:/var/log/vllm-sr-producer/current.log:z",
+        "log_spool_router_mount": (
+            f"{tmp_path}/router.log:/var/log/vllm-sr-producer/current.log:z"
+        ),
         "runtime_container_config": "/app/.vllm-sr/runtime-config.yaml",
     }
     command = container_start._build_router_runtime_command(
