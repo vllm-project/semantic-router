@@ -611,7 +611,8 @@ vllm-sr-decision-runtime-test: harness-venv-install
 		src/vllm-sr/tests/test_decision_runtime_server.py
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
 		bench/decision_runtime/test_harness.py \
-		bench/decision_runtime/test_semantic.py
+		bench/decision_runtime/test_semantic.py \
+		bench/decision_runtime/test_semantic_arrivals.py
 
 vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
 vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker
