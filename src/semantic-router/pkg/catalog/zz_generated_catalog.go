@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:4c0cf8ff60118137bcf645b9d37a40ba8610bb9a1fa6875d7a6510419f97d3fa"
+const builtInCatalogDigest = "sha256:8c0aa713ac068b76db09c98c0f4913f406e032aa41c640366bcf436de54e7e36"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -7603,6 +7603,169 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "ERNIE 4.5 300B A47B",
         "source_model_slug": "ernie-4-5-300b-a47b"
+      }
+    },
+    {
+      "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0",
+      "metrics": {
+        "accuracy": 0.66
+      },
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_technical_report",
+        "table": "Table 6",
+        "variant": "ERNIE-4.5-21B-A3B"
+      }
+    },
+    {
+      "benchmark": "openai/simpleqa@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "baidu/ernie-4.5-21b-a3b-paper-simpleqa@1.0.0",
+      "metrics": {
+        "accuracy": 0.242
+      },
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_technical_report",
+        "table": "Table 6",
+        "variant": "ERNIE-4.5-21B-A3B"
+      }
+    },
+    {
+      "benchmark": "google/ifeval@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "baidu/ernie-4.5-21b-a3b-paper-ifeval@1.0.0",
+      "metrics": {
+        "accuracy": 0.8
+      },
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_technical_report",
+        "table": "Table 6",
+        "variant": "ERNIE-4.5-21B-A3B"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2024.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "baidu/ernie-4.5-21b-a3b-paper-aime-2024@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.279
+      },
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_technical_report",
+        "table": "Table 6",
+        "variant": "ERNIE-4.5-21B-A3B"
+      }
+    },
+    {
+      "benchmark": "matharena/aime@2025.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "baidu/ernie-4.5-21b-a3b-paper-aime-2025@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.197
+      },
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_technical_report",
+        "table": "Table 6",
+        "variant": "ERNIE-4.5-21B-A3B"
+      }
+    },
+    {
+      "benchmark": "huggingfaceh4/math-500@1.0.0",
+      "benchmark_profile": "pass-at-1",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "baidu/ernie-4.5-21b-a3b-paper-math-500@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.872
+      },
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_technical_report",
+        "table": "Table 6",
+        "variant": "ERNIE-4.5-21B-A3B"
+      }
+    },
+    {
+      "benchmark": "livecodebench/livecodebench@6.0.0",
+      "benchmark_profile": "published-code-generation",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "baidu/ernie-4.5-21b-a3b-paper-livecodebench-v6@1.0.0",
+      "metrics": {
+        "pass_at_1": 0.264
+      },
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "disabled",
+      "status": "available",
+      "subject": {
+        "dataset_release": "v6",
+        "problem_window": "2024-08-01_to_2025-05-01",
+        "source_kind": "official_technical_report",
+        "table": "Table 6",
+        "variant": "ERNIE-4.5-21B-A3B"
       }
     },
     {
@@ -45164,6 +45327,330 @@ const builtInCatalogJSON = `{
         "independent/ernie-4.5-300b-a47b-gpqa-diamond@1.0.0",
         "independent/ernie-4.5-300b-a47b-humanitys-last-exam@1.0.0",
         "independent/ernie-4.5-300b-a47b-livecodebench-v6@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [],
+      "reasoning_effort": "default",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.66,
+          "status": "available",
+          "value": 0.66,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "general_reasoning": 66.0
+      },
+      "index": "vllm-sr/general@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [
+        "baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": 66.0,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profile": "published-code-generation",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "evaluation": "baidu/ernie-4.5-21b-a3b-paper-livecodebench-v6@1.0.0",
+          "metric": "pass_at_1",
+          "normalized": 0.264,
+          "status": "available",
+          "value": 0.264,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [
+        "baidu/ernie-4.5-21b-a3b-paper-livecodebench-v6@1.0.0"
+      ],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": 0.66,
+          "status": "available",
+          "value": 0.66,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "baidu/ernie-4.5-21b-a3b",
+      "provenance": [
+        "baidu/ernie-4.5-21b-a3b-paper-livecodebench-v6@1.0.0",
+        "baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0"
       ],
       "reasoning_effort": "disabled",
       "score": null,
@@ -88244,6 +88731,55 @@ const builtInCatalogJSON = `{
     {
       "capabilities": [
         "chat",
+        "long_context"
+      ],
+      "description": "Baidu's open-weight 21B-parameter text MoE model with 3B active parameters.",
+      "display_name": "ERNIE 4.5 21B A3B",
+      "distribution": {
+        "license": "Apache-2.0",
+        "source": "https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT",
+        "type": "open_weights"
+      },
+      "family": "ernie-4.5",
+      "id": "baidu/ernie-4.5-21b-a3b",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 131072
+      },
+      "modalities": {
+        "input": [
+          "text"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "21B (3B active)",
+      "presentation": {
+        "logo": "package:baidu",
+        "monochrome": false,
+        "monogram": "E"
+      },
+      "publisher": "Baidu",
+      "released_at": "2025-06-30",
+      "revision": "87db95487941cb39592ee0abca3b9155a6d19c5c",
+      "tags": [
+        "open_weights",
+        "moe",
+        "long_context",
+        "efficient"
+      ],
+      "verification": {
+        "authority": "Baidu",
+        "source": "https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-24"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
         "reasoning",
         "tools",
         "structured_output",
@@ -93692,6 +94228,20 @@ const builtInCatalogJSON = `{
             "status": "claimed",
             "verified_at": "2026-09-06"
           }
+        },
+        {
+          "catalog": "baidu/ernie-4.5-21b-a3b",
+          "id": "ernie-4.5-21b-a3b",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://ai.baidu.com/ai-doc/AISTUDIO/Mmhslv9lf",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
+          }
         }
       ],
       "path_overrides": {
@@ -97066,6 +97616,26 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT",
             "status": "claimed",
             "verified_at": "2026-09-06"
+          }
+        },
+        {
+          "catalog": "baidu/ernie-4.5-21b-a3b",
+          "id": "baidu/ERNIE-4.5-21B-A3B-PT",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "self_hosted",
+          "restrictions": {
+            "excluded_vllm_versions": [
+              "0.11.0"
+            ],
+            "minimum_vllm_version": "0.10.2"
+          },
+          "verification": {
+            "source": "https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
           }
         },
         {

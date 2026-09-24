@@ -39,6 +39,20 @@ models:
     status: claimed
     verified_at: 2026-09-06
     source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT
+- catalog: baidu/ernie-4.5-21b-a3b
+  relationship: self_hosted
+  id: baidu/ERNIE-4.5-21B-A3B-PT
+  protocols:
+  - openai/chat-completions@1
+  lifecycle: active
+  restrictions:
+    minimum_vllm_version: 0.10.2
+    excluded_vllm_versions:
+    - 0.11.0
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md
 - catalog: nvidia/nemotron-cascade-2-30b-a3b
   relationship: self_hosted
   id: nvidia/Nemotron-Cascade-2-30B-A3B

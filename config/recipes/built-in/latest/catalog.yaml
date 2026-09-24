@@ -392,6 +392,16 @@ providers:
       status: claimed
       verified_at: '2026-09-06'
       source: https://ai.baidu.com/ai-doc/AISTUDIO/Mmhslv9lf
+  - catalog: baidu/ernie-4.5-21b-a3b
+    relationship: first_party
+    id: ernie-4.5-21b-a3b
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://ai.baidu.com/ai-doc/AISTUDIO/Mmhslv9lf
 - id: baidu-qianfan
   display_name: Baidu Qianfan
   description: ERNIE and selected third-party models through Qianfan's OpenAI-compatible API.
@@ -2914,6 +2924,20 @@ providers:
       status: claimed
       verified_at: '2026-09-06'
       source: https://huggingface.co/baidu/ERNIE-4.5-300B-A47B-PT
+  - catalog: baidu/ernie-4.5-21b-a3b
+    relationship: self_hosted
+    id: baidu/ERNIE-4.5-21B-A3B-PT
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    restrictions:
+      minimum_vllm_version: 0.10.2
+      excluded_vllm_versions:
+      - 0.11.0
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md
   - catalog: nvidia/nemotron-cascade-2-30b-a3b
     relationship: self_hosted
     id: nvidia/Nemotron-Cascade-2-30B-A3B
@@ -4935,6 +4959,44 @@ models:
   - open_weights
   - moe
   - long_context
+  released_at: '2025-06-30'
+- id: baidu/ernie-4.5-21b-a3b
+  display_name: ERNIE 4.5 21B A3B
+  description: Baidu's open-weight 21B-parameter text MoE model with 3B active parameters.
+  kind: physical
+  publisher: Baidu
+  presentation:
+    logo: package:baidu
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT
+    license: Apache-2.0
+  family: ernie-4.5
+  parameter_size: 21B (3B active)
+  revision: 87db95487941cb39592ee0abca3b9155a6d19c5c
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Baidu
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://huggingface.co/baidu/ERNIE-4.5-21B-A3B-PT/blob/87db95487941cb39592ee0abca3b9155a6d19c5c/README.md
+  tags:
+  - open_weights
+  - moe
+  - long_context
+  - efficient
   released_at: '2025-06-30'
 - id: bytedance/seed-2.1-pro
   display_name: Seed2.1 Pro
@@ -14613,6 +14675,134 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/evaluations/aime-2025
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.66
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-simpleqa@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: openai/simpleqa@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.242
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-ifeval@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: google/ifeval@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    accuracy: 0.8
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-aime-2024@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: matharena/aime@2024.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.279
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-aime-2025@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.197
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-math-500@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: huggingfaceh4/math-500@1.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+  metrics:
+    pass_at_1: 0.872
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
+    redistributable: true
+- id: baidu/ernie-4.5-21b-a3b-paper-livecodebench-v6@1.0.0
+  model: baidu/ernie-4.5-21b-a3b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: disabled
+  subject:
+    variant: ERNIE-4.5-21B-A3B
+    source_kind: official_technical_report
+    table: Table 6
+    dataset_release: v6
+    problem_window: 2024-08-01_to_2025-05-01
+  metrics:
+    pass_at_1: 0.264
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://ernie.baidu.com/blog/publication/ERNIE_Technical_Report.pdf
     redistributable: true
 - id: bytedance/seed-oss-36b-instruct-model-card-supergpqa@1.0.0
   model: bytedance/seed-oss-36b-instruct
@@ -39408,6 +39598,28 @@ index_results:
   domains:
     frontier_reasoning: 3.33642261353105
     scientific_reasoning: 81.1111111111111
+- model: baidu/ernie-4.5-21b-a3b
+  reasoning_effort: disabled
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 66.0
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.66
+    normalized: 0.66
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - baidu/ernie-4.5-21b-a3b-paper-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 66.0
 - model: bytedance/seed-2.1-pro
   reasoning_effort: unspecified
   index: vllm-sr/agentic@1.0.0
