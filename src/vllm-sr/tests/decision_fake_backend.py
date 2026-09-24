@@ -1,4 +1,4 @@
-"""Deterministic backend for contract tests and local API development."""
+"""Deterministic, nonsemantic backend used only by Decision contract tests."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import math
 from collections.abc import Sequence
 
-from .backend import (
+from decision_runtime.backend import (
     BackendBatchRequest,
     BackendBatchResult,
     BackendPrediction,
@@ -16,7 +16,7 @@ from .backend import (
     ModelDescriptor,
     UnknownModelError,
 )
-from .contracts import ChoiceQuestion, ScoreQuestion, SystemOneRequest
+from decision_runtime.contracts import ChoiceQuestion, ScoreQuestion, SystemOneRequest
 
 
 class FakeDecisionBackend:

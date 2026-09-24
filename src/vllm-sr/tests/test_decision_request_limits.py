@@ -14,7 +14,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from decision_runtime.api import create_app  # noqa: E402
 from decision_runtime.backend import ModelDescriptor  # noqa: E402
 from decision_runtime.engine import DecisionEngine  # noqa: E402
-from decision_runtime.fake_backend import FakeDecisionBackend  # noqa: E402
+from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.model_inputs import (  # noqa: E402
     QWEN_DEFAULT_NO,
     QWEN_DEFAULT_YES,

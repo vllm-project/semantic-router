@@ -21,7 +21,7 @@ from decision_runtime.backend import (  # noqa: E402
     UnknownModelError,
 )
 from decision_runtime.engine import DecisionEngine  # noqa: E402
-from decision_runtime.fake_backend import FakeDecisionBackend  # noqa: E402
+from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.physical_batching import (  # noqa: E402
     DecisionRowResult,
     PhysicalBatchBackend,

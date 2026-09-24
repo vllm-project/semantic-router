@@ -26,7 +26,7 @@ from decision_runtime.contracts import (  # noqa: E402
     SystemOneRequest,
 )
 from decision_runtime.engine import DecisionEngine  # noqa: E402
-from decision_runtime.fake_backend import FakeDecisionBackend  # noqa: E402
+from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.scheduler import (  # noqa: E402
     MAX_ROW_CREDIT_BYPASSES,
     ModelScheduler,
@@ -596,9 +596,7 @@ def test_scheduler_row_waiters_are_bounded_and_cancelled_without_credit_leaks():
             scheduler.run(MODEL.name, blocking, row_cost=1024)
         )
         await entered.wait()
-        queued = asyncio.create_task(
-            scheduler.run(MODEL.name, blocking, row_cost=1024)
-        )
+        queued = asyncio.create_task(scheduler.run(MODEL.name, blocking, row_cost=1024))
         await asyncio.sleep(0)
         snapshot = (await scheduler.snapshots())[0]
         assert (snapshot.running, snapshot.queued, snapshot.active_rows) == (
@@ -676,9 +674,7 @@ def test_scheduler_full_wait_queue_still_admits_fitting_small_work():
         running, releases = await _hold_scheduler_rows(
             scheduler, (1024, 1024, 1024, 428)
         )
-        head = asyncio.create_task(
-            scheduler.run(MODEL.name, immediate, row_cost=1024)
-        )
+        head = asyncio.create_task(scheduler.run(MODEL.name, immediate, row_cost=1024))
         await asyncio.sleep(0)
         try:
             assert (await scheduler.snapshots())[0].queued == 1
@@ -706,9 +702,7 @@ async def _start_aged_large_waiter(scheduler, head_operation):
         return "small"
 
     running, releases = await _hold_scheduler_rows(scheduler, (512,) * 8)
-    head = asyncio.create_task(
-        scheduler.run(MODEL.name, head_operation, row_cost=1024)
-    )
+    head = asyncio.create_task(scheduler.run(MODEL.name, head_operation, row_cost=1024))
     await asyncio.sleep(0)
     releases[0].set()
     await running[0]
