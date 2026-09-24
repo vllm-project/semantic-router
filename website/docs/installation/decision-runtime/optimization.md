@@ -1,46 +1,49 @@
 ---
-title: Measure and optimize
-description: Tune Decision Runtime without hiding semantic changes or per-model regressions.
+title: Tune performance
+description: Measure Decision Runtime and adjust request capacity for your workload.
 ---
 
-Decision models score many small, independent question rows against one
-resident model. The runtime prepares rows once, batches compatible rows across
-requests, and returns them in caller order. This helps when a single state has
-many questions or a [batch request](./api.md#several-states-shared-questions)
-shares questions across states; it does not make every model or workload
-equally fast.
+Start with the [default capacity settings](./parameters.md#request-capacity):
+eight active requests, 32 waiting requests, and at most eight compatible
+decision rows in one model forward. The runtime can combine rows from different
+requests, so traffic shape matters as much as the model you choose.
 
-## Tune capacity
+## Choose the right request shape
 
-Start with the model profile's B8 physical batch, 8 admitted requests, and 32
-waiting requests. Increase `--max-concurrency` only after measuring the target
-model and workload. A deeper `--max-queue` absorbs bursts but does not raise
-GPU throughput; clients should honor `529` and `Retry-After` rather than retry
-in a tight loop. `/api/status` reports the live limits, while `/metrics`
-exposes queueing, preparation, physical-batch sizes, and model execution.
+Use [`POST /v1/systemone`](./api.md#one-state-three-question-types) for one
+state with one or more questions. If several states share the same questions,
+use [`POST /v1/decision/batches`](./api.md#many-states-one-question-set) to
+send them together. The batch endpoint reduces repeated HTTP and question
+payload work; it returns an answer for every state and question in caller
+order. It does not change what the questions mean.
 
-`--max-batch` controls rows in one forward, not requests. A value above B8
-requires kernel-profile coverage plus numerical, memory, and throughput
-qualification on that model and device. The optional
-[Sol ROCm B8 graph](./parameters.md#experimental-sol-graph) is a separate,
-off-by-default variant; compare its capture, replay, and fallback counters to
-the eager path before adopting it.
+## Decide what to change
 
-## Compare changes fairly
+| What you observe | First check | Next step |
+| --- | --- | --- |
+| `529` responses during short bursts | `queued` and `max_queue` in `GET /api/status` | Honor `Retry-After`; a larger `--max-queue` can let a short burst wait. |
+| Latency rises as the queue grows | Queue depth and p95 latency | Reduce sustained load or add capacity. Increasing the queue only makes requests wait longer. |
+| Throughput stays low with little queueing | Model execution time and physical batch sizes in `GET /metrics` | Test a small `--max-concurrency` change on the same model and request mix. |
 
-Keep model revision, artifact content ID, image, device, dtype, and request
-shapes fixed while changing one runtime setting. First check answer and
-input-token parity, then measure decisions per second, p50/p95 latency, error
-rate, queue depth, and observed physical forwards at each concurrency. Compare
-one-state/many-question and multi-state/shared-question traffic separately:
-the batch API removes repeated HTTP work, so its speedup is not solely a GPU
-kernel improvement. Choice and Score confidence use Decision's type-aware
-formulas; they should not be compared numerically to a historical preview's
-maximum-probability statistic.
+`--max-batch` is a separate control: it limits rows per model forward, not
+incoming requests. Its default is eight for every model. A larger value on
+ROCm needs a supported kernel profile and a check of answers, memory use, and
+performance on the selected model and device. The
+[optional Sol graph](./parameters.md#experimental-sol-graph) is another
+separate setting; test it against ordinary Sol execution at batch size eight.
 
-For reproducible paired runs, use the
-[benchmark harness](https://github.com/vllm-project/semantic-router/tree/main/bench/decision_runtime).
-The protected release rule checks all six models and each declared workload
-cell for no throughput regression; a gain in one model cannot hide a loss in
-another. Keep every attempt, including borderline or failed runs. These
-measurements do not replace model-quality evaluation.
+## Measure a change
+
+Keep the model revision, image, device, and request examples fixed. Record
+answers and input-token counts, then compare decisions per second, p50/p95
+latency, error rate, queue depth, and observed physical batch sizes. Change
+one setting at a time and repeat the same traffic pattern. Measure
+single-state/many-question traffic separately from multiple states with shared
+questions; batching can reduce HTTP work even when model execution is
+unchanged.
+
+For repeatable paired runs, use the
+[Decision benchmark harness](https://github.com/vllm-project/semantic-router/tree/main/bench/decision_runtime).
+Keep results for each model separately so a gain on one model does not conceal
+a slowdown on another. Throughput measurements do not establish answer quality;
+compare the actual answers as well.

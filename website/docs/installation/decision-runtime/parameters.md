@@ -1,41 +1,70 @@
 ---
-title: Launch parameters
-description: Understand Decision Runtime image, capacity, device, and lifecycle controls.
+title: Configure an instance
+description: Choose a device, set request capacity, and manage a Decision model instance.
 ---
 
-`vllm-sr drun run MODEL` resolves one catalog model and one immutable artifact
-before starting a managed container. These are the most consequential options;
-the [generated command reference](../../api/cli.md#vllm-sr-drun-run) is the
-complete list.
+Start with the [basic `drun` command](./overview.md). You can
+leave the capacity flags unset for the first run. The options below change how
+that one model instance starts and handles traffic; the
+[CLI reference](../../api/cli.md#vllm-sr-drun-run) lists every flag.
 
-| Option | Behavior |
+## Device and model
+
+| Option | When to use it |
 | --- | --- |
-| `--backend` | `auto`, `rocm`, `cuda`, or `cpu`. Select explicitly when device discovery is ambiguous; a choice still needs an installed executor and image. |
-| `--revision` | Full commit SHA of the selected catalog model; defaults to its catalog revision. |
-| `--image`, `--image-pull-policy` | Released defaults require a packaged digest inventory. An exact local Docker `sha256:` image ID requires `--image-pull-policy never`; a published `repository@sha256:` reference follows the selected pull policy. |
-| `--max-batch` | Maximum compatible **physical rows** per model forward; profile default 8. It is not the number of HTTP requests. |
-| `--max-concurrency` | Simultaneously admitted requests; `drun` default 8. |
-| `--max-queue` | Waiting requests; `drun` default 32. Zero rejects rather than queues when admission is full. |
-| `--cpu-threads` | CPU-only Torch/BLAS thread limit; default is the smaller of 8 and the container CPU allowance. |
-| `--gpu-device` | ROCm-only numeric device index. Without it, all visible GPUs remain visible; this is not exclusive GPU ownership. |
-| `--host`, `--port` | Host binding; defaults to `127.0.0.1:8000`. Use distinct ports for separate model instances. |
-| `--detach`, `--restart-policy` | Managed background mode and Docker restart behavior. `unless-stopped` requires detached Docker mode. |
-| `--startup-timeout` | Readiness deadline in seconds; default 1,800. |
+| `--backend auto` (default) | Detect one visible GPU type, or select CPU when none is visible. Detection does not guarantee that the selected model and image can run there. If both ROCm and CUDA devices are visible, choose a backend explicitly. |
+| `--backend rocm` or `--backend cpu` | Choose the intended execution path explicitly. The [model table](./models.md) shows which paths exist in the current build. `--backend cuda` is accepted by the CLI, but no Decision CUDA executor is installed yet. |
+| `--gpu-device INDEX` | On ROCm, limit this instance to one visible GPU index. Without it, the container sees all visible GPUs; it does not reserve them for this instance. |
+| `--cpu-threads N` | On CPU, set the Torch/BLAS thread limit. The default is the smaller of 8 and the container's CPU allowance. |
+| `--revision SHA` | Use a full 40-character commit SHA for another revision of the same catalog model. Omit it to use the catalog revision. |
 
-The request scheduler also reserves one credit for each pending decision row,
-up to a fixed 4,096 active rows across admitted requests. A single request is
-limited to 1,024 state × question decisions. Queue size counts **requests**;
-row credits and physical batch size count **decision rows**. Raising a queue
-or concurrency limit cannot bypass the row cap or make a model forward wider.
-Check `/api/status` for the live `max_concurrency`, `max_queue`, and
-`max_active_rows` values instead of assuming the CLI defaults were used.
+## Request capacity
 
-## Experimental Sol graph
+One HTTP request can contain many decisions: one state with 10 questions is
+one request and 10 decision rows. A batch of three states and four shared
+questions is one request and 12 rows. These limits control different things:
 
-`--experimental-qwen-rocm-graph-b8` is an explicit opt-in for canonical
-Decision Sol on ROCm at physical batch size 8. It is off for every ordinary
-launch and is rejected for other models, backends, or batch sizes. Graph
-capture/replay has bounded fallback and telemetry; enabling it is not a
-general speed guarantee. Keep the eager path as your baseline and qualify the
-graph variant against the same model revision and artifact before relying on
-it. See [measuring changes](./optimization.md).
+| Option | Default | What it limits |
+| --- | ---: | --- |
+| `--max-concurrency` | 8 | Requests admitted at the same time. |
+| `--max-queue` | 32 | Additional requests waiting for admission. `0` rejects a request immediately when capacity is full. |
+| `--max-batch` | 8 | Compatible decision rows combined into one model forward. This does not limit the number of HTTP requests. |
+
+For example, on a CLI with a qualified ROCm image installed, this starts Kai
+with room for four active requests and sixteen waiting requests:
+
+```bash
+vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
+  --backend rocm --port 8001 --instance-name kai-8001 \
+  --max-concurrency 4 --max-queue 16 --detach
+```
+
+If the CLI has no qualified image installed, follow the
+[image instructions](./overview.md) before running this example.
+At most 1,024 state/question decisions fit in one request, and at most 4,096
+decision rows can be active across requests. Those bounds still apply if you
+raise concurrency or queue length. When the service is full, it returns `529`
+with `Retry-After`. `GET /api/status` shows the live request and row limits.
+
+Keep `--max-batch` at the profile default unless you have verified a larger
+value on this exact model and device. In particular, a larger queue does not
+make a ROCm kernel support a larger physical batch. See
+[measuring changes](./optimization.md).
+
+## Image and lifecycle
+
+| Option | When to use it |
+| --- | --- |
+| `--image` | Normally omit it and use the qualified image pinned in the installed CLI. Source and release validation can supply an immutable image reference explicitly; see [start one model](./overview.md). |
+| `--image-pull-policy` | Controls when the container runtime pulls the image: `ifnotpresent` (default), `always`, or `never`. Most users can leave the default. |
+| `--host`, `--port` | Publish the endpoint at `127.0.0.1:8000` by default. Give separate model instances separate ports. |
+| `--instance-name` | Give a detached instance a stable name for `drun status` and `drun stop`. |
+| `--detach`, `--restart-policy` | Keep the instance running in the background. Docker restart policy defaults to `no`; `unless-stopped` requires `--detach`. |
+| `--startup-timeout` | Allow more time for model loading and readiness than the default 1,800 seconds. |
+
+## Optional Sol ROCm graph {#experimental-sol-graph}
+
+`--experimental-qwen-rocm-graph-b8` enables an experimental graph path only
+for Decision Sol on ROCm with `--max-batch 8`. It is off by default. Compare
+its answers, latency, and throughput with the ordinary Sol path before using
+it for your workload.

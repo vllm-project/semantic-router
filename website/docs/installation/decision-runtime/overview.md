@@ -1,61 +1,76 @@
 ---
-title: Run a Decision model
-description: Start one standalone Decision Runtime instance, verify readiness, and manage its lifecycle.
+title: Get started with Decision Runtime
+description: Start a Decision 1.0 model and make your first decision request.
 ---
 
-Decision Runtime is a standalone service for the six Decision 1.0 models. It is
-not the Router's decision-rule engine: `vllm-sr drun` runs one pinned model per
-instance and serves the [SystemOne and batch APIs](./api.md). Run separate
-instances, on separate ports, when you need more than one model.
+Decision Runtime turns a Decision 1.0 model into a small HTTP service. You give
+it a **state** (the situation to evaluate) and one or more **questions**; it
+returns a typed answer for each question. Use `vllm-sr drun` to run one model
+per instance. To serve more models, start more instances on different ports.
+You need the vLLM Semantic Router CLI and Docker or Podman; `drun` is
+standalone and does not require `vllm-sr serve`.
 
-## Start one model
+## 1. Start a model
 
-With a released CLI that contains a qualified, digest-pinned Decision image,
-start one model on an available supported backend:
+:::note Preview source builds
+The command below assumes an installed release with a published Decision
+Runtime image for your device. The current source checkout has no default
+image yet; contributors can follow the
+[image build guide](https://github.com/vllm-project/semantic-router/tree/main/src/vllm-sr/decision_runtime/image)
+to validate an unreleased build.
+:::
 
-```bash
-vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
-  --backend auto --port 8001 --instance-name kai-8001 --detach
-```
-
-The command fails closed if the installed package has no qualified image for
-the detected backend. Source checkouts and staging wheels do not ship a default
-image inventory.
-
-For source or isolated validation, [build the matching Decision image](https://github.com/vllm-project/semantic-router/tree/main/src/vllm-sr/decision_runtime/image)
-and inspect its **full local Docker image ID**. Then pass that exact ID:
+This example starts Kai on port 8001 and keeps it running in the background:
 
 ```bash
-IMAGE_ID=$(docker image inspect --format '{{.Id}}' YOUR_LOCAL_DECISION_IMAGE)
-vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
-  --backend rocm --port 8001 --instance-name kai-8001 \
-  --image "$IMAGE_ID" --image-pull-policy never --detach
+vllm-sr drun llm-semantic-router/Decision-1.0-Kai-0.6B \
+  --port 8001 --instance-name kai-demo --detach
 ```
 
-The override must be a complete `sha256:` Docker image ID already on this
-host; it is never pulled. It is for explicit local validation, **not** a
-released registry digest or a substitute for release qualification. Podman
-does not support this local-ID override. Once a qualified immutable image is
-actually published and installed in the CLI's inventory, omit `--image` to use
-that released default. See [model and backend support](./models.md) before
-choosing another model or device.
+`drun` detects the available backend by default. Check the
+[model and backend table](./models.md) for what this build can run.
 
-## Check and stop the instance
+Wait for the model to load, then check readiness:
 
 ```bash
 curl -fsS http://127.0.0.1:8001/ready
-curl -fsS http://127.0.0.1:8001/v1/models
-vllm-sr drun status kai-8001
-vllm-sr drun stop kai-8001
 ```
 
-`/ready` confirms the resident model can serve requests; container creation
-alone does not. The default host binding is loopback. Keep `/api/status` and
-`/metrics` on a protected control-plane path if you expose inference through a
-Gateway. Detached instances default to Docker restart policy `no`; use
-`--restart-policy unless-stopped` with `--detach` only when the Docker service,
-model cache, and mounted artifact will remain available after a reboot.
+## 2. Ask a question
 
-Continue with [models](./models.md), [launch parameters](./parameters.md), and
-the [first API request](./api.md). The [generated CLI reference](../../api/cli.md#vllm-sr-drun-run)
-lists every current option.
+```bash
+curl -sS http://127.0.0.1:8001/v1/systemone \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+    "state": "I was charged twice. Please refund the duplicate payment.",
+    "questions": {
+      "refund_requested": {
+        "type": "noul",
+        "instructions": "Does the customer explicitly request a refund?"
+      }
+    }
+  }'
+```
+
+Look for `answers.refund_requested.noul` in the JSON response. It is the
+model's probability for **yes**; your application chooses the threshold or
+action. Every request must name the model running on that port.
+
+For Choice and Score questions, response examples, Python/JavaScript clients,
+and the difference between SystemOne and our batch extension, continue to
+[Call the API](./api.md).
+
+## 3. Manage the instance
+
+```bash
+vllm-sr drun status kai-demo
+vllm-sr drun stop kai-demo
+```
+
+`status` tells you which model and revision are loaded. `stop` shuts down the
+managed instance. To run two models at once, repeat step 1 with another model,
+instance name, and port.
+
+Next: [choose a model](./models.md), [set capacity and hardware options](./parameters.md),
+or [see how a request flows through the runtime](./architecture.md).

@@ -1,179 +1,133 @@
 ---
-title: Decision Runtime API
+title: Decision Runtime API reference
 sidebar_label: Decision Runtime
-description: Serve Decision 1.0 models and call the strict single-state API or the separate shared-question batch extension.
+description: Request fields, answer shapes, limits, and errors for Decision Runtime.
 ---
 
-# Decision Runtime API
+# Decision Runtime API reference
 
-`vllm-sr drun` starts one pinned Decision 1.0 model per process. Give each
-instance a different port to serve multiple models on one machine. The runtime
-does not select a default model: every request must name the model served by
-that instance. See the [`drun` command reference](./cli#vllm-sr-drun-run) for
-the available backend, image, capacity, and lifecycle options. Once a qualified
-backend has a published immutable runtime image in the packaged inventory, a
-release launch can use:
+Start with the [quickstart](../installation/decision-runtime/overview.md) and
+the [cURL and SDK examples](../installation/decision-runtime/api.md) if you
+are making your first request. This page is the field-level reference for the
+runtime's HTTP API.
 
-```bash
-vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
-  --backend rocm --port 8001 --detach
-```
+Each `drun` instance serves **one model** on its own port. Every inference
+request must use that instance's exact model ID; the runtime does not choose a
+default. `GET /v1/models` returns the ID to send.
 
-Detached launches default to Docker's `no` restart policy. For a long-running
-Docker deployment, add `--restart-policy unless-stopped` with `--detach` to
-restart the same owned container when the Docker daemon restarts. This option
-is not supported with foreground mode or Podman. The Docker service must start
-on the host, and the model cache and any mounted artifact paths must remain
-available after reboot. `vllm-sr drun status INSTANCE_NAME` reports the
-observed restart policy and current readiness; `vllm-sr drun stop INSTANCE_NAME`
-stops and removes the owned container so it will not restart. Manually stopping
-the container outside `drun` suppresses Docker's `unless-stopped` restart until
-it is started again.
+| Endpoint | Use it when | Status |
+| --- | --- | --- |
+| `POST /v1/systemone` | One state has one or more questions. | SystemOne single-state format |
+| `POST /v1/decision/batches` | Several states have the same question set. | Decision-specific extension |
 
-For isolated validation with an already-loaded Docker image, pass its full
-`sha256:` image ID with `--image` and set `--image-pull-policy never`. The ID
-must exist locally and is never pulled; abbreviated IDs and Podman are not
-accepted for this override. Published `repository@sha256:` image references
-retain the normal pull-policy behavior. Staging builds with an empty packaged
-image inventory require an explicit immutable image override; the release
-example above will not launch from such a build as written.
+The SystemOne path and JSON shape support the official
+[TypeSafe SDKs](../installation/decision-runtime/api.md#use-the-official-systemone-sdks)
+when configured with this runtime's base URL and full model ID. Local
+validation requires non-null `instructions` on every question and rejects
+unknown fields; Choice and Score confidence use Decision's own calculation.
+There is no `/v1/systemone/batch` endpoint.
 
-For ROCm, `--gpu-device 0` selects one numeric GPU index for that instance by
-setting [`ROCR_VISIBLE_DEVICES`](https://rocm.docs.amd.com/en/latest/reference/system-optimization/gpu-isolation.html)
-inside the container. Use different ports and device indices when launching
-multiple instances. Without `--gpu-device`, each ROCm instance retains the
-current all-visible default and may contend for the same GPUs. This is
-process-level ROCm visibility, not exclusive GPU ownership or a security
-boundary; verify the host's current GPU index mapping before launch. CPU and
-CUDA do not currently support this selector; CUDA hardware is not qualified by
-the presence of a backend option.
+## Single state: `POST /v1/systemone`
 
-The model ID is fixed by the catalog. By default, `drun` uses its catalog
-revision; `--revision` accepts a different full, immutable Hugging Face commit
-SHA for the same model. At launch, the runtime verifies that commit's own
-manifest and selected inference files, records the revision and content digest,
-and verifies the mounted files again before loading weights. Changing weights
-within a supported model family does not require a runtime rebuild. Changes to
-architecture, prompt format, or hardware kernels must still satisfy the
-runtime's structural and device checks.
-For a ROCm model with a strict kernel profile, `--max-batch` must fit that
-profile's verified physical batch envelope; startup rejects larger values.
-
-The ROCm implementation targets all six Decision 1.0 catalog models on
-`gfx942`. Linux CPU execution is scoped to the three models below 1B (Kai,
-Lex, and Eos); publish CPU performance and quality claims only with matching
-model-backed validation results. CUDA and Apple MLX require separate hardware
-qualification before they can be selected.
-
-## One state: `POST /v1/systemone`
-
-This is the strict SystemOne-compatible single-state endpoint. One `state` is
-evaluated against one or more named `questions`. The three supported question
-types are `noul` (yes/no), `choice` (2–255 named options), and `score` (2–10
-ordered rubric levels). There is no implicit model and no batch form at this
-path.
-
-```bash
-curl -sS http://127.0.0.1:8001/v1/systemone \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
-    "state": "I was charged twice for order A1842. Please refund the duplicate payment.",
-    "questions": {
-      "refund_requested": {
-        "type": "noul",
-        "instructions": "Does the customer explicitly request a refund?"
-      },
-      "category": {
-        "type": "choice",
-        "instructions": "Classify the support request.",
-        "criteria": {
-          "billing": "Charges, invoices, or refunds",
-          "product": "Product use or defects"
-        }
-      },
-      "urgency": {
-        "type": "score",
-        "instructions": "Rate the urgency of this request.",
-        "criteria": ["Routine", "Needs prompt attention", "Critical"]
-      }
+```json
+{
+  "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+  "state": "Please refund the duplicate charge.",
+  "questions": {
+    "refund_requested": {
+      "type": "noul",
+      "instructions": "Does the customer explicitly request a refund?"
     }
-  }'
+  }
+}
 ```
 
-Successful responses contain only `model`, `answers`, and `usage`. A Noul
-answer contains `type` and `noul` (the probability of true). A Choice answer
-contains `type`, `choice`, `confidence`, and `probabilities`. A Score answer
-contains `type`, `score`, `confidence`, `legend`, and `probabilities`; `score` is
-the expected zero-based rubric index. Request and response JSON are strict:
-unknown fields are rejected, and answers must match the requested question
-names and criteria.
-One single-state request accepts at most 1,024 questions. The transport and
-expanded rendered-input byte limits are separate safeguards; oversized input
-is rejected before model preparation instead of entering a retryable queue.
-Text `state`, instructions, and criterion descriptions must be nonblank;
-structured JSON content is still accepted where the request schema permits it.
+| Request field | Required | Meaning |
+| --- | --- | --- |
+| `model` | Yes | Exact model ID served by this instance. |
+| `state` | Yes | Nonblank text or structured JSON content to evaluate. |
+| `questions` | Yes | Map from your question IDs to 1–1,024 questions about this state. |
 
-Decision confidence is a versioned, type-aware statistic, not a claim of
-numeric equivalence to another provider. For Choice it is the top-two
-probability margin; for Score it is one minus normalized ordinal variance.
-Noul exposes its true probability directly and has no separate confidence
-field. The runtime computes these from unrounded probabilities before
-serializing the response.
+Each question has a `type` and non-null `instructions`. Text values must not
+be blank. Question IDs must be nonblank. The question types are:
 
-## Multiple states: `POST /v1/decision/batches`
+| Type | `criteria` | Answer |
+| --- | --- | --- |
+| `noul` | Optional descriptions under `true` and `false`. | `noul`: probability that the answer is true (0–1). |
+| `choice` | 2–255 named options, each with a description or `null`. | `choice`: selected option key; `probabilities`: distribution by option key; `confidence`. |
+| `score` | 2–10 ordered rubric levels. | `score`: expected zero-based rubric position; `legend`: position-to-level map; `probabilities`; `confidence`. |
 
-This Decision-specific extension evaluates identified states against the same
-model and question map. It is distinct from multiple questions on one state:
-the single-state API shares a state across questions, while this endpoint
-shares questions across states. It is not an alias of `/v1/systemone` and does
-not introduce a `/v1/systemone/batch` route.
+For all three types, `instructions` and criterion descriptions can be text or
+structured JSON content where the schema permits it. The names under
+`answers` are exactly the question IDs you sent. A successful response has
+only these top-level fields:
 
-```bash
-curl -sS http://127.0.0.1:8001/v1/decision/batches \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
-    "states": [
-      {"id": "case-a", "state": "I was charged twice. Please refund the duplicate."},
-      {"id": "case-b", "state": "Can you explain the new invoice?"}
-    ],
-    "questions": {
-      "refund_requested": {
-        "type": "noul",
-        "instructions": "Does the customer explicitly request a refund?"
-      }
+| Response field | Meaning |
+| --- | --- |
+| `model` | The model that produced the answers. |
+| `answers` | One typed answer for every requested question. |
+| `usage` | `input_tokens` and `output_tokens` for this request. |
+
+Choice and Score `confidence` are Decision-defined statistics derived from
+their distributions, **not** calibrated correctness probabilities or a claim
+of numeric equivalence with TypeSafe/Jev. Noul has no separate confidence
+field. See the [call guide](../installation/decision-runtime/api.md) for an
+example covering all three question types.
+
+## Shared-question batch: `POST /v1/decision/batches`
+
+```json
+{
+  "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+  "states": [
+    {"id": "case-a", "state": "Please refund the duplicate charge."},
+    {"id": "case-b", "state": "Can you explain this invoice?"}
+  ],
+  "questions": {
+    "refund_requested": {
+      "type": "noul",
+      "instructions": "Does the customer explicitly request a refund?"
     }
-  }'
+  }
+}
 ```
 
-The response contains `model`, ordered `results`, and aggregate `usage`.
-Each result repeats its caller-supplied `id` and contains `answers` and
-per-state `usage`. State IDs must be unique. The runtime validates the whole
-batch before evaluating it; the product of state count and question count may
-not exceed 1,024 decisions. A batch can reduce repeated request overhead, but
-it does not change the meaning of an individual answer.
+The `model` and `questions` rules are the same as for a single state.
+`states` is a nonempty array; each element has a unique, nonblank `id`
+(at most 128 characters) and a `state`. The product of state count and
+question count may not exceed **1,024 decisions**. The response has `model`,
+ordered `results`, and aggregate `usage`. Each result has the input `id`,
+its `answers`, and its own `usage`.
 
-## Service and diagnostics
+This endpoint reduces repeated HTTP and question-formatting overhead when
+several states share questions. It is not an official TypeSafe SDK method;
+call it with an HTTP client.
 
-`GET /ready` reports whether the pinned model is available. `GET /v1/models`
-lists the model served by the instance. Runtime diagnostics are separate from
-normal inference responses: `GET /api/status` reports the resolved model
-revision, verified manifest SHA-256, content SHA-256, and scheduler status;
-`GET /metrics` exposes Prometheus-format metrics. Keep these
-diagnostic routes on a protected control-plane listener or allowlist when
-placing the runtime behind a public Gateway.
+## Limits and errors
 
-A successful single or batch inference from a verified resident artifact also
-sets `X-Decision-Artifact-Model`, `X-Decision-Artifact-Revision`,
-`X-Decision-Artifact-Manifest-Sha256`, and
-`X-Decision-Artifact-Content-Sha256` response headers. A direct Gateway can
-check the identity of that specific response against its deployment pins in
-one request. The strict SystemOne and batch JSON envelopes do not change;
-unavailable or rejected requests do not carry an artifact attestation.
+| Status | Meaning | Client action |
+| --- | --- | --- |
+| `413` | Request body, expanded input, or model token limit exceeded. | Reduce or split the input. |
+| `422` | Invalid request, unknown field, or model not served here. | Check the schema and `GET /v1/models`. |
+| `529` | Runtime admission is full. | Honor `Retry-After` before retrying. |
+| `503` | Backend unavailable. | Check readiness before retrying. |
 
-Malformed requests return `422`; oversized inputs return `413`; a saturated
-runtime returns `529` with `Retry-After`; an unavailable backend returns
-`503`. Clients should honor backpressure rather than retrying an overloaded
-instance without delay. The live service publishes its exact OpenAPI schema
-at `GET /openapi.json`.
+Single-state JSON bodies are capped at **256 KiB**, batch bodies at **2 MiB**,
+and expanded rendered input at **16 MiB**. The model may impose a lower token
+limit. Do not retry invalid or oversized requests unchanged.
+
+## Readiness and diagnostics
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /health` | Process liveness. |
+| `GET /ready` | Whether the resident model is available (`503` until ready). |
+| `GET /v1/models` | The model served by this instance. |
+| `GET /openapi.json` | The exact schema of the running version. |
+| `GET /api/status` | Artifact and scheduler diagnostics. |
+| `GET /metrics` | Prometheus-format metrics. |
+
+Successful inference responses may carry artifact identity in HTTP headers;
+diagnostic data is not added to the SystemOne or batch JSON. Protect
+`/api/status` and `/metrics` when publishing a public endpoint. For instance
+setup and capacity controls, see [launch parameters](../installation/decision-runtime/parameters.md).
