@@ -35027,6 +35027,116 @@
       }
     },
     {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-deep-swe-1.1@1.0.0",
+      "metrics": {
+        "resolved": 0.679
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-automation-bench@1.0.0",
+      "metrics": {
+        "score": 0.523
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
+      "benchmark": "berkeley-rdi/agents-last-exam@1.0.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-agents-last-exam@1.0.0",
+      "metrics": {
+        "pass_rate": 0.276
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0",
+      "metrics": {
+        "resolved": 0.876
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
+      "benchmark": "osworld/verified@1.0.0",
+      "benchmark_profile": "official",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md",
+        "verification": "claimed"
+      },
+      "id": "xiaomi/mimo-v2.6-flash-model-card-osworld-verified@1.0.0",
+      "metrics": {
+        "success_rate": 0.808
+      },
+      "model": "xiaomi/mimo-v2.6-flash",
+      "observed_at": "2026-09-23",
+      "reasoning_effort": "unspecified",
+      "status": "available",
+      "subject": {
+        "source_kind": "official_model_card",
+        "variant": "MiMo-V2.6-Flash-RL"
+      }
+    },
+    {
       "benchmark": "artificial-analysis/critpt@1.0.0",
       "benchmark_profile": "independent-standard",
       "evidence": {
@@ -83795,6 +83905,480 @@
       ],
       "coverage": 0.0,
       "index": "vllm-sr/general@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "enabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "disabled",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0",
+          "metric": "resolved",
+          "normalized": 0.876,
+          "status": "available",
+          "value": 0.876,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 87.6
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [
+        "xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": 87.6,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.8759999999999999,
+          "status": "available",
+          "value": 0.8759999999999999,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "xiaomi/mimo-v2.6-flash",
+      "provenance": [
+        "xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0"
+      ],
+      "reasoning_effort": "unspecified",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
       "model": "xiaomi/mimo-v2.5-pro",
       "provenance": [],
       "reasoning_effort": "enabled",
@@ -92893,6 +93477,67 @@
         "reasoning",
         "tools",
         "structured_output",
+        "vision",
+        "audio",
+        "video",
+        "long_context"
+      ],
+      "description": "Efficiency-balanced open-weight omnimodal Xiaomi MoE model for coding and agentic workloads.",
+      "display_name": "MiMo V2.6 Flash",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+        "type": "open_weights"
+      },
+      "family": "mimo-v2",
+      "id": "xiaomi/mimo-v2.6-flash",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image",
+          "video",
+          "audio"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "309B (15B active)",
+      "presentation": {
+        "logo": "package:xiaomimimo",
+        "monochrome": false,
+        "monogram": "Mi"
+      },
+      "publisher": "Xiaomi",
+      "reasoning_family": "mimo",
+      "released_at": "2026-09-22",
+      "tags": [
+        "open_weights",
+        "reasoning",
+        "coding",
+        "agentic",
+        "multimodal",
+        "efficient",
+        "moe"
+      ],
+      "verification": {
+        "authority": "Xiaomi",
+        "source": "https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL",
+        "status": "claimed",
+        "verified_at": "2026-09-23"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
         "long_context"
       ],
       "description": "High-capability open-weight Xiaomi model for complex software agents.",
@@ -98842,6 +99487,20 @@
             "source": "https://platform.xiaomimimo.com/docs/en-US/usage-guide/passing-back-reasoning_content",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "xiaomi/mimo-v2.6-flash",
+          "id": "mimo-v2.6-flash",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "first_party",
+          "verification": {
+            "source": "https://mimo.mi.com/docs/en-US/quick-start/summary/model",
+            "status": "claimed",
+            "verified_at": "2026-09-23"
           }
         }
       ],
