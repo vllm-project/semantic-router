@@ -12,6 +12,8 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from types import MappingProxyType
 
+from decision_runtime.qwen35_torch import EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+
 from cli.consts import (
     HEALTH_CHECK_TIMEOUT,
     IMAGE_PULL_POLICY_ALWAYS,
@@ -95,6 +97,7 @@ class DrunOptions:
     startup_timeout: int = HEALTH_CHECK_TIMEOUT
     detach: bool = False
     restart_policy: str = "no"
+    experimental_qwen_rocm_graph_b8: bool = False
 
 
 @dataclass(frozen=True)
@@ -295,6 +298,7 @@ def _resolve_runtime(
         max_batch=options.max_batch,
         max_concurrency=options.max_concurrency,
         max_queue=options.max_queue,
+        experimental_qwen_rocm_graph_b8=options.experimental_qwen_rocm_graph_b8,
     )
     spec = resolver.resolve(request)
     if not isinstance(spec, ResolvedDecisionRuntime):
@@ -430,6 +434,17 @@ def _validate_options(options: DrunOptions) -> None:
         raise DecisionLifecycleError(
             f"Unsupported backend {options.backend!r}; choose "
             f"{', '.join(SUPPORTED_DECISION_BACKENDS)}."
+        )
+    if type(options.experimental_qwen_rocm_graph_b8) is not bool:
+        raise DecisionLifecycleError(
+            "--experimental-qwen-rocm-graph-b8 must be a boolean flag."
+        )
+    if options.experimental_qwen_rocm_graph_b8 and options.backend not in (
+        "auto",
+        "rocm",
+    ):
+        raise DecisionLifecycleError(
+            "--experimental-qwen-rocm-graph-b8 requires the ROCm backend."
         )
     if options.cpu_threads is not None:
         _positive_integer("cpu threads", options.cpu_threads, maximum=256)
@@ -580,6 +595,19 @@ def _validate_resolved_runtime(
         not isinstance(part, str) or not part or "\0" in part for part in spec.command
     ):
         raise DecisionLifecycleError("Resolved Decision runtime command is invalid.")
+    graph_flag = "--experimental-qwen-rocm-graph-b8"
+    if spec.command.count(graph_flag) != int(request.experimental_qwen_rocm_graph_b8):
+        raise DecisionLifecycleError(
+            "Resolved Decision runtime changed the requested Qwen graph mode."
+        )
+    if request.experimental_qwen_rocm_graph_b8 and (
+        spec.canonical_model != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+        or spec.backend != "rocm"
+        or spec.max_batch != 8
+    ):
+        raise DecisionLifecycleError(
+            "Experimental Qwen ROCm graph requires canonical Sol at B8."
+        )
     validate_decision_environment(spec.environment)
     if ROCM_VISIBLE_DEVICES_ENV in spec.environment:
         raise DecisionLifecycleError(

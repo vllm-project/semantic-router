@@ -28,6 +28,7 @@ from decision_runtime.catalog_adapter import (
     RuntimeModelResolutionError,
     resolve_decision_runtime_model,
 )
+from decision_runtime.qwen35_torch import EXPERIMENTAL_SOL_GRAPH_MODEL_ID
 from decision_runtime.scheduler import DEFAULT_MAX_CONCURRENCY, DEFAULT_MAX_QUEUE
 
 from cli.decision_runtime.catalog import (
@@ -89,6 +90,10 @@ class IntegratedDecisionCatalogResolver:
 
         if not isinstance(request, DecisionRuntimeRequest):
             raise DecisionCatalogError("Decision runtime request is invalid")
+        if type(request.experimental_qwen_rocm_graph_b8) is not bool:
+            raise DecisionCatalogError(
+                "experimental Qwen graph opt-in must be a boolean"
+            )
         backend = (
             self.detect_backend() if request.backend == "auto" else request.backend
         )
@@ -146,6 +151,14 @@ class IntegratedDecisionCatalogResolver:
             DEFAULT_MAX_QUEUE if request.max_queue is None else request.max_queue
         )
         _validate_resolved_limits(max_batch, max_concurrency, max_queue)
+        if request.experimental_qwen_rocm_graph_b8 and (
+            model.catalog.model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+            or backend != "rocm"
+            or max_batch != 8
+        ):
+            raise DecisionCatalogError(
+                "experimental Qwen ROCm graph requires canonical Sol at B8"
+            )
 
         try:
             artifact = self.artifacts.materialize(model)
@@ -192,6 +205,8 @@ class IntegratedDecisionCatalogResolver:
             "--max-queue",
             str(max_queue),
         )
+        if request.experimental_qwen_rocm_graph_b8:
+            command += ("--experimental-qwen-rocm-graph-b8",)
         return ResolvedDecisionRuntime(
             canonical_model=model.catalog.model_id,
             revision=model.catalog.revision,

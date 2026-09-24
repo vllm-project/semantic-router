@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .qwen35_torch import (
+    Qwen35RuntimeError,
     QwenRocmProfileBinding,
     ValidatedQwenRocmProfile,
     _validate_kernel_profile,
@@ -178,6 +179,45 @@ def create_qwen_rocm_profile_binder() -> StrictQwenRocmProfileBinder:
     """Return the owned binder without importing Torch, Triton, or FLA."""
 
     return StrictQwenRocmProfileBinder()
+
+
+def assert_qwen_rocm_graph_replay_safe(
+    receipt: QwenRocmProfileBinding, *, physical_batch_size: int, padded_tokens: int
+) -> None:
+    """Revalidate the exact FLA launch before graph replay bypasses Python.
+
+    The ordinary ``_StrictRunGuard`` cannot run on a captured replay.  A graph
+    caller must invoke this immediately before every replay, including the
+    first replay used to qualify a newly captured graph.
+    """
+
+    with _BIND_LOCK:
+        active = _ACTIVE
+        if active is None or active.receipt != receipt:
+            raise QwenRocmBindingError("Qwen graph profile binding is not active")
+        _verify_active(active, active.profile)
+        entries = _profile_entries(active.profile)
+        try:
+            blocks = active.profile.normalization_blocks_for(
+                physical_batch_size=physical_batch_size, padded_tokens=padded_tokens
+            )
+        except Qwen35RuntimeError as error:
+            raise QwenRocmBindingError(
+                "Qwen graph shape is outside the profile"
+            ) from error
+        key = (128, blocks, "torch.bfloat16", "torch.bfloat16", "torch.float32")
+        if key not in entries or not isinstance(active.kernel.cache, dict):
+            raise QwenRocmBindingError("Qwen graph has no profiled FLA launch")
+        if _config_fields(active.kernel.cache.get(key)) != entries[key]:
+            raise QwenRocmBindingError("Qwen graph FLA launch config changed")
+        if any(
+            cached_key not in entries
+            or _config_fields(cached_config) != entries[cached_key]
+            for cached_key, cached_config in active.kernel.cache.items()
+        ):
+            raise QwenRocmBindingError(
+                "Qwen graph FLA cache contains an unprofiled key"
+            )
 
 
 def _import_module(name: str) -> Any:
