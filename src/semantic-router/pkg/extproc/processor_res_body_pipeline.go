@@ -3,6 +3,7 @@ package extproc
 import (
 	"bytes"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
+	decodedDiagnosticsEnd := len(ctx.ProtocolDiagnostics)
 	clientBody := responseBody
 	rewriteClientBody := requiresClientResponseRewrite(ctx)
 	if rewriteClientBody {
@@ -45,6 +47,9 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		if err != nil {
 			return r.createErrorResponse(502, "The selected model returned an incompatible response")
 		}
+		ctx.ProtocolDiagnostics = deduplicateReencodedResponseDiagnostics(
+			ctx.ProtocolDiagnostics, diagnosticsBeforeBody, decodedDiagnosticsEnd,
+		)
 	}
 	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
@@ -79,6 +84,24 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		setResponseBodyMutation(response, finalBody)
 	}
 	return response
+}
+
+// Translation validates and renders the client wire before response policy
+// runs. The buffered path renders it again to apply response mutations; a
+// warning emitted by both renders describes one loss, not two.
+func deduplicateReencodedResponseDiagnostics(
+	diagnostics llmprotocol.Diagnostics,
+	decodeStart, encodeStart int,
+) llmprotocol.Diagnostics {
+	decoded := diagnostics[decodeStart:encodeStart]
+	encoded := diagnostics[encodeStart:]
+	kept := diagnostics[:encodeStart]
+	for _, diagnostic := range encoded {
+		if !slices.Contains(decoded, diagnostic) {
+			kept = append(kept, diagnostic)
+		}
+	}
+	return kept
 }
 
 // finalizeResponsePolicy runs the shared response-stage processing across normal and fallback paths:

@@ -67,6 +67,34 @@ func TestBufferedResponseDiagnosticsReachBodyHeaderAndMetrics(t *testing.T) {
 	}
 }
 
+func TestBufferedResponsePartialCacheWarningIsRecordedOnce(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.AnthropicMessagesV1,
+		TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "public-model",
+		TraceContext: t.Context(),
+	}
+	const reason = "Messages requires numeric cache buckets; the unreported bucket is zero-filled for representation, while settlement retains unknown usage"
+	counter := metrics.TranslationLossyTotal.WithLabelValues("anthropic", "openai", "dropped", reason)
+	before := testutil.ToFloat64(counter)
+	body := []byte(`{"id":"response_1","model":"source-model","choices":[{"index":0,"message":{"role":"assistant","content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":2,"total_tokens":12,"prompt_tokens_details":{"cached_tokens":1}}}`)
+	response := router.handleNonStreamingResponseBody(body, ctx, 0)
+	if response.GetResponseBody() == nil {
+		t.Fatalf("buffered response failed: %+v", response)
+	}
+	warning := protocolDiagnosticsHeader(response.GetResponseBody().GetResponse().GetHeaderMutation())
+	if strings.Count(warning, ";usage.cache") != 1 {
+		t.Fatalf("partial cache usage should emit one warning: %q", warning)
+	}
+	if got := testutil.ToFloat64(counter); got != before+1 {
+		t.Fatalf("partial cache warning counted %v times, want 1", got-before)
+	}
+	if ctx.SemanticResponse == nil || ctx.SemanticResponse.Usage.InputCacheWrite.Value != nil {
+		t.Fatalf("unreported cache writes must remain unknown for settlement: %+v", ctx.SemanticResponse)
+	}
+}
+
 func protocolDiagnosticsHeader(mutation *ext_proc.HeaderMutation) string {
 	for _, option := range mutation.GetSetHeaders() {
 		if option.GetHeader().GetKey() == headers.VSRProtocolWarnings {
