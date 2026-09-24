@@ -53,16 +53,18 @@ class EvalContractTests(unittest.TestCase):
         self.assertGreater(got["ci_low"], -0.5)
 
     def test_report_contrasts_every_arm(self) -> None:
+        def records(scores):
+            return [{"id": f"example-{i}", "score": score} for i, score in enumerate(scores)]
         cold = [2.0, 2.1, 1.9, 2.2]
         mapped = [1.6, 1.7, 1.5, 1.8]
         raw = [2.4, 2.5, 2.3, 2.6]
         report = build_report(
             "inject_nll",
             {
-                "cold": cold,
-                "mapped_v1": mapped,
-                "raw_kv": raw,
-                "random": [3.0, 3.1, 2.9, 3.2],
+                "cold": records(cold),
+                "mapped_v1": records(mapped)[::-1],
+                "raw_kv": records(raw),
+                "random": records([3.0, 3.1, 2.9, 3.2]),
             },
             n_boot=500,
             seed=0,
@@ -74,13 +76,22 @@ class EvalContractTests(unittest.TestCase):
         self.assertNotIn("cold", report["delta_vs_reference"])
         self.assertLess(report["delta_vs_reference"]["mapped_v1"]["mean"], 0.0)
 
+    def test_report_rejects_unpaired_or_duplicate_ids(self) -> None:
+        cold = [{"id": "a", "score": 1}, {"id": "b", "score": 2}]
+        with self.assertRaisesRegex(ValueError, "example IDs differ"):
+            build_report("nll", {"cold": cold, "mapped": [{"id": "a", "score": 1}, {"id": "c", "score": 2}]})
+        with self.assertRaisesRegex(ValueError, "duplicate example id"):
+            build_report("nll", {"cold": cold, "mapped": [cold[0], cold[0]]})
+        with self.assertRaisesRegex(ValueError, "id and score"):
+            build_report("nll", {"cold": [1, 2], "mapped": [1, 2]})
+
     def test_cli_writes_report(self) -> None:
         items = {
             "metric": "hellaswag_acc",
             "reference": "cold",
             "arms": {
-                "cold": [1, 0, 1, 1],
-                "mapped_v1": [1, 1, 1, 1],
+                "cold": [{"id": str(i), "score": score} for i, score in enumerate([1, 0, 1, 1])],
+                "mapped_v1": [{"id": str(i), "score": score} for i, score in enumerate([1, 1, 1, 1])],
             },
         }
         script = REPO_ROOT / "src/training/kv_mapper/eval_report.py"
