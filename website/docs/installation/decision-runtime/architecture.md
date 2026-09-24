@@ -21,6 +21,24 @@ requests fairly, and sends at most `--max-batch` rows to one forward. It
 restores each result to its original state and question before returning the
 strict response envelope.
 
+## Why the model paths differ
+
+Kai and Lex use the Vela encoder path; Eos, Sol, Nox, and Lux use a Qwen 3.5
+hybrid backbone. Both paths score a finite set of answer candidates instead of
+generating an open-ended response. Each question becomes one prepared row,
+so a request with many questions can share resident weights and physical
+forwards without changing its question IDs or response order. The Qwen path
+keeps its backbone in BF16 on GPU and its candidate head and final scoring in
+FP32. The Vela and Qwen input encoders, heads, and device kernels are separate
+modules behind the same row-executor interface.
+
+On ROCm, a Qwen artifact that carries a normalization profile binds its
+validated launch shapes; an unknown shape fails instead of silently
+autotuning during serving.
+The optional Sol graph path can replay a previously captured B8 backbone
+shape, but it is not enabled by default. These are model-specific execution
+choices, not changes to the public API.
+
 This separates three limits that are easy to confuse:
 
 | Boundary | Unit | Default or cap |
