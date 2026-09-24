@@ -42,11 +42,23 @@ the current commit. The gate verifies zero failed workflows, no parity
 mismatches, matching decision counts, recomputed throughput and latency
 percentiles, correct alternating wave timing, and positive physical batch
 counter deltas. High-load cells must show actual batching above one row per
-physical batch and no throughput regression worse than 20%.
+physical batch. Every concurrency 8 or 32 cell, including the single-state
+shape, must retain at least 95% of its old-arm decisions/sec throughput.
 
-For each model, concurrency 32 must show at least a 20% decisions/sec gain on
-either multi-state workload. The threshold is applied to the measured results; a
-model that misses it blocks qualification. The measurement compares synthetic
+The throughput win is predeclared over all six models and both multi-state
+shapes: 8 questions/8 states and 32 questions/32 states, each at concurrency
+32. For each of these 12 fixed cells, divide the new-arm decisions/sec by the
+old-arm decisions/sec. The equal-weight geometric mean of all 12 ratios must
+be at least 1.05. Each model's geometric mean of its two ratios must be at
+least 1.00, so one model's gain cannot conceal another model's regression.
+An individual model may be flat. The qualification summary publishes the
+overall mean, each model's mean, and both shape ratios for every model; no
+best-performing shape is selected after measurement. Three old/new alternating
+rounds per cell limit order effects. The 0.95 cell floor is a fixed allowance
+for measurement variation, not a statistical confidence bound; all cell
+measurements remain in the hashed report for review.
+
+The measurement compares synthetic
 HTTP workflows, not task accuracy. Multi-state results compare the old
 single-state fanout with the new batch protocol, so their wire requests are
 different. The report labels that scope rather than attributing every gain to

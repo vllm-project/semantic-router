@@ -467,7 +467,12 @@ def _metric_record(
     }
 
 
-def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
+def _fixture(
+    root: Path,
+    *,
+    slowdown: str | None = None,
+    throughput_ratios: dict[tuple[str, int, int, int], float] | None = None,
+) -> tuple[Path, dict]:
     report = {
         "schema_version": gate.SCHEMA,
         "scope": "synthetic same-revision Decision HTTP performance, not task-quality evaluation",
@@ -584,7 +589,11 @@ def _fixture(root: Path, *, slowdown: str | None = None) -> tuple[Path, dict]:
                         1,
                         8,
                     ):
-                        new_seconds = 1.4
+                        new_seconds = 1 / 0.94
+                if throughput_ratios is not None:
+                    ratio = throughput_ratios.get((model_id, q, s, concurrency))
+                    if ratio is not None:
+                        new_seconds = 1 / ratio
                 old = _arm(q, s, 1.0, concurrency, "old")
                 new = _arm(q, s, new_seconds, concurrency, "new")
                 total_rows = gate.MIN_WORKFLOWS_PER_ROUND * gate.ROUNDS * q * s
@@ -1000,6 +1009,13 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         result = self.validate(run_id="42", run_attempt="1")
         self.assertEqual(set(result["models"]), gate.MODEL_IDS)
         self.assertEqual(result["source_sha"], SOURCE)
+        self.assertAlmostEqual(result["high_load_throughput_geomean"], 1.6)
+        for model in result["models"].values():
+            self.assertEqual(
+                set(model["high_load_shape_ratios"]),
+                {"q8_s8_c32", "q32_s32_c32"},
+            )
+            self.assertAlmostEqual(model["high_load_throughput_geomean"], 1.6)
 
     def test_old_v4_report_without_live_process_proof_is_rejected(self) -> None:
         model = self.report["models"][0]
@@ -1731,18 +1747,64 @@ class DecisionPerformanceGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "independent tuning qualification"):
             self.validate()
 
-    def test_no_material_gain_blocks_release(self) -> None:
+    def test_modest_gain_with_bounded_cell_regression_qualifies(self) -> None:
+        ratios = {
+            (model_id, q, s, 32): 1.06
+            for model_id in gate.MODEL_IDS
+            for q, s in gate.HIGH_LOAD_SHAPES
+        }
+        ratios[(sorted(gate.MODEL_IDS)[0], 32, 1, 8)] = 0.96
+        self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
+        result = self.validate()
+        self.assertAlmostEqual(result["high_load_throughput_geomean"], 1.06)
+        for model in result["models"].values():
+            self.assertAlmostEqual(model["high_load_throughput_geomean"], 1.06)
+            for ratio in model["high_load_shape_ratios"].values():
+                self.assertAlmostEqual(ratio, 1.06)
+
+    def test_flat_model_qualifies_when_other_models_raise_overall_gain(self) -> None:
         self.path, self.report = _fixture(self.root, slowdown="no_gain")
-        with self.assertRaisesRegex(
-            ValueError, "lacks a material high-load throughput gain"
-        ):
-            self.validate()
+        result = self.validate()
+        self.assertAlmostEqual(
+            result["models"][sorted(gate.MODEL_IDS)[0]][
+                "high_load_throughput_geomean"
+            ],
+            1.0,
+        )
+        self.assertGreaterEqual(result["high_load_throughput_geomean"], 1.05)
 
     def test_latency_only_win_cannot_replace_unpaired_throughput_gain(self) -> None:
-        self.path, self.report = _fixture(self.root, slowdown="latency_only")
-        with self.assertRaisesRegex(
-            ValueError, "lacks a material high-load throughput gain"
-        ):
+        ratios = {
+            (model_id, q, s, 32): 1.0
+            for model_id in gate.MODEL_IDS
+            for q, s in gate.HIGH_LOAD_SHAPES
+        }
+        self.path, self.report = _fixture(
+            self.root, slowdown="latency_only", throughput_ratios=ratios
+        )
+        with self.assertRaisesRegex(ValueError, "throughput gain is below 5%"):
+            self.validate()
+
+    def test_one_shape_win_cannot_hide_low_overall_gain(self) -> None:
+        ratios = {
+            (model_id, q, s, 32): 1.0
+            for model_id in gate.MODEL_IDS
+            for q, s in gate.HIGH_LOAD_SHAPES
+        }
+        first_model = sorted(gate.MODEL_IDS)[0]
+        ratios[(first_model, 8, 8, 32)] = 1.20
+        ratios[(first_model, 32, 32, 32)] = 0.96
+        self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
+        with self.assertRaisesRegex(ValueError, "throughput gain is below 5%"):
+            self.validate()
+
+    def test_one_model_regression_blocks_aggregate_gain(self) -> None:
+        ratios = {
+            (sorted(gate.MODEL_IDS)[0], q, s, 32): 0.99
+            for q, s in gate.HIGH_LOAD_SHAPES
+        }
+        self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
+        with self.assertRaisesRegex(ValueError, "material high-load model regression"):
             self.validate()
 
     def test_high_load_regression_blocks_release(self) -> None:

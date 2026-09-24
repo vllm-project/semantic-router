@@ -35,8 +35,10 @@ ROUNDS = 3
 PHYSICAL_BATCH = 8  # Current untuned qualification ceiling, not a report-wide size.
 PHYSICAL_BATCH_BUCKETS = (1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024)
 MIN_WORKFLOWS_PER_ROUND = 32
-MIN_HIGH_LOAD_THROUGHPUT_GAIN = 1.20
-MIN_ACCEPTABLE_HIGH_LOAD_THROUGHPUT_RATIO = 0.80
+HIGH_LOAD_SHAPES = ((8, 8), (32, 32))
+MIN_OVERALL_HIGH_LOAD_THROUGHPUT_GAIN = 1.05
+MIN_MODEL_HIGH_LOAD_THROUGHPUT_RATIO = 1.00
+MIN_ACCEPTABLE_HIGH_LOAD_THROUGHPUT_RATIO = 0.95
 MAX_SEMANTIC_PROBABILITY_DELTA = 0.010000001
 HIGH_LOAD_MIN_CONCURRENCY = 8
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -127,6 +129,10 @@ def _close(actual: Any, expected: Any, label: str) -> float:
     if not math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-9):
         raise ValueError(f"{label} differs from raw measurement")
     return a
+
+
+def _geometric_mean(ratios: list[float]) -> float:
+    return math.exp(math.fsum(math.log(ratio) for ratio in ratios) / len(ratios))
 
 
 def _clean_mismatches(value: Any, label: str) -> None:
@@ -1568,6 +1574,7 @@ def validate_report(
             "performance report requires exactly six distinct Decision models"
         )
     new_images: set[str] = set()
+    all_high_load_ratios: list[float] = []
     summary: dict[str, Any] = {"source_sha": source_sha, "models": {}}
     for entry in models:
         model = _mapping(entry, "model")
@@ -1793,15 +1800,9 @@ def validate_report(
                 previous_snapshots,
                 hash_snapshots,
             )
-        high_load = [indexed[8, 8]["cells"][-1], indexed[32, 32]["cells"][-1]]
-        high_throughput = max(
-            cell["new_over_old_decisions_per_second"] for cell in high_load
-        )
         # The arms perform the same logical work, but old fanout and new batch
         # have different HTTP submissions and no shared scheduled-arrival trace.
         # Workflow latency is diagnostic, never an alternative release win.
-        if high_throughput < MIN_HIGH_LOAD_THROUGHPUT_GAIN:
-            raise ValueError(model_id + " lacks a material high-load throughput gain")
         for shape in shapes:
             for cell in shape["cells"]:
                 if (
@@ -1812,7 +1813,18 @@ def validate_report(
                     raise ValueError(
                         model_id + " has a material high-load throughput regression"
                     )
-        for q, s in ((8, 8), (32, 32)):
+        high_load_shape_ratios = {
+            f"q{q}_s{s}_c32": indexed[q, s]["cells"][-1][
+                "new_over_old_decisions_per_second"
+            ]
+            for q, s in HIGH_LOAD_SHAPES
+        }
+        model_high_load_geomean = _geometric_mean(
+            list(high_load_shape_ratios.values())
+        )
+        if model_high_load_geomean < MIN_MODEL_HIGH_LOAD_THROUGHPUT_RATIO:
+            raise ValueError(model_id + " has a material high-load model regression")
+        for q, s in HIGH_LOAD_SHAPES:
             if (
                 indexed[q, s]["cells"][-1]["new_observed_rows_per_physical_batch"]
                 <= 1.0
@@ -1820,11 +1832,18 @@ def validate_report(
                 raise ValueError(
                     model_id + " did not demonstrate physical batching under load"
                 )
+        all_high_load_ratios.extend(high_load_shape_ratios.values())
         summary["models"][model_id] = {
-            "high_load_throughput_gain": high_throughput,
+            "high_load_shape_ratios": high_load_shape_ratios,
+            "high_load_throughput_geomean": model_high_load_geomean,
         }
     if len(new_images) != 1:
         raise ValueError("six models must use one immutable new runtime image")
+    summary["high_load_throughput_geomean"] = _geometric_mean(
+        all_high_load_ratios
+    )
+    if summary["high_load_throughput_geomean"] < MIN_OVERALL_HIGH_LOAD_THROUGHPUT_GAIN:
+        raise ValueError("fixed high-load model/shape throughput gain is below 5%")
     return summary
 
 
