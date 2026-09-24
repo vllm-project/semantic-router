@@ -255,6 +255,12 @@ router:
 # `config`, this map atomically replaces chart defaults before Kubernetes
 # integration rewrites.
 configOverride: null
+# Runtime management APIs may update the live Router ConfigMap after install.
+configMap:
+  # -- Helm values seed config.yaml at install. Change this revision to
+  # explicitly replace the live config.yaml with config/configOverride on an
+  # upgrade; reusing the same revision preserves later management API edits.
+  applyValuesRevision: ""
 # Application configuration
 config:
   version: v0.3

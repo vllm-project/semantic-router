@@ -79,6 +79,29 @@ Get the router ConfigMap name
 {{- end }}
 
 {{/*
+After installation, management APIs may update config.yaml in the live
+ConfigMap. Helm values are the install seed. A changed revision explicitly
+reapplies them once; --reuse-values with the same revision preserves later
+runtime edits.
+*/}}
+{{- define "semantic-router.liveConfig" -}}
+{{- $policy := .Values.configMap | default (dict) -}}
+{{- if .Release.IsUpgrade -}}
+{{- $current := lookup "v1" "ConfigMap" (include "semantic-router.namespace" .) (include "semantic-router.configMapName" .) -}}
+{{- if $current -}}
+{{- $metadata := (get $current "metadata") | default (dict) -}}
+{{- $annotations := (get $metadata "annotations") | default (dict) -}}
+{{- $appliedRevision := (get $annotations "semantic-router.vllm.ai/chart-config-revision") | default "" -}}
+{{- $requestedRevision := (get $policy "applyValuesRevision") | default "" -}}
+{{- if eq $requestedRevision $appliedRevision -}}
+{{- $data := (get $current "data") | default (dict) -}}
+{{- get $data "config.yaml" | default "" -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+{{- end }}
+
+{{/*
 Get the dashboard service account name
 */}}
 {{- define "semantic-router.dashboardServiceAccountName" -}}
@@ -163,6 +186,14 @@ atomic deployment-tooling override instead of Helm's recursive map coalescing.
 {{-     fail "configOverride must be a non-empty mapping" -}}
 {{-   end -}}
 {{-   $config = deepCopy .Values.configOverride -}}
+{{- end -}}
+{{- $liveConfig := include "semantic-router.liveConfig" . -}}
+{{- if ne (trim $liveConfig) "" -}}
+{{-   $parsed := fromYaml $liveConfig -}}
+{{-   if hasKey $parsed "Error" -}}
+{{-     fail "the live Router ConfigMap contains invalid YAML; correct it or change configMap.applyValuesRevision to replace it explicitly" -}}
+{{-   end -}}
+{{-   $config = $parsed -}}
 {{- end -}}
 {{- toYaml $config -}}
 {{- end }}
