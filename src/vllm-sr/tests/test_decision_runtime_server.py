@@ -190,8 +190,70 @@ def test_qwen_loader_uses_verified_manifest_layout(
     assert calls[0][0] == tmp_path
     assert calls[0][1]["temperature"] == profile.temperature
     assert calls[0][1]["max_length"] == profile.max_input_tokens
+    assert calls[0][1]["gated_delta_kernel_policy"] == profile.qwen_gated_delta_kernel
     assert calls[0][1]["expected_manifest_sha256"] == (
         profile.artifact.manifest.sha256 if expected_manifest else None
+    )
+
+
+def test_eos_native_policy_does_not_gate_a_new_model_manifest(
+    monkeypatch, tmp_path: Path
+):
+    from decision_runtime import qwen35_torch, runtime_factory  # noqa: PLC0415
+
+    profile = load_runtime_profile("Decision-1.0-Eos-0.8B", revision="e" * 40)
+    (tmp_path / "runtime.json").write_text(json.dumps({"temperature": 1.25}))
+    artifact = SimpleNamespace(
+        data_root=tmp_path,
+        files=(),
+        manifest=ArtifactManifestIdentity("MODEL_MANIFEST.json", "d" * 64, 10),
+    )
+    calls = []
+    monkeypatch.setattr(
+        qwen35_torch.Qwen35TorchRuntime,
+        "load",
+        lambda *args, **options: calls.append(options),
+    )
+
+    runtime_factory._load_family(SimpleNamespace(profile=profile), artifact, "rocm")
+
+    assert calls[0]["gated_delta_kernel_policy"] == "native_torch"
+    assert calls[0]["expected_manifest_sha256"] == "d" * 64
+    assert calls[0]["temperature"] == 1.25
+    assert calls[0]["rocm_profile_binder"] is None
+
+
+@pytest.mark.parametrize(
+    ("profile_id", "expected_policy"),
+    (
+        ("Decision-1.0-Eos-0.8B", "native_torch"),
+        ("Decision-1.0-Sol-2B", "accelerated"),
+        ("Decision-1.0-Nox-4B", "accelerated"),
+        ("Decision-1.0-Lux-9B", "accelerated"),
+    ),
+)
+def test_qwen_rocm_fla_binder_only_follows_accelerated_policy(
+    monkeypatch, tmp_path: Path, profile_id: str, expected_policy: str
+):
+    from decision_runtime import qwen35_torch, runtime_factory  # noqa: PLC0415
+
+    profile = load_runtime_profile(profile_id, revision="e" * 40)
+    calls = []
+    monkeypatch.setattr(
+        qwen35_torch.Qwen35TorchRuntime,
+        "load",
+        lambda *args, **options: calls.append(options),
+    )
+
+    runtime_factory._load_family(
+        SimpleNamespace(profile=profile),
+        SimpleNamespace(data_root=tmp_path),
+        "rocm",
+    )
+
+    assert calls[0]["gated_delta_kernel_policy"] == expected_policy
+    assert (calls[0]["rocm_profile_binder"] is None) == (
+        expected_policy == "native_torch"
     )
 
 

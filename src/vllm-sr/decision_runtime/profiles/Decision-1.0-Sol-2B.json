@@ -1,6 +1,7 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "family": "qwen3.5",
+  "kernel_policy": {"gated_delta": "accelerated"},
   "artifact": {
     "manifest": {
       "path": "bundle-manifest.json",

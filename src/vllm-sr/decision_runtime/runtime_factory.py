@@ -176,10 +176,15 @@ def _load_family(
     if profile.family == "qwen3.5":
         from .qwen35_torch import Qwen35TorchRuntime  # noqa: PLC0415
 
+        policy = profile.qwen_gated_delta_kernel
+        if policy is None:
+            raise RuntimeAssemblyError(
+                "Qwen runtime has no GatedDeltaNet kernel policy"
+            )
         if manifest.path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
             raise RuntimeAssemblyError("Qwen release manifest layout is unsupported")
         binder = None
-        if backend == "rocm":
+        if backend == "rocm" and policy == "accelerated":
             from .qwen35_rocm_binder import (  # noqa: PLC0415
                 create_qwen_rocm_profile_binder,
             )
@@ -191,6 +196,7 @@ def _load_family(
             temperature=temperature,
             max_length=profile.max_input_tokens,
             backend=backend,
+            gated_delta_kernel_policy=policy,
             physical_batch_size=physical_batch_size,
             rocm_profile_binder=binder,
             expected_manifest_sha256=(

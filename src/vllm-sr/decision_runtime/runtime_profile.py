@@ -22,8 +22,9 @@ from typing import Any, Literal
 RuntimeFamily = Literal["vela", "qwen3.5"]
 RuntimeBackendName = Literal["rocm", "cuda", "cpu", "mlx"]
 ChoiceNullDescriptionPolicy = Literal["render_key", "preserve_json_null"]
+QwenGatedDeltaKernel = Literal["native_torch", "accelerated"]
 
-PROFILE_SCHEMA_VERSION = 2
+PROFILE_SCHEMA_VERSION = 3
 # Initial benchmarked profile value, not a hard upper bound. A profile may tune
 # it after backend/device correctness and performance validation.
 DEFAULT_PHYSICAL_BATCH_SIZE = 8
@@ -92,6 +93,7 @@ class RuntimeProfile:
     physical_batch_size: int
     temperature: float | None
     prompt_policy: PromptPolicy
+    qwen_gated_delta_kernel: QwenGatedDeltaKernel | None
     backends: Mapping[RuntimeBackendName, BackendQualification]
 
     def require_backend(
@@ -171,27 +173,25 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
             "Decision runtime profile is not valid JSON"
         ) from error
     root = _mapping(document, "profile")
-    _exact_keys(
-        root,
-        {
-            "schema_version",
-            "family",
-            "artifact",
-            "max_input_tokens",
-            "dtype",
-            "physical_batch_size",
-            "calibration",
-            "prompt_policy",
-            "backends",
-        },
-        "profile",
-    )
-    if root["schema_version"] != PROFILE_SCHEMA_VERSION:
-        raise RuntimeProfileError("unsupported Decision runtime profile schema")
-
-    family = root["family"]
+    family = root.get("family")
     if family not in {"vela", "qwen3.5"}:
         raise RuntimeProfileError("profile.family is unsupported")
+    fields = {
+        "schema_version",
+        "family",
+        "artifact",
+        "max_input_tokens",
+        "dtype",
+        "physical_batch_size",
+        "calibration",
+        "prompt_policy",
+        "backends",
+    }
+    if family == "qwen3.5":
+        fields.add("kernel_policy")
+    _exact_keys(root, fields, "profile")
+    if root["schema_version"] != PROFILE_SCHEMA_VERSION:
+        raise RuntimeProfileError("unsupported Decision runtime profile schema")
 
     artifact = _parse_artifact(root["artifact"])
     max_input_tokens = _positive_int(root["max_input_tokens"], "max_input_tokens")
@@ -205,6 +205,11 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
     head_dtype = _dtype(dtype["head"], "dtype.head")
     temperature = _parse_calibration(root["calibration"])
     prompt_policy = _parse_prompt_policy(root["prompt_policy"])
+    qwen_gated_delta_kernel = (
+        _parse_qwen_kernel_policy(root["kernel_policy"])
+        if family == "qwen3.5"
+        else None
+    )
     backends = _parse_backends(root["backends"])
 
     return RuntimeProfile(
@@ -217,6 +222,7 @@ def parse_runtime_profile(payload: bytes, *, revision: str) -> RuntimeProfile:
         physical_batch_size=physical_batch_size,
         temperature=temperature,
         prompt_policy=prompt_policy,
+        qwen_gated_delta_kernel=qwen_gated_delta_kernel,
         backends=backends,
     )
 
@@ -278,6 +284,15 @@ def _parse_prompt_policy(value: object) -> PromptPolicy:
             "prompt_policy.choice_null_description is unsupported"
         )
     return PromptPolicy(choice_null_description=choice_null_description)
+
+
+def _parse_qwen_kernel_policy(value: object) -> QwenGatedDeltaKernel:
+    policy = _mapping(value, "kernel_policy")
+    _exact_keys(policy, {"gated_delta"}, "kernel_policy")
+    selected = policy["gated_delta"]
+    if selected not in {"native_torch", "accelerated"}:
+        raise RuntimeProfileError("kernel_policy.gated_delta is unsupported")
+    return selected
 
 
 def _parse_backends(

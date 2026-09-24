@@ -66,6 +66,14 @@ PROMPT_POLICIES = {
     "llm-semantic-router/Decision-1.0-Nox-4B": "render_key",
     "llm-semantic-router/Decision-1.0-Lux-9B": "preserve_json_null",
 }
+KERNEL_POLICIES = {
+    "llm-semantic-router/Decision-1.0-Kai-0.6B": None,
+    "llm-semantic-router/Decision-1.0-Lex-0.6B": None,
+    "llm-semantic-router/Decision-1.0-Eos-0.8B": "native_torch",
+    "llm-semantic-router/Decision-1.0-Sol-2B": "accelerated",
+    "llm-semantic-router/Decision-1.0-Nox-4B": "accelerated",
+    "llm-semantic-router/Decision-1.0-Lux-9B": "accelerated",
+}
 
 
 @pytest.mark.parametrize("model_id", MODELS)
@@ -86,6 +94,7 @@ def test_catalog_exactly_selects_revision_profile(model_id: str) -> None:
         resolved.profile.prompt_policy.choice_null_description
         == PROMPT_POLICIES[model_id]
     )
+    assert resolved.profile.qwen_gated_delta_kernel == KERNEL_POLICIES[model_id]
 
 
 def test_profile_package_has_exact_catalog_model_set() -> None:
@@ -130,6 +139,32 @@ def test_catalog_new_revision_reuses_model_template(
     assert updated.template_id == resolved.template_id
     assert updated.template_id == model_id.rsplit("/", 1)[-1]
     assert updated.profile.prompt_policy == resolved.profile.prompt_policy
+    assert (
+        updated.profile.qwen_gated_delta_kernel
+        == resolved.profile.qwen_gated_delta_kernel
+    )
+
+
+def test_qwen_kernel_policy_is_profile_scoped_across_model_revisions() -> None:
+    for model_id, policy in KERNEL_POLICIES.items():
+        profile_id = model_id.rsplit("/", 1)[-1]
+        profile = load_runtime_profile(profile_id, revision="f" * 40)
+        assert profile.qwen_gated_delta_kernel == policy
+
+
+def test_qwen_kernel_policy_is_explicit_and_closed() -> None:
+    profile_id = "Decision-1.0-Eos-0.8B"
+    packaged = resources.files("decision_runtime.profiles").joinpath(
+        f"{profile_id}.json"
+    )
+    document = json.loads(packaged.read_bytes())
+    del document["kernel_policy"]
+    with pytest.raises(RuntimeProfileError, match="fields do not match"):
+        parse_runtime_profile(json.dumps(document).encode(), revision="f" * 40)
+
+    document["kernel_policy"] = {"gated_delta": "unknown"}
+    with pytest.raises(RuntimeProfileError, match="gated_delta is unsupported"):
+        parse_runtime_profile(json.dumps(document).encode(), revision="f" * 40)
 
 
 def test_explicit_revision_requires_an_immutable_commit() -> None:
