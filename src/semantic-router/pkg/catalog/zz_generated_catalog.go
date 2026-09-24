@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:4c0cf8ff60118137bcf645b9d37a40ba8610bb9a1fa6875d7a6510419f97d3fa"
+const builtInCatalogDigest = "sha256:1025a58abb80db1fd089dd1532ad53f9701be9ad93206ac8f4c3d9feb508ff9a"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -10562,6 +10562,133 @@ const builtInCatalogJSON = `{
         "run_kind": "independent",
         "source_model": "DeepSeek V3.1 Terminus (Reasoning)",
         "source_model_slug": "deepseek-v3-1-terminus-reasoning"
+      }
+    },
+    {
+      "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+      "benchmark_profile": "published-standard",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0",
+      "metrics": {
+        "accuracy": 0.909
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "published-no-tools",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-model-card-max-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.368
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "hle_mode": "no_tools",
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
+      "benchmark": "harbor/terminal-bench@2.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0",
+      "metrics": {
+        "resolved": 0.906
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "attempts_per_task": 3,
+        "harness": "DeepSeek Harness Minimal",
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
+      "benchmark": "datacurve/deep-swe@1.1.0",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-model-card-max-deep-swe@1.1.0",
+      "metrics": {
+        "resolved": 0.742
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "attempts_per_task": 8,
+        "harness": "mini-swe-agent",
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_model_card",
+        "variant": "DeepSeek-V4.1-Flash"
+      }
+    },
+    {
+      "benchmark": "zapier/automation-bench@1.0.6",
+      "benchmark_profile": "published-agent",
+      "evidence": {
+        "provenance": "vendor_claimed",
+        "redistributable": true,
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/DeepSeek_V41_Tech_Report.pdf",
+        "verification": "claimed"
+      },
+      "id": "deepseek/deepseek-v4.1-flash-tech-report-max-automation-bench@1.0.6",
+      "metrics": {
+        "score": 0.548
+      },
+      "model": "deepseek/deepseek-v4.1-flash",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "max",
+      "status": "available",
+      "subject": {
+        "harness": "official AutomationBench scaffold",
+        "model_revision": "dba1be0a40aa45a94ad051997016db3960a90277",
+        "reasoning_effort": "max",
+        "source_kind": "official_technical_report",
+        "subset": "public",
+        "variant": "DeepSeek-V4.1-Flash"
       }
     },
     {
@@ -47445,6 +47572,485 @@ const builtInCatalogJSON = `{
       "reasoning_effort": "unspecified",
       "score": null,
       "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "low",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "metric": "resolved",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "high",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "tiger-ai-lab/mmlu-pro@1.0.0",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/general@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "idavidrein/gpqa-diamond@1.0.0",
+          "benchmark_profile": "published-standard",
+          "benchmark_profiles": [
+            "independent-standard",
+            "published-standard"
+          ],
+          "evaluation": "deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0",
+          "metric": "accuracy",
+          "normalized": 0.909,
+          "status": "available",
+          "value": 0.909,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profiles": [
+            "independent-text-only",
+            "text-only"
+          ],
+          "metric": "accuracy",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.5,
+      "index": "vllm-sr/reasoning@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [
+        "deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "livecodebench/livecodebench@6.0.0",
+          "benchmark_profiles": [
+            "independent-code-generation",
+            "published-code-generation"
+          ],
+          "metric": "pass_at_1",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        },
+        {
+          "benchmark": "scicode-bench/scicode@1.0.0",
+          "benchmark_profiles": [
+            "independent-test-288",
+            "published-standard"
+          ],
+          "metric": "score",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.5
+        }
+      ],
+      "coverage": 0.0,
+      "index": "vllm-sr/coding@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "missing"
+    },
+    {
+      "components": [
+        {
+          "benchmark": "harbor/terminal-bench@2.1.0",
+          "benchmark_profile": "published-agent",
+          "benchmark_profiles": [
+            "independent-agent",
+            "published-agent"
+          ],
+          "evaluation": "deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0",
+          "metric": "resolved",
+          "normalized": 0.906,
+          "status": "available",
+          "value": 0.906,
+          "weight": 1.0
+        }
+      ],
+      "coverage": 1.0,
+      "domains": {
+        "agentic_systems": 90.60000000000001
+      },
+      "index": "vllm-sr/agentic@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [
+        "deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0"
+      ],
+      "reasoning_effort": "max",
+      "score": 90.60000000000001,
+      "status": "available"
+    },
+    {
+      "components": [
+        {
+          "index": "vllm-sr/general@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/reasoning@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.4
+        },
+        {
+          "index": "vllm-sr/coding@1.0.0",
+          "normalized": null,
+          "status": "missing",
+          "value": null,
+          "weight": 0.2
+        },
+        {
+          "index": "vllm-sr/agentic@1.0.0",
+          "normalized": 0.9060000000000001,
+          "status": "available",
+          "value": 0.9060000000000001,
+          "weight": 0.2
+        }
+      ],
+      "coverage": 0.2,
+      "index": "vllm-sr/intelligence@1.0.0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "provenance": [
+        "deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0",
+        "deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0"
+      ],
+      "reasoning_effort": "max",
+      "score": null,
+      "status": "partial"
     },
     {
       "components": [
@@ -88617,6 +89223,64 @@ const builtInCatalogJSON = `{
         "reasoning",
         "tools",
         "structured_output",
+        "vision",
+        "long_context"
+      ],
+      "description": "DeepSeek's multimodal V4.1 reasoning model for cost-efficient agentic workloads.",
+      "display_name": "DeepSeek V4.1 Flash",
+      "distribution": {
+        "license": "MIT",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash",
+        "type": "open_weights"
+      },
+      "family": "deepseek-v4.1",
+      "id": "deepseek/deepseek-v4.1-flash",
+      "kind": "physical",
+      "lifecycle": "active",
+      "limits": {
+        "context_window_size": 1048576,
+        "max_output_tokens": 393216
+      },
+      "modalities": {
+        "input": [
+          "text",
+          "image"
+        ],
+        "output": [
+          "text"
+        ]
+      },
+      "parameter_size": "552B (8B prefill, 16B decode active)",
+      "presentation": {
+        "logo": "package:deepseek",
+        "monochrome": false,
+        "monogram": "D"
+      },
+      "publisher": "DeepSeek",
+      "reasoning_family": "deepseek",
+      "released_at": "2026-09-10",
+      "revision": "DeepSeek-V4.1-Flash",
+      "tags": [
+        "efficient",
+        "open_weights",
+        "reasoning",
+        "moe",
+        "multimodal",
+        "agentic"
+      ],
+      "verification": {
+        "authority": "DeepSeek",
+        "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md",
+        "status": "claimed",
+        "verified_at": "2026-09-24"
+      }
+    },
+    {
+      "capabilities": [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
         "long_context"
       ],
       "description": "DeepSeek's high-capability V4 reasoning model.",
@@ -94381,8 +95045,8 @@ const builtInCatalogJSON = `{
       "id": "deepseek",
       "models": [
         {
-          "catalog": "deepseek/deepseek-v4-flash",
-          "id": "deepseek-v4-flash",
+          "catalog": "deepseek/deepseek-v4.1-flash",
+          "id": "deepseek-flash",
           "lifecycle": "active",
           "protocols": [
             "openai/chat-completions@1",
@@ -94392,7 +95056,7 @@ const builtInCatalogJSON = `{
           "verification": {
             "source": "https://api-docs.deepseek.com/quick_start/pricing",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-24"
           }
         },
         {
@@ -97252,6 +97916,22 @@ const builtInCatalogJSON = `{
             "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "deepseek/deepseek-v4.1-flash",
+          "id": "deepseek-ai/DeepSeek-V4.1-Flash",
+          "lifecycle": "experimental",
+          "protocols": [
+            "openai/chat-completions@1",
+            "openai/responses@1"
+          ],
+          "reasoning_transport": "top_level_effort",
+          "relationship": "self_hosted",
+          "verification": {
+            "source": "https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/tree/dba1be0a40aa45a94ad051997016db3960a90277",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
           }
         },
         {

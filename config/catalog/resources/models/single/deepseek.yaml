@@ -1,3 +1,50 @@
+- id: deepseek/deepseek-v4.1-flash
+  display_name: DeepSeek V4.1 Flash
+  description: DeepSeek's multimodal V4.1 reasoning model for cost-efficient agentic workloads.
+  kind: physical
+  publisher: DeepSeek
+  presentation:
+    logo: package:deepseek
+    monogram: D
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash
+    license: MIT
+  family: deepseek-v4.1
+  parameter_size: 552B (8B prefill, 16B decode active)
+  revision: DeepSeek-V4.1-Flash
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 393216
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: deepseek
+  verification:
+    authority: DeepSeek
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+  tags:
+  - efficient
+  - open_weights
+  - reasoning
+  - moe
+  - multimodal
+  - agentic
+  released_at: '2026-09-10'
 - id: deepseek/deepseek-v4-pro
   display_name: DeepSeek V4 Pro
   description: DeepSeek's high-capability V4 reasoning model.
