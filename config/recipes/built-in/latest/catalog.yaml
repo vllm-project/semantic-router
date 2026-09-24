@@ -2683,6 +2683,17 @@ providers:
   conformance:
     status: unverified
   models:
+  - catalog: stepfun/step-5-preview
+    relationship: first_party
+    id: step-5-preview
+    protocols:
+    - openai/chat-completions@1
+    reasoning_transport: top_level_effort
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://platform.stepfun.ai/docs/en/guides/models/step-5-preview
   - catalog: stepfun/step-3.7-flash
     relationship: first_party
     id: step-3.7-flash
@@ -7756,6 +7767,51 @@ models:
   - moe
   - efficient
   released_at: '2025-07-29'
+- id: stepfun/step-5-preview
+  display_name: Step 5 Preview
+  description: StepFun flagship multimodal MoE preview for agentic software engineering and knowledge work.
+  kind: physical
+  publisher: StepFun
+  presentation:
+    logo: package:stepfun
+    monogram: S
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://platform.stepfun.ai/docs/en/guides/models/step-5-preview
+  family: step-5
+  reasoning_family: step-3.7
+  parameter_size: 600B (27B active)
+  lifecycle: experimental
+  limits:
+    context_window_size: 1000000
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: StepFun
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://www.stepfun.com/step-5-preview
+  tags:
+  - proprietary
+  - reasoning
+  - multimodal
+  - agentic
+  - moe
+  - preview
+  released_at: '2026-09-18'
 - id: stepfun/step-3.7-flash
   display_name: Step 3.7 Flash
   description: Open-weight multimodal MoE model for efficient reasoning and agentic workflows.
@@ -33272,6 +33328,114 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/models/qwen3-30b-a3b-2507-reasoning
+    redistributable: true
+- id: independent/step-5-preview-humanitys-last-exam@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.464782205746061
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-scicode@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: independent-test-288
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    score: 0.58912037037037
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-critpt@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    score: 0.208571428571429
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-omniscience@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    index: 16.383333333333333
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-lcr@1.1.0
+  model: stepfun/step-5-preview
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    score: 0.883333333333333
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
+    redistributable: true
+- id: independent/step-5-preview-mmmu-pro@1.0.0
+  model: stepfun/step-5-preview
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: standard-10
+  reasoning_effort: unspecified
+  subject:
+    source_model: Step 5 Preview
+    source_model_slug: step-5
+    run_kind: independent
+  metrics:
+    accuracy: 0.763583815028902
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/step-5
     redistributable: true
 - id: independent/step-3.7-flash-high-omniscience@1.0.0
   model: stepfun/step-3.7-flash
