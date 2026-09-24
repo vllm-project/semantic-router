@@ -344,7 +344,7 @@ def test_optional_graph_refuses_unbound_rocm_model_before_import(
             physical_batch_size=8,
             enable_rocm_graph=True,
             artifact_content_id="a" * 64,
-            graph_model_id=qwen35_torch.EXPERIMENTAL_SOL_GRAPH_MODEL_ID,
+            graph_model_id="llm-semantic-router/Decision-1.0-Sol-2B",
         )
     assert imported == []
 
@@ -356,8 +356,29 @@ def test_optional_graph_refuses_unbound_rocm_model_before_import(
         "llm-semantic-router/Decision-1.0-Lux-9B",
     ),
 )
-def test_optional_graph_refuses_non_sol_model_before_import(
+def test_optional_graph_accepts_eligible_model_until_strict_binder_check(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, model_id: str
+) -> None:
+    imported = []
+    monkeypatch.setattr(
+        "decision_runtime.qwen35_torch.importlib.import_module", imported.append
+    )
+    with pytest.raises(Qwen35RuntimeError, match="owned strict ROCm profile binder"):
+        Qwen35TorchRuntime.load(
+            _profiled_artifact(tmp_path),
+            temperature=1.0,
+            max_length=16384,
+            backend="rocm",
+            physical_batch_size=8,
+            enable_rocm_graph=True,
+            artifact_content_id="a" * 64,
+            graph_model_id=model_id,
+        )
+    assert imported == []
+
+
+def test_optional_graph_refuses_other_qwen_model_before_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     imported = []
     monkeypatch.setattr(
@@ -372,7 +393,7 @@ def test_optional_graph_refuses_non_sol_model_before_import(
             physical_batch_size=8,
             enable_rocm_graph=True,
             artifact_content_id="a" * 64,
-            graph_model_id=model_id,
+            graph_model_id="llm-semantic-router/Decision-1.0-Eos-0.8B",
         )
     assert imported == []
 

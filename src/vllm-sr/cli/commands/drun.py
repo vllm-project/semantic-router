@@ -130,7 +130,7 @@ def drun() -> None:
 @click.option(
     "--experimental-qwen-rocm-graph-b8",
     is_flag=True,
-    help="Opt in to short-shape B8 ROCm backbone graphs for Decision Sol only.",
+    help="Opt in to short-shape B8 ROCm backbone graphs for eligible Qwen3.5 models.",
 )
 @click.option(
     "--cpu-threads",

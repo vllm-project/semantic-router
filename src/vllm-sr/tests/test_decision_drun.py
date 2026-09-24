@@ -543,7 +543,7 @@ def test_drun_graph_opt_in_request_requires_matching_resolved_command():
 
     with pytest.raises(lifecycle.DecisionLifecycleError, match="graph mode"):
         lifecycle._resolve_runtime(options, GraphResolver(flag=False))
-    with pytest.raises(lifecycle.DecisionLifecycleError, match="canonical Sol"):
+    with pytest.raises(lifecycle.DecisionLifecycleError, match="eligible Qwen3.5"):
         lifecycle._resolve_runtime(options, GraphResolver(model=MODEL))
 
 

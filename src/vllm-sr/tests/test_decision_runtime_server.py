@@ -336,14 +336,16 @@ def test_opt_in_qwen_graph_receives_verified_artifact_identity(
         "llm-semantic-router/Decision-1.0-Lux-9B",
     ),
 )
-def test_experimental_graph_rejects_other_qwen_models_before_load(
+def test_experimental_graph_accepts_eligible_qwen_models(
     model_id: str, tmp_path: Path, monkeypatch
 ):
     from decision_runtime import qwen35_torch, runtime_factory  # noqa: PLC0415
 
     model = SimpleNamespace(
         catalog=SimpleNamespace(model_id=model_id),
-        profile=SimpleNamespace(family="qwen3.5"),
+        profile=SimpleNamespace(
+            family="qwen3.5", max_input_tokens=16384, temperature=1.0
+        ),
     )
     artifact = SimpleNamespace(
         data_root=tmp_path,
@@ -356,7 +358,37 @@ def test_experimental_graph_rejects_other_qwen_models_before_load(
         "load",
         lambda *args, **kwargs: loads.append(args),
     )
-    with pytest.raises(RuntimeAssemblyError, match="Sol-only"):
+    monkeypatch.setattr(runtime_factory, "_qwen_temperature", lambda *a, **k: 1.0)
+    runtime_factory._load_family(
+        model,
+        artifact,
+        "rocm",
+        physical_batch_size=8,
+        enable_rocm_graph=True,
+    )
+    assert loads != []
+
+
+def test_experimental_graph_rejects_unlisted_qwen_model_before_load(
+    tmp_path: Path, monkeypatch
+):
+    from decision_runtime import qwen35_torch, runtime_factory  # noqa: PLC0415
+
+    model = SimpleNamespace(
+        catalog=SimpleNamespace(model_id="llm-semantic-router/Decision-1.0-Eos-0.8B"),
+        profile=SimpleNamespace(family="qwen3.5"),
+    )
+    artifact = SimpleNamespace(
+        data_root=tmp_path,
+        manifest=SimpleNamespace(path="MODEL_MANIFEST.json", sha256="a" * 64),
+    )
+    loads = []
+    monkeypatch.setattr(
+        qwen35_torch.Qwen35TorchRuntime,
+        "load",
+        lambda *args, **kwargs: loads.append(args),
+    )
+    with pytest.raises(RuntimeAssemblyError, match="eligible Qwen3.5"):
         runtime_factory._load_family(
             model,
             artifact,

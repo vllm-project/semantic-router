@@ -18,6 +18,8 @@ from decision_runtime.catalog_adapter import ResolvedRuntimeModel
 
 MODEL = "llm-semantic-router/Decision-1.0-Kai-0.6B"
 SOL_MODEL = "llm-semantic-router/Decision-1.0-Sol-2B"
+NOX_MODEL = "llm-semantic-router/Decision-1.0-Nox-4B"
+LUX_MODEL = "llm-semantic-router/Decision-1.0-Lux-9B"
 REVISION = "7185f514f54b8f93c55998b1e8f9c5cc67f0d029"
 IMAGE = f"example.test/decision-runtime-rocm@sha256:{'a' * 64}"
 LOCAL_IMAGE_ID = f"sha256:{'9' * 64}"
@@ -147,31 +149,30 @@ def test_explicit_tuning_is_forwarded_without_changing_model_identity(
     )
 
 
-def test_sol_graph_opt_in_adds_only_the_explicit_runtime_command_flag(
+@pytest.mark.parametrize("model_id", (SOL_MODEL, NOX_MODEL, LUX_MODEL))
+def test_qwen_graph_opt_in_adds_only_the_explicit_runtime_command_flag(
     tmp_path: Path,
+    model_id: str,
 ) -> None:
     bridge = resolver(tmp_path)
 
-    spec = bridge.resolve(
-        request(model=SOL_MODEL, experimental_qwen_rocm_graph_b8=True)
-    )
+    spec = bridge.resolve(request(model=model_id, experimental_qwen_rocm_graph_b8=True))
 
-    assert spec.canonical_model == SOL_MODEL
+    assert spec.canonical_model == model_id
     assert spec.backend == "rocm"
     assert spec.max_batch == 8
     assert spec.command[-1] == "--experimental-qwen-rocm-graph-b8"
     assert spec.command.count("--experimental-qwen-rocm-graph-b8") == 1
-    assert [item.catalog.model_id for item in bridge.artifacts.calls] == [SOL_MODEL]  # type: ignore[attr-defined]
+    assert [item.catalog.model_id for item in bridge.artifacts.calls] == [model_id]  # type: ignore[attr-defined]
 
 
 @pytest.mark.parametrize(
     ("overrides", "message"),
     (
-        ({"model": MODEL}, "canonical Sol"),
-        ({"model": "llm-semantic-router/Decision-1.0-Nox-4B"}, "canonical Sol"),
-        ({"model": "llm-semantic-router/Decision-1.0-Lux-9B"}, "canonical Sol"),
-        ({"model": SOL_MODEL, "backend": "cuda"}, "no installed|canonical Sol"),
-        ({"model": SOL_MODEL, "max_batch": 16}, "canonical Sol"),
+        ({"model": MODEL}, "eligible Qwen3.5"),
+        ({"model": "llm-semantic-router/Decision-1.0-Eos-0.8B"}, "eligible Qwen3.5"),
+        ({"model": SOL_MODEL, "backend": "cuda"}, "no installed|eligible Qwen3.5"),
+        ({"model": SOL_MODEL, "max_batch": 16}, "eligible Qwen3.5"),
         ({"model": SOL_MODEL, "experimental_qwen_rocm_graph_b8": "true"}, "boolean"),
     ),
 )

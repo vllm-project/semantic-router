@@ -23,7 +23,13 @@ from .release_artifacts import ReleaseArtifactError, verify_release_manifest
 
 QWEN_PROMPT_VERSION = "structured-segmented-candidate-endpoints-global-query-v2"
 SUPPORTED_TRANSFORMERS_VERSION = "5.17.0"
-EXPERIMENTAL_SOL_GRAPH_MODEL_ID = "llm-semantic-router/Decision-1.0-Sol-2B"
+EXPERIMENTAL_ROCM_GRAPH_MODEL_IDS = frozenset(
+    {
+        "llm-semantic-router/Decision-1.0-Sol-2B",
+        "llm-semantic-router/Decision-1.0-Nox-4B",
+        "llm-semantic-router/Decision-1.0-Lux-9B",
+    }
+)
 RELEASED_MAX_INPUT_TOKENS = 16_384
 _ROCM_PROFILE_FORMAT = "decision-fla-l2norm-profile-v1"
 _FLA_SOURCE_FILES = ("modules/l2norm.py", "ops/utils/cache.py")
@@ -180,7 +186,7 @@ class Qwen35TorchRuntime:
             backend != "rocm"
             or rocm_profile is None
             or physical_batch_size != 8
-            or graph_model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+            or graph_model_id not in EXPERIMENTAL_ROCM_GRAPH_MODEL_IDS
             or not isinstance(artifact_content_id, str)
             or len(artifact_content_id) != 64
             or any(

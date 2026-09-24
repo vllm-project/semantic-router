@@ -75,10 +75,8 @@ def assemble_runtime(
         if config.experimental_qwen_rocm_graph_b8:
             load_options["enable_rocm_graph"] = True
             if metrics is not None:
-                load_options["graph_event_recorder"] = (
-                    lambda event: metrics.record_qwen_rocm_graph_event(
-                        model.catalog.model_id, event
-                    )
+                load_options["graph_event_recorder"] = lambda event: (
+                    metrics.record_qwen_rocm_graph_event(model.catalog.model_id, event)
                 )
         resident = _load_family(model, artifact, config.backend, **load_options)
     except (RuntimeModelResolutionError, RuntimeProfileError, ArtifactError) as error:
@@ -178,7 +176,7 @@ def _load_family(
 ):
     profile = model.profile
     if enable_rocm_graph and profile.family != "qwen3.5":
-        raise RuntimeAssemblyError("experimental ROCm graph is Sol-only")
+        raise RuntimeAssemblyError("experimental ROCm graph requires Qwen3.5")
     manifest = getattr(artifact, "manifest", None) or profile.artifact.manifest
     if profile.family == "vela":
         from .vela_torch import VelaTorchRuntime  # noqa: PLC0415
@@ -193,15 +191,17 @@ def _load_family(
         )
     if profile.family == "qwen3.5":
         from .qwen35_torch import (  # noqa: PLC0415
-            EXPERIMENTAL_SOL_GRAPH_MODEL_ID,
+            EXPERIMENTAL_ROCM_GRAPH_MODEL_IDS,
             Qwen35TorchRuntime,
         )
 
         if (
             enable_rocm_graph
-            and model.catalog.model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+            and model.catalog.model_id not in EXPERIMENTAL_ROCM_GRAPH_MODEL_IDS
         ):
-            raise RuntimeAssemblyError("experimental ROCm graph is Sol-only")
+            raise RuntimeAssemblyError(
+                "experimental ROCm graph requires an eligible Qwen3.5 model"
+            )
 
         if manifest.path not in {"MODEL_MANIFEST.json", "bundle-manifest.json"}:
             raise RuntimeAssemblyError("Qwen release manifest layout is unsupported")

@@ -28,7 +28,7 @@ from decision_runtime.catalog_adapter import (
     RuntimeModelResolutionError,
     resolve_decision_runtime_model,
 )
-from decision_runtime.qwen35_torch import EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+from decision_runtime.qwen35_torch import EXPERIMENTAL_ROCM_GRAPH_MODEL_IDS
 from decision_runtime.scheduler import DEFAULT_MAX_CONCURRENCY
 from cli.decision_runtime.catalog import (
     DecisionCatalogError,
@@ -154,12 +154,12 @@ class IntegratedDecisionCatalogResolver:
         )
         _validate_resolved_limits(max_batch, max_concurrency, max_queue)
         if request.experimental_qwen_rocm_graph_b8 and (
-            model.catalog.model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+            model.catalog.model_id not in EXPERIMENTAL_ROCM_GRAPH_MODEL_IDS
             or backend != "rocm"
             or max_batch != 8
         ):
             raise DecisionCatalogError(
-                "experimental Qwen ROCm graph requires canonical Sol at B8"
+                "experimental Qwen ROCm graph requires eligible Qwen3.5 at B8"
             )
 
         try:

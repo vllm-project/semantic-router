@@ -12,7 +12,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from types import MappingProxyType
 
-from decision_runtime.qwen35_torch import EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+from decision_runtime.qwen35_torch import EXPERIMENTAL_ROCM_GRAPH_MODEL_IDS
 
 from cli.consts import (
     HEALTH_CHECK_TIMEOUT,
@@ -601,12 +601,12 @@ def _validate_resolved_runtime(
             "Resolved Decision runtime changed the requested Qwen graph mode."
         )
     if request.experimental_qwen_rocm_graph_b8 and (
-        spec.canonical_model != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
+        spec.canonical_model not in EXPERIMENTAL_ROCM_GRAPH_MODEL_IDS
         or spec.backend != "rocm"
         or spec.max_batch != 8
     ):
         raise DecisionLifecycleError(
-            "Experimental Qwen ROCm graph requires canonical Sol at B8."
+            "Experimental Qwen ROCm graph requires eligible Qwen3.5 at B8."
         )
     validate_decision_environment(spec.environment)
     if ROCM_VISIBLE_DEVICES_ENV in spec.environment:
