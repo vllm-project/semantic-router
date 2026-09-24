@@ -387,8 +387,11 @@ func generateDockerRunCmd(runtime string, req ProvisionRequest, dataDir string) 
 	)
 	return fmt.Sprintf(`%s run -d \
   --name %s \
-  --user 0:0 \
   --network %s \
+  --read-only \
+  --cap-drop ALL \
+  --security-opt no-new-privileges \
+  --tmpfs /tmp:rw,noexec,nosuid,size=64m \
   --health-cmd '%s' \
   --health-interval 30s \
   --health-timeout 5s \
@@ -415,7 +418,13 @@ func generateComposeYAML(req ProvisionRequest, dataDir string) string {
   openclaw:
     image: %s
     container_name: %s
-    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     networks:
       - %s
     volumes:
@@ -450,7 +459,13 @@ volumes:
   openclaw:
     image: %s
     container_name: %s
-    user: "0:0"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
     network_mode: %s
     volumes:
       - %s/workspace:/workspace
