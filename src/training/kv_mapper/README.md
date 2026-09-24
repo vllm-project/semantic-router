@@ -107,3 +107,23 @@ PYTHONPATH=. python3 src/training/kv_mapper/eval_report.py \
 `items.json` shape: `metric`, optional `reference` (default `cold`), and
 `arms` mapping each arm to records of `{ "id": "example-id", "score": 0.0 }`.
 Every arm must have the same unique example IDs; record order may differ.
+
+`model_eval_run.py` runs held-out HellaSwag validation with the pinned source
+and target revisions from an artifact. It uses a seeded random sample with
+stable example IDs. Each item scores the same endings against four target-model
+cache arms: cold target, mapped source, raw source, and zero KV. The report
+contains paired bootstrap intervals for mean gold-ending log probability and
+accuracy, plus per-layer-averaged pre-RoPE K/V relative errors. The scorer
+checks its cached continuation against a full forward pass in a small Qwen3
+model test. The GPU runner needs torch, transformers, and datasets in addition
+to the artifact dependencies.
+
+```bash
+PYTHONPATH=. python3 src/training/kv_mapper/model_eval_run.py \
+  --artifact /tmp/kv-artifacts/<mapper-id> \
+  --dataset-revision <hellaswag-sha> --count 100 --seed 42 \
+  --output-dir /tmp/kv-eval
+```
+
+This run measures teacher-forced target cache injection. Connector reuse and
+fallback require their own integration evaluation.
