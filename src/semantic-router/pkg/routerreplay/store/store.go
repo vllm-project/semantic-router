@@ -164,6 +164,17 @@ type LooperDiagnostics struct {
 	DroppedUsage        LooperUsage     `json:"dropped_usage,omitempty"`
 }
 
+// PreparedDispatchReceipt fingerprints the primary provider-bound payload
+// returned to Envoy without retaining payload bytes. Internal Looper calls and
+// response-time fallback attempts are outside this single-dispatch contract.
+// Restricted Replay API views omit it. Version permits future additive fields.
+type PreparedDispatchReceipt struct {
+	Version    int    `json:"version"`
+	WireFormat string `json:"wire_format"`
+	SHA256     string `json:"sha256"`
+	ByteLength int    `json:"byte_length"`
+}
+
 // RequestDemandSnapshot is one content-free observation of the request demand
 // at a stable lifecycle boundary. Representation says whether the observation
 // describes semantic or wire form; the closed stage/source vocabularies keep
@@ -193,6 +204,7 @@ type RouteDiagnostics struct {
 	SelectionTrace                 *selectiontrace.MultiFactorObjective `json:"selection_trace,omitempty"`
 	FusionQuorum                   *FusionQuorumDiagnostics             `json:"fusion_quorum,omitempty"`
 	Looper                         *LooperDiagnostics                   `json:"looper,omitempty"`
+	PreparedDispatch               *PreparedDispatchReceipt             `json:"prepared_dispatch,omitempty"`
 	PromptHelperModel              string                               `json:"prompt_helper_model,omitempty"`
 	PromptHelperPromptTokens       int64                                `json:"prompt_helper_prompt_tokens,omitempty"`
 	PromptHelperCompletionTokens   int64                                `json:"prompt_helper_completion_tokens,omitempty"`
@@ -640,6 +652,10 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
+	if value.PreparedDispatch != nil {
+		receipt := *value.PreparedDispatch
+		cloned.PreparedDispatch = &receipt
+	}
 	cloned.RequestDemandSnapshots = append([]RequestDemandSnapshot(nil), value.RequestDemandSnapshots...)
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)

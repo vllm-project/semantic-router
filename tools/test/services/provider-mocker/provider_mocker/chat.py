@@ -85,6 +85,7 @@ def mock_chat_control_response(req: ChatRequest, created_ts: int) -> Any | None:
 
 @router.post("/v1/chat/completions")
 async def chat_completions(request: Request):
+    raw_body = await request.body()
     body, error_response = await parse_provider_request(
         request, "openai_chat_completions"
     )
@@ -92,7 +93,7 @@ async def chat_completions(request: Request):
         return error_response
     assert body is not None
     session_id = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session_id, body, request.headers)
+    request.app.state.request_store.record(session_id, body, request.headers, raw_body)
     try:
         req = ChatRequest.model_validate(body)
     except ValidationError as error:
