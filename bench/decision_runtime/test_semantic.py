@@ -258,6 +258,8 @@ class SemanticTests(TestCase):
 
     def test_timed_all_concurrency_archive_contains_exact_http_bodies(self):
         self.assertEqual(TIMED_SEMANTIC_CONCURRENCIES, TIMED_CONCURRENCIES)
+        self.assertEqual(MAX_ARCHIVE_BYTES, 120 * 1024 * 1024)
+        self.assertEqual(MAX_COMPRESSED_ARCHIVE_BYTES, 24 * 1024 * 1024)
         self.assertEqual(MAX_TIMED_SEMANTIC_EVIDENCE_BYTES, MAX_ARCHIVE_BYTES)
         self.assertEqual(
             MAX_TIMED_SEMANTIC_COMPRESSED_BYTES,
