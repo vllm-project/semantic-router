@@ -50,12 +50,12 @@
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html
   family: nova-1
   lifecycle: active
   limits:
     context_window_size: 300000
-    max_output_tokens: 10000
+    max_output_tokens: 5000
   capabilities:
   - chat
   - tools
@@ -73,7 +73,7 @@
     authority: Amazon
     status: claimed
     verified_at: 2026-09-24
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html
   tags:
   - proprietary
   - efficient

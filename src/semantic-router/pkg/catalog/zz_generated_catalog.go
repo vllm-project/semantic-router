@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:fb4f22f183855141e12cf63e43dc4ee6cc481e5184d97d43f50f31f8dc5ab527"
+const builtInCatalogDigest = "sha256:44b323553ff3c1ec73b9667ef3bce4580095cbfb8fb06d1d0d8836a76519191d"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -88068,7 +88068,7 @@ const builtInCatalogJSON = `{
       "description": "Amazon's low-cost Nova 1 multimodal model for fast image, video, and text processing.",
       "display_name": "Amazon Nova Lite",
       "distribution": {
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html",
         "type": "proprietary_api"
       },
       "family": "nova-1",
@@ -88077,7 +88077,7 @@ const builtInCatalogJSON = `{
       "lifecycle": "active",
       "limits": {
         "context_window_size": 300000,
-        "max_output_tokens": 10000
+        "max_output_tokens": 5000
       },
       "modalities": {
         "input": [
@@ -88103,7 +88103,7 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "Amazon",
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html",
         "status": "claimed",
         "verified_at": "2026-09-24"
       }

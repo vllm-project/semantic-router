@@ -88062,7 +88062,7 @@
       "description": "Amazon's low-cost Nova 1 multimodal model for fast image, video, and text processing.",
       "display_name": "Amazon Nova Lite",
       "distribution": {
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html",
         "type": "proprietary_api"
       },
       "family": "nova-1",
@@ -88071,7 +88071,7 @@
       "lifecycle": "active",
       "limits": {
         "context_window_size": 300000,
-        "max_output_tokens": 10000
+        "max_output_tokens": 5000
       },
       "modalities": {
         "input": [
@@ -88097,7 +88097,7 @@
       ],
       "verification": {
         "authority": "Amazon",
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html",
         "status": "claimed",
         "verified_at": "2026-09-24"
       }
