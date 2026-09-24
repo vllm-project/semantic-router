@@ -51,7 +51,7 @@ func TestRegisterProxyRoutesDoesNotExposeFleetSimAPI(t *testing.T) {
 	t.Parallel()
 
 	mux := http.NewServeMux()
-	registerProxyRoutes(mux, &config.Config{})
+	registerProxyRoutes(mux, &config.Config{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/fleet-sim/api/workloads", nil)
 	_, pattern := mux.Handler(req)
@@ -85,6 +85,7 @@ func TestRouterAPIProxyReplacesBrowserAuthorization(t *testing.T) {
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
+		nil,
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
@@ -133,7 +134,7 @@ func TestPlaygroundChatProxyPreservesIdentityAndStripsBrowserCredentials(t *test
 	}
 	cfg := &config.Config{EnvoyURL: server.URL, RouterAPIURL: server.URL, AbsConfigPath: configPath}
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), routerProxyCredentialProvider{token: "management-only-token"})
+	registerRouterAPIProxy(mux, cfg, configureEnvoyProxy(cfg), nil, routerProxyCredentialProvider{token: "management-only-token"})
 
 	for _, conversation := range []string{"conversation-one", "conversation-one", "conversation-two"} {
 		body := `{"model":"vllm-sr/auto","messages":[{"role":"user","content":"hello"}]}`
@@ -181,6 +182,7 @@ func TestRouterAPIProxyExposesRuntimeDocumentation(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
+		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
 	for _, target := range []string{
@@ -220,7 +222,13 @@ func TestRouterAPIProxyExposesKnowledgeBaseActivationHash(t *testing.T) {
 	}))
 	defer upstream.Close()
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, nil, routerProxyCredentialProvider{token: "router-service-token"})
+	registerRouterAPIProxy(
+		mux,
+		&config.Config{RouterAPIURL: upstream.URL},
+		nil,
+		nil,
+		routerProxyCredentialProvider{token: "router-service-token"},
+	)
 	request := httptest.NewRequest(http.MethodGet, "/api/router/api/v1/config/hash", nil)
 	request.Header.Set("Authorization", "Bearer dashboard-user-jwt")
 	response := httptest.NewRecorder()
@@ -248,6 +256,7 @@ func TestRouterOutcomeProxyUsesServiceCredential(t *testing.T) {
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
+		nil,
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)
@@ -281,6 +290,7 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 	registerRouterAPIProxy(
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
+		nil,
 		nil,
 		routerProxyCredentialProvider{token: "router-service-token"},
 	)

@@ -153,6 +153,8 @@ type chatToolCallWire struct {
 	Type     string               `json:"type"`
 	Function chatFunctionCallWire `json:"function"`
 	Custom   json.RawMessage      `json:"custom,omitempty"`
+	// Ollama sends the stream-only index on buffered tool calls too.
+	Index *int `json:"index,omitempty"`
 }
 
 type chatFunctionCallWire struct {
@@ -581,7 +583,7 @@ func decodeChatContent(body json.RawMessage, part chatContentWire) (llmprotocol.
 		if part.InputAudio == nil {
 			return llmprotocol.Content{}, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "audio_required", "input audio is required", nil)
 		}
-		return llmprotocol.Content{Kind: llmprotocol.ContentAudio, Data: part.InputAudio.Data, MediaType: part.InputAudio.Format, Cache: decodeAnthropicCacheControl(part.CacheControl)}, nil
+		return decodeChatAudioContent(part)
 	case "file":
 		content, err := decodeChatFileContent(part.File)
 		content.Cache = decodeAnthropicCacheControl(part.CacheControl)

@@ -219,6 +219,99 @@ const momScorecards = [
   },
 ]
 
+const alternativeComparison = [
+  {
+    capability: translate({
+      id: 'homepage.alternatives.decides.capability',
+      message: 'What it decides',
+    }),
+    semanticRouter: translate({
+      id: 'homepage.alternatives.decides.semanticRouter',
+      message: 'Which model, recipe and policy serve a request',
+    }),
+    aiGateway: translate({
+      id: 'homepage.alternatives.decides.aiGateway',
+      message: 'How a request reaches a backend',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.decides.llmd',
+      message: 'Which healthy replica inside the chosen pool',
+    }),
+  },
+  {
+    capability: translate({
+      id: 'homepage.alternatives.reads.capability',
+      message: 'What it reads',
+    }),
+    semanticRouter: translate({
+      id: 'homepage.alternatives.reads.semanticRouter',
+      message: 'Request content, policy, semantic evidence',
+    }),
+    aiGateway: translate({
+      id: 'homepage.alternatives.reads.aiGateway',
+      message: 'Protocol, credentials, rate limits',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.reads.llmd',
+      message: 'Load, prefix-cache locality, replica health',
+    }),
+  },
+  {
+    capability: translate({
+      id: 'homepage.alternatives.owns.capability',
+      message: 'What it owns',
+    }),
+    semanticRouter: translate({
+      id: 'homepage.alternatives.owns.semanticRouter',
+      message: 'The model, recipe and policy decision',
+    }),
+    aiGateway: translate({
+      id: 'homepage.alternatives.owns.aiGateway',
+      message: 'Provider translation, credentials, rate limits, traffic policy',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.owns.llmd',
+      message: 'Endpoint selection inside a pool',
+    }),
+  },
+  {
+    capability: translate({
+      id: 'homepage.alternatives.runs.capability',
+      message: 'Where it runs',
+    }),
+    semanticRouter: translate({
+      id: 'homepage.alternatives.runs.semanticRouter',
+      message: 'An Envoy ExtProc filter',
+    }),
+    aiGateway: translate({
+      id: 'homepage.alternatives.runs.aiGateway',
+      message: 'The data plane',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.runs.llmd',
+      message: 'The llm-d Endpoint Picker',
+    }),
+  },
+  {
+    capability: translate({
+      id: 'homepage.alternatives.receipt.capability',
+      message: 'Decision receipt',
+    }),
+    semanticRouter: translate({
+      id: 'homepage.alternatives.receipt.semanticRouter',
+      message: 'x-vsr-selected-model',
+    }),
+    aiGateway: translate({
+      id: 'homepage.alternatives.receipt.aiGateway',
+      message: 'None',
+    }),
+    llmd: translate({
+      id: 'homepage.alternatives.receipt.llmd',
+      message: 'None',
+    }),
+  },
+]
+
 function CapabilitySection(): JSX.Element {
   return (
     <section
@@ -298,6 +391,101 @@ function CapabilitySection(): JSX.Element {
 
             <div className={styles.capabilityStats}>
               <StatStrip items={heroStats} />
+            </div>
+          </div>
+        </ScrollReveal>
+      </div>
+    </section>
+  )
+}
+
+function AlternativesSection(): JSX.Element {
+  return (
+    <section
+      className={styles.capabilitySection}
+      aria-labelledby="alternatives-title"
+    >
+      <div className="site-shell-container">
+        <ScrollReveal>
+          <header className={`site-section-intro ${styles.capabilityHeading}`}>
+            <SectionLabel>
+              <Translate id="homepage.alternatives.label">
+                Where it fits
+              </Translate>
+            </SectionLabel>
+            <h2 id="alternatives-title">
+              <Translate id="homepage.alternatives.heading">
+                One decision layer, two neighbours
+              </Translate>
+            </h2>
+            <p>
+              <Translate id="homepage.alternatives.description">
+                What the Router owns next to the AI gateway and llm-d — three
+                components, no overlapping decisions.
+              </Translate>
+            </p>
+          </header>
+
+          <div className={styles.capabilityFrame}>
+            <div
+              className={`${styles.architectureMatrix} ${styles.alternativesMatrix}`}
+              role="table"
+              aria-label={translate({
+                id: 'homepage.alternatives.table.aria',
+                message:
+                  'Semantic Router compared with an AI gateway and llm-d',
+              })}
+            >
+              <div className={styles.matrixHeader} role="row">
+                <span role="columnheader">
+                  <Translate id="homepage.alternatives.table.capability">
+                    Capability
+                  </Translate>
+                </span>
+                <span role="columnheader">
+                  <Translate id="homepage.alternatives.table.semanticRouter">
+                    Semantic Router
+                  </Translate>
+                </span>
+                <span role="columnheader">
+                  <Translate id="homepage.alternatives.table.aiGateway">
+                    AI Gateway
+                  </Translate>
+                </span>
+                <span role="columnheader">
+                  <Translate id="homepage.alternatives.table.llmd">LLM-D</Translate>
+                </span>
+              </div>
+
+              {alternativeComparison.map(item => (
+                <div key={item.capability} className={styles.matrixRow} role="row">
+                  <div className={styles.matrixDimension} role="rowheader">
+                    <strong>{item.capability}</strong>
+                  </div>
+                  <div className={styles.matrixUnified} role="cell">
+                    <span className={styles.matrixMobileLabel}>
+                      <Translate id="homepage.alternatives.table.semanticRouter">
+                        Semantic Router
+                      </Translate>
+                    </span>
+                    <p>{item.semanticRouter}</p>
+                  </div>
+                  <div className={styles.matrixFragmented} role="cell">
+                    <span className={styles.matrixMobileLabel}>
+                      <Translate id="homepage.alternatives.table.aiGateway">
+                        AI Gateway
+                      </Translate>
+                    </span>
+                    <p>{item.aiGateway}</p>
+                  </div>
+                  <div className={styles.matrixFragmented} role="cell">
+                    <span className={styles.matrixMobileLabel}>
+                      <Translate id="homepage.alternatives.table.llmd">LLM-D</Translate>
+                    </span>
+                    <p>{item.llmd}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </ScrollReveal>
@@ -580,6 +768,10 @@ export default function Home(): JSX.Element {
 
         <div className={styles.bandGraphite}>
           <CapabilitySection />
+        </div>
+
+        <div className={styles.bandBlack}>
+          <AlternativesSection />
         </div>
 
         <div className={styles.bandRaised}>

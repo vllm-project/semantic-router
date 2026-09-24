@@ -101,9 +101,6 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.
 		prepared = sets[0]
 	}
 	return func(text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
-		if backend == config.EmbeddingBackendOpenVINO {
-			return openvinoEmbeddingFunc(embeddingConfig.ModelType)(text)
-		}
 		provider, err := prepared.Get(embeddingConfig.ModelType, embeddingConfig.TargetDimension, 0)
 		if err != nil {
 			return nil, err
@@ -113,13 +110,8 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig, sets ...*embedding.
 }
 
 func selectionEmbeddingModelType(models config.EmbeddingModels, backend string) string {
-	// Normalized once here so every downstream consumer -- the batched-FFI
-	// capability check, GetEmbeddingBatched, and GetEmbeddingWithModelType's
-	// own exact-match validation -- sees the same casing. Config validation
-	// already accepts "Qwen3" case-insensitively without rewriting the
-	// configured value, so an unnormalized modelType would otherwise pass
-	// SupportsBatchedEmbedding's tolerant check and then fail the FFI's
-	// strict one, or fail GetEmbeddingWithModelType's exact match either way.
+	// Config validation accepts model names case-insensitively; the prepared
+	// provider set uses normalized keys for every execution backend.
 	modelType := strings.ToLower(strings.TrimSpace(models.EmbeddingConfig.ModelType))
 	if modelType != "" {
 		return modelType

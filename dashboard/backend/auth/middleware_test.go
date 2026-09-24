@@ -268,6 +268,16 @@ func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) 
 			wantRequired: []string{PermEvalWrite},
 		},
 		{
+			name: "dataset preparation requires write", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset preparation needs no generation permission", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
 			name: "dataset composition needs no generation permission", path: "/api/sr-bench/v1/datasets/compose",
 			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
 			wantRequired: []string{PermEvalWrite},
@@ -404,10 +414,11 @@ func TestAuthenticateRequestRequiresFeedbackPermissionForRouterOutcomes(t *testi
 		readerRecorder,
 		newAuthenticatedRequest(t, svc, reader, http.MethodPost, "/api/router/api/v1/observability/outcomes", `{}`),
 	)
-	if readerRecorder.Code != http.StatusForbidden || nextCalled {
+	if readerRecorder.Code != http.StatusNoContent || !nextCalled {
 		t.Fatalf("read role status = %d, next called = %v", readerRecorder.Code, nextCalled)
 	}
 
+	nextCalled = false
 	writerRecorder := httptest.NewRecorder()
 	handler.ServeHTTP(
 		writerRecorder,

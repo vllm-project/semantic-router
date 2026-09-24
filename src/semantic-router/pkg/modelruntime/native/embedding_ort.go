@@ -13,9 +13,19 @@ import (
 )
 
 func (r *Runtime) ortEmbedding(ctx context.Context, spec config.ResolvedModelBinding, view embedding.Options) (*preparedEmbedding, error) {
+	factory, err := resolveORTEmbeddingFactory(spec.Binding.Adapter)
+	if err != nil {
+		return nil, err
+	}
 	options, err := ortOptions(spec)
 	if err != nil {
 		return nil, err
+	}
+	if factory.prepareOptions != nil {
+		options, err = factory.prepareOptions(options)
+		if err != nil {
+			return nil, err
+		}
 	}
 	revision, err := r.artifactRevision(ctx, options.ModelPath)
 	if err != nil {
@@ -40,32 +50,15 @@ func (r *Runtime) ortEmbedding(ctx context.Context, spec config.ResolvedModelBin
 	id := binding.ResourceIdentity{Artifact: options.ModelPath, Revision: spec.Deployment.Revision + ":" + revision, Provider: "ort", Device: d.Device, Precision: options.Precision, Execution: "embedding:" + string(execution)}
 	budget, gate := resourceAdmission(spec)
 	resource, err := r.Pool.Acquire(ctx, id, budget, gate, func(context.Context) (io.Closer, error) {
-		if spec.Binding.Adapter == "multimodal" {
-			model, loadErr := ort.LoadMultiModal(options)
-			if loadErr != nil {
-				return nil, loadErr
-			}
-			return &embeddingEngine{multi: model}, nil
-		}
-		model, loadErr := ort.LoadEmbeddingModel(options)
-		if loadErr != nil {
-			return nil, loadErr
-		}
-		return &embeddingEngine{ort: model}, nil
+		return factory.load(options)
 	})
 	if err != nil {
 		return nil, err
 	}
 	prepared := &preparedEmbedding{resource: resource, identity: id}
 	err = resource.Use(ctx, func(value io.Closer) error {
-		engine := value.(*embeddingEngine)
-		var info ort.Info
-		var infoErr error
-		if engine.ort != nil {
-			info, infoErr = engine.ort.Info()
-		} else {
-			info, infoErr = engine.multi.Info()
-		}
+		engine := value.(ortEmbeddingEngine)
+		info, infoErr := engine.Info()
 		if infoErr != nil {
 			return infoErr
 		}
@@ -73,13 +66,26 @@ func (r *Runtime) ortEmbedding(ctx context.Context, spec config.ResolvedModelBin
 		if infoErr != nil {
 			return infoErr
 		}
-		if engine.ort != nil {
+		if factory.layerViews {
 			prepared.layers = append([]int(nil), info.AvailableLayers...)
-			prepared.contentIdentity = true
 		}
-		capability.Embedding = &binding.EmbeddingCapability{Layer: view.Layer, Pooling: "graph_defined", Normalization: "l2", Modalities: []string{"text"}}
-		if engine.multi != nil {
-			capability.Embedding.Modalities = []string{"text", "image", "audio"}
+		prepared.contentIdentity = factory.contentIdentity
+		capability.Embedding = &binding.EmbeddingCapability{Layer: view.Layer, Pooling: "graph_defined", Normalization: "l2", Modalities: append([]string(nil), factory.modalities...)}
+		if len(info.Modalities) > 0 {
+			capability.Embedding.Modalities = append([]string(nil), info.Modalities...)
+		}
+		if info.Pooling != "" {
+			capability.Embedding.Pooling = info.Pooling
+		}
+		if info.Normalization != "" {
+			capability.Embedding.Normalization = info.Normalization
+		}
+		capability.Embedding.AvailableDimensions = append([]int(nil), info.AvailableDimensions...)
+		if info.Audio != nil {
+			capability.Embedding.Audio = &binding.AudioCapability{
+				SampleRates: append([]int(nil), info.Audio.SampleRates...), MaxSampleRate: info.Audio.MaxSampleRate,
+				MaxSeconds: info.Audio.MaxSeconds, MaxChannels: info.Audio.MaxChannels, Layout: info.Audio.Layout,
+			}
 		}
 		capability.Embedding.Dimension, infoErr = warmEmbeddingModel(engine, view, prepared.layers)
 		prepared.capability = capability

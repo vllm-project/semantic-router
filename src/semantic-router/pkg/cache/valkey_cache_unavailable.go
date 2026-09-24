@@ -55,9 +55,9 @@ func (c *ValkeyCache) getEmbedding(ctx context.Context, text string) ([]float32,
 
 func (c *ValkeyCache) embeddingDimension() int {
 	if c == nil || c.config == nil {
-		return semanticCacheEmbeddingDimension(0, "")
+		return 0
 	}
-	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingModel)
+	return semanticCacheEmbeddingDimension(c.config.Index.VectorField.Dimension, c.embeddingProvider)
 }
 
 func (c *ValkeyCache) IsEnabled() bool { return c.enabled }

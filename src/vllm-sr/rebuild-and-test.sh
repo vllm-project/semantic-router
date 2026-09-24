@@ -3,7 +3,7 @@ set -e
 
 IMAGE="ghcr.io/vllm-project/semantic-router/vllm-sr:latest"
 ROUTER_IMAGE="${IMAGE}"
-ENVOY_IMAGE="envoyproxy/envoy:v1.34-latest"
+ENVOY_IMAGE="envoyproxy/envoy:v1.35.3"
 DASHBOARD_IMAGE="ghcr.io/vllm-project/semantic-router/dashboard:latest"
 RUNTIME_CONTAINERS=(
   vllm-sr-router-container

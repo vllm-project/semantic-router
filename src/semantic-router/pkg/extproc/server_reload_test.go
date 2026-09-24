@@ -11,7 +11,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 )
 
@@ -34,9 +33,9 @@ func TestReloadRejectsPreviewAdmissionChangeBeforePreparation(t *testing.T) {
 		t.Fatal("restart-only change reached model download")
 		return nil
 	}
-	prepareReloadRuntime = func(*config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
+	buildReloadRouter = func(*config.RouterConfig, ...*binding.Pool) (*OpenAIRouter, error) {
 		t.Fatal("restart-only change reached runtime preparation")
-		return modelruntime.EmbeddingRuntimeState{}, nil
+		return nil, nil
 	}
 	for _, source := range []string{"file", "kubernetes"} {
 		err := server.reloadRouterFromConfig(source, "config.yaml", candidate)
@@ -111,7 +110,7 @@ func TestReloadRouterFromFileEnsuresAMDModelsBeforeSwap(t *testing.T) {
 		t.Fatalf("router swap did not install candidate config")
 	}
 
-	wantOrder := []string{"parse", "ensure", "prepare", "build", "warmup", "replace"}
+	wantOrder := []string{"parse", "ensure", "build", "warmup", "replace"}
 	if !reflect.DeepEqual(order, wantOrder) {
 		t.Fatalf("reload order = %v, want %v", order, wantOrder)
 	}
@@ -148,11 +147,7 @@ func TestReloadRouterFromFileDoesNotSwapWhenModelEnsureFails(t *testing.T) {
 		t.Fatalf("buildReloadRouter() should not be called on ensure failure")
 		return nil, nil
 	}
-	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		t.Fatalf("prepareReloadRuntime() should not be called on ensure failure")
-		return modelruntime.EmbeddingRuntimeState{}, nil
-	}
-	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
+	warmupReloadRouter = func(router *OpenAIRouter) error {
 		t.Fatalf("warmupReloadRouter() should not be called on ensure failure")
 		return nil
 	}
@@ -187,7 +182,6 @@ func stubSuccessfulReloadSequence(
 
 	stubReloadParse(t, configPath, candidateCfg, order)
 	stubReloadEnsure(t, candidateCfg, order)
-	stubReloadPrepare(t, candidateCfg, order)
 	stubReloadBuild(t, candidateCfg, order)
 	stubReloadWarmup(t, candidateCfg, order)
 	stubReloadReplace(t, candidateCfg, order)
@@ -233,18 +227,6 @@ func stubReloadEnsure(t *testing.T, candidateCfg *config.RouterConfig, order *[]
 	}
 }
 
-func stubReloadPrepare(t *testing.T, candidateCfg *config.RouterConfig, order *[]string) {
-	t.Helper()
-
-	prepareReloadRuntime = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		appendReloadStep(order, "prepare")
-		if cfg != candidateCfg {
-			t.Fatalf("prepareReloadRuntime() cfg = %p, want %p", cfg, candidateCfg)
-		}
-		return modelruntime.EmbeddingRuntimeState{AnyReady: true, ToolsReady: true}, nil
-	}
-}
-
 func stubReloadBuild(t *testing.T, candidateCfg *config.RouterConfig, order *[]string) {
 	t.Helper()
 
@@ -260,13 +242,10 @@ func stubReloadBuild(t *testing.T, candidateCfg *config.RouterConfig, order *[]s
 func stubReloadWarmup(t *testing.T, candidateCfg *config.RouterConfig, order *[]string) {
 	t.Helper()
 
-	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
+	warmupReloadRouter = func(router *OpenAIRouter) error {
 		appendReloadStep(order, "warmup")
 		if router == nil || router.Config != candidateCfg {
 			t.Fatalf("warmupReloadRouter() router config mismatch")
-		}
-		if !state.AnyReady || !state.ToolsReady {
-			t.Fatalf("warmupReloadRouter() state = %+v, want ready", state)
 		}
 		return nil
 	}
@@ -292,7 +271,6 @@ func stubReloadSeams(t *testing.T) func() {
 
 	originalParse := parseReloadConfig
 	originalEnsure := ensureReloadConfigModels
-	originalPrepare := prepareReloadRuntime
 	originalBuild := buildReloadRouter
 	originalWarmup := warmupReloadRouter
 	originalReplace := replaceReloadConfig
@@ -300,7 +278,6 @@ func stubReloadSeams(t *testing.T) func() {
 	return func() {
 		parseReloadConfig = originalParse
 		ensureReloadConfigModels = originalEnsure
-		prepareReloadRuntime = originalPrepare
 		buildReloadRouter = originalBuild
 		warmupReloadRouter = originalWarmup
 		replaceReloadConfig = originalReplace
