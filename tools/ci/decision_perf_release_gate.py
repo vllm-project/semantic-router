@@ -19,9 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from decision_rocm_promotion import MODEL_IDS, validate_receipt
-from decision_timed_semantics import validate_timed_semantics
+from decision_timed_semantics import (
+    MAX_COMPRESSED_ARCHIVE_BYTES as MAX_TIMED_SEMANTIC_COMPRESSED_BYTES,
+    validate_timed_semantics,
+)
 
-SCHEMA = "decision-paired-release-v7"
+SCHEMA = "decision-paired-release-v8"
 RAW_SCHEMA = "decision-semantic-workload-v2"
 SOL_GRAPH_MODEL_ID = "llm-semantic-router/Decision-1.0-Sol-2B"
 RUNTIME_VARIANTS = frozenset({"eager", "sol_rocm_graph_b8"})
@@ -143,7 +146,14 @@ def _clean_mismatches(value: Any, label: str) -> None:
             raise ValueError(f"{label} reports a semantic mismatch")
 
 
-def _evidence(root: Path, relative: Any, digest: Any, label: str) -> Path:
+def _evidence(
+    root: Path,
+    relative: Any,
+    digest: Any,
+    label: str,
+    *,
+    max_bytes: int = MAX_JSON_BYTES,
+) -> Path:
     _hex(digest, label + " hash", HASH)
     if not isinstance(relative, str):
         raise ValueError(f"{label} path is invalid")
@@ -165,11 +175,11 @@ def _evidence(root: Path, relative: Any, digest: Any, label: str) -> Path:
         raise ValueError(f"{label} file is missing") from error
     if not path.is_relative_to(root.resolve(strict=True)) or not path.is_file():
         raise ValueError(f"{label} escapes the evidence directory")
-    if path.stat().st_size > MAX_JSON_BYTES:
+    if path.stat().st_size > max_bytes:
         raise ValueError(f"{label} is too large")
     with path.open("rb") as handle:
-        content = handle.read(MAX_JSON_BYTES + 1)
-    if len(content) > MAX_JSON_BYTES:
+        content = handle.read(max_bytes + 1)
+    if len(content) > max_bytes:
         raise ValueError(f"{label} is too large")
     if hashlib.sha256(content).hexdigest() != digest:
         raise ValueError(f"{label} content changed")
@@ -1395,6 +1405,11 @@ def _validate_shape(
             shape.get(f"raw_{name}_path"),
             shape.get(f"raw_{name}_sha256"),
             label + " " + name,
+            max_bytes=(
+                MAX_TIMED_SEMANTIC_COMPRESSED_BYTES
+                if name == "timed_semantic"
+                else MAX_JSON_BYTES
+            ),
         )
     _same(preflight.get("status"), "passed", label + " raw preflight")
     _same(

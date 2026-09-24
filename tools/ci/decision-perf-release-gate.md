@@ -11,8 +11,8 @@ python3 tools/ci/decision_perf_release_gate.py validate \
   --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
 ```
 
-The performance report schema is `decision-paired-release-v7`. It requires
-live old process and full-snapshot proof for all six models; v4/v5/v6 receipts
+The performance report schema is `decision-paired-release-v8`. It requires
+live old process and full-snapshot proof for all six models; v4/v5/v6/v7 receipts
 cannot qualify.
 
 The gate expects exactly six Decision model IDs, each measured at 32 questions
@@ -54,6 +54,13 @@ diagnostic. The qualification summary publishes all nine throughput ratios and
 the six high-load ratios for every model, plus the equal-weight high-load
 geometric means as diagnostics.
 There is no aggregate gain threshold or post-measurement shape selection.
+Every new-arm throughput response at c1/c8/c32 must also have an exact timed
+request/response body in the protected archive. The gate checks its hashes,
+canonical case, request-relative response, and audited answers before a hard
+cell can qualify. Adding c1 increases the fixed captured-workflow count by
+one half, so the archive's hard limits scale from 80/16 MiB to 120/24 MiB
+(decompressed/compressed), with unchanged 1/2 MiB per-request/response limits.
+Exceeding a bound fails the run; it never silently drops timed responses.
 
 Each candidate model declares `new_runtime_variant: eager` or
 `sol_rocm_graph_b8` in the protected input and the report. Only canonical

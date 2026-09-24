@@ -62,9 +62,12 @@ SOURCE_LABEL = re.compile(r"(?:[0-9a-f]{40}|sha256:[0-9a-f]{64})\Z")
 MODEL_REVISION = re.compile(r"[0-9a-f]{40}\Z")
 HARDWARE_LABEL = re.compile(r"[A-Za-z0-9 ._+()-]{1,128}\Z")
 MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}\Z")
-MAX_TIMED_SEMANTIC_EVIDENCE_BYTES = 80 * 1024 * 1024
-MAX_TIMED_SEMANTIC_COMPRESSED_BYTES = 16 * 1024 * 1024
+# The protected grid now retains three concurrency cells rather than two;
+# scale the former 80/16 MiB hard bounds by 3/2 and fail closed above them.
+MAX_TIMED_SEMANTIC_EVIDENCE_BYTES = 120 * 1024 * 1024
+MAX_TIMED_SEMANTIC_COMPRESSED_BYTES = 24 * 1024 * 1024
 MAX_TIMED_SEMANTIC_REQUEST_BYTES = 1024 * 1024
+TIMED_SEMANTIC_CONCURRENCIES = (1, 8, 32)
 
 
 def _positive_int(value: str) -> int:
@@ -217,7 +220,7 @@ def _run_wave(
                     capture_timed_semantics
                     and arm == "new"
                     and phase == "throughput"
-                    and concurrency in (8, 32)
+                    and concurrency in TIMED_SEMANTIC_CONCURRENCIES
                 ),
             )
             for sequence, case_id, endpoint, spec in jobs
@@ -640,7 +643,7 @@ def run_semantic(args: argparse.Namespace) -> int:
         and (args.output_dir / "timed-semantic.jsonl.gz").stat().st_size
         > MAX_TIMED_SEMANTIC_COMPRESSED_BYTES
     ):
-        raise ValueError("timed semantic compressed archive exceeds 16 MiB")
+        raise ValueError("timed semantic compressed archive exceeds 24 MiB")
     receipt = {
         **receipt_base,
         "measured_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -736,7 +739,7 @@ def add_parsers(commands: argparse._SubParsersAction) -> None:
     run.add_argument(
         "--timed-semantic-evidence",
         action="store_true",
-        help="Retain bounded exact request/response bytes from every new c8/c32 throughput wave.",
+        help="Retain bounded exact request/response bytes from every new c1/c8/c32 throughput wave.",
     )
     run.add_argument("--output-dir", required=True, type=Path)
     run.set_defaults(handler=run_semantic)
