@@ -1915,7 +1915,13 @@ class DecisionPerformanceGateTests(unittest.TestCase):
                 self.assertAlmostEqual(ratio, 1.06)
 
     def test_single_state_c8_regression_blocks_despite_other_gains(self) -> None:
-        ratios = {(sorted(gate.MODEL_IDS)[0], 32, 1, 8): 0.96}
+        ratios = {
+            (model_id, q, s, concurrency): 1.06
+            for model_id in gate.MODEL_IDS
+            for q, s in gate.SHAPES
+            for concurrency in (8, 32)
+        }
+        ratios[(sorted(gate.MODEL_IDS)[0], 32, 1, 8)] = 0.99
         self.path, self.report = _fixture(self.root, throughput_ratios=ratios)
         with self.assertRaisesRegex(
             ValueError, "high-load throughput regression at q32_s1_c8"
