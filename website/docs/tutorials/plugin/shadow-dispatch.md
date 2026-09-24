@@ -116,3 +116,16 @@ curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
 The manifest carries identity, output digests, and lineage, never prompt or response text, so it can be published beside the numbers it supports. An observation enters whole or not at all: a request that failed, is unfinished, lost its input to truncation, or never recorded a digest is left out and counted under an exclusion reason, and `counts` reports what was kept and what was dropped. Because the manifest describes the whole selection it was built from, a selection larger than 5000 records is refused rather than exported as a page. Narrow the filters and export again.
 
 The export needs `replay.read` and reads the same records the list API does. Body capture must be on for the decisions being compared, since an observation with no captured request is excluded as `request_body_missing`.
+
+### Hand the comparison to a judge
+
+`GET /api/v1/observability/replays/dataset/judge-tasks` takes the same selection and split plan as the export, plus a `blinding_key`, and answers with pairwise tasks: one primary answer against one shadow answer, with the request each was given. Every pair appears twice with the sides swapped, so a judge that prefers whichever answer comes first shows up as disagreement between the two orders. Each side carries an opaque arm label that names neither the model nor which side is the primary, and the labels differ in every pair. Only the key maps a label back to a model, so keep it away from the judge. It may not equal the manifest seed, which is published.
+
+```bash
+curl -H "Authorization: Bearer $ROUTER_MANAGEMENT_TOKEN" \
+  "$ROUTER_MANAGEMENT_URL/api/v1/observability/replays/dataset/judge-tasks?recipe=vault&seed=2026-q3&split=train:8&split=eval:2&blinding_key=$JUDGE_KEY"
+```
+
+A pair is built only when both texts hash back to the digests in the manifest. The shadow text comes from the captured excerpt, so the shadow decision needs `capture_response_body` on and a `max_capture_bytes` large enough for whole answers. An excerpt that was cut, or a primary answer a response-stage plugin rewrote before it was stored, is left out and counted as `arm_text_digest_mismatch`, and a pair with no text at all as `arm_text_missing`. An answer that names its own model is marked `names_own_model`, since no label can blind a judge to that.
+
+The tasks carry prompt and answer text, so the route needs `replay.detail` and refuses a caller without it rather than redacting the tasks. The judge runs outside the router.

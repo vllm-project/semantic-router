@@ -22486,6 +22486,460 @@
         "x-vllm-sr-visibility": "primary"
       }
     },
+    "/api/v1/observability/replays/dataset/judge-tasks": {
+      "get": {
+        "summary": "Build blinded pairwise judge tasks over the shadow comparison dataset",
+        "description": "Build blinded pairwise judge tasks over the shadow comparison dataset",
+        "operationId": "get_api_v1_observability_replays_dataset_judge_tasks",
+        "tags": [
+          "observability"
+        ],
+        "parameters": [
+          {
+            "name": "search",
+            "in": "query",
+            "description": "Case-insensitive text search across replay records.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "recipe",
+            "in": "query",
+            "description": "Filter by recipe name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "description": "Filter by decision name.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "model",
+            "in": "query",
+            "description": "Filter by selected model.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "description": "Filter by logical session identifier.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "cache_status",
+            "in": "query",
+            "description": "Filter by response-cache outcome.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "cached",
+                "streamed"
+              ]
+            }
+          },
+          {
+            "name": "seed",
+            "in": "query",
+            "description": "Seed that fixes split assignment; the same records under the same seed reproduce the same manifest.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "split",
+            "in": "query",
+            "description": "Repeatable split written as name:weight, for example train:8.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "blinding_key",
+            "in": "query",
+            "description": "Secret that derives the opaque arm labels. Keep it from the judge, since it maps each label back to a model.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "security": [
+          {},
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Blinded judge tasks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "counts": {
+                      "type": "object",
+                      "properties": {
+                        "excluded": {
+                          "nullable": true,
+                          "type": "object",
+                          "additionalProperties": {
+                            "type": "integer"
+                          }
+                        },
+                        "pairs": {
+                          "type": "integer"
+                        },
+                        "tasks": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "pairs",
+                        "tasks"
+                      ]
+                    },
+                    "manifest_digest": {
+                      "type": "string"
+                    },
+                    "tasks": {
+                      "nullable": true,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "first": {
+                            "type": "object",
+                            "properties": {
+                              "arm": {
+                                "type": "string"
+                              },
+                              "names_own_model": {
+                                "type": "boolean"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "arm",
+                              "text"
+                            ]
+                          },
+                          "id": {
+                            "type": "string"
+                          },
+                          "input": {
+                            "type": "string"
+                          },
+                          "pair": {
+                            "type": "string"
+                          },
+                          "second": {
+                            "type": "object",
+                            "properties": {
+                              "arm": {
+                                "type": "string"
+                              },
+                              "names_own_model": {
+                                "type": "boolean"
+                              },
+                              "text": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "arm",
+                              "text"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "pair",
+                          "input",
+                          "first",
+                          "second"
+                        ]
+                      }
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "version",
+                    "manifest_digest",
+                    "counts",
+                    "tasks"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "A management bearer token is required or invalid when bearer authentication is enabled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The authenticated role lacks the operation permission",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "request_id": {
+                          "type": "string"
+                        },
+                        "timestamp": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code",
+                        "message"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "description": "Correlation identifier for this management request.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "x-vllm-sr-permission": "replay.detail",
+        "x-vllm-sr-sensitivity": "replay",
+        "x-vllm-sr-plane": "management",
+        "x-vllm-sr-audiences": [
+          "agent",
+          "operator"
+        ],
+        "x-vllm-sr-stability": "stable",
+        "x-vllm-sr-plugin-operations": [
+          {
+            "plugin": "router_replay",
+            "mode": "read"
+          },
+          {
+            "plugin": "shadow_dispatch",
+            "mode": "read"
+          }
+        ],
+        "x-vllm-sr-visibility": "primary"
+      }
+    },
     "/api/v1/observability/replays/trajectory": {
       "get": {
         "summary": "Build a recipe-scoped session trajectory with each recorded routing result",
