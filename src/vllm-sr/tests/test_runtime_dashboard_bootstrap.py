@@ -17,6 +17,8 @@ def test_dashboard_open_bootstrap_defaults_true_without_admin(monkeypatch):
     )
 
     assert dashboard_env["DASHBOARD_ALLOW_OPEN_BOOTSTRAP"] == "true"
+    assert dashboard_env["OPENCLAW_ENABLED"] == "false"
+    assert dashboard_env["ML_PIPELINE_ENABLED"] == "false"
 
 
 def test_dashboard_bootstrap_admin_is_scoped_to_dashboard(monkeypatch):

@@ -15,9 +15,8 @@ data:
   # starts under OpenShift's arbitrary UID with mutation capabilities disabled.
   DASHBOARD_RUNTIME_CONFIG_WRITABLE: "false"
   DASHBOARD_RECIPE_STORE_WRITABLE: "false"
-  # ML service sidecar: connect to localhost since it's in the same pod
-  ML_SERVICE_URL: "http://127.0.0.1:8686"
-  ML_PIPELINE_ENABLED: "true"
+  ML_PIPELINE_ENABLED: "false"
+  OPENCLAW_ENABLED: "false"
 
 ---
 apiVersion: apps/v1
@@ -57,8 +56,6 @@ spec:
               mountPath: /app/config/tools_db.json
               subPath: tools_db.json
               readOnly: true
-            - name: ml-data
-              mountPath: /app/data/ml-pipeline
           livenessProbe:
             httpGet:
               path: /healthz
@@ -79,59 +76,10 @@ spec:
               memory: "512Mi"
               cpu: "500m"
 
-        # ML Training Service sidecar (Python)
-        - name: ml-service
-          image: image-registry.openshift-image-registry.svc:5000/vllm-semantic-router-system/ml-training-service:latest
-          imagePullPolicy: Always
-          env:
-            # This unauthenticated API is only for the co-located dashboard.
-            - name: ML_SERVICE_HOST
-              value: "127.0.0.1"
-            - name: ML_SERVICE_PORT
-              value: "8686"
-            - name: PYTHONUNBUFFERED
-              value: "1"
-          volumeMounts:
-            - name: ml-data
-              mountPath: /app/data
-          resources:
-            requests:
-              memory: "512Mi"
-              cpu: "250m"
-            limits:
-              memory: "4Gi"
-              cpu: "2"
-          readinessProbe:
-            exec:
-              command:
-                - curl
-                - --fail
-                - --silent
-                - --max-time
-                - "5"
-                - http://127.0.0.1:8686/api/health
-            timeoutSeconds: 6
-            initialDelaySeconds: 10
-            periodSeconds: 10
-          livenessProbe:
-            exec:
-              command:
-                - curl
-                - --fail
-                - --silent
-                - --max-time
-                - "5"
-                - http://127.0.0.1:8686/api/health
-            timeoutSeconds: 6
-            initialDelaySeconds: 30
-            periodSeconds: 30
-
       volumes:
         - name: config
           configMap:
             name: semantic-router-config
-        - name: ml-data
-          emptyDir: {}
 
 ---
 apiVersion: v1

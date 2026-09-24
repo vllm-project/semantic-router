@@ -24,6 +24,10 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
+A stable CLI pulls Router and Dashboard images tagged with its own release
+version. Development CLI builds use `:latest`; `--image` and the documented
+image environment overrides select a different build when needed.
+
 With no `--config`, `vllm-sr serve` uses `config.yaml` in the current directory
 or opens first-run setup in the Dashboard. The default local endpoints are:
 

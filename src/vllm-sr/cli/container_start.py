@@ -552,15 +552,16 @@ def _build_dashboard_runtime_command(
     ]
     dashboard_env[LOG_SPOOL_ROOT_ENV] = LOG_SPOOL_READER_DIR
     dashboard_env[LOG_SPOOL_GID_ENV] = runtime_paths["log_spool_gid"]
-    configure_openclaw_support(
-        dashboard_mount_specs,
-        dashboard_env,
-        config_dir,
-        openclaw_network_name,
-        runtime,
-        stack_layout,
-        resolve_container_cli=resolve_container_cli_path,
-    )
+    if dashboard_env["OPENCLAW_ENABLED"] == "true":
+        configure_openclaw_support(
+            dashboard_mount_specs,
+            dashboard_env,
+            config_dir,
+            openclaw_network_name,
+            runtime,
+            stack_layout,
+            resolve_container_cli=resolve_container_cli_path,
+        )
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/app/entrypoint.sh",
         [
@@ -668,6 +669,11 @@ def _build_dashboard_runtime_env(
 ):
     dashboard_env = dict(common_env)
     dashboard_env.pop("DASHBOARD_JWT_SECRET", None)
+    for feature_flag in ("OPENCLAW_ENABLED", "ML_PIPELINE_ENABLED"):
+        if feature_flag in os.environ:
+            dashboard_env[feature_flag] = os.environ[feature_flag]
+        else:
+            dashboard_env.setdefault(feature_flag, "false")
     if os.getenv("DASHBOARD_JWT_SECRET", "").strip():
         # The container runtime inherits the host value by name. Do not copy
         # signing material into command arguments or printable runtime state.
