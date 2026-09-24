@@ -335,6 +335,10 @@ ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, PermInfe
 func TestReadStylePostRejectsRevocationWhileBodyIsPaused(t *testing.T) {
 	svc := newTestAuthService(t)
 	user := newTestUser(t, svc, "policy-paused-preview@example.com", RoleRead, "active")
+	if _, err := svc.store.db.Exec(`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,1)
+ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=1`, user.ID, PermEvalRun); err != nil {
+		t.Fatal(err)
+	}
 	mux := NewPolicyMux()
 	policy := ReadPolicy(http.MethodPost, PermEvalRun, SensitivitySensitive, ResourceOwnerEvaluation)
 	policy.MaxBodyBytes = 1024

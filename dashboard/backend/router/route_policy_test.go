@@ -2,12 +2,14 @@ package router
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -53,6 +55,20 @@ func TestDashboardRouteInventoryHasCompletePolicies(t *testing.T) {
 			if policy.AuditAction == "" {
 				t.Errorf("%s %s has no audit action", policy.Method, contract.Pattern)
 			}
+		}
+	}
+	for _, route := range []struct{ method, path string }{
+		{http.MethodGet, "/api/ml-pipeline/jobs"},
+		{http.MethodGet, "/api/ml-pipeline/jobs/job-1"},
+		{http.MethodPost, "/api/ml-pipeline/benchmark"},
+		{http.MethodPost, "/api/ml-pipeline/train"},
+		{http.MethodPost, "/api/ml-pipeline/config"},
+		{http.MethodGet, "/api/ml-pipeline/download/job-1"},
+		{http.MethodGet, "/api/ml-pipeline/stream/job-1"},
+	} {
+		policy, lookup := server.routePolicies.LookupRoutePolicy(route.method, route.path)
+		if lookup != auth.RouteFound || policy.Permission != auth.PermMlPipeline {
+			t.Errorf("ML inventory %s %s: lookup=%v policy=%+v", route.method, route.path, lookup, policy)
 		}
 	}
 }
@@ -134,7 +150,89 @@ func TestOutboundDashboardRoutesRevalidateBeforeUse(t *testing.T) {
 	}
 }
 
+func TestDashboardProductionRoutePermissionsGrantAndRevokeIndependently(t *testing.T) {
+	server, cfg := setupRouteInventoryServerWithConfig(t)
+	store, err := auth.NewStore(cfg.AuthDBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	service := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
+	const password = "production-route-permissions-test"
+	hash, err := service.HashPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user, err := store.CreateUser(t.Context(), "route-permissions@example.test", "Route Permissions", hash, auth.RoleRead, "active")
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := service.Login(t.Context(), user.Email, password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite3", cfg.AuthDBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	routes := []struct{ method, path, permission string }{
+		{http.MethodGet, "/api/router/config/all", auth.PermConfigRead},
+		{http.MethodGet, "/api/router/api/v1/observability/replays/record-1", auth.PermReplayRead},
+		{http.MethodPost, "/api/router/api/v1/observability/outcomes", auth.PermFeedbackSubmit},
+		{http.MethodPost, "/api/router/v1/chat/completions", auth.PermInferenceRun},
+		{http.MethodPost, "/api/ml-pipeline/train", auth.PermMlPipeline},
+		{http.MethodPost, "/api/openclaw/teams", auth.PermOpenClaw},
+	}
+	setPermission := func(permission string, allowed bool) {
+		t.Helper()
+		value := 0
+		if allowed {
+			value = 1
+		}
+		if _, err := db.ExecContext(t.Context(), `INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,?)
+ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=excluded.allowed`, user.ID, permission, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, route := range routes {
+		setPermission(route.permission, false)
+	}
+	authorized := auth.AuthenticateRequest(service, server.routePolicies)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	status := func(route struct{ method, path, permission string }) int {
+		t.Helper()
+		request := httptest.NewRequest(route.method, route.path, strings.NewReader(`{}`))
+		request.Header.Set("Authorization", "Bearer "+token)
+		response := httptest.NewRecorder()
+		authorized.ServeHTTP(response, request)
+		return response.Code
+	}
+	for _, granted := range routes {
+		setPermission(granted.permission, true)
+		for _, route := range routes {
+			want := http.StatusForbidden
+			if route.permission == granted.permission {
+				want = http.StatusNoContent
+			}
+			if got := status(route); got != want {
+				t.Errorf("grant %s: %s %s status=%d, want %d", granted.permission, route.method, route.path, got, want)
+			}
+		}
+		setPermission(granted.permission, false)
+		if got := status(granted); got != http.StatusForbidden {
+			t.Errorf("revoke %s: %s %s status=%d", granted.permission, granted.method, granted.path, got)
+		}
+	}
+}
+
 func setupRouteInventoryServer(t *testing.T) *Server {
+	server, _ := setupRouteInventoryServerWithConfig(t)
+	return server
+}
+
+func setupRouteInventoryServerWithConfig(t *testing.T) (*Server, *config.Config) {
 	t.Helper()
 	dir := t.TempDir()
 	staticDir := filepath.Join(dir, "static")
@@ -153,10 +251,11 @@ func setupRouteInventoryServer(t *testing.T) *Server {
 		JWTExpiryHours: 1, StaticDir: staticDir, ConfigFile: configPath, AbsConfigPath: configPath,
 		ConfigDir: dir, RouterAPIURL: "http://127.0.0.1:18080", RouterMetrics: "http://127.0.0.1:19190/metrics",
 		MCPEnabled: true, OpenClawEnabled: true, OpenClawDataDir: filepath.Join(dir, "openclaw"),
+		MLPipelineEnabled: true, MLPipelineDataDir: filepath.Join(dir, "ml-pipeline"),
 		WorkflowDBPath:         filepath.Join(dir, "workflow.sqlite"),
 		ConfigProjectionDBPath: filepath.Join(dir, "projection.sqlite"),
 	}
 	server := Setup(cfg, setupmode.New(configPath, false))
 	t.Cleanup(func() { _ = server.Close() })
-	return server
+	return server, cfg
 }

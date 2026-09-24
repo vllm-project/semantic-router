@@ -186,6 +186,16 @@ func RevalidateRequest(r *http.Request) error {
 	return revalidate(r.Context())
 }
 
+// RevalidateContextIfPresent checks live permission at a service-side write
+// boundary. Direct service callers may have no Dashboard request policy.
+func RevalidateContextIfPresent(ctx context.Context) error {
+	revalidate, ok := ctx.Value(revalidatorKey).(permissionRevalidator)
+	if !ok {
+		return nil
+	}
+	return revalidate(ctx)
+}
+
 func WithPermissionRevalidator(ctx context.Context, check func(context.Context) error) context.Context {
 	return context.WithValue(ctx, revalidatorKey, permissionRevalidator(check))
 }
