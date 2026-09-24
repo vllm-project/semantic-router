@@ -594,10 +594,13 @@ vllm-sr-decision-runtime-test: harness-venv-install
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
 		src/vllm-sr/tests/test_decision_runtime_contracts.py \
 		src/vllm-sr/tests/test_decision_runtime_engine.py \
+		src/vllm-sr/tests/test_decision_drun.py \
+		src/vllm-sr/tests/test_decision_drun_catalog_adapter.py \
 		src/vllm-sr/tests/test_decision_cpu_threads.py \
 		src/vllm-sr/tests/test_decision_runtime_api.py \
 		src/vllm-sr/tests/test_decision_runtime_profiles.py \
 		src/vllm-sr/tests/test_decision_runtime_artifacts.py \
+		src/vllm-sr/tests/test_decision_image_lock.py \
 		src/vllm-sr/tests/test_decision_runtime_torch_batch_sync.py \
 		src/vllm-sr/tests/test_decision_physical_batching.py \
 		src/vllm-sr/tests/test_decision_request_limits.py \
@@ -608,6 +611,8 @@ vllm-sr-decision-runtime-test: harness-venv-install
 		src/vllm-sr/tests/test_decision_vela_torch_contract.py \
 		src/vllm-sr/tests/test_decision_qwen35_torch_contract.py \
 		src/vllm-sr/tests/test_decision_qwen35_rocm_binder.py \
+		src/vllm-sr/tests/test_decision_qwen35_rocm_graph.py \
+		src/vllm-sr/tests/test_decision_qwen35_rocm_graph_model.py \
 		src/vllm-sr/tests/test_decision_runtime_server.py
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
 		bench/decision_runtime/test_harness.py \
