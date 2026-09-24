@@ -129,7 +129,7 @@ func registerConfigRoutes(mux routeRegistrar, cfg *config.Config, routeOptions .
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.credentialStore})
 	registerRouteFunc(mux, auth.ProtectedRoute("/api/models/catalog", auth.PermConfigRead, auth.SensitivityOperational, auth.ResourceOwnerConfig, http.MethodGet), handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/models/discover", auth.PermConfigWrite, auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.ModelDiscoveryHandler(nil))
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/models/discover", auth.PermConfigWrite, "model.discover", auth.SensitivitySensitive, auth.ResourceOwnerConfig, 2<<20, http.MethodPost), handlers.ModelDiscoveryHandler(nil))
 	registerRouteFunc(mux, auth.ProtectedDelegatedAuditRoute("/api/models/verify", auth.PermEvalRun, "model.inference_verify", auth.SensitivitySensitive, auth.ResourceOwnerInference, 2<<20, http.MethodPost), handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))
 	for _, route := range []struct {
 		path    string
@@ -167,16 +167,16 @@ func registerToolRoutes(mux routeRegistrar, cfg *config.Config) {
 	})
 	log.Printf("Tools DB API endpoint registered: /api/tools-db")
 
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/tools/web-search", auth.PermToolsUse, auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.WebSearchHandler())
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/tools/web-search", auth.PermToolsUse, "tools.web_search", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.WebSearchHandler())
 	log.Printf("Web Search API endpoint registered: /api/tools/web-search")
 
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/tools/open-web", auth.PermToolsUse, auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.OpenWebHandler())
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/tools/open-web", auth.PermToolsUse, "tools.open_web", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.OpenWebHandler())
 	log.Printf("Open Web API endpoint registered: /api/tools/open-web")
 
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/tools/weather", auth.PermToolsUse, auth.SensitivityOperational, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.WeatherHandler())
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/tools/weather", auth.PermToolsUse, "tools.weather", auth.SensitivityOperational, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.WeatherHandler())
 	log.Printf("Weather API endpoint registered: /api/tools/weather")
 
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/tools/fetch-raw", auth.PermToolsUse, auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.FetchRawHandler())
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/tools/fetch-raw", auth.PermToolsUse, "tools.fetch_raw", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost), handlers.FetchRawHandler())
 	log.Printf("Fetch Raw API endpoint registered: /api/tools/fetch-raw")
 }
 
@@ -217,7 +217,7 @@ func registerStatusRoutes(mux routeRegistrar, cfg *config.Config, statusHandler 
 
 func registerTopologyRoutes(mux routeRegistrar, cfg *config.Config, credentialProvider ...*recipe.Store) {
 	store := selectedRecipeStore(cfg, credentialProvider)
-	registerRouteFunc(mux, auth.ProtectedBoundedRoute("/api/topology/test-query", auth.PermTopologyRead, auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
+	registerRouteFunc(mux, auth.ProtectedMutationRoute("/api/topology/test-query", auth.PermTopologyRead, "topology.test_query", auth.SensitivitySensitive, auth.ResourceOwnerEvaluation, 2<<20, http.MethodPost), handlers.TopologyTestQueryHandler(cfg.AbsConfigPath, cfg.RouterAPIURL, store))
 	log.Printf("Topology Test Query API endpoint registered: /api/topology/test-query (Router API: %s)", cfg.RouterAPIURL)
 }
 

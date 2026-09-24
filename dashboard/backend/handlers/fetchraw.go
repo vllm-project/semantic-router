@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 const (
@@ -83,6 +85,9 @@ func FetchRawHandler() http.HandlerFunc {
 		httpReq.Header.Set("User-Agent", getRandomUserAgent())
 		httpReq.Header.Set("Accept", "text/plain, application/x-yaml, application/json, */*")
 
+		if dashboardauth.RejectRevokedMutation(w, r) {
+			return
+		}
 		resp, err := client.Do(httpReq)
 		if err != nil {
 			w.WriteHeader(http.StatusBadGateway)

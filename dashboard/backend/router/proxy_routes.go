@@ -1,11 +1,13 @@
 package router
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
@@ -208,7 +210,13 @@ func routeRouterTrafficToEnvoy(
 		if middleware.HandleCORSPreflight(w, r) {
 			return true
 		}
-		envoyProxy.ServeHTTP(w, r)
+		if policy, ok := auth.RoutePolicyFromContext(r); ok && policy.ProxyUpstream && policy.Permission == auth.PermInferenceRun {
+			proxy.ServeWithLiveAuthorization(w, r, envoyProxy, func(ctx context.Context) error {
+				return auth.RevalidateRequest(r.WithContext(ctx))
+			}, 250*time.Millisecond)
+		} else {
+			envoyProxy.ServeHTTP(w, r)
+		}
 		return true
 	}
 	return false

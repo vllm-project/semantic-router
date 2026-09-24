@@ -100,6 +100,31 @@ func TestDashboardRoutePoliciesSeparateSecurityDomains(t *testing.T) {
 	}
 }
 
+func TestOutboundDashboardRoutesRevalidateBeforeUse(t *testing.T) {
+	server := setupRouteInventoryServer(t)
+	for _, test := range []struct {
+		path, action string
+	}{
+		{"/api/models/discover", "model.discover"},
+		{"/api/tools/web-search", "tools.web_search"},
+		{"/api/tools/open-web", "tools.open_web"},
+		{"/api/tools/weather", "tools.weather"},
+		{"/api/tools/fetch-raw", "tools.fetch_raw"},
+		{"/api/topology/test-query", "topology.test_query"},
+		{"/api/mcp/servers/server-1/test", "mcp.server.test"},
+		{"/api/openclaw/mcp", "openclaw.mcp.call"},
+	} {
+		policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodPost, test.path)
+		if lookup != auth.RouteFound || !policy.Revalidate || policy.AuditMode != auth.AuditRequired || policy.AuditAction != test.action {
+			t.Errorf("POST %s policy=%+v lookup=%v, want live revalidation and %q audit", test.path, policy, lookup, test.action)
+		}
+	}
+	policy, lookup := server.routePolicies.LookupRoutePolicy(http.MethodDelete, "/api/openclaw/mcp")
+	if lookup != auth.RouteFound || !policy.Revalidate || policy.AuditMode != auth.AuditRequired || policy.AuditAction != "openclaw.mcp.delete" {
+		t.Errorf("DELETE /api/openclaw/mcp policy=%+v lookup=%v", policy, lookup)
+	}
+}
+
 func setupRouteInventoryServer(t *testing.T) *Server {
 	t.Helper()
 	dir := t.TempDir()

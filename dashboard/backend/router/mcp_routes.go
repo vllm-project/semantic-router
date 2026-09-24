@@ -55,7 +55,11 @@ func registerBuiltInOpenClawMCP(
 	openClawHandler *handlers.OpenClawHandler,
 ) {
 	openClawMCPHandler := handlers.NewOpenClawMCPHandler(openClawHandler)
-	registerRoute(mux, auth.ProtectedBoundedRoute("/api/openclaw/mcp", auth.PermMcpManage, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20, http.MethodGet, http.MethodPost, http.MethodDelete), openClawMCPHandler)
+	registerRoute(mux, auth.Route("/api/openclaw/mcp",
+		auth.ReadPolicy(http.MethodGet, auth.PermMcpManage, auth.SensitivitySecret, auth.ResourceOwnerOpenClaw),
+		auth.MutationPolicy(http.MethodPost, auth.PermMcpManage, "openclaw.mcp.call", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
+		auth.MutationPolicy(http.MethodDelete, auth.PermMcpManage, "openclaw.mcp.delete", auth.SensitivitySecret, auth.ResourceOwnerOpenClaw, 2<<20),
+	), openClawMCPHandler)
 	registerRoute(mux, auth.PublicRoute(internalOpenClawMCPPath, http.MethodGet, http.MethodPost, http.MethodDelete), loopbackOnly(openClawMCPHandler))
 
 	serverURL := fmt.Sprintf("http://127.0.0.1:%s%s", port, internalOpenClawMCPPath)
@@ -143,7 +147,7 @@ func registerMCPServerOperationRoutes(mux routeRegistrar, mcpHandler *handlers.M
 		auth.ProtectedMutationRoute("/api/mcp/servers/{id}/connect", auth.PermMcpManage, "mcp.server.connect", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost),
 		auth.ProtectedMutationRoute("/api/mcp/servers/{id}/disconnect", auth.PermMcpManage, "mcp.server.disconnect", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost),
 		auth.ProtectedRoute("/api/mcp/servers/{id}/status", auth.PermMcpRead, auth.SensitivitySensitive, auth.ResourceOwnerTools, http.MethodGet),
-		auth.ProtectedBoundedRoute("/api/mcp/servers/{id}/test", auth.PermMcpManage, auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost),
+		auth.ProtectedMutationRoute("/api/mcp/servers/{id}/test", auth.PermMcpManage, "mcp.server.test", auth.SensitivitySensitive, auth.ResourceOwnerTools, 2<<20, http.MethodPost),
 	}, serverHandler)
 }
 

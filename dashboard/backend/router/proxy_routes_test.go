@@ -1,6 +1,9 @@
 package router
 
 import (
+	"bufio"
+	"context"
+	"database/sql"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 )
@@ -160,6 +165,120 @@ func TestPlaygroundChatProxyPreservesIdentityAndStripsBrowserCredentials(t *test
 				t.Fatalf("browser credential %s reached Envoy", name)
 			}
 		}
+	}
+}
+
+func TestInferenceStreamStopsWhenLiveAuthorizationIsRevoked(t *testing.T) {
+	for _, revocation := range []string{"permission", "session"} {
+		t.Run(revocation, func(t *testing.T) {
+			releaseSecond := make(chan struct{})
+			upstreamCanceled := make(chan struct{})
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				defer close(upstreamCanceled)
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = io.WriteString(w, "data: first\n\n")
+				w.(http.Flusher).Flush()
+				select {
+				case <-releaseSecond:
+					_, _ = io.WriteString(w, "data: second\n\n")
+					w.(http.Flusher).Flush()
+				case <-r.Context().Done():
+					return
+				}
+				<-r.Context().Done()
+			}))
+			defer upstream.Close()
+
+			dbPath := filepath.Join(t.TempDir(), "auth.db")
+			store, err := auth.NewStore(dbPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer store.Close()
+			svc := auth.NewService(store, "inference-stream-secret", 1)
+			const email, password = "stream@example.com", "test-admin-password"
+			if err := svc.EnsureBootstrapAdmin(context.Background(), email, password, "Stream Admin"); err != nil {
+				t.Fatal(err)
+			}
+			token, user, err := svc.Login(context.Background(), email, password)
+			if err != nil {
+				t.Fatal(err)
+			}
+			claims, err := svc.ParseToken(token)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			mux := auth.NewPolicyMux()
+			envoyProxy, err := proxy.NewReverseProxy(upstream.URL, "", false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, envoyProxy, nil, nil)
+			mux.Seal()
+			front := httptest.NewServer(auth.AuthenticateRequest(svc, mux)(mux))
+			defer front.Close()
+			request, err := http.NewRequest(http.MethodPost, front.URL+"/api/router/v1/chat/completions", strings.NewReader(`{"stream":true,"messages":[{"role":"user","content":"hello"}]}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			request.Header.Set("Authorization", "Bearer "+token)
+			request.Header.Set("Content-Type", "application/json")
+			client := front.Client()
+			client.Timeout = 10 * time.Second
+			response, err := client.Do(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("status=%d", response.StatusCode)
+			}
+			reader := bufio.NewReader(response.Body)
+			if line, readErr := reader.ReadString('\n'); readErr != nil || line != "data: first\n" {
+				t.Fatalf("first event=%q error=%v", line, readErr)
+			}
+			if line, readErr := reader.ReadString('\n'); readErr != nil || line != "\n" {
+				t.Fatalf("first event terminator=%q error=%v", line, readErr)
+			}
+
+			switch revocation {
+			case "permission":
+				db, openErr := sql.Open("sqlite3", dbPath+"?_busy_timeout=3000")
+				if openErr != nil {
+					t.Fatal(openErr)
+				}
+				if _, execErr := db.Exec(`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,0)
+ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed=0`, user.ID, auth.PermInferenceRun); execErr != nil {
+					_ = db.Close()
+					t.Fatal(execErr)
+				}
+				_ = db.Close()
+			case "session":
+				if err := store.RevokeSession(context.Background(), claims.ID); err != nil {
+					t.Fatal(err)
+				}
+			}
+			close(releaseSecond)
+			remaining := make(chan string, 1)
+			go func() {
+				bytes, _ := io.ReadAll(reader)
+				remaining <- string(bytes)
+			}()
+			select {
+			case tail := <-remaining:
+				if strings.Contains(tail, "second") {
+					t.Fatalf("post-%s-revocation event escaped: %q", revocation, tail)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("revoked inference stream did not close")
+			}
+			select {
+			case <-upstreamCanceled:
+			case <-time.After(3 * time.Second):
+				t.Fatal("revoked inference upstream did not close")
+			}
+		})
 	}
 }
 

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 type openWebFetchPlan struct {
@@ -48,7 +50,12 @@ func handleOpenWeb(w http.ResponseWriter, r *http.Request) {
 	plan := buildOpenWebFetchPlan(req)
 	logOpenWebFetchPlan(plan)
 
-	result, fetchErr := fetchOpenWeb(plan)
+	result, revoked, fetchErr := fetchOpenWeb(plan, func() bool {
+		return dashboardauth.RejectRevokedMutation(w, r)
+	})
+	if revoked {
+		return
+	}
 	if fetchErr != nil {
 		log.Printf(
 			"[OpenWeb] All fetch methods failed for %s: %v",
@@ -125,13 +132,16 @@ func logOpenWebFetchPlan(plan openWebFetchPlan) {
 	)
 }
 
-func fetchOpenWeb(plan openWebFetchPlan) (*OpenWebResponse, error) {
+func fetchOpenWeb(plan openWebFetchPlan, rejectRevoked func() bool) (*OpenWebResponse, bool, error) {
 	if !plan.forceJina {
+		if rejectRevoked() {
+			return nil, true, nil
+		}
 		log.Printf("[OpenWeb] Strategy 1: Trying direct fetch...")
 		result, err := fetchWebDirect(plan.request.URL, plan.timeout, plan.maxLength)
 		if err == nil {
 			log.Printf("[OpenWeb] Direct fetch succeeded")
-			return result, nil
+			return result, false, nil
 		}
 		log.Printf("[OpenWeb] Direct fetch failed: %v", redactURLsForLog(err.Error()))
 		log.Printf("[OpenWeb] Strategy 2: Falling back to Jina Reader...")
@@ -139,6 +149,9 @@ func fetchOpenWeb(plan openWebFetchPlan) (*OpenWebResponse, error) {
 		log.Printf("[OpenWeb] Skipping direct fetch, using Jina Reader directly")
 	}
 
+	if rejectRevoked() {
+		return nil, true, nil
+	}
 	result, err := fetchWebWithJina(
 		plan.request.URL,
 		plan.timeout,
@@ -147,11 +160,11 @@ func fetchOpenWeb(plan openWebFetchPlan) (*OpenWebResponse, error) {
 		plan.request.WithImages,
 	)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	log.Printf("[OpenWeb] Jina Reader fetch succeeded")
-	return result, nil
+	return result, false, nil
 }
 
 func writeOpenWebJSON(w http.ResponseWriter, status int, response OpenWebResponse) {
