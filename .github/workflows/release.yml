@@ -29,6 +29,10 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
+      decision_rocm_qualification: ${{ steps.decision_rocm.outputs.record }}
+    permissions:
+      contents: read
+      packages: read
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,6 +74,20 @@ jobs:
           python3 tools/release/check_version_contract.py \
             --version "${{ steps.version.outputs.version }}" \
             --github-output "$GITHUB_OUTPUT"
+
+      - name: Verify qualified Decision ROCm image
+        if: github.event_name == 'push'
+        id: decision_rocm
+        env:
+          DECISION_ROCM_QUALIFICATION: ${{ vars.DECISION_ROCM_QUALIFICATION }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+          printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          record="$(python3 tools/ci/package_contract.py --mode release \
+            --verify-rocm-qualification --verify-registry)"
+          printf 'record=%s\n' "$record" >> "$GITHUB_OUTPUT"
 
       - name: Resolve compatible previous release for paired performance
         id: baseline
@@ -161,6 +179,7 @@ jobs:
       catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
       prebuilt-dist: true
       decision_runtime: true
+      decision_rocm_qualification: ${{ needs.validate.outputs.decision_rocm_qualification }}
     secrets: inherit
 
   crate:
@@ -217,7 +236,7 @@ jobs:
             ## Release ${{ needs.validate.outputs.tag }}
 
             Version and CI checks completed before publication. The Python package
-            was verified against its published Decision CPU image.
+            was verified against its published Decision CPU and ROCm images.
 
             ### Container images
 

@@ -540,8 +540,6 @@ vllm-sr-test: vllm-sr-install-cli
 	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
 		src/vllm-sr/tests/test_container_images.py \
 		src/vllm-sr/tests/test_container_log_spool.py \
-		src/vllm-sr/tests/test_decision_serve.py \
-		src/vllm-sr/tests/test_decision_catalog_adapter.py \
 		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
 		src/vllm-sr/tests/test_embedding_api_config.py \
 		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \

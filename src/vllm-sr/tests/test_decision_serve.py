@@ -1905,7 +1905,7 @@ def test_repository_digest_keeps_existing_image_preparation_path(monkeypatch):
     (
         {"HF_TOKEN": "must-not-reach-argv"},
         {"A_PROFILE": "apparently-innocent-but-not-public"},
-        {"DECISION_RUNTIME_LOG_LEVEL": "jv_live_must_not_reach_argv"},
+        {"DECISION_RUNTIME_LOG_LEVEL": "invalid-value"},
         {"OMP_NUM_THREADS": "12345"},
         {"DECISION_CPU_THREADS": "257"},
         {"ROCR_VISIBLE_DEVICES": "0,1"},

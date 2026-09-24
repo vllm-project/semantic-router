@@ -28,84 +28,21 @@ pip install -e .
 service. An installed Decision-enabled CLI release selects the image for the
 detected backend automatically; `--image` is an advanced development override.
 The first such release is still being prepared. See the
-[Decision Runtime guide](../../website/docs/installation/decision-runtime/overview.md)
+[Decision Runtime guide](https://vllm-sr.ai/docs/installation/decision-runtime/overview)
 for launch and API examples, or the
-[image build guide](decision_runtime/image/README.md) for source-checkout testing.
+[image build guide](https://github.com/vllm-project/semantic-router/tree/main/src/vllm-sr/decision_runtime/image) for source-checkout testing.
 
-Production model identity comes from the packaged catalog: each canonical
-Hugging Face repository ID resolves to an immutable revision and a stable
-runtime profile for its model family. The selected revision's own manifest
-provides the hashes and sizes of inference files consumed by vLLM-SR-owned
-runtime code. Those files are verified into a read-only, content-addressed
-local view; model-repository Python and `trust_remote_code` are never used.
+Decision Runtime supports Kai, Lex, Eos, Sol, Nox, and Lux on qualified ROCm
+hardware. Kai, Lex, and Eos can also run on Linux CPU. See the
+[model and backend table](https://vllm-sr.ai/docs/installation/decision-runtime/models)
+for current support and model IDs.
 
-| Runtime family | ROCm `gfx942` | CUDA | Linux CPU | Apple MLX |
-| --- | --- | --- | --- | --- |
-| Vela (Kai, Lex) | Implemented | Not qualified | Implemented; validation pending | Deferred |
-| Qwen3.5 (Eos) | Implemented | Not qualified | Implemented; validation pending | Deferred |
-| Qwen3.5 (Sol, Nox, Lux) | Implemented | Not qualified | Not supported | Deferred |
-
-The initial physical microbatch is 8 for every profile. ROCm execution targets
-`gfx942`; Linux CPU execution is limited to Kai, Lex, and Eos. Publish CPU
-quality or performance claims only after model-backed validation. CUDA and MLX
-remain unavailable; catalog presence alone does not enable a backend.
-
-The HTTP contract requires an explicit `model`, one string/object/array `state`,
-and at least one named question. Instructions are required and non-null. Choice
-questions accept 2–255 options and Score questions accept 2–10 levels. Successful
-responses contain only `model`, `answers`, and `usage`; diagnostics stay on
-`/api/status` and `/metrics`. Batch and debug request-body extensions are not
-part of `/v1/systemone`.
-
-The separate Decision extension `POST /v1/systemone/batches` applies one required
-`model` and one shared `questions` map to ordered
-`states: [{"id": ..., "state": ...}]`. IDs must be unique, nonblank strings of
-at most 128 characters. A request may contain at most 1,024 states, 1,024
-questions, and 1,024 state/question decisions. Its atomic response contains
-only `model`, ordered `results: [{"id", "answers", "usage"}]`, and aggregate
-`usage`; one invalid backend result rejects the whole response. This endpoint is
-a Decision batching extension, not part of the official single-state API.
-
-The runtime bounds a single request body at 256 KiB, a batch body at 2 MiB, and
-the logical state/question expansion at 16 MiB before inference. Its
-`PhysicalBatchBackend` coalesces question rows from concurrent callers, rotates
-fairly across requests, preserves per-state identity, and never exceeds the
-selected physical batch size. Each logical request is completely tokenized
-before atomic queue admission, and only rows with the same executor-defined
-batch key share a model forward. A complete input over the model profile's token
-limit must raise `BackendInputTooLargeError`; the API returns HTTP 413 without
-admitting any part of that request or affecting concurrent callers. Admission
-allows eight concurrent calls per model and queues 32 by default; `decision serve`
-exposes `--max-concurrency` and `--max-queue` to adjust these bounds. There is
-no sequential single-request fallback. Family adapters enforce complete-input
-token limits without truncation. A ROCm model with a strict kernel profile
-requires batch overrides to fit its verified envelope. These resource policies
-do not add fields to either inference response.
-
-`create_app` leaves backend lifecycle with its caller. The production
-`create_runtime_app` closes the resident backend from its shutdown lifespan;
-the deterministic fake backend remains a contract-test fixture.
-
-Choice and Score answers use Decision-owned, type-aware confidence statistics
-computed from the calibrated, unrounded probability distribution:
-
-```text
-Choice: top_probability - second_probability
-Score: clamp(1 - ordinal_variance / uniform_ordinal_variance, 0, 1)
-```
-
-Noul returns P(true) without a separate confidence field. These are not
-calibrated probabilities of correctness and do not claim numeric equivalence
-to TypeSafe/Jev confidence, whose formula is not public.
-
-The runtime also exposes `GET /v1/models`, `/health`, `/ready`, `/api/status`,
-and `/metrics`. The status and metrics routes are control-plane surfaces and
-must not be exposed by a public Gateway. No model is selected implicitly by
-the SystemOne request contract. Requests accept only the exact canonical ID
-returned by `/v1/models`; the runtime does not define compatibility aliases,
-and the response repeats the requested model ID. Readiness is the exact HTTP
-200 JSON document `{"ready": true}`; redirects, empty bodies, and string
-lookalikes are not readiness success.
+`POST /v1/systemone` accepts one state with Noul, Choice, or Score questions.
+`POST /v1/systemone/batches` applies the same questions to several states; it
+is a Decision extension, not an official SystemOne SDK method. Every request
+names the model served on that port. See
+[API examples and SDK usage](https://vllm-sr.ai/docs/installation/decision-runtime/api) and
+[launch options](https://vllm-sr.ai/docs/installation/decision-runtime/parameters).
 
 Local `serve` requires Docker or Podman on Linux, macOS, or WSL2. A native
 Windows Python environment can run config and catalog commands, but it cannot

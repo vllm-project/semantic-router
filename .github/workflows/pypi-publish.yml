@@ -8,9 +8,13 @@ on:
         type: boolean
         default: false
       decision_runtime:
-        description: Bind the published Decision CPU image to the final package.
+        description: Bind published Decision images to the final package.
         type: boolean
         default: false
+      decision_rocm_qualification:
+        description: Verified six-model ROCm qualification for a stable release.
+        type: string
+        default: ""
       channel:
         description: Package channel, stable for releases or dev for validated main commits.
         required: false
@@ -241,6 +245,7 @@ jobs:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DECISION_ROCM_QUALIFICATION: ${{ inputs.decision_rocm_qualification }}
         run: |
           set -euo pipefail
           python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
@@ -259,7 +264,12 @@ jobs:
         env:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}
-        run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
+          DECISION_RUNTIME: ${{ inputs.decision_runtime }}
+        run: |
+          args=()
+          if [[ "$DECISION_RUNTIME" == true ]]; then args+=(--require-decision-images); fi
+          python tools/ci/package_contract.py --verify-dist --output dist \
+            --mode "$MODE" --tag "$TAG" "${args[@]}"
       - run: pip install twine
 
       - name: Publish verified package

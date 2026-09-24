@@ -393,7 +393,6 @@ domains:
       - src/vllm-sr/tests/test_decision_runtime_*.py
       - src/vllm-sr/tests/test_decision_physical_batching.py
       - src/vllm-sr/tests/test_decision_request_limits.py
-      - src/vllm-sr/tests/fixtures/decision_confidence_oracle.v1.json
     checks: [make vllm-sr-decision-runtime-test]
     verifications: [cli-unit]
 
@@ -734,8 +733,8 @@ images:
       - tools/ci/image_artifacts.py
       - tools/ci/docker-build-args.sh
       - .github/workflows/build-artifacts.yml
-  # ROCm is excluded from hosted image CI and publication until a supported
-  # GPU validation and release path is in place.
+  # ROCm stays outside hosted image matrices. Stable releases bind a separately
+  # qualified and published GPU image by digest.
   decision-runtime-rocm:
     pr_paths: []
     publish_paths: []

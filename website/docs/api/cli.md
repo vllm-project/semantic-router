@@ -71,7 +71,7 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
 | [`vllm-sr config versions`](#vllm-sr-config-versions) | List immutable configuration backup versions. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
-| [`vllm-sr decision`](#vllm-sr-decision) | Serve and manage standalone Decision models. |
+| [`vllm-sr decision`](#vllm-sr-decision) | Serve and manage standalone Decision 1.0 models. |
 | [`vllm-sr decision forget`](#vllm-sr-decision-forget) | Forget registry evidence without stopping any container. |
 | [`vllm-sr decision list`](#vllm-sr-decision-list) | List registry lifecycle, runtime state, and cross-runtime orphans. |
 | [`vllm-sr decision serve`](#vllm-sr-decision-serve) | Launch one exact MODEL as a standalone SystemOne service. |
@@ -964,24 +964,16 @@ vllm-sr dashboard --no-open
 Usage: vllm-sr decision [OPTIONS] COMMAND [ARGS]...
 ```
 
-Serve and manage standalone Decision models.
+Serve and manage standalone Decision 1.0 models.
 
-Launching requires the integrated Decision catalog. Recovery commands remain
-available without it. ``vllm-sr decision serve MODEL`` starts one model as a
-standalone HTTP service. Detached instances remain registered for the
-ownership-checked list, status, stop, and forget commands.
-Current source builds have no default CPU or ROCm image; build one locally and
-pass its image ID with ``--image`` and ``--image-pull-policy never``.
-
-List and status report authoritative registry lifecycle separately from observed
-container state. List does not probe service readiness; status probes the strict
-``/ready`` contract for a registered running instance. Native MLX launch support
-remains explicit integration work and is not emulated by the container driver.
+``vllm-sr decision serve MODEL`` starts one model as a SystemOne HTTP service.
+An installed release selects its verified image for a supported backend;
+``--image`` is only needed for an explicit override. Use ``--detach`` to leave
+the model running, then manage it with list, status, and stop.
 
 ```text
 Examples:
   vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B \
-    --backend cpu --image "$DECISION_IMAGE_ID" --image-pull-policy never \
     --instance-name kai-demo --detach
   vllm-sr decision list
   vllm-sr decision status kai-demo

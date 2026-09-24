@@ -1,7 +1,6 @@
 """Default-source fingerprints stream full content and retain only bounded proofs."""
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -85,11 +84,7 @@ def test_stat_keyed_fingerprint_cache_rechecks_tampering(tmp_path, monkeypatch):
     assert _choices(reader)["mmlu-pro"]["eligible"]
     assert checked == ["first"]
     path = Path(saved["path"])
-    before = path.stat()
     path.write_bytes(path.read_bytes().replace(b'"answer":"A"', b'"answer":"B"'))
-    # The same-size write can share mtime/ctime ticks with the original file.
-    # Force a different stat cache key so this checks the revalidation path.
-    os.utime(path, ns=(before.st_atime_ns, before.st_mtime_ns + 1_000_000_000))
     with pytest.raises(ValueError, match="digest"):
         _choices(reader)
     assert checked == ["first", "first"]

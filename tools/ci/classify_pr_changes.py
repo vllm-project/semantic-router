@@ -30,8 +30,8 @@ PRODUCTION_RELEASE_IMAGES = (
     "vllm-sr-cuda",
     "vllm-sr-rocm",
 )
-# The 46 GiB ROCm runtime must not enter hosted OCI artifact matrices.
-# A separate device-capable build and validation path is not yet integrated.
+# The 46 GiB ROCm runtime stays outside hosted OCI artifact matrices.
+# Stable releases bind its separately qualified, published digest.
 NIGHTLY_IMAGES = (
     *PRODUCTION_RELEASE_IMAGES,
     "vllm-sr-sim",

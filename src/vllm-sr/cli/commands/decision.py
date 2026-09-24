@@ -35,24 +35,16 @@ from cli.decision_runtime.management import (
 )
 from cli.decision_runtime.registry import DecisionRegistryError
 
-DECISION_HELP = """Serve and manage standalone Decision models.
+DECISION_HELP = """Serve and manage standalone Decision 1.0 models.
 
-Launching requires the integrated Decision catalog. Recovery commands remain
-available without it. ``vllm-sr decision serve MODEL`` starts one model as a
-standalone HTTP service. Detached instances remain registered for the
-ownership-checked list, status, stop, and forget commands.
-Current source builds have no default CPU or ROCm image; build one locally and
-pass its image ID with ``--image`` and ``--image-pull-policy never``.
-
-List and status report authoritative registry lifecycle separately from observed
-container state. List does not probe service readiness; status probes the strict
-``/ready`` contract for a registered running instance. Native MLX launch support
-remains explicit integration work and is not emulated by the container driver.
+``vllm-sr decision serve MODEL`` starts one model as a SystemOne HTTP service.
+An installed release selects its verified image for a supported backend;
+``--image`` is only needed for an explicit override. Use ``--detach`` to leave
+the model running, then manage it with list, status, and stop.
 
 \b
 Examples:
   vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B \\
-    --backend cpu --image "$DECISION_IMAGE_ID" --image-pull-policy never \\
     --instance-name kai-demo --detach
   vllm-sr decision list
   vllm-sr decision status kai-demo
