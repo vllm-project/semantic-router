@@ -79,6 +79,8 @@ artifact, and reads it back to verify checksums. It stores completed target
 fits under `.fit-work/` for restart after interruption. A full 500-sequence
 Qwen3 run needs a high-memory machine; this script has not yet been validated
 on the model pair.
+Publishing refuses to overwrite an existing artifact. Use `--bundle-version 2`
+for a new fit of the same pinned model pair and precision.
 
 ```bash
 PYTHONPATH=. python3 src/training/kv_mapper/fit_run.py \
