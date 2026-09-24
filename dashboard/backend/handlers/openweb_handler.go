@@ -2,13 +2,16 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
-	"net/url"
+	"net/netip"
+	"strings"
 	"time"
 
 	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 )
 
 type openWebFetchPlan struct {
@@ -91,15 +94,57 @@ func validateOpenWebRequest(req OpenWebRequest) (OpenWebResponse, bool) {
 		return OpenWebResponse{Error: "URL cannot be empty"}, true
 	}
 
-	parsedURL, err := url.Parse(req.URL)
-	if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") {
+	parsed, err := outboundPolicy(openWebDefaultTimeout).ValidateURL(req.URL)
+	if err != nil {
 		return OpenWebResponse{
 			URL:   req.URL,
 			Error: "Invalid URL format",
 		}, true
 	}
+	// Reader mode forwards this URL to an external service, so our transport
+	// cannot inspect the target's address. Refuse literal non-public targets
+	// before choosing either the direct or reader path.
+	if isNonPublicReaderTarget(parsed.Hostname()) {
+		return OpenWebResponse{
+			URL:   req.URL,
+			Error: errOpenWebForbiddenTarget.Error(),
+		}, true
+	}
 
 	return OpenWebResponse{}, false
+}
+
+func isNonPublicReaderTarget(host string) bool {
+	if address, err := netip.ParseAddr(host); err == nil {
+		return !safefetch.IsPublicAddr(address)
+	}
+
+	// Other URL consumers can accept shorthand, octal or hexadecimal IPv4
+	// forms. Reject numeric-looking hosts rather than trusting Jina to parse
+	// them the same way as Go. Local names are not public web targets either.
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") ||
+		host == "local" || strings.HasSuffix(host, ".local") ||
+		host == "internal" || strings.HasSuffix(host, ".internal") {
+		return true
+	}
+	if host == "" {
+		return true
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" {
+			return true
+		}
+		base := "0123456789"
+		if strings.HasPrefix(label, "0x") {
+			label = strings.TrimPrefix(label, "0x")
+			base = "0123456789abcdef"
+		}
+		if label == "" || strings.IndexFunc(label, func(r rune) bool { return !strings.ContainsRune(base, r) }) >= 0 {
+			return false
+		}
+	}
+	return true
 }
 
 func buildOpenWebFetchPlan(req OpenWebRequest) openWebFetchPlan {
@@ -143,6 +188,13 @@ func fetchOpenWeb(plan openWebFetchPlan, rejectRevoked func() bool) (*OpenWebRes
 			log.Printf("[OpenWeb] Direct fetch succeeded")
 			return result, false, nil
 		}
+		// A refused destination fails closed. Only a transport or upstream
+		// failure earns the reader fallback; retrying a blocked URL through a
+		// second path would make the policy advisory.
+		if isForbiddenFetchTarget(err) {
+			log.Printf("[OpenWeb] Direct fetch refused by outbound policy")
+			return nil, false, errOpenWebForbiddenTarget
+		}
 		log.Printf("[OpenWeb] Direct fetch failed: %v", redactURLsForLog(err.Error()))
 		log.Printf("[OpenWeb] Strategy 2: Falling back to Jina Reader...")
 	} else {
@@ -165,6 +217,21 @@ func fetchOpenWeb(plan openWebFetchPlan, rejectRevoked func() bool) (*OpenWebRes
 
 	log.Printf("[OpenWeb] Jina Reader fetch succeeded")
 	return result, false, nil
+}
+
+// errOpenWebForbiddenTarget is what the caller sees when the outbound policy
+// refuses a destination. It names no address and no reason, so the endpoint
+// cannot be used to map the dashboard's network by reading error text.
+var errOpenWebForbiddenTarget = errors.New("destination is not permitted")
+
+// isForbiddenFetchTarget reports whether err is the outbound policy refusing
+// the destination, as opposed to the upstream being unreachable or slow.
+func isForbiddenFetchTarget(err error) bool {
+	return errors.Is(err, errOpenWebForbiddenTarget) ||
+		errors.Is(err, safefetch.ErrDestinationForbidden) ||
+		errors.Is(err, safefetch.ErrSchemeNotAllowed) ||
+		errors.Is(err, safefetch.ErrInvalidURL) ||
+		errors.Is(err, safefetch.ErrTooManyRedirects)
 }
 
 func writeOpenWebJSON(w http.ResponseWriter, status int, response OpenWebResponse) {
