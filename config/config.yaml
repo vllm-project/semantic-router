@@ -892,6 +892,17 @@ routing:
                 - target
               max_target_tokens: 16000
             failure_mode: fail_open
+        # Disabled sample: remove the later copy of prior turns sent twice in a row.
+        - type: context_dedup
+          configuration:
+            enabled: false
+            normalization: exact
+            failure_mode: fail_open
+            limits:
+              max_history_turns: 128
+              max_history_bytes: 1048576
+              max_segment_turns: 64
+              timeout_ms: 50
         - type: tools
           configuration:
             enabled: true

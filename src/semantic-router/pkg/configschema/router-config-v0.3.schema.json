@@ -1840,6 +1840,42 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ContextDedupLimitsConfig": {
+      "properties": {
+        "max_history_turns": {
+          "type": "integer"
+        },
+        "max_history_bytes": {
+          "type": "integer"
+        },
+        "max_segment_turns": {
+          "type": "integer"
+        },
+        "timeout_ms": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ContextDedupPluginConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "normalization": {
+          "type": "string"
+        },
+        "failure_mode": {
+          "type": "string"
+        },
+        "limits": {
+          "$ref": "#/$defs/ContextDedupLimitsConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ContextRule": {
       "properties": {
         "name": {
@@ -2303,6 +2339,25 @@
           "if": {
             "properties": {
               "type": {
+                "const": "context_dedup"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "$ref": "#/$defs/ContextDedupPluginConfig"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
                 "const": "shadow_dispatch"
               }
             },
@@ -2324,6 +2379,7 @@
           "type": "string",
           "enum": [
             "context_compression",
+            "context_dedup",
             "fast_response",
             "hallucination",
             "header_mutation",
@@ -7645,6 +7701,12 @@
         "display_name": "Context Compression",
         "description": "Compress selected context before provider dispatch.",
         "schema_ref": "#/$defs/ContextCompressionPluginConfig"
+      },
+      {
+        "type": "context_dedup",
+        "display_name": "Context Dedup",
+        "description": "Remove adjacent repeated history turns before provider dispatch.",
+        "schema_ref": "#/$defs/ContextDedupPluginConfig"
       },
       {
         "type": "shadow_dispatch",

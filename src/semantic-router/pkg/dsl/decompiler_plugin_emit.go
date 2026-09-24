@@ -13,6 +13,7 @@ var typedPluginConfigEmitters = map[string]typedPluginConfigEmitter{
 	"system_prompt":       emitSystemPromptPluginConfig,
 	"response_cache":      emitResponseCachePluginConfig,
 	"context_compression": emitStructuredPluginConfig,
+	"context_dedup":       emitStructuredPluginConfig,
 	"router_replay":       emitRouterReplayPluginConfig,
 	"shadow_dispatch":     emitStructuredPluginConfig,
 	"memory":              emitMemoryPluginConfig,

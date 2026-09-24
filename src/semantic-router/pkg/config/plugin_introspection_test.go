@@ -75,6 +75,8 @@ func TestDecisionPluginActivationMatchesEveryRuntimeGetter(t *testing.T) {
 					want = decision.GetResponseJailbreakConfig().Enabled
 				case *ContextCompressionPluginConfig:
 					want = decision.GetContextCompressionConfig().Enabled
+				case *ContextDedupPluginConfig:
+					want = decision.GetContextDedupConfig().Enabled
 				case *ShadowDispatchPluginConfig:
 					want = decision.GetShadowDispatchConfig().Enabled
 				default:

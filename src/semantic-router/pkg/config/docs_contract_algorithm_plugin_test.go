@@ -35,6 +35,7 @@ var retiredAlgorithmTutorialDocs = []string{
 var pluginTutorialBuckets = map[string]string{
 	"content-safety":      "safety-and-generation",
 	"context-compression": "response-and-mutation",
+	"context-dedup":       "response-and-mutation",
 	"fast-response":       "response-and-mutation",
 	"hallucination":       "safety-and-generation",
 	"header-mutation":     "response-and-mutation",

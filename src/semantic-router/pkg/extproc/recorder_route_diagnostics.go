@@ -70,6 +70,7 @@ func buildReplayRouteDiagnostics(
 		AppliedUnknownPolicies:         ctx.VSRDecisionDiagnostics.AppliedUnknownPolicies,
 		DecisionRanking:                replayDecisionRanking(ctx.VSRDecisionDiagnostics.Ranking),
 	}
+	diagnostics.ContextDedup = contextDedupReplayDiagnostics(ctx)
 	if ctx.VSRSelectedDecision != nil {
 		diagnostics.Annotations = ctx.VSRSelectedDecision.Annotations
 	}

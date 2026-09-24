@@ -94,6 +94,7 @@ const PLUGIN_ICON_OVERRIDES: Partial<Record<PluginType, string>> = {
   tools: 'TL',
   tool_selection: 'TS',
   context_compression: 'CC',
+  context_dedup: 'CD',
   shadow_dispatch: 'SD',
 }
 
@@ -117,6 +118,7 @@ const PLUGIN_COLOR_OVERRIDES: Partial<Record<PluginType, { background: string; b
     tools: { background: '#5a6c7d', border: '#3d4a59' },
     tool_selection: { background: '#4b6f7f', border: '#344f5c' },
     context_compression: { background: '#606c7a', border: '#3d4a59' },
+    context_dedup: { background: '#4f6b6e', border: '#354d50' },
     shadow_dispatch: { background: '#5b5f7a', border: '#3f4259' },
   }
 

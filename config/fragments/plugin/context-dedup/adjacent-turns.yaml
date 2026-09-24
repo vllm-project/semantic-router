@@ -1,0 +1,16 @@
+# Remove the later copy of prior turns a request carries twice in a row.
+#
+# Disabled by default. Only complete text-only turns that immediately repeat
+# an identical block of turns are removed; tool exchanges, confirmations,
+# retries, corrections, and repeats separated by other content are kept.
+plugin:
+  type: context_dedup
+  configuration:
+    enabled: false
+    normalization: exact
+    failure_mode: fail_open
+    limits:
+      max_history_turns: 128
+      max_history_bytes: 1048576
+      max_segment_turns: 64
+      timeout_ms: 50

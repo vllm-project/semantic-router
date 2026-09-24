@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"maps"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/tasks"
@@ -230,6 +231,7 @@ type RouteDiagnostics struct {
 	ContextCompressionQuality      string                               `json:"context_compression_quality,omitempty"`
 	ContextCompressionFallback     string                               `json:"context_compression_fallback,omitempty"`
 	ContextCompressionCostSaved    float64                              `json:"context_compression_cost_saved,omitempty"`
+	ContextDedup                   *ContextDedupDiagnostics             `json:"context_dedup,omitempty"`
 	RequestDemandSnapshots         []RequestDemandSnapshot              `json:"request_demand_snapshots,omitempty"`
 	Annotations                    map[string]interface{}               `json:"annotations,omitempty"`
 	SignalErrors                   map[string]string                    `json:"signal_errors,omitempty"`
@@ -249,6 +251,39 @@ type DecisionRanking struct {
 	DecidedBy  string `json:"decided_by"`
 	Winner     string `json:"winner"`
 	Candidates int    `json:"candidates"`
+}
+
+// ContextDedupDiagnostics is the bounded receipt of the context_dedup step.
+// It carries counts, bounded reason codes, and pre-transform message
+// positions only: no message text ever reaches replay storage.
+type ContextDedupDiagnostics struct {
+	Scope             string                `json:"scope,omitempty"`
+	Normalization     string                `json:"normalization,omitempty"`
+	Outcome           string                `json:"outcome,omitempty"`
+	Reason            string                `json:"reason,omitempty"`
+	ExaminedMessages  int                   `json:"examined_messages,omitempty"`
+	ExaminedTurns     int                   `json:"examined_turns,omitempty"`
+	CandidateTurns    int                   `json:"candidate_turns,omitempty"`
+	ProtectedMessages int                   `json:"protected_messages,omitempty"`
+	RetainedMessages  int                   `json:"retained_messages,omitempty"`
+	RemovedMessages   int                   `json:"removed_messages,omitempty"`
+	RemovedTurns      int                   `json:"removed_turns,omitempty"`
+	RemovedTextBytes  int                   `json:"removed_text_bytes,omitempty"`
+	DuplicateSegments int                   `json:"duplicate_segments,omitempty"`
+	Retained          map[string]int        `json:"retained,omitempty"`
+	Segments          []ContextDedupSegment `json:"segments,omitempty"`
+	SegmentsTruncated bool                  `json:"segments_truncated,omitempty"`
+	RecoveryStatus    string                `json:"recovery_status,omitempty"`
+	Recovery          string                `json:"recovery,omitempty"`
+}
+
+// ContextDedupSegment locates one removed block of turns by pre-transform
+// message index.
+type ContextDedupSegment struct {
+	RetainedFirstMessageID int `json:"retained_first_message_id"`
+	RemovedFirstMessageID  int `json:"removed_first_message_id"`
+	Turns                  int `json:"turns"`
+	Messages               int `json:"messages"`
 }
 
 // HallucinationSpan is a single unsupported span with its NLI explanation,
@@ -640,6 +675,7 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 	cloned.FusionQuorum = cloneFusionQuorumDiagnostics(value.FusionQuorum)
 	cloned.SelectionTrace = value.SelectionTrace.Clone()
 	cloned.Looper = cloneLooperDiagnostics(value.Looper)
+	cloned.ContextDedup = cloneContextDedupDiagnostics(value.ContextDedup)
 	cloned.RequestDemandSnapshots = append([]RequestDemandSnapshot(nil), value.RequestDemandSnapshots...)
 	cloned.Annotations = cloneInterfaceMap(value.Annotations)
 	cloned.SignalErrors = cloneStringMap(value.SignalErrors)
@@ -648,6 +684,16 @@ func cloneRouteDiagnostics(value *RouteDiagnostics) *RouteDiagnostics {
 		ranking := *value.DecisionRanking
 		cloned.DecisionRanking = &ranking
 	}
+	return &cloned
+}
+
+func cloneContextDedupDiagnostics(value *ContextDedupDiagnostics) *ContextDedupDiagnostics {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	cloned.Segments = append([]ContextDedupSegment(nil), value.Segments...)
+	cloned.Retained = maps.Clone(value.Retained)
 	return &cloned
 }
 

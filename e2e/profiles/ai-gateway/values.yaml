@@ -100,6 +100,45 @@ config:
               ttl_turns: 0
               keep_current_model: true
               prefer_prefix_retention: true
+      - name: context_dedup_probe_decision
+        description: "Deterministic keyword-gated route carrying an enabled context_dedup plugin, used by the context-dedup-adjacent-turns E2E to assert that the later copy of an adjacent repeated turn is removed while corrections and confirmations are forwarded (issue #3346)."
+        priority: 606
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: context_dedup_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: context_dedup
+            configuration:
+              enabled: true
+              normalization: exact
+              failure_mode: fail_closed
+              limits:
+                max_history_turns: 128
+                max_history_bytes: 1048576
+                max_segment_turns: 64
+                timeout_ms: 50
+      - name: context_dedup_disabled_probe_decision
+        description: "Deterministic keyword-gated route carrying a disabled context_dedup plugin, used by the context-dedup-disabled E2E to assert that a configured-but-disabled policy forwards the complete conversation (issue #3346)."
+        priority: 607
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: context_dedup_disabled_probe_keywords
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: context_dedup
+            configuration:
+              enabled: false
       - name: looper_metrics_probe_decision
         description: "Deterministic keyword-gated looper route used by the looper-latency-token-headers E2E to assert x-vsr-looper-latency-ms and x-vsr-looper-*-tokens response headers (issue #2694)."
         priority: 610
@@ -842,6 +881,16 @@ config:
           operator: OR
           keywords:
             - __MULTI_MODEL_PROBE__
+          case_sensitive: false
+        - name: context_dedup_probe_keywords
+          operator: OR
+          keywords:
+            - __CONTEXT_DEDUP_PROBE__
+          case_sensitive: false
+        - name: context_dedup_disabled_probe_keywords
+          operator: OR
+          keywords:
+            - __CONTEXT_DEDUP_DISABLED_PROBE__
           case_sensitive: false
       events:
         - name: critical_payment_event
