@@ -323,6 +323,10 @@ type RequestContext struct {
 	// persistence participates in this request. Generation never depends on it.
 	ResponseObjectState *ResponseObjectState
 
+	// preparedDispatchReceipt identifies the final primary payload returned to
+	// Envoy without retaining its bytes beyond the existing body mutation.
+	preparedDispatchReceipt *routerreplay.PreparedDispatchReceipt
+
 	// Router replay context
 	RouterReplayID           string                           // ID of the router replay session, if applicable
 	RouterReplayPluginConfig *config.RouterReplayPluginConfig // Per-decision plugin configuration for router replay

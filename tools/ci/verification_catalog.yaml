@@ -359,6 +359,7 @@ full_cpu:
     - e2e.streaming
     - e2e.vela-omni
     - e2e.vela-halu
+    - e2e.vela-shield
     - e2e.multimodal-routing
   support_contracts:
     Helm chart: [core]

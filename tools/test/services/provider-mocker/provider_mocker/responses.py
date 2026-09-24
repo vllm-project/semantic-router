@@ -23,13 +23,14 @@ router = APIRouter()
 
 @router.post("/v1/responses")
 async def responses(request: Request):
+    raw_body = await request.body()
     body, error_response = await parse_provider_request(request, "openai_responses")
     if error_response is not None:
         return error_response
     assert body is not None
     await apply_fixture_delay()
     session_id = request.headers.get(SESSION_HEADER) or "__global__"
-    request.app.state.request_store.record(session_id, body, request.headers)
+    request.app.state.request_store.record(session_id, body, request.headers, raw_body)
     if response_input_contains(body, "__mock_provider_error__"):
         return JSONResponse(
             status_code=429,

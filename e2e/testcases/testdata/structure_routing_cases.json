@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Many questions match",
+    "description": "many_questions matches a prompt with four or more explicit questions",
+    "query": "What's the best way to reduce latency? Should I add a cache? What about connection pooling? Would batching the requests help too?",
+    "expected_decision": "many_questions_routing",
+    "expected_matched_signal": "many_questions",
+    "should_match": true
+  },
+  {
+    "name": "Numbered steps match",
+    "description": "numbered_steps matches a prompt containing a numbered list item",
+    "query": "Here's my deployment plan:\n1. Provision the cluster\n2. Deploy the router\n3. Run the smoke tests",
+    "expected_decision": "numbered_steps_routing",
+    "expected_matched_signal": "numbered_steps",
+    "should_match": true
+  },
+  {
+    "name": "No structure rule matches",
+    "description": "A short, unstructured query matches neither many_questions nor numbered_steps",
+    "query": "What's a good recipe for pasta tonight?",
+    "expected_decision": "",
+    "expected_matched_signal": "",
+    "should_match": false
+  }
+]
