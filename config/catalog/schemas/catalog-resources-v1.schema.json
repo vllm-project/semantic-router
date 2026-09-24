@@ -238,6 +238,20 @@
             "propertyNames": {"minLength": 1},
             "additionalProperties": {"type": "string", "pattern": "^/"}
           },
+          "operation_overrides": {
+            "type": "object",
+            "propertyNames": {"minLength": 1},
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {"type": "string", "pattern": "^/"},
+                "absolute_path": {"type": "boolean"},
+                "suppress_api_version": {"type": "boolean"}
+              },
+              "required": ["path"]
+            }
+          },
           "default_headers": {
             "type": "object",
             "propertyNames": {"pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"},

@@ -20,27 +20,40 @@ import { ArticleFigure, ArticleVideo } from '@site/src/components/ArticleMedia';
   From the next move to a whole queue of decisions. Meet Decision 1.0. Sound on.
 </ArticleVideo>
 
-[Jev's launch](https://typesafe.ai/blog/introducing-system-one-models-and-jev) has put decision models in the spotlight. The question is simple: **how do we give AI systems a faster way to decide what happens next?**
+**AI is moving from generating answers to making decisions inside software.**
 
-For **vLLM Semantic Router**, that means choosing the right model, applying the right policy, and moving each request forward.
+Those decisions are everywhere: route an intent, gate an action by confidence, combine signals into a score, or ask many questions at once. Small decisions can shape the behavior of an entire system.
 
-Meet **Decision 1.0: Open Decision Foundation Models**. Six open models that turn context into decisions—built for the next action, from a single request to a whole queue of work.
+That vision is deeply aligned with **vLLM Semantic Router**: understand each request, apply policy, and choose what should happen next. It is why we invested in **Decision 1.0: six open-weight Decision Foundation Models**—and why we will keep improving them in the open.
 
-[**Explore the six models →**](https://huggingface.co/collections/llm-semantic-router/decision-10) · [**Try Decision Studio →**](https://huggingface.co/spaces/llm-semantic-router/decision-studio)
+[**Read the paper →**](/decision-paper) · [**Explore the six models →**](https://huggingface.co/collections/llm-semantic-router/decision-10) · [**Try Decision Studio →**](https://huggingface.co/spaces/llm-semantic-router/decision-studio)
 
 <!-- truncate -->
 
 ## Why the decision layer matters
 
+AI can generate an answer. An application still has to decide what happens next.
+
 A useful decision layer has to keep up with the application. Available models change. Policies evolve. A fast answer may be the right outcome for one request, while another deserves more computation. The application needs a way to express those differences and evaluate the available choices.
 
-Decision turns that work into a small interface:
+<ArticleVideo
+  src="/videos/decision-1-0/decision-1-0-tetris.mp4"
+  poster="/img/blog/decision-1-0/tetris-poster.png"
+  title="Decision 1.0 speed comparison in Tetris"
+  showcase
+>
+  <em>Feel the speed.</em>
+</ArticleVideo>
 
-**State + questions + criteria → answers.**
+Decision 1.0 makes the decision itself programmable:
 
-The state carries the evidence. Questions specify what matters. Criteria describe the candidate models, actions, labels, or rubric levels. Change the criteria and the model has a new decision to make, without replacing a fixed classification head or parsing a generated explanation.
+**State + questions + criteria → typed probability distributions.**
 
-For routing, the application can supply task requirements, model capabilities, and measured operating signals as evidence. For agents, it can provide the current state and available actions. For evaluation, it can supply a completed trace and the standards it should meet. The format stays the same while the decisions change.
+The application defines what matters and what is allowed. The model evaluates the choices. The system stays in control.
+
+Route a request. Select an action. Apply a policy. Score an outcome. One interface, many decisions.
+
+This is the layer between intelligence and action: open, programmable, and built to keep software in control.
 
 ## Built to decide
 
@@ -58,7 +71,7 @@ Two architectural branches make this possible. **Kai and Lex** use three bidirec
 
 The result is a model designed around the decision itself: compare the alternatives, return their probabilities, and let the application take the next step.
 
-<details>
+<details open>
 <summary>Explore the encoder branch and candidate readout</summary>
 
 <ArticleFigure
@@ -77,7 +90,7 @@ The result is a model designed around the decision itself: compare the alternati
   Lux's shared candidate readout. Candidate descriptions come from the request, rather than a fixed vocabulary of task labels.
 </ArticleFigure>
 
-[Lux model details](https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/blob/c22a05deaf2c4c492465f7e7048ed80f0d342e81/METHODS.md) · [Kai architecture](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/3ec2d25838bf50b60d56cacb03fde220ab9d638a/ARCHITECTURE.md)
+[Kai architecture](https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/blob/3ec2d25838bf50b60d56cacb03fde220ab9d638a/ARCHITECTURE.md)
 
 </details>
 
