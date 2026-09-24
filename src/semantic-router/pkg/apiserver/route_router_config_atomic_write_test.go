@@ -163,11 +163,11 @@ func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 	// The low-level writer must compare the live revision, while an API
 	// mutation still requires a rollout before accepting another request.
 	second := []byte("routing: {second: true}\n")
-	if err := writeConfigAtomically(configPath, second); err != nil {
-		t.Fatalf("second ConfigMap write with stale mount: %v", err)
+	if writeErr := writeConfigAtomically(configPath, second); writeErr != nil {
+		t.Fatalf("second ConfigMap write with stale mount: %v", writeErr)
 	}
-	if err := writeConfigAtomicallyIfUnchanged(configPath, original, []byte("routing: {stale: true}\n")); !errors.Is(err, configwriter.ErrConfigMapChanged) {
-		t.Fatalf("stale ConfigMap write error = %v, want ErrConfigMapChanged", err)
+	if staleErr := writeConfigAtomicallyIfUnchanged(configPath, original, []byte("routing: {stale: true}\n")); !errors.Is(staleErr, configwriter.ErrConfigMapChanged) {
+		t.Fatalf("stale ConfigMap write error = %v, want ErrConfigMapChanged", staleErr)
 	}
 	updated, err = clientset.CoreV1().ConfigMaps(fakeCM.Namespace).Get(t.Context(), fakeCM.Name, metav1.GetOptions{})
 	if err != nil {

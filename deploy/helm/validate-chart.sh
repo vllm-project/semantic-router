@@ -177,7 +177,7 @@ if helm template canonical-empty-release "$CHART_PATH" \
     log_error "An empty canonical config silently fell back to chart defaults"
     exit 1
 fi
-if ! grep -q "configOverride must be a non-empty mapping" \
+if ! grep -Eq "configOverride must be a non-empty mapping|configOverride: Must have at least 1 properties" \
     "$TEMP_DIR/canonical-empty-template.yaml"; then
     log_error "Empty canonical config failed without the expected safety error"
     exit 1
