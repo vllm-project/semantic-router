@@ -96,7 +96,7 @@ def test_bridge_materializes_exact_model_and_builds_read_only_launch(
     assert spec.dtype == "float32"
     assert spec.image == IMAGE
     assert spec.artifact_digest == f"sha256:{'b' * 64}"
-    assert (spec.max_batch, spec.max_concurrency, spec.max_queue) == (8, 8, 8)
+    assert (spec.max_batch, spec.max_concurrency, spec.max_queue) == (8, 8, 32)
     assert spec.environment == {"TOKENIZERS_PARALLELISM": "false"}
     assert len(spec.mounts) == 1
     assert spec.mounts[0].source == str(tmp_path / "artifact")

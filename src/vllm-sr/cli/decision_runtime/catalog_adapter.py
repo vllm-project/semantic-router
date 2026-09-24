@@ -29,8 +29,7 @@ from decision_runtime.catalog_adapter import (
     resolve_decision_runtime_model,
 )
 from decision_runtime.qwen35_torch import EXPERIMENTAL_SOL_GRAPH_MODEL_ID
-from decision_runtime.scheduler import DEFAULT_MAX_CONCURRENCY, DEFAULT_MAX_QUEUE
-
+from decision_runtime.scheduler import DEFAULT_MAX_CONCURRENCY
 from cli.decision_runtime.catalog import (
     DecisionCatalogError,
     DecisionRuntimeMount,
@@ -49,6 +48,9 @@ from cli.decision_runtime.image_reference import (
 
 _ARTIFACT_TARGET = "/opt/vllm-sr/decision-artifact"
 _CONTAINER_PORT = 8000
+# Large multi-state requests wait for row credits instead of exhausting an
+# eight-entry request queue while the physical backend drains a B8 cohort.
+_DEFAULT_DRUN_MAX_QUEUE = 32
 _SHA256_HEX_LENGTH = 64
 _SUPPORTED_CONTAINER_BACKENDS = frozenset({"rocm", "cuda", "cpu"})
 _FAMILY_PYTHON = MappingProxyType(
@@ -148,7 +150,7 @@ class IntegratedDecisionCatalogResolver:
         max_batch = request.max_batch or model.profile.physical_batch_size
         max_concurrency = request.max_concurrency or DEFAULT_MAX_CONCURRENCY
         max_queue = (
-            DEFAULT_MAX_QUEUE if request.max_queue is None else request.max_queue
+            _DEFAULT_DRUN_MAX_QUEUE if request.max_queue is None else request.max_queue
         )
         _validate_resolved_limits(max_batch, max_concurrency, max_queue)
         if request.experimental_qwen_rocm_graph_b8 and (
