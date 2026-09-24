@@ -20509,6 +20509,30 @@
                               "original_model": {
                                 "type": "string"
                               },
+                              "prepared_dispatch": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "byte_length": {
+                                    "type": "integer"
+                                  },
+                                  "sha256": {
+                                    "type": "string"
+                                  },
+                                  "version": {
+                                    "type": "integer"
+                                  },
+                                  "wire_format": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "version",
+                                  "wire_format",
+                                  "sha256",
+                                  "byte_length"
+                                ]
+                              },
                               "previous_model": {
                                 "type": "string"
                               },
@@ -24604,6 +24628,30 @@
                         },
                         "original_model": {
                           "type": "string"
+                        },
+                        "prepared_dispatch": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "byte_length": {
+                              "type": "integer"
+                            },
+                            "sha256": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "wire_format": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "version",
+                            "wire_format",
+                            "sha256",
+                            "byte_length"
+                          ]
                         },
                         "previous_model": {
                           "type": "string"

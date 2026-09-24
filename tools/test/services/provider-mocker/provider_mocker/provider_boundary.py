@@ -1,5 +1,6 @@
 """HTTP request boundary and bounded request observation for the simulator."""
 
+import hashlib
 from collections import OrderedDict
 from collections.abc import Mapping
 from copy import deepcopy
@@ -25,7 +26,8 @@ class RequestStore:
         self,
         session_id: str,
         body: dict[str, Any],
-        headers: Mapping[str, str] | None = None,
+        headers: Mapping[str, str] | None,
+        raw_body: bytes,
     ) -> None:
         if session_id in self._store:
             self._store.move_to_end(session_id)
@@ -42,6 +44,8 @@ class RequestStore:
                 header_values.setdefault(normalized, []).append(value)
         self._store[session_id] = {
             "body": deepcopy(body),
+            "body_sha256": hashlib.sha256(raw_body).hexdigest(),
+            "body_bytes": len(raw_body),
             "headers": observed_headers,
             "header_values": header_values,
         }
