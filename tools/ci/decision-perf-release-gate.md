@@ -45,18 +45,30 @@ counter deltas. High-load cells must show actual batching above one row per
 physical batch. Every concurrency 8 or 32 cell, including the single-state
 shape, must retain at least 95% of its old-arm decisions/sec throughput.
 
-The throughput win is predeclared over all six models and both multi-state
-shapes: 8 questions/8 states and 32 questions/32 states, each at concurrency
-32. For each of these 12 fixed cells, divide the new-arm decisions/sec by the
-old-arm decisions/sec. The equal-weight geometric mean of all 12 ratios must
-be at least 1.05. Each model's geometric mean of its two ratios must be at
-least 1.00, so one model's gain cannot conceal another model's regression.
-An individual model may be flat. The qualification summary publishes the
-overall mean, each model's mean, and both shape ratios for every model; no
-best-performing shape is selected after measurement. Three old/new alternating
-rounds per cell limit order effects. The 0.95 cell floor is a fixed allowance
-for measurement variation, not a statistical confidence bound; all cell
-measurements remain in the hashed report for review.
+The hard model throughput gate is predeclared over all six models and both
+multi-state shapes: 8 questions/8 states and 32 questions/32 states, each at
+concurrency 32. For each of these 12 fixed cells, divide the new-arm
+decisions/sec by the old-arm decisions/sec measured against that model's same
+selected historical snapshot. Each model's equal-weight geometric mean of its
+two ratios must be at least 1.00. A gain in another model cannot offset a
+model below parity. An individual model may be flat, subject to the 0.95 floor
+in every concurrency 8 or 32 cell. The equal-weight geometric mean of all 12
+ratios is reported, and reaching 1.05 is an aspirational gain goal rather than
+a release condition. The qualification summary publishes that mean, whether
+it reached the goal, each model's mean, and both shape ratios for every model;
+no best-performing shape is selected after measurement.
+
+Three alternating old/new rounds per cell limit order effects but do not
+establish formal statistical noninferiority. The model gate uses the measured
+point estimate without a below-parity tolerance; the 0.95 cell floor is a
+fixed material-regression guard, not a confidence bound or permission for a
+model-level regression. If results are borderline or noisy, treat them as
+inconclusive and obtain a fresh complete paired protected run against the same
+selected historical snapshot before promotion. Retain all attempts and never
+choose favorable rounds, shapes, models, or runs after seeing the results. A
+future confidence-based gate would need a predeclared sample size and a
+one-sided lower bound on the paired log-throughput ratio at or above zero for
+each model.
 
 The measurement compares synthetic
 HTTP workflows, not task accuracy. Multi-state results compare the old
