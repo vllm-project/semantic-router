@@ -51,6 +51,10 @@ default; set `VLLM_SR_DASHBOARD_HOST_BIND=127.0.0.1` for a loopback-only trial.
 Inspect actual port bindings before opening access. Preserve authentication state
 when updating a stack and reuse an existing valid session where available.
 
+Jaeger, Prometheus, and Grafana publish on loopback by default. Set
+`VLLM_SR_OBSERVABILITY_HOST_BIND=0.0.0.0` only when their host ports need external
+access; inspect the resulting bindings and secure access before exposing them.
+
 Initial admin provisioning supports `DASHBOARD_ADMIN_EMAIL`,
 `DASHBOARD_ADMIN_PASSWORD` and optional `DASHBOARD_ADMIN_NAME`. Supply secrets
 through environment variables. Set `DASHBOARD_ALLOW_OPEN_BOOTSTRAP=false` when
