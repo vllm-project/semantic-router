@@ -28,6 +28,16 @@ class EvalContractTests(unittest.TestCase):
         self.assertAlmostEqual(got["cosine"], 1.0, places=6)
         self.assertAlmostEqual(got["r2"], 1.0, places=6)
 
+    def test_kv_fit_rejects_incomplete_or_reshaped_capture(self) -> None:
+        for pred, true in (
+            ([1, 2], [1, 2, 1000]),
+            (np.ones((2, 3)), np.ones((3, 2))),
+            ([], []),
+        ):
+            with self.subTest(pred_shape=np.shape(pred), true_shape=np.shape(true)):
+                with self.assertRaisesRegex(ValueError, "matching nonempty shapes"):
+                    kv_fit_metrics(pred, true)
+
     def test_length_mismatch_raises(self) -> None:
         with self.assertRaises(ValueError):
             paired_deltas([1.0, 2.0], [1.0])

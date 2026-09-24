@@ -10,10 +10,13 @@ import numpy as np
 
 
 def kv_fit_metrics(pred: np.ndarray, true: np.ndarray) -> dict[str, float]:
-    pred = np.asarray(pred, dtype=np.float64).reshape(-1)
-    true = np.asarray(true, dtype=np.float64).reshape(-1)
-    n = min(pred.size, true.size)
-    pred, true = pred[:n], true[:n]
+    pred = np.asarray(pred, dtype=np.float64)
+    true = np.asarray(true, dtype=np.float64)
+    if pred.shape != true.shape or pred.size == 0:
+        raise ValueError(
+            f"KV tensors must have matching nonempty shapes, got {pred.shape} vs {true.shape}"
+        )
+    pred, true = pred.reshape(-1), true.reshape(-1)
     err = pred - true
     rel = float(np.linalg.norm(err) / (np.linalg.norm(true) + 1e-8))
     cosine = float(
