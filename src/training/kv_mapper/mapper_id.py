@@ -4,6 +4,19 @@ from __future__ import annotations
 
 import re
 
+_PRECISION_ALIASES = {
+    "fp16": "fp16", "float16": "fp16", "half": "fp16",
+    "bf16": "bf16", "bfloat16": "bf16",
+    "fp32": "fp32", "float32": "fp32",
+}
+
+
+def normalize_precision(precision: str) -> str:
+    try:
+        return _PRECISION_ALIASES[precision.strip().lower()]
+    except KeyError as exc:
+        raise ValueError(f"unsupported mapper precision: {precision!r}") from exc
+
 
 def _revision_token(revision: str, max_len: int = 12) -> str:
     """HF revision or commit id, safe for use in a config string."""
@@ -33,7 +46,7 @@ def make_mapper_id(
     alias), plus dtype and KV head count. ``bundle_version`` bumps when the same
     revisions are re-fitted with a new recipe; it is not a model revision.
     """
-    prec = precision.lower().replace("float", "fp")
+    prec = normalize_precision(precision)
     src = _revision_token(source_revision)
     tgt = _revision_token(target_revision)
     tp = (
