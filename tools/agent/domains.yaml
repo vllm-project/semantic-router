@@ -389,7 +389,6 @@ domains:
   decision-runtime:
     owner: vllm-sr-cli
     paths:
-      - bench/decision_runtime/**
       - src/vllm-sr/decision_runtime/**
       - src/vllm-sr/tests/test_decision_runtime_*.py
       - src/vllm-sr/tests/test_decision_physical_batching.py
@@ -735,8 +734,8 @@ images:
       - tools/ci/image_artifacts.py
       - tools/ci/docker-build-args.sh
       - .github/workflows/build-artifacts.yml
-  # ROCm publishes only after the external device qualification receipt is
-  # validated. A hosted runner cannot stage this 46 GiB runtime as a CI artifact.
+  # ROCm is excluded from hosted image CI and publication until a supported
+  # GPU validation and release path is in place.
   decision-runtime-rocm:
     pr_paths: []
     publish_paths: []

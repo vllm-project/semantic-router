@@ -12,7 +12,7 @@ requests, so traffic shape matters as much as the model you choose.
 
 Use [`POST /v1/systemone`](./api.md#one-state-three-question-types) for one
 state with one or more questions. If several states share the same questions,
-use [`POST /v1/decision/batches`](./api.md#many-states-one-question-set) to
+use [`POST /v1/systemone/batches`](./api.md#many-states-one-question-set) to
 send them together. The batch endpoint reduces repeated HTTP and question
 payload work; it returns an answer for every state and question in caller
 order. It does not change what the questions mean.
@@ -42,8 +42,7 @@ single-state/many-question traffic separately from multiple states with shared
 questions; batching can reduce HTTP work even when model execution is
 unchanged.
 
-For repeatable paired runs, use the
-[Decision benchmark harness](https://github.com/vllm-project/semantic-router/tree/main/bench/decision_runtime).
-Keep results for each model separately so a gain on one model does not conceal
-a slowdown on another. Throughput measurements do not establish answer quality;
-compare the actual answers as well.
+Use the same load generator and input set for each run. Keep results for each
+model separately so a gain on one model does not conceal a slowdown on
+another. Throughput measurements do not establish answer quality; compare the
+actual answers as well.

@@ -486,7 +486,7 @@ def _validate_record(record: DecisionInstanceRecord) -> None:
         raise DecisionRegistryError("Decision runtime registry record is invalid.")
     if (
         not _INSTANCE_NAME.fullmatch(record.instance_name)
-        or record.container_name != f"vllm-sr-drun-{record.instance_name}"
+        or record.container_name != f"vllm-sr-decision-{record.instance_name}"
         or any(
             character.isspace() or ord(character) < _ASCII_CONTROL_THRESHOLD
             for value in string_fields

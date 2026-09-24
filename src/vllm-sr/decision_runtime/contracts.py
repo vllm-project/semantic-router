@@ -175,7 +175,7 @@ class BatchState(ContractModel):
 
 
 class SystemOneBatchRequest(ContractModel):
-    """Many identified states evaluated against one shared question map."""
+    """Decision extension: many identified states with shared SystemOne questions."""
 
     model: Annotated[str, Field(min_length=1)]
     states: Annotated[
@@ -274,7 +274,7 @@ class SystemOneResponse(ContractModel):
 
 
 class SystemOneBatchResult(ContractModel):
-    """Official answer and usage shapes for one identified batch state."""
+    """One state's ID, SystemOne-compatible answers, and token usage."""
 
     id: Annotated[str, Field(min_length=1, max_length=128)]
     answers: Annotated[dict[str, Answer], Field(min_length=1)]
@@ -289,7 +289,7 @@ class SystemOneBatchResult(ContractModel):
 
 
 class SystemOneBatchResponse(ContractModel):
-    """Atomic shared-question batch response without diagnostic fields."""
+    """Decision batch envelope of ordered results and aggregate token usage."""
 
     model: Annotated[str, Field(min_length=1)]
     results: Annotated[list[SystemOneBatchResult], Field(min_length=1)]

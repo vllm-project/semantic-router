@@ -18,7 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-drun_command = importlib.import_module("cli.commands.drun")
+decision_command = importlib.import_module("cli.commands.decision")
 catalog_module = importlib.import_module("cli.decision_runtime.catalog")
 container_module = importlib.import_module("cli.decision_runtime.container")
 registry_module = importlib.import_module("cli.decision_runtime.registry")
@@ -44,7 +44,7 @@ from cli.decision_runtime.image_reference import (  # noqa: E402
     validate_immutable_image_reference,
 )
 from cli.decision_runtime.lifecycle import (  # noqa: E402
-    DrunOptions,
+    DecisionServeOptions,
     run_decision_runtime,
 )
 from cli.decision_runtime.management import (  # noqa: E402
@@ -164,7 +164,7 @@ def _launch(
     )
     return DecisionContainerLaunch(
         runtime="docker",
-        container_name="vllm-sr-drun-fixture",
+        container_name="vllm-sr-decision-fixture",
         instance_name="fixture",
         identity_digest=identity_digest or f"sha256:{'e' * 64}",
         host="127.0.0.1",
@@ -184,10 +184,10 @@ def _inspect_completed_process(
     restart_policy: str = "no",
 ) -> subprocess.CompletedProcess[str]:
     effective_labels = labels or {
-        "ai.vllm-sr.drun.managed": "true",
-        "ai.vllm-sr.drun.instance": identity.instance_name,
-        "ai.vllm-sr.drun.identity": identity.identity_digest,
-        "ai.vllm-sr.drun.image": identity.image,
+        "ai.vllm-sr.decision.managed": "true",
+        "ai.vllm-sr.decision.instance": identity.instance_name,
+        "ai.vllm-sr.decision.identity": identity.identity_digest,
+        "ai.vllm-sr.decision.image": identity.image,
     }
     payload = [
         {
@@ -209,29 +209,29 @@ def _inspect_completed_process(
     )
 
 
-def test_main_always_registers_drun_recovery_commands():
+def test_main_always_registers_decision_recovery_commands():
     result = CliRunner().invoke(main, ["--help"])
 
     assert result.exit_code == 0, result.output
-    assert "drun" in main.commands
-    assert " drun " in result.output
+    assert "decision" in main.commands
+    assert " decision " in result.output
 
 
-def test_drun_management_commands_do_not_load_catalog(monkeypatch):
+def test_decision_management_commands_do_not_load_catalog(monkeypatch):
     monkeypatch.setattr(
-        drun_command,
+        decision_command,
         "default_catalog_resolver",
         lambda: (_ for _ in ()).throw(AssertionError("catalog must not be loaded")),
     )
-    monkeypatch.setattr(drun_command, "list_decision_instances", lambda: ())
+    monkeypatch.setattr(decision_command, "list_decision_instances", lambda: ())
 
-    result = CliRunner().invoke(main, ["drun", "list"])
+    result = CliRunner().invoke(main, ["decision", "list"])
 
     assert result.exit_code == 0, result.output
     assert "No managed Decision runtime instances." in result.output
 
 
-def test_drun_list_renders_registry_runtime_and_readiness_separately(monkeypatch):
+def test_decision_list_renders_registry_runtime_and_readiness_separately(monkeypatch):
     statuses = (
         DecisionManagedStatus(
             record=_record("active-start", "id-active-start", 8000),
@@ -260,9 +260,9 @@ def test_drun_list_renders_registry_runtime_and_readiness_separately(monkeypatch
             ownership_verified=True,
         ),
     )
-    monkeypatch.setattr(drun_command, "list_decision_instances", lambda: statuses)
+    monkeypatch.setattr(decision_command, "list_decision_instances", lambda: statuses)
 
-    result = CliRunner().invoke(drun_command.drun, ["list"])
+    result = CliRunner().invoke(decision_command.decision, ["list"])
 
     assert result.exit_code == 0, result.output
     assert (
@@ -280,7 +280,7 @@ def test_drun_list_renders_registry_runtime_and_readiness_separately(monkeypatch
     assert "\trunning\tverified\t" not in result.output
 
 
-def test_drun_status_renders_current_strict_readiness(monkeypatch):
+def test_decision_status_renders_current_strict_readiness(monkeypatch):
     managed = DecisionManagedStatus(
         record=replace(
             _record("healthy", "id-healthy", 8000),
@@ -292,12 +292,12 @@ def test_drun_status_renders_current_strict_readiness(monkeypatch):
         ownership_verified=True,
     )
     monkeypatch.setattr(
-        drun_command,
+        decision_command,
         "status_decision_instance",
         lambda _instance_name: managed,
     )
 
-    result = CliRunner().invoke(drun_command.drun, ["status", "healthy"])
+    result = CliRunner().invoke(decision_command.decision, ["status", "healthy"])
 
     assert result.exit_code == 0, result.output
     assert (
@@ -306,9 +306,9 @@ def test_drun_status_renders_current_strict_readiness(monkeypatch):
     ) in result.output
 
 
-def test_drun_list_surfaces_each_runtime_discovery_warning(monkeypatch):
+def test_decision_list_surfaces_each_runtime_discovery_warning(monkeypatch):
     monkeypatch.setattr(
-        drun_command,
+        decision_command,
         "list_decision_instances",
         lambda: (
             DecisionDiscoveryStatus(runtime="docker"),
@@ -316,19 +316,19 @@ def test_drun_list_surfaces_each_runtime_discovery_warning(monkeypatch):
         ),
     )
 
-    result = CliRunner().invoke(drun_command.drun, ["list"])
+    result = CliRunner().invoke(decision_command.decision, ["list"])
 
     assert result.exit_code == 0, result.output
     assert "Warning: docker managed-label discovery is unavailable" in result.output
     assert "Warning: podman managed-label discovery is unavailable" in result.output
 
 
-def test_drun_list_identifies_orphan_runtime_without_adopting_it(monkeypatch):
+def test_decision_list_identifies_orphan_runtime_without_adopting_it(monkeypatch):
     orphan = DecisionOrphanStatus(
         candidate=DecisionContainerCandidate(
             runtime="podman",
             container_id="f" * 64,
-            container_name="vllm-sr-drun-orphan",
+            container_name="vllm-sr-decision-orphan",
             state="running",
             instance_name="orphan",
             identity_digest=f"sha256:{'f' * 64}",
@@ -337,12 +337,12 @@ def test_drun_list_identifies_orphan_runtime_without_adopting_it(monkeypatch):
         )
     )
     monkeypatch.setattr(
-        drun_command,
+        decision_command,
         "list_decision_instances",
         lambda: (orphan,),
     )
 
-    result = CliRunner().invoke(drun_command.drun, ["list"])
+    result = CliRunner().invoke(decision_command.decision, ["list"])
 
     assert result.exit_code == 0, result.output
     assert "orphan\tregistry=unregistered\truntime=running" in result.output
@@ -384,24 +384,25 @@ def test_catalog_adapter_must_expose_a_resolver_factory(monkeypatch):
         catalog_module.default_catalog_resolver()
 
 
-def test_drun_group_exposes_lifecycle_commands():
-    result = CliRunner().invoke(drun_command.drun, ["--help"])
+def test_decision_group_exposes_lifecycle_commands():
+    result = CliRunner().invoke(decision_command.decision, ["--help"])
 
     assert result.exit_code == 0, result.output
-    for command in ("run", "list", "status", "stop", "forget"):
+    for command in ("serve", "list", "status", "stop", "forget"):
         assert command in result.output
+    assert "run" not in decision_command.decision.commands
 
-    forget_help = CliRunner().invoke(drun_command.drun, ["forget", "--help"])
+    forget_help = CliRunner().invoke(decision_command.decision, ["forget", "--help"])
     assert forget_help.exit_code == 0, forget_help.output
     assert "--force" in forget_help.output
     assert "no container is changed" in forget_help.output
 
 
-def test_drun_run_help_exposes_required_model_and_lifecycle_options():
-    result = CliRunner().invoke(drun_command.drun, ["run", "--help"])
+def test_decision_serve_help_exposes_required_model_and_lifecycle_options():
+    result = CliRunner().invoke(decision_command.decision, ["serve", "--help"])
 
     assert result.exit_code == 0, result.output
-    assert "Usage: drun run [OPTIONS] MODEL" in result.output
+    assert "Usage: decision serve [OPTIONS] MODEL" in result.output
     for option in (
         "--revision",
         "--host",
@@ -425,32 +426,41 @@ def test_drun_run_help_exposes_required_model_and_lifecycle_options():
     assert "mlx" not in result.output.lower()
 
 
-def test_drun_requires_exact_positional_model():
-    result = CliRunner().invoke(drun_command.drun, [])
+def test_decision_serve_requires_exact_positional_model():
+    result = CliRunner().invoke(decision_command.decision, ["serve"])
 
     assert result.exit_code == 2
     assert "Missing argument 'MODEL'" in result.output
 
 
-def test_drun_rejects_invalid_cpu_thread_count_before_catalog_resolution():
-    result = CliRunner().invoke(drun_command.drun, ["run", MODEL, "--cpu-threads", "0"])
+def test_decision_does_not_accept_model_as_implicit_serve_command():
+    result = CliRunner().invoke(decision_command.decision, [MODEL])
+
+    assert result.exit_code == 2
+    assert "No such command" in result.output
+
+
+def test_decision_rejects_invalid_cpu_thread_count_before_catalog_resolution():
+    result = CliRunner().invoke(
+        decision_command.decision, ["serve", MODEL, "--cpu-threads", "0"]
+    )
 
     assert result.exit_code == 2
     assert "--cpu-threads" in result.output
 
 
-def test_drun_cli_forwards_cpu_thread_override(monkeypatch):
-    options_seen: list[DrunOptions] = []
+def test_decision_cli_forwards_cpu_thread_override(monkeypatch):
+    options_seen: list[DecisionServeOptions] = []
 
-    def record_options(options: DrunOptions, **_kwargs: object) -> None:
+    def record_options(options: DecisionServeOptions, **_kwargs: object) -> None:
         options_seen.append(options)
 
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", object)
-    monkeypatch.setattr(drun_command, "run_decision_runtime", record_options)
+    monkeypatch.setattr(decision_command, "default_catalog_resolver", object)
+    monkeypatch.setattr(decision_command, "run_decision_runtime", record_options)
 
     result = CliRunner().invoke(
-        drun_command.drun,
-        ["run", MODEL, "--backend", "cpu", "--cpu-threads", "6"],
+        decision_command.decision,
+        ["serve", MODEL, "--backend", "cpu", "--cpu-threads", "6"],
     )
 
     assert result.exit_code == 0, result.output
@@ -459,18 +469,18 @@ def test_drun_cli_forwards_cpu_thread_override(monkeypatch):
     assert options_seen[0].cpu_threads == 6
 
 
-def test_drun_cli_forwards_one_rocm_gpu_device(monkeypatch):
-    options_seen: list[DrunOptions] = []
+def test_decision_cli_forwards_one_rocm_gpu_device(monkeypatch):
+    options_seen: list[DecisionServeOptions] = []
 
-    def record_options(options: DrunOptions, **_kwargs: object) -> None:
+    def record_options(options: DecisionServeOptions, **_kwargs: object) -> None:
         options_seen.append(options)
 
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", object)
-    monkeypatch.setattr(drun_command, "run_decision_runtime", record_options)
+    monkeypatch.setattr(decision_command, "default_catalog_resolver", object)
+    monkeypatch.setattr(decision_command, "run_decision_runtime", record_options)
 
     result = CliRunner().invoke(
-        drun_command.drun,
-        ["run", MODEL, "--backend", "rocm", "--gpu-device", "2"],
+        decision_command.decision,
+        ["serve", MODEL, "--backend", "rocm", "--gpu-device", "2"],
     )
 
     assert result.exit_code == 0, result.output
@@ -479,19 +489,19 @@ def test_drun_cli_forwards_one_rocm_gpu_device(monkeypatch):
     assert options_seen[0].gpu_device == "2"
 
 
-def test_drun_cli_forwards_explicit_sol_graph_opt_in(monkeypatch):
-    options_seen: list[DrunOptions] = []
+def test_decision_cli_forwards_explicit_sol_graph_opt_in(monkeypatch):
+    options_seen: list[DecisionServeOptions] = []
 
-    def record_options(options: DrunOptions, **_kwargs: object) -> None:
+    def record_options(options: DecisionServeOptions, **_kwargs: object) -> None:
         options_seen.append(options)
 
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", object)
-    monkeypatch.setattr(drun_command, "run_decision_runtime", record_options)
+    monkeypatch.setattr(decision_command, "default_catalog_resolver", object)
+    monkeypatch.setattr(decision_command, "run_decision_runtime", record_options)
 
     result = CliRunner().invoke(
-        drun_command.drun,
+        decision_command.decision,
         [
-            "run",
+            "serve",
             SOL_MODEL,
             "--backend",
             "rocm",
@@ -508,7 +518,7 @@ def test_drun_cli_forwards_explicit_sol_graph_opt_in(monkeypatch):
     assert options_seen[0].max_batch == 8
 
 
-def test_drun_graph_opt_in_request_requires_matching_resolved_command():
+def test_decision_graph_opt_in_request_requires_matching_resolved_command():
     class GraphResolver:
         def __init__(self, *, model=SOL_MODEL, flag=True):
             self.requests: list[DecisionRuntimeRequest] = []
@@ -533,7 +543,7 @@ def test_drun_graph_opt_in_request_requires_matching_resolved_command():
                 command=command,
             )
 
-    options = DrunOptions(
+    options = DecisionServeOptions(
         model=SOL_MODEL, backend="rocm", experimental_qwen_rocm_graph_b8=True
     )
     resolver = GraphResolver()
@@ -547,10 +557,10 @@ def test_drun_graph_opt_in_request_requires_matching_resolved_command():
         lifecycle._resolve_runtime(options, GraphResolver(model=MODEL))
 
 
-def test_drun_graph_opt_in_rejects_explicit_non_rocm_before_resolver():
+def test_decision_graph_opt_in_rejects_explicit_non_rocm_before_resolver():
     with pytest.raises(lifecycle.DecisionLifecycleError, match="ROCm backend"):
         lifecycle._validate_options(
-            DrunOptions(
+            DecisionServeOptions(
                 model=SOL_MODEL,
                 backend="cuda",
                 experimental_qwen_rocm_graph_b8=True,
@@ -558,19 +568,19 @@ def test_drun_graph_opt_in_rejects_explicit_non_rocm_before_resolver():
         )
 
 
-def test_drun_cli_forwards_exact_local_docker_image_id(monkeypatch):
-    options_seen: list[DrunOptions] = []
+def test_decision_cli_forwards_exact_local_docker_image_id(monkeypatch):
+    options_seen: list[DecisionServeOptions] = []
 
-    def record_options(options: DrunOptions, **_kwargs: object) -> None:
+    def record_options(options: DecisionServeOptions, **_kwargs: object) -> None:
         options_seen.append(options)
 
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", object)
-    monkeypatch.setattr(drun_command, "run_decision_runtime", record_options)
+    monkeypatch.setattr(decision_command, "default_catalog_resolver", object)
+    monkeypatch.setattr(decision_command, "run_decision_runtime", record_options)
 
     result = CliRunner().invoke(
-        drun_command.drun,
+        decision_command.decision,
         [
-            "run",
+            "serve",
             MODEL,
             "--image",
             LOCAL_IMAGE_ID,
@@ -588,11 +598,11 @@ def test_drun_cli_forwards_exact_local_docker_image_id(monkeypatch):
     assert options_seen[0].runtime == "docker"
 
 
-def test_drun_cli_runs_fixture_lifecycle_end_to_end(monkeypatch, tmp_path: Path):
+def test_decision_cli_runs_fixture_lifecycle_end_to_end(monkeypatch, tmp_path: Path):
     resolver = FixtureResolver()
     driver = FakeDriver()
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", lambda: resolver)
+    monkeypatch.setattr(decision_command, "default_catalog_resolver", lambda: resolver)
     monkeypatch.setattr(lifecycle, "LowLevelDecisionContainerDriver", lambda: driver)
     monkeypatch.setattr(
         lifecycle,
@@ -601,8 +611,9 @@ def test_drun_cli_runs_fixture_lifecycle_end_to_end(monkeypatch, tmp_path: Path)
     )
 
     result = CliRunner().invoke(
-        drun_command.drun,
+        decision_command.decision,
         [
+            "serve",
             MODEL,
             "--revision",
             REVISION,
@@ -661,12 +672,12 @@ def test_drun_cli_runs_fixture_lifecycle_end_to_end(monkeypatch, tmp_path: Path)
     assert records[0].image == IMAGE
 
 
-def test_drun_cli_opt_in_restart_policy_is_detached_and_docker_only(
+def test_decision_cli_opt_in_restart_policy_is_detached_and_docker_only(
     monkeypatch, tmp_path: Path
 ):
     driver = FakeDriver()
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", FixtureResolver)
+    monkeypatch.setattr(decision_command, "default_catalog_resolver", FixtureResolver)
     monkeypatch.setattr(lifecycle, "LowLevelDecisionContainerDriver", lambda: driver)
     monkeypatch.setattr(
         lifecycle,
@@ -675,9 +686,9 @@ def test_drun_cli_opt_in_restart_policy_is_detached_and_docker_only(
     )
 
     result = CliRunner().invoke(
-        drun_command.drun,
+        decision_command.decision,
         [
-            "run",
+            "serve",
             MODEL,
             "--instance-name",
             "durable-fixture",
@@ -701,19 +712,21 @@ def test_drun_cli_opt_in_restart_policy_is_detached_and_docker_only(
     ("options", "runtime", "message"),
     (
         (
-            DrunOptions(model=MODEL, restart_policy="unless-stopped"),
+            DecisionServeOptions(model=MODEL, restart_policy="unless-stopped"),
             "docker",
             "requires --detach",
         ),
         (
-            DrunOptions(model=MODEL, detach=True, restart_policy="unless-stopped"),
+            DecisionServeOptions(
+                model=MODEL, detach=True, restart_policy="unless-stopped"
+            ),
             "podman",
             "requires the Docker container runtime",
         ),
     ),
 )
 def test_durable_restart_policy_rejects_foreground_and_podman_before_reservation(
-    options: DrunOptions, runtime: str, message: str, tmp_path: Path
+    options: DecisionServeOptions, runtime: str, message: str, tmp_path: Path
 ):
     registry = DecisionInstanceRegistry(tmp_path / "instances.json")
     driver = FakeDriver()
@@ -748,7 +761,7 @@ def test_durable_restart_policy_must_be_observed_before_ready(tmp_path: Path):
 
     with pytest.raises(lifecycle.DecisionLifecycleError, match="did not apply"):
         run_decision_runtime(
-            DrunOptions(
+            DecisionServeOptions(
                 model=MODEL,
                 instance_name="ignored-restart",
                 detach=True,
@@ -782,7 +795,7 @@ def test_durable_instance_remains_owned_and_status_ready_after_process_restart(
 
     registry = DecisionInstanceRegistry(tmp_path / "instances.json")
     run_decision_runtime(
-        DrunOptions(
+        DecisionServeOptions(
             model=MODEL,
             instance_name="recovered",
             detach=True,
@@ -814,8 +827,10 @@ def test_durable_instance_remains_owned_and_status_ready_after_process_restart(
     assert status.readiness_state == "ready"
     assert status.ownership_verified is True
     assert status.restart_policy == "unless-stopped"
-    monkeypatch.setattr(drun_command, "status_decision_instance", lambda _name: status)
-    output = CliRunner().invoke(drun_command.drun, ["status", "recovered"])
+    monkeypatch.setattr(
+        decision_command, "status_decision_instance", lambda _name: status
+    )
+    output = CliRunner().invoke(decision_command.decision, ["status", "recovered"])
     assert output.exit_code == 0, output.output
     assert "ownership=verified\trestart=unless-stopped" in output.output
 
@@ -831,7 +846,7 @@ def test_foreground_launch_follows_logs_then_cleans_registry(tmp_path: Path):
     receipts = []
 
     receipt = run_decision_runtime(
-        DrunOptions(model=MODEL, instance_name="foreground"),
+        DecisionServeOptions(model=MODEL, instance_name="foreground"),
         resolver=FixtureResolver(),
         registry=registry,
         driver=driver,
@@ -857,7 +872,7 @@ def test_identical_launches_receive_distinct_ownership_identities(tmp_path: Path
 
     for _attempt in range(2):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="same-launch"),
+            DecisionServeOptions(model=MODEL, instance_name="same-launch"),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -873,7 +888,7 @@ def test_identical_launches_receive_distinct_ownership_identities(tmp_path: Path
     ("field", "value"),
     (
         ("runtime", "podman"),
-        ("container_name", "vllm-sr-drun-somebody-else"),
+        ("container_name", "vllm-sr-decision-somebody-else"),
         ("instance_name", "somebody-else"),
         ("identity_digest", f"sha256:{'f' * 64}"),
         ("image", f"example.test/other@sha256:{'f' * 64}"),
@@ -903,7 +918,7 @@ def test_untrusted_start_receipt_is_never_cleaned_by_guess(
         match="full, matching ownership receipt",
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="bad-receipt"),
+            DecisionServeOptions(model=MODEL, instance_name="bad-receipt"),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -932,7 +947,7 @@ def test_untrusted_start_state_is_never_accepted(tmp_path: Path):
         match="full, matching ownership receipt",
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="bad-state"),
+            DecisionServeOptions(model=MODEL, instance_name="bad-state"),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -949,7 +964,7 @@ def test_foreground_log_failure_cleans_container_only_once(tmp_path: Path):
 
     with pytest.raises(DecisionContainerError, match="fixture logs failure"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="foreground-failure"),
+            DecisionServeOptions(model=MODEL, instance_name="foreground-failure"),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -970,7 +985,7 @@ def test_zero_length_queue_is_a_valid_explicit_overload_policy(tmp_path: Path):
     registry = DecisionInstanceRegistry(tmp_path / "instances.json")
 
     receipt = run_decision_runtime(
-        DrunOptions(
+        DecisionServeOptions(
             model=MODEL,
             instance_name="no-queue",
             max_queue=0,
@@ -992,7 +1007,7 @@ def test_startup_failure_rolls_back_owned_container_and_registry(tmp_path: Path)
 
     with pytest.raises(DecisionContainerError, match="fixture ready failure"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="rollback"),
+            DecisionServeOptions(model=MODEL, instance_name="rollback"),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -1016,7 +1031,7 @@ def test_start_command_failure_retains_evidence_without_guessing_cleanup(
 
     with pytest.raises(DecisionContainerError, match="fixture start failure"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="start-rollback"),
+            DecisionServeOptions(model=MODEL, instance_name="start-rollback"),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -1048,7 +1063,7 @@ def test_failed_container_cleanup_is_retained_for_reconciliation(tmp_path: Path)
 
     with pytest.raises(DecisionContainerError, match="fixture readiness failure"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="orphan"),
+            DecisionServeOptions(model=MODEL, instance_name="orphan"),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -1071,7 +1086,7 @@ def test_resolver_cannot_silently_change_explicit_limits(tmp_path: Path):
         match="changed the explicitly requested max batch",
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL, max_batch=8),
+            DecisionServeOptions(model=MODEL, max_batch=8),
             resolver=BadResolver(),
             registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
             driver=FakeDriver(),
@@ -1084,7 +1099,7 @@ def test_cpu_thread_override_reaches_owned_cpu_container(tmp_path: Path):
     driver = FakeDriver()
 
     run_decision_runtime(
-        DrunOptions(model=MODEL, backend="cpu", cpu_threads=6, detach=True),
+        DecisionServeOptions(model=MODEL, backend="cpu", cpu_threads=6, detach=True),
         resolver=FixtureResolver(),
         registry=registry,
         driver=driver,
@@ -1107,7 +1122,7 @@ def test_cpu_thread_override_rejects_explicit_gpu_before_catalog_resolution(
 
     with pytest.raises(lifecycle.DecisionLifecycleError, match="only for the CPU"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, backend=backend, cpu_threads=6),
+            DecisionServeOptions(model=MODEL, backend=backend, cpu_threads=6),
             resolver=MustNotResolve(),
         )
 
@@ -1120,7 +1135,7 @@ def test_cpu_thread_override_rejects_auto_gpu_before_registry_mutation(
 
     with pytest.raises(lifecycle.DecisionLifecycleError, match="only for the CPU"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, cpu_threads=6),
+            DecisionServeOptions(model=MODEL, cpu_threads=6),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -1149,7 +1164,7 @@ def test_two_rocm_gpu_devices_launch_independently_on_distinct_ports(tmp_path: P
 
     for device, port in (("0", 8100), ("2", 8102)):
         run_decision_runtime(
-            DrunOptions(
+            DecisionServeOptions(
                 model=MODEL,
                 backend="rocm",
                 gpu_device=device,
@@ -1190,7 +1205,7 @@ def test_two_rocm_gpu_devices_launch_independently_on_distinct_ports(tmp_path: P
 def test_rocm_gpu_device_combines_with_exact_local_image_id(tmp_path: Path):
     driver = FakeDriver()
     run_decision_runtime(
-        DrunOptions(
+        DecisionServeOptions(
             model=MODEL,
             backend="rocm",
             gpu_device="2",
@@ -1221,7 +1236,7 @@ def test_invalid_gpu_device_rejected_before_catalog_resolution(device: str) -> N
 
     with pytest.raises(lifecycle.DecisionLifecycleError, match="one GPU index"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, gpu_device=device),
+            DecisionServeOptions(model=MODEL, gpu_device=device),
             resolver=MustNotResolve(),
         )
 
@@ -1236,7 +1251,7 @@ def test_gpu_device_rejects_unsupported_explicit_backend_before_catalog(
 
     with pytest.raises(lifecycle.DecisionLifecycleError, match="only for the ROCm"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, backend=backend, gpu_device="2"),
+            DecisionServeOptions(model=MODEL, backend=backend, gpu_device="2"),
             resolver=MustNotResolve(),
         )
 
@@ -1253,7 +1268,7 @@ def test_gpu_device_rejects_auto_resolved_unsupported_backend_before_registry(
     driver = FakeDriver()
     with pytest.raises(lifecycle.DecisionLifecycleError, match="only for the ROCm"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, gpu_device="2"),
+            DecisionServeOptions(model=MODEL, gpu_device="2"),
             resolver=UnsupportedResolver(),
             registry=registry,
             driver=driver,
@@ -1279,7 +1294,7 @@ def test_catalog_cannot_inject_rocm_gpu_visibility_without_selector(
     driver = FakeDriver()
     with pytest.raises(lifecycle.DecisionLifecycleError, match="through --gpu-device"):
         run_decision_runtime(
-            DrunOptions(model=MODEL),
+            DecisionServeOptions(model=MODEL),
             resolver=MaskingResolver(),
             registry=registry,
             driver=driver,
@@ -1356,7 +1371,7 @@ def test_invalid_artifact_mount_target_is_rejected_before_start(
 
     with pytest.raises(DecisionContainerError, match=r"mount target|mount paths"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, detach=True),
+            DecisionServeOptions(model=MODEL, detach=True),
             resolver=InvalidMountResolver(),
             registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
             driver=driver,
@@ -1405,7 +1420,7 @@ def test_duplicate_artifact_mount_targets_are_rejected_before_start(tmp_path: Pa
         lifecycle.DecisionLifecycleError, match="mount targets must be unique"
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL, detach=True),
+            DecisionServeOptions(model=MODEL, detach=True),
             resolver=DuplicateMountResolver(),
             registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
             driver=driver,
@@ -1474,7 +1489,7 @@ def test_host_binding_is_canonicalized_before_identity_and_argv(tmp_path: Path):
     driver = FakeDriver()
 
     receipt = run_decision_runtime(
-        DrunOptions(
+        DecisionServeOptions(
             model=MODEL,
             instance_name="canonical-host",
             host="0:0:0:0:0:0:0:1",
@@ -1502,7 +1517,7 @@ def test_explicit_image_is_validated_before_catalog_resolution(tmp_path: Path):
         match="image override is invalid",
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL, image="--runtime@sha256:" + "c" * 64),
+            DecisionServeOptions(model=MODEL, image="--runtime@sha256:" + "c" * 64),
             resolver=MustNotResolve(),
             registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
             driver=FakeDriver(),
@@ -1528,11 +1543,11 @@ def test_local_image_id_requires_no_pull_docker_before_catalog_resolution(
         def resolve(self, _request):
             raise AssertionError("invalid local image request reached catalog")
 
-    monkeypatch.setattr(drun_command, "default_catalog_resolver", MustNotResolve)
+    monkeypatch.setattr(decision_command, "default_catalog_resolver", MustNotResolve)
     result = CliRunner().invoke(
-        drun_command.drun,
+        decision_command.decision,
         [
-            "run",
+            "serve",
             MODEL,
             "--image",
             LOCAL_IMAGE_ID,
@@ -1553,7 +1568,7 @@ def test_explicit_local_image_id_is_retained_in_launch_and_registry(tmp_path: Pa
     driver = FakeDriver()
 
     run_decision_runtime(
-        DrunOptions(
+        DecisionServeOptions(
             model=MODEL,
             image=LOCAL_IMAGE_ID,
             image_pull_policy="never",
@@ -1583,7 +1598,9 @@ def test_local_image_id_refuses_selected_non_docker_runtime(tmp_path: Path):
         lifecycle.DecisionLifecycleError, match="Docker container runtime"
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL, image=LOCAL_IMAGE_ID, image_pull_policy="never"),
+            DecisionServeOptions(
+                model=MODEL, image=LOCAL_IMAGE_ID, image_pull_policy="never"
+            ),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -1605,7 +1622,7 @@ def test_catalog_cannot_inject_local_image_id_without_explicit_override(
     driver = FakeDriver()
     with pytest.raises(lifecycle.DecisionLifecycleError, match="explicit --image"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, image_pull_policy="never"),
+            DecisionServeOptions(model=MODEL, image_pull_policy="never"),
             resolver=UnexpectedImageResolver(),
             registry=registry,
             driver=driver,
@@ -1691,7 +1708,7 @@ def test_container_command_is_stable_and_contains_no_registry_secrets(monkeypatc
     )
     launch = DecisionContainerLaunch(
         runtime="docker",
-        container_name="vllm-sr-drun-fixture",
+        container_name="vllm-sr-decision-fixture",
         instance_name="fixture",
         identity_digest=f"sha256:{'d' * 64}",
         host="127.0.0.1",
@@ -1705,17 +1722,17 @@ def test_container_command_is_stable_and_contains_no_registry_secrets(monkeypatc
         "run",
         "-d",
         "--name",
-        "vllm-sr-drun-fixture",
+        "vllm-sr-decision-fixture",
         "--ulimit",
         "nofile=65536:65536",
         "--label",
-        "ai.vllm-sr.drun.managed=true",
+        "ai.vllm-sr.decision.managed=true",
         "--label",
-        "ai.vllm-sr.drun.instance=fixture",
+        "ai.vllm-sr.decision.instance=fixture",
         "--label",
-        f"ai.vllm-sr.drun.identity=sha256:{'d' * 64}",
+        f"ai.vllm-sr.decision.identity=sha256:{'d' * 64}",
         "--label",
-        f"ai.vllm-sr.drun.image={IMAGE}",
+        f"ai.vllm-sr.decision.image={IMAGE}",
         "-p",
         "127.0.0.1:8000:8000",
         "-e",
@@ -1907,7 +1924,7 @@ def test_container_command_rejects_nonpublic_or_unbounded_environment_values(
     )
     launch = DecisionContainerLaunch(
         runtime="docker",
-        container_name="vllm-sr-drun-fixture",
+        container_name="vllm-sr-decision-fixture",
         instance_name="fixture",
         identity_digest=f"sha256:{'d' * 64}",
         host="127.0.0.1",
@@ -1956,10 +1973,10 @@ def test_label_mismatch_never_issues_a_destructive_container_command(monkeypatch
     ownership = _launch().identity(container_id=CONTAINER_ID)
     commands: list[list[str]] = []
     mismatched_labels = {
-        "ai.vllm-sr.drun.managed": "true",
-        "ai.vllm-sr.drun.instance": ownership.instance_name,
-        "ai.vllm-sr.drun.identity": f"sha256:{'f' * 64}",
-        "ai.vllm-sr.drun.image": ownership.image,
+        "ai.vllm-sr.decision.managed": "true",
+        "ai.vllm-sr.decision.instance": ownership.instance_name,
+        "ai.vllm-sr.decision.identity": f"sha256:{'f' * 64}",
+        "ai.vllm-sr.decision.image": ownership.image,
     }
 
     def fake_run(command, **_kwargs):
@@ -2102,7 +2119,7 @@ def test_managed_label_discovery_is_read_only_and_structurally_validated(
 ):
     identity = DecisionContainerIdentity(
         runtime="docker",
-        container_name="vllm-sr-drun-orphan",
+        container_name="vllm-sr-decision-orphan",
         instance_name="orphan",
         identity_digest=f"sha256:{'f' * 64}",
         image=image,
@@ -2130,7 +2147,7 @@ def test_managed_label_discovery_is_read_only_and_structurally_validated(
         DecisionContainerCandidate(
             runtime="docker",
             container_id=CONTAINER_ID,
-            container_name="vllm-sr-drun-orphan",
+            container_name="vllm-sr-decision-orphan",
             state="running",
             instance_name="orphan",
             identity_digest=f"sha256:{'f' * 64}",
@@ -2310,7 +2327,7 @@ def test_mlx_requires_native_driver_before_container_access(tmp_path: Path):
         match="MLX backend requires the native Decision runtime driver",
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL),
+            DecisionServeOptions(model=MODEL),
             resolver=resolver,
             registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
             driver=driver,
@@ -2336,7 +2353,7 @@ def test_mutable_resolved_image_is_rejected_before_container_access(tmp_path: Pa
         match="safe digest-qualified OCI reference",
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL),
+            DecisionServeOptions(model=MODEL),
             resolver=MutableImageResolver(),
             registry=DecisionInstanceRegistry(tmp_path / "instances.json"),
             driver=driver,
@@ -2443,7 +2460,7 @@ def test_blocked_image_prepare_cannot_be_orphaned_by_concurrent_stop(tmp_path: P
         try:
             receipts.append(
                 run_decision_runtime(
-                    DrunOptions(
+                    DecisionServeOptions(
                         model=MODEL,
                         instance_name="concurrent-start",
                         detach=True,
@@ -2517,7 +2534,7 @@ def test_concurrent_list_cannot_advance_or_rollback_a_healthy_launch(
         try:
             receipts.append(
                 run_decision_runtime(
-                    DrunOptions(
+                    DecisionServeOptions(
                         model=MODEL,
                         instance_name="concurrent-list",
                         detach=True,
@@ -2802,7 +2819,9 @@ def test_launch_cannot_overwrite_concurrent_cleanup_required_transition(
     driver = ConcurrentCleanupDriver()
     with pytest.raises(DecisionRegistryStaleRecordError, match="lifecycle state"):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="cleanup-race", detach=True),
+            DecisionServeOptions(
+                model=MODEL, instance_name="cleanup-race", detach=True
+            ),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -2853,7 +2872,7 @@ def test_list_surfaces_label_owned_orphan_without_adopting_it(tmp_path: Path):
                 DecisionContainerCandidate(
                     runtime="docker",
                     container_id="f" * 64,
-                    container_name="vllm-sr-drun-orphan",
+                    container_name="vllm-sr-decision-orphan",
                     state="running",
                     instance_name="orphan",
                     identity_digest=f"sha256:{'f' * 64}",
@@ -3195,7 +3214,7 @@ def test_nondurable_reservation_never_starts_or_reports_a_runtime(
         match="reservation was committed, but crash durability",
     ):
         run_decision_runtime(
-            DrunOptions(model=MODEL, instance_name="nondurable"),
+            DecisionServeOptions(model=MODEL, instance_name="nondurable"),
             resolver=FixtureResolver(),
             registry=registry,
             driver=driver,
@@ -3210,7 +3229,7 @@ def _record(name: str, instance_id: str, port: int) -> DecisionInstanceRecord:
     return DecisionInstanceRecord(
         instance_id=instance_id,
         instance_name=name,
-        container_name=f"vllm-sr-drun-{name}",
+        container_name=f"vllm-sr-decision-{name}",
         model=MODEL,
         revision=REVISION,
         endpoint=f"http://127.0.0.1:{port}/v1/systemone",

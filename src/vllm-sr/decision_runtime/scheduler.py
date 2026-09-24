@@ -146,9 +146,8 @@ class ModelScheduler:
         for older in state.waiters:
             if older is candidate:
                 break
-            if (
-                older.bypasses >= MAX_ROW_CREDIT_BYPASSES
-                or self._can_run(state, older.row_cost)
+            if older.bypasses >= MAX_ROW_CREDIT_BYPASSES or self._can_run(
+                state, older.row_cost
             ):
                 return False
         return True

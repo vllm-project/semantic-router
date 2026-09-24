@@ -226,12 +226,12 @@ def publication_tags(
     image: str, mode: str, tag: str, latest: bool, date: str
 ) -> list[str]:
     if image == "decision-runtime-rocm":
-        raise ValueError("ROCm publication requires six-model device qualification")
+        raise ValueError("Decision ROCm is not supported by the hosted image publisher")
     if image == "decision-runtime-cpu":
         if mode not in {"main", "nightly", "release"}:
             raise ValueError("PR artifacts cannot be published")
-        # Until the exact OCI digest passes model-backed qualification, keep
-        # publication on an immutable source tag without a latest/version alias.
+        # This is a source-tagged candidate, not a qualified CLI default.
+        # Do not publish a latest/version alias without a digest binding.
         return [source_sha()]
     if image == mocker.IMAGE:
         if mode != "main":
@@ -413,9 +413,10 @@ def main() -> None:
                     print(json.dumps({"reused_qualified_publication": existing["ref"]}))
                     return
             owner = os.environ["GITHUB_REPOSITORY_OWNER"].lower()
-            for tag in publication_tags(
+            tags = publication_tags(
                 args.image, args.mode, args.tag, args.latest, manifest["date"]
-            ):
+            )
+            for tag in tags:
                 subprocess.run(
                     [
                         "skopeo",
@@ -428,6 +429,30 @@ def main() -> None:
                         f"docker://ghcr.io/{owner}/semantic-router/{args.image}:{tag}",
                     ],
                     check=True,
+                )
+            if args.image == "decision-runtime-cpu":
+                digest = (args.directory / "published-digest.txt").read_text().strip()
+                if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                    raise ValueError("Decision publication returned an invalid digest")
+                if len(tags) != 1 or tags[0] != manifest["source_sha"]:
+                    raise ValueError("Decision publication must use its source SHA")
+                if [item["platform"] for item in manifest["images"]] != ["linux/amd64"]:
+                    raise ValueError(
+                        "Decision CPU publication has an unexpected platform"
+                    )
+                receipt = {
+                    "schema_version": 1,
+                    "image": args.image,
+                    "source_sha": manifest["source_sha"],
+                    "mode": args.mode,
+                    "tag": args.tag,
+                    "digest": digest,
+                    "ref": f"ghcr.io/{owner}/semantic-router/{args.image}@{digest}",
+                    "archive_sha256": manifest["sha256"],
+                    "platform": "linux/amd64",
+                }
+                (args.directory / "published.json").write_text(
+                    json.dumps(receipt, indent=2) + "\n"
                 )
         print(json.dumps(manifest, indent=2))
 

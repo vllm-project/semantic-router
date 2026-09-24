@@ -1,7 +1,7 @@
-"""Load the immutable Decision image inventory injected into a release wheel.
+"""Load Decision image defaults packaged with the matching CLI version.
 
-Source checkouts deliberately have no lock. The protected image qualification
-and package publication flow supplies this resource after image digests exist.
+Source checkouts have no image defaults. A release can include this resource
+only after its backend images have been published and validated.
 """
 
 from __future__ import annotations
@@ -12,6 +12,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from importlib import resources
 from types import MappingProxyType
+
+from cli import __version__
 
 from .image_reference import (
     ImmutableImageReferenceError,
@@ -30,8 +32,9 @@ class DecisionImageLockError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class DecisionImageLock:
-    """One source commit and its qualified, digest-addressed backend images."""
+    """One package version, source commit, and backend image inventory."""
 
+    package_version: str
     source_sha: str
     images: Mapping[str, str]
 
@@ -47,7 +50,8 @@ def load_decision_image_lock() -> DecisionImageLock:
         )
     except FileNotFoundError as error:
         raise DecisionImageLockError(
-            "Decision image lock is not installed; pass a digest-qualified --image"
+            "This CLI build has no default Decision image. Install a Decision-enabled "
+            "release, or use --image for local development."
         ) from error
     except OSError as error:
         raise DecisionImageLockError("Decision image lock cannot be read") from error
@@ -67,12 +71,18 @@ def parse_decision_image_lock(payload: bytes) -> DecisionImageLock:
         raise DecisionImageLockError("Decision image lock is not valid JSON") from error
     if not isinstance(document, dict) or set(document) != {
         "schema_version",
+        "package_version",
         "source_sha",
         "images",
     }:
         raise DecisionImageLockError("Decision image lock fields are invalid")
     if type(document["schema_version"]) is not int or document["schema_version"] != 1:
         raise DecisionImageLockError("Decision image lock schema is unsupported")
+    package_version = document["package_version"]
+    if not isinstance(package_version, str) or package_version != __version__:
+        raise DecisionImageLockError(
+            "Decision image lock does not match the installed CLI version"
+        )
     source_sha = document["source_sha"]
     if not isinstance(source_sha, str) or _SOURCE_SHA.fullmatch(source_sha) is None:
         raise DecisionImageLockError("Decision image lock source SHA is invalid")
@@ -94,7 +104,7 @@ def parse_decision_image_lock(payload: bytes) -> DecisionImageLock:
                 f"Decision image lock maps {backend} to a different backend image"
             )
         checked[backend] = image
-    return DecisionImageLock(source_sha, MappingProxyType(checked))
+    return DecisionImageLock(package_version, source_sha, MappingProxyType(checked))
 
 
 def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:

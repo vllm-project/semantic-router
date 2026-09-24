@@ -54,33 +54,14 @@ jobs:
       mode: main
     secrets: inherit
 
-  decision:
-    name: Publish Qualified Decision Package Candidate
+  pypi:
+    name: Publish Development CLI
     needs: [ci, images]
     if: >-
       !cancelled() && needs.ci.result == 'success'
-      && needs.images.result == 'success'
-      && contains(fromJSON(needs.ci.outputs.publish_images), 'decision-runtime-cpu')
-      && github.repository == 'vllm-project/semantic-router'
-      && vars.DECISION_RUNTIME_RELEASE_ENABLED == 'true'
-    permissions:
-      contents: read
-      actions: read
-      packages: write
-    uses: ./.github/workflows/decision-qualified-package.yml
-    with:
-      mode: main
-    secrets: inherit
-
-  pypi:
-    name: Publish Development CLI
-    needs: [ci, decision]
-    if: >-
-      !cancelled() && needs.ci.result == 'success'
       && needs.ci.outputs.publish_python == 'true'
+      && needs.images.result == 'success'
       && github.repository == 'vllm-project/semantic-router'
-      && contains(fromJSON(needs.ci.outputs.publish_images), 'decision-runtime-cpu')
-      && needs.decision.result == 'success'
     permissions:
       contents: read
       actions: read
@@ -89,5 +70,5 @@ jobs:
     with:
       channel: dev
       prebuilt-dist: true
-      qualified-decision: true
+      decision_runtime: true
     secrets: inherit

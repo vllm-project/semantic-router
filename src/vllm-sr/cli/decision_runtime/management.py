@@ -1,4 +1,4 @@
-"""Safe reconciliation and public lifecycle operations for ``drun`` instances."""
+"""Safe reconciliation and public lifecycle operations for Decision instances."""
 
 from __future__ import annotations
 
@@ -153,7 +153,7 @@ def stop_decision_instance(
             f"Refusing to stop Decision runtime instance {instance_name!r}: "
             "container ownership does not match the registry. The unknown "
             "container and registry evidence were preserved; inspect them before "
-            "using 'drun forget'."
+            "using 'decision forget'."
         ) from error
     except DecisionContainerError:
         raise
@@ -163,7 +163,7 @@ def stop_decision_instance(
             raise DecisionManagementError(
                 f"Refusing to clear starting Decision runtime instance "
                 f"{instance_name!r}: its launch process may still own the "
-                "reservation. Retry after launch completes, or use 'drun forget' "
+                "reservation. Retry after launch completes, or use 'decision forget' "
                 "only after confirming no launch is active."
             )
         removal = instance_registry.remove(

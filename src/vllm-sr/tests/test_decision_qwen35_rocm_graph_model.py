@@ -20,9 +20,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from decision_runtime.artifacts import open_verified_artifact  # noqa: E402
-from decision_runtime.catalog_adapter import (
+from decision_runtime.catalog_adapter import (  # noqa: E402
     resolve_decision_runtime_model,
-)  # noqa: E402
+)
 from decision_runtime.contracts import (  # noqa: E402
     SystemOneBatchRequest,
     SystemOneRequest,

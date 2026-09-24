@@ -71,4 +71,4 @@ fi
     --tag "$output_tag" "$repo_root"
 
 echo "Built candidate $output_tag from $base_image ($source_revision, $source_state)."
-echo "Use a registry manifest digest for drun --image after validation and publication."
+echo "Use a registry manifest digest for decision serve --image after validation and publication."

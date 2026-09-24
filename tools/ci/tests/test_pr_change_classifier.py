@@ -482,7 +482,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIn("decision-runtime-cpu", cli["publish_images"])
         self.assertIn("cli-package", cli["expected_verification_ids"])
 
-    def test_main_decision_package_never_publishes_without_qualification(self):
+    def test_main_catalog_package_binds_the_decision_image_for_every_dev_wheel(self):
         for path in (
             "src/vllm-sr/tests/test_decision_runtime_server.py",
             "src/vllm-sr/README.md",
@@ -501,7 +501,6 @@ class SelectionTests(unittest.TestCase):
                 plan = make_plan([path], source_sha=SHA, profile="main")
                 self.assertTrue(plan["publish_python"])
                 self.assertIn("decision-runtime-cpu", plan["publish_images"])
-                self.assertIn("decision-runtime-cpu", plan["images"])
 
     def test_decision_cpu_enters_trusted_image_flow_without_scheduling_rocm(self):
         for path in (

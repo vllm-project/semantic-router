@@ -263,7 +263,7 @@ def test_profile_parser_rejects_oversized_calibration_without_overflow() -> None
     )
     document["calibration"]["temperature"] = 10**400
 
-    with pytest.raises(RuntimeProfileError, match="calibration.temperature"):
+    with pytest.raises(RuntimeProfileError, match=r"calibration\.temperature"):
         parse_runtime_profile(json.dumps(document).encode(), revision=revision)
 
 

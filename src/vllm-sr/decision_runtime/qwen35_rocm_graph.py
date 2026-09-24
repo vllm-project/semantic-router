@@ -10,17 +10,21 @@ from __future__ import annotations
 import hashlib
 import inspect
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .qwen35_rocm_binder import (
     QwenRocmBindingError,
     assert_qwen_rocm_graph_replay_safe,
 )
-from .qwen35_torch import QwenRocmProfileBinding, Qwen35TorchRuntime
+from .qwen35_torch import Qwen35TorchRuntime, QwenRocmProfileBinding
 
 _PHYSICAL_BATCH = 8
+_INPUT_RANK = 2
+_PADDED_TOKEN_MULTIPLE = 32
+_SHA256_HEX_LENGTH = 64
 _MAX_PADDED_TOKENS = 256
 _MAX_GRAPHS = 2
 _MAX_CAPTURE_BYTES = 512 << 20
@@ -88,7 +92,7 @@ class QwenRocmBackboneGraphs:
             or not runtime.rocm_profile_binding.strict_cache_enforced
             or not runtime.rocm_profile_binding.unknown_key_guard_enforced
             or not isinstance(artifact_content_id, str)
-            or len(artifact_content_id) != 64
+            or len(artifact_content_id) != _SHA256_HEX_LENGTH
             or any(
                 character not in "0123456789abcdef" for character in artifact_content_id
             )
@@ -117,11 +121,11 @@ class QwenRocmBackboneGraphs:
         model = self.runtime.model
         ids = batch["input_ids"]
         if (
-            len(ids.shape) != 2
+            len(ids.shape) != _INPUT_RANK
             or ids.shape[0] != _PHYSICAL_BATCH
             or ids.shape[1] > _MAX_PADDED_TOKENS
-            or ids.shape[1] < 32
-            or ids.shape[1] % 32
+            or ids.shape[1] < _PADDED_TOKEN_MULTIPLE
+            or ids.shape[1] % _PADDED_TOKEN_MULTIPLE
         ):
             return self._fallback(batch)
         try:

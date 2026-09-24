@@ -21,11 +21,6 @@ on:
         required: false
         default: false
         type: boolean
-      record_decision_digest:
-        description: Upload the current run's Decision CPU digest for qualification.
-        required: false
-        default: true
-        type: boolean
 
 permissions:
   contents: read
@@ -70,14 +65,13 @@ jobs:
           if [[ "$PUBLISH_LATEST" == true ]]; then args+=(--latest); fi
           python tools/ci/image_artifacts.py promote --image "$IMAGE" \
             --directory .agent-harness/image-input --mode "$MODE" --tag "$RELEASE_TAG" "${args[@]}"
-      - name: Record the published registry digest
-        if: matrix.image == 'decision-runtime-cpu' && inputs.record_decision_digest
+      - name: Record published Decision CPU image
+        if: matrix.image == 'decision-runtime-cpu'
         uses: actions/upload-artifact@v4
         with:
-          name: ci-published-digest-${{ matrix.image }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .agent-harness/image-input/published-digest.txt
+          name: ci-published-decision-runtime-cpu
+          path: .agent-harness/image-input/published.json
           if-no-files-found: error
-
       - uses: docker/setup-qemu-action@v3
         if: matrix.image == 'dashboard'
         with:

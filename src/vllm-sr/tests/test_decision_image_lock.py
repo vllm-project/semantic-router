@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from cli import __version__
 from cli.decision_runtime import image_lock
 from cli.decision_runtime.image_lock import (
     DecisionImageLockError,
@@ -23,6 +24,7 @@ IMAGES = {
 def lock_bytes(**changes: object) -> bytes:
     document: dict[str, object] = {
         "schema_version": 1,
+        "package_version": __version__,
         "source_sha": SOURCE_SHA,
         "images": IMAGES,
     }
@@ -39,6 +41,7 @@ def test_release_image_lock_loads_all_three_immutable_backends(
     lock = load_decision_image_lock()
 
     assert lock.source_sha == SOURCE_SHA
+    assert lock.package_version == __version__
     assert lock.images == IMAGES
     with pytest.raises(TypeError):
         lock.images["cpu"] = IMAGES["cpu"]  # type: ignore[index]
@@ -49,7 +52,9 @@ def test_source_checkout_without_release_lock_fails_explicitly(
 ) -> None:
     monkeypatch.setattr(image_lock.resources, "files", lambda _package: tmp_path)
 
-    with pytest.raises(DecisionImageLockError, match=r"not installed.*--image"):
+    with pytest.raises(
+        DecisionImageLockError, match=r"no default Decision image.*--image"
+    ):
         load_decision_image_lock()
 
 
@@ -57,6 +62,7 @@ def test_source_checkout_without_release_lock_fails_explicitly(
     ("payload", "message"),
     (
         (lock_bytes(schema_version=2), "schema is unsupported"),
+        (lock_bytes(package_version="different"), "installed CLI version"),
         (lock_bytes(source_sha="main"), "source SHA is invalid"),
         (lock_bytes(images={}), "backends are invalid"),
         (lock_bytes(images={"mlx": IMAGES["cpu"]}), "backends are invalid"),

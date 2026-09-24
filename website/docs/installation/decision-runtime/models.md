@@ -3,7 +3,7 @@ title: Choose a model
 description: See the six Decision 1.0 model IDs and where the current runtime can run them.
 ---
 
-Each `vllm-sr drun` instance serves one model. Copy its full ID into the
+Each `vllm-sr decision serve` instance serves one model. Copy its full ID into the
 [start command](./overview.md) and the `model` field of every
 [API request](./api.md). After launch, `GET /v1/models` shows the ID that the
 instance accepts.
@@ -22,16 +22,14 @@ with several questions produces a separate input for each answer; it does not
 make the model's token limit larger. An input that exceeds its model's limit
 returns `413`.
 
-The table lists execution paths present in the current code. Running one also
-requires a compatible image and model artifact. Linux CPU qualification is
-limited to Kai, Lex, and Eos and still needs model-backed validation before a
-released default image or performance claim. CUDA has no installed Decision
-executor in this build, and native Apple MLX launch is not yet available. See
-[starting a model](./overview.md) for the image requirement.
+The table lists execution paths present in the current code. Linux CPU is
+limited to Kai, Lex, and Eos. CUDA has no installed Decision executor in this
+build, and native Apple MLX launch is not yet available. See
+[starting a model](./overview.md) for release availability.
 
 ## Model revisions
 
-Without `--revision`, `drun` uses the model catalog's pinned revision. To try a
+Without `--revision`, `decision serve` uses the model catalog's pinned revision. To try a
 different revision of the **same model**, provide its full 40-character commit
 SHA. The runtime verifies the selected files before loading and checks that
 the revision still fits the model's runtime profile. A different revision still

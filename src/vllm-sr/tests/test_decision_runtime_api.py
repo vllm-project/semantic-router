@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.api import ARTIFACT_RESPONSE_HEADERS, create_app  # noqa: E402
 from decision_runtime.backend import (  # noqa: E402
     BackendInputTooLargeError,
@@ -21,7 +22,6 @@ from decision_runtime.backend import (  # noqa: E402
     UnknownModelError,
 )
 from decision_runtime.engine import DecisionEngine  # noqa: E402
-from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.physical_batching import (  # noqa: E402
     DecisionRowResult,
     PhysicalBatchBackend,
@@ -221,7 +221,7 @@ def test_http_validation_uses_documented_422_issue_shape():
 def test_batch_http_e2e_is_strict_ordered_and_state_specific():
     async def scenario():
         async with _client(app_for()) as client:
-            response = await client.post("/v1/decision/batches", json=batch_payload())
+            response = await client.post("/v1/systemone/batches", json=batch_payload())
         assert response.status_code == 200
         body = response.json()
         assert set(body) == {"model", "results", "usage"}
@@ -262,7 +262,7 @@ def test_http_admission_prices_single_and_batch_decision_rows():
         )
         async with _client(app) as client:
             single = await client.post("/v1/systemone", json=payload())
-            batch = await client.post("/v1/decision/batches", json=batch_payload())
+            batch = await client.post("/v1/systemone/batches", json=batch_payload())
             status = (await client.get("/api/status")).json()["scheduler"][0]
         assert (single.status_code, batch.status_code) == (200, 200)
         assert scheduler.costs == [3, 6]
@@ -272,21 +272,12 @@ def test_http_admission_prices_single_and_batch_decision_rows():
     asyncio.run(scenario())
 
 
-def test_batch_extension_has_no_systemone_batch_alias():
-    async def scenario():
-        async with _client(app_for()) as client:
-            response = await client.post("/v1/systemone/batch", json=batch_payload())
-        assert response.status_code == 404
-
-    asyncio.run(scenario())
-
-
 def test_batch_validation_rejects_duplicate_ids_and_excess_decisions():
     async def scenario():
         async with _client(app_for()) as client:
             duplicate = batch_payload()
             duplicate["states"][1]["id"] = "first"
-            response = await client.post("/v1/decision/batches", json=duplicate)
+            response = await client.post("/v1/systemone/batches", json=duplicate)
             assert response.status_code == 422
             assert response.json()["detail"][0]["loc"] == ["body", "states"]
 
@@ -294,7 +285,7 @@ def test_batch_validation_rejects_duplicate_ids_and_excess_decisions():
             too_many["states"] = [
                 {"id": f"state-{index}", "state": "state"} for index in range(513)
             ]
-            response = await client.post("/v1/decision/batches", json=too_many)
+            response = await client.post("/v1/systemone/batches", json=too_many)
             assert response.status_code == 422
             assert "1024 decisions" in response.json()["detail"][0]["msg"]
 
@@ -372,7 +363,7 @@ def test_successful_inference_attests_artifact_without_changing_json_contract():
             for path, request, expected_fields in (
                 ("/v1/systemone", payload(), {"model", "answers", "usage"}),
                 (
-                    "/v1/decision/batches",
+                    "/v1/systemone/batches",
                     batch_payload(),
                     {"model", "results", "usage"},
                 ),
@@ -423,9 +414,16 @@ def test_artifact_header_source_requires_one_matching_complete_identity():
 
 def test_openapi_preserves_strict_single_state_schema():
     openapi = app_for().openapi()
-    assert "/v1/decision/batches" in openapi["paths"]
-    assert "/v1/systemone/batch" not in openapi["paths"]
+    batch_operation = openapi["paths"]["/v1/systemone/batches"]["post"]
+    assert "Decision Runtime extension" in batch_operation["description"]
+    assert "POST /v1/systemone" in batch_operation["description"]
     schema = openapi["components"]["schemas"]
+    batch_request_schema = schema["SystemOneBatchRequest"]
+    assert batch_request_schema["required"] == ["model", "states", "questions"]
+    assert batch_request_schema["additionalProperties"] is False
+    assert set(batch_request_schema["properties"]) == {"model", "states", "questions"}
+    batch_response_schema = schema["SystemOneBatchResponse"]
+    assert set(batch_response_schema["properties"]) == {"model", "results", "usage"}
     request_schema = schema["SystemOneRequest"]
     assert request_schema["required"] == ["state", "model", "questions"]
     assert request_schema["additionalProperties"] is False
@@ -524,7 +522,7 @@ def test_backend_token_limit_maps_to_413_for_single_and_batch_requests():
         async with _client(app_for(InputTooLargeBackend([MODEL]))) as client:
             for route, body in (
                 ("/v1/systemone", payload()),
-                ("/v1/decision/batches", batch_payload()),
+                ("/v1/systemone/batches", batch_payload()),
             ):
                 response = await client.post(route, json=body)
                 assert response.status_code == 413
@@ -557,15 +555,17 @@ def test_batch_uses_same_unknown_model_and_overload_mapping():
         async with _client(app) as client:
             unknown = batch_payload()
             unknown["model"] = "unknown"
-            response = await client.post("/v1/decision/batches", json=unknown)
+            response = await client.post("/v1/systemone/batches", json=unknown)
             assert response.status_code == 422
             assert response.json()["detail"][0]["loc"] == ["body", "model"]
 
             first = asyncio.create_task(
-                client.post("/v1/decision/batches", json=batch_payload())
+                client.post("/v1/systemone/batches", json=batch_payload())
             )
             await backend.entered.wait()
-            overloaded = await client.post("/v1/decision/batches", json=batch_payload())
+            overloaded = await client.post(
+                "/v1/systemone/batches", json=batch_payload()
+            )
             assert overloaded.status_code == 529
             assert overloaded.headers["retry-after"] == "1"
             backend.release.set()
@@ -585,7 +585,7 @@ def test_batch_backend_identity_failures_use_backend_error_boundary(mutation):
 
     async def scenario():
         async with _client(app_for(InvalidBatchBackend([MODEL]))) as client:
-            response = await client.post("/v1/decision/batches", json=batch_payload())
+            response = await client.post("/v1/systemone/batches", json=batch_payload())
             assert response.status_code == 500
             assert response.json() == {
                 "detail": "Decision backend returned an invalid result"
@@ -601,7 +601,7 @@ def test_batch_backend_model_rejection_is_not_a_client_unknown_model_error():
 
     async def scenario():
         async with _client(app_for(RejectingBatchBackend([MODEL]))) as client:
-            response = await client.post("/v1/decision/batches", json=batch_payload())
+            response = await client.post("/v1/systemone/batches", json=batch_payload())
             assert response.status_code == 500
             assert response.json() == {
                 "detail": "Decision backend returned an invalid result"

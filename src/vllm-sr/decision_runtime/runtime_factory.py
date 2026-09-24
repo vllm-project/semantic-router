@@ -5,9 +5,10 @@ from __future__ import annotations
 import importlib
 import json
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 
 from .artifacts import ArtifactError, VerifiedArtifact, open_verified_artifact
 from .backend import ModelDescriptor
@@ -24,6 +25,7 @@ from .runtime_profile import RuntimeProfileError
 from .scheduler import ModelScheduler
 
 MAX_PENDING_ROWS = 4096
+_GRAPH_PHYSICAL_BATCH = 8
 
 
 class RuntimeAssemblyError(RuntimeError):
@@ -126,7 +128,7 @@ def _validate_config(config: RuntimeLaunchConfig) -> None:
         raise RuntimeAssemblyError("Decision backend is unsupported")
     if type(config.experimental_qwen_rocm_graph_b8) is not bool or (
         config.experimental_qwen_rocm_graph_b8
-        and (config.backend != "rocm" or config.max_batch != 8)
+        and (config.backend != "rocm" or config.max_batch != _GRAPH_PHYSICAL_BATCH)
     ):
         raise RuntimeAssemblyError("experimental Qwen ROCm graph requires B8 ROCm")
     for name, value, minimum, maximum in (

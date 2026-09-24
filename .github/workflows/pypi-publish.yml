@@ -7,8 +7,8 @@ on:
         description: Promote the exact distribution qualified by package-check.yml.
         type: boolean
         default: false
-      qualified-decision:
-        description: Publish the post-image six-model-qualified Decision distribution.
+      decision_runtime:
+        description: Bind the published Decision CPU image to the final package.
         type: boolean
         default: false
       channel:
@@ -34,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish to TestPyPI.
+        description: Version to publish as a source-build TestPyPI preview (without released Decision image defaults).
         required: true
         type: string
       tag:
@@ -207,7 +207,7 @@ jobs:
     if: >-
       always() && !cancelled()
       && (needs.build.result == 'success' || inputs.prebuilt-dist)
-      && (!inputs.qualified-decision || inputs.prebuilt-dist)
+      && (!inputs.decision_runtime || inputs.prebuilt-dist)
       && github.repository == 'vllm-project/semantic-router'
       && github.event_name == 'push'
       && ((inputs.channel == 'dev' && github.ref == 'refs/heads/main')
@@ -219,74 +219,63 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Require the qualified path for Decision-enabled source
-        env:
-          QUALIFIED_DECISION: ${{ inputs.qualified-decision }}
-        run: python tools/ci/decision_release_policy.py --expect "$QUALIFIED_DECISION"
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.qualified-decision && format('decision-qualified-dist-{0}-{1}', github.run_id, github.run_attempt) || 'vllm-sr-dist' }}
-          path: dist
+          name: vllm-sr-dist
+          path: ${{ inputs.decision_runtime && '.agent-harness/qualified-package' || 'dist' }}
 
-      - name: Verify qualified source and package content
+      - uses: actions/download-artifact@v4
+        if: inputs.decision_runtime
+        with:
+          name: ci-published-decision-runtime-cpu
+          path: .agent-harness/decision-image
+
+      - name: Bind published Decision image to the package
+        if: inputs.decision_runtime
+        env:
+          MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
+          TAG: ${{ inputs.tag }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+          printf '%s' "$GHCR_TOKEN" | skopeo login --username "$GITHUB_ACTOR" --password-stdin ghcr.io
+          python tools/ci/package_contract.py --mode "$MODE" --tag "$TAG" \
+            --base-ref "$GITHUB_SHA" --output .agent-harness/bound-package \
+            --qualified-dist .agent-harness/qualified-package \
+            --decision-image-receipt .agent-harness/decision-image/published.json \
+            --verify-registry
+          mv .agent-harness/bound-package/dist dist
+
+      - name: Verify prebuilt distribution
         if: inputs.prebuilt-dist
         env:
           MODE: ${{ inputs.channel == 'dev' && 'main' || 'release' }}
           TAG: ${{ inputs.tag }}
         run: python tools/ci/package_contract.py --verify-dist --output dist --mode "$MODE" --tag "$TAG"
-      - uses: actions/download-artifact@v4
-        if: inputs.qualified-decision
-        with:
-          name: decision-qualified-release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .agent-harness/decision-release-evidence
-      - name: Verify Decision release evidence against published registry digests
-        if: inputs.qualified-decision
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REGISTRY_AUTH_FILE: ${{ runner.temp }}/decision-registry-auth.json
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y skopeo
-          printf '%s' "$GHCR_TOKEN" | skopeo login --authfile "$REGISTRY_AUTH_FILE" --username "$GITHUB_ACTOR" --password-stdin ghcr.io
-          evidence=.agent-harness/decision-release-evidence
-          lock="$evidence/src/vllm-sr/cli/decision_runtime/decision-images.lock.json"
-          receipt="$evidence/.agent-harness/decision-rocm/qualification.json"
-          rocm_ref="$(cat "$evidence/.agent-harness/decision-release/rocm-ref.txt")"
-          python tools/ci/decision_image_lock_release.py validate \
-            --owner "$GITHUB_REPOSITORY_OWNER" \
-            --cpu-digest-file "$evidence/.agent-harness/decision-cpu/published-digest.txt" \
-            --cpu-receipt "$evidence/.agent-harness/decision-cpu-qualified/qualification.json" \
-            --rocm-receipt "$receipt" \
-            --rocm-published-ref "$rocm_ref" --lock "$lock"
-          shopt -s nullglob
-          wheels=(dist/*.whl)
-          sdists=(dist/*.tar.gz)
-          test "${#wheels[@]}" -eq 1
-          test "${#sdists[@]}" -eq 1
-          python tools/ci/decision_image_lock_release.py check-dist \
-            --lock "$lock" --wheel "${wheels[0]}" --sdist "${sdists[0]}"
-          candidate_ref="$(python3 -c 'import json, sys; from pathlib import Path; print(json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["candidate_ref"])' "$receipt")"
-          python tools/ci/decision_perf_release_gate.py validate \
-            --report "$evidence/.agent-harness/decision-performance/report.json" \
-            --source-sha "$GITHUB_SHA" \
-            --qualification-receipt "$receipt" \
-            --owner "$GITHUB_REPOSITORY_OWNER" \
-            --candidate-ref "$candidate_ref" \
-            --run-id "$GITHUB_RUN_ID" --run-attempt "$GITHUB_RUN_ATTEMPT"
       - run: pip install twine
 
       - name: Publish verified package
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-          QUALIFIED_DECISION: ${{ inputs.qualified-decision }}
+          DECISION_RUNTIME: ${{ inputs.decision_runtime }}
         run: |
-          if [[ "$QUALIFIED_DECISION" == true ]]; then
+          if [[ "$DECISION_RUNTIME" == true ]]; then
             twine upload dist/*.whl dist/*.tar.gz
           else
             twine upload dist/*.whl dist/*.tar.gz --skip-existing
           fi
+      - uses: actions/upload-artifact@v4
+        if: inputs.decision_runtime
+        with:
+          name: vllm-sr-bound-dist
+          path: dist/
+          if-no-files-found: error

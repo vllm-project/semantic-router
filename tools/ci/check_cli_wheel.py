@@ -13,7 +13,7 @@ import venv
 from pathlib import Path
 
 
-def check_wheel(wheel: Path) -> None:
+def check_wheel(wheel: Path, decision_image: str | None = None) -> None:
     wheel = wheel.resolve(strict=True)
     with tempfile.TemporaryDirectory(prefix="vllm-sr-wheel-") as temporary:
         root = Path(temporary)
@@ -162,12 +162,35 @@ def check_wheel(wheel: Path) -> None:
         print(
             "Installed wheel supports schema, config lifecycle, route evidence, and built-in Recipe export."
         )
+        if decision_image is not None:
+            cli("decision", "serve", "--help")
+            result = subprocess.run(
+                args=[
+                    str(python),
+                    "-I",
+                    "-c",
+                    "from cli.decision_runtime.image_lock import load_decision_image_lock; "
+                    "print(load_decision_image_lock().images['cpu'])",
+                ],
+                cwd=root,
+                env=child_env,
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=60,
+            )
+            if result.returncode or result.stdout.strip() != decision_image:
+                raise RuntimeError(
+                    "installed Decision image does not match the published release"
+                )
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("wheel", type=Path)
-    check_wheel(parser.parse_args().wheel)
+    parser.add_argument("--decision-image")
+    args = parser.parse_args()
+    check_wheel(args.wheel, decision_image=args.decision_image)
 
 
 if __name__ == "__main__":

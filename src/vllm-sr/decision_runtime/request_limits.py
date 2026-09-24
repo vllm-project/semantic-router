@@ -178,7 +178,7 @@ def _request_limit(scope: dict[str, Any]) -> int | None:
             path = path[len(root_path) :]
     if path == "/v1/systemone":
         return SINGLE_MAX_REQUEST_BYTES
-    if path == "/v1/decision/batches":
+    if path == "/v1/systemone/batches":
         return BATCH_MAX_REQUEST_BYTES
     return None
 

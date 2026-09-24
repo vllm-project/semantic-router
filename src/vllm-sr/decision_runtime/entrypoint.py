@@ -12,10 +12,11 @@ from .cpu_threads import configure_cpu_threads
 from .runtime_factory import MAX_PENDING_ROWS, RuntimeLaunchConfig
 
 _MAX_TCP_PORT = 65535
+_GRAPH_PHYSICAL_BATCH = 8
 
 
 def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
-    """Parse the exact host-side ``drun`` launch contract."""
+    """Parse the exact host-side ``decision serve`` launch contract."""
 
     parser = argparse.ArgumentParser(prog="vllm-sr-decision-runtime")
     parser.add_argument("--model", required=True)
@@ -45,7 +46,7 @@ def parse_launch_args(argv: Sequence[str] | None = None) -> RuntimeLaunchConfig:
     if args.max_queue < 0:
         parser.error("--max-queue must be non-negative")
     if args.experimental_qwen_rocm_graph_b8 and (
-        args.backend != "rocm" or args.max_batch != 8
+        args.backend != "rocm" or args.max_batch != _GRAPH_PHYSICAL_BATCH
     ):
         parser.error("--experimental-qwen-rocm-graph-b8 requires B8 ROCm")
     return RuntimeLaunchConfig(

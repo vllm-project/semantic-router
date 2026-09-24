@@ -60,6 +60,6 @@ RUN set -eu; \
     rm -rf /wheels /opt/vllm-sr/install-image.py \
       /opt/vllm-sr/requirements-vela.txt /opt/vllm-sr/requirements-qwen35.txt
 EXPOSE 8000
-# drun supplies the complete command. This default only supports image inspection.
+# decision serve supplies the complete command. This default only supports image inspection.
 ENTRYPOINT []
 CMD ["/opt/vllm-sr/venvs/vela/bin/python", "-m", "decision_runtime.entrypoint", "--help"]

@@ -71,12 +71,12 @@ This reference is generated from the registered CLI commands. Command descriptio
 | [`vllm-sr config validate`](#vllm-sr-config-validate) | Validate configuration file. |
 | [`vllm-sr config versions`](#vllm-sr-config-versions) | List immutable configuration backup versions. |
 | [`vllm-sr dashboard`](#vllm-sr-dashboard) | Open the dashboard in your default web browser. |
-| [`vllm-sr drun`](#vllm-sr-drun) | Launch and safely manage standalone Decision model runtimes. |
-| [`vllm-sr drun forget`](#vllm-sr-drun-forget) | Forget registry evidence without stopping any container. |
-| [`vllm-sr drun list`](#vllm-sr-drun-list) | List registry lifecycle, runtime state, and cross-runtime orphans. |
-| [`vllm-sr drun run`](#vllm-sr-drun-run) | Launch one exact MODEL as a standalone SystemOne service. |
-| [`vllm-sr drun status`](#vllm-sr-drun-status) | Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME. |
-| [`vllm-sr drun stop`](#vllm-sr-drun-stop) | Stop one owned runtime or clear a proven container-missing record. |
+| [`vllm-sr decision`](#vllm-sr-decision) | Serve and manage standalone Decision models. |
+| [`vllm-sr decision forget`](#vllm-sr-decision-forget) | Forget registry evidence without stopping any container. |
+| [`vllm-sr decision list`](#vllm-sr-decision-list) | List registry lifecycle, runtime state, and cross-runtime orphans. |
+| [`vllm-sr decision serve`](#vllm-sr-decision-serve) | Launch one exact MODEL as a standalone SystemOne service. |
+| [`vllm-sr decision status`](#vllm-sr-decision-status) | Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME. |
+| [`vllm-sr decision stop`](#vllm-sr-decision-stop) | Stop one owned runtime or clear a proven container-missing record. |
 | [`vllm-sr logs`](#vllm-sr-logs) | Show logs from vLLM Semantic Router service. |
 | [`vllm-sr optimize`](#vllm-sr-optimize) | Analyze routing evidence and produce candidate recipe changes. |
 | [`vllm-sr optimize recipe-learning`](#vllm-sr-optimize-recipe-learning) | Analyze replay and outcomes to produce recipe-learning artifacts. |
@@ -958,18 +958,20 @@ vllm-sr dashboard --no-open
 | `--runtime CHOICE` | Container runtime for the local Docker target: docker, podman. Equivalent to setting CONTAINER_RUNTIME=&lt;runtime&gt;. Has no effect on the k8s target. Choices: docker, podman. |
 | `--help` | Show this message and exit. Default: false. |
 
-## `vllm-sr drun` {#vllm-sr-drun}
+## `vllm-sr decision` {#vllm-sr-decision}
 
 ```text
-Usage: vllm-sr drun [OPTIONS] COMMAND [ARGS]...
+Usage: vllm-sr decision [OPTIONS] COMMAND [ARGS]...
 ```
 
-Launch and safely manage standalone Decision model runtimes.
+Serve and manage standalone Decision models.
 
 Launching requires the integrated Decision catalog. Recovery commands remain
-available without it. ``vllm-sr drun MODEL`` is a shortcut for
-``vllm-sr drun run MODEL``. Detached instances remain registered for the
+available without it. ``vllm-sr decision serve MODEL`` starts one model as a
+standalone HTTP service. Detached instances remain registered for the
 ownership-checked list, status, stop, and forget commands.
+Current source builds have no default CPU or ROCm image; build one locally and
+pass its image ID with ``--image`` and ``--image-pull-policy never``.
 
 List and status report authoritative registry lifecycle separately from observed
 container state. List does not probe service readiness; status probes the strict
@@ -978,21 +980,22 @@ remains explicit integration work and is not emulated by the container driver.
 
 ```text
 Examples:
-  vllm-sr drun llm-semantic-router/Decision-1.0-Kai-0.6B
-  vllm-sr drun run llm-semantic-router/Decision-1.0-Lux-9B --backend rocm --detach
-  vllm-sr drun list
-  vllm-sr drun stop lux-8000-ab12cd34
-  vllm-sr drun forget lux-8000-ab12cd34
+  vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B \
+    --backend cpu --image "$DECISION_IMAGE_ID" --image-pull-policy never \
+    --instance-name kai-demo --detach
+  vllm-sr decision list
+  vllm-sr decision status kai-demo
+  vllm-sr decision stop kai-demo
 ```
 
 | Parameter | Description |
 | --- | --- |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr drun forget` {#vllm-sr-drun-forget}
+### `vllm-sr decision forget` {#vllm-sr-decision-forget}
 
 ```text
-Usage: vllm-sr drun forget [OPTIONS] INSTANCE_NAME
+Usage: vllm-sr decision forget [OPTIONS] INSTANCE_NAME
 ```
 
 Forget registry evidence without stopping any container.
@@ -1003,10 +1006,10 @@ Forget registry evidence without stopping any container.
 | `--force` | Forget a starting reservation after independently confirming its launch process is no longer active; no container is changed. Default: false. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr drun list` {#vllm-sr-drun-list}
+### `vllm-sr decision list` {#vllm-sr-decision-list}
 
 ```text
-Usage: vllm-sr drun list [OPTIONS]
+Usage: vllm-sr decision list [OPTIONS]
 ```
 
 List registry lifecycle, runtime state, and cross-runtime orphans.
@@ -1015,10 +1018,10 @@ List registry lifecycle, runtime state, and cross-runtime orphans.
 | --- | --- |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr drun run` {#vllm-sr-drun-run}
+### `vllm-sr decision serve` {#vllm-sr-decision-serve}
 
 ```text
-Usage: vllm-sr drun run [OPTIONS] MODEL
+Usage: vllm-sr decision serve [OPTIONS] MODEL
 ```
 
 Launch one exact MODEL as a standalone SystemOne service.
@@ -1046,10 +1049,10 @@ Launch one exact MODEL as a standalone SystemOne service.
 | `--restart-policy CHOICE` | Docker restart policy; unless-stopped requires --detach.  [default: no] Choices: no, unless-stopped. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr drun status` {#vllm-sr-drun-status}
+### `vllm-sr decision status` {#vllm-sr-decision-status}
 
 ```text
-Usage: vllm-sr drun status [OPTIONS] INSTANCE_NAME
+Usage: vllm-sr decision status [OPTIONS] INSTANCE_NAME
 ```
 
 Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME.
@@ -1059,10 +1062,10 @@ Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME.
 | `INSTANCE_NAME` | Required argument. Type: text. |
 | `--help` | Show this message and exit. Default: false. |
 
-### `vllm-sr drun stop` {#vllm-sr-drun-stop}
+### `vllm-sr decision stop` {#vllm-sr-decision-stop}
 
 ```text
-Usage: vllm-sr drun stop [OPTIONS] INSTANCE_NAME
+Usage: vllm-sr decision stop [OPTIONS] INSTANCE_NAME
 ```
 
 Stop one owned runtime or clear a proven container-missing record.

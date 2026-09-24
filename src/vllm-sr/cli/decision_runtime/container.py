@@ -47,10 +47,10 @@ from cli.decision_runtime.image_reference import (
     validate_decision_image_reference,
 )
 
-MANAGED_LABEL = "ai.vllm-sr.drun.managed"
-INSTANCE_LABEL = "ai.vllm-sr.drun.instance"
-IDENTITY_LABEL = "ai.vllm-sr.drun.identity"
-IMAGE_LABEL = "ai.vllm-sr.drun.image"
+MANAGED_LABEL = "ai.vllm-sr.decision.managed"
+INSTANCE_LABEL = "ai.vllm-sr.decision.instance"
+IDENTITY_LABEL = "ai.vllm-sr.decision.identity"
+IMAGE_LABEL = "ai.vllm-sr.decision.image"
 _PUBLIC_TUNING_ENVIRONMENT = {
     "DECISION_RUNTIME_LOG_LEVEL": re.compile(r"(?:critical|error|warning|info|debug)"),
     "DECISION_CPU_THREADS": re.compile(
@@ -342,7 +342,7 @@ class LowLevelDecisionContainerDriver:
                 labels.get(MANAGED_LABEL) == "true"
                 and isinstance(instance_name, str)
                 and _INSTANCE_NAME.fullmatch(instance_name) is not None
-                and container_name == f"vllm-sr-drun-{instance_name}"
+                and container_name == f"vllm-sr-decision-{instance_name}"
                 and isinstance(identity_digest, str)
                 and _SHA256_DIGEST.fullmatch(identity_digest) is not None
                 and labeled_image == image

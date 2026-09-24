@@ -15,13 +15,23 @@ its confidence statistic is not numerically equivalent to Jev's. The separate
 [multi-state batch endpoint](#many-states-one-question-set) is a Decision
 extension, not part of SystemOne compatibility.
 
+First, confirm the exact model ID accepted by the instance:
+
+```bash
+curl -fsS http://127.0.0.1:8001/v1/models
+```
+
+Copy a value from `models[].name` into the `model` field below. A Decision
+instance serves one model; a different ID returns `422` rather than silently
+selecting another model.
+
 ## One state, three question types
 
 This example asks a yes/no question, selects a category, and rates urgency in
 one call. You can copy it as-is after starting Kai on port 8001.
 
 ```bash
-curl -sS http://127.0.0.1:8001/v1/systemone \
+curl --fail-with-body -sS http://127.0.0.1:8001/v1/systemone \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
@@ -70,7 +80,7 @@ prediction for the message above):
       "probabilities": {"0": 0.1, "1": 0.8, "2": 0.1}
     }
   },
-  "usage": {"input_tokens": 54, "output_tokens": 3}
+  "usage": {"input_tokens": 54, "output_tokens": 0}
 }
 ```
 
@@ -106,7 +116,7 @@ a Decision model.
 Python (`pip install typesafe-sdk`):
 
 ```python
-from typesafe_sdk import Noul, TypeSafeClient
+from typesafe_sdk import Choice, Noul, Score, TypeSafeClient
 
 with TypeSafeClient(
     base_url="http://127.0.0.1:8001",
@@ -114,20 +124,33 @@ with TypeSafeClient(
     model="llm-semantic-router/Decision-1.0-Kai-0.6B",
 ) as client:
     result = client.system_one(
-        state="Please refund the duplicate charge.",
+        state="I was charged twice. Please refund the duplicate payment.",
         questions={
             "refund_requested": Noul(
-                instructions="Does the customer request a refund?"
-            )
+                instructions="Does the customer explicitly request a refund?"
+            ),
+            "category": Choice(
+                instructions="Classify this support request.",
+                criteria={
+                    "billing": "Charges, invoices, or refunds",
+                    "product": "Product use or defects",
+                },
+            ),
+            "urgency": Score(
+                instructions="Rate the urgency of this request.",
+                criteria=["Routine", "Needs prompt attention", "Critical"],
+            ),
         },
     )
     print(result.nouls["refund_requested"].noul)
+    print(result.choices["category"].choice)
+    print(result.scores["urgency"].score)
 ```
 
 JavaScript/TypeScript (`npm install @typesafe-ai/sdk`):
 
 ```ts
-import { noul, TypeSafeClient } from "@typesafe-ai/sdk";
+import { choice, noul, score, TypeSafeClient } from "@typesafe-ai/sdk";
 
 const client = new TypeSafeClient({
   baseURL: "http://127.0.0.1:8001",
@@ -135,28 +158,40 @@ const client = new TypeSafeClient({
   defaultModel: "llm-semantic-router/Decision-1.0-Kai-0.6B",
 });
 const result = await client.systemOne({
-  state: "Please refund the duplicate charge.",
+  state: "I was charged twice. Please refund the duplicate payment.",
   questions: {
-    refund_requested: noul("Does the customer request a refund?"),
+    refund_requested: noul("Does the customer explicitly request a refund?"),
+    category: choice("Classify this support request.", {
+      billing: "Charges, invoices, or refunds",
+      product: "Product use or defects",
+    }),
+    urgency: score("Rate the urgency of this request.", [
+      "Routine",
+      "Needs prompt attention",
+      "Critical",
+    ]),
   },
 });
 console.log(result.answers.refund_requested.noul);
+console.log(result.answers.category.choice);
+console.log(result.answers.urgency.score);
 ```
 
 These SDKs require an API-key value and send a Bearer header. `local-only` is
 only an SDK-required placeholder for **direct local testing**; the local
 runtime has no authentication middleware. Use a real Gateway credential for
-a protected deployment. The Python `result.nouls` convenience view is not a
-field in the wire JSON; the response JSON uses `answers`.
+a protected deployment. The Python `result.nouls`, `result.choices`, and
+`result.scores` convenience views are not fields in the wire JSON; the
+response JSON uses `answers`.
 
 ## Many states, one question set
 
-Use `POST /v1/decision/batches` when the **same questions** apply to several
+Use `POST /v1/systemone/batches` when the **same questions** apply to several
 states. This shares the question set across states; multiple questions on one
 state are already supported by `/v1/systemone`.
 
 ```bash
-curl -sS http://127.0.0.1:8001/v1/decision/batches \
+curl --fail-with-body -sS http://127.0.0.1:8001/v1/systemone/batches \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
@@ -173,11 +208,34 @@ curl -sS http://127.0.0.1:8001/v1/decision/batches \
   }'
 ```
 
-Read `results` in the response: each entry has the input `id`, its `answers`,
-and its `usage`. The response also has aggregate `usage`. State IDs must be
-unique; `number of states × number of questions` cannot exceed 1,024. This is
-**not** an official TypeSafe SDK method or a `/v1/systemone/batch` alias; use
-HTTP directly for this extension.
+An illustrative response shows how each input state becomes one result:
+
+```json
+{
+  "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+  "results": [
+    {
+      "id": "case-a",
+      "answers": {"refund_requested": {"type": "noul", "noul": 0.91}},
+      "usage": {"input_tokens": 18, "output_tokens": 0}
+    },
+    {
+      "id": "case-b",
+      "answers": {"refund_requested": {"type": "noul", "noul": 0.08}},
+      "usage": {"input_tokens": 17, "output_tokens": 0}
+    }
+  ],
+  "usage": {"input_tokens": 35, "output_tokens": 0}
+}
+```
+
+The `questions` object uses the same types and IDs as a single-state request.
+Read `results` in the response: one entry per input state, in input order,
+with its `id`, typed `answers`, and `usage`. The response also has aggregate
+`usage`. State IDs must be unique; `number of states × number of questions`
+cannot exceed 1,024. The `states` and `results` envelope is a Decision Runtime
+extension, **not** an official TypeSafe SDK method; use HTTP directly for this
+endpoint.
 
 ## Check and troubleshoot
 

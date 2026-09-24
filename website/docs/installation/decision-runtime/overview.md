@@ -5,41 +5,40 @@ description: Start a Decision 1.0 model and make your first decision request.
 
 Decision Runtime turns a Decision 1.0 model into a small HTTP service. You give
 it a **state** (the situation to evaluate) and one or more **questions**; it
-returns a typed answer for each question. Use `vllm-sr drun` to run one model
-per instance. To serve more models, start more instances on different ports.
-You need the vLLM Semantic Router CLI and Docker or Podman; `drun` is
+returns a typed answer for each question. Use `vllm-sr decision serve` to run
+one model per instance. To serve more models, start more instances on different ports.
+You need the vLLM Semantic Router CLI and Docker or Podman; Decision Runtime is
 standalone and does not require `vllm-sr serve`.
 
 ## 1. Start a model
 
-:::note Preview source builds
-The command below assumes an installed release with a published Decision
-Runtime image for your device. The current source checkout has no default
-image yet; contributors can follow the
-[image build guide](https://github.com/vllm-project/semantic-router/tree/main/src/vllm-sr/decision_runtime/image)
-to validate an unreleased build.
+:::note Availability
+The first CLI release with Decision Runtime is being prepared. The command
+below is the installed-release flow; contributors testing the current source
+checkout can use the [local build guide](https://github.com/vllm-project/semantic-router/tree/main/src/vllm-sr/decision_runtime/image).
 :::
 
 This example starts Kai on port 8001 and keeps it running in the background:
 
 ```bash
-vllm-sr drun llm-semantic-router/Decision-1.0-Kai-0.6B \
+vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B \
   --port 8001 --instance-name kai-demo --detach
 ```
 
-`drun` detects the available backend by default. Check the
-[model and backend table](./models.md) for what this build can run.
+`decision serve` detects the available backend when `--backend` is omitted and
+uses the matching image recorded by that CLI release. Check the
+[model and backend table](./models.md) for supported combinations.
 
 Wait for the model to load, then check readiness:
 
 ```bash
-curl -fsS http://127.0.0.1:8001/ready
+curl --fail-with-body -sS http://127.0.0.1:8001/ready
 ```
 
 ## 2. Ask a question
 
 ```bash
-curl -sS http://127.0.0.1:8001/v1/systemone \
+curl --fail-with-body -sS http://127.0.0.1:8001/v1/systemone \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
@@ -64,8 +63,8 @@ and the difference between SystemOne and our batch extension, continue to
 ## 3. Manage the instance
 
 ```bash
-vllm-sr drun status kai-demo
-vllm-sr drun stop kai-demo
+vllm-sr decision status kai-demo
+vllm-sr decision stop kai-demo
 ```
 
 `status` tells you which model and revision are loaded. `stop` shuts down the

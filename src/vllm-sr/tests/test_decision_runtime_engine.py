@@ -12,6 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.backend import (  # noqa: E402
     BackendBatchRequest,
     BackendBatchResult,
@@ -26,7 +27,6 @@ from decision_runtime.contracts import (  # noqa: E402
     SystemOneRequest,
 )
 from decision_runtime.engine import DecisionEngine  # noqa: E402
-from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.scheduler import (  # noqa: E402
     MAX_ROW_CREDIT_BYPASSES,
     ModelScheduler,

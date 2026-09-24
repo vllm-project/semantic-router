@@ -11,10 +11,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.api import create_app  # noqa: E402
 from decision_runtime.backend import ModelDescriptor  # noqa: E402
 from decision_runtime.engine import DecisionEngine  # noqa: E402
-from decision_fake_backend import FakeDecisionBackend  # noqa: E402
 from decision_runtime.model_inputs import (  # noqa: E402
     QWEN_DEFAULT_NO,
     QWEN_DEFAULT_YES,
@@ -258,7 +258,7 @@ def test_batch_has_a_larger_but_still_bounded_raw_transport_limit():
             transport=transport, base_url="http://test"
         ) as client:
             response = await client.post(
-                "/v1/decision/batches",
+                "/v1/systemone/batches",
                 content=b"{" + b" " * BATCH_MAX_REQUEST_BYTES + b"}",
                 headers={"Content-Type": "application/json"},
             )
@@ -325,7 +325,7 @@ def test_many_choice_candidates_cannot_bypass_expanded_prompt_limit():
         async with httpx.AsyncClient(
             transport=transport, base_url="http://test"
         ) as client:
-            response = await client.post("/v1/decision/batches", json=payload)
+            response = await client.post("/v1/systemone/batches", json=payload)
             assert response.status_code == 413
 
     asyncio.run(scenario())

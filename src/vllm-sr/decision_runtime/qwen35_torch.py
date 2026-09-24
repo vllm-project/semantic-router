@@ -13,10 +13,11 @@ import inspect
 import json
 import math
 import types
+from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Callable, Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from .qwen35_inputs import EncodedQwenRow
 from .release_artifacts import ReleaseArtifactError, verify_release_manifest
@@ -32,6 +33,7 @@ _FLA_L2NORM_WIDTH = 128
 _FLA_MAX_NORMALIZATION_BLOCKS = 64
 _FLA_NUM_STAGES = 3
 _SHA256_HEX_LENGTH = 64
+_GRAPH_PHYSICAL_BATCH = 8
 INFERENCE_FILES = (
     "backbone/config.json",
     "decision_config.json",
@@ -178,10 +180,10 @@ class Qwen35TorchRuntime:
         if enable_rocm_graph and (
             backend != "rocm"
             or rocm_profile is None
-            or physical_batch_size != 8
+            or physical_batch_size != _GRAPH_PHYSICAL_BATCH
             or graph_model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
             or not isinstance(artifact_content_id, str)
-            or len(artifact_content_id) != 64
+            or len(artifact_content_id) != _SHA256_HEX_LENGTH
             or any(
                 character not in "0123456789abcdef" for character in artifact_content_id
             )

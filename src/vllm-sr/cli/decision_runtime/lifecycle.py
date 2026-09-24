@@ -1,4 +1,4 @@
-"""Standalone ``vllm-sr drun`` lifecycle orchestration."""
+"""Standalone ``vllm-sr decision serve`` lifecycle orchestration."""
 
 from __future__ import annotations
 
@@ -62,6 +62,7 @@ _INSTANCE_NAME = re.compile(r"^[a-z0-9](?:[a-z0-9_.-]{0,62}[a-z0-9])?$")
 _ARTIFACT_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _CONTAINER_ID = re.compile(r"^[0-9a-f]{64}$")
 _ASCII_CONTROL_THRESHOLD = 32
+_EXPERIMENTAL_GRAPH_BATCH_SIZE = 8
 _VALID_PULL_POLICIES = frozenset(
     {
         IMAGE_PULL_POLICY_ALWAYS,
@@ -76,8 +77,8 @@ class DecisionLifecycleError(RuntimeError):
 
 
 @dataclass(frozen=True)
-class DrunOptions:
-    """Validated public options for one ``drun`` launch."""
+class DecisionServeOptions:
+    """Validated public options for one ``decision serve`` launch."""
 
     model: str
     revision: str | None = None
@@ -116,7 +117,7 @@ class DecisionLaunchReceipt:
 
 
 def run_decision_runtime(
-    options: DrunOptions,
+    options: DecisionServeOptions,
     *,
     resolver: DecisionCatalogResolver,
     registry: DecisionInstanceRegistry | None = None,
@@ -155,7 +156,7 @@ def run_decision_runtime(
         runtime=runtime,
         spec=spec,
     )
-    container_name = f"vllm-sr-drun-{instance_name}"
+    container_name = f"vllm-sr-decision-{instance_name}"
     launch = DecisionContainerLaunch(
         runtime=runtime,
         container_name=container_name,
@@ -284,7 +285,7 @@ def run_decision_runtime(
 
 
 def _resolve_runtime(
-    options: DrunOptions,
+    options: DecisionServeOptions,
     resolver: DecisionCatalogResolver,
 ) -> ResolvedDecisionRuntime:
     """Resolve and validate a container-compatible runtime description."""
@@ -425,7 +426,7 @@ def _validated_launch_ownership(
     return identity
 
 
-def _validate_options(options: DrunOptions) -> None:
+def _validate_options(options: DecisionServeOptions) -> None:
     if not isinstance(options.model, str) or not options.model.strip():
         raise DecisionLifecycleError("MODEL must be an exact non-empty model ID.")
     if options.model != options.model.strip():
@@ -603,7 +604,7 @@ def _validate_resolved_runtime(
     if request.experimental_qwen_rocm_graph_b8 and (
         spec.canonical_model != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
         or spec.backend != "rocm"
-        or spec.max_batch != 8
+        or spec.max_batch != _EXPERIMENTAL_GRAPH_BATCH_SIZE
     ):
         raise DecisionLifecycleError(
             "Experimental Qwen ROCm graph requires canonical Sol at B8."

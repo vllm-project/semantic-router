@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import hashlib
+import io
+import json
 import os
 import subprocess
 import sys
+import tarfile
 import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -13,6 +18,12 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
 from check_cli_wheel import check_wheel  # noqa: E402
+from package_contract import (  # noqa: E402
+    DECISION_LOCK_PATH,
+    decision_lock,
+    decision_publication,
+    verify_distribution,
+)
 from prepare_dev_package import prepare_version  # noqa: E402
 from validate_workflows import load_workflows, needs  # noqa: E402
 
@@ -117,6 +128,121 @@ class PythonPublisherContractTests(unittest.TestCase):
             self.assertTrue(
                 self.workflows[filename].jobs["pypi"]["with"]["prebuilt-dist"]
             )
+
+    def test_python_publication_waits_for_the_published_decision_image(self) -> None:
+        for filename, dependency in (("main.yml", "images"), ("release.yml", "docker")):
+            with self.subTest(workflow=filename):
+                publisher = self.workflows[filename].jobs["pypi"]
+                self.assertIn(dependency, needs(publisher))
+                self.assertIn(
+                    f"needs.{dependency}.result == 'success'", publisher["if"]
+                )
+                self.assertTrue(publisher["with"]["decision_runtime"])
+        receipt = self.workflows["docker-publish.yml"].jobs["publish"]["steps"]
+        self.assertTrue(
+            any(
+                step.get("with", {}).get("name") == "ci-published-decision-runtime-cpu"
+                for step in receipt
+            )
+        )
+        publish_steps = self.publisher.jobs["pypi"]["steps"]
+        self.assertTrue(
+            any(
+                "--decision-image-receipt" in step.get("run", "")
+                and "--verify-registry" in step["run"]
+                for step in publish_steps
+            )
+        )
+
+    def test_decision_receipt_rejects_stale_source_and_registry_content(self) -> None:
+        source = "a" * 40
+        raw = b'{"schemaVersion":2}'
+        digest = "sha256:" + hashlib.sha256(raw).hexdigest()
+        receipt = {
+            "schema_version": 1,
+            "image": "decision-runtime-cpu",
+            "source_sha": source,
+            "mode": "release",
+            "tag": "v1.2.3",
+            "digest": digest,
+            "ref": f"ghcr.io/example/semantic-router/decision-runtime-cpu@{digest}",
+            "archive_sha256": "b" * 64,
+            "platform": "linux/amd64",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "published.json"
+            path.write_text(json.dumps(receipt))
+            with (
+                patch.dict(os.environ, {"GITHUB_REPOSITORY_OWNER": "Example"}),
+                patch("package_contract.subprocess.check_output", return_value=raw),
+            ):
+                decision_publication(
+                    path,
+                    source_sha=source,
+                    mode="release",
+                    tag="v1.2.3",
+                    verify_registry=True,
+                )
+                with self.assertRaisesRegex(ValueError, "does not match"):
+                    decision_publication(
+                        path,
+                        source_sha="c" * 40,
+                        mode="release",
+                        tag="v1.2.3",
+                        verify_registry=True,
+                    )
+                with (
+                    patch(
+                        "package_contract.subprocess.check_output",
+                        return_value=b"other",
+                    ),
+                    self.assertRaisesRegex(ValueError, "digest differs"),
+                ):
+                    decision_publication(
+                        path,
+                        source_sha=source,
+                        mode="release",
+                        tag="v1.2.3",
+                        verify_registry=True,
+                    )
+
+    def test_bound_wheel_and_sdist_must_contain_identical_version_lock(self) -> None:
+        source = "a" * 40
+        image = (
+            "ghcr.io/example/semantic-router/decision-runtime-cpu@sha256:" + "b" * 64
+        )
+        lock = decision_lock("1.2.3", source, image)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            wheel = output / "vllm_sr-1.2.3-py3-none-any.whl"
+            sdist = output / "vllm_sr-1.2.3.tar.gz"
+            with zipfile.ZipFile(wheel, "w") as archive:
+                archive.writestr(DECISION_LOCK_PATH, lock)
+            with tarfile.open(sdist, "w:gz") as archive:
+                member = tarfile.TarInfo("vllm_sr-1.2.3/" + DECISION_LOCK_PATH)
+                member.size = len(lock)
+                archive.addfile(member, io.BytesIO(lock))
+            manifest = {
+                "source_sha": source,
+                "mode": "release",
+                "tag": "v1.2.3",
+                "version": "1.2.3",
+                "files": {
+                    path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+                    for path in (wheel, sdist)
+                },
+                "decision_image": {
+                    "ref": image,
+                    "lock_sha256": hashlib.sha256(lock).hexdigest(),
+                },
+            }
+            (output / "manifest.json").write_text(json.dumps(manifest))
+            with patch("package_contract.subprocess.check_output", return_value=source):
+                verify_distribution(output, "release", "v1.2.3")
+                manifest["decision_image"]["ref"] = image.replace("b" * 64, "c" * 64)
+                (output / "manifest.json").write_text(json.dumps(manifest))
+                with self.assertRaisesRegex(ValueError, "lock metadata differs"):
+                    verify_distribution(output, "release", "v1.2.3")
 
     def test_installer_uses_isolated_home_without_runtime_bootstrap(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

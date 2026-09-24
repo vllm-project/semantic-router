@@ -79,7 +79,7 @@ def _request(state: str) -> SystemOneRequest:
     )
 
 
-def test_entrypoint_parses_exact_drun_command(tmp_path: Path):
+def test_entrypoint_parses_exact_decision_serve_command(tmp_path: Path):
     args = [
         "--model",
         MODEL,

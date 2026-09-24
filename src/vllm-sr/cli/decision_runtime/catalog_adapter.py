@@ -1,4 +1,4 @@
-"""Integrated catalog resolver for ``vllm-sr drun``.
+"""Integrated catalog resolver for ``vllm-sr decision serve``.
 
 The CLI process resolves the exact catalog revision, verifies and materializes
 data-only model artifacts on the host, and passes a read-only content-addressed
@@ -30,6 +30,7 @@ from decision_runtime.catalog_adapter import (
 )
 from decision_runtime.qwen35_torch import EXPERIMENTAL_SOL_GRAPH_MODEL_ID
 from decision_runtime.scheduler import DEFAULT_MAX_CONCURRENCY
+
 from cli.decision_runtime.catalog import (
     DecisionCatalogError,
     DecisionRuntimeMount,
@@ -48,9 +49,10 @@ from cli.decision_runtime.image_reference import (
 
 _ARTIFACT_TARGET = "/opt/vllm-sr/decision-artifact"
 _CONTAINER_PORT = 8000
-# Large multi-state requests wait for row credits instead of exhausting an
-# eight-entry request queue while the physical backend drains a B8 cohort.
-_DEFAULT_DRUN_MAX_QUEUE = 32
+# Large multi-state requests wait for row credits while the physical backend
+# drains B8 cohorts; the admission queue is independently configurable.
+_DEFAULT_DECISION_MAX_QUEUE = 32
+_EXPERIMENTAL_GRAPH_BATCH_SIZE = 8
 _SHA256_HEX_LENGTH = 64
 _SUPPORTED_CONTAINER_BACKENDS = frozenset({"rocm", "cuda", "cpu"})
 _FAMILY_PYTHON = MappingProxyType(
@@ -70,7 +72,7 @@ class DecisionArtifactMaterializer(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class IntegratedDecisionCatalogResolver:
-    """Resolve one public ``drun`` request into an immutable OCI launch."""
+    """Resolve one public ``decision serve`` request into an immutable OCI launch."""
 
     artifacts: DecisionArtifactMaterializer
     images: Mapping[str, str] | None = None
@@ -133,8 +135,8 @@ class IntegratedDecisionCatalogResolver:
             image = inventory.get(backend)
         if image is None:
             raise DecisionCatalogError(
-                f"no released Decision runtime image is installed for {backend!r}; "
-                "pass a digest-qualified --image during release validation"
+                f"This CLI build has no default Decision image for {backend!r}. "
+                "Install a release with this backend, or use --image for local development."
             )
         try:
             image = (
@@ -150,13 +152,15 @@ class IntegratedDecisionCatalogResolver:
         max_batch = request.max_batch or model.profile.physical_batch_size
         max_concurrency = request.max_concurrency or DEFAULT_MAX_CONCURRENCY
         max_queue = (
-            _DEFAULT_DRUN_MAX_QUEUE if request.max_queue is None else request.max_queue
+            _DEFAULT_DECISION_MAX_QUEUE
+            if request.max_queue is None
+            else request.max_queue
         )
         _validate_resolved_limits(max_batch, max_concurrency, max_queue)
         if request.experimental_qwen_rocm_graph_b8 and (
             model.catalog.model_id != EXPERIMENTAL_SOL_GRAPH_MODEL_ID
             or backend != "rocm"
-            or max_batch != 8
+            or max_batch != _EXPERIMENTAL_GRAPH_BATCH_SIZE
         ):
             raise DecisionCatalogError(
                 "experimental Qwen ROCm graph requires canonical Sol at B8"
@@ -263,7 +267,7 @@ def default_artifact_cache_root() -> Path:
 
 
 def get_catalog_resolver() -> IntegratedDecisionCatalogResolver:
-    """Build the production host-side resolver used by ``vllm-sr drun``."""
+    """Build the production host-side resolver used by ``vllm-sr decision serve``."""
 
     return IntegratedDecisionCatalogResolver(
         artifacts=ArtifactResolver(

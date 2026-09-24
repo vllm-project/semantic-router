@@ -24,16 +24,13 @@ pip install -e .
 
 ## Serve a Decision 1.0 model
 
-`vllm-sr drun run MODEL` starts one catalog model as a standalone SystemOne
-service. It requires a supported backend and an immutable runtime image; until
-a released image inventory is packaged, pass a digest-qualified `--image` or
-an exact local Docker image ID with `--image-pull-policy never`. The image
-installs the optional `vllm-sr[decision-runtime]` HTTP dependencies. The
-lower-level `vllm-sr-decision-runtime` entry point requires the verified model
-and artifact arguments supplied by `drun`; it has no default model or fake
-inference mode.
-See the [Decision runtime guide](../../website/docs/api/decision-runtime.md) for
-launch and API examples.
+`vllm-sr decision serve MODEL` starts one catalog model as a standalone SystemOne
+service. An installed Decision-enabled CLI release selects the image for the
+detected backend automatically; `--image` is an advanced development override.
+The first such release is still being prepared. See the
+[Decision Runtime guide](../../website/docs/installation/decision-runtime/overview.md)
+for launch and API examples, or the
+[image build guide](decision_runtime/image/README.md) for source-checkout testing.
 
 Production model identity comes from the packaged catalog: each canonical
 Hugging Face repository ID resolves to an immutable revision and a stable
@@ -60,7 +57,7 @@ responses contain only `model`, `answers`, and `usage`; diagnostics stay on
 `/api/status` and `/metrics`. Batch and debug request-body extensions are not
 part of `/v1/systemone`.
 
-The separate Decision extension `POST /v1/decision/batches` applies one required
+The separate Decision extension `POST /v1/systemone/batches` applies one required
 `model` and one shared `questions` map to ordered
 `states: [{"id": ..., "state": ...}]`. IDs must be unique, nonblank strings of
 at most 128 characters. A request may contain at most 1,024 states, 1,024
@@ -78,7 +75,7 @@ before atomic queue admission, and only rows with the same executor-defined
 batch key share a model forward. A complete input over the model profile's token
 limit must raise `BackendInputTooLargeError`; the API returns HTTP 413 without
 admitting any part of that request or affecting concurrent callers. Admission
-allows eight concurrent calls per model and queues eight by default; `drun`
+allows eight concurrent calls per model and queues 32 by default; `decision serve`
 exposes `--max-concurrency` and `--max-queue` to adjust these bounds. There is
 no sequential single-request fallback. Family adapters enforce complete-input
 token limits without truncation. A ROCm model with a strict kernel profile

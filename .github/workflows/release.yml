@@ -29,7 +29,6 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
       catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
-      decision_required: ${{ steps.decision-policy.outputs.decision_required }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -80,9 +79,6 @@ jobs:
           python3 tools/ci/ci_plan.py previous-release \
             --version "$RELEASE_VERSION" --github-output "$GITHUB_OUTPUT"
 
-      - name: Select Decision qualification from the tagged source
-        id: decision-policy
-        run: python3 tools/ci/decision_release_policy.py --github-output "$GITHUB_OUTPUT"
 
   ci:
     name: Release Candidate
@@ -99,74 +95,25 @@ jobs:
     secrets: inherit
 
   gate:
-    name: Release CPU Qualification
+    name: Release Checks
     if: always()
     needs: [validate, ci]
     runs-on: ubuntu-24.04
     steps:
-      - name: Require version and complete CPU evidence
+      - name: Require release checks
         env:
           VERSION_RESULT: ${{ needs.validate.result }}
           QUALIFICATION_RESULT: ${{ needs.ci.result }}
-          DECISION_REQUIRED: ${{ needs.validate.outputs.decision_required }}
-          DECISION_ENABLED: ${{ vars.DECISION_RUNTIME_RELEASE_ENABLED }}
-          RELEASE_EVENT: ${{ github.event_name }}
         run: |
           test "$VERSION_RESULT" = success
           test "$QUALIFICATION_RESULT" = success
-          case "$DECISION_REQUIRED" in
-            true|false) ;;
-            *) echo '::error::Decision source policy did not produce a valid result.'; exit 1 ;;
-          esac
-          if [[ "$RELEASE_EVENT" == push && "$DECISION_REQUIRED" == true && "$DECISION_ENABLED" != true ]]; then
-            echo '::error::Decision-enabled stable release requires the protected qualification environment.'
-            exit 1
-          fi
 
-  decision-cpu:
-    name: Publish Immutable Decision CPU Candidate
+  docker:
+    name: Publish Images
     needs: [validate, gate, ci]
     if: >-
       !cancelled() && github.event_name == 'push'
       && needs.gate.result == 'success'
-      && needs.validate.outputs.decision_required == 'true'
-    permissions:
-      contents: read
-      actions: read
-      packages: write
-    uses: ./.github/workflows/docker-publish.yml
-    with:
-      mode: release
-      images: '["decision-runtime-cpu"]'
-      tag: ${{ needs.validate.outputs.tag }}
-    secrets: inherit
-
-  decision:
-    name: Build Qualified Stable Decision Distribution
-    needs: [validate, gate, decision-cpu]
-    if: >-
-      !cancelled() && github.event_name == 'push'
-      && needs.gate.result == 'success'
-      && needs.decision-cpu.result == 'success'
-      && needs.validate.outputs.decision_required == 'true'
-    permissions:
-      contents: read
-      actions: read
-      packages: write
-    uses: ./.github/workflows/decision-qualified-package.yml
-    with:
-      mode: release
-      tag: ${{ needs.validate.outputs.tag }}
-    secrets: inherit
-
-  docker:
-    name: Publish Images
-    needs: [validate, gate, ci, decision]
-    if: >-
-      !cancelled() && github.event_name == 'push'
-      && needs.gate.result == 'success'
-      && (needs.validate.outputs.decision_required == 'false'
-        || needs.decision.result == 'success')
     permissions:
       contents: read
       actions: read
@@ -177,17 +124,14 @@ jobs:
       images: ${{ needs.ci.outputs.publish_images }}
       tag: ${{ needs.validate.outputs.tag }}
       publish_latest: true
-      record_decision_digest: false
     secrets: inherit
 
   helm:
     name: Publish Helm Chart
-    needs: [validate, gate, decision]
+    needs: [validate, gate]
     if: >-
       !cancelled() && github.event_name == 'push'
       && needs.gate.result == 'success'
-      && (needs.validate.outputs.decision_required == 'false'
-        || needs.decision.result == 'success')
     permissions:
       contents: read
       actions: read
@@ -201,29 +145,30 @@ jobs:
 
   pypi:
     name: Publish Python Package
-    needs: [validate, gate, decision]
+    needs: [validate, gate, docker]
     if: >-
       !cancelled() && github.event_name == 'push'
       && needs.gate.result == 'success'
-      && (needs.validate.outputs.decision_required == 'false'
-        || needs.decision.result == 'success')
+      && needs.docker.result == 'success'
+    permissions:
+      contents: read
+      actions: read
+      packages: read
     uses: ./.github/workflows/pypi-publish.yml
     with:
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
       catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
       prebuilt-dist: true
-      qualified-decision: ${{ needs.validate.outputs.decision_required == 'true' }}
+      decision_runtime: true
     secrets: inherit
 
   crate:
     name: Publish Rust Crate
-    needs: [validate, gate, decision]
+    needs: [validate, gate]
     if: >-
       !cancelled() && github.event_name == 'push'
       && needs.gate.result == 'success'
-      && (needs.validate.outputs.decision_required == 'false'
-        || needs.decision.result == 'success')
     uses: ./.github/workflows/publish-crate.yml
     with:
       version: ${{ needs.validate.outputs.version }}
@@ -240,7 +185,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.validate.outputs.decision_required == 'true' && format('decision-qualified-dist-{0}-{1}', github.run_id, github.run_attempt) || 'vllm-sr-dist' }}
+          name: vllm-sr-bound-dist
           path: release-assets/python
 
       - uses: actions/download-artifact@v4
@@ -271,12 +216,12 @@ jobs:
           body: |
             ## Release ${{ needs.validate.outputs.tag }}
 
-            Version and CPU runtime qualification completed before Docker, Helm, PyPI, crates.io,
-            and operator image publication.
+            Version and CI checks completed before publication. The Python package
+            was verified against its published Decision CPU image.
 
             ### Container images
 
-            All images use `${{ needs.validate.outputs.tag }}` and `latest`:
+            These general runtime images use `${{ needs.validate.outputs.tag }}` and `latest`:
 
             - `dashboard`
             - `extproc`

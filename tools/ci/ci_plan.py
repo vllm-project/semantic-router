@@ -19,8 +19,6 @@ from classify_pr_changes import (
     classify,
     git_changed_files,
 )
-from decision_release_policy import ROOT as SOURCE_ROOT
-from decision_release_policy import requires_qualification
 from domain_registry import domain_records, load_domain_registry, matching_domains
 from execution_batches import (
     EXECUTOR_JOBS,
@@ -156,11 +154,12 @@ def make_plan(
         and not selection.test_only
         and bool({"vllm-sr-cli", "generated-model-catalog"} & set(selection.domains))
     )
-    # The installed CLI contains Decision even when only its catalog changed.
-    # A main-channel wheel must never bypass the source-qualified image lock
-    # merely because the changed-path image selector missed that dependency.
-    if profile == "main" and publish_python and requires_qualification(SOURCE_ROOT):
-        publish_images = sorted({*publish_images, "decision-runtime-cpu"})
+    if (
+        profile == "main"
+        and publish_python
+        and "decision-runtime-cpu" not in publish_images
+    ):
+        publish_images.append("decision-runtime-cpu")
     images = sorted(
         set(selection.pr_images if ids else ())
         | set(publish_images)

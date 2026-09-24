@@ -58,7 +58,7 @@ jobs:
           MODE: ${{ inputs.mode }}
         run: |
           if [[ "$IMAGE" == decision-runtime-rocm ]]; then
-            echo '::error::Decision ROCm requires the external device-qualified digest handoff' >&2
+            echo '::error::Decision ROCm is not supported by the hosted image builder' >&2
             exit 1
           fi
           args=()

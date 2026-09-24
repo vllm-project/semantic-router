@@ -3,10 +3,10 @@ title: Configure an instance
 description: Choose a device, set request capacity, and manage a Decision model instance.
 ---
 
-Start with the [basic `drun` command](./overview.md). You can
+Start with the [basic `decision serve` command](./overview.md). You can
 leave the capacity flags unset for the first run. The options below change how
 that one model instance starts and handles traffic; the
-[CLI reference](../../api/cli.md#vllm-sr-drun-run) lists every flag.
+[CLI reference](../../api/cli.md#vllm-sr-decision-serve) lists every flag.
 
 ## Device and model
 
@@ -30,17 +30,17 @@ questions is one request and 12 rows. These limits control different things:
 | `--max-queue` | 32 | Additional requests waiting for admission. `0` rejects a request immediately when capacity is full. |
 | `--max-batch` | 8 | Compatible decision rows combined into one model forward. This does not limit the number of HTTP requests. |
 
-For example, on a CLI with a qualified ROCm image installed, this starts Kai
-with room for four active requests and sixteen waiting requests:
+For example, this starts Kai with room for four active requests and sixteen
+waiting requests. The [starting guide](./overview.md) notes release
+availability.
 
 ```bash
-vllm-sr drun run llm-semantic-router/Decision-1.0-Kai-0.6B \
-  --backend rocm --port 8001 --instance-name kai-8001 \
+vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B \
+  --backend cpu \
+  --port 8001 --instance-name kai-8001 \
   --max-concurrency 4 --max-queue 16 --detach
 ```
 
-If the CLI has no qualified image installed, follow the
-[image instructions](./overview.md) before running this example.
 At most 1,024 state/question decisions fit in one request, and at most 4,096
 decision rows can be active across requests. Those bounds still apply if you
 raise concurrency or queue length. When the service is full, it returns `529`
@@ -55,10 +55,10 @@ make a ROCm kernel support a larger physical batch. See
 
 | Option | When to use it |
 | --- | --- |
-| `--image` | Normally omit it and use the qualified image pinned in the installed CLI. Source and release validation can supply an immutable image reference explicitly; see [start one model](./overview.md). |
-| `--image-pull-policy` | Controls when the container runtime pulls the image: `ifnotpresent` (default), `always`, or `never`. Most users can leave the default. |
+| `--image` | Advanced override for a custom or locally built Decision Runtime image. Normally omit it and use the image selected by the installed CLI version. |
+| `--image-pull-policy` | Control when to pull an image: `ifnotpresent` (default), `always`, or `never`. Most users can leave the default. |
 | `--host`, `--port` | Publish the endpoint at `127.0.0.1:8000` by default. Give separate model instances separate ports. |
-| `--instance-name` | Give a detached instance a stable name for `drun status` and `drun stop`. |
+| `--instance-name` | Give a detached instance a stable name for `decision status` and `decision stop`. |
 | `--detach`, `--restart-policy` | Keep the instance running in the background. Docker restart policy defaults to `no`; `unless-stopped` requires `--detach`. |
 | `--startup-timeout` | Allow more time for model loading and readiness than the default 1,800 seconds. |
 

@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 import pytest
@@ -625,9 +626,7 @@ def test_cancel_during_forward_keeps_row_credit_until_selected_job_is_drained():
         first_request = request("first", ("a", "b", "c", "d"))
         second_request = request("second", ("e", "f", "g", "h"))
         first = asyncio.create_task(
-            scheduler.run(
-                MODEL.name, lambda: backend.infer(first_request), row_cost=4
-            )
+            scheduler.run(MODEL.name, lambda: backend.infer(first_request), row_cost=4)
         )
 
         async def wait_for_first_forward():
@@ -702,10 +701,8 @@ def test_close_during_partial_forward_keeps_credit_until_selected_job_is_drained
             except asyncio.CancelledError:
                 self.cancelled.set()
                 while not forward.done():
-                    try:
+                    with suppress(asyncio.CancelledError):
                         await asyncio.shield(forward)
-                    except asyncio.CancelledError:
-                        pass
                 raise
             return await super().predict_rows(rows)
 
@@ -723,9 +720,7 @@ def test_close_during_partial_forward_keeps_credit_until_selected_job_is_drained
         )
         first_request = request("first", ("a", "b", "c", "d"))
         first = asyncio.create_task(
-            scheduler.run(
-                MODEL.name, lambda: backend.infer(first_request), row_cost=4
-            )
+            scheduler.run(MODEL.name, lambda: backend.infer(first_request), row_cost=4)
         )
         try:
             await asyncio.wait_for(executor.entered.wait(), timeout=2)
@@ -778,9 +773,7 @@ def test_worker_error_and_double_cancel_wait_for_selected_job_drain():
         backend._fail_jobs = delayed_fail_jobs
         first_request = request("first", ("a", "b", "c", "d"))
         first = asyncio.create_task(
-            scheduler.run(
-                MODEL.name, lambda: backend.infer(first_request), row_cost=4
-            )
+            scheduler.run(MODEL.name, lambda: backend.infer(first_request), row_cost=4)
         )
         try:
             await asyncio.wait_for(failed.wait(), timeout=2)

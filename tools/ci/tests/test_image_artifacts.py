@@ -53,7 +53,7 @@ class ImageArtifactTests(unittest.TestCase):
             / ".github/workflows/build-artifacts.yml"
         ).read_text()
         self.assertIn('[[ "$IMAGE" == decision-runtime-rocm ]]', workflow)
-        self.assertIn("external device-qualified digest handoff", workflow)
+        self.assertIn("not supported by the hosted image builder", workflow)
         self.assertLess(
             workflow.index("name: Verify the sealed candidate"),
             workflow.index("name: ci-image-${{ matrix.image }}"),
@@ -224,7 +224,7 @@ class ImageArtifactTests(unittest.TestCase):
                     ),
                     ["a" * 40],
                 )
-        with self.assertRaisesRegex(ValueError, "six-model"):
+        with self.assertRaisesRegex(ValueError, "hosted image publisher"):
             images.publication_tags("decision-runtime-rocm", "main", "", False, "")
 
     def test_promotion_records_the_copied_digest_for_each_tag(self):
@@ -276,6 +276,56 @@ class ImageArtifactTests(unittest.TestCase):
                     ],
                 )
                 self.assertTrue(call.kwargs["check"])
+
+    def test_decision_publication_receipt_binds_source_digest_and_platform(self):
+        source = "a" * 40
+        digest = "sha256:" + "b" * 64
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "image_artifacts.py",
+                    "promote",
+                    "--image",
+                    "decision-runtime-cpu",
+                    "--directory",
+                    tmp,
+                    "--mode",
+                    "release",
+                    "--tag",
+                    "v1.2.3",
+                ],
+            ),
+            patch.dict(images.os.environ, {"GITHUB_REPOSITORY_OWNER": "Example"}),
+            patch.object(images, "source_sha", return_value=source),
+            patch.object(
+                images,
+                "verify",
+                return_value={
+                    "mode": "release",
+                    "tag": "v1.2.3",
+                    "date": "",
+                    "source_sha": source,
+                    "sha256": "c" * 64,
+                    "images": [{"platform": "linux/amd64"}],
+                },
+            ),
+            patch.object(images.subprocess, "run") as copy,
+        ):
+            directory = Path(tmp)
+            (directory / "published-digest.txt").write_text(digest + "\n")
+            images.main()
+            self.assertEqual(copy.call_count, 1)
+            receipt = json.loads((directory / "published.json").read_text())
+            self.assertEqual(receipt["source_sha"], source)
+            self.assertEqual(receipt["digest"], digest)
+            self.assertEqual(receipt["platform"], "linux/amd64")
+            self.assertEqual(
+                receipt["ref"],
+                f"ghcr.io/example/semantic-router/decision-runtime-cpu@{digest}",
+            )
 
     def test_published_archive_preserves_registry_and_checkout_identities(self):
         with tempfile.TemporaryDirectory() as tmp:

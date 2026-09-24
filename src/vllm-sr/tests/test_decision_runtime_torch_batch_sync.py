@@ -55,7 +55,7 @@ class FakeMask:
         self.values = [list(row) for row in values]
 
     def __invert__(self):
-        return FakeMask(([not value for value in row] for row in self.values))
+        return FakeMask([not value for value in row] for row in self.values)
 
 
 class FakeMatrix:
@@ -171,13 +171,11 @@ def _runtime(family, monkeypatch, logits, *, temperature=1.0, qwen_rows=None):
             "_collate",
             lambda _, items, *args, **kwargs: {
                 "candidate_mask": FakeMask(
-                    (
-                        [
-                            index < len(row.candidate_positions)
-                            for index in range(len(logits[0]))
-                        ]
-                        for row in items
-                    )
+                    [
+                        index < len(row.candidate_positions)
+                        for index in range(len(logits[0]))
+                    ]
+                    for row in items
                 )
             },
         )

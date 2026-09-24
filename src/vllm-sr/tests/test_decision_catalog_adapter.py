@@ -1,4 +1,4 @@
-"""Integration tests for the host-side ``drun`` catalog bridge."""
+"""Integration tests for the host-side ``decision serve`` catalog bridge."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
+from cli import __version__
 from cli.decision_runtime import image_lock
 from cli.decision_runtime.catalog import DecisionCatalogError, DecisionRuntimeRequest
 from cli.decision_runtime.catalog_adapter import (
@@ -223,7 +224,7 @@ def test_auto_backend_uses_injected_detector(tmp_path: Path) -> None:
 def test_missing_released_image_fails_before_artifact_download(tmp_path: Path) -> None:
     bridge = resolver(tmp_path, images={})
 
-    with pytest.raises(DecisionCatalogError, match=r"no released.*image"):
+    with pytest.raises(DecisionCatalogError, match=r"no default Decision image"):
         bridge.resolve(request())
 
     assert bridge.artifacts.calls == []  # type: ignore[attr-defined]
@@ -234,7 +235,12 @@ def test_default_resolution_uses_release_injected_image_lock(
 ) -> None:
     (tmp_path / image_lock.IMAGE_LOCK_RESOURCE).write_text(
         json.dumps(
-            {"schema_version": 1, "source_sha": "a" * 40, "images": {"rocm": IMAGE}}
+            {
+                "schema_version": 1,
+                "package_version": __version__,
+                "source_sha": "a" * 40,
+                "images": {"rocm": IMAGE},
+            }
         ),
         encoding="utf-8",
     )
@@ -250,7 +256,7 @@ def test_missing_release_lock_fails_before_artifact_download(
     isolate_image_lock_resource(monkeypatch, tmp_path)
     bridge = resolver(tmp_path, images=None)
 
-    with pytest.raises(DecisionCatalogError, match="image lock is not installed"):
+    with pytest.raises(DecisionCatalogError, match="no default Decision image"):
         bridge.resolve(request())
 
     assert bridge.artifacts.calls == []  # type: ignore[attr-defined]

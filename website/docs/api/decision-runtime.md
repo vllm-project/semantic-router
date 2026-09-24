@@ -11,21 +11,23 @@ the [cURL and SDK examples](../installation/decision-runtime/api.md) if you
 are making your first request. This page is the field-level reference for the
 runtime's HTTP API.
 
-Each `drun` instance serves **one model** on its own port. Every inference
+Each `decision serve` instance serves **one model** on its own port. Every inference
 request must use that instance's exact model ID; the runtime does not choose a
 default. `GET /v1/models` returns the ID to send.
 
 | Endpoint | Use it when | Status |
 | --- | --- | --- |
 | `POST /v1/systemone` | One state has one or more questions. | SystemOne single-state format |
-| `POST /v1/decision/batches` | Several states have the same question set. | Decision-specific extension |
+| `POST /v1/systemone/batches` | Several states have the same question set. | Decision Runtime extension using SystemOne questions and answers |
 
 The SystemOne path and JSON shape support the official
 [TypeSafe SDKs](../installation/decision-runtime/api.md#use-the-official-systemone-sdks)
 when configured with this runtime's base URL and full model ID. Local
 validation requires non-null `instructions` on every question and rejects
 unknown fields; Choice and Score confidence use Decision's own calculation.
-There is no `/v1/systemone/batch` endpoint.
+The `/v1/systemone/batches` path groups several evaluations under one shared
+question map. Its `states` and `results` envelope is a Decision Runtime
+extension; the official SystemOne SDKs call only the single-state endpoint.
 
 ## Single state: `POST /v1/systemone`
 
@@ -74,7 +76,7 @@ of numeric equivalence with TypeSafe/Jev. Noul has no separate confidence
 field. See the [call guide](../installation/decision-runtime/api.md) for an
 example covering all three question types.
 
-## Shared-question batch: `POST /v1/decision/batches`
+## Shared-question batch: `POST /v1/systemone/batches`
 
 ```json
 {
@@ -92,16 +94,36 @@ example covering all three question types.
 }
 ```
 
-The `model` and `questions` rules are the same as for a single state.
-`states` is a nonempty array; each element has a unique, nonblank `id`
-(at most 128 characters) and a `state`. The product of state count and
-question count may not exceed **1,024 decisions**. The response has `model`,
-ordered `results`, and aggregate `usage`. Each result has the input `id`,
-its `answers`, and its own `usage`.
+The batch evaluates every state against every question. `model` is the same
+explicit model ID used by `/v1/systemone`, and `questions` uses the same
+question IDs, types, criteria, and required instructions. Replace the single
+`state` field with a nonempty `states` array: each element has a unique,
+nonblank `id` (at most 128 characters) and a `state` with the same content
+rules as a single request. The product of state count and question count may
+not exceed **1,024 decisions**.
+
+The response uses the same typed `answers` and per-request token `usage` as
+the single-state API, grouped in an ordered result for each input state:
+
+```json
+{
+  "model": "llm-semantic-router/Decision-1.0-Kai-0.6B",
+  "results": [
+    {"id": "case-a", "answers": {"refund_requested": {"type": "noul", "noul": 0.91}}, "usage": {"input_tokens": 18, "output_tokens": 0}},
+    {"id": "case-b", "answers": {"refund_requested": {"type": "noul", "noul": 0.08}}, "usage": {"input_tokens": 17, "output_tokens": 0}}
+  ],
+  "usage": {"input_tokens": 35, "output_tokens": 0}
+}
+```
+
+Each result's `id` matches the corresponding input state; `results` follows
+input order. Top-level `usage` totals the per-state usage. The values above
+illustrate the response shape, not model predictions.
 
 This endpoint reduces repeated HTTP and question-formatting overhead when
-several states share questions. It is not an official TypeSafe SDK method;
-call it with an HTTP client.
+several states share questions. It is a Decision Runtime extension to the
+SystemOne single-state API, not an official TypeSafe SDK method; call it with
+an HTTP client.
 
 ## Limits and errors
 

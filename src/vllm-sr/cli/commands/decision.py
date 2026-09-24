@@ -20,7 +20,7 @@ from cli.decision_runtime.container import DecisionContainerError
 from cli.decision_runtime.lifecycle import (
     DecisionLaunchReceipt,
     DecisionLifecycleError,
-    DrunOptions,
+    DecisionServeOptions,
     run_decision_runtime,
 )
 from cli.decision_runtime.management import (
@@ -35,12 +35,14 @@ from cli.decision_runtime.management import (
 )
 from cli.decision_runtime.registry import DecisionRegistryError
 
-DRUN_HELP = """Launch and safely manage standalone Decision model runtimes.
+DECISION_HELP = """Serve and manage standalone Decision models.
 
 Launching requires the integrated Decision catalog. Recovery commands remain
-available without it. ``vllm-sr drun MODEL`` is a shortcut for
-``vllm-sr drun run MODEL``. Detached instances remain registered for the
+available without it. ``vllm-sr decision serve MODEL`` starts one model as a
+standalone HTTP service. Detached instances remain registered for the
 ownership-checked list, status, stop, and forget commands.
+Current source builds have no default CPU or ROCm image; build one locally and
+pass its image ID with ``--image`` and ``--image-pull-policy never``.
 
 List and status report authoritative registry lifecycle separately from observed
 container state. List does not probe service readiness; status probes the strict
@@ -49,11 +51,12 @@ remains explicit integration work and is not emulated by the container driver.
 
 \b
 Examples:
-  vllm-sr drun llm-semantic-router/Decision-1.0-Kai-0.6B
-  vllm-sr drun run llm-semantic-router/Decision-1.0-Lux-9B --backend rocm --detach
-  vllm-sr drun list
-  vllm-sr drun stop lux-8000-ab12cd34
-  vllm-sr drun forget lux-8000-ab12cd34
+  vllm-sr decision serve llm-semantic-router/Decision-1.0-Kai-0.6B \\
+    --backend cpu --image "$DECISION_IMAGE_ID" --image-pull-policy never \\
+    --instance-name kai-demo --detach
+  vllm-sr decision list
+  vllm-sr decision status kai-demo
+  vllm-sr decision stop kai-demo
 """
 
 _LIFECYCLE_ERRORS = (
@@ -66,23 +69,12 @@ _LIFECYCLE_ERRORS = (
 )
 
 
-class _DefaultRunGroup(click.Group):
-    """Preserve ``drun MODEL`` while exposing explicit lifecycle subcommands."""
-
-    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
-        if not args or (
-            args[0] not in self.commands and args[0] not in {"--help", "-h"}
-        ):
-            args.insert(0, "run")
-        return super().parse_args(ctx, args)
-
-
-@click.group("drun", cls=_DefaultRunGroup, help=DRUN_HELP, no_args_is_help=False)
-def drun() -> None:
+@click.group("decision", help=DECISION_HELP)
+def decision() -> None:
     """Launch and safely manage standalone Decision model runtimes."""
 
 
-@drun.command("run")
+@decision.command("serve")
 @click.argument("model", required=True)
 @click.option(
     "--revision",
@@ -190,7 +182,7 @@ def drun() -> None:
     show_default=True,
     help="Docker restart policy; unless-stopped requires --detach.",
 )
-def run(
+def serve(
     model: str,
     revision: str | None,
     host: str,
@@ -213,7 +205,7 @@ def run(
 ) -> None:
     """Launch one exact MODEL as a standalone SystemOne service."""
 
-    options = DrunOptions(
+    options = DecisionServeOptions(
         model=model,
         revision=revision,
         host=host,
@@ -245,7 +237,7 @@ def run(
         raise click.ClickException(str(error)) from error
 
 
-@drun.command("list")
+@decision.command("list")
 def list_instances() -> None:
     """List registry lifecycle, runtime state, and cross-runtime orphans."""
 
@@ -265,7 +257,7 @@ def list_instances() -> None:
             _show_managed_status(managed_status)
 
 
-@drun.command("status")
+@decision.command("status")
 @click.argument("instance_name", required=True)
 def status(instance_name: str) -> None:
     """Inspect lifecycle, runtime state, and strict readiness for INSTANCE_NAME."""
@@ -276,7 +268,7 @@ def status(instance_name: str) -> None:
         raise click.ClickException(str(error)) from error
 
 
-@drun.command("stop")
+@decision.command("stop")
 @click.argument("instance_name", required=True)
 def stop(instance_name: str) -> None:
     """Stop one owned runtime or clear a proven container-missing record."""
@@ -292,7 +284,7 @@ def stop(instance_name: str) -> None:
     _show_registry_durability(receipt.registry_durable)
 
 
-@drun.command("forget")
+@decision.command("forget")
 @click.argument("instance_name", required=True)
 @click.option(
     "--force",

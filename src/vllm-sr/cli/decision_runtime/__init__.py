@@ -4,7 +4,7 @@ from cli.decision_runtime.catalog import (
     DecisionRuntimeRequest,
     ResolvedDecisionRuntime,
 )
-from cli.decision_runtime.lifecycle import DrunOptions, run_decision_runtime
+from cli.decision_runtime.lifecycle import DecisionServeOptions, run_decision_runtime
 from cli.decision_runtime.management import (
     forget_decision_instance,
     list_decision_instances,
@@ -14,7 +14,7 @@ from cli.decision_runtime.management import (
 
 __all__ = [
     "DecisionRuntimeRequest",
-    "DrunOptions",
+    "DecisionServeOptions",
     "ResolvedDecisionRuntime",
     "forget_decision_instance",
     "list_decision_instances",

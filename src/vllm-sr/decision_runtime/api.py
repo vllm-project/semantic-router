@@ -44,6 +44,9 @@ ARTIFACT_RESPONSE_HEADERS = {
     "manifest_sha256": "X-Decision-Artifact-Manifest-Sha256",
     "content_sha256": "X-Decision-Artifact-Content-Sha256",
 }
+MAX_ARTIFACT_MODEL_ID_LENGTH = 128
+ARTIFACT_MODEL_ASCII_MIN = 33
+ARTIFACT_MODEL_ASCII_MAX = 126
 
 
 class _ResponseModel(BaseModel):
@@ -86,9 +89,10 @@ def create_app(
         or set(attested_artifact) != set(ARTIFACT_RESPONSE_HEADERS)
         or attested_artifact["model"] != model_names[0]
         or not isinstance(attested_artifact["model"], str)
-        or not 1 <= len(attested_artifact["model"]) <= 128
+        or not 1 <= len(attested_artifact["model"]) <= MAX_ARTIFACT_MODEL_ID_LENGTH
         or any(
-            not 33 <= ord(character) <= 126 or character == ","
+            not ARTIFACT_MODEL_ASCII_MIN <= ord(character) <= ARTIFACT_MODEL_ASCII_MAX
+            or character == ","
             for character in attested_artifact["model"]
         )
         or any(
@@ -253,7 +257,18 @@ def create_app(
             row_cost=len(payload.questions),
         )
 
-    @app.post("/v1/decision/batches", response_model=SystemOneBatchResponse)
+    @app.post(
+        "/v1/systemone/batches",
+        response_model=SystemOneBatchResponse,
+        summary="Evaluate many states with shared SystemOne questions",
+        description=(
+            "Decision Runtime extension to POST /v1/systemone. Send the same "
+            "SystemOne question map for every identified state; each result "
+            "contains the same typed answers as a single-state response. "
+            "The states/results envelope is specific to Decision Runtime, "
+            "not an official SystemOne SDK operation."
+        ),
+    )
     async def system_one_batch(
         payload: Annotated[SystemOneBatchRequest, Body(...)],
         response: Response,
