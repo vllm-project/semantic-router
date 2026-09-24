@@ -24,7 +24,9 @@ CONTAINER = "c" * 64
 SOURCE = "d" * 40
 
 
-def _full_snapshot_fixture(root: Path) -> tuple[Path, Path, dict, SimpleNamespace]:
+def _full_snapshot_fixture(
+    root: Path, *, code_filename: str = "model.py"
+) -> tuple[Path, Path, dict, SimpleNamespace]:
     source = root / "snapshot"
     core = root / "core"
     (source / "native").mkdir(parents=True)
@@ -32,7 +34,7 @@ def _full_snapshot_fixture(root: Path) -> tuple[Path, Path, dict, SimpleNamespac
     weight = b"qualified model data"
     historical_code = b"raise RuntimeError('repository Python must not execute')\n"
     (source / "native" / "weights.bin").write_bytes(weight)
-    (source / "native" / "model.py").write_bytes(historical_code)
+    (source / "native" / code_filename).write_bytes(historical_code)
 
     def identity(payload: bytes) -> dict:
         return {
@@ -43,7 +45,7 @@ def _full_snapshot_fixture(root: Path) -> tuple[Path, Path, dict, SimpleNamespac
     manifest = {
         "files": {
             "weights.bin": identity(weight),
-            "model.py": identity(historical_code),
+            code_filename: identity(historical_code),
         }
     }
     manifest_bytes = json.dumps(manifest, sort_keys=True).encode()
@@ -56,7 +58,7 @@ def _full_snapshot_fixture(root: Path) -> tuple[Path, Path, dict, SimpleNamespac
         "manifest_sha256": manifest_identity["sha256"],
         "files": {
             "native/MANIFEST.json": manifest_identity,
-            "native/model.py": identity(historical_code),
+            f"native/{code_filename}": identity(historical_code),
             "native/weights.bin": identity(weight),
         },
     }
@@ -109,6 +111,22 @@ def _full_snapshot_fixture(root: Path) -> tuple[Path, Path, dict, SimpleNamespac
 
 
 class DecisionPairedProducerTests(unittest.TestCase):
+    def test_full_snapshot_accepts_renamed_model_code(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source, core, row, artifact = _full_snapshot_fixture(
+                Path(temporary), code_filename="modeling_decision.py"
+            )
+            with (
+                patch.object(
+                    producer, "resolve_decision_runtime_model", return_value=object()
+                ),
+                patch.object(producer, "open_verified_artifact", return_value=artifact),
+            ):
+                self.assertEqual(
+                    producer._verified_old_snapshot(source, core, row),
+                    row["artifact_content_id"],
+                )
+
     def test_full_snapshot_selected_data_matches_qualified_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             source, core, row, artifact = _full_snapshot_fixture(Path(temporary))

@@ -120,7 +120,7 @@ content-addressed ID does not make the old source redistributable.
 The core mount's `BINDINGS.json` entry keyed by `old_model_id` (or `model_id`)
 must declare `repo`, `revision`, `manifest_file`, `manifest_sha256`, and a
 complete `files` map from relative path to `{ "bytes": ..., "sha256": ... }`.
-Every regular snapshot file must be bound, including co-located `model.py`,
+Every regular snapshot file must be bound, including co-located model code,
 and each self-manifest entry must agree with that binding. Unselected
 historical source files remain in the full snapshot and are verified, not
 copied into the candidate's data-only cache.

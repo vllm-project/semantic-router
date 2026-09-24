@@ -710,11 +710,6 @@ def _verified_old_snapshot(source: Path, core_source: Path, row: dict) -> str:
             raise ProducerError("old full snapshot contains a special file")
     if set(declared) != actual or manifest_name not in declared:
         raise ProducerError("old full snapshot file roster differs from old binding")
-    if not any(
-        relative == "model.py" or relative.endswith("/model.py")
-        for relative in declared
-    ):
-        raise ProducerError("old full snapshot lacks co-located model Python")
     for relative, reference in declared.items():
         path = regular_file(source, relative)
         if (
