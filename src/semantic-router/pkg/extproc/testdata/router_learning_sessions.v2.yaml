@@ -1,0 +1,990 @@
+schema_version: agent-routing-protection.v2
+missing_coverage:
+  - Proposals are scripted; adaptation sampling, posterior updates, cold-arm exposure and delayed/missing
+    outcome learning are not exercised.
+  - Rescue-switch evidence, failed dispatch/fallback, timeout and idle-expiry boundaries require
+    additional scenarios.
+  - Delegated-role contracts and multi-arm shadow execution are not validated.
+  - Authorization, residency, privacy, capability and budget eligibility computation is upstream;
+    this slice checks an already-resolved candidate boundary.
+  - Live paired task quality, model cost/latency, real cache savings and statistical uncertainty
+    require measured model runs.
+  - The runner uses in-process semantic messages and session memory; wire codecs, Envoy transport
+    and external state stores are not exercised.
+scenarios:
+  # Establish a first selection without prior session state.
+  - id: single-request-cold-start
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - first-request
+  # Keep the same model until the tool exchange has fully completed.
+  - id: tool-loop-and-release
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: tool-call
+        append_messages:
+          - role: assistant
+            text: '{"a":12,"b":12}'
+            tool_call_id: call-1
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: tool_or_protocol_state
+          category: blocked
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        coverage:
+          - active-tool-call
+      - id: tool-result
+        append_messages:
+          - role: tool
+            text: '144'
+            tool_call_id: call-1
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: tool_or_protocol_state
+          category: blocked
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        coverage:
+          - tool-result
+      - id: user-after-result
+        append_messages:
+          - role: user
+            text: Please explain that result.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: tool_or_protocol_state
+          category: blocked
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        coverage:
+          - tool-followup
+      - id: completed-loop
+        append_messages:
+          - role: assistant
+            text: The result is 144.
+          - role: user
+            text: Now solve a harder problem.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - tool-release
+  # Provider-bound state blocks switching; portable history releases it.
+  - id: provider-state-and-release
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: provider-bound
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: tool_or_protocol_state
+          category: blocked
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        previous_response_id: response-1
+        coverage:
+          - provider-bound
+      - id: portable-history
+        append_messages:
+          - role: assistant
+            text: Here is the complete earlier work.
+          - role: user
+            text: Continue using the full history.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - provider-release
+  # A small advantage should hold; a clear advantage should permit switching.
+  - id: small-advantage-and-recovery
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: small-advantage
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.5
+          protection-frontier: 0.51
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: switch_margin_not_met
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - small-advantage
+      - id: clear-advantage
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - clear-advantage
+  # A warm continuation suppresses sampling to preserve cache affinity.
+  - id: warm-cache
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: warm-followup
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.5
+          protection-frontier: 0.51
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: hold_current
+          reason: switch_margin_not_met
+          category: hold
+          hard_locked: false
+          preflight_reason: steady_state
+        cache_warmth: 0.9
+        coverage:
+          - warm-cache
+  # Continuity must never restore a model outside the eligible candidate set.
+  - id: candidate-boundary-over-continuity
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: old-model-ineligible
+        append_messages:
+          - role: assistant
+            text: '{"a":12,"b":12}'
+            tool_call_id: call-1
+          - role: tool
+            text: '144'
+            tool_call_id: call-1
+        candidates:
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          rejected: true
+          model: ''
+          sampling_allowed: false
+          action: reject
+          reason: selection_rejected
+          category: boundary
+          hard_locked: true
+          preflight_reason: tool_or_protocol_state
+        coverage:
+          - candidate-boundary
+  # Session scope retains the actual previous selection.
+  - id: session-scope-hold
+    scope: session
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_session
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: same-session
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: session_scope_protect
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - session-continuity
+  # Separate conversations keep independent model histories.
+  - id: conversation-isolation
+    scope: conversation
+    mode: apply
+    steps:
+      - id: start
+        append_messages:
+          - role: user
+            text: Calculate twelve times twelve, then explain the answer.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: new-conversation
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-b
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: establish_baseline
+          reason: new_conversation
+          category: baseline
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage: []
+      - id: return-to-first-conversation
+        append_messages:
+          - role: user
+            text: Continue our original task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.5
+          protection-frontier: 0.51
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: switch_margin_not_met
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+        coverage:
+          - conversation-isolation
+  # Missing identity preserves the current documented policy.
+  - id: missing-identity
+    scope: conversation
+    mode: apply
+    steps:
+      - id: anonymous
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: suppress_sampling
+          reason: missing_identity
+          category: missing_identity
+          hard_locked: false
+          preflight_reason: missing_identity
+        missing_identity: true
+        coverage:
+          - missing-identity
+  # Observe reports protection without enforcing it.
+  - id: observe-does-not-enforce
+    scope: session
+    mode: observe
+    steps:
+      - id: observe-first
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: observe
+          reason: observe_only
+          category: observe
+          hard_locked: false
+          preflight_reason: observe_only
+        coverage: []
+      - id: observe-proposal
+        append_messages:
+          - role: assistant
+            text: '{"a":12,"b":12}'
+            tool_call_id: call-1
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-frontier
+        scores:
+          protection-cheap: 0.1
+          protection-frontier: 0.9
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: observe
+          reason: observe_only
+          category: observe
+          hard_locked: false
+          preflight_reason: observe_only
+        coverage:
+          - observe
+  # Bypass leaves protection enforcement disabled.
+  - id: bypass-does-not-enforce
+    scope: conversation
+    mode: bypass
+    steps:
+      - id: bypass
+        append_messages:
+          - role: user
+            text: Please continue the task.
+        candidates:
+          - protection-cheap
+          - protection-frontier
+        proposal: protection-cheap
+        scores:
+          protection-cheap: 0.9
+          protection-frontier: 0.1
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: false
+          action: bypass
+          reason: decision_bypass
+          category: bypass
+          hard_locked: false
+          preflight_reason: decision_bypass
+        coverage:
+          - bypass
+  # Enforce mode suppresses cold/under-evidenced switches, ignores environment
+  # noise for attribution, permits sustained regression, then applies cooldown.
+  - id: progress-gate-trajectory
+    scope: conversation
+    mode: apply
+    progress_gate: &enforced_gate
+      mode: enforce
+      calibration_id: benchmark/progress-gate@1.0.0
+      window_size: 8
+      window_ttl_seconds: 900
+      min_window_outcomes: 3
+      min_consecutive_regressions: 2
+      min_consecutive_recoveries: 2
+      cooldown_seconds: 120
+      max_switches_per_window: 2
+    steps:
+      - id: start
+        append_messages: [{role: user, text: Start the task.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        expected: {model: protection-cheap, sampling_allowed: true, action: establish_baseline, reason: new_conversation, category: baseline, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: cold-start
+        append_messages: [{role: user, text: Try a stronger model.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: no_progress
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: progress_gate_suppressed
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: cold_start, origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: switch_suppressed, applied: true, enforced: true, cold_start: true, attributable_count: 0, missing_count: 0, window_count: 0, regression_streak: 0, recovery_streak: 0, switches_in_window: 0}
+        coverage: [gate-cold-start]
+      - id: insufficient-one
+        append_messages: [{role: user, text: The task is still stuck.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: provider_error
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: progress_gate_suppressed
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: insufficient_evidence, origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: switch_suppressed, applied: true, enforced: true, cold_start: false, attributable_count: 1, missing_count: 0, window_count: 1, regression_streak: 1, recovery_streak: 0, switches_in_window: 0}
+        coverage: [gate-insufficient-evidence]
+      - id: provider-noise
+        append_messages: [{role: user, text: Retry after the provider error.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: missing
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: progress_gate_suppressed
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: insufficient_evidence, origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: switch_suppressed, applied: true, enforced: true, cold_start: false, attributable_count: 1, missing_count: 0, window_count: 2, regression_streak: 1, recovery_streak: 0, switches_in_window: 0}
+        coverage: [outcome-failure-attribution]
+      - id: missing-noise
+        append_messages: [{role: user, text: Continue despite missing feedback.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: no_progress
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: progress_gate_suppressed
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: insufficient_evidence, origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: switch_suppressed, applied: true, enforced: true, cold_start: false, attributable_count: 1, missing_count: 1, window_count: 3, regression_streak: 1, recovery_streak: 0, switches_in_window: 0}
+        coverage: []
+      - id: insufficient-two
+        append_messages: [{role: user, text: There is still no progress.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: no_progress
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: progress_gate_suppressed
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: insufficient_evidence, origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: switch_suppressed, applied: true, enforced: true, cold_start: false, attributable_count: 2, missing_count: 1, window_count: 4, regression_streak: 2, recovery_streak: 0, switches_in_window: 0}
+        coverage: []
+      - id: sustained-regression
+        append_messages: [{role: user, text: Escalate after sustained lack of progress.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: progress
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: switch, reason: '', origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: proposal_accepted, applied: false, enforced: true, cold_start: false, attributable_count: 3, missing_count: 1, window_count: 5, regression_streak: 3, recovery_streak: 0, switches_in_window: 0}
+        coverage: [gate-sustained-regression]
+      - id: frontier-progress
+        append_messages: [{role: user, text: Continue on the stronger model.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: progress
+        expected: {model: protection-frontier, sampling_allowed: true, action: allow_switch, reason: switch_margin_not_met, category: hold, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: cooldown-downgrade
+        append_messages: [{role: user, text: Try the cheaper model again.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: hold_current
+          reason: progress_gate_suppressed
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: cooldown, origin: downgrade, calibration_id: benchmark/progress-gate@1.0.0, application_reason: switch_suppressed, applied: true, enforced: true, cold_start: false, attributable_count: 5, missing_count: 1, window_count: 7, regression_streak: 0, recovery_streak: 2, switches_in_window: 1}
+        coverage: [gate-cooldown]
+  # Observe mode emits the same cold-start verdict but never intercepts routing.
+  - id: progress-gate-observe
+    scope: conversation
+    mode: apply
+    progress_gate:
+      <<: *enforced_gate
+      mode: observe
+    steps:
+      - id: start
+        append_messages: [{role: user, text: Start an observed session.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        expected: {model: protection-cheap, sampling_allowed: true, action: establish_baseline, reason: new_conversation, category: baseline, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: observed-cold-switch
+        append_messages: [{role: user, text: Route to the stronger model.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: observe
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: cold_start, origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: proposal_accepted, applied: false, enforced: false, cold_start: true, attributable_count: 0, missing_count: 0, window_count: 0, regression_streak: 0, recovery_streak: 0, switches_in_window: 0}
+        coverage: [gate-observe]
+  # Sustained recovery permits a calibrated downgrade when cooldown is disabled.
+  - id: progress-gate-recovery
+    scope: conversation
+    mode: apply
+    progress_gate:
+      <<: *enforced_gate
+      cooldown_seconds: 0
+    steps:
+      - id: start
+        append_messages: [{role: user, text: Start on the frontier model.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: no_progress
+        expected: {model: protection-frontier, sampling_allowed: true, action: establish_baseline, reason: new_conversation, category: baseline, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: recovery-one
+        append_messages: [{role: user, text: Progress is now improving.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: progress
+        expected: {model: protection-frontier, sampling_allowed: true, action: allow_switch, reason: switch_margin_not_met, category: hold, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: recovery-two
+        append_messages: [{role: user, text: Progress remains healthy.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: progress
+        expected: {model: protection-frontier, sampling_allowed: true, action: allow_switch, reason: switch_margin_not_met, category: hold, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: downgrade
+        append_messages: [{role: user, text: Return to the cheaper model.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: switch, reason: '', origin: downgrade, calibration_id: benchmark/progress-gate@1.0.0, application_reason: proposal_accepted, applied: false, enforced: true, cold_start: false, attributable_count: 3, missing_count: 0, window_count: 3, regression_streak: 0, recovery_streak: 2, switches_in_window: 0}
+        coverage: [gate-sustained-recovery]
+  # A suppressed verdict cannot resurrect a model outside the candidate set.
+  - id: progress-gate-current-ineligible
+    scope: conversation
+    mode: apply
+    progress_gate: *enforced_gate
+    steps:
+      - id: start
+        append_messages: [{role: user, text: Start on the cheap model.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        expected: {model: protection-cheap, sampling_allowed: true, action: establish_baseline, reason: new_conversation, category: baseline, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: current-removed
+        append_messages: [{role: user, text: Continue after eligibility changed.}]
+        candidates: [protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-frontier: 0.9}
+        conversation: conversation-a
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: previous_model_not_in_candidates
+          category: boundary
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: cold_start, origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: 'current_ineligible:candidate_set', applied: false, enforced: true, cold_start: true, attributable_count: 0, missing_count: 0, window_count: 0, regression_streak: 0, recovery_streak: 0, switches_in_window: 0}
+        coverage: [gate-current-ineligible]
+  # Two valid switches in one evidence window make the third oscillation-prone.
+  - id: progress-gate-oscillation
+    scope: conversation
+    mode: apply
+    progress_gate:
+      <<: *enforced_gate
+      cooldown_seconds: 0
+    steps:
+      - id: start
+        append_messages: [{role: user, text: Start oscillation test.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        outcome: no_progress
+        expected: {model: protection-cheap, sampling_allowed: true, action: establish_baseline, reason: new_conversation, category: baseline, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: cheap-regression-two
+        append_messages: [{role: user, text: No progress yet.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        outcome: no_progress
+        expected: {model: protection-cheap, sampling_allowed: true, action: allow_switch, reason: switch_margin_not_met, category: hold, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: cheap-regression-three
+        append_messages: [{role: user, text: Still no progress.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        outcome: no_progress
+        expected: {model: protection-cheap, sampling_allowed: true, action: allow_switch, reason: switch_margin_not_met, category: hold, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: first-switch
+        append_messages: [{role: user, text: Escalate.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: progress
+        expected:
+          model: protection-frontier
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: switch, reason: '', origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: proposal_accepted, applied: false, enforced: true, cold_start: false, attributable_count: 3, missing_count: 0, window_count: 3, regression_streak: 3, recovery_streak: 0, switches_in_window: 0}
+        coverage: []
+      - id: frontier-recovery-two
+        append_messages: [{role: user, text: Continue making progress.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        outcome: progress
+        expected: {model: protection-frontier, sampling_allowed: true, action: allow_switch, reason: switch_margin_not_met, category: hold, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: second-switch
+        append_messages: [{role: user, text: Downgrade after recovery.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        outcome: no_progress
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: allow_switch
+          reason: switch_allowed
+          category: opportunity
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: switch, reason: '', origin: downgrade, calibration_id: benchmark/progress-gate@1.0.0, application_reason: proposal_accepted, applied: false, enforced: true, cold_start: false, attributable_count: 5, missing_count: 0, window_count: 5, regression_streak: 0, recovery_streak: 2, switches_in_window: 1}
+        coverage: []
+      - id: cheap-regression-after-switch
+        append_messages: [{role: user, text: The cheaper model is stalled.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-cheap
+        scores: {protection-cheap: 0.9, protection-frontier: 0.1}
+        conversation: conversation-a
+        outcome: no_progress
+        expected: {model: protection-cheap, sampling_allowed: true, action: allow_switch, reason: switch_margin_not_met, category: hold, hard_locked: false, preflight_reason: no_tool_or_protocol_state}
+        coverage: []
+      - id: third-switch-blocked
+        append_messages: [{role: user, text: Escalate again.}]
+        candidates: [protection-cheap, protection-frontier]
+        proposal: protection-frontier
+        scores: {protection-cheap: 0.1, protection-frontier: 0.9}
+        conversation: conversation-a
+        expected:
+          model: protection-cheap
+          sampling_allowed: true
+          action: hold_current
+          reason: progress_gate_suppressed
+          category: hold
+          hard_locked: false
+          preflight_reason: no_tool_or_protocol_state
+          gate: {decision: suppress, reason: oscillation_guard, origin: escalation, calibration_id: benchmark/progress-gate@1.0.0, application_reason: switch_suppressed, applied: true, enforced: true, cold_start: false, attributable_count: 7, missing_count: 0, window_count: 7, regression_streak: 2, recovery_streak: 0, switches_in_window: 2}
+        coverage: [gate-oscillation]
