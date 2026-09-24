@@ -68,6 +68,8 @@ jobs:
       actions: read
       packages: write
     uses: ./.github/workflows/decision-qualified-package.yml
+    with:
+      mode: main
     secrets: inherit
 
   pypi:

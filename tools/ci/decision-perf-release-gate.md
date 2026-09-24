@@ -167,10 +167,15 @@ python3 tools/ci/decision_perf_release_producer.py \
   --run-attempt "$GITHUB_RUN_ATTEMPT" --output-dir "$REPORT_DIR"
 ```
 
-The workflow does not invoke the producer until a protected immutable old
-baseline and service provisioner exist. Its report check therefore remains
-closed. Do not set `DECISION_RUNTIME_RELEASE_ENABLED` merely because this
-producer is tracked.
+The protected workflow invokes this producer after the current run's ROCm
+candidate and six-model receipt exist. The protected runner must provision
+the six live old/new service pairs and expose its current-run baseline JSON at
+the private path named by `DECISION_PAIRED_BASELINE_CONFIG_PATH`. That path and
+the service details are not repository artifacts. Until the runner, attested
+old baseline, and provisioner actually exist, leave
+`DECISION_RUNTIME_RELEASE_ENABLED` unset. A missing or stale baseline blocks
+the qualified distribution, and Decision-enabled stable tags cannot fall back
+to the ordinary prebuilt wheel.
 
 GPU exclusivity is a protected runner prerequisite: the runner operator must
 reserve the selected GPU and ensure no unrelated compute is active during the

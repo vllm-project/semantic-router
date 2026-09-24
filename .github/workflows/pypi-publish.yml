@@ -222,9 +222,14 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Require the qualified path for Decision-enabled stable source
+        if: inputs.channel == 'stable'
+        env:
+          QUALIFIED_DECISION: ${{ inputs.qualified-decision }}
+        run: python tools/ci/decision_release_policy.py --expect "$QUALIFIED_DECISION"
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ inputs.qualified-decision && 'decision-qualified-dist' || 'vllm-sr-dist' }}
+          name: ${{ inputs.qualified-decision && format('decision-qualified-dist-{0}-{1}', github.run_id, github.run_attempt) || 'vllm-sr-dist' }}
           path: dist
 
       - name: Verify qualified source and package content
@@ -236,7 +241,7 @@ jobs:
       - uses: actions/download-artifact@v4
         if: inputs.qualified-decision
         with:
-          name: decision-qualified-release-evidence
+          name: decision-qualified-release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-harness/decision-release-evidence
       - name: Verify Decision release evidence against published registry digests
         if: inputs.qualified-decision

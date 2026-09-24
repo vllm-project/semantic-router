@@ -2,6 +2,15 @@ name: Qualify and Package Decision Runtime
 
 on:
   workflow_call:
+    inputs:
+      mode:
+        description: Protected main or stable release package context.
+        required: true
+        type: string
+      tag:
+        description: Exact stable tag for release mode.
+        default: ''
+        type: string
 
 permissions:
   contents: read
@@ -9,13 +18,14 @@ permissions:
 jobs:
   rocm:
     name: Qualify Six Decision Models on ROCm
-    # Enable only after a protected environment, a dedicated ROCm runner with
-    # model access, GHCR package write access, and an attested immutable old
-    # baseline on the protected runner have been provisioned. The tracked
-    # paired producer must run before the performance validation step.
+    # The protected runner must provide six live, attested old/new service
+    # pairs through its protected baseline configuration.
     if: >-
       github.repository == 'vllm-project/semantic-router'
-      && github.ref == 'refs/heads/main'
+      && github.event_name == 'push'
+      && ((inputs.mode == 'main' && github.ref == 'refs/heads/main')
+        || (inputs.mode == 'release' && startsWith(github.ref, 'refs/tags/v')
+          && github.ref_name == inputs.tag))
       && vars.DECISION_RUNTIME_RELEASE_ENABLED == 'true'
     runs-on: [self-hosted, linux, x64, decision-rocm]
     environment: decision-runtime-release
@@ -38,6 +48,7 @@ jobs:
       - name: Require a clean source and device-qualified runner
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain=v1 -uall)"
           command -v docker
           command -v skopeo
@@ -56,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          image="ghcr.io/${owner}/semantic-router/decision-runtime-rocm-staging:${GITHUB_SHA}"
+          image="ghcr.io/${owner}/semantic-router/decision-runtime-rocm-staging:${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           base="$(python3 -c 'import sys; sys.path.insert(0, "tools/ci"); from image_artifacts import DECISION_RUNTIME_BASES; print(DECISION_RUNTIME_BASES["decision-runtime-rocm"][0])')"
           src/vllm-sr/decision_runtime/image/build-image.sh rocm "$base" "$image" python3
           docker push "$image"
@@ -88,9 +99,22 @@ jobs:
           python3 tools/ci/decision_rocm_promotion.py \
             --receipt "${RUNNER_TEMP}/decision-rocm-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/qualification.json" \
             --owner "$GITHUB_REPOSITORY_OWNER"
+      - name: Produce paired performance from protected live services
+        env:
+          BASELINE_CONFIG: ${{ vars.DECISION_PAIRED_BASELINE_CONFIG_PATH }}
+          CANDIDATE_REF: ${{ steps.candidate.outputs.reference }}
+        run: |
+          set -euo pipefail
+          test -n "$BASELINE_CONFIG"
+          test -f "$BASELINE_CONFIG"
+          python3 tools/ci/decision_perf_release_producer.py \
+            --baseline-config "$BASELINE_CONFIG" \
+            --qualification-receipt "${RUNNER_TEMP}/decision-rocm-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/qualification.json" \
+            --candidate-ref "$CANDIDATE_REF" --owner "$GITHUB_REPOSITORY_OWNER" \
+            --source-sha "$GITHUB_SHA" --run-id "$GITHUB_RUN_ID" \
+            --run-attempt "$GITHUB_RUN_ATTEMPT" \
+            --output-dir "${RUNNER_TEMP}/decision-paired-performance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
       - name: Require a same-source paired performance report
-        # A tracked paired benchmark producer must create the report and raw
-        # receipts in this run. An operator-authored JSON is not release proof.
         run: |
           set -euo pipefail
           report="${RUNNER_TEMP}/decision-paired-performance-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/report.json"
@@ -105,7 +129,7 @@ jobs:
       - name: Preserve qualified receipt and model evidence
         uses: actions/upload-artifact@v4
         with:
-          name: decision-rocm-qualified-receipt
+          name: decision-rocm-qualified-receipt-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/decision-rocm-${{ github.run_id }}-${{ github.run_attempt }}/qualification.json
             ${{ runner.temp }}/decision-rocm-${{ github.run_id }}-${{ github.run_attempt }}/models/*.json
@@ -116,7 +140,7 @@ jobs:
       - name: Preserve validated paired performance evidence
         uses: actions/upload-artifact@v4
         with:
-          name: decision-paired-performance
+          name: decision-paired-performance-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/decision-paired-performance-${{ github.run_id }}-${{ github.run_attempt }}/**
           include-hidden-files: true
           if-no-files-found: error
@@ -142,15 +166,15 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          name: ci-published-digest-decision-runtime-cpu
+          name: ci-published-digest-decision-runtime-cpu-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-harness/decision-cpu
       - uses: actions/download-artifact@v4
         with:
-          name: decision-rocm-qualified-receipt
+          name: decision-rocm-qualified-receipt-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-harness/decision-rocm
       - uses: actions/download-artifact@v4
         with:
-          name: decision-paired-performance
+          name: decision-paired-performance-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-harness/decision-performance
       - name: Install image and packaging validators
         run: |
@@ -193,9 +217,12 @@ jobs:
             --rocm-published-ref "$rocm_ref" \
             --output src/vllm-sr/cli/decision_runtime/decision-images.lock.json
       - name: Build and verify the post-qualification wheel and sdist
+        env:
+          MODE: ${{ inputs.mode }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          python3 tools/ci/package_contract.py --mode main \
+          python3 tools/ci/package_contract.py --mode "$MODE" --tag "$TAG" \
             --base-ref "$GITHUB_SHA" --output .agent-harness/decision-package
           shopt -s nullglob
           wheels=(.agent-harness/decision-package/dist/*.whl)
@@ -207,14 +234,14 @@ jobs:
             --wheel "${wheels[0]}" --sdist "${sdists[0]}"
       - uses: actions/upload-artifact@v4
         with:
-          name: decision-qualified-dist
+          name: decision-qualified-dist-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-harness/decision-package/dist/
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
       - uses: actions/upload-artifact@v4
         with:
-          name: decision-qualified-release-evidence
+          name: decision-qualified-release-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             .agent-harness/decision-cpu/published-digest.txt
             .agent-harness/decision-rocm/qualification.json

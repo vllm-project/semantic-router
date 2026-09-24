@@ -21,12 +21,16 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(errors, [])
         self.decision = self.workflows["decision-qualified-package.yml"]
 
-    def test_only_protected_main_can_run_live_rocm_qualification(self) -> None:
+    def test_only_protected_main_or_stable_tag_can_run_live_rocm(self) -> None:
         self.assertEqual(set(self.decision.events), {"workflow_call"})
+        self.assertTrue(self.decision.call_contract["inputs"]["mode"]["required"])
         rocm = self.decision.jobs["rocm"]
         for restriction in (
             "github.repository == 'vllm-project/semantic-router'",
-            "github.ref == 'refs/heads/main'",
+            "github.event_name == 'push'",
+            "inputs.mode == 'main' && github.ref == 'refs/heads/main'",
+            "inputs.mode == 'release' && startsWith(github.ref, 'refs/tags/v')",
+            "github.ref_name == inputs.tag",
             "vars.DECISION_RUNTIME_RELEASE_ENABLED == 'true'",
         ):
             self.assertIn(restriction, rocm["if"])
@@ -46,12 +50,32 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("build-image.sh rocm", candidate["run"])
         self.assertIn("docker push", candidate["run"])
         self.assertIn("skopeo inspect --raw", candidate["run"])
+        self.assertIn("${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}", candidate["run"])
         self.assertIn('--candidate-ref "$CANDIDATE_REF"', qualify["run"])
         self.assertIn("decision_rocm_promotion.py", qualify["run"])
-        self.assertIn(
-            "decision_perf_release_gate.py validate",
-            "\n".join(step.get("run", "") for step in rocm["steps"]),
+        commands = "\n".join(step.get("run", "") for step in rocm["steps"])
+        self.assertIn("decision_perf_release_gate.py validate", commands)
+        self.assertIn("decision_perf_release_producer.py", commands)
+        self.assertLess(
+            commands.index("decision_perf_release_producer.py"),
+            commands.index("decision_perf_release_gate.py validate"),
         )
+        producer = next(
+            step
+            for step in rocm["steps"]
+            if "decision_perf_release_producer.py" in step.get("run", "")
+        )
+        self.assertEqual(
+            producer["env"]["BASELINE_CONFIG"],
+            "${{ vars.DECISION_PAIRED_BASELINE_CONFIG_PATH }}",
+        )
+        for argument in (
+            "--qualification-receipt",
+            "--source-sha",
+            "--run-id",
+            "--run-attempt",
+        ):
+            self.assertIn(argument, producer["run"])
         performance_gate = next(
             step
             for step in rocm["steps"]
@@ -59,20 +83,21 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         )
         for argument in ("--qualification-receipt", "--candidate-ref", "--owner"):
             self.assertIn(argument, performance_gate["run"])
-        self.assertNotIn(
-            "decision_perf_release_producer.py",
-            "\n".join(step.get("run", "") for step in rocm["steps"]),
-        )
         upload = next(
             step
             for step in rocm["steps"]
-            if step.get("with", {}).get("name") == "decision-rocm-qualified-receipt"
+            if step.get("with", {})
+            .get("name", "")
+            .startswith("decision-rocm-qualified-receipt-")
         )
+        self.assertIn("${{ github.run_attempt }}", upload["with"]["name"])
         self.assertIn("/raw/**", upload["with"]["path"])
         performance_upload = next(
             step
             for step in rocm["steps"]
-            if step.get("with", {}).get("name") == "decision-paired-performance"
+            if step.get("with", {})
+            .get("name", "")
+            .startswith("decision-paired-performance-")
         )
         self.assertTrue(performance_upload["with"]["path"].endswith("/**"))
         self.assertNotIn("workflow_dispatch", self.decision.events)
@@ -89,9 +114,9 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(
             artifacts,
             [
-                "ci-published-digest-decision-runtime-cpu",
-                "decision-rocm-qualified-receipt",
-                "decision-paired-performance",
+                "ci-published-digest-decision-runtime-cpu-${{ github.run_id }}-${{ github.run_attempt }}",
+                "decision-rocm-qualified-receipt-${{ github.run_id }}-${{ github.run_attempt }}",
+                "decision-paired-performance-${{ github.run_id }}-${{ github.run_attempt }}",
             ],
         )
         commands = "\n".join(step.get("run", "") for step in package["steps"])
@@ -99,7 +124,7 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
             "decision_rocm_promotion.py",
             "--promote",
             "decision_image_lock_release.py generate",
-            "package_contract.py --mode main",
+            'package_contract.py --mode "$MODE" --tag "$TAG"',
             "decision_image_lock_release.py check-dist",
             "decision_perf_release_gate.py validate",
         ):
@@ -114,10 +139,19 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
             commands.index("package_contract.py"), commands.index("check-dist")
         )
         self.assertEqual(package["environment"], "decision-runtime-release")
+        build = next(
+            step
+            for step in package["steps"]
+            if "package_contract.py" in step.get("run", "")
+        )
+        self.assertEqual(build["env"]["MODE"], "${{ inputs.mode }}")
+        self.assertEqual(build["env"]["TAG"], "${{ inputs.tag }}")
         release_evidence = next(
             step
             for step in package["steps"]
-            if step.get("with", {}).get("name") == "decision-qualified-release-evidence"
+            if step.get("with", {})
+            .get("name", "")
+            .startswith("decision-qualified-release-evidence-")
         )
         self.assertIn(
             ".agent-harness/decision-rocm/raw/**",
@@ -160,6 +194,7 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(
             decision["uses"], "./.github/workflows/decision-qualified-package.yml"
         )
+        self.assertEqual(decision["with"]["mode"], "main")
         self.assertEqual(needs(publisher), {"ci", "decision"})
         self.assertIn("needs.decision.result == 'success'", publisher["if"])
         self.assertIn("decision-runtime-cpu", publisher["if"])
@@ -184,8 +219,15 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(
             download["with"]["name"],
-            "${{ inputs.qualified-decision && 'decision-qualified-dist' || 'vllm-sr-dist' }}",
+            "${{ inputs.qualified-decision && format('decision-qualified-dist-{0}-{1}', github.run_id, github.run_attempt) || 'vllm-sr-dist' }}",
         )
+        preflight = next(
+            step
+            for step in steps
+            if "decision_release_policy.py" in step.get("run", "")
+        )
+        self.assertEqual(preflight["if"], "inputs.channel == 'stable'")
+        self.assertIn('--expect "$QUALIFIED_DECISION"', preflight["run"])
         validate_index = next(
             index
             for index, command in enumerate(commands)
@@ -218,21 +260,68 @@ class DecisionReleaseWorkflowTests(unittest.TestCase):
         self.assertEqual(steps[validate_index]["if"], "inputs.qualified-decision")
         self.assertIn("twine upload dist/*.whl dist/*.tar.gz\n", commands[upload_index])
 
-    def test_changed_decision_inputs_block_unqualified_stable_release(self) -> None:
+    def test_stable_tag_always_qualifies_decision_capable_source(self) -> None:
         release = self.workflows["release.yml"]
         validate = release.jobs["validate"]
         gate = release.jobs["gate"]
         self.assertEqual(
-            validate["outputs"]["decision_changed"],
-            "${{ steps.decision-impact.outputs.changed }}",
+            validate["outputs"]["decision_required"],
+            "${{ steps.decision-policy.outputs.decision_required }}",
         )
-        impact = next(
-            step for step in validate["steps"] if step.get("id") == "decision-impact"
+        policy = next(
+            step for step in validate["steps"] if step.get("id") == "decision-policy"
         )
-        self.assertIn("git diff --quiet", impact["run"])
-        self.assertIn("src/vllm-sr/decision_runtime/", impact["run"])
-        self.assertIn("src/vllm-sr/cli/commands/drun.py", impact["run"])
-        self.assertIn("DECISION_CHANGED", gate["steps"][0]["run"])
+        self.assertIn("decision_release_policy.py", policy["run"])
+        self.assertNotIn("git diff --quiet", policy["run"])
+        self.assertIn("DECISION_REQUIRED", gate["steps"][0]["run"])
+        for required, enabled, expected in (
+            ("", "", 1),
+            ("false", "", 0),
+            ("true", "", 1),
+            ("true", "true", 0),
+        ):
+            with self.subTest(required=required, enabled=enabled):
+                result = subprocess.run(
+                    ["bash", "-e", "-c", gate["steps"][0]["run"]],
+                    env={
+                        **os.environ,
+                        "VERSION_RESULT": "success",
+                        "QUALIFICATION_RESULT": "success",
+                        "DECISION_REQUIRED": required,
+                        "DECISION_ENABLED": enabled,
+                        "RELEASE_EVENT": "push",
+                    },
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, expected)
+        decision = release.jobs["decision"]
+        cpu = release.jobs["decision-cpu"]
+        self.assertEqual(cpu["with"]["images"], '["decision-runtime-cpu"]')
+        self.assertEqual(cpu["with"]["mode"], "release")
+        self.assertNotIn("publish_latest", cpu["with"])
+        self.assertEqual(needs(decision), {"validate", "gate", "decision-cpu"})
+        self.assertIn("decision_required == 'true'", decision["if"])
+        self.assertIn("needs.decision-cpu.result == 'success'", decision["if"])
+        self.assertEqual(decision["with"]["mode"], "release")
+        self.assertEqual(decision["with"]["tag"], "${{ needs.validate.outputs.tag }}")
+        for job_name in ("docker", "helm", "pypi", "crate"):
+            job = release.jobs[job_name]
+            self.assertIn("decision", needs(job))
+            self.assertIn("needs.decision.result == 'success'", job["if"])
+            self.assertIn("decision_required == 'false'", job["if"])
+        self.assertFalse(release.jobs["docker"]["with"]["record_decision_digest"])
+        self.assertEqual(
+            release.jobs["pypi"]["with"]["qualified-decision"],
+            "${{ needs.validate.outputs.decision_required == 'true' }}",
+        )
+        note_download = next(
+            step
+            for step in release.jobs["release-notes"]["steps"]
+            if step.get("uses", "").startswith("actions/download-artifact@")
+        )
+        self.assertIn("decision-qualified-dist-{0}-{1}", note_download["with"]["name"])
 
 
 if __name__ == "__main__":

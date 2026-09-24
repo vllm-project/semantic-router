@@ -204,7 +204,7 @@ class ROCmPromotionTests(unittest.TestCase):
             ):
                 rocm.validate_registry_candidate(record)
 
-    def test_promotion_requires_main_and_copies_only_tested_digest(self):
+    def test_promotion_requires_protected_exact_source_push(self):
         with tempfile.TemporaryDirectory() as tmp:
             record = rocm.validate_receipt(
                 receipt(Path(tmp)), owner="example", revision=REVISION
@@ -215,9 +215,24 @@ class ROCmPromotionTests(unittest.TestCase):
                     {
                         "GITHUB_REF": "refs/heads/feature",
                         "GITHUB_REPOSITORY": "example/semantic-router",
+                        "GITHUB_EVENT_NAME": "push",
+                        "GITHUB_SHA": REVISION,
                     },
                 ),
-                self.assertRaisesRegex(ValueError, "protected main"),
+                self.assertRaisesRegex(ValueError, "protected exact-source push"),
+            ):
+                rocm.promote(record, owner="example")
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "GITHUB_REF": "refs/tags/v1.2.3",
+                        "GITHUB_REPOSITORY": "example/semantic-router",
+                        "GITHUB_EVENT_NAME": "push",
+                        "GITHUB_SHA": "d" * 40,
+                    },
+                ),
+                self.assertRaisesRegex(ValueError, "protected exact-source push"),
             ):
                 rocm.promote(record, owner="example")
 
@@ -234,21 +249,25 @@ class ROCmPromotionTests(unittest.TestCase):
                 )
                 Path(arguments[arguments.index("--digestfile") + 1]).write_text(DIGEST)
 
-            with (
-                patch.dict(
-                    os.environ,
-                    {
-                        "GITHUB_REF": "refs/heads/main",
-                        "GITHUB_REPOSITORY": "example/semantic-router",
-                        "RUNNER_TEMP": tmp,
-                    },
-                ),
-                patch.object(rocm.subprocess, "run", side_effect=copied),
-            ):
-                self.assertEqual(
-                    rocm.promote(record, owner="example"),
-                    "ghcr.io/example/semantic-router/decision-runtime-rocm@" + DIGEST,
-                )
+            for ref in ("refs/heads/main", "refs/tags/v1.2.3"):
+                with (
+                    patch.dict(
+                        os.environ,
+                        {
+                            "GITHUB_REF": ref,
+                            "GITHUB_REPOSITORY": "example/semantic-router",
+                            "GITHUB_EVENT_NAME": "push",
+                            "GITHUB_SHA": REVISION,
+                            "RUNNER_TEMP": tmp,
+                        },
+                    ),
+                    patch.object(rocm.subprocess, "run", side_effect=copied),
+                ):
+                    self.assertEqual(
+                        rocm.promote(record, owner="example"),
+                        "ghcr.io/example/semantic-router/decision-runtime-rocm@"
+                        + DIGEST,
+                    )
 
 
 if __name__ == "__main__":

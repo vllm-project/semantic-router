@@ -21,6 +21,11 @@ on:
         required: false
         default: false
         type: boolean
+      record_decision_digest:
+        description: Upload the current run's Decision CPU digest for qualification.
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: read
@@ -66,10 +71,10 @@ jobs:
           python tools/ci/image_artifacts.py promote --image "$IMAGE" \
             --directory .agent-harness/image-input --mode "$MODE" --tag "$RELEASE_TAG" "${args[@]}"
       - name: Record the published registry digest
-        if: matrix.image == 'decision-runtime-cpu'
+        if: matrix.image == 'decision-runtime-cpu' && inputs.record_decision_digest
         uses: actions/upload-artifact@v4
         with:
-          name: ci-published-digest-${{ matrix.image }}
+          name: ci-published-digest-${{ matrix.image }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: .agent-harness/image-input/published-digest.txt
           if-no-files-found: error
 

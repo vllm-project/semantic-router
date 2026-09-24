@@ -3,8 +3,8 @@
 
 The ROCm image is too large for the ordinary hosted-runner artifact handoff.
 This tool is the explicit device-qualified promotion seam; its default action
-is read-only validation. Run it from the protected main checkout after the
-candidate was built and tested on a ROCm host and pushed to a staging registry.
+is read-only validation. Run it from a protected main or stable-tag checkout
+after the candidate was built and tested and pushed to a staging registry.
 """
 
 from __future__ import annotations
@@ -38,6 +38,7 @@ REQUIRED_CHECKS = frozenset(
 )
 SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
+STABLE_TAG_REF = re.compile(r"refs/tags/v[0-9]+\.[0-9]+\.[0-9]+\Z")
 RAW_FILES = frozenset(
     {
         "drun-launch.txt",
@@ -204,13 +205,16 @@ def validate_registry_candidate(record: dict) -> None:
 
 
 def promote(record: dict, *, owner: str) -> str:
-    """Copy the already qualified digest; never build or push from a tag."""
+    """Copy the qualified digest from a protected source push without rebuilding."""
+    ref = os.environ.get("GITHUB_REF", "")
     if (
-        os.environ.get("GITHUB_REF") != "refs/heads/main"
-        or os.environ.get("GITHUB_REPOSITORY", "").lower()
+        os.environ.get("GITHUB_REPOSITORY", "").lower()
         != f"{owner.lower()}/semantic-router"
+        or os.environ.get("GITHUB_EVENT_NAME") != "push"
+        or os.environ.get("GITHUB_SHA") != record["source_sha"]
+        or (ref != "refs/heads/main" and STABLE_TAG_REF.fullmatch(ref) is None)
     ):
-        raise ValueError("ROCm promotion requires a protected main repository run")
+        raise ValueError("ROCm promotion requires a protected exact-source push")
     destination = (
         f"ghcr.io/{owner.lower()}/semantic-router/{IMAGE}:{record['source_sha']}"
     )
