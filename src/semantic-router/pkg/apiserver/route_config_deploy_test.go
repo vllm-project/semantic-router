@@ -694,7 +694,10 @@ func TestConfigVersionSourceMetadataUsesCanonicalOrigins(t *testing.T) {
 		t.Fatalf("set permissive backup directory mode: %v", err)
 	}
 
-	apiVersion, backupDir := server.recordRouterConfigArtifacts(configPath, []byte("version: v0.3\n"))
+	apiVersion, backupDir, backupErr := server.recordRouterConfigArtifacts(configPath, []byte("version: v0.3\n"))
+	if backupErr != nil {
+		t.Fatal(backupErr)
+	}
 	if got := readConfigVersionSource(backupDir, apiVersion); got != configVersionSourceAPI {
 		t.Fatalf("API backup source = %q, want %q", got, configVersionSourceAPI)
 	}

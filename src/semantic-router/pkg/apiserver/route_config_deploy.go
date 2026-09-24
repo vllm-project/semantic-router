@@ -445,19 +445,19 @@ func writePrivateConfigArtifact(path string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	if _, err := file.Write(data); err != nil {
+	if _, writeErr := file.Write(data); writeErr != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
-		return err
+		return writeErr
 	}
-	if err := file.Sync(); err != nil {
+	if syncErr := file.Sync(); syncErr != nil {
 		_ = file.Close()
 		_ = os.Remove(path)
-		return err
+		return syncErr
 	}
-	if err := file.Close(); err != nil {
+	if closeErr := file.Close(); closeErr != nil {
 		_ = os.Remove(path)
-		return err
+		return closeErr
 	}
 	return nil
 }

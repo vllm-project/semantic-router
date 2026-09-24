@@ -625,8 +625,8 @@ func writeConfigAtomicallyIfUnchanged(configPath string, expected, yamlBytes []b
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
 		defer cancel()
-		if err := writer.WriteIfUnchanged(ctx, target, expected, yamlBytes); err != nil {
-			return err
+		if writeErr := writer.WriteIfUnchanged(ctx, target, expected, yamlBytes); writeErr != nil {
+			return writeErr
 		}
 		return nil
 	}
