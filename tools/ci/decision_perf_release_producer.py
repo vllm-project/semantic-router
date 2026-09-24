@@ -844,6 +844,13 @@ def _container_image(
     if old_core_sha256 is not None:
         if old_artifact is None:
             raise ProducerError("old artifact attestation is required")
+        # A directly mounted old core cannot provide the required imported-core
+        # and loaded-artifact proof. Reject it before examining live bind inodes
+        # so this independent policy violation is not masked by mount failures.
+        if arm.get("core_source_kind") == "mounted":
+            raise ProducerError(
+                "direct old core lacks mandatory loaded-artifact process proof"
+            )
         mounts = container.get("Mounts") or []
         declared = arm.get("mounts", [])
         if (
@@ -915,11 +922,7 @@ def _container_image(
             raise ProducerError(
                 "old service mount inventory differs from protected baseline"
             )
-        if arm.get("core_source_kind") == "mounted":
-            raise ProducerError(
-                "direct old core lacks mandatory loaded-artifact process proof"
-            )
-        elif arm.get("core_source_kind") == "mounted_adapter":
+        if arm.get("core_source_kind") == "mounted_adapter":
             adapter_destination = arm.get("adapter_mount_destination")
             if (
                 old_adapter_sha256 is None
