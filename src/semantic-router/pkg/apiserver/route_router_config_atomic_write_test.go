@@ -125,6 +125,10 @@ func TestWriteConfigAtomicallyTempWriteFailureCleansUp(t *testing.T) {
 func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 	dir := t.TempDir()
 	configPath := filepath.Join(dir, "config.yaml")
+	original := []byte("routing: {original: true}\n")
+	if err := os.WriteFile(configPath, original, 0o400); err != nil {
+		t.Fatalf("seed read-only mounted config: %v", err)
+	}
 
 	t.Setenv(configwriter.ConfigMapNameEnv, "semantic-router-config")
 	t.Setenv(configwriter.ConfigMapNamespaceEnv, "vllm-semantic-router-system")
@@ -132,7 +136,7 @@ func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 	fakeCM := &fakeConfigMap{
 		Namespace: "vllm-semantic-router-system",
 		Name:      "semantic-router-config",
-		Data:      map[string]string{"config.yaml": "routing: {original: true}\n"},
+		Data:      map[string]string{"config.yaml": string(original)},
 	}
 	clientset := fakeclientset.NewSimpleClientset(fakeCM.toObject())
 	restoreWriter := stubInClusterConfigMapWriter(t, configwriter.NewConfigMapWriter(clientset))
@@ -142,10 +146,9 @@ func TestWriteConfigAtomicallyRoutesThroughConfigMapWhenDeclared(t *testing.T) {
 		t.Fatalf("writeConfigAtomically: %v", err)
 	}
 
-	// The local path must never be touched: on the real deployment this mount
-	// is read-only, so any local write attempt would itself be the bug.
-	if _, err := os.Stat(configPath); !os.IsNotExist(err) {
-		t.Fatalf("local configPath was written despite a declared ConfigMap target, stat err = %v", err)
+	// The mounted file remains on the old revision until the Pod is restarted.
+	if mounted, err := os.ReadFile(configPath); err != nil || string(mounted) != string(original) {
+		t.Fatalf("mounted config changed despite a declared ConfigMap target: %q, err=%v", mounted, err)
 	}
 
 	updated, err := clientset.CoreV1().ConfigMaps(fakeCM.Namespace).Get(t.Context(), fakeCM.Name, metav1.GetOptions{})

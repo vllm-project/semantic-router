@@ -7,7 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
-	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 )
 
@@ -86,7 +86,7 @@ func managementRouteContracts(includeKnowledgeBases bool) []auth.RouteContract {
 	return contracts
 }
 
-func registerKnowledgeBaseRoutes(mux routeRegistrar, cfg *config.Config, store *recipe.Store) {
-	handler := handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, store)
+func registerKnowledgeBaseRoutes(mux routeRegistrar, cfg *config.Config, credentialProvider routerauth.CredentialProvider) {
+	handler := handlers.RouterClassifierProxyHandler(cfg.RouterAPIURL, cfg.ReadonlyMode, credentialProvider)
 	registerRouteGroup(mux, managementRouteContracts(true), handler)
 }

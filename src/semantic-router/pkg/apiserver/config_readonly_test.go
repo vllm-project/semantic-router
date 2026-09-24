@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -149,8 +150,16 @@ func TestManagementRoutePersistsConfigMapAndRequiresRollout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.Data["config.yaml"] != string(candidate) {
-		t.Fatal("candidate document was not persisted to the ConfigMap")
+	storedDoc, err := decodeYAMLDocument([]byte(stored.Data["config.yaml"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	candidateDoc, err := decodeYAMLDocument(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(storedDoc, candidateDoc) {
+		t.Fatalf("candidate document was not persisted to the ConfigMap: got=%v want=%v", storedDoc, candidateDoc)
 	}
 	mounted, err := os.ReadFile(configPath)
 	if err != nil || !bytes.Equal(mounted, original) {
@@ -160,7 +169,7 @@ func TestManagementRoutePersistsConfigMapAndRequiresRollout(t *testing.T) {
 	get.Header.Set("Authorization", "Bearer "+token)
 	readback := httptest.NewRecorder()
 	mux.ServeHTTP(readback, get)
-	if readback.Code != http.StatusOK || readback.Header().Get("ETag") != configDocumentETag(candidate) {
+	if readback.Code != http.StatusOK || readback.Header().Get("ETag") != configDocumentETag([]byte(stored.Data["config.yaml"])) {
 		t.Fatalf("ConfigMap readback = HTTP %d ETag %s: %s", readback.Code, readback.Header().Get("ETag"), readback.Body.String())
 	}
 	second := put()

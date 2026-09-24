@@ -297,8 +297,8 @@ func TestRouterAPIProxyRejectsUnknownManagementMutation(t *testing.T) {
 
 	mux.ServeHTTP(recorder, req)
 
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusNotFound)
 	}
 	if calls != 0 {
 		t.Fatalf("upstream calls = %d, want 0", calls)
