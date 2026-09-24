@@ -243,6 +243,9 @@ func (r *OpenAIRouter) maybeExecuteFallback(body []byte, ctx *RequestContext) *e
 		nextCandidate := &ctx.VSREligibleModelRefs[candIdx]
 
 		resp, candidateEval, attemptErr := r.executeFallbackCandidate(callCtx, nextCandidate, commit, ctx, orch)
+		if attemptErr != nil {
+			fmt.Printf("fallback diagnostic candidate=%s err=%v\n", candidateModelIdentity(*nextCandidate), attemptErr)
+		}
 		if attemptErr == nil && resp != nil {
 			return resp
 		}
