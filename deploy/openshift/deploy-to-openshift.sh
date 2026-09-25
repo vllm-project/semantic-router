@@ -137,6 +137,14 @@ for i in {1..30}; do
 done
 success "Namespace ready"
 
+# ServiceAccount and the Role letting the router/dashboard patch their own
+# ConfigMap through the Kubernetes API instead of the read-only mounted
+# file (issue #3688). Needed before the deployments below reference it.
+log "Creating ServiceAccount and RBAC for config writes..."
+apply_with_namespace "$SCRIPT_DIR/serviceaccount.yaml"
+apply_with_namespace "$SCRIPT_DIR/rbac.yaml"
+success "ServiceAccount and RBAC ready"
+
 # KServe mode: deploy LLMInferenceService and semantic-router
 if [[ "$USE_KSERVE" == "true" ]]; then
     KSERVE_SCRIPT="$SCRIPT_DIR/../kserve/deploy.sh"
