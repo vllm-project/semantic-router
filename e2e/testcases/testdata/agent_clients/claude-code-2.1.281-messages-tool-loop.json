@@ -1,0 +1,389 @@
+{
+  "client": "claude-code",
+  "version": "2.1.281",
+  "path": "/v1/messages",
+  "headers": {
+    "anthropic-beta": "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,effort-2025-11-24",
+    "user-agent": "claude-cli/2.1.281 (external, sdk-cli)",
+    "x-app": "cli"
+  },
+  "backends": {
+    "anthropic.messages.v1": [
+      "context_management",
+      "max_tokens",
+      "metadata",
+      "output_config",
+      "system",
+      "thinking",
+      "tools"
+    ]
+  },
+  "turns": [
+    {
+      "model": "vllm-sr/auto",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-reminder>\n(Reminder shortened for this fixture.)\n</system-reminder>\n"
+            },
+            {
+              "type": "text",
+              "text": "Run echo hi with Bash and report the output."
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": [
+            {
+              "type": "text",
+              "text": "Today's date is 2026-01-01.",
+              "cache_control": {
+                "type": "ephemeral"
+              }
+            }
+          ]
+        }
+      ],
+      "system": [
+        {
+          "type": "text",
+          "text": "x-anthropic-billing-header: cc_version=2.1.281.554; cc_entrypoint=sdk-cli;"
+        },
+        {
+          "type": "text",
+          "text": "You are a Claude agent. (System prompt shortened for this fixture.)",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
+          "type": "text",
+          "text": "CWD: /workspace\nDate: 2026-01-01",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ],
+      "tools": [
+        {
+          "name": "Bash",
+          "description": "execute shell commands",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "command": {
+                "description": "The command to execute",
+                "type": "string"
+              },
+              "timeout": {
+                "description": "Optional timeout in milliseconds (max 600000)",
+                "type": "number"
+              },
+              "description": {
+                "description": "Clear, concise description of what this command does in active voice.",
+                "type": "string"
+              },
+              "run_in_background": {
+                "description": "Set to true to run this command in the background.",
+                "type": "boolean"
+              },
+              "dangerouslyDisableSandbox": {
+                "description": "Set this to true to dangerously override sandbox mode and run commands without sandboxing.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "Edit",
+          "description": "modify file contents in place",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "file_path": {
+                "description": "The absolute path to the file to modify",
+                "type": "string"
+              },
+              "old_string": {
+                "description": "The text to replace",
+                "type": "string"
+              },
+              "new_string": {
+                "description": "The text to replace it with (must be different from old_string)",
+                "type": "string"
+              },
+              "replace_all": {
+                "description": "Replace all occurrences of old_string (default false)",
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "file_path",
+              "old_string",
+              "new_string"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "Read",
+          "description": "read files, images, PDFs, notebooks",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "file_path": {
+                "description": "The absolute path to the file to read",
+                "type": "string"
+              },
+              "offset": {
+                "description": "The line number to start reading from.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "limit": {
+                "description": "The number of lines to read.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "pages": {
+                "description": "Page range for PDF files (e.g., \"1-5\", \"3\", \"10-20\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_path"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "metadata": {
+        "user_id": "{\"device_id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"account_uuid\":\"\",\"session_id\":\"00000000-0000-4000-8000-000000000001\"}"
+      },
+      "max_tokens": 32000,
+      "thinking": {
+        "type": "adaptive",
+        "display": "omitted"
+      },
+      "context_management": {
+        "edits": [
+          {
+            "type": "clear_thinking_20251015",
+            "keep": "all"
+          }
+        ]
+      },
+      "output_config": {
+        "effort": "high"
+      },
+      "stream": true
+    },
+    {
+      "model": "vllm-sr/auto",
+      "messages": [
+        {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-reminder>\n(Reminder shortened for this fixture.)\n</system-reminder>\n"
+            },
+            {
+              "type": "text",
+              "text": "Run echo hi with Bash and report the output."
+            }
+          ]
+        },
+        {
+          "role": "system",
+          "content": "Today's date is 2026-01-01."
+        },
+        {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_capture_1",
+              "name": "Bash",
+              "input": {
+                "command": "echo hi",
+                "description": "Print hi"
+              }
+            }
+          ]
+        },
+        {
+          "role": "user",
+          "content": [
+            {
+              "tool_use_id": "toolu_capture_1",
+              "type": "tool_result",
+              "content": "hi",
+              "is_error": false,
+              "cache_control": {
+                "type": "ephemeral"
+              }
+            }
+          ]
+        }
+      ],
+      "system": [
+        {
+          "type": "text",
+          "text": "x-anthropic-billing-header: cc_version=2.1.281.554; cc_entrypoint=sdk-cli;"
+        },
+        {
+          "type": "text",
+          "text": "You are a Claude agent. (System prompt shortened for this fixture.)",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
+          "type": "text",
+          "text": "CWD: /workspace\nDate: 2026-01-01",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        }
+      ],
+      "tools": [
+        {
+          "name": "Bash",
+          "description": "execute shell commands",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "command": {
+                "description": "The command to execute",
+                "type": "string"
+              },
+              "timeout": {
+                "description": "Optional timeout in milliseconds (max 600000)",
+                "type": "number"
+              },
+              "description": {
+                "description": "Clear, concise description of what this command does in active voice.",
+                "type": "string"
+              },
+              "run_in_background": {
+                "description": "Set to true to run this command in the background.",
+                "type": "boolean"
+              },
+              "dangerouslyDisableSandbox": {
+                "description": "Set this to true to dangerously override sandbox mode and run commands without sandboxing.",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "command"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "Edit",
+          "description": "modify file contents in place",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "file_path": {
+                "description": "The absolute path to the file to modify",
+                "type": "string"
+              },
+              "old_string": {
+                "description": "The text to replace",
+                "type": "string"
+              },
+              "new_string": {
+                "description": "The text to replace it with (must be different from old_string)",
+                "type": "string"
+              },
+              "replace_all": {
+                "description": "Replace all occurrences of old_string (default false)",
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "file_path",
+              "old_string",
+              "new_string"
+            ],
+            "additionalProperties": false
+          }
+        },
+        {
+          "name": "Read",
+          "description": "read files, images, PDFs, notebooks",
+          "input_schema": {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "properties": {
+              "file_path": {
+                "description": "The absolute path to the file to read",
+                "type": "string"
+              },
+              "offset": {
+                "description": "The line number to start reading from.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "limit": {
+                "description": "The number of lines to read.",
+                "type": "integer",
+                "exclusiveMinimum": 0,
+                "maximum": 9007199254740991
+              },
+              "pages": {
+                "description": "Page range for PDF files (e.g., \"1-5\", \"3\", \"10-20\").",
+                "type": "string"
+              }
+            },
+            "required": [
+              "file_path"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ],
+      "metadata": {
+        "user_id": "{\"device_id\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"account_uuid\":\"\",\"session_id\":\"00000000-0000-4000-8000-000000000001\"}"
+      },
+      "max_tokens": 32000,
+      "thinking": {
+        "type": "adaptive",
+        "display": "omitted"
+      },
+      "context_management": {
+        "edits": [
+          {
+            "type": "clear_thinking_20251015",
+            "keep": "all"
+          }
+        ]
+      },
+      "output_config": {
+        "effort": "high"
+      },
+      "stream": true
+    }
+  ]
+}

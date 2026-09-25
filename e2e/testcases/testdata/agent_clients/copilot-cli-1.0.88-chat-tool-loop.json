@@ -1,0 +1,413 @@
+{
+  "client": "copilot-cli",
+  "version": "1.0.88",
+  "path": "/v1/chat/completions",
+  "headers": {
+    "user-agent": "OpenAI/JS 5.20.1"
+  },
+  "backends": {
+    "openai.chat.v1": [
+      "frequency_penalty",
+      "presence_penalty",
+      "temperature",
+      "tools",
+      "top_p"
+    ]
+  },
+  "turns": [
+    {
+      "model": "vllm-sr/auto",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are the GitHub Copilot CLI, a terminal assistant built by GitHub. (System prompt shortened for this fixture.)"
+        },
+        {
+          "role": "user",
+          "content": "<current_datetime>2026-01-01T00:00:00.000Z</current_datetime>\n\nRun echo hi with bash and report the output."
+        }
+      ],
+      "temperature": 0,
+      "top_p": 0.95,
+      "frequency_penalty": 0,
+      "presence_penalty": 0,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Runs a Bash command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "The Bash command and arguments to run."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "A short human-readable description of what the command does, limited to 100 characters, for example \"List files in the current directory\", \"Install dependencies with npm\" or \"Run RSpec tests\"."
+                },
+                "shellId": {
+                  "type": "string",
+                  "description": "(Optional) Identifier for this command execution."
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "sync",
+                    "async"
+                  ],
+                  "description": "Execution mode: \"sync\" runs synchronously and waits for completion (default), \"async\" runs in the background."
+                },
+                "detach": {
+                  "type": "boolean",
+                  "description": "(Optional) Only valid when mode=\"async\"."
+                },
+                "initial_wait": {
+                  "type": "number",
+                  "description": "(Optional) Time in seconds to wait for initial output when mode is \"sync\"."
+                }
+              },
+              "required": [
+                "command",
+                "description"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "list_bash",
+            "description": "Lists all active Bash sessions.",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "view",
+            "description": "View files, images, or directories.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Existing file or directory's absolute path."
+                },
+                "view_range": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "description": "Optional 1-based inclusive line range."
+                },
+                "forceReadLargeFiles": {
+                  "type": "boolean",
+                  "description": "Read an entire large file despite the size limit; default false."
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search file contents quickly and precisely with ripgrep.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string",
+                  "description": "Regex to search for in file contents."
+                },
+                "paths": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ],
+                  "description": "One directory or an array of directories; defaults to cwd."
+                },
+                "output_mode": {
+                  "type": "string",
+                  "enum": [
+                    "content",
+                    "files_with_matches",
+                    "count"
+                  ],
+                  "description": "Output: matching lines (content, with context/line-number options), matching file paths (files_with_matches, default), or per-file counts (count)."
+                },
+                "glob": {
+                  "type": "string",
+                  "description": "File glob filter, e.g."
+                },
+                "type": {
+                  "type": "string",
+                  "description": "File type filter, e.g."
+                },
+                "-i": {
+                  "type": "boolean",
+                  "description": "Case-insensitive search."
+                },
+                "-A": {
+                  "type": "number",
+                  "description": "Context lines after matches; requires content mode."
+                },
+                "-B": {
+                  "type": "number",
+                  "description": "Context lines before matches; requires content mode."
+                },
+                "-C": {
+                  "type": "number",
+                  "description": "Context lines around matches; requires content mode."
+                },
+                "-n": {
+                  "type": "boolean",
+                  "description": "\"-n\": true adds line numbers; requires content mode."
+                },
+                "head_limit": {
+                  "type": "number",
+                  "description": "Return first N results."
+                },
+                "multiline": {
+                  "type": "boolean",
+                  "description": "Allow cross-line patterns; default false."
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    },
+    {
+      "model": "vllm-sr/auto",
+      "messages": [
+        {
+          "role": "system",
+          "content": "You are the GitHub Copilot CLI, a terminal assistant built by GitHub. (System prompt shortened for this fixture.)"
+        },
+        {
+          "role": "user",
+          "content": "<current_datetime>2026-01-01T00:00:00.000Z</current_datetime>\n\nRun echo hi with bash and report the output."
+        },
+        {
+          "role": "assistant",
+          "content": null,
+          "refusal": null,
+          "tool_calls": [
+            {
+              "id": "call_capture_1",
+              "type": "function",
+              "function": {
+                "name": "bash",
+                "arguments": "{\"command\": \"echo hi\", \"description\": \"Print hi\"}"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "tool_call_id": "call_capture_1",
+          "content": "hi\n<shellId: 0 completed with exit code 0>"
+        }
+      ],
+      "temperature": 0,
+      "top_p": 0.95,
+      "frequency_penalty": 0,
+      "presence_penalty": 0,
+      "tools": [
+        {
+          "type": "function",
+          "function": {
+            "name": "bash",
+            "description": "Runs a Bash command.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "The Bash command and arguments to run."
+                },
+                "description": {
+                  "type": "string",
+                  "description": "A short human-readable description of what the command does, limited to 100 characters, for example \"List files in the current directory\", \"Install dependencies with npm\" or \"Run RSpec tests\"."
+                },
+                "shellId": {
+                  "type": "string",
+                  "description": "(Optional) Identifier for this command execution."
+                },
+                "mode": {
+                  "type": "string",
+                  "enum": [
+                    "sync",
+                    "async"
+                  ],
+                  "description": "Execution mode: \"sync\" runs synchronously and waits for completion (default), \"async\" runs in the background."
+                },
+                "detach": {
+                  "type": "boolean",
+                  "description": "(Optional) Only valid when mode=\"async\"."
+                },
+                "initial_wait": {
+                  "type": "number",
+                  "description": "(Optional) Time in seconds to wait for initial output when mode is \"sync\"."
+                }
+              },
+              "required": [
+                "command",
+                "description"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "list_bash",
+            "description": "Lists all active Bash sessions.",
+            "parameters": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "view",
+            "description": "View files, images, or directories.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Existing file or directory's absolute path."
+                },
+                "view_range": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "description": "Optional 1-based inclusive line range."
+                },
+                "forceReadLargeFiles": {
+                  "type": "boolean",
+                  "description": "Read an entire large file despite the size limit; default false."
+                }
+              },
+              "required": [
+                "path"
+              ]
+            }
+          }
+        },
+        {
+          "type": "function",
+          "function": {
+            "name": "grep",
+            "description": "Search file contents quickly and precisely with ripgrep.",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "pattern": {
+                  "type": "string",
+                  "description": "Regex to search for in file contents."
+                },
+                "paths": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  ],
+                  "description": "One directory or an array of directories; defaults to cwd."
+                },
+                "output_mode": {
+                  "type": "string",
+                  "enum": [
+                    "content",
+                    "files_with_matches",
+                    "count"
+                  ],
+                  "description": "Output: matching lines (content, with context/line-number options), matching file paths (files_with_matches, default), or per-file counts (count)."
+                },
+                "glob": {
+                  "type": "string",
+                  "description": "File glob filter, e.g."
+                },
+                "type": {
+                  "type": "string",
+                  "description": "File type filter, e.g."
+                },
+                "-i": {
+                  "type": "boolean",
+                  "description": "Case-insensitive search."
+                },
+                "-A": {
+                  "type": "number",
+                  "description": "Context lines after matches; requires content mode."
+                },
+                "-B": {
+                  "type": "number",
+                  "description": "Context lines before matches; requires content mode."
+                },
+                "-C": {
+                  "type": "number",
+                  "description": "Context lines around matches; requires content mode."
+                },
+                "-n": {
+                  "type": "boolean",
+                  "description": "\"-n\": true adds line numbers; requires content mode."
+                },
+                "head_limit": {
+                  "type": "number",
+                  "description": "Return first N results."
+                },
+                "multiline": {
+                  "type": "boolean",
+                  "description": "Allow cross-line patterns; default false."
+                }
+              },
+              "required": [
+                "pattern"
+              ]
+            }
+          }
+        }
+      ],
+      "stream": true,
+      "stream_options": {
+        "include_usage": true
+      }
+    }
+  ]
+}

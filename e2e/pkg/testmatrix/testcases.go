@@ -109,6 +109,7 @@ var ProviderProtocolsContract = []string{
 	"protocol-codec-anthropic-backend-error-matrix",
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
+	"protocol-codec-anthropic-backend-agent-client-replay",
 }
 
 // Combine preserves order while removing duplicate testcase names.
