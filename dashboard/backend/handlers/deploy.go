@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"sync"
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -97,7 +97,7 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 			return
 		}
 
-		currentData, err := os.ReadFile(configPath)
+		currentData, err := readPersistedDashboardConfig(configPath)
 		currentForDiffBytes := currentData
 		if err != nil {
 			currentForDiffBytes = []byte("# No existing config\n")
@@ -160,7 +160,7 @@ func DeployHandler(configPath string, readonlyMode bool, configDir string) http.
 
 		log.Printf("[Deploy] Received: YAML=%d bytes, DSL=%d bytes", len(req.YAML), len(req.DSL))
 
-		deployDirectWrite(w, configPath, configDir, req)
+		deployDirectWrite(w, r, configPath, configDir, req)
 	}
 }
 
@@ -196,7 +196,7 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 			return
 		}
 
-		rollbackDirectWrite(w, configPath, configDir, rollbackReq.Version)
+		rollbackDirectWrite(w, r, configPath, configDir, rollbackReq.Version)
 	}
 }
 
@@ -215,7 +215,7 @@ func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 
 // ==================== Deploy: write canonical config.yaml ====================
 
-func deployDirectWrite(w http.ResponseWriter, configPath string, configDir string, req DeployRequest) {
+func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string, configDir string, req DeployRequest) {
 	release, err := beginOrdinaryRuntimeConfigMutation(configDir)
 	if err != nil {
 		writeRuntimeConfigMutationError(w, err)
@@ -268,6 +268,14 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 		return
 	}
 
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
+	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+		writeConfigPersistenceError(w, err)
+		return
+	}
+
 	// Step 3: Create backup of current config
 	version, backupErr := createConfigBackup(configDir, existingData)
 	if backupErr != nil {
@@ -286,7 +294,7 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 
 	// Step 5: Atomic write to config.yaml
 	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+		writeConfigPersistenceError(w, err)
 		return
 	}
 
@@ -300,6 +308,16 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 
 	// Step 7: Clean up old backups (keep only maxBackups most recent)
 	cleanupBackups(configBackupDir(configDir))
+	if configActivationDeferred() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(DeployResponse{
+			Status:  "persisted",
+			Version: version,
+			Message: "Configuration saved to the Kubernetes ConfigMap. Roll out Router and Envoy to activate it.",
+		})
+		return
+	}
 
 	refreshConfigProjection(configprojection.RefreshInput{
 		Version:     newActivationVersion(),
@@ -477,7 +495,7 @@ func looksLikeFullCanonicalDeployBase(raw []byte) (bool, error) {
 	return false, nil
 }
 
-func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir string, version string) {
+func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath string, configDir string, version string) {
 	release, err := beginOrdinaryRuntimeConfigMutation(configDir)
 	if err != nil {
 		writeRuntimeConfigMutationError(w, err)
@@ -508,6 +526,14 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 		return
 	}
 
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
+	if _, err := checkConfigMapMutationFresh(configPath); err != nil {
+		writeConfigPersistenceError(w, err)
+		return
+	}
+
 	// Back up current config before rollback
 	existingData, snapshotErr := snapshotCurrentConfigBeforeRollback(configPath, configDir)
 	if snapshotErr != nil {
@@ -523,7 +549,7 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 
 	// Atomic write to config.yaml
 	if err := writeConfigAtomically(configPath, backupData); err != nil {
-		http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+		writeConfigPersistenceError(w, err)
 		return
 	}
 
@@ -531,6 +557,16 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 
 	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
 		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", err), http.StatusInternalServerError)
+		return
+	}
+	if configActivationDeferred() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(DeployResponse{
+			Status:  "persisted",
+			Version: version,
+			Message: "Rollback saved to the Kubernetes ConfigMap. Roll out Router and Envoy to activate it.",
+		})
 		return
 	}
 

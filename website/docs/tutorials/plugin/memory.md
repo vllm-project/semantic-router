@@ -59,7 +59,8 @@ Your configured logical names remain unchanged.
 
 Earlier untagged collections are preserved, but are not adopted automatically:
 equal vector dimensions do not prove that two models produce compatible
-embeddings. Export the original memory content and ingest it with the new model
-before relying on historical retrieval. No old collection is deleted during
+embeddings. The management API has no import or bulk export endpoint for
+memories, so the collection for the new model starts empty and repopulates
+from new traffic. No old collection is deleted during
 startup or model migration. This automatic identity binding currently covers
 local `mmbert`; other embedding providers keep their existing behavior.
