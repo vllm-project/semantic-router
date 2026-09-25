@@ -13,6 +13,8 @@ Use this guide when you need one of the following:
 
 Semantic Router is an Envoy External Processor. In buffered mode the gateway sends the full request body in one ExtProc message. In streamed mode the gateway sends multiple body chunks. Semantic Router's streamed body handler accumulates the chunks, applies the same routing and mutation pipeline at end-of-stream, and then emits one complete mutated request body or an immediate response.
 
+Requests that name a concrete model are accumulated the same way as `auto` requests, and the `streamed_body.max_bytes` and `streamed_body.timeout_sec` limits apply to them. Their chunks are held until end-of-stream because the pipeline can still rewrite the model to the provider's model ID, translate the request to the backend's API format, or add `stream_options.include_usage` to a streamed Chat Completions request.
+
 For streamed Chat Completions responses, immediate responses keep OpenAI-compatible behavior:
 
 - looper algorithms return `Content-Type: text/event-stream` when the original request has `"stream": true`;
