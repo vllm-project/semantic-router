@@ -46,7 +46,10 @@ func validateGlobalMemoryContracts(cfg *RouterConfig) error {
 	); err != nil {
 		return err
 	}
-	return validateMemoryPersistence(cfg.Memory.Persistence)
+	if err := validateMemoryPersistence(cfg.Memory.Persistence); err != nil {
+		return err
+	}
+	return validateMemoryConsolidation(cfg.Memory.Consolidation)
 }
 
 // Zero values use runtime defaults. Reject invalid resource bounds before any
@@ -70,6 +73,31 @@ func validateMemoryPersistence(cfg MemoryPersistenceConfig) error {
 			"global memory persistence shutdown_grace_seconds must be between 0 and %d, got %d",
 			MaxMemoryPersistenceDurationSeconds,
 			cfg.ShutdownGraceSeconds,
+		)
+	}
+	return nil
+}
+
+func validateMemoryConsolidation(cfg MemoryConsolidationConfig) error {
+	if cfg.CooldownSeconds < 0 || int64(cfg.CooldownSeconds) > MaxMemoryPersistenceDurationSeconds {
+		return fmt.Errorf(
+			"global memory consolidation cooldown_seconds must be between 0 and %d, got %d",
+			MaxMemoryPersistenceDurationSeconds,
+			cfg.CooldownSeconds,
+		)
+	}
+	if cfg.TimeoutSeconds < 0 || int64(cfg.TimeoutSeconds) > MaxMemoryPersistenceDurationSeconds {
+		return fmt.Errorf(
+			"global memory consolidation timeout_seconds must be between 0 and %d, got %d",
+			MaxMemoryPersistenceDurationSeconds,
+			cfg.TimeoutSeconds,
+		)
+	}
+	if cfg.Concurrency < 0 || cfg.Concurrency > MaxMemoryPersistenceConcurrency {
+		return fmt.Errorf(
+			"global memory consolidation concurrency must be between 0 and %d, got %d",
+			MaxMemoryPersistenceConcurrency,
+			cfg.Concurrency,
 		)
 	}
 	return nil

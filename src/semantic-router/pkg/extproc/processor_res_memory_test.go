@@ -48,6 +48,32 @@ func (s *noopMemoryStore) CheckConnection(_ context.Context) error { return nil 
 
 func (s *noopMemoryStore) Close() error { return nil }
 
+type recordingConsolidator struct {
+	users []string
+}
+
+func (r *recordingConsolidator) Enqueue(userID string) {
+	r.users = append(r.users, userID)
+}
+
+func TestEnqueueMemoryConsolidationOnlyAfterSuccessfulWrite(t *testing.T) {
+	recorder := &recordingConsolidator{}
+	enqueueMemoryConsolidation(nil, "user-1", 1, nil)
+	enqueueMemoryConsolidation(recorder, "user-1", 0, nil)
+	enqueueMemoryConsolidation(recorder, "user-1", 1, fmt.Errorf("store failed"))
+	enqueueMemoryConsolidation(recorder, "", 1, nil)
+	enqueueMemoryConsolidation(recorder, "user-1", 2, nil)
+	require.Equal(t, []string{"user-1"}, recorder.users)
+}
+
+func TestMemoryPersistenceJobSkipsConsolidationWhenNothingIsStored(t *testing.T) {
+	recorder := &recordingConsolidator{}
+	outcome, err := (memoryPersistenceJob{userID: "user-1", consolidate: recorder}).run(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "skipped", outcome.Status)
+	assert.Empty(t, recorder.users)
+}
+
 type blockingMemoryStore struct {
 	noopMemoryStore
 	storeStarted chan struct{}

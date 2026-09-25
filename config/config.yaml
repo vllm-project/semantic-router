@@ -2204,6 +2204,11 @@ global:
         concurrency: 8
         queue: 64
         shutdown_grace_seconds: 5
+      consolidation:
+        enabled: false
+        cooldown_seconds: 60
+        timeout_seconds: 30
+        concurrency: 1
     vector_store:
       enabled: true
       backend_type: llama_stack

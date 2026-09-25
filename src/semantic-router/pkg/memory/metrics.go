@@ -104,6 +104,30 @@ var (
 		},
 		[]string{"backend"},
 	)
+	// MemoryConsolidationTotal counts terminal consolidation outcomes.
+	// Labels stay content-free: no user id and no memory text.
+	MemoryConsolidationTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "llm_memory_consolidation_total",
+			Help: "Terminal Router Memory consolidation outcomes",
+		},
+		[]string{"status", "reason"},
+	)
+	// MemoryConsolidationMerged counts memories groups merged by consolidation.
+	MemoryConsolidationMerged = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "llm_memory_consolidation_merged_total",
+			Help: "Memory groups merged by Router Memory consolidation",
+		},
+	)
+	// MemoryConsolidationDeleted counts original memories removed after a merge.
+	MemoryConsolidationDeleted = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "llm_memory_consolidation_deleted_total",
+			Help: "Original memories deleted by Router Memory consolidation",
+		},
+	)
+
 	// MemoryCacheLatencySeconds records latency of cache get operations (hit path).
 	MemoryCacheLatencySeconds = promauto.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -186,6 +210,23 @@ func UpdateMemoryStoreSize(backend, userID string, count int) {
 	}
 
 	MemoryStoreSize.WithLabelValues(backend, userID).Set(float64(count))
+}
+
+// RecordMemoryConsolidation records one content-free consolidation outcome.
+func RecordMemoryConsolidation(status, reason string, merged, deleted int) {
+	if status == "" {
+		status = "unknown"
+	}
+	if reason == "" {
+		reason = "unknown"
+	}
+	MemoryConsolidationTotal.WithLabelValues(status, reason).Inc()
+	if merged > 0 {
+		MemoryConsolidationMerged.Add(float64(merged))
+	}
+	if deleted > 0 {
+		MemoryConsolidationDeleted.Add(float64(deleted))
+	}
 }
 
 // RecordMemoryCacheHit records a cache hit and optional latency for the cache get.

@@ -222,23 +222,24 @@ type QdrantConfig struct {
 const DefaultMemorySimilarityThreshold float32 = 0.70
 
 type MemoryConfig struct {
-	Enabled                    bool                    `yaml:"enabled,omitempty"`
-	Backend                    string                  `yaml:"backend,omitempty"`
-	AutoStore                  bool                    `yaml:"auto_store,omitempty"`
-	DisabledRoutes             []string                `yaml:"disabled_routes,omitempty"`
-	DisabledModels             []string                `yaml:"disabled_models,omitempty"`
-	Milvus                     MemoryMilvusConfig      `yaml:"milvus,omitempty"`
-	Valkey                     *MemoryValkeyConfig     `yaml:"valkey,omitempty"`
-	Qdrant                     *MemoryQdrantConfig     `yaml:"qdrant,omitempty"`
-	RedisCache                 *MemoryRedisCacheConfig `yaml:"redis_cache,omitempty"`
-	EmbeddingModel             string                  `yaml:"embedding_model,omitempty"`
-	DefaultRetrievalLimit      int                     `yaml:"default_retrieval_limit,omitempty"`
-	DefaultSimilarityThreshold float32                 `yaml:"default_similarity_threshold,omitempty"`
-	HybridSearch               bool                    `yaml:"hybrid_search,omitempty"`
-	HybridMode                 string                  `yaml:"hybrid_mode,omitempty"`
-	AdaptiveThreshold          bool                    `yaml:"adaptive_threshold,omitempty"`
-	Reflection                 MemoryReflectionConfig  `yaml:"reflection,omitempty"`
-	Persistence                MemoryPersistenceConfig `yaml:"persistence,omitempty"`
+	Enabled                    bool                      `yaml:"enabled,omitempty"`
+	Backend                    string                    `yaml:"backend,omitempty"`
+	AutoStore                  bool                      `yaml:"auto_store,omitempty"`
+	DisabledRoutes             []string                  `yaml:"disabled_routes,omitempty"`
+	DisabledModels             []string                  `yaml:"disabled_models,omitempty"`
+	Milvus                     MemoryMilvusConfig        `yaml:"milvus,omitempty"`
+	Valkey                     *MemoryValkeyConfig       `yaml:"valkey,omitempty"`
+	Qdrant                     *MemoryQdrantConfig       `yaml:"qdrant,omitempty"`
+	RedisCache                 *MemoryRedisCacheConfig   `yaml:"redis_cache,omitempty"`
+	EmbeddingModel             string                    `yaml:"embedding_model,omitempty"`
+	DefaultRetrievalLimit      int                       `yaml:"default_retrieval_limit,omitempty"`
+	DefaultSimilarityThreshold float32                   `yaml:"default_similarity_threshold,omitempty"`
+	HybridSearch               bool                      `yaml:"hybrid_search,omitempty"`
+	HybridMode                 string                    `yaml:"hybrid_mode,omitempty"`
+	AdaptiveThreshold          bool                      `yaml:"adaptive_threshold,omitempty"`
+	Reflection                 MemoryReflectionConfig    `yaml:"reflection,omitempty"`
+	Persistence                MemoryPersistenceConfig   `yaml:"persistence,omitempty"`
+	Consolidation              MemoryConsolidationConfig `yaml:"consolidation,omitempty"`
 }
 
 // MemoryPersistenceConfig bounds asynchronous response memory writes.
@@ -247,6 +248,16 @@ type MemoryPersistenceConfig struct {
 	Concurrency          int `yaml:"concurrency,omitempty"`
 	Queue                int `yaml:"queue,omitempty"`
 	ShutdownGraceSeconds int `yaml:"shutdown_grace_seconds,omitempty"`
+}
+
+// MemoryConsolidationConfig bounds optional post-write memory consolidation.
+// Zero values stay off. When Enabled is true, a zero cooldown, timeout, or
+// concurrency uses the runner defaults.
+type MemoryConsolidationConfig struct {
+	Enabled         bool `yaml:"enabled,omitempty"`
+	CooldownSeconds int  `yaml:"cooldown_seconds,omitempty"`
+	TimeoutSeconds  int  `yaml:"timeout_seconds,omitempty"`
+	Concurrency     int  `yaml:"concurrency,omitempty"`
 }
 
 // MemoryRedisCacheConfig configures an optional Redis hot cache in front of Milvus retrieval.
