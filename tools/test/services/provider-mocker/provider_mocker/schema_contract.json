@@ -452,6 +452,7 @@
       "official_request_fields": [
         "cache_control",
         "container",
+        "context_management",
         "inference_geo",
         "max_tokens",
         "messages",
@@ -478,6 +479,7 @@
       "official_response_fields": [
         "container",
         "content",
+        "context_management",
         "id",
         "model",
         "role",
@@ -496,6 +498,7 @@
         "cache_read_input_tokens",
         "inference_geo",
         "input_tokens",
+        "iterations",
         "output_tokens",
         "output_tokens_details",
         "server_tool_use",

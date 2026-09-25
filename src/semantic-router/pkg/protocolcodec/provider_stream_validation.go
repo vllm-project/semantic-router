@@ -120,6 +120,13 @@ func validateResponsesSummaryPartEvent(wire responsesEventWire) error {
 }
 
 func validateAnthropicStreamEvent(wire anthropicEventWire, body []byte) error {
+	if len(wire.ContextManagement) > 0 && wire.Type != "message_delta" {
+		return invalidProviderResponse("invalid_context_management_event", "Anthropic context management belongs to message_delta")
+	}
+	if wire.Delta != nil && wire.Delta.EstimatedTokens != nil &&
+		(wire.Type != "content_block_delta" || wire.Delta.Type != "thinking_delta") {
+		return invalidProviderResponse("invalid_estimated_tokens_event", "Anthropic estimated tokens belong to thinking_delta")
+	}
 	if anthropicEventUsesIndex(wire.Type) && (wire.Index == nil || *wire.Index < 0) {
 		return invalidProviderResponse("invalid_stream_item_index", "Anthropic content event requires a non-negative index")
 	}

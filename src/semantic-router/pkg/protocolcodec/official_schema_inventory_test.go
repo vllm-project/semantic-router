@@ -9,7 +9,8 @@ import (
 // These inventories are the top-level request fields published by the
 // OpenAI OpenAPI contract at 690521b1753dce0c6d6b275f583d22537679cff9 and the
 // generated Anthropic Messages API types at
-// d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa.
+// d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa, plus the later published
+// context-editing, thinking-token-count, and iteration-usage fields.
 // Every field is either represented semantically or decoded into an explicit
 // unsupported_feature error; adding a silent JSON sink is not allowed.
 func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
@@ -50,7 +51,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicRequestWire{},
 			official: fields(
-				"cache_control", "container", "inference_geo", "max_tokens", "messages", "metadata", "model",
+				"cache_control", "container", "context_management", "inference_geo", "max_tokens", "messages", "metadata", "model",
 				"output_config", "service_tier", "stop_sequences", "stream", "system", "temperature", "thinking",
 				"tool_choice", "tools", "top_k", "top_p",
 			),
@@ -113,7 +114,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicRequestWire{},
 			semantic: fields(
-				"max_tokens", "messages", "metadata", "model", "output_config", "stop_sequences", "stream",
+				"context_management", "max_tokens", "messages", "metadata", "model", "output_config", "stop_sequences", "stream",
 				"system", "temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 			unsupported: fields("cache_control", "container", "inference_geo", "service_tier"),
@@ -165,7 +166,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicResponseWire{},
 			official: fields(
-				"container", "content", "id", "model", "role", "stop_details", "stop_reason",
+				"container", "content", "context_management", "id", "model", "role", "stop_details", "stop_reason",
 				"stop_sequence", "type", "usage",
 			),
 			extensions: fields("error"),
@@ -215,7 +216,7 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			wire: anthropicUsageWire{},
 			official: fields(
 				"cache_creation", "cache_creation_input_tokens", "cache_read_input_tokens", "inference_geo",
-				"input_tokens", "output_tokens", "output_tokens_details", "server_tool_use", "service_tier",
+				"input_tokens", "iterations", "output_tokens", "output_tokens_details", "server_tool_use", "service_tier",
 			),
 		},
 	}

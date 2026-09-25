@@ -1,6 +1,7 @@
 package llmprotocol
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -40,6 +41,15 @@ func ValidateRequest(request Request, limits Limits) error {
 	}
 	if err := validateCacheSalt(request.CacheSalt); err != nil {
 		return err
+	}
+	if len(request.ContextManagement) > 0 {
+		value := bytes.TrimSpace(request.ContextManagement)
+		if !json.Valid(value) || len(value) == 0 || value[0] != '{' {
+			return NewError(ErrorInvalidRequest, "invalid_context_management", "context management must be a JSON object", nil)
+		}
+		if limits.MetadataBytes > 0 && len(value) > limits.MetadataBytes {
+			return NewError(ErrorInvalidRequest, "context_management_limit", "context management exceeds the configured limit", nil)
+		}
 	}
 	return validateReasoning(request, limits)
 }

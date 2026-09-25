@@ -432,6 +432,11 @@ func collectNestedFixtureFields(
 		t.Fatalf("nested inventory %s/%s has invalid fixture path %q", protocol, wire, fixture)
 	}
 	fixturePath := filepath.Join("testdata", "golden", clean)
+	if strings.HasPrefix(clean, "contracts"+string(filepath.Separator)) {
+		// A small reviewed JSON document can witness newly published fields
+		// without adding a full translation golden for telemetry we only decode.
+		fixturePath = filepath.Join("testdata", clean)
+	}
 	if _, err := os.Stat(fixturePath); err != nil {
 		t.Fatalf("nested inventory %s/%s fixture %q: %v", protocol, wire, fixture, err)
 	}

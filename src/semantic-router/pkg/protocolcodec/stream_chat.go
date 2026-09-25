@@ -63,6 +63,9 @@ type chatChunkWire struct {
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
 	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
+	// Aggregator gateways may report the handling agent alongside a chunk.
+	// It is transport metadata, not response content.
+	Agent json.RawMessage `json:"agent,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -153,6 +156,11 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	if err := validateChatStreamChunk(chunk); err != nil {
 		return nil, diagnostics, err
 	}
+	// Some gateways emit an empty synthetic chunk while waiting for the first
+	// model token. It must not establish the response ID or model identity.
+	if isGatewayChatKeepalive(chunk) {
+		return nil, diagnostics, nil
+	}
 	if err := decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
 		return nil, diagnostics, err
 	}
@@ -189,6 +197,12 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"stream.x_groq", "provider request metadata is not model output",
 		)
 	}
+	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.agent", "gateway agent metadata is not model output",
+		)
+	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
@@ -202,6 +216,23 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 		)
 	}
 	return diagnostics
+}
+
+// isGatewayChatKeepalive recognizes only the empty chunk shape used by
+// gateway aggregators. A real delta, usage snapshot, or error must continue
+// through identity and content validation even when created is zero.
+func isGatewayChatKeepalive(chunk chatChunkWire) bool {
+	if chunk.ID != "chatcmpl-keepalive" || chunk.Created != 0 || chunk.Model != "keepalive" ||
+		chunk.Usage != nil || chunk.Error != nil || len(chunk.Choices) != 1 {
+		return false
+	}
+	choice := chunk.Choices[0]
+	delta := choice.Delta
+	return choice.Index == 0 && choice.FinishReason == nil && choice.Logprobs == nil &&
+		choice.StopReason == nil && len(choice.TokenIDs) == 0 && choice.RoutedExperts == nil &&
+		delta.Role == "" && delta.Content == nil && delta.Reasoning == nil &&
+		delta.AlternateReasoning == nil && delta.Refusal == nil && delta.Audio == nil &&
+		delta.LegacyFunctionCall == nil && len(delta.ToolCalls) == 0 && len(delta.Annotations) == 0
 }
 
 func validateChatStreamChunk(chunk chatChunkWire) error {
