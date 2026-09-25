@@ -409,6 +409,9 @@ func validateAnthropicEncodableRequest(request llmprotocol.Request) error {
 	if err := rejectChatOnlyControls(request); err != nil {
 		return err
 	}
+	if request.PromptCacheKey != "" {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_prompt_cache_key", "target protocol cannot preserve prompt_cache_key", nil)
+	}
 	if request.Sampling.TopK != nil && *request.Sampling.TopK < 0 {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_top_k", "Messages cannot represent top_k=-1", nil)
 	}

@@ -49,7 +49,7 @@ func encodeResponsesRequestWire(request llmprotocol.Request) (responsesRequestWi
 	wire := responsesRequestWire{
 		Model: request.Model, Stream: request.Stream, Metadata: request.Metadata,
 		Store: request.Store, AutoStore: request.AutoStore, PreviousResponseID: request.PreviousResponseID,
-		Truncation: request.Truncation, User: request.EndUserID,
+		Truncation: request.Truncation, User: request.EndUserID, PromptCacheKey: request.PromptCacheKey,
 		ParallelToolCalls: request.ParallelToolCalls, Temperature: request.Sampling.Temperature,
 		TopP: request.Sampling.TopP, MaxOutputTokens: request.Sampling.MaxOutputTokens,
 	}

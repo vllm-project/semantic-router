@@ -82,6 +82,7 @@ func encodeChatBaseRequest(request llmprotocol.Request) chatRequestWire {
 		ReasoningEffort: request.ReasoningEffort, ReasoningBudget: request.ReasoningBudgetTokens,
 		ChatTemplateKwargs: request.ChatTemplateKwargs, CacheSalt: request.CacheSalt,
 		TopK: request.Sampling.TopK, MinP: request.Sampling.MinP, RepetitionPenalty: request.Sampling.RepetitionPenalty,
+		PromptCacheKey: request.PromptCacheKey,
 	}
 	if request.Stream && (request.StreamOptions.IncludeUsage != nil || request.StreamOptions.IncludeObfuscation != nil) {
 		wire.StreamOptions = &chatStreamOptionsWire{

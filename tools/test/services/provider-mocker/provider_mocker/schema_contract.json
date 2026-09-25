@@ -299,7 +299,8 @@
         "user"
       ],
       "extension_request_fields": [
-        "auto_store"
+        "auto_store",
+        "client_metadata"
       ],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
       "provider_request_fields": {

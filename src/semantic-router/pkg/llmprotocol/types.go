@@ -253,6 +253,9 @@ type Request struct {
 	ChatTemplateKwargs json.RawMessage
 	// CacheSalt isolates backend prefix-cache entries; it is never prompt text.
 	CacheSalt *string
+	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
+	// output, but targets that cannot carry it must reject it, not drop it.
+	PromptCacheKey string
 }
 
 type StopReason string
