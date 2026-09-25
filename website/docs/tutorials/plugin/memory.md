@@ -59,8 +59,9 @@ Your configured logical names remain unchanged.
 
 Earlier untagged collections are preserved, but are not adopted automatically:
 equal vector dimensions do not prove that two models produce compatible
-embeddings. Export the original memory content and ingest it with the new model
-before relying on historical retrieval. No old collection is deleted during
+embeddings. The management API has no import or bulk export endpoint for
+memories, so the collection for the new model starts empty and repopulates
+from new traffic. No old collection is deleted during
 startup or model migration. This automatic identity binding currently covers
 local `mmbert`; other embedding providers keep their existing behavior, except
 Candle `bert` as described below.
@@ -69,6 +70,7 @@ Candle `bert` models have no content descriptor, so the router keys their memory
 by an encoder version that changes whenever Candle BERT vectors change, as they
 did when padding tokens stopped counting toward the average. After upgrading
 across such a change, BERT memory opens a new collection or index and a new
-Redis hot cache. Entries stored before the upgrade stay in the old collection
-and are no longer recalled, so memory fills again from new conversations. BERT
-served by another runtime keeps its existing storage.
+Redis hot cache. As with a model change, the new collection starts empty and
+repopulates from new traffic. Entries stored before the upgrade stay in the old
+collection and are no longer recalled. BERT served by another runtime keeps its
+existing storage.
