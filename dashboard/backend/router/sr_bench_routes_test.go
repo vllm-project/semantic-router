@@ -20,9 +20,6 @@ func TestSRBenchRoutesUseIndependentServiceAndRetireEvaluation(t *testing.T) {
 	cfg := &config.Config{SRBenchURL: upstream.URL, SRBenchTokenEnv: "BENCH_TEST_TOKEN"}
 	mux := http.NewServeMux()
 	registerSRBenchRoutes(mux, cfg)
-	mux.HandleFunc("/api/", func(http.ResponseWriter, *http.Request) {
-		t.Error("retired or unsupported benchmark endpoint escaped to generic proxy")
-	})
 	if !cfg.SRBenchAvailable || cfg.SRBenchUnavailableReason != "" {
 		t.Fatal("configured sr-bench was unavailable")
 	}

@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -18,6 +17,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 )
 
 const (
@@ -334,16 +335,10 @@ func normalizeExpectedArchiveDigest(raw string) (string, error) {
 }
 
 func normalizeRemotePackageURL(raw string) (*url.URL, error) {
-	value := strings.TrimSpace(raw)
-	parsed, err := url.Parse(value)
-	if err != nil || !parsed.IsAbs() || parsed.Opaque != "" || parsed.Host == "" || parsed.Hostname() == "" {
-		return nil, wrapPackageError(ErrorInvalidURL, http.StatusBadRequest, "Recipe package URL is invalid.", err)
-	}
-	if parsed.Scheme != "https" {
-		return nil, wrapPackageError(ErrorInsecureURL, http.StatusBadRequest, "Recipe package URL must use HTTPS.", nil)
-	}
-	if parsed.User != nil || parsed.Fragment != "" {
-		return nil, wrapPackageError(ErrorInvalidURL, http.StatusBadRequest, "Recipe package URL must not contain credentials or a fragment.", nil)
+	parsed, err := packagePolicy(nil).ValidateURL(raw)
+	if err != nil {
+		mapped, _ := classifyFetchPolicyError(err)
+		return nil, mapped
 	}
 	return parsed, nil
 }
@@ -365,85 +360,48 @@ func classifyDownloadError(err error) error {
 	if errors.As(err, &packageErr) {
 		return err
 	}
+	if mapped, ok := classifyFetchPolicyError(err); ok {
+		return mapped
+	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return wrapPackageError(ErrorDownloadFailed, http.StatusBadGateway, "Recipe package download was cancelled or timed out.", err)
 	}
 	return wrapPackageError(ErrorDownloadFailed, http.StatusBadGateway, "Recipe package download failed.", err)
 }
 
+// packagePolicy is the shared outbound policy, tightened for package
+// downloads: HTTPS only, and a longer deadline because an archive is larger
+// than a page.
+func packagePolicy(resolver IPResolver) safefetch.Policy {
+	policy := safefetch.DefaultPolicy().
+		WithSchemes("https").
+		WithTimeout(60 * time.Second)
+	policy.MaxRedirects = maxRedirects
+	if resolver != nil {
+		policy = policy.WithResolver(resolver)
+	}
+	return policy
+}
+
 func newPackageHTTPClient(resolver IPResolver) *http.Client {
-	if resolver == nil {
-		resolver = net.DefaultResolver
-	}
-	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
-	transport := &http.Transport{
-		Proxy:               nil,
-		DisableCompression:  true,
-		ForceAttemptHTTP2:   true,
-		TLSHandshakeTimeout: 10 * time.Second,
-		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(address)
-			if err != nil {
-				return nil, err
-			}
-			addresses, err := resolver.LookupNetIP(ctx, "ip", host)
-			if err != nil || len(addresses) == 0 {
-				return nil, wrapPackageError(ErrorSourceForbidden, http.StatusBadRequest, "Recipe package host could not be resolved safely.", err)
-			}
-			for _, address := range addresses {
-				if !isPublicIP(address) {
-					return nil, wrapPackageError(ErrorSourceForbidden, http.StatusBadRequest, "Recipe package URL resolves to a non-public address.", nil)
-				}
-			}
-			return dialer.DialContext(ctx, network, net.JoinHostPort(addresses[0].String(), port))
-		},
-	}
-	return &http.Client{
-		Transport: transport,
-		Timeout:   60 * time.Second,
-		CheckRedirect: func(request *http.Request, via []*http.Request) error {
-			if len(via) >= maxRedirects {
-				return wrapPackageError(ErrorDownloadFailed, http.StatusBadGateway, "Recipe package download used too many redirects.", nil)
-			}
-			// Signed source URLs may carry credentials in their query. Never send
-			// them to a redirect target through the Referer header.
-			request.Header.Del("Referer")
-			_, err := normalizeRemotePackageURL(request.URL.String())
-			return err
-		},
-	}
+	return packagePolicy(resolver).NewClient()
 }
 
-var nonPublicNetworks = mustPrefixes(
-	"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8",
-	"169.254.0.0/16", "172.16.0.0/12", "192.0.0.0/24", "192.0.2.0/24",
-	"192.88.99.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24",
-	"203.0.113.0/24", "224.0.0.0/4", "240.0.0.0/4",
-	"::/96", "::1/128", "64:ff9b::/96", "64:ff9b:1::/48", "100::/64",
-	"2001::/32", "2001:2::/48", "2001:10::/28", "2001:20::/28",
-	"2001:db8::/32", "2002::/16", "fc00::/7", "fec0::/10", "fe80::/10", "ff00::/8",
-)
-
-func isPublicIP(address netip.Addr) bool {
-	if !address.IsValid() {
-		return false
+// classifyFetchPolicyError maps a shared-policy refusal onto this package's
+// error codes, so the importer's API contract is unchanged by the move.
+func classifyFetchPolicyError(err error) (error, bool) {
+	switch {
+	case err == nil:
+		return nil, false
+	case errors.Is(err, safefetch.ErrDestinationForbidden):
+		return wrapPackageError(ErrorSourceForbidden, http.StatusBadRequest, "Recipe package URL resolves to a non-public address.", nil), true
+	case errors.Is(err, safefetch.ErrSchemeNotAllowed):
+		return wrapPackageError(ErrorInsecureURL, http.StatusBadRequest, "Recipe package URL must use HTTPS.", nil), true
+	case errors.Is(err, safefetch.ErrInvalidURL):
+		return wrapPackageError(ErrorInvalidURL, http.StatusBadRequest, "Recipe package URL is invalid.", nil), true
+	case errors.Is(err, safefetch.ErrTooManyRedirects):
+		return wrapPackageError(ErrorDownloadFailed, http.StatusBadGateway, "Recipe package download used too many redirects.", nil), true
+	default:
+		return err, false
 	}
-	address = address.Unmap()
-	if !address.IsGlobalUnicast() {
-		return false
-	}
-	for _, prefix := range nonPublicNetworks {
-		if prefix.Contains(address) {
-			return false
-		}
-	}
-	return true
-}
-
-func mustPrefixes(values ...string) []netip.Prefix {
-	result := make([]netip.Prefix, 0, len(values))
-	for _, value := range values {
-		result = append(result, netip.MustParsePrefix(value))
-	}
-	return result
 }

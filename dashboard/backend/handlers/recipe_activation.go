@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
@@ -124,13 +125,18 @@ func (a *RecipeActivator) activateLocked(ctx context.Context, request recipe.Act
 	if err != nil {
 		return recipe.ActivateResult{}, err
 	}
+	if confirmationErr := requireActivationConfirmation(request, plan); confirmationErr != nil {
+		return recipe.ActivateResult{}, confirmationErr
+	}
+	// Recovery above repairs an older transaction. Check this request's live
+	// permission after planning, just before its first baseline or journal write.
+	if revalidationErr := revalidateRecipeActivation(ctx); revalidationErr != nil {
+		return recipe.ActivateResult{}, revalidationErr
+	}
 	if state == recipe.ActivationNone {
 		if baselineErr := a.store.RefreshSourceBaseline(previousConfig); baselineErr != nil {
 			return recipe.ActivateResult{}, activationFailed("Source Recipe baseline could not be preserved.", baselineErr)
 		}
-	}
-	if confirmationErr := requireActivationConfirmation(request, plan); confirmationErr != nil {
-		return recipe.ActivateResult{}, confirmationErr
 	}
 	transaction, err := a.store.BeginActivation(target.RecipeDigest, previousConfig)
 	if err != nil {
@@ -204,11 +210,23 @@ func (a *RecipeActivator) deactivateLocked(ctx context.Context, requests ...reci
 	if confirmationErr := requireDeactivationConfirmation(request, plan); confirmationErr != nil {
 		return recipe.DeactivateResult{}, confirmationErr
 	}
+	// Recovery above repairs an older transaction. Check this request's live
+	// permission after planning, just before its deactivation journal write.
+	if revalidationErr := revalidateRecipeActivation(ctx); revalidationErr != nil {
+		return recipe.DeactivateResult{}, revalidationErr
+	}
 	transaction, err := a.store.BeginDeactivation(previousConfig)
 	if err != nil {
 		return recipe.DeactivateResult{}, activationFailed("Recipe deactivation transaction could not be started.", err)
 	}
 	return a.executeDeactivation(ctx, active, plan, transaction, previousConfig, baseline)
+}
+
+func revalidateRecipeActivation(ctx context.Context) error {
+	if err := auth.RevalidateContextIfPresent(ctx); err != nil {
+		return recipe.NewPackageError("permission_revoked", http.StatusForbidden, "Recipe activation permission was revoked.", err)
+	}
+	return nil
 }
 
 func (a *RecipeActivator) executeDeactivation(ctx context.Context, active recipe.ActivePointer, plan recipe.ActivationPlan, transaction recipe.ActivationTransaction, previousConfig, baseline []byte) (recipe.DeactivateResult, error) {

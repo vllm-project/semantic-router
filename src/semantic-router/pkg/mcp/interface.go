@@ -115,6 +115,8 @@ type ClientConfig struct {
 	TransportType    string            `json:"transportType,omitempty"`
 	Timeout          time.Duration     `json:"timeout,omitempty"`
 	MaxResponseBytes int64             `json:"maxResponseBytes,omitempty"`
+	MaxListPages     int               `json:"maxListPages,omitempty"`
+	MaxListBytes     int64             `json:"maxListBytes,omitempty"`
 	Options          ClientOptions     `json:"options"`
 }
 
