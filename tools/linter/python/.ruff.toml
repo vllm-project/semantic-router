@@ -83,6 +83,19 @@ ignore = [
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
 "e2e/testing/anthropic-shim/tests/*.py" = ["PLR2004"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
+"bench/agent_crew/test_*.py" = [
+  "PLR2004",  # expected call counts and costs are readable inline
+  "RUF012",   # stub HTTP handler class attributes are per-test state
+]
+"bench/agent_crew/report.py" = [
+  "PLC0415",  # matplotlib is an optional dependency used only by --figures
+]
+# The crew fixture is a pull request with deliberately defective code. Its bugs
+# are what the arms are scored against, so correctness rules must not remove them.
+"bench/agent_crew/fixture/pr/*.py" = [
+  "E722",     # bare except is a seeded defect
+  "SIM105",   # so is the try/except/pass it sits in
+]
 "tools/mock-vllm/tests/*.py" = ["PLR2004"]
 "tools/mock-vllm/app.py" = [
   "PLR0911",  # endpoint dispatch keeps one response path per request outcome
