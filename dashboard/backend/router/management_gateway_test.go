@@ -26,7 +26,7 @@ func TestManagementGatewaySharesRBACAndReadonlyPolicy(t *testing.T) {
 		mux := http.NewServeMux()
 		cfg := &config.Config{RouterAPIURL: upstream.URL, ReadonlyMode: readonly}
 		provider := routerProxyCredentialProvider{token: "router-management"}
-		registerRouterAPIProxy(mux, cfg, nil, nil, provider)
+		registerRouterAPIProxy(mux, cfg, nil, nil, nil, provider)
 		registerKnowledgeBaseRoutes(mux, cfg, provider)
 		for _, policy := range routercontract.ManagementPolicies() {
 			path := strings.NewReplacer("{type}", "rag", "{id}", "record-1", "{name}", "example").Replace(policy.Path)
@@ -59,7 +59,7 @@ func TestManagementGatewayRejectsUndeclaredAndOldRoutes(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(http.StatusNoContent) }))
 	defer upstream.Close()
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, nil, nil, routerProxyCredentialProvider{token: "managed"})
+	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: upstream.URL}, nil, nil, nil, routerProxyCredentialProvider{token: "managed"})
 	for _, test := range []struct {
 		method, path string
 		want         int
