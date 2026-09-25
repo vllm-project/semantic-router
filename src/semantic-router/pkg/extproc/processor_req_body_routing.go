@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
 type routeHeaderState struct {
@@ -39,6 +41,8 @@ type providerDispatch struct {
 	decisionName   string
 	useReasoning   bool
 }
+
+const preparedDispatchReceiptVersion = 1
 
 // prepareProviderDispatch is the only point where a neutral request becomes a
 // provider-bound request. Routing and plugins mutate semantic state first;
@@ -291,6 +295,9 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 	if err := selectionRequestContext(ctx).Err(); err != nil {
 		return nil, err
 	}
+	if ctx != nil {
+		ctx.preparedDispatchReceipt = nil
+	}
 	if response.GetImmediateResponse() != nil {
 		return response, nil
 	}
@@ -344,12 +351,10 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		common.HeaderMutation = &ext_proc.HeaderMutation{}
 	}
 	appendContentLengthHeader(&common.HeaderMutation.SetHeaders, len(body))
-	common.BodyMutation = &ext_proc.BodyMutation{
-		Mutation: &ext_proc.BodyMutation_Body{Body: body},
-	}
 	if err := commitAgenticSessionDecision(ctx); err != nil {
 		return nil, err
 	}
+	bindPreparedDispatchArtifact(common, ctx, body, dispatch.targetFormat)
 	logging.ComponentDebugEvent("extproc", "provider_dispatch_encoded", map[string]interface{}{
 		"request_id":  ctx.RequestID,
 		"model":       dispatch.logicalModel,
@@ -357,6 +362,30 @@ func (r *OpenAIRouter) finalizeProviderDispatchResponse(
 		"body_bytes":  len(body),
 	})
 	return response, nil
+}
+
+// bindPreparedDispatchArtifact couples the payload-free primary-dispatch
+// receipt to the exact final byte slice returned to Envoy. The caller has
+// already completed codec encoding and provider adaptation; this helper
+// performs no transformation. Existing Replay records, including Looper's
+// per-attempt records, are intentionally outside this no-updater contract.
+func bindPreparedDispatchArtifact(
+	common *ext_proc.CommonResponse,
+	ctx *RequestContext,
+	body []byte,
+	format llmprotocol.WireFormat,
+) {
+	common.BodyMutation = &ext_proc.BodyMutation{
+		Mutation: &ext_proc.BodyMutation_Body{Body: body},
+	}
+	if !shouldStartRouterReplay(ctx) {
+		return
+	}
+	digest := sha256.Sum256(body)
+	ctx.preparedDispatchReceipt = &routerreplay.PreparedDispatchReceipt{
+		Version: preparedDispatchReceiptVersion, WireFormat: string(format),
+		SHA256: fmt.Sprintf("%x", digest), ByteLength: len(body),
+	}
 }
 
 // processBodyRoutingError answers every ProtocolError it recognizes with HTTP
