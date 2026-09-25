@@ -24,6 +24,7 @@ from tests.test_openclaw_shared_network import (
 @pytest.fixture(autouse=True)
 def _split_runtime_topology(monkeypatch):
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "split")
+    monkeypatch.setenv("OPENCLAW_ENABLED", "true")
     monkeypatch.setattr(
         container_openclaw_support,
         "_runtime_socket_is_group_safe",

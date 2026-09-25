@@ -1,4 +1,7 @@
+from pathlib import Path
+
 import pytest
+import yaml
 from cli.algorithms import (
     AlgorithmConfig,
     FusionAlgorithmConfig,
@@ -6,6 +9,7 @@ from cli.algorithms import (
     WorkflowPlannerConfig,
     WorkflowsAlgorithmConfig,
 )
+from cli.main import main
 from cli.models import (
     Condition,
     DecisionAdaptationsConfig,
@@ -23,6 +27,7 @@ from cli.models import (
     UserConfig,
 )
 from cli.validator import validate_user_config
+from click.testing import CliRunner
 from pydantic import ValidationError as PydanticValidationError
 
 
@@ -95,6 +100,117 @@ def test_catalog_model_cannot_override_reasoning_binding():
         and "inherits reasoning" in error.message
         for error in errors
     )
+
+
+def _catalog_backed_qwen_config() -> UserConfig:
+    config = recipe_config()
+    config.providers.models[0].catalog = "qwen/qwen3.8-27b"
+    config.routing.model_cards[0].name = "qwen/qwen3.8-27b"
+    return config
+
+
+@pytest.mark.parametrize(
+    ("overlay", "field", "added"),
+    [
+        (
+            {
+                "capabilities": [
+                    "chat",
+                    "reasoning",
+                    "tools",
+                    "structured_output",
+                    "text",
+                ]
+            },
+            "capabilities",
+            "text",
+        ),
+        (
+            {"modalities": {"input": ["text", "audio"], "output": ["text"]}},
+            "modalities",
+            "audio",
+        ),
+    ],
+)
+def test_catalog_card_widening_is_rejected_before_serve(overlay, field, added):
+    config = _catalog_backed_qwen_config()
+    card = config.routing.model_cards[0]
+    for name, value in overlay.items():
+        setattr(card, name, value)
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert any(
+        error.field == f"routing.modelCards[0].{field}"
+        and "widen a built-in claim" in error.message
+        and added in error.message
+        for error in errors
+    )
+
+
+def test_catalog_card_claims_may_be_narrowed():
+    config = _catalog_backed_qwen_config()
+    config.routing.model_cards[0].capabilities = ["chat", "reasoning"]
+    config.routing.model_cards[0].modalities = {"input": ["text"], "output": ["text"]}
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert not any(
+        error.field and error.field.startswith("routing.modelCards[0].")
+        for error in errors
+    )
+
+
+def test_custom_card_sharing_builtin_name_may_declare_its_own_claims():
+    config = UserConfig.model_validate(
+        {
+            "version": "v0.3",
+            "providers": {
+                "defaults": {"model": "qwen/qwen3.8-27b"},
+                "models": [
+                    {
+                        "name": "qwen/qwen3.8-27b",
+                        "backend_refs": [
+                            {"endpoint": "127.0.0.1:8000", "provider": "vllm"}
+                        ],
+                    }
+                ],
+            },
+            "routing": {
+                "modelCards": [
+                    {"name": "qwen/qwen3.8-27b", "capabilities": ["chat", "text"]}
+                ]
+            },
+        }
+    )
+
+    errors = validate_user_config(config, log_summary=False)
+
+    assert not any("widen a built-in claim" in error.message for error in errors)
+
+
+def test_config_validate_reports_unverified_catalog_claim(tmp_path: Path):
+    config = _catalog_backed_qwen_config()
+    config.routing.model_cards[0].capabilities = [
+        "chat",
+        "reasoning",
+        "tools",
+        "structured_output",
+        "text",
+    ]
+    path = tmp_path / "config.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            config.model_dump(mode="json", by_alias=True, exclude_none=True)
+        ),
+        encoding="utf-8",
+    )
+
+    result = CliRunner().invoke(main, ["config", "validate", "--config", str(path)])
+
+    assert result.exit_code != 0
+    assert "capabilities widen a built-in claim" in result.output
+    assert "routing.modelCards[0].capabilities" in result.output
 
 
 def test_inline_reasoning_allows_an_implicit_mode_contract():
