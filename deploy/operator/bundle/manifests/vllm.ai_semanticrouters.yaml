@@ -3288,6 +3288,28 @@ spec:
                     enum:
                     - priority
                     type: string
+                  streamed_body:
+                    description: |-
+                      StreamedBody enables streamed request body handling. Mirrors
+                      global.router.streamed_body; the gateway must send bodies to ExtProc in
+                      STREAMED or FullDuplexStreamed mode for it to take effect.
+                    properties:
+                      enabled:
+                        description: Enabled accumulates request body chunks before
+                          routing at end-of-stream.
+                        type: boolean
+                      max_bytes:
+                        description: MaxBytes rejects larger accumulated bodies with
+                          413. Zero disables the limit.
+                        format: int64
+                        minimum: 0
+                        type: integer
+                      timeout_sec:
+                        description: TimeoutSec rejects slower body accumulation with
+                          408. Zero disables the limit.
+                        minimum: 0
+                        type: integer
+                    type: object
                   tools:
                     description: Tools configuration
                     properties:

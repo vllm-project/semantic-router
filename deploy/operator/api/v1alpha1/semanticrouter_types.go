@@ -348,6 +348,29 @@ type ConfigSpec struct {
 	// Observability configuration
 	// +optional
 	Observability *ObservabilityConfig `json:"observability,omitempty"`
+
+	// StreamedBody enables streamed request body handling. Mirrors
+	// global.router.streamed_body; the gateway must send bodies to ExtProc in
+	// STREAMED or FullDuplexStreamed mode for it to take effect.
+	// +optional
+	StreamedBody *StreamedBodyConfig `json:"streamed_body,omitempty"`
+}
+
+// StreamedBodyConfig defines streamed request body handling.
+type StreamedBodyConfig struct {
+	// Enabled accumulates request body chunks before routing at end-of-stream.
+	// +optional
+	Enabled bool `json:"enabled,omitempty"`
+
+	// MaxBytes rejects larger accumulated bodies with 413. Zero disables the limit.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxBytes int64 `json:"max_bytes,omitempty"`
+
+	// TimeoutSec rejects slower body accumulation with 408. Zero disables the limit.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	TimeoutSec int `json:"timeout_sec,omitempty"`
 }
 
 // SemanticCacheConfig defines semantic cache configuration

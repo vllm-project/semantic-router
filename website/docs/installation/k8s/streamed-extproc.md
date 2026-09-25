@@ -45,6 +45,27 @@ runtime defaults or experimentally calibrated limits. Omitting either value or
 setting it to zero disables that guard. The reference `config/config.yaml`
 demonstrates a smaller 1 MiB and 15-second policy.
 
+With the Kubernetes Operator, set the same fields under
+`spec.config.streamed_body`; the Operator renders them into
+`global.router.streamed_body`:
+
+```yaml
+spec:
+  gateway:
+    existingRef:
+      name: shared-gateway
+      namespace: gateway-system
+  config:
+    streamed_body:
+      enabled: true
+      max_bytes: 10485760
+      timeout_sec: 30
+```
+
+The Operator's standalone Envoy sidecar keeps `request_body_mode: BUFFERED`
+for the reason given in [Raw Envoy](#raw-envoy), so this setting only changes
+behavior when an existing Gateway invokes ExtProc in a streamed mode.
+
 ## Envoy AI Gateway / Envoy Gateway
 
 For Envoy AI Gateway examples that use `EnvoyPatchPolicy`, change the Semantic Router ExtProc filter from buffered request bodies to streamed request bodies.
