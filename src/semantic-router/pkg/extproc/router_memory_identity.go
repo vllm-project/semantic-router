@@ -10,12 +10,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 // bindMemoryEmbedding isolates persisted vectors and the retrieval hot cache
 // without modifying the user's configuration or deleting historical data.
 func bindMemoryEmbedding(cfg *config.RouterConfig, sets ...*embedding.Set) (*config.RouterConfig, error) {
-	return memoryConfigForIdentity(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
+	bound, err := memoryConfigForIdentity(cfg, func(settings embedding.ConsumerSettings) (embedding.ContentIdentity, error) {
 		if len(sets) == 0 || sets[0] == nil {
 			return embedding.ContentIdentity{}, fmt.Errorf("memory embedding set was not prepared")
 		}
@@ -25,6 +26,25 @@ func bindMemoryEmbedding(cfg *config.RouterConfig, sets ...*embedding.Set) (*con
 		}
 		return embedding.ResolveNamespaceIdentity(provider, settings)
 	})
+	if err == nil && len(sets) > 0 {
+		warnUnboundRemoteMemoryEmbedding(bound, sets[0])
+	}
+	return bound, err
+}
+
+func warnUnboundRemoteMemoryEmbedding(cfg *config.RouterConfig, prepared *embedding.Set) {
+	if prepared == nil {
+		return
+	}
+	provider, err := prepared.Get(detectMemoryEmbeddingModel(cfg), 0, 0)
+	if err != nil || provider.Backend() != config.EmbeddingBackendOpenAICompatible {
+		return
+	}
+	var model string
+	if described, ok := provider.(embedding.Described); ok {
+		model = described.EmbeddingInfo().Artifact
+	}
+	logging.Warnf("Memory: the router cannot verify the identity of remote embedding model %q, so memories stay in the configured collection if the provider changes that model; after an embedding model change, point memory at a new collection or index", model)
 }
 
 func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.ConsumerSettings) (embedding.ContentIdentity, error)) (*config.RouterConfig, error) {

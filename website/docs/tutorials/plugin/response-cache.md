@@ -83,8 +83,9 @@ tokenizer, representation size, or inference settings starts a separate cache
 space. The router retains your tenant namespace and explicit cache revision;
 historical entries remain stored until their normal expiry or explicit cleanup.
 The first requests after a model upgrade are cache misses. Restarting with the
-same representation reuses its compatible cache. This binding does not infer
-the identity of a mutable remote embedding endpoint.
+same representation reuses its compatible cache. The router rejects a
+[remote embedding endpoint](../../installation/runtime/embeddings.md#remote-embeddings)
+for the semantic cache, because the cache needs local tokenizer windows.
 
 Candle `bert` embeddings are keyed by an encoder version instead, which changes
 whenever Candle BERT vectors change, as they did when padding tokens stopped
