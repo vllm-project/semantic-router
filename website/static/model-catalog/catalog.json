@@ -94850,22 +94850,7 @@
       "description": "Custom models exposed through Amazon Bedrock's OpenAI-compatible Chat Completions API.",
       "display_name": "Amazon Bedrock",
       "id": "bedrock",
-      "models": [
-        {
-          "catalog": "amazon/nova-lite-v1",
-          "id": "amazon.nova-lite-v1:0",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-            "status": "claimed",
-            "verified_at": "2026-09-24"
-          }
-        }
-      ],
+      "models": [],
       "path_overrides": {
         "openai/chat-completions@1#create": "/chat/completions"
       },
@@ -96829,6 +96814,20 @@
           "relationship": "gateway",
           "verification": {
             "source": "https://openrouter.ai/amazon/nova-2-lite-v1",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
+          }
+        },
+        {
+          "catalog": "amazon/nova-lite-v1",
+          "id": "amazon/nova-lite-v1",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "gateway",
+          "verification": {
+            "source": "https://openrouter.ai/amazon/nova-lite-v1",
             "status": "claimed",
             "verified_at": "2026-09-24"
           }

@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:f17648d557765d81ee8f260a72f2857a88f879872fb789059f69020ad79956ff"
+const builtInCatalogDigest = "sha256:6f477ab4a3c24ff447c4cd6d92481b0b598353020b842f0e00dddb0a134209fb"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -94856,22 +94856,7 @@ const builtInCatalogJSON = `{
       "description": "Custom models exposed through Amazon Bedrock's OpenAI-compatible Chat Completions API.",
       "display_name": "Amazon Bedrock",
       "id": "bedrock",
-      "models": [
-        {
-          "catalog": "amazon/nova-lite-v1",
-          "id": "amazon.nova-lite-v1:0",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-            "status": "claimed",
-            "verified_at": "2026-09-24"
-          }
-        }
-      ],
+      "models": [],
       "path_overrides": {
         "openai/chat-completions@1#create": "/chat/completions"
       },
@@ -96835,6 +96820,20 @@ const builtInCatalogJSON = `{
           "relationship": "gateway",
           "verification": {
             "source": "https://openrouter.ai/amazon/nova-2-lite-v1",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
+          }
+        },
+        {
+          "catalog": "amazon/nova-lite-v1",
+          "id": "amazon/nova-lite-v1",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "gateway",
+          "verification": {
+            "source": "https://openrouter.ai/amazon/nova-lite-v1",
             "status": "claimed",
             "verified_at": "2026-09-24"
           }

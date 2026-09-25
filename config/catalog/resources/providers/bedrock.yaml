@@ -23,14 +23,4 @@ presentation:
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04
-models:
-- catalog: amazon/nova-lite-v1
-  relationship: first_party
-  id: amazon.nova-lite-v1:0
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-24
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+models: []
