@@ -16,6 +16,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 // The Referer of a request made from a page whose URL carried ?authToken= holds a live
@@ -59,6 +60,7 @@ func registerProxyRoutes(
 	mux routeRegistrar,
 	cfg *config.Config,
 	feedbackStore playgroundFeedbackStore,
+	setupResolver *setupmode.Resolver,
 	credentialProvider ...routerauth.CredentialProvider,
 ) {
 	var provider routerauth.CredentialProvider
@@ -69,7 +71,7 @@ func registerProxyRoutes(
 		envoy: configureEnvoyProxy(cfg),
 	}
 	attachPlaygroundReplayTracking(proxies.envoy, feedbackStore)
-	registerRouterAPIProxy(mux, cfg, proxies.envoy, feedbackStore, provider)
+	registerRouterAPIProxy(mux, cfg, proxies.envoy, feedbackStore, setupResolver, provider)
 	proxies.grafanaStatic = registerGrafanaRoutes(mux, cfg)
 	proxies.jaegerAPI, proxies.jaegerStatic = registerJaegerRoutes(mux, cfg)
 
@@ -111,6 +113,7 @@ func registerRouterAPIProxy(
 	cfg *config.Config,
 	envoyProxy *httputil.ReverseProxy,
 	feedbackStore playgroundFeedbackStore,
+	setupResolver *setupmode.Resolver,
 	credentialProvider routerauth.CredentialProvider,
 ) *httputil.ReverseProxy {
 	if cfg.RouterAPIURL == "" {
@@ -126,7 +129,7 @@ func registerRouterAPIProxy(
 	attachRouterReplayResponseRedaction(routerAPIProxy)
 
 	routerHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, feedbackStore, credentialProvider)
+		serveRouterAPIProxy(w, r, cfg, envoyProxy, routerAPIProxy, feedbackStore, setupResolver, credentialProvider)
 	})
 	contracts := managementRouteContracts(false)
 	contracts = append(contracts, auth.ProxyMutationRoute("/api/router/v1/chat/completions", auth.PermInferenceRun, "inference.chat", auth.SensitivitySecret, auth.ResourceOwnerInference, 16<<20, http.MethodPost))
@@ -141,6 +144,7 @@ func serveRouterAPIProxy(
 	cfg *config.Config,
 	envoyProxy, routerAPIProxy *httputil.ReverseProxy,
 	feedbackStore playgroundFeedbackStore,
+	setupResolver *setupmode.Resolver,
 	credentialProvider routerauth.CredentialProvider,
 ) {
 	if policy, ok := auth.RoutePolicyFromContext(r); ok && policy.Revalidate && auth.RejectRevokedMutation(w, r) {
@@ -159,6 +163,13 @@ func serveRouterAPIProxy(
 	}
 	if !routerManagementProxyRouteAllowed(r.Method, r.URL.Path) {
 		writeDisallowedRouterManagementResponse(w, r)
+		return
+	}
+	// Setup mode keeps the router on standby, so every path below this point
+	// would fail inside the transport with a raw dial error. Answer with the
+	// setup state instead of leaking it. See #4144.
+	if setupResolver != nil && setupResolver.Active() {
+		writeRouterStandbyResponse(w, r)
 		return
 	}
 	if r.Method == http.MethodPost && r.URL.Path == "/api/router/api/v1/observability/outcomes" && feedbackStore != nil {
@@ -188,6 +199,18 @@ func writeDisallowedRouterManagementResponse(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	http.NotFound(w, r)
+}
+
+// routerStandbyMessage is the whole body served while the router waits on
+// setup. It names the state, the cause, and the exit from it, because the
+// audience is someone mid-setup reading a new browser tab. See #4144.
+const routerStandbyMessage = "The router is on standby during first-run setup mode, so this endpoint is unavailable. The router starts once you activate a configuration in the Dashboard setup flow; finish setup and try again."
+
+func writeRouterStandbyResponse(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_, _ = w.Write([]byte(routerStandbyMessage + "\n"))
+	log.Printf("Router API standby response for %s %s (setup mode active)", r.Method, r.URL.Path)
 }
 
 func routerManagementProxyRouteAllowed(method, path string) bool {
