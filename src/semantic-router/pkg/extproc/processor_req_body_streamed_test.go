@@ -2,10 +2,12 @@ package extproc
 
 import (
 	"bytes"
+	"encoding/json"
 	"testing"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -154,26 +156,51 @@ func TestStreamedBodyNonEOSChunkUsesSharedResponse(t *testing.T) {
 	assertChunkEaten(t, response)
 }
 
-func TestStreamedBodyGuardRejectsOversizedAccumulation(t *testing.T) {
-	ctx := &RequestContext{}
-	handler := newStreamedBodyHandler(makeTestRouterWithLimits(100, 0), ctx)
-	defer handler.Release()
+func TestProcessRequestBodyRejectsStreamedGuardViolations(t *testing.T) {
+	tests := []struct {
+		name       string
+		maxBytes   int64
+		expire     bool
+		wantStatus typev3.StatusCode
+		wantCode   string
+	}{
+		{name: "max bytes", maxBytes: 100, wantStatus: typev3.StatusCode_PayloadTooLarge, wantCode: "request_too_large"},
+		{name: "deadline", expire: true, wantStatus: typev3.StatusCode_RequestTimeout, wantCode: "request_timeout"},
+	}
 
-	response, err := handler.HandleChunk(&ext_proc.HttpBody{Body: bytes.Repeat([]byte("a"), 100)}, ctx)
-	require.NoError(t, err)
-	assertChunkEaten(t, response)
-	_, err = handler.HandleChunk(&ext_proc.HttpBody{Body: []byte("b")}, ctx)
-	require.ErrorContains(t, err, "too large")
-}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			router := makeTestRouterWithLimits(test.maxBytes, 30)
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			stream := NewMockStream(nil)
+			send := func(chunk []byte) error {
+				return router.processRequestBody(stream, &ext_proc.ProcessingRequest_RequestBody{
+					RequestBody: &ext_proc.HttpBody{Body: chunk},
+				}, ctx)
+			}
 
-func TestStreamedBodyGuardRejectsExpiredAccumulation(t *testing.T) {
-	ctx := &RequestContext{}
-	handler := newStreamedBodyHandler(makeTestRouterWithLimits(0, 1), ctx)
-	defer handler.Release()
-	handler.deadline = time.Now().Add(-time.Second)
+			require.NoError(t, send(bytes.Repeat([]byte("a"), 100)))
+			if test.expire {
+				ctx.StreamedBody.deadline = time.Now().Add(-time.Second)
+			}
+			require.NoError(t, send([]byte("b")))
 
-	_, err := handler.HandleChunk(&ext_proc.HttpBody{Body: []byte("opaque")}, ctx)
-	require.ErrorContains(t, err, "timed out")
+			require.Len(t, stream.Responses, 2)
+			assertChunkEaten(t, stream.Responses[0])
+			immediate := stream.Responses[1].GetImmediateResponse()
+			require.NotNil(t, immediate)
+			assert.Equal(t, test.wantStatus, immediate.GetStatus().GetCode())
+			var body struct {
+				Error struct {
+					Type string `json:"type"`
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			require.NoError(t, json.Unmarshal(immediate.GetBody(), &body))
+			assert.Equal(t, "invalid_request_error", body.Error.Type)
+			assert.Equal(t, test.wantCode, body.Error.Code)
+		})
+	}
 }
 
 func TestStreamedBodyPoolReuseClearsRequestStateAndGuards(t *testing.T) {
