@@ -9,6 +9,8 @@ choose platform and image from the actual host, not an assumed accelerator.
 Local stacks use `VLLM_SR_STACK_NAME` and `VLLM_SR_PORT_OFFSET`. The offset affects
 inference and management ports. Inspect `VLLM_SR_STATE_ROOT_DIR`: an inherited
 root can load another stack's active configuration even from a new directory.
+Set this variable to the directory that contains `.vllm-sr`, usually the config
+directory; pointing it at `.vllm-sr` creates a second, empty state directory.
 Keep the selected state root, runtime, image, platform and ports consistent across
 lifecycle commands. Supply the actual management endpoint explicitly.
 
@@ -46,9 +48,15 @@ modalities rather than claim full recipe coverage.
 
 ## Dashboard access
 
-`--minimal` omits Dashboard. Local Docker publishes its port on all interfaces by
-default; inspect access controls before opening it. Preserve authentication state
+`--minimal` omits Dashboard. Local Docker publishes its port on loopback by
+default; set `VLLM_SR_DASHBOARD_HOST_BIND=0.0.0.0` only when external access is
+intended.
+Inspect actual port bindings before opening access. Preserve authentication state
 when updating a stack and reuse an existing valid session where available.
+
+Jaeger, Prometheus, and Grafana publish on loopback by default. Set
+`VLLM_SR_OBSERVABILITY_HOST_BIND=0.0.0.0` only when their host ports need external
+access; inspect the resulting bindings and secure access before exposing them.
 
 Initial admin provisioning supports `DASHBOARD_ADMIN_EMAIL`,
 `DASHBOARD_ADMIN_PASSWORD` and optional `DASHBOARD_ADMIN_NAME`. Supply secrets

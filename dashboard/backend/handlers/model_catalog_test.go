@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 )
@@ -451,15 +455,73 @@ func TestGeneratedPublicModelCatalogSatisfiesDashboardContract(t *testing.T) {
 	if unmarshalErr := json.Unmarshal(normalized, &document); unmarshalErr != nil {
 		t.Fatalf("decode normalized public catalog: %v", unmarshalErr)
 	}
-	if len(document.Models) != 106 || len(document.Providers) != 62 || len(document.Evaluations) != 1542 {
-		t.Fatalf(
-			"unexpected generated inventory: models=%d providers=%d evaluations=%d; "+
-				"regenerate the catalog, or update these counts if the change is intended",
-			len(document.Models),
-			len(document.Providers),
-			len(document.Evaluations),
-		)
+	want := authoredCatalogInventory(t, repositoryRoot)
+	got := map[string]int{
+		"models":      len(document.Models),
+		"providers":   len(document.Providers),
+		"evaluations": len(document.Evaluations),
 	}
+	for _, kind := range authoredCatalogKinds {
+		if got[kind] != want[kind] {
+			t.Fatalf(
+				"generated %s = %d, authored sources under config/catalog/resources have %d; regenerate the catalog",
+				kind, got[kind], want[kind],
+			)
+		}
+	}
+}
+
+var authoredCatalogKinds = []string{"models", "providers", "evaluations"}
+
+// authoredCatalogInventory counts resources in the YAML sources that the
+// catalog generator reads, so an intended inventory change needs no edit here.
+func authoredCatalogInventory(t *testing.T, repositoryRoot string) map[string]int {
+	t.Helper()
+	sourceRoot := filepath.Join(repositoryRoot, "config", "catalog")
+	manifestPayload, err := os.ReadFile(filepath.Join(sourceRoot, "manifest.yaml"))
+	if err != nil {
+		t.Fatalf("read catalog manifest: %v", err)
+	}
+	var manifest struct {
+		Resources map[string]string `yaml:"resources"`
+	}
+	if unmarshalErr := yaml.Unmarshal(manifestPayload, &manifest); unmarshalErr != nil {
+		t.Fatalf("decode catalog manifest: %v", unmarshalErr)
+	}
+	counts := map[string]int{}
+	for _, kind := range authoredCatalogKinds {
+		relative, ok := manifest.Resources[kind]
+		if !ok {
+			t.Fatalf("catalog manifest has no resources.%s", kind)
+		}
+		resources := os.DirFS(filepath.Join(sourceRoot, relative))
+		walkErr := fs.WalkDir(resources, ".", func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() || filepath.Ext(path) != ".yaml" {
+				return err
+			}
+			payload, err := fs.ReadFile(resources, path)
+			if err != nil {
+				return err
+			}
+			var node yaml.Node
+			if err := yaml.Unmarshal(payload, &node); err != nil {
+				return fmt.Errorf("%s: %w", path, err)
+			}
+			if len(node.Content) == 1 && node.Content[0].Kind == yaml.SequenceNode {
+				counts[kind] += len(node.Content[0].Content)
+			} else if len(node.Content) == 1 {
+				counts[kind]++
+			}
+			return nil
+		})
+		if walkErr != nil {
+			t.Fatalf("count authored %s: %v", kind, walkErr)
+		}
+		if counts[kind] == 0 {
+			t.Fatalf("no authored %s found under %s", kind, relative)
+		}
+	}
+	return counts
 }
 
 func TestDashboardAcceptsOrderedIndexProfilesAndIncompleteCoverage(t *testing.T) {
