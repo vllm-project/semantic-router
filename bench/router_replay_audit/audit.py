@@ -145,19 +145,29 @@ def numeric_boundary_margin(fixture: dict[str, Any]) -> dict[str, Any]:
     value = float(replay["signal_values"][probe["key"]])
     threshold = float(probe["threshold"])
     margin = abs(value - threshold)
-    status = "CRITICAL" if margin <= float(probe.get("critical_margin", 0.05)) + 1e-12 else "OK"
+    status = (
+        "CRITICAL"
+        if margin <= float(probe.get("critical_margin", 0.05)) + 1e-12
+        else "OK"
+    )
     return {
         "status": status,
         "margin": margin,
         "key": probe["key"],
         "value": value,
         "threshold": threshold,
-        "baseline_route": probe["route_if_gte"] if value >= threshold else probe["route_if_lt"],
-        "counterfactual_route": probe["route_if_lt"] if value >= threshold else probe["route_if_gte"],
+        "baseline_route": (
+            probe["route_if_gte"] if value >= threshold else probe["route_if_lt"]
+        ),
+        "counterfactual_route": (
+            probe["route_if_lt"] if value >= threshold else probe["route_if_gte"]
+        ),
     }
 
 
-def apply_state_event(state: dict[str, float], event: dict[str, Any]) -> dict[str, float]:
+def apply_state_event(
+    state: dict[str, float], event: dict[str, Any]
+) -> dict[str, float]:
     out = dict(state)
     field = event["field"]
     cur = float(out.get(field, 0.0))
@@ -187,7 +197,9 @@ def order_commutator(fixture: dict[str, Any]) -> dict[str, Any]:
     divergent = ab != ba
     route_flip = route_ab != route_ba
     return {
-        "status": "FAIL" if route_flip else ("STATE_DIVERGENT" if divergent else "PASS"),
+        "status": (
+            "FAIL" if route_flip else ("STATE_DIVERGENT" if divergent else "PASS")
+        ),
         "route_flip": route_flip,
         "state_divergent": divergent,
         "A_then_B_state": ab,
@@ -223,11 +235,19 @@ def grouping_associator(fixture: dict[str, Any]) -> dict[str, Any]:
     right_inner = star(b, c, spec)
     right = star(a, right_inner, spec)
     route = fixture["route"]
-    left_route = route["if_gte"] if left >= float(route["threshold"]) else route["if_lt"]
-    right_route = route["if_gte"] if right >= float(route["threshold"]) else route["if_lt"]
+    left_route = (
+        route["if_gte"] if left >= float(route["threshold"]) else route["if_lt"]
+    )
+    right_route = (
+        route["if_gte"] if right >= float(route["threshold"]) else route["if_lt"]
+    )
     residual = abs(left - right)
     return {
-        "status": "FAIL" if left_route != right_route else ("STATE_DIVERGENT" if residual else "PASS"),
+        "status": (
+            "FAIL"
+            if left_route != right_route
+            else ("STATE_DIVERGENT" if residual else "PASS")
+        ),
         "route_flip": left_route != right_route,
         "associator_residual": residual,
         "left": {
@@ -294,49 +314,52 @@ def result_rows(results: dict[str, Any]) -> list[tuple[str, str, str]]:
 
 def render_table(rows: list[tuple[str, str, str]]) -> str:
     headers = ("Metric", "Status", "Evidence")
-    widths = [
-        max(len(headers[i]), *(len(r[i]) for r in rows))
-        for i in range(3)
-    ]
+    widths = [max(len(headers[i]), *(len(r[i]) for r in rows)) for i in range(3)]
+
     def line(parts):
         return " | ".join(parts[i].ljust(widths[i]) for i in range(3))
-    return "\n".join([
-        line(headers),
-        "-+-".join("-" * w for w in widths),
-        *(line(r) for r in rows),
-    ])
+
+    return "\n".join(
+        [
+            line(headers),
+            "-+-".join("-" * w for w in widths),
+            *(line(r) for r in rows),
+        ]
+    )
 
 
 def render_markdown(results: dict[str, Any], rows: list[tuple[str, str, str]]) -> str:
     grouping = results["grouping"]
     order = results["order"]
-    return "\n".join([
-        "# Counterfactual / Stateful Routing Audit — PoC v0.1",
-        "",
-        "| Metric | Status | Evidence |",
-        "|---|---|---|",
-        *[f"| {m} | **{s}** | {e} |" for m, s, e in rows],
-        "",
-        "## Grouping fixture detail",
-        "",
-        f"- `(A★B)★C`: terminal state `{grouping['left']['terminal_state']:.3f}` → `{grouping['left']['route']}`",
-        f"- `A★(B★C)`: terminal state `{grouping['right']['terminal_state']:.3f}` → `{grouping['right']['route']}`",
-        f"- Associator residual: `{grouping['associator_residual']:.3f}`",
-        "",
-        "`★` is explicitly `merge/update → lossy projection/reduction`; it is not ordinary function composition.",
-        "",
-        "## Order fixture detail",
-        "",
-        f"- `A→B`: `{order['A_then_B_state']}` → `{order['A_then_B_route']}`",
-        f"- `B→A`: `{order['B_then_A_state']}` → `{order['B_then_A_route']}`",
-        "",
-        "## Evidence classification",
-        "",
-        "- Baseline + official counterfactual: derived from the public AuthZ-RBAC E2E policy/testcase.",
-        "- Gray-boundary, order, grouping: explicitly synthetic stress fixtures.",
-        "- A synthetic `FAIL` demonstrates the audit primitive, **not an upstream vSR bug**.",
-        "",
-    ])
+    return "\n".join(
+        [
+            "# Counterfactual / Stateful Routing Audit — PoC v0.1",
+            "",
+            "| Metric | Status | Evidence |",
+            "|---|---|---|",
+            *[f"| {m} | **{s}** | {e} |" for m, s, e in rows],
+            "",
+            "## Grouping fixture detail",
+            "",
+            f"- `(A★B)★C`: terminal state `{grouping['left']['terminal_state']:.3f}` → `{grouping['left']['route']}`",
+            f"- `A★(B★C)`: terminal state `{grouping['right']['terminal_state']:.3f}` → `{grouping['right']['route']}`",
+            f"- Associator residual: `{grouping['associator_residual']:.3f}`",
+            "",
+            "`★` is explicitly `merge/update → lossy projection/reduction`; it is not ordinary function composition.",
+            "",
+            "## Order fixture detail",
+            "",
+            f"- `A→B`: `{order['A_then_B_state']}` → `{order['A_then_B_route']}`",
+            f"- `B→A`: `{order['B_then_A_state']}` → `{order['B_then_A_route']}`",
+            "",
+            "## Evidence classification",
+            "",
+            "- Baseline + official counterfactual: derived from the public AuthZ-RBAC E2E policy/testcase.",
+            "- Gray-boundary, order, grouping: explicitly synthetic stress fixtures.",
+            "- A synthetic `FAIL` demonstrates the audit primitive, **not an upstream vSR bug**.",
+            "",
+        ]
+    )
 
 
 def main() -> int:
