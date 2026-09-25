@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,6 +41,23 @@ def local_hook(hook_id: str) -> dict:
             if hook["id"] == hook_id:
                 return hook
     raise AssertionError(f"missing hook {hook_id}")
+
+
+def write_fake_python(path: Path, version: tuple[int, int, int], calls: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "#!/bin/sh\n"
+        f'echo "$0 $*" >> "{calls}"\n'
+        'case "$1" in\n'
+        f'-c) shift; exec "{sys.executable}" -c \'import sys; '
+        f"sys.executable = sys.argv.pop(1); sys.version_info = {version}; "
+        'exec(sys.argv.pop(1))\' "$0" "$@" ;;\n'
+        '-m) if [ "$2" = venv ]; then for target; do :; done; '
+        'mkdir -p "$target/bin"; cp "$0" "$target/bin/python"; fi ;;\n'
+        "esac\n"
+    )
+    path.chmod(0o755)
+    return path
 
 
 class HarnessMakeContractTests(unittest.TestCase):
@@ -172,6 +190,65 @@ class HarnessMakeContractTests(unittest.TestCase):
             ".venv-agent/bin/python tools/agent/scripts/architecture_check.py",
         )
         self.assertNotIn("agent-changed-files-lint", str(PRECOMMIT_CONFIG))
+
+    def test_tool_environment_requires_python_3_10(self) -> None:
+        # The quote catches a recipe that splices paths into shell or Python code.
+        with tempfile.TemporaryDirectory(prefix="agent's-venv-") as directory:
+            root = Path(directory)
+            calls = root / "calls.log"
+            system_python = write_fake_python(root / "bin/python3", (3, 9, 6), calls)
+            newer_python = write_fake_python(root / "python3.12", (3, 12, 4), calls)
+            venv = root / ".venv-agent"
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in {"MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKEFILES"}
+                and not key.startswith("AGENT_")
+            }
+            environment.update(PATH=f"{system_python.parent}:{os.environ['PATH']}")
+
+            def install(*variables: str) -> subprocess.CompletedProcess[str]:
+                calls.write_text("")
+                return subprocess.run(
+                    [
+                        "make",
+                        "--no-print-directory",
+                        "-f",
+                        "tools/make/agent.mk",
+                        "harness-venv-install",
+                        f"AGENT_VENV={venv}",
+                        f"AGENT_WORKTREE_VENV={venv}",
+                        *variables,
+                    ],
+                    cwd=REPO_ROOT,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            refused = install()
+            self.assertNotEqual(refused.returncode, 0, refused.stdout)
+            self.assertIn(f"python3 is Python 3.9.6 at {system_python}", refused.stderr)
+            self.assertIn("Set AGENT_BOOTSTRAP_PYTHON", refused.stderr)
+            self.assertFalse(venv.exists())
+
+            write_fake_python(venv / "bin/python", (3, 9, 6), calls)
+            rebuilt = install(f"AGENT_BOOTSTRAP_PYTHON={newer_python}")
+            self.assertEqual(rebuilt.returncode, 0, rebuilt.stderr)
+            rebuild_calls = calls.read_text().splitlines()
+            self.assertIn(f"{newer_python} -m venv --clear {venv}", rebuild_calls)
+            self.assertIn(
+                f"{venv}/bin/python -m pip install -r tools/agent/requirements.txt",
+                rebuild_calls,
+            )
+            self.assertEqual(
+                (venv / "bin/python").read_text(), newer_python.read_text()
+            )
+
+            reused = install(f"AGENT_BOOTSTRAP_PYTHON={newer_python}")
+            self.assertEqual(reused.returncode, 0, reused.stderr)
+            self.assertNotIn(" -m venv ", calls.read_text())
 
     def test_linked_worktrees_share_one_tool_environment(self) -> None:
         install = target_block("harness-venv-install")
