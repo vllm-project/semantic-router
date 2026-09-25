@@ -16,6 +16,9 @@ import (
 
 func importSetupRoundTrip(t *testing.T, configPath string, patch map[string]interface{}) map[string]interface{} {
 	t.Helper()
+	// The fixture server is on loopback; declare it the way an operator would
+	// declare a real internal target (#1388).
+	allowLoopbackForTest(t)
 	payload := mustJSONRaw(t, patch)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(payload)
