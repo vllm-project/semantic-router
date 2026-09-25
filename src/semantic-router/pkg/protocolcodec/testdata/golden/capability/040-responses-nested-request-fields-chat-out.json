@@ -23,11 +23,22 @@
     {
       "name": "reasoning_summary",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_reasoning_summary"
-        }
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "reasoning.summary",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {

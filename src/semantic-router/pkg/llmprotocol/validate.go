@@ -449,6 +449,9 @@ func validateReasoning(request Request, limits Limits) error {
 	if err := validateReasoningDisplay(request); err != nil {
 		return err
 	}
+	if err := validateReasoningSummary(request); err != nil {
+		return err
+	}
 	return validateReasoningMode(request)
 }
 
@@ -479,6 +482,14 @@ func validateReasoningDisplay(request Request) error {
 		return NewError(ErrorInvalidRequest, "conflicting_reasoning_display", "reasoning display requires enabled or adaptive reasoning", nil)
 	}
 	return nil
+}
+
+func validateReasoningSummary(request Request) error {
+	switch request.ReasoningSummary {
+	case "", "auto", "concise", "detailed":
+		return nil
+	}
+	return NewError(ErrorInvalidRequest, "invalid_reasoning_summary", "reasoning summary must be auto, concise, or detailed", nil)
 }
 
 func validateReasoningMode(request Request) error {
