@@ -3,6 +3,7 @@ package extproc
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -18,13 +19,17 @@ func bindMemoryEmbedding(cfg *config.RouterConfig, sets ...*embedding.Set) (*con
 		if len(sets) == 0 || sets[0] == nil {
 			return embedding.ContentIdentity{}, fmt.Errorf("memory embedding set was not prepared")
 		}
-		return sets[0].ResolveIdentity(settings)
+		provider, err := sets[0].Get(settings.ModelType, 0, 0)
+		if err != nil {
+			return embedding.ContentIdentity{}, err
+		}
+		return embedding.ResolveNamespaceIdentity(provider, settings)
 	})
 }
 
 func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.ConsumerSettings) (embedding.ContentIdentity, error)) (*config.RouterConfig, error) {
 	model := strings.ToLower(strings.TrimSpace(detectMemoryEmbeddingModel(cfg)))
-	if model != "mmbert" && model != "multimodal" {
+	if model != "mmbert" && model != "multimodal" && model != "bert" {
 		return cfg, nil
 	}
 	bound := *cfg
@@ -75,13 +80,16 @@ func memoryConfigForIdentity(cfg *config.RouterConfig, resolve func(embedding.Co
 		*dimension = 256
 	}
 	fingerprint, deterministic := memory.DeterministicEmbeddingFingerprint(memory.EmbeddingConfig{Model: memory.EmbeddingModelType(model), Dimension: *dimension})
-	if deterministic && *dimension == 0 {
+	if deterministic && *dimension == 0 && model == "multimodal" {
 		return nil, fmt.Errorf("simulated multimodal memory requires an explicit storage dimension")
 	}
 	if !deterministic {
 		identity, err := resolve(embedding.ConsumerSettings{
 			ModelType: model, Dimension: *dimension, Layer: 0, InputPolicy: "memory-content-v1",
 		})
+		if model == "bert" && errors.Is(err, embedding.ErrIdentityUnsupported) {
+			return cfg, nil
+		}
 		if err != nil {
 			return nil, fmt.Errorf("bind memory embedding representation: %w", err)
 		}

@@ -118,6 +118,7 @@ impl BertSimilarity {
         let mut tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
         // all-MiniLM's tokenizer.json pads every input to 128 tokens, and
         // get_embedding averages every position, so pads would otherwise skew it.
+        // Output changes here need a new candleBERTNamespace in pkg/embedding.
         tokenizer.with_padding(None);
 
         // Use the approximate GELU for better performance
