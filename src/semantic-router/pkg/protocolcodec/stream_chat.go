@@ -13,6 +13,7 @@ type chatStreamDecoder struct {
 	framer             sseFramer
 	contentIndexes     map[chatContentKey]int
 	nextContentIndexes map[int]int
+	toolKinds          map[int]llmprotocol.ToolKind
 }
 
 type chatContentKey struct {
@@ -31,6 +32,7 @@ func (OpenAIChatCodec) NewDecoder(context llmprotocol.StreamContext, policy llmp
 		framer:             newSSEFramer(policy.Limits.SSEFrameBytes),
 		contentIndexes:     make(map[chatContentKey]int),
 		nextContentIndexes: make(map[int]int),
+		toolKinds:          make(map[int]llmprotocol.ToolKind),
 	}
 }
 
@@ -461,6 +463,9 @@ func (decoder *chatStreamDecoder) decodeToolCalls(calls []chatChunkToolCallWire)
 			return nil, deltaErr
 		}
 		itemIndex := call.Index + 1
+		if err := decoder.observeToolKind(itemIndex, call, delta.Kind); err != nil {
+			return nil, err
+		}
 		if !decoder.items[itemIndex] {
 			started, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: itemIndex, Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{Kind: delta.Kind, ID: delta.ID, Name: delta.Name}})
 			if err != nil {
@@ -475,6 +480,19 @@ func (decoder *chatStreamDecoder) decodeToolCalls(calls []chatChunkToolCallWire)
 		events = append(events, event)
 	}
 	return events, nil
+}
+
+// An explicit and an omitted function type both decode to the empty kind, so
+// only a delta with a type or a function or custom payload declares its kind.
+func (decoder *chatStreamDecoder) observeToolKind(itemIndex int, call chatChunkToolCallWire, kind llmprotocol.ToolKind) error {
+	if call.Type == "" && call.Custom == nil && call.Function == (chatFunctionCallWire{}) {
+		return nil
+	}
+	if declared, found := decoder.toolKinds[itemIndex]; found && declared != kind {
+		return invalidProviderResponse("stream_tool_identity_mismatch", "Chat stream changed a tool call kind")
+	}
+	decoder.toolKinds[itemIndex] = kind
+	return nil
 }
 
 func (decoder *chatStreamDecoder) completeChoice(reason *string) ([]llmprotocol.Event, error) {
