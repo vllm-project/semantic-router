@@ -17,7 +17,7 @@ from cli.consts import (
     PLATFORM_NVIDIA,
 )
 from cli.container_data_network import router_data_network_commands
-from cli.container_gpu_isolation import router_runtime_env
+from cli.container_gpu_isolation import router_compiler_cache, router_runtime_env
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
@@ -399,6 +399,13 @@ def _build_router_runtime_command(
     storage_secret_names: tuple[str, ...] = (),
 ):
     router_env = router_runtime_env(common_env, normalized_platform)
+    compiler_cache = router_compiler_cache(
+        runtime,
+        router_image,
+        runtime_paths["vllm_sr_dir"],
+        stack_layout.stack_name,
+        normalized_platform,
+    )
     # Names only. Each one is rendered as an inheriting `-e NAME` flag, and the
     # value reaches Docker through the Router child process environment. They
     # stay out of `common_env` on purpose: `_build_dashboard_runtime_env()`
@@ -415,13 +422,14 @@ def _build_router_runtime_command(
     )
     return _build_service_run_command(
         runtime=runtime,
-        image=router_image,
+        image=compiler_cache.image_id if compiler_cache else router_image,
         container_name=stack_layout.router_container_name,
         nofile_limit=nofile_limit,
         network_name=runtime_network_name,
         env_vars=router_env,
         mount_specs=[
             *_runtime_mount_specs(runtime_paths, include_models=True),
+            *([compiler_cache.mount] if compiler_cache else []),
             runtime_paths["log_spool_router_mount"],
         ],
         port_mappings=[
@@ -507,6 +515,16 @@ def _listener_host_address(listener: dict) -> str:
     )
 
 
+def _dashboard_host_bind_address() -> str:
+    """Select the Docker host address for the Dashboard's published port."""
+    address = os.getenv("VLLM_SR_DASHBOARD_HOST_BIND", "127.0.0.1").strip()
+    if address not in {"0.0.0.0", "127.0.0.1", "::", "::1"}:
+        raise ValueError(
+            "VLLM_SR_DASHBOARD_HOST_BIND must be an explicit wildcard or loopback IP"
+        )
+    return address
+
+
 def _build_dashboard_runtime_command(
     *,
     runtime: str,
@@ -552,15 +570,16 @@ def _build_dashboard_runtime_command(
     ]
     dashboard_env[LOG_SPOOL_ROOT_ENV] = LOG_SPOOL_READER_DIR
     dashboard_env[LOG_SPOOL_GID_ENV] = runtime_paths["log_spool_gid"]
-    configure_openclaw_support(
-        dashboard_mount_specs,
-        dashboard_env,
-        config_dir,
-        openclaw_network_name,
-        runtime,
-        stack_layout,
-        resolve_container_cli=resolve_container_cli_path,
-    )
+    if dashboard_env["OPENCLAW_ENABLED"] == "true":
+        configure_openclaw_support(
+            dashboard_mount_specs,
+            dashboard_env,
+            config_dir,
+            openclaw_network_name,
+            runtime,
+            stack_layout,
+            resolve_container_cli=resolve_container_cli_path,
+        )
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/app/entrypoint.sh",
         [
@@ -576,7 +595,9 @@ def _build_dashboard_runtime_command(
         network_name=runtime_network_name,
         env_vars=dashboard_env,
         mount_specs=dashboard_mount_specs,
-        port_mappings=[(stack_layout.dashboard_port, 8700)],
+        port_mappings=[
+            (_dashboard_host_bind_address(), stack_layout.dashboard_port, 8700)
+        ],
         entrypoint=service_entrypoint,
         command_args=service_args,
         inherited_env_keys={"DASHBOARD_ADMIN_PASSWORD", "DASHBOARD_JWT_SECRET"}
@@ -668,6 +689,11 @@ def _build_dashboard_runtime_env(
 ):
     dashboard_env = dict(common_env)
     dashboard_env.pop("DASHBOARD_JWT_SECRET", None)
+    for feature_flag in ("OPENCLAW_ENABLED", "ML_PIPELINE_ENABLED"):
+        if feature_flag in os.environ:
+            dashboard_env[feature_flag] = os.environ[feature_flag]
+        else:
+            dashboard_env.setdefault(feature_flag, "false")
     if os.getenv("DASHBOARD_JWT_SECRET", "").strip():
         # The container runtime inherits the host value by name. Do not copy
         # signing material into command arguments or printable runtime state.
@@ -684,10 +710,19 @@ def _build_dashboard_runtime_env(
     bootstrap_policy_env = "DASHBOARD_ALLOW_OPEN_BOOTSTRAP"
     if bootstrap_policy_env in os.environ:
         dashboard_env[bootstrap_policy_env] = os.environ[bootstrap_policy_env]
-    elif bootstrap_policy_env not in dashboard_env:
-        bootstrap_email = dashboard_env.get("DASHBOARD_ADMIN_EMAIL", "").strip()
-        bootstrap_password = dashboard_env.get("DASHBOARD_ADMIN_PASSWORD", "").strip()
-        if not (bootstrap_email and bootstrap_password):
+    bootstrap_email = dashboard_env.get("DASHBOARD_ADMIN_EMAIL", "").strip()
+    bootstrap_password = dashboard_env.get("DASHBOARD_ADMIN_PASSWORD", "").strip()
+    if not (bootstrap_email and bootstrap_password):
+        if _dashboard_host_bind_address() in {"0.0.0.0", "::"}:
+            if dashboard_env.get(bootstrap_policy_env) != "true":
+                raise ValueError(
+                    "Publishing Dashboard on all interfaces requires "
+                    "DASHBOARD_ADMIN_EMAIL and DASHBOARD_ADMIN_PASSWORD, or "
+                    "an explicit DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true opt-in"
+                )
+        elif bootstrap_policy_env not in dashboard_env:
+            # Keep dashboard-first setup usable on the local machine without
+            # opening first-admin registration on the network by default.
             dashboard_env[bootstrap_policy_env] = "true"
 
     dashboard_env["TARGET_ROUTER_API_URL"] = (

@@ -57,6 +57,7 @@ RUN python tools/calibration/image-routing/prepare_assets.py --repository-root /
 FROM --platform=$BUILDPLATFORM python:3.12-slim-bookworm AS vela-omni-builder
 ENV HF_HOME=/tmp/vela-hf-cache PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/vela-omni
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 COPY tools/models/vela_omni/requirements.txt ./
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0 torchaudio==2.8.0 && \
     pip install --no-cache-dir -r requirements.txt

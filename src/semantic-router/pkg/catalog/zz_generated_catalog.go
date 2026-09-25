@@ -2,8 +2,6 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:46a29376003b776c9b6a63f5cb12cbb08cc1353be7eed21568110cdd06104138"
-
 const builtInCatalogJSON = `{
   "benchmarks": [
     {
@@ -89097,7 +89095,7 @@ const builtInCatalogJSON = `{
       "description": "Amazon's most capable Nova 1 multimodal model for complex tasks.",
       "display_name": "Amazon Nova Premier",
       "distribution": {
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html",
         "type": "proprietary_api"
       },
       "family": "nova-1",
@@ -89106,7 +89104,7 @@ const builtInCatalogJSON = `{
       "lifecycle": "active",
       "limits": {
         "context_window_size": 1000000,
-        "max_output_tokens": 10000
+        "max_output_tokens": 25000
       },
       "modalities": {
         "input": [
@@ -89133,9 +89131,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "Amazon",
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html",
         "status": "claimed",
-        "verified_at": "2026-09-05"
+        "verified_at": "2026-09-24"
       }
     },
     {
@@ -89149,7 +89147,7 @@ const builtInCatalogJSON = `{
       "description": "Amazon's multimodal model for complex reasoning and code generation.",
       "display_name": "Amazon Nova Pro",
       "distribution": {
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html",
         "type": "proprietary_api"
       },
       "family": "nova-1",
@@ -89158,7 +89156,7 @@ const builtInCatalogJSON = `{
       "lifecycle": "active",
       "limits": {
         "context_window_size": 300000,
-        "max_output_tokens": 10000
+        "max_output_tokens": 5000
       },
       "modalities": {
         "input": [
@@ -89184,9 +89182,9 @@ const builtInCatalogJSON = `{
       ],
       "verification": {
         "authority": "Amazon",
-        "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
+        "source": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html",
         "status": "claimed",
-        "verified_at": "2026-09-05"
+        "verified_at": "2026-09-24"
       }
     },
     {
@@ -95300,58 +95298,15 @@ const builtInCatalogJSON = `{
         "verified_at": "2026-09-04"
       },
       "default_protocol": "openai/chat-completions@1",
-      "description": "Models exposed through Amazon Bedrock-compatible routing.",
+      "description": "Custom models exposed through Amazon Bedrock's OpenAI-compatible Chat Completions API.",
       "display_name": "Amazon Bedrock",
       "id": "bedrock",
-      "models": [
-        {
-          "catalog": "amazon/nova-pro-v1",
-          "id": "amazon.nova-pro-v1:0",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        },
-        {
-          "catalog": "amazon/nova-premier-v1",
-          "id": "amazon.nova-premier-v1:0",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        },
-        {
-          "catalog": "amazon/nova-2-lite",
-          "id": "amazon.nova-2-lite-v1:0",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        }
-      ],
+      "models": [],
       "path_overrides": {
         "openai/chat-completions@1#create": "/chat/completions"
       },
       "presentation": {
-        "featured": true,
+        "featured": false,
         "logo": "monogram",
         "monochrome": false,
         "monogram": "AWS"
@@ -96585,21 +96540,6 @@ const builtInCatalogJSON = `{
       "id": "moonshot",
       "models": [
         {
-          "catalog": "moonshot/kimi-k2.5",
-          "id": "kimi-k2.5",
-          "lifecycle": "active",
-          "protocols": [
-            "openai/chat-completions@1"
-          ],
-          "reasoning_transport": "thinking_object",
-          "relationship": "first_party",
-          "verification": {
-            "source": "https://platform.moonshot.ai/docs/api/chat",
-            "status": "claimed",
-            "verified_at": "2026-09-05"
-          }
-        },
-        {
           "catalog": "moonshot/kimi-k2.6",
           "id": "kimi-k2.6",
           "lifecycle": "active",
@@ -97328,6 +97268,20 @@ const builtInCatalogJSON = `{
             "source": "https://openrouter.ai/bytedance-seed/seed-2-1-turbo",
             "status": "claimed",
             "verified_at": "2026-09-05"
+          }
+        },
+        {
+          "catalog": "amazon/nova-2-lite",
+          "id": "amazon/nova-2-lite-v1",
+          "lifecycle": "active",
+          "protocols": [
+            "openai/chat-completions@1"
+          ],
+          "relationship": "gateway",
+          "verification": {
+            "source": "https://openrouter.ai/amazon/nova-2-lite-v1",
+            "status": "claimed",
+            "verified_at": "2026-09-24"
           }
         },
         {
