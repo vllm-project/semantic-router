@@ -13,13 +13,16 @@ Envoy and the Router to the provider-mocker.
 | `backends` | The backend formats this capture passes through today, each with the request fields that must reach the provider. |
 | `turns` | Two request bodies: the turn that asks for a tool call, then the follow-up that carries the client's call and its result. |
 
-The replay changes only the model, the `stream` flag and the text of the last
-user message, and buffered replays drop `stream_options`, which Chat Completions
-accepts only on streams. It sends each turn streamed and buffered, adds the mocker's
-`__mock_tool_call__` or `__mock_provider_error__` marker to that text, and checks
-the status, the client's own response envelope or event order, tool-call
-identity across stream deltas, usage, the fields the provider received, and the
-client's error shape for a provider 429.
+The replay changes only the model, the `stream` flag, the text of the last user
+message and, in the follow-up, the tool call's ID and name, which it takes from
+the call the mocker returned on the first turn, as the client would. Buffered
+replays drop `stream_options`, which Chat Completions accepts only on streams. It
+sends each turn streamed and buffered, adds the mocker's `__mock_tool_call__` or
+`__mock_provider_error__` marker to the user text, and checks the status, the
+client's own response envelope or event order, tool-call identity across stream
+deltas, usage, the fields the provider received, that the follow-up reaches the
+provider as the answer to the call it returned, and the client's error shape for
+a provider 429.
 
 ## Current captures
 

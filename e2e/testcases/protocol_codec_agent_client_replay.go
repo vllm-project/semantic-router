@@ -44,6 +44,7 @@ type agentClientCapture struct {
 
 type agentClientProtocol struct {
 	userText       func(turn map[string]any) (string, func(string), error)
+	toolRefs       agentClientToolRefs
 	decodeToolCall func(body []byte, stream bool, anthropicBackend bool) (responsesFunctionCall, error)
 	assertText     func(body []byte, stream bool) error
 	assertUsage    func(body []byte, stream bool, turn map[string]any) error
@@ -52,22 +53,33 @@ type agentClientProtocol struct {
 var agentClientProtocols = map[string]agentClientProtocol{
 	"/v1/chat/completions": {
 		userText:       lastMessageUserText,
+		toolRefs:       agentChatToolRefs,
 		decodeToolCall: decodeAgentChatToolCall,
 		assertText:     assertAgentChatText,
 		assertUsage:    assertAgentChatUsage,
 	},
 	"/v1/messages": {
 		userText:       lastMessageUserText,
+		toolRefs:       agentMessagesToolRefs,
 		decodeToolCall: decodeAgentMessagesToolCall,
 		assertText:     assertAgentMessagesText,
 		assertUsage:    assertAgentMessagesUsage,
 	},
 	"/v1/responses": {
 		userText:       lastResponsesUserText,
+		toolRefs:       agentResponsesToolRefs,
 		decodeToolCall: decodeAgentResponsesToolCall,
 		assertText:     assertAgentResponsesText,
 		assertUsage:    assertAgentResponsesUsage,
 	},
+}
+
+// agentClientBackendToolRefs reads a provider request, which arrives in the
+// backend's format rather than the client's.
+var agentClientBackendToolRefs = map[string]agentClientToolRefs{
+	"openai.chat.v1":        agentChatToolRefs,
+	"openai.responses.v1":   agentResponsesToolRefs,
+	"anthropic.messages.v1": agentMessagesToolRefs,
 }
 
 func init() {
@@ -158,9 +170,7 @@ func decodeAgentClientCapture(name string, data []byte) (agentClientCapture, err
 		return capture, fmt.Errorf("%s: declares no backend format", name)
 	}
 	for backendFormat := range capture.Backends {
-		switch backendFormat {
-		case "openai.chat.v1", "openai.responses.v1", "anthropic.messages.v1":
-		default:
+		if _, ok := agentClientBackendToolRefs[backendFormat]; !ok {
 			return capture, fmt.Errorf("%s: unknown backend format %q", name, backendFormat)
 		}
 	}
@@ -227,7 +237,7 @@ func (replay agentClientReplay) run(ctx context.Context) error {
 		} else if call != streamedCall {
 			return fmt.Errorf("buffered and streamed tool calls differ: buffered=%+v streamed=%+v", call, streamedCall)
 		}
-		if err := replay.toolResultTurn(ctx, stream); err != nil {
+		if err := replay.toolResultTurn(ctx, stream, call); err != nil {
 			return err
 		}
 		if err := replay.providerErrorTurn(ctx, stream); err != nil {
@@ -259,8 +269,8 @@ func (replay agentClientReplay) toolCallTurn(ctx context.Context, stream bool) (
 	return call, nil
 }
 
-func (replay agentClientReplay) toolResultTurn(ctx context.Context, stream bool) error {
-	turn, err := agentClientTurn(replay.protocol, replay.capture.Turns[1], replay.model, stream, "")
+func (replay agentClientReplay) toolResultTurn(ctx context.Context, stream bool, call responsesFunctionCall) error {
+	turn, err := replay.resultTurn(stream, call)
 	if err != nil {
 		return err
 	}
@@ -274,7 +284,23 @@ func (replay agentClientReplay) toolResultTurn(ctx context.Context, stream bool)
 	if err := replay.protocol.assertUsage(body, stream, turn); err != nil {
 		return fmt.Errorf("%s: %w", sessionID, err)
 	}
+	if err := verifyAgentClientToolLink(ctx, replay.provider, sessionID, replay.backendFormat, call); err != nil {
+		return fmt.Errorf("%s: %w", sessionID, err)
+	}
 	return nil
+}
+
+// resultTurn is the captured follow-up, answering the call decoded on the
+// tool-call turn as a client would rather than the call recorded in the capture.
+func (replay agentClientReplay) resultTurn(stream bool, call responsesFunctionCall) (map[string]any, error) {
+	turn, err := agentClientTurn(replay.protocol, replay.capture.Turns[1], replay.model, stream, "")
+	if err != nil {
+		return nil, err
+	}
+	if err := linkAgentClientToolCall(replay.protocol.toolRefs, turn, call); err != nil {
+		return nil, err
+	}
+	return turn, nil
 }
 
 func (replay agentClientReplay) providerErrorTurn(ctx context.Context, stream bool) error {
@@ -377,6 +403,119 @@ func verifyAgentClientProviderFields(
 		}
 	}
 	return nil
+}
+
+func verifyAgentClientToolLink(
+	ctx context.Context,
+	provider *fixtures.ServiceSession,
+	sessionID string,
+	backendFormat string,
+	call responsesFunctionCall,
+) error {
+	raw, err := lastProviderSimulatorRequest(ctx, provider, sessionID)
+	if err != nil {
+		return err
+	}
+	var observation struct {
+		Body map[string]any `json:"body"`
+	}
+	if err := json.Unmarshal(raw, &observation); err != nil {
+		return fmt.Errorf("decode provider observation: %w", err)
+	}
+	if err := requireAgentClientToolLink(agentClientBackendToolRefs[backendFormat], observation.Body, call); err != nil {
+		return fmt.Errorf("provider request: %w", err)
+	}
+	return nil
+}
+
+// agentClientToolRef points at the object that holds a tool call ID under
+// idKey. For a call, name is the object that holds the tool name.
+type agentClientToolRef struct {
+	fields map[string]any
+	idKey  string
+	name   map[string]any
+}
+
+type agentClientToolRefs func(body map[string]any) (calls, results []agentClientToolRef)
+
+func linkAgentClientToolCall(refs agentClientToolRefs, turn map[string]any, call responsesFunctionCall) error {
+	calls, results := refs(turn)
+	if len(calls) != 1 || len(results) != 1 {
+		return fmt.Errorf("follow-up has %d tool calls and %d results, want one of each", len(calls), len(results))
+	}
+	captured := calls[0].fields[calls[0].idKey]
+	if results[0].fields[results[0].idKey] != captured {
+		return fmt.Errorf("captured tool result does not answer the captured call %v", captured)
+	}
+	calls[0].fields[calls[0].idKey] = call.CallID
+	calls[0].name["name"] = call.Name
+	results[0].fields[results[0].idKey] = call.CallID
+	return nil
+}
+
+func requireAgentClientToolLink(refs agentClientToolRefs, body map[string]any, call responsesFunctionCall) error {
+	calls, results := refs(body)
+	if len(calls) != 1 || len(results) != 1 {
+		return fmt.Errorf("want one tool call and one result, got %d and %d", len(calls), len(results))
+	}
+	callID, name := calls[0].fields[calls[0].idKey], calls[0].name["name"]
+	answered := results[0].fields[results[0].idKey]
+	if callID != call.CallID || name != call.Name || answered != call.CallID {
+		return fmt.Errorf("tool call %v %v is answered by %v; want %s %s from the tool-call turn",
+			name, callID, answered, call.Name, call.CallID)
+	}
+	return nil
+}
+
+func agentChatToolRefs(body map[string]any) (calls, results []agentClientToolRef) {
+	for _, message := range agentClientObjects(body["messages"]) {
+		for _, toolCall := range agentClientObjects(message["tool_calls"]) {
+			if function, ok := toolCall["function"].(map[string]any); ok {
+				calls = append(calls, agentClientToolRef{fields: toolCall, idKey: "id", name: function})
+			}
+		}
+		if message["role"] == "tool" {
+			results = append(results, agentClientToolRef{fields: message, idKey: "tool_call_id"})
+		}
+	}
+	return calls, results
+}
+
+func agentMessagesToolRefs(body map[string]any) (calls, results []agentClientToolRef) {
+	for _, message := range agentClientObjects(body["messages"]) {
+		for _, block := range agentClientObjects(message["content"]) {
+			switch block["type"] {
+			case "tool_use":
+				calls = append(calls, agentClientToolRef{fields: block, idKey: "id", name: block})
+			case "tool_result":
+				results = append(results, agentClientToolRef{fields: block, idKey: "tool_use_id"})
+			}
+		}
+	}
+	return calls, results
+}
+
+func agentResponsesToolRefs(body map[string]any) (calls, results []agentClientToolRef) {
+	for _, item := range agentClientObjects(body["input"]) {
+		switch item["type"] {
+		case "function_call":
+			calls = append(calls, agentClientToolRef{fields: item, idKey: "call_id", name: item})
+		case "function_call_output":
+			results = append(results, agentClientToolRef{fields: item, idKey: "call_id"})
+		}
+	}
+	return calls, results
+}
+
+func agentClientObjects(value any) []map[string]any {
+	items, _ := value.([]any)
+	objects := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		if object, ok := item.(map[string]any); ok {
+			objects = append(objects, object)
+		}
+	}
+	return objects
 }
 
 func lastMessageUserText(turn map[string]any) (string, func(string), error) {

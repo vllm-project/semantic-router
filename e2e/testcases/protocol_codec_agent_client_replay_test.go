@@ -129,3 +129,73 @@ func TestAgentClientUserTextShapes(t *testing.T) {
 		t.Fatal("a turn without user text was accepted")
 	}
 }
+
+func TestAgentClientResultTurnAnswersTheDecodedCall(t *testing.T) {
+	call := responsesFunctionCall{CallID: "call_mock_lookup", Name: "lookup", Arguments: `{"query":"weather"}`}
+	captures, err := loadAgentClientCaptures()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, capture := range captures {
+		replay := agentClientReplay{capture: capture, protocol: agentClientProtocols[capture.Path], model: "profile-model"}
+		for _, stream := range []bool{true, false} {
+			turn, turnErr := replay.resultTurn(stream, call)
+			if turnErr != nil {
+				t.Fatalf("%s stream=%t: %v", capture.Name, stream, turnErr)
+			}
+			if linkErr := requireAgentClientToolLink(replay.protocol.toolRefs, turn, call); linkErr != nil {
+				t.Errorf("%s stream=%t: %v", capture.Name, stream, linkErr)
+			}
+		}
+	}
+}
+
+func TestLinkAgentClientToolCallShapes(t *testing.T) {
+	call := responsesFunctionCall{CallID: "call_mock_lookup", Name: "lookup"}
+	tests := []struct {
+		name     string
+		protocol string
+		turn     string
+	}{
+		{
+			name: "chat tool_call_id", protocol: "/v1/chat/completions",
+			turn: `{"messages":[{"role":"user","content":"run"},{"role":"assistant","content":null,"tool_calls":[{"id":"call_capture_1","type":"function","function":{"name":"bash","arguments":"{}"}}]},{"role":"tool","tool_call_id":"call_capture_1","content":"hi"}]}`,
+		},
+		{
+			name: "messages tool_use_id", protocol: "/v1/messages",
+			turn: `{"messages":[{"role":"user","content":"run"},{"role":"assistant","content":[{"type":"tool_use","id":"toolu_capture_1","name":"bash","input":{}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_capture_1","content":"hi"}]}]}`,
+		},
+		{
+			name: "responses function_call_output call_id", protocol: "/v1/responses",
+			turn: `{"input":[{"type":"message","role":"user","content":"run"},{"type":"function_call","call_id":"call_capture_1","name":"bash","arguments":"{}"},{"type":"function_call_output","call_id":"call_capture_1","output":"hi"}]}`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			refs := agentClientProtocols[test.protocol].toolRefs
+			var turn map[string]any
+			if err := json.Unmarshal([]byte(test.turn), &turn); err != nil {
+				t.Fatal(err)
+			}
+			if err := requireAgentClientToolLink(refs, turn, call); err == nil {
+				t.Fatal("a follow-up that keeps the captured call ID was accepted")
+			}
+			if err := linkAgentClientToolCall(refs, turn, call); err != nil {
+				t.Fatal(err)
+			}
+			if err := requireAgentClientToolLink(refs, turn, call); err != nil {
+				t.Fatal(err)
+			}
+			if encoded, _ := json.Marshal(turn); strings.Contains(string(encoded), "capture_1") || strings.Contains(string(encoded), "bash") {
+				t.Fatalf("follow-up kept the captured call: %s", encoded)
+			}
+		})
+	}
+	var unpaired map[string]any
+	if err := json.Unmarshal([]byte(`{"messages":[{"role":"assistant","tool_calls":[{"id":"call_a","function":{"name":"bash"}}]},{"role":"tool","tool_call_id":"call_b"}]}`), &unpaired); err != nil {
+		t.Fatal(err)
+	}
+	if err := linkAgentClientToolCall(agentChatToolRefs, unpaired, call); err == nil {
+		t.Fatal("a result that answers another call was relinked")
+	}
+}
