@@ -57,6 +57,42 @@ routing:
 `field` is one of `delegated_role` or `task_phase`. Exactly one predicate
 comparator, `equals` or `in`, is required per rule.
 
+## Replay
+
+When [Router Replay](../../learning/memory-and-replay) is enabled, each record
+shows what happened to the envelope in `route_diagnostics`:
+
+| Field | Values |
+| --- | --- |
+| `agentic_facts_status` | `accepted` or `rejected` |
+| `agentic_facts_reasons` | one entry per rejection, as `field:reason`, or a bare reason when the whole envelope failed |
+
+A rejected envelope:
+
+```json
+"route_diagnostics": {
+  "agentic_facts_status": "rejected",
+  "agentic_facts_reasons": ["expires_at:expired", "lineage.depth:too_deep"]
+}
+```
+
+An envelope sent without the trust marker:
+
+```json
+"agentic_facts_reasons": ["untrusted"]
+```
+
+Both fields are absent when the contract is disabled or the request carried no
+envelope, so existing records do not change.
+
+Replay never stores a value the caller sent. Reasons contain only schema field
+names and reason codes. To see which rule matched, read `signals.agentic_facts`,
+which lists the operator's rule names. Callers without the `replay.detail`
+permission see the status, but `agentic_facts_reasons` is returned empty.
+
+A request refused with `422` because no candidate model is eligible writes no
+Replay record. This matches the existing behavior for context-window refusals.
+
 ## Dependencies and Limitations
 
 `agentic_facts` only evaluates facts accepted at the request boundary; it never
