@@ -32,7 +32,7 @@ async def respond_to_scenario(request, req, created):
             "prompt_tokens": count,
             "completion_tokens": count,
             "total_tokens": count * 2,
-            "prompt_tokens_details": {"cached_tokens": 0},
+            "prompt_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
             "completion_tokens_details": {"reasoning_tokens": 0},
         }
         return scenario_response(req, content, created, usage)
