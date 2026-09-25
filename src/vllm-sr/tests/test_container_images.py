@@ -7,13 +7,14 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from cli import container_images  # noqa: E402
+from cli import __version__, container_images  # noqa: E402
 from cli.consts import (  # noqa: E402
     VLLM_SR_CONTAINER_IMAGE_CUDA,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_CONTAINER_IMAGE_ROCM,
     VLLM_SR_DASHBOARD_CONTAINER_IMAGE_DEFAULT,
     VLLM_SR_ENVOY_CONTAINER_IMAGE_DEFAULT,
+    image_tag_for_cli_version,
 )
 
 
@@ -27,6 +28,39 @@ def clear_runtime_image_env(monkeypatch):
         "VLLM_SR_PLATFORM",
     ):
         monkeypatch.delenv(env_name, raising=False)
+
+
+@pytest.mark.parametrize(
+    ("cli_version", "image_tag"),
+    [
+        ("0.4.0", "v0.4.0"),
+        ("0.4.1", "v0.4.1"),
+        ("0.4.0.dev20260924000100", "latest"),
+        ("unknown", "latest"),
+    ],
+)
+def test_official_image_tag_follows_stable_cli_version(cli_version, image_tag):
+    assert image_tag_for_cli_version(cli_version) == image_tag
+
+
+def test_default_runtime_images_match_installed_cli_release(monkeypatch):
+    monkeypatch.setattr(container_images, "_ensure_image_available", lambda *_: None)
+    expected_tag = image_tag_for_cli_version(__version__)
+
+    for platform, repository in (
+        ("cpu", "vllm-sr"),
+        ("amd", "vllm-sr-rocm"),
+        ("nvidia", "vllm-sr-cuda"),
+    ):
+        images = container_images.get_runtime_images(
+            pull_policy="never", platform=platform
+        )
+        assert images["router"] == (
+            f"ghcr.io/vllm-project/semantic-router/{repository}:{expected_tag}"
+        )
+        assert images["dashboard"] == (
+            f"ghcr.io/vllm-project/semantic-router/dashboard:{expected_tag}"
+        )
 
 
 def test_get_runtime_images_falls_back_to_base_image(monkeypatch):
