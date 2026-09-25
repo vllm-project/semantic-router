@@ -465,6 +465,9 @@ func buildAnthropicRequestWire(
 
 func anthropicRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	if request.ReasoningSummary != "" {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Messages cannot request a reasoning summary")
+	}
 	if err := appendAnthropicContentDiagnostics(&diagnostics, request, policy); err != nil {
 		return diagnostics, err
 	}

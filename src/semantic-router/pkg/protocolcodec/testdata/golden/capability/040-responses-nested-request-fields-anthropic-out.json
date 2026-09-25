@@ -23,11 +23,32 @@
     {
       "name": "reasoning_summary",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_reasoning_summary"
-        }
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "reasoning.summary",
+            "action": "dropped"
+          },
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
       }
     },
     {
