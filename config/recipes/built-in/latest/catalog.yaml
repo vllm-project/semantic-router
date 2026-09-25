@@ -11120,6 +11120,24 @@ evaluations:
     verification: imported
     source: https://artificialanalysis.ai/models/nova-lite
     redistributable: true
+- id: independent/nova-lite-humanitys-last-exam@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.0429
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
 - id: independent/nova-lite-gpqa-diamond@1.0.0
   model: amazon/nova-lite-v1
   benchmark: idavidrein/gpqa-diamond@1.0.0
@@ -38720,6 +38738,41 @@ index_results:
   domains:
     frontier_reasoning: 2.87303058387396
     scientific_reasoning: 60.303030303030305
+- model: amazon/nova-lite-v1
+  reasoning_effort: default
+  index: vllm-sr/reasoning@1.0.0
+  status: available
+  score: 23.81166666666665
+  coverage: 1.0
+  components:
+  - weight: 0.5
+    status: available
+    value: 0.433333333333333
+    normalized: 0.433333333333333
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/nova-lite-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.5
+    status: available
+    value: 0.0429
+    normalized: 0.0429
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-text-only
+    - text-only
+    evaluation: independent/nova-lite-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-text-only
+  provenance:
+  - independent/nova-lite-gpqa-diamond@1.0.0
+  - independent/nova-lite-humanitys-last-exam@1.0.0
+  domains:
+    frontier_reasoning: 4.29
+    scientific_reasoning: 43.3333333333333
 - model: amazon/nova-premier-v1
   reasoning_effort: disabled
   index: vllm-sr/reasoning@1.0.0

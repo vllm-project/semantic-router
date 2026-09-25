@@ -628,6 +628,24 @@
     verification: imported
     source: https://artificialanalysis.ai/models/nova-lite
     redistributable: true
+- id: independent/nova-lite-humanitys-last-exam@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.0429
+  status: available
+  observed_at: 2026-09-24
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
 - id: independent/nova-lite-gpqa-diamond@1.0.0
   model: amazon/nova-lite-v1
   benchmark: idavidrein/gpqa-diamond@1.0.0

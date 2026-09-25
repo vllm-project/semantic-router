@@ -2,7 +2,7 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:6f477ab4a3c24ff447c4cd6d92481b0b598353020b842f0e00dddb0a134209fb"
+const builtInCatalogDigest = "sha256:5220fbc6ab22b721d5e8d7b85c4341bfa72906b33849cf8273e7e7e17658214f"
 
 const builtInCatalogJSON = `{
   "benchmarks": [
@@ -3076,6 +3076,29 @@ const builtInCatalogJSON = `{
       "id": "independent/nova-lite-omniscience@1.0.0",
       "metrics": {
         "index": -42.166666666666664
+      },
+      "model": "amazon/nova-lite-v1",
+      "observed_at": "2026-09-24",
+      "reasoning_effort": "default",
+      "status": "available",
+      "subject": {
+        "run_kind": "independent",
+        "source_model": "Nova Lite",
+        "source_model_slug": "nova-lite"
+      }
+    },
+    {
+      "benchmark": "cais/humanitys-last-exam@1.0.0",
+      "benchmark_profile": "independent-text-only",
+      "evidence": {
+        "provenance": "third_party",
+        "redistributable": true,
+        "source": "https://artificialanalysis.ai/models/nova-lite",
+        "verification": "imported"
+      },
+      "id": "independent/nova-lite-humanitys-last-exam@1.0.0",
+      "metrics": {
+        "accuracy": 0.0429
       },
       "model": "amazon/nova-lite-v1",
       "observed_at": "2026-09-24",
@@ -39434,26 +39457,33 @@ const builtInCatalogJSON = `{
         },
         {
           "benchmark": "cais/humanitys-last-exam@1.0.0",
+          "benchmark_profile": "independent-text-only",
           "benchmark_profiles": [
             "independent-text-only",
             "text-only"
           ],
+          "evaluation": "independent/nova-lite-humanitys-last-exam@1.0.0",
           "metric": "accuracy",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.0429,
+          "status": "available",
+          "value": 0.0429,
           "weight": 0.5
         }
       ],
-      "coverage": 0.5,
+      "coverage": 1.0,
+      "domains": {
+        "frontier_reasoning": 4.29,
+        "scientific_reasoning": 43.3333333333333
+      },
       "index": "vllm-sr/reasoning@1.0.0",
       "model": "amazon/nova-lite-v1",
       "provenance": [
-        "independent/nova-lite-gpqa-diamond@1.0.0"
+        "independent/nova-lite-gpqa-diamond@1.0.0",
+        "independent/nova-lite-humanitys-last-exam@1.0.0"
       ],
       "reasoning_effort": "default",
-      "score": null,
-      "status": "partial"
+      "score": 23.81166666666665,
+      "status": "available"
     },
     {
       "components": [
@@ -39524,9 +39554,9 @@ const builtInCatalogJSON = `{
         },
         {
           "index": "vllm-sr/reasoning@1.0.0",
-          "normalized": null,
-          "status": "missing",
-          "value": null,
+          "normalized": 0.2381166666666665,
+          "status": "available",
+          "value": 0.2381166666666665,
           "weight": 0.4
         },
         {
@@ -39544,15 +39574,16 @@ const builtInCatalogJSON = `{
           "weight": 0.2
         }
       ],
-      "coverage": 0.0,
+      "coverage": 0.4,
       "index": "vllm-sr/intelligence@1.0.0",
       "model": "amazon/nova-lite-v1",
       "provenance": [
-        "independent/nova-lite-gpqa-diamond@1.0.0"
+        "independent/nova-lite-gpqa-diamond@1.0.0",
+        "independent/nova-lite-humanitys-last-exam@1.0.0"
       ],
       "reasoning_effort": "default",
       "score": null,
-      "status": "missing"
+      "status": "partial"
     },
     {
       "components": [
