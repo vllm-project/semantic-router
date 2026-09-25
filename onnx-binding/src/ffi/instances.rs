@@ -53,7 +53,7 @@ fn result<T: Serialize>(call: impl FnOnce() -> UnifiedResult<T>) -> InstanceResu
                 UnifiedError::Validation { .. } => "invalid_input",
                 UnifiedError::FileNotFound { .. } | UnifiedError::ModelLoad { .. } => "load",
                 UnifiedError::Inference { operation, .. }
-                    if ["distribution", "token_spans", "embedding"]
+                    if ["distribution", "token_spans", "embedding", "pair_scores"]
                         .contains(&operation.as_str()) =>
                 {
                     "invalid_output"
@@ -113,9 +113,12 @@ macro_rules! loader {
     };
 }
 loader!(ort_instance_load_sequence, instances::load_sequence);
+loader!(ort_instance_load_label_scores, instances::load_label_scores);
 loader!(ort_instance_load_token, instances::load_token);
+loader!(ort_instance_load_grounded, instances::load_grounded);
 loader!(ort_instance_load_embedding, instances::load_embedding);
 loader!(ort_instance_load_multimodal, instances::load_multimodal);
+loader!(ort_instance_load_omni, instances::load_omni);
 
 #[no_mangle]
 pub extern "C" fn ort_instance_clone(handle: u64) -> InstanceResult {
@@ -141,6 +144,15 @@ pub extern "C" fn ort_instance_info(handle: u64) -> InstanceResult {
 #[no_mangle]
 pub extern "C" fn ort_instance_finish_profiling(handle: u64) -> InstanceResult {
     result(|| instances::finish_profiling(handle))
+}
+
+#[no_mangle]
+pub extern "C" fn ort_instance_embedding_descriptor(
+    handle: u64,
+    layer: usize,
+    dimension: usize,
+) -> InstanceResult {
+    result(|| instances::embedding_runtime_descriptor(handle, layer, dimension))
 }
 
 /// # Safety
@@ -272,6 +284,28 @@ pub unsafe extern "C" fn ort_instance_encode_audio(
 }
 
 /// # Safety
+/// `pcm` must point to `length` readable f32 values in channels-first order.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_encode_audio_pcm(
+    handle: u64,
+    pcm: *const f32,
+    length: usize,
+    sample_rate: usize,
+    channels: usize,
+    dimension: usize,
+) -> InstanceResult {
+    result(|| {
+        instances::encode_audio_pcm(
+            handle,
+            slice(pcm, length)?,
+            sample_rate,
+            channels,
+            (dimension != 0).then_some(dimension),
+        )
+    })
+}
+
+/// # Safety
 /// The result must have been returned by this ABI and not previously freed.
 #[no_mangle]
 pub unsafe extern "C" fn ort_instance_result_free(output: InstanceResult) {
@@ -280,4 +314,98 @@ pub unsafe extern "C" fn ort_instance_result_free(output: InstanceResult) {
             drop(CString::from_raw(value));
         }
     }
+}
+
+/// # Safety
+/// `input` must point to a live NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_score(handle: u64, input: *const c_char) -> InstanceResult {
+    result(|| instances::score(handle, text(input)?))
+}
+/// # Safety
+/// `input` must point to a live NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_classify_windows(
+    handle: u64,
+    input: *const c_char,
+    size: usize,
+    overlap: usize,
+) -> InstanceResult {
+    result(|| instances::classify_windows(handle, text(input)?, size, overlap))
+}
+/// # Safety
+/// `input` must point to a live NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_score_windows(
+    handle: u64,
+    input: *const c_char,
+    size: usize,
+    overlap: usize,
+) -> InstanceResult {
+    result(|| instances::score_windows(handle, text(input)?, size, overlap))
+}
+
+/// Load a cross-encoder with an immutable trained layer/dimension selection.
+/// # Safety
+/// Arguments must be live NUL-terminated JSON strings.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_load_pair_scorer(
+    options: *const c_char,
+    selection: *const c_char,
+) -> InstanceResult {
+    let mut handle = 0;
+    let mut output = result(|| {
+        let invalid = |e: serde_json::Error| {
+            crate::core::unified_error::errors::config_error("pair_scorer", &e.to_string())
+        };
+        handle = instances::load_pair_scorer(
+            serde_json::from_str(text(options)?).map_err(invalid)?,
+            serde_json::from_str(text(selection)?).map_err(invalid)?,
+        )?;
+        Ok(())
+    });
+    output.handle = handle;
+    output
+}
+
+/// Score complete query/document pairs in input order.
+/// # Safety
+/// `pairs` must be a live NUL-terminated JSON array.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_score_pairs(
+    handle: u64,
+    pairs: *const c_char,
+) -> InstanceResult {
+    result(|| {
+        instances::score_pairs(
+            handle,
+            serde_json::from_str(text(pairs)?).map_err(|e| {
+                crate::core::unified_error::errors::config_error("pairs", &e.to_string())
+            })?,
+        )
+    })
+}
+
+/// # Safety
+/// `input` must point to a live NUL-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_token_windows(
+    handle: u64,
+    input: *const c_char,
+    size: usize,
+    overlap: usize,
+) -> InstanceResult {
+    result(|| instances::detect_token_windows(handle, text(input)?, size, overlap))
+}
+
+/// # Safety
+/// All inputs must point to live NUL-terminated UTF-8 strings.
+#[no_mangle]
+pub unsafe extern "C" fn ort_instance_grounded(
+    handle: u64,
+    context: *const c_char,
+    question: *const c_char,
+    answer: *const c_char,
+) -> InstanceResult {
+    result(|| instances::grounded(handle, text(context)?, text(question)?, text(answer)?))
 }

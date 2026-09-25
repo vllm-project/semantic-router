@@ -29,7 +29,7 @@ body,
 .site-page--home .main-wrapper,
 html[data-page-key='home'],
 body[data-page-key='home'] {
-  background: #09090b;
+  background: var(--site-bg);
 }
 
 * {

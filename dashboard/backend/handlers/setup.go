@@ -2,16 +2,18 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -221,26 +223,50 @@ func SetupActivateHandler(
 		}
 		defer release()
 
+		// The candidate was validated before acquiring the shared config lock.
+		// A concurrent activation may have completed while this request waited.
+		if _, setupErr := loadBootstrapConfig(configPath, setupResolver); setupErr != nil {
+			http.Error(w, "Setup is no longer active; reload the current configuration", http.StatusConflict)
+			return
+		}
+		previousData, err := os.ReadFile(configPath)
+		if err != nil {
+			http.Error(w, "Failed to read the current setup configuration", http.StatusInternalServerError)
+			return
+		}
+
 		yamlData, err := marshalYAMLBytes(candidate.canonicalTransport())
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to convert config to YAML: %v", err), http.StatusInternalServerError)
 			return
 		}
 
-		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
-			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
-		}
-
-		tmpConfigFile := configPath + ".tmp"
-		if writeErr := os.WriteFile(tmpConfigFile, yamlData, 0o644); writeErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
+		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
-		if renameErr := os.Rename(tmpConfigFile, configPath); renameErr != nil {
-			if fallbackWriteErr := os.WriteFile(configPath, yamlData, 0o644); fallbackWriteErr != nil {
-				http.Error(w, fmt.Sprintf("Failed to write config: %v", fallbackWriteErr), http.StatusInternalServerError)
-				return
-			}
+		if _, freshErr := checkConfigMapMutationFresh(configPath); freshErr != nil {
+			writeConfigPersistenceError(w, freshErr)
+			return
+		}
+		if backupErr := backupCurrentConfig(configPath, configDir); backupErr != nil {
+			log.Printf("Setup activation aborted, config backup failed: %v", backupErr)
+			http.Error(w, "Setup activation aborted: the config backup could not be written with owner-only permissions.", http.StatusInternalServerError)
+			return
+		}
+
+		if writeErr := writeConfigAtomically(configPath, yamlData); writeErr != nil {
+			writeConfigPersistenceError(w, writeErr)
+			return
+		}
+		if configActivationDeferred() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusAccepted)
+			_ = json.NewEncoder(w).Encode(SetupActivateResponse{
+				Status:    "persisted",
+				SetupMode: true,
+				Message:   "Setup saved to the Kubernetes ConfigMap. Roll out Router and Envoy to activate it.",
+			})
+			return
 		}
 
 		// The config no longer declares setup mode. Drop the cached resolution
@@ -250,18 +276,19 @@ func SetupActivateHandler(
 		setupResolver.Invalidate()
 
 		if _, parseErr := routerconfig.Parse(configPath); parseErr != nil {
-			http.Error(w, fmt.Sprintf("Failed to validate activated config: %v", parseErr), http.StatusInternalServerError)
+			failSetupActivation(w, configPath, previousData, setupResolver, "config_validation")
 			return
 		}
 
 		effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
 		if err != nil {
-			http.Error(w, fmt.Sprintf("Failed to sync runtime config: %v", err), http.StatusInternalServerError)
+			failSetupActivation(w, configPath, previousData, setupResolver, "runtime_config_sync")
 			return
 		}
 
 		if err := restartSetupRuntimeServices(configPath, effectiveConfigPath); err != nil {
-			log.Printf("Warning: failed to restart router/envoy after activation: %v", err)
+			failSetupActivation(w, configPath, previousData, setupResolver, "runtime_start")
+			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -285,8 +312,6 @@ func ensureSetupGlobalDefaults(configFile *setupConfigFile) {
 }
 
 func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolver) http.HandlerFunc {
-	client := &http.Client{Timeout: 10 * time.Second}
-
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -316,8 +341,17 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 			return
 		}
 
-		resp, err := client.Do(remoteReq)
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
+		// The destination is revalidated after DNS and on every redirect, so an
+		// import URL cannot be used to reach the cluster from the dashboard.
+		resp, err := outboundPolicy(setupImportTimeout).NewClient().Do(remoteReq)
 		if err != nil {
+			if isForbiddenFetchTarget(err) {
+				http.Error(w, "destination is not permitted", http.StatusBadRequest)
+				return
+			}
 			http.Error(w, fmt.Sprintf("failed to fetch remote config: %v", err), http.StatusBadGateway)
 			return
 		}
@@ -328,7 +362,11 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 			return
 		}
 
-		body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		body, err := safefetch.ReadBounded(resp.Body, setupImportMaxResponseBytes)
+		if errors.Is(err, safefetch.ErrResponseTooLarge) {
+			http.Error(w, "remote config exceeds the size limit", http.StatusRequestEntityTooLarge)
+			return
+		}
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to read remote config: %v", err), http.StatusBadGateway)
 			return
@@ -349,6 +387,9 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 		configJSON, err := rawJSONMessage(remoteConfig.canonicalTransport())
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to encode remote config: %v", err), http.StatusInternalServerError)
+			return
+		}
+		if auth.RejectRevokedMutation(w, r) {
 			return
 		}
 
@@ -391,7 +432,7 @@ func buildSetupCandidateConfig(
 		return nil, fmt.Errorf("config is required")
 	}
 
-	requestConfig, err := decodeYAMLTaggedBytes[canonicalConfigTransport](req.Config)
+	requestConfig, err := decodeStrictSetupConfig(req.Config)
 	if err != nil {
 		return nil, fmt.Errorf("invalid config payload: %w", err)
 	}
@@ -427,22 +468,19 @@ func normalizeRemoteConfigURL(rawValue string) (string, error) {
 		return "", fmt.Errorf("remote config URL is required")
 	}
 
-	parsed, err := url.ParseRequestURI(trimmed)
+	parsed, err := outboundPolicy(setupImportTimeout).ValidateURL(trimmed)
 	if err != nil {
+		if errors.Is(err, safefetch.ErrSchemeNotAllowed) {
+			return "", fmt.Errorf("remote config URL must use http or https")
+		}
 		return "", fmt.Errorf("invalid remote config URL: %w", err)
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", fmt.Errorf("remote config URL must use http or https")
-	}
-	if parsed.Host == "" {
-		return "", fmt.Errorf("remote config URL must include a host")
 	}
 
 	return parsed.String(), nil
 }
 
 func parseSetupCanonicalConfig(raw []byte) (*setupConfigFile, error) {
-	parsed, err := decodeYAMLTaggedBytes[setupConfigFile](raw)
+	parsed, err := decodeStrictSetupConfig(raw)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse remote config: %w", err)
 	}
@@ -546,22 +584,14 @@ func mergeSetupCanonicalConfig(base, patch routerconfig.CanonicalConfig) routerc
 }
 
 func backupCurrentConfig(configPath string, configDir string) error {
-	existingData, err := os.ReadFile(configPath)
-	if err != nil || len(existingData) == 0 {
+	existingData, err := readLiveConfig(configPath)
+	if err != nil {
 		return err
 	}
-
-	backupDir := filepath.Join(configDir, ".vllm-sr", "config-backups")
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+	if _, err := createConfigBackup(configDir, existingData); err != nil {
 		return err
 	}
-
-	version := time.Now().Format("20060102-150405")
-	backupFile := filepath.Join(backupDir, fmt.Sprintf("config.%s.yaml", version))
-	if err := os.WriteFile(backupFile, existingData, 0o644); err != nil {
-		return err
-	}
-	cleanupBackups(backupDir)
+	cleanupBackups(configBackupDir(configDir))
 	return nil
 }
 

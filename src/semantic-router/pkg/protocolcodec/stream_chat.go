@@ -62,6 +62,10 @@ type chatChunkWire struct {
 	RemoteEngineID    *string                   `json:"remote_engine_id,omitempty"`
 	RemoteHost        *string                   `json:"remote_host,omitempty"`
 	RemotePort        *int64                    `json:"remote_port,omitempty"`
+	XGroq             json.RawMessage           `json:"x_groq,omitempty"`
+	// Aggregator gateways may report the handling agent alongside a chunk.
+	// It is transport metadata, not response content.
+	Agent json.RawMessage `json:"agent,omitempty"`
 }
 
 func (wire chatChunkWire) hasLegacyKVTransferMetadata() bool {
@@ -143,20 +147,29 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		return []llmprotocol.Event{event}, nil, err
 	}
 	var chunk chatChunkWire
-	if err := decodeProviderWire(parsed.Data, &chunk, decoder.policy); err != nil {
+	_, vendorExtensions, err := decodeProviderWireVendorAware(parsed.Data, &chunk, decoder.policy)
+	if err != nil {
 		return nil, nil, err
 	}
+	var diagnostics llmprotocol.Diagnostics
+	appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1, vendorExtensions)
 	if err := validateChatStreamChunk(chunk); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
+	}
+	// Some gateways emit an empty synthetic chunk while waiting for the first
+	// model token. It must not establish the response ID or model identity.
+	if isGatewayChatKeepalive(chunk) {
+		return nil, diagnostics, nil
 	}
 	if err := decoder.observeProviderIdentity(chunk.ID, chunk.Model); err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	if chunk.Error != nil {
 		event, err := decoder.next(chatStreamFailureEvent(chunk.Error))
-		return []llmprotocol.Event{event}, nil, err
+		return []llmprotocol.Event{event}, diagnostics, err
 	}
-	events, diagnostics, err := decoder.decodeChunkEvents(chunk)
+	events, chunkDiagnostics, err := decoder.decodeChunkEvents(chunk)
+	diagnostics = appendDiagnostics(diagnostics, chunkDiagnostics, decoder.policy.Limits.Diagnostics)
 	diagnostics = decoder.appendProviderChunkDiagnostics(chunk, diagnostics)
 	return events, diagnostics, err
 }
@@ -178,13 +191,48 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 			"stream.kv_transfer", "provider KV-transfer metadata is not model output",
 		)
 	}
+	if len(chunk.XGroq) > 0 {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.x_groq", "provider request metadata is not model output",
+		)
+	}
+	if len(chunk.Agent) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Agent), []byte("null")) {
+		appendProviderFieldOmission(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.agent", "gateway agent metadata is not model output",
+		)
+	}
 	if len(chunk.Moderation) > 0 && !bytes.Equal(bytes.TrimSpace(chunk.Moderation), []byte("null")) {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
 			"stream.moderation", "moderation metadata has no protocol-neutral representation",
 		)
 	}
+	if chunk.Usage != nil {
+		appendProviderFieldOmissions(
+			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			chatUsageFieldOmissions(*chunk.Usage, "stream.usage."), chatUsageOmissionReason,
+		)
+	}
 	return diagnostics
+}
+
+// isGatewayChatKeepalive recognizes only the empty chunk shape used by
+// gateway aggregators. A real delta, usage snapshot, or error must continue
+// through identity and content validation even when created is zero.
+func isGatewayChatKeepalive(chunk chatChunkWire) bool {
+	if chunk.ID != "chatcmpl-keepalive" || chunk.Created != 0 || chunk.Model != "keepalive" ||
+		chunk.Usage != nil || chunk.Error != nil || len(chunk.Choices) != 1 {
+		return false
+	}
+	choice := chunk.Choices[0]
+	delta := choice.Delta
+	return choice.Index == 0 && choice.FinishReason == nil && choice.Logprobs == nil &&
+		choice.StopReason == nil && len(choice.TokenIDs) == 0 && choice.RoutedExperts == nil &&
+		delta.Role == "" && delta.Content == nil && delta.Reasoning == nil &&
+		delta.AlternateReasoning == nil && delta.Refusal == nil && delta.Audio == nil &&
+		delta.LegacyFunctionCall == nil && len(delta.ToolCalls) == 0 && len(delta.Annotations) == 0
 }
 
 func validateChatStreamChunk(chunk chatChunkWire) error {
@@ -259,7 +307,10 @@ func (decoder *chatStreamDecoder) decodeChunkEvents(chunk chatChunkWire) ([]llmp
 		events = append(events, choiceEvents...)
 	}
 	if chunk.Usage != nil {
-		usage := decodeChatUsage(*chunk.Usage)
+		usage, usageErr := decodeChatUsage(*chunk.Usage)
+		if usageErr != nil {
+			return nil, nil, usageErr
+		}
 		event, nextErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventUsageUpdated, Usage: &usage})
 		if nextErr != nil {
 			return nil, nil, nextErr

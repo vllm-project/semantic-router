@@ -17,11 +17,18 @@ type EmbeddingRequirement struct {
 }
 
 func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices bool) []EmbeddingRequirement {
+	cacheNeeded := sharedServices && cfg.NeedsSemanticResponseCache()
 	cfg = cfg.ModelConsumerScope()
 	var result []EmbeddingRequirement
 	if len(cfg.EmbeddingRules) > 0 {
 		options := cfg.EmbeddingConfig.WithDefaults()
 		for _, rule := range cfg.EmbeddingRules {
+			if rule.HasImageCandidates() {
+				result = append(result, EmbeddingRequirement{Model: primary, Consumer: "embedding image candidates " + rule.Name, Dimension: options.TargetDimension, Modality: "image"})
+			}
+			if len(rule.Candidates)+len(rule.NegativeCandidates) > 0 {
+				result = append(result, EmbeddingRequirement{Model: primary, Consumer: "embedding text candidates " + rule.Name, Dimension: options.TargetDimension, Layer: options.TargetLayer, LocalLayerHint: true, Modality: "text"})
+			}
 			result = append(result, EmbeddingRequirement{Model: primary, Consumer: "embedding signal " + rule.Name, Dimension: options.TargetDimension, Layer: options.TargetLayer, LocalLayerHint: true, Modality: string(rule.EffectiveQueryModality())})
 		}
 	}
@@ -46,14 +53,15 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 	if !sharedServices {
 		return result
 	}
-	if cfg.SemanticCache.Enabled {
+	if cfg.API.Embeddings.Enabled {
+		options := cfg.EmbeddingConfig.WithDefaults()
+		result = append(result, EmbeddingRequirement{Model: primary, Consumer: "embedding API", Dimension: options.TargetDimension, Layer: options.TargetLayer, LocalLayerHint: true, SharedService: true})
+	}
+	if cacheNeeded {
 		requirement := EmbeddingRequirement{Model: SemanticCacheEmbeddingModel(cfg), Consumer: "response cache", Windows: true, SharedService: true}
 		if cfg.SemanticCache.BackendType == "" || cfg.SemanticCache.BackendType == "memory" {
-			switch requirement.Model {
-			case "mmbert":
+			if requirement.Model == "mmbert" {
 				requirement.Dimension, requirement.Layer = 256, 6
-			case "multimodal":
-				requirement.Dimension = 384
 			}
 		}
 		result = append(result, requirement)
@@ -74,9 +82,7 @@ func EmbeddingRequirements(cfg *RouterConfig, primary string, sharedServices boo
 				dimension = 256
 			}
 		case "multimodal":
-			if dimension <= 0 {
-				dimension = 384
-			}
+			// Zero selects the prepared artifact's complete output.
 		default:
 			dimension = 0
 		}

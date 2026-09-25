@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
@@ -19,16 +21,17 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
-	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
-	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
-	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
-	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
-	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
-	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
+	ConfigSource              ConfigSource             `yaml:"config_source,omitempty"`
+	Strategy                  RoutingStrategy          `yaml:"strategy,omitempty"`
+	AutoModelName             string                   `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            *[]string                `yaml:"auto_model_names,omitempty"`
+	IncludeConfigModelsInList bool                     `yaml:"include_config_models_in_list"`
+	ClearRouteCache           bool                     `yaml:"clear_route_cache"`
+	StreamedBody              CanonicalStreamedBody    `yaml:"streamed_body"`
+	SkipProcessing            SkipProcessingConfig     `yaml:"skip_processing"`
+	ModelSelection            ModelSelectionConfig     `yaml:"model_selection"`
+	Learning                  RouterLearningConfig     `yaml:"learning,omitempty"`
+	Fallback                  *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -66,6 +69,7 @@ type CanonicalIntegrationGlobal struct {
 // CanonicalModelCatalog groups router-owned model assets and the module
 // configs that resolve through those assets.
 type CanonicalModelCatalog struct {
+	Bindings    map[string]ModelBinding    `yaml:"bindings,omitempty"`
 	Deployments map[string]ModelDeployment `yaml:"deployments,omitempty"`
 	Embeddings  CanonicalEmbeddingModels   `yaml:"embeddings"`
 	System      CanonicalSystemModels      `yaml:"system"`
@@ -83,6 +87,7 @@ type CanonicalEmbeddingModels struct {
 // CanonicalModelModules groups configurable capability modules built on top of
 // router-owned model assets.
 type CanonicalModelModules struct {
+	Safety                  SafetyModelsConfig              `yaml:"safety"`
 	PromptCompression       PromptCompressionConfig         `yaml:"prompt_compression"`
 	PromptGuard             CanonicalPromptGuardModule      `yaml:"prompt_guard"`
 	Classifier              CanonicalClassifierModule       `yaml:"classifier"`
@@ -94,6 +99,8 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
+	Safety                 string `yaml:"safety,omitempty"`
+	Hazard                 string `yaml:"hazard,omitempty"`
 	PromptGuard            string `yaml:"prompt_guard,omitempty"`
 	DomainClassifier       string `yaml:"domain_classifier,omitempty"`
 	PIIClassifier          string `yaml:"pii_classifier,omitempty"`
@@ -188,6 +195,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err != nil {
 		return CanonicalGlobal{}, err
 	}
+	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
 	if err := normalizeSparseCanonicalCategoryOverride(&resolved, rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
@@ -195,6 +203,27 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return CanonicalGlobal{}, err
 	}
 	return resolved, nil
+}
+
+// Representation defaults belong to the default mmBERT model. Selecting a
+// different family must not silently request mmBERT's layer 22 from that owner.
+func normalizeSparseCanonicalEmbeddingOverride(resolved *CanonicalGlobal, raw *StructuredPayload) {
+	if raw == nil {
+		return
+	}
+	global, err := raw.AsStringMap()
+	if err != nil {
+		return
+	}
+	catalog := nestedStringMap(global["model_catalog"])
+	embeddings := nestedStringMap(catalog["embeddings"])
+	semantic := nestedStringMap(embeddings["semantic"])
+	settings := nestedStringMap(semantic["embedding_config"])
+	if model, ok := settings["model_type"].(string); ok && strings.TrimSpace(model) != "" && strings.ToLower(strings.TrimSpace(model)) != "mmbert" {
+		if !hasRawKey(settings, "target_layer") {
+			resolved.ModelCatalog.Embeddings.Semantic.EmbeddingConfig.TargetLayer = 0
+		}
+	}
 }
 
 func mergeCanonicalGlobalOverride(
@@ -354,6 +383,9 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.SkipProcessing = router.SkipProcessing
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
+	if router.Fallback != nil && cfg.Fallback == nil {
+		cfg.Fallback = router.Fallback.Clone()
+	}
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
@@ -380,6 +412,7 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
 	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
+	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
 	cfg.EmbeddingModels = modelCatalog.Embeddings.Semantic
 	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), modelCatalog.KBs...)
@@ -390,6 +423,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.HallucinationMitigation = modelCatalog.Modules.HallucinationMitigation.runtimeConfig()
 	cfg.FeedbackDetector = modelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
 	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
+	cfg.SafetyModels = modelCatalog.Modules.Safety
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 }
 
@@ -410,6 +444,14 @@ func resolveModuleModelRefs(global *CanonicalGlobal) error {
 	}
 
 	var err error
+	for name, head := range map[string]*SequenceHeadModelConfig{
+		"safety": &global.ModelCatalog.Modules.Safety.Safety,
+		"hazard": &global.ModelCatalog.Modules.Safety.Hazard,
+	} {
+		if head.ModelID, err = resolveSystemModelRef(head.ModelRef, head.ModelID, global.ModelCatalog.System); err != nil {
+			return fmt.Errorf("global.model_catalog.modules.safety.%s: %w", name, err)
+		}
+	}
 	if global.ModelCatalog.Modules.PromptGuard.ModelID, err = resolveSystemModelRef(
 		global.ModelCatalog.Modules.PromptGuard.ModelRef,
 		global.ModelCatalog.Modules.PromptGuard.ModelID,
@@ -472,6 +514,10 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 
 	var modelID string
 	switch ref {
+	case "safety":
+		modelID = catalog.Safety
+	case "hazard":
+		modelID = catalog.Hazard
 	case "prompt_guard":
 		modelID = catalog.PromptGuard
 	case "domain_classifier":

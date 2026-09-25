@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -46,6 +47,7 @@ type (
 	LearningRescueDiagnostics     = store.LearningRescueDiagnostics
 	LearningSamplingDiagnostics   = store.LearningSamplingDiagnostics
 	Outcome                       = store.Outcome
+	PreparedDispatchReceipt       = store.PreparedDispatchReceipt
 	RequestDemandSnapshot         = store.RequestDemandSnapshot
 	FusionPanelAttemptDiagnostics = store.FusionPanelAttemptDiagnostics
 	FusionQuorumDiagnostics       = store.FusionQuorumDiagnostics
@@ -53,6 +55,7 @@ type (
 	LooperAttempt                 = store.LooperAttempt
 	LooperDiagnostics             = store.LooperDiagnostics
 	RouteDiagnostics              = store.RouteDiagnostics
+	DecisionRanking               = store.DecisionRanking
 	RoutingRecord                 = store.Record
 	ToolTrace                     = store.ToolTrace
 	ToolTraceStep                 = store.ToolTraceStep
@@ -60,7 +63,10 @@ type (
 )
 
 type Recorder struct {
-	storage store.Storage
+	storage   store.Storage
+	outcomes  *outcomeQueue
+	closeOnce sync.Once
+	closeErr  error
 	// operationTimeout bounds audit-store I/O independently from the client
 	// request. It is immutable after construction in production; tests may
 	// shorten it before issuing operations to exercise stalled backends.
@@ -87,6 +93,7 @@ type lifecycleTransition struct {
 func NewRecorder(storage store.Storage) *Recorder {
 	return &Recorder{
 		storage:              storage,
+		outcomes:             newOutcomeQueue(DefaultOutcomeQueueCapacity, outcomeShutdownGrace),
 		operationTimeout:     DefaultOperationTimeout,
 		lifecycleTransitions: make(map[string]*lifecycleTransition),
 		maxBodyBytes:         DefaultMaxBodyBytes,
@@ -195,20 +202,20 @@ func (r *Recorder) AddRecord(rec RoutingRecord) (string, error) {
 }
 
 // applyMaxToolTraceBytes truncates structured tool-trace text fields to max
-// bytes. A non-positive max disables truncation.
+// bytes. A non-positive max disables truncation, but malformed UTF-8 is still
+// normalized before text reaches a database.
 func applyMaxToolTraceBytes(rec *RoutingRecord, max int) {
-	if max <= 0 {
-		return
-	}
-	rec.Prompt, rec.PromptTruncated = truncateString(rec.Prompt, max)
-	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = truncateString(rec.ToolDefinitions, max)
+	prompt, promptCut := truncateString(rec.Prompt, max)
+	rec.Prompt, rec.PromptTruncated = prompt, rec.PromptTruncated || promptCut
+	definitions, definitionsCut := truncateString(rec.ToolDefinitions, max)
+	rec.ToolDefinitions, rec.ToolDefinitionsTruncated = definitions, rec.ToolDefinitionsTruncated || definitionsCut
 	truncateToolTraceSteps(rec.ToolTrace, max)
 }
 
 // truncateToolTraceSteps applies the byte limit to each step's Arguments and
 // Output fields.
 func truncateToolTraceSteps(trace *ToolTrace, max int) {
-	if trace == nil || max <= 0 {
+	if trace == nil {
 		return
 	}
 	for i := range trace.Steps {
@@ -347,7 +354,13 @@ func (r *Recorder) AttachResponse(id string, responseBody []byte) error {
 }
 
 func (r *Recorder) AppendOutcome(id string, outcome Outcome) error {
-	ctx, cancel := r.replayOperationContext()
+	return r.AppendOutcomeContext(context.Background(), id, outcome)
+}
+
+// AppendOutcomeContext lets background dispatchers cancel outstanding receipt
+// I/O at shutdown. The recorder's operation timeout still bounds each write.
+func (r *Recorder) AppendOutcomeContext(parent context.Context, id string, outcome Outcome) error {
+	ctx, cancel := r.replayOperationContextFrom(parent)
 	defer cancel()
 	return r.storage.AppendOutcome(ctx, id, outcome)
 }
@@ -402,19 +415,18 @@ func (r *Recorder) getRecord(id string) (RoutingRecord, bool, error) {
 	return rec, found, err
 }
 
-func (r *Recorder) ListAllRecords() []RoutingRecord {
+func (r *Recorder) ListRecords() ([]RoutingRecord, error) {
 	ctx, cancel := r.replayOperationContext()
 	defer cancel()
-	records, err := r.storage.List(ctx)
+	return r.storage.List(ctx)
+}
+
+func (r *Recorder) ListAllRecords() []RoutingRecord {
+	records, err := r.ListRecords()
 	if err != nil {
 		return []RoutingRecord{}
 	}
 	return records
-}
-
-// Releases resources held by the storage backend.
-func (r *Recorder) Close() error {
-	return r.storage.Close()
 }
 
 // replayOperationContext is intentionally independent from a client request:
@@ -423,11 +435,17 @@ func (r *Recorder) Close() error {
 // config reload, or shutdown indefinitely. Store mutations acknowledge queued
 // persistence before returning, so callers can release the timer immediately.
 func (r *Recorder) replayOperationContext() (context.Context, context.CancelFunc) {
+	return r.replayOperationContextFrom(context.Background())
+}
+
+// replayOperationContextFrom bounds an operation whose caller owns cancellation,
+// such as the background outcome writer at shutdown.
+func (r *Recorder) replayOperationContextFrom(parent context.Context) (context.Context, context.CancelFunc) {
 	timeout := r.operationTimeout
 	if timeout <= 0 {
 		timeout = DefaultOperationTimeout
 	}
-	return context.WithTimeout(context.Background(), timeout)
+	return context.WithTimeout(parent, timeout)
 }
 
 // applyBodyCapturePolicy enforces one capture switch on one body field. The
@@ -439,24 +457,26 @@ func applyBodyCapturePolicy(body string, truncated, capture bool, maxBytes int) 
 	if !capture {
 		return "", false
 	}
-	if len(body) > maxBytes {
-		return strings.Clone(body[:maxBytes]), true
-	}
-	return body, truncated
+	body, cut := truncateString(body, maxBytes)
+	return body, truncated || cut
 }
 
 func truncateBody(body []byte, maxBytes int) (string, bool) {
-	if maxBytes <= 0 || len(body) <= maxBytes {
-		return string(body), false
-	}
-	return string(body[:maxBytes]), true
+	return truncateString(string(body), maxBytes)
 }
 
+// Captured text uses U+FFFD for malformed UTF-8 runs. Apply the byte budget after
+// normalization, and keep only complete runes so PostgreSQL TEXT remains valid.
 func truncateString(s string, maxBytes int) (string, bool) {
+	s = strings.ToValidUTF8(s, "\uFFFD")
 	if maxBytes <= 0 || len(s) <= maxBytes {
 		return s, false
 	}
-	return strings.Clone(s[:maxBytes]), true
+	end := maxBytes
+	for end > 0 && !utf8.RuneStart(s[end]) {
+		end--
+	}
+	return strings.Clone(s[:end]), true
 }
 
 func logSignalFields(signals Signal) map[string]interface{} {
@@ -482,7 +502,7 @@ func logSignalFields(signals Signal) map[string]interface{} {
 }
 
 func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
-	if !r.GuardrailsEnabled && !r.JailbreakEnabled && !r.PIIEnabled {
+	if !r.GuardrailsEnabled && !r.JailbreakEnabled && !r.PIIEnabled && !r.JailbreakScoreAvailable {
 		return
 	}
 
@@ -490,7 +510,7 @@ func appendGuardrailLogFields(fields map[string]interface{}, r RoutingRecord) {
 	fields["jailbreak_enabled"] = r.JailbreakEnabled
 	fields["pii_enabled"] = r.PIIEnabled
 
-	if r.JailbreakDetected {
+	if r.JailbreakDetected || r.JailbreakScoreAvailable {
 		fields["jailbreak_detected"] = r.JailbreakDetected
 		fields["jailbreak_type"] = r.JailbreakType
 		fields["jailbreak_score_available"] = r.JailbreakScoreAvailable

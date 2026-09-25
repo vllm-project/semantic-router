@@ -1,20 +1,11 @@
 import React, { useMemo, useState } from 'react'
+import CodeBlock from '@theme/CodeBlock'
 
 import openAPIDocument from '../../../static/openapi/apiserver/apiserver.openapi.json'
+import SchemaView, { exampleValue, OpenAPISchema } from './SchemaView'
 import styles from './styles.module.css'
 
 type HTTPMethod = 'get' | 'post' | 'patch' | 'put' | 'delete'
-
-interface OpenAPISchema {
-  $ref?: string
-  type?: string
-  format?: string
-  enum?: string[]
-  properties?: Record<string, OpenAPISchema>
-  required?: string[]
-  items?: OpenAPISchema
-  additionalProperties?: boolean | OpenAPISchema
-}
 
 interface OpenAPIMedia {
   schema?: OpenAPISchema
@@ -24,12 +15,18 @@ interface OpenAPIOperationPolicy {
   'x-vllm-sr-permission'?: string
   'x-vllm-sr-sensitivity'?: string
   'x-vllm-sr-audit-action'?: string
+  'x-vllm-sr-plane'?: string
+  'x-vllm-sr-audiences'?: string[]
+  'x-vllm-sr-stability'?: string
+  'x-vllm-sr-visibility'?: string
+  'x-vllm-sr-plugin-operations'?: Array<{ plugin: string, mode: string }>
 }
 
 interface OpenAPIOperation extends OpenAPIOperationPolicy {
   summary?: string
   description?: string
   operationId?: string
+  tags?: string[]
   security?: Array<Record<string, string[]>>
   parameters?: Array<{
     name: string
@@ -45,6 +42,7 @@ interface OpenAPIOperation extends OpenAPIOperationPolicy {
   }
   responses?: Record<string, {
     description?: string
+    headers?: Record<string, { description?: string, schema?: OpenAPISchema }>
     content?: Record<string, OpenAPIMedia>
   }>
 }
@@ -53,6 +51,7 @@ interface OpenAPISpec {
   openapi: string
   info: { title: string, description?: string, version: string }
   paths: Record<string, Partial<Record<HTTPMethod, OpenAPIOperation>>>
+  components?: { schemas?: Record<string, OpenAPISchema> }
 }
 
 interface OperationEntry {
@@ -63,6 +62,7 @@ interface OperationEntry {
 }
 
 const document = openAPIDocument as unknown as OpenAPISpec
+const definitions = document.components?.schemas ?? {}
 const methods: HTTPMethod[] = ['get', 'post', 'patch', 'put', 'delete']
 const operations: OperationEntry[] = Object.entries(document.paths)
   .flatMap(([path, item]) => methods.flatMap((method) => {
@@ -71,41 +71,22 @@ const operations: OperationEntry[] = Object.entries(document.paths)
   }))
   .sort((left, right) => left.path.localeCompare(right.path) || left.method.localeCompare(right.method))
 
-function schemaType(schema?: OpenAPISchema): string {
-  if (!schema) return 'unspecified'
-  if (schema.$ref) {
-    const parts = schema.$ref.split('/')
-    return parts[parts.length - 1] || schema.$ref
-  }
-  if (schema.type === 'array') return `array<${schemaType(schema.items)}>`
-  return schema.format ? `${schema.type ?? 'value'} · ${schema.format}` : schema.type ?? 'value'
-}
-
 function requestSchema(operation: OpenAPIOperation): OpenAPISchema | undefined {
   const media = Object.values(operation.requestBody?.content ?? {})[0]
   return media?.schema
 }
 
-function exampleValue(schema: OpenAPISchema | undefined, field = 'value'): unknown {
-  if (!schema) return {}
-  if (schema.enum?.length) return schema.enum[0]
-  if (schema.type === 'array') return [exampleValue(schema.items, 'item')]
-  if (schema.type === 'object' || schema.properties) {
-    const required = new Set(schema.required ?? [])
-    const properties = Object.entries(schema.properties ?? {})
-    let selected = properties.filter(([name]) => required.has(name))
-    if (!selected.length && properties.length) {
-      const preferredNames = ['text', 'messages', 'query', 'yaml', 'name', 'file_id', 'premise']
-      const preferred = preferredNames
-        .map(name => properties.find(([candidate]) => candidate === name))
-        .find(Boolean)
-      selected = [preferred ?? properties[0]]
-    }
-    return Object.fromEntries(selected.map(([name, child]) => [name, exampleValue(child, name)]))
-  }
-  if (schema.type === 'boolean') return false
-  if (schema.type === 'integer' || schema.type === 'number') return 0
-  return `<${field}>`
+function MediaSchemas({ content }: { content?: Record<string, OpenAPIMedia> }) {
+  return (
+    <div className={styles.mediaSchemas}>
+      {Object.entries(content ?? {}).map(([mediaType, media]) => (
+        <div key={mediaType}>
+          <code className={styles.mediaType}>{mediaType}</code>
+          <SchemaView name="body" schema={media.schema} definitions={definitions} />
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function curlExample(entry: OperationEntry): string {
@@ -125,7 +106,7 @@ function curlExample(entry: OperationEntry): string {
   if (entry.operation.requestBody) {
     const mediaType = Object.keys(entry.operation.requestBody.content ?? {})[0] ?? 'application/json'
     if (mediaType === 'application/json') {
-      const body = JSON.stringify(exampleValue(requestSchema(entry.operation)), null, 2)
+      const body = JSON.stringify(exampleValue(requestSchema(entry.operation), definitions), null, 2)
         .replace(/\u0027/g, '\u0027\\\u0027\u0027')
       parts.push(`  -H 'Content-Type: application/json'`)
       parts.push(`  -d '${body}'`)
@@ -150,7 +131,11 @@ export default function OpenAPIReference() {
   const visible = useMemo(
     () => operations.filter((entry) => {
       if (methodFilter !== 'all' && entry.method !== methodFilter) return false
-      return [entry.path, entry.method, entry.operation.summary, entry.operation.operationId]
+      return [
+        entry.path, entry.method, entry.operation.summary, entry.operation.operationId,
+        ...(entry.operation.tags ?? []),
+        ...(entry.operation['x-vllm-sr-plugin-operations'] ?? []).flatMap(({ plugin, mode }) => [plugin, mode]),
+      ]
         .filter(Boolean)
         .some(value => value!.toLowerCase().includes(normalized))
     }),
@@ -185,7 +170,7 @@ export default function OpenAPIReference() {
             type="search"
             value={query}
             onChange={event => setQuery(event.target.value)}
-            placeholder="Try config, classify, memory…"
+            placeholder="Try config, diagnostics, rag…"
           />
         </label>
         <label>
@@ -223,7 +208,7 @@ export default function OpenAPIReference() {
           ))}
         </nav>
 
-        <article className={styles.detail}>
+        <article key={selected?.id} className={styles.detail}>
           {selected
             ? (
                 <>
@@ -243,28 +228,56 @@ export default function OpenAPIReference() {
                       )
                     : null}
 
-                  <div className={styles.accessContract}>
+                  <dl className={styles.accessContract} aria-label="Operation access policy">
                     <div>
-                      <span>Authentication</span>
-                      <code>{selected.operation.security?.length ? 'runtime-configured bearer' : 'public'}</code>
+                      <dt>Authentication</dt>
+                      <dd>{selected.operation.security?.length ? 'Runtime-configured bearer' : 'Public'}</dd>
                     </div>
                     <div>
-                      <span>Permission</span>
-                      <code>{selected.operation['x-vllm-sr-permission'] ?? 'unspecified'}</code>
+                      <dt>Permission</dt>
+                      <dd><code>{selected.operation['x-vllm-sr-permission'] ?? 'unspecified'}</code></dd>
                     </div>
                     <div>
-                      <span>Sensitivity</span>
-                      <code>{selected.operation['x-vllm-sr-sensitivity'] ?? 'unspecified'}</code>
+                      <dt>Sensitivity</dt>
+                      <dd><code>{selected.operation['x-vllm-sr-sensitivity'] ?? 'unspecified'}</code></dd>
                     </div>
+                    {[
+                      ['Capability', selected.operation.tags?.join(', ')],
+                      ['Plane', selected.operation['x-vllm-sr-plane']],
+                      ['Audiences', selected.operation['x-vllm-sr-audiences']?.join(', ')],
+                      ['Stability', selected.operation['x-vllm-sr-stability']],
+                      ['Visibility', selected.operation['x-vllm-sr-visibility']],
+                    ].filter(([, value]) => value).map(([label, value]) => (
+                      <div key={label}>
+                        <dt>{label}</dt>
+                        <dd><code>{value}</code></dd>
+                      </div>
+                    ))}
                     {selected.operation['x-vllm-sr-audit-action']
                       ? (
                           <div>
-                            <span>Audit action</span>
-                            <code>{selected.operation['x-vllm-sr-audit-action']}</code>
+                            <dt>Audit action</dt>
+                            <dd><code>{selected.operation['x-vllm-sr-audit-action']}</code></dd>
                           </div>
                         )
                       : null}
-                  </div>
+                  </dl>
+
+                  {selected.operation['x-vllm-sr-plugin-operations']?.length
+                    ? (
+                        <section className={styles.block}>
+                          <h4>Plugin operations</h4>
+                          <div className={styles.pluginOperations}>
+                            {selected.operation['x-vllm-sr-plugin-operations'].map(({ plugin, mode }) => (
+                              <div key={`${plugin}:${mode}`}>
+                                <code>{plugin}</code>
+                                <span>{mode}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
+                      )
+                    : null}
 
                   <section className={styles.block}>
                     <h4>Request</h4>
@@ -278,13 +291,13 @@ export default function OpenAPIReference() {
                                   <span>{parameter.in}</span>
                                   {parameter.required ? <b>required</b> : null}
                                 </header>
-                                <small>{schemaType(parameter.schema)}</small>
+                                <SchemaView name="value" schema={parameter.schema} definitions={definitions} />
                                 {parameter.description ? <p>{parameter.description}</p> : null}
                               </div>
                             ))}
                           </div>
                         )
-                      : <p className={styles.muted}>No path or query parameters.</p>}
+                      : <p className={styles.muted}>No path, query, or header parameters.</p>}
                     {selected.operation.requestBody
                       ? (
                           <>
@@ -293,47 +306,43 @@ export default function OpenAPIReference() {
                                 Body
                                 {selected.operation.requestBody.required ? ' · required' : ''}
                               </strong>
-                              <span>{Object.keys(selected.operation.requestBody.content ?? {}).join(', ')}</span>
                               {selected.operation.requestBody.description
                                 ? <small>{selected.operation.requestBody.description}</small>
                                 : null}
                             </div>
-                            {Object.entries(requestSchema(selected.operation)?.properties ?? {}).length
-                              ? (
-                                  <div className={styles.bodyFields}>
-                                    {Object.entries(requestSchema(selected.operation)?.properties ?? {}).map(([name, schema]) => (
-                                      <div key={name}>
-                                        <code>{name}</code>
-                                        <span>{schemaType(schema)}</span>
-                                        {requestSchema(selected.operation)?.required?.includes(name)
-                                          ? <b>required</b>
-                                          : null}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )
-                              : null}
+                            <MediaSchemas content={selected.operation.requestBody.content} />
                           </>
                         )
                       : null}
-                    <pre><code>{curlExample(selected)}</code></pre>
+                    <CodeBlock language="bash" title="Example request">{curlExample(selected)}</CodeBlock>
                   </section>
 
                   <section className={styles.block}>
                     <h4>Responses</h4>
                     <div className={styles.responses}>
-                      {Object.entries(selected.operation.responses ?? {}).map(([status, response]) => {
-                        const schemas = Object.values(response.content ?? {})
-                          .map(media => schemaType(media.schema))
-                          .filter(Boolean)
-                        return (
-                          <div key={status}>
-                            <strong>{status}</strong>
+                      {Object.entries(selected.operation.responses ?? {}).map(([status, response]) => (
+                        <details key={status} open={status.startsWith('2')}>
+                          <summary>
+                            <strong data-status={status[0]}>{status}</strong>
                             <span>{response.description}</span>
-                            {schemas.length ? <code>{schemas.join(', ')}</code> : null}
+                          </summary>
+                          <div className={styles.responseDetails}>
+                            {Object.keys(response.headers ?? {}).length
+                              ? (
+                                  <div className={styles.responseHeaders}>
+                                    <strong>Headers</strong>
+                                    {Object.entries(response.headers ?? {}).map(([name, header]) => (
+                                      <SchemaView key={name} name={name} schema={{ ...header.schema, description: header.description }} definitions={definitions} />
+                                    ))}
+                                  </div>
+                                )
+                              : null}
+                            {Object.keys(response.content ?? {}).length
+                              ? <MediaSchemas content={response.content} />
+                              : <p className={styles.muted}>No response body.</p>}
                           </div>
-                        )
-                      })}
+                        </details>
+                      ))}
                     </div>
                   </section>
                 </>

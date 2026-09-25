@@ -130,7 +130,16 @@ helm-ci-setup:
 		helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --force-update; \
 		helm repo add grafana https://grafana.github.io/helm-charts --force-update; \
 		helm repo update; \
-		helm dependency build $(HELM_CHART_PATH); \
+		for attempt in 1 2 3; do \
+			if helm dependency build $(HELM_CHART_PATH); then \
+				break; \
+			fi; \
+			if [ "$$attempt" -eq 3 ]; then \
+				exit 1; \
+			fi; \
+			echo "$(YELLOW)[WARN]$(NC) Helm dependency download failed; retrying ($$((attempt + 1))/3)"; \
+			sleep 5; \
+		done; \
 	else \
 		echo "$(YELLOW)[WARN]$(NC) Skipping helm repo add/update; using Chart.lock dependency versions"; \
 		helm dependency build $(HELM_CHART_PATH) --skip-refresh; \

@@ -12,7 +12,9 @@ import (
 	"strings"
 	"time"
 
+	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 // TestQueryMode represents the test query mode
@@ -21,9 +23,6 @@ type TestQueryMode string
 const (
 	TestQueryModeSimulate TestQueryMode = "simulate"
 	TestQueryModeDryRun   TestQueryMode = "dry-run"
-
-	// Cold learned signals can take minutes on CPU; caller cancellation still wins.
-	topologyPreviewTimeout = 5 * time.Minute
 )
 
 // TestQueryRequest represents a test query request
@@ -123,10 +122,16 @@ func TopologyTestQueryHandler(configPath, routerAPIURL string, credentialProvide
 		case routerAPIURL == "":
 			result = failedTestQueryResult(req, "Router API is not configured.", http.StatusServiceUnavailable)
 		default:
+			if dashboardauth.RejectRevokedMutation(w, r) {
+				return
+			}
 			result = callRouterAPI(r.Context(), req, routerAPIURL, configPath, credentialProvider...)
 		}
 
 		result.RoutingLatency = time.Since(start).Milliseconds()
+		if r.Context().Err() != nil {
+			return
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if result.HTTPStatus != 0 {
@@ -212,6 +217,8 @@ func failedTestQueryResult(req TestQueryRequest, warning string, status int) *Te
 
 // callRouterAPI calls the real Router API and preserves its evaluation diagnostics.
 func callRouterAPI(ctx context.Context, req TestQueryRequest, routerAPIURL, configPath string, credentialProvider ...routerauth.CredentialProvider) *TestQueryResult {
+	ctx, cancel := context.WithTimeout(ctx, topologyPreviewTimeout(configPath))
+	defer cancel()
 	intentReq := RouterIntentRequest{
 		Text:    req.Query,
 		Model:   req.Model,
@@ -236,7 +243,7 @@ func callRouterAPI(ctx context.Context, req TestQueryRequest, routerAPIURL, conf
 		return failedTestQueryResult(req, "Router management credential is unavailable", http.StatusServiceUnavailable)
 	}
 
-	client := &http.Client{Timeout: topologyPreviewTimeout}
+	client := &http.Client{}
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		log.Printf("Router API preview failed: %v", err)
@@ -275,6 +282,14 @@ func callRouterAPI(ctx context.Context, req TestQueryRequest, routerAPIURL, conf
 		return failedTestQueryResult(req, "Failed to parse Router API response", http.StatusBadGateway)
 	}
 	return convertRouterResponse(req, &routerResp, configPath)
+}
+
+func topologyPreviewTimeout(configPath string) time.Duration {
+	settings := routerconfig.RoutingPreviewConfig{}
+	if cfg, err := routerconfig.Parse(configPath); err == nil {
+		settings = cfg.API.RoutingPreview
+	}
+	return settings.RequestTimeout() + routerconfig.RoutingPreviewResponseWriteAllowance
 }
 
 // System fallback decisions - these are hardcoded in the router, not from config

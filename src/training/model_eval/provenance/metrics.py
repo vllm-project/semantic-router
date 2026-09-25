@@ -21,6 +21,8 @@ __all__ = [
     "discrimination",
     "latency_percentiles",
     "operating_points",
+    "recall_at_fpr",
+    "roc_auc",
 ]
 
 
@@ -264,28 +266,36 @@ def discrimination(
     columns = [label_mapping[name] for name in positive_labels if name in label_mapping]
     if not columns:
         return None
-    scored = [
-        (sum(row[column] for column in columns), true in columns)
-        for row, true in zip(probabilities, y_true, strict=True)
-    ]
-    positives = sum(1 for _, is_positive in scored if is_positive)
-    negatives = len(scored) - positives
-    if not positives or not negatives:
+    scores = [sum(row[column] for column in columns) for row in probabilities]
+    positives = [true in columns for true in y_true]
+    if not any(positives) or all(positives):
         return None
 
+    budget = recall_at_fpr(scores, positives, fpr_budget)
     return {
         "positive_labels": list(positive_labels),
-        "roc_auc": _roc_auc(scored, positives, negatives),
+        "roc_auc": roc_auc(scores, positives),
         "fpr_budget": fpr_budget,
-        "recall_at_fpr_budget": _recall_at_fpr(
-            scored, positives, negatives, fpr_budget
-        ),
+        # Both classes are present by the check above, so an empty answer here
+        # means no threshold stays inside the budget. That is a recall of zero,
+        # not an undefined one.
+        "recall_at_fpr_budget": budget["recall"] if budget else 0.0,
     }
 
 
-def _roc_auc(scored: list[tuple[float, bool]], positives: int, negatives: int) -> float:
-    """Rank form of the area, which handles ties by sharing their mean rank."""
-    ordered = sorted(scored, key=lambda entry: entry[0])
+def roc_auc(scores: Sequence[float], positives: Sequence[bool]) -> float:
+    """Chance a positive row outranks a negative one.
+
+    Rank form, so equal scores share their mean rank. A gate scores many safe
+    rows identically, and a tie-blind ranking reports the artifact as better
+    ordered than it is.
+    """
+    ordered = sorted(zip(scores, positives, strict=True), key=lambda entry: entry[0])
+    positive_count = sum(1 for _, is_positive in ordered if is_positive)
+    negative_count = len(ordered) - positive_count
+    if not positive_count or not negative_count:
+        raise ValueError("an area under the curve needs both classes")
+
     rank_sum = 0.0
     index = 0
     while index < len(ordered):
@@ -297,24 +307,38 @@ def _roc_auc(scored: list[tuple[float, bool]], positives: int, negatives: int) -
             1 for _, is_positive in ordered[index : stop + 1] if is_positive
         )
         index = stop + 1
-    return (rank_sum - positives * (positives + 1) / 2.0) / (positives * negatives)
+    return (rank_sum - positive_count * (positive_count + 1) / 2.0) / (
+        positive_count * negative_count
+    )
 
 
-def _recall_at_fpr(
-    scored: list[tuple[float, bool]],
-    positives: int,
-    negatives: int,
+def recall_at_fpr(
+    scores: Sequence[float],
+    positives: Sequence[bool],
     fpr_budget: float,
-) -> float | None:
+) -> dict[str, float] | None:
     """Most recall reachable while the false-positive rate stays in budget.
 
     The sweep only reads a threshold between two distinct scores, so a tie
-    cannot be split to buy recall the gate could not actually deliver.
+    cannot be split to buy recall the gate could not actually deliver. The
+    threshold that bought the recall and the rate it actually spent come back
+    with it, because a small slice may carry no threshold that reaches the
+    budget exactly.
+
+    Returns ``None`` when the slice carries only one side, or when no threshold
+    stays inside the budget.
     """
-    ordered = sorted(scored, key=lambda entry: entry[0], reverse=True)
+    ordered = sorted(
+        zip(scores, positives, strict=True), key=lambda entry: entry[0], reverse=True
+    )
+    positive_count = sum(1 for _, is_positive in ordered if is_positive)
+    negative_count = len(ordered) - positive_count
+    if not positive_count or not negative_count:
+        return None
+
     hits = 0
     misfires = 0
-    best: float | None = None
+    best: dict[str, float] | None = None
     for index, (score, is_positive) in enumerate(ordered):
         if is_positive:
             hits += 1
@@ -322,8 +346,14 @@ def _recall_at_fpr(
             misfires += 1
         if index + 1 < len(ordered) and ordered[index + 1][0] == score:
             continue
-        if misfires / negatives <= fpr_budget:
-            best = max(best or 0.0, hits / positives)
+        rate = misfires / negative_count
+        recall = hits / positive_count
+        if rate <= fpr_budget and (best is None or recall > best["recall"]):
+            best = {
+                "recall": recall,
+                "threshold": score,
+                "false_positive_rate": rate,
+            }
     return best
 
 

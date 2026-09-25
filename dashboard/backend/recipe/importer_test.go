@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -17,6 +18,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/safefetch"
 )
 
 func TestStoreImportsListsAndIdempotentlyInstallsExactFiveZIP(t *testing.T) {
@@ -141,18 +144,34 @@ func TestURLAndIPSecurityPolicy(t *testing.T) {
 		"2001:0000:4136:e378:8000:63bf:3fff:fdd2", "2002:7f00:1::",
 		"fc00::1", "fec0::1",
 	} {
-		if isPublicIP(netipMustParse(raw)) {
+		if safefetch.IsPublicAddr(netipMustParse(raw)) {
 			t.Fatalf("non-public address accepted: %s", raw)
 		}
 	}
-	if !isPublicIP(netipMustParse("8.8.8.8")) {
+	if !safefetch.IsPublicAddr(netipMustParse("8.8.8.8")) {
 		t.Fatal("public address rejected")
+	}
+}
+
+// unwrapTransport finds the *http.Transport underneath safefetch's own
+// wrapping RoundTripper, the way errors.Unwrap chains through wrapped errors.
+func unwrapTransport(rt http.RoundTripper) (*http.Transport, bool) {
+	for {
+		if transport, ok := rt.(*http.Transport); ok {
+			return transport, true
+		}
+		unwrapper, ok := rt.(interface{ Unwrap() http.RoundTripper })
+		if !ok {
+			return nil, false
+		}
+		rt = unwrapper.Unwrap()
 	}
 }
 
 func TestPackageRedirectPolicyAllowsPublicGitHubReleaseAndRejectsUnsafeRedirects(t *testing.T) {
 	client := newPackageHTTPClient(staticIPResolver{addresses: []netip.Addr{netip.MustParseAddr("8.8.8.8")}})
-	if transport, ok := client.Transport.(*http.Transport); !ok || transport.Proxy != nil {
+	transport, ok := unwrapTransport(client.Transport)
+	if !ok || transport.Proxy != nil {
 		t.Fatalf("package transport proxy = %#v", client.Transport)
 	}
 	allowed, _ := http.NewRequest(http.MethodGet, "https://release-assets.githubusercontent.com/github-production-release-asset/file.zip?token=redacted", nil)
@@ -189,9 +208,14 @@ func TestPackageHTTPClientRejectsMixedPublicAndPrivateDNSAnswers(t *testing.T) {
 	if response != nil {
 		_ = response.Body.Close()
 	}
-	packageErr, ok := AsPackageError(err)
+	// The transport refuses with the shared sentinel, and the importer maps it
+	// onto its own code, so the caller-visible contract is unchanged.
+	if !errors.Is(err, safefetch.ErrDestinationForbidden) {
+		t.Fatalf("Do() error = %#v, want ErrDestinationForbidden", err)
+	}
+	packageErr, ok := AsPackageError(classifyDownloadError(err))
 	if !ok || packageErr.Code != ErrorSourceForbidden {
-		t.Fatalf("Do() error = %#v", err)
+		t.Fatalf("classifyDownloadError() = %#v, want %s", err, ErrorSourceForbidden)
 	}
 }
 

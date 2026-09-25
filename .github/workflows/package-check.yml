@@ -1,0 +1,60 @@
+name: CLI Package Tests
+
+on:
+  workflow_call:
+    inputs:
+      verification:
+        type: string
+        required: true
+      mode:
+        type: string
+        default: pr
+      tag:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: CLI Package
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VERIFICATION: ${{ inputs.verification }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install packaging tools
+        run: python -m pip install build twine PyYAML==6.0.3 jsonschema==4.26.0
+      - name: Qualify the final candidate
+        env:
+          MODE: ${{ inputs.mode }}
+          TAG: ${{ inputs.tag }}
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+        run: |
+          python tools/ci/package_contract.py --mode "$MODE" --tag "$TAG" \
+            --base-ref "$BASE_REF" --output .agent-harness/package
+      - name: Record packaging qualification
+        if: always()
+        run: |
+          python tools/ci/ci_results.py record --verification "$VERIFICATION" \
+            --evidence .agent-harness/package/evidence.json --output .agent-harness/package/result.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-result-${{ fromJSON(inputs.verification).id }}
+          path: .agent-harness/package/result.json
+          include-hidden-files: true
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vllm-sr-dist
+          path: .agent-harness/package/dist/
+          include-hidden-files: true
+          if-no-files-found: error

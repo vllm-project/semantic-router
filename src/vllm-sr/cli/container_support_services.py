@@ -26,6 +26,23 @@ from cli.utils import get_logger
 log = get_logger(__name__)
 
 
+def _observability_host_bind_address() -> str:
+    """Keep auxiliary dashboards and telemetry private unless explicitly exposed."""
+    address = os.getenv("VLLM_SR_OBSERVABILITY_HOST_BIND", "127.0.0.1").strip()
+    if address not in {"0.0.0.0", "127.0.0.1", "::", "::1"}:
+        raise ValueError(
+            "VLLM_SR_OBSERVABILITY_HOST_BIND must be an explicit wildcard or loopback IP"
+        )
+    return address
+
+
+def _published_observability_port(host_port: int, container_port: int) -> str:
+    address = _observability_host_bind_address()
+    if ":" in address:
+        address = f"[{address}]"
+    return f"{address}:{host_port}:{container_port}"
+
+
 def container_start_jaeger(
     network_name=None, stack_layout: RuntimeStackLayout | None = None
 ):
@@ -46,10 +63,24 @@ def container_start_jaeger(
         network_name,
         "-e",
         "COLLECTOR_OTLP_ENABLED=true",
+        "-e",
+        "SPAN_STORAGE_TYPE=badger",
+        "-e",
+        "BADGER_EPHEMERAL=false",
+        "-e",
+        "BADGER_DIRECTORY_KEY=/tmp/badger/keys",
+        "-e",
+        "BADGER_DIRECTORY_VALUE=/tmp/badger/values",
+        "-e",
+        "BADGER_SPAN_STORE_TTL=168h",
+        # The pinned image owns writable /tmp (UID10001). A named volume
+        # preserves it across replacements without a privileged init container.
+        "-v",
+        f"{container_name}-data:/tmp",
         "-p",
-        f"{stack_layout.jaeger_otlp_port}:4317",
+        _published_observability_port(stack_layout.jaeger_otlp_port, 4317),
         "-p",
-        f"{stack_layout.jaeger_ui_port}:16686",
+        _published_observability_port(stack_layout.jaeger_ui_port, 16686),
         "docker.io/jaegertracing/all-in-one:1.76.0",
     ]
     return _run_service_start(cmd, "Jaeger")
@@ -105,7 +136,7 @@ def container_start_prometheus(
         "-v",
         f"{os.path.abspath(prometheus_data_dir)}:/prometheus",
         "-p",
-        f"{stack_layout.prometheus_port}:9090",
+        _published_observability_port(stack_layout.prometheus_port, 9090),
         "docker.io/prom/prometheus:v2.53.0",
         "--config.file=/etc/prometheus/prometheus.yaml",
         "--storage.tsdb.path=/prometheus/data",
@@ -167,8 +198,10 @@ def container_start_grafana(
         f"{os.path.abspath(os.path.join(grafana_dir, 'grafana-dashboard.serve.yaml'))}:/etc/grafana/provisioning/dashboards/dashboard.yaml:ro",
         "-v",
         f"{os.path.abspath(os.path.join(grafana_dir, 'llm-router-dashboard.serve.json'))}:/etc/grafana/provisioning/dashboards/llm-router-dashboard.json:ro",
+        "-v",
+        f"{container_name}-data:/var/lib/grafana",
         "-p",
-        f"{stack_layout.grafana_port}:3000",
+        _published_observability_port(stack_layout.grafana_port, 3000),
         "docker.io/grafana/grafana:11.5.1",
     ]
     return _run_service_start(cmd, "Grafana")

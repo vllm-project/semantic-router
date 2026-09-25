@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 )
 
 // CredentialProvider resolves the Dashboard-owned Router management identity.
@@ -49,6 +51,8 @@ func StripBrowserCredentials(request *http.Request) {
 	request.Header.Del("Authorization")
 	request.Header.Del("Proxy-Authorization")
 	request.Header.Del("Cookie")
+	request.Header.Del(headers.VSROutcomeSource)
+	request.Header.Del(headers.VSROutcomePrincipal)
 	if request.URL != nil {
 		query := request.URL.Query()
 		query.Del("authToken")

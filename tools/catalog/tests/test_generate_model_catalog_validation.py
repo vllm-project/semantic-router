@@ -38,6 +38,61 @@ class ModelCatalogValidationTests(unittest.TestCase):
             "models[0].roles[0]",
         )
 
+    def test_virtual_model_recommendations_do_not_satisfy_required_assignments(
+        self,
+    ) -> None:
+        resources = catalog._load_json(catalog.RESOURCE_SCHEMA_PATH)
+        role_schema = {
+            **resources["$defs"]["models"]["items"]["properties"]["roles"]["items"],
+            "$defs": resources["$defs"],
+        }
+        role = {
+            "name": "review",
+            "required": True,
+            "minimum_candidates": 2,
+            "traits": ["reasoning"],
+        }
+        for advisory in (
+            {},
+            {"recommended_pool": []},
+            {"recommended_pool": ["operator/model"]},
+        ):
+            with self.subTest(advisory=advisory):
+                candidate = {**role, **advisory}
+                catalog._validate_schema(candidate, role_schema, "role")
+                catalog._validate_virtual_model_role(candidate, "role")
+                self.assertEqual(candidate["minimum_candidates"], 2)
+
+        source = {
+            "kind": "virtual",
+            "asset": "example",
+            "verification": {},
+            "roles": [role],
+        }
+        generated = catalog._generated_models(
+            {"models": [source]}, [{"id": "example", "sha256": "sha256:example"}]
+        )[0]
+        self.assertEqual(generated["roles"][0]["recommended_pool"], [])
+        self.assertNotIn("recommended_pool", source["roles"][0])
+
+        for minimum in (0, -1, True, 1.5, None):
+            with (
+                self.subTest(minimum=minimum),
+                self.assertRaises(catalog.CatalogBuildError),
+            ):
+                catalog._validate_virtual_model_role(
+                    {**role, "minimum_candidates": minimum}, "role"
+                )
+
+        for pool in (None, ["operator/model", "operator/model"], ["../model"]):
+            with (
+                self.subTest(pool=pool),
+                self.assertRaises(catalog.CatalogBuildError),
+            ):
+                catalog._validate_schema(
+                    {**role, "recommended_pool": pool}, role_schema, "role"
+                )
+
     def test_physical_chat_models_require_routing_metadata(self) -> None:
         model = {
             "distribution": {"type": "open_weights"},
@@ -250,7 +305,10 @@ class ModelCatalogValidationTests(unittest.TestCase):
         self,
     ) -> None:
         with tempfile.TemporaryDirectory() as directory:
-            repo_root = Path(directory)
+            physical_root = Path(directory) / "repository"
+            physical_root.mkdir()
+            repo_root = Path(directory) / "workspace"
+            repo_root.symlink_to(physical_root, target_is_directory=True)
             source_root = repo_root / "config" / "catalog"
             model_root = source_root / "resources" / "models"
             single_root = model_root / "single"
@@ -426,6 +484,41 @@ class ModelCatalogValidationTests(unittest.TestCase):
             catalog.CatalogBuildError, "unknown or duplicate operation"
         ):
             catalog._validate_providers([provider], self.protocols)
+
+    def test_provider_operation_override_keys_are_disjoint(self) -> None:
+        operation = "openai/chat-completions@1#create"
+        provider = {
+            "id": "example",
+            "category": "model_api",
+            "support_tier": "compatible",
+            "protocols": ["openai/chat-completions@1"],
+            "default_protocol": "openai/chat-completions@1",
+            "supported_operations": [
+                operation,
+                "openai/chat-completions@1#list_models",
+            ],
+            "path_overrides": {operation: "/chat/completions"},
+            "operation_overrides": {
+                "openai/chat-completions@1#list_models": {"path": "/models"}
+            },
+            "auth": {
+                "strategy": "bearer",
+                "header": "Authorization",
+                "prefix": "Bearer",
+            },
+            "presentation": {"logo": "monogram", "monogram": "E", "monochrome": True},
+            "conformance": {"status": "unverified"},
+        }
+        catalog._validate_providers([provider], self.protocols)
+
+        for path in ("/chat/completions", "/different"):
+            with self.subTest(path=path):
+                provider["operation_overrides"][operation] = {"path": path}
+                with self.assertRaisesRegex(
+                    catalog.CatalogBuildError,
+                    "both path_overrides and operation_overrides",
+                ):
+                    catalog._validate_providers([provider], self.protocols)
 
     def test_provider_catalog_model_protocol_must_be_supported(self) -> None:
         providers = {

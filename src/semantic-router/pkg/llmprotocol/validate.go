@@ -1,6 +1,7 @@
 package llmprotocol
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -37,6 +38,18 @@ func ValidateRequest(request Request, limits Limits) error {
 	}
 	if err := validateSampling(request.Sampling, limits); err != nil {
 		return err
+	}
+	if err := validateCacheSalt(request.CacheSalt); err != nil {
+		return err
+	}
+	if len(request.ContextManagement) > 0 {
+		value := bytes.TrimSpace(request.ContextManagement)
+		if !json.Valid(value) || len(value) == 0 || value[0] != '{' {
+			return NewError(ErrorInvalidRequest, "invalid_context_management", "context management must be a JSON object", nil)
+		}
+		if limits.MetadataBytes > 0 && len(value) > limits.MetadataBytes {
+			return NewError(ErrorInvalidRequest, "context_management_limit", "context management exceeds the configured limit", nil)
+		}
 	}
 	return validateReasoning(request, limits)
 }
@@ -338,6 +351,12 @@ func validateSampling(sampling Sampling, limits Limits) error {
 }
 
 func validateSamplingScalars(sampling Sampling) error {
+	if sampling.MinP != nil && (!finiteFloat(*sampling.MinP) || *sampling.MinP < 0 || *sampling.MinP > 1) {
+		return NewError(ErrorInvalidRequest, "invalid_min_p", "min_p must be between 0 and 1", nil)
+	}
+	if sampling.RepetitionPenalty != nil && (!finiteFloat(*sampling.RepetitionPenalty) || *sampling.RepetitionPenalty <= 0) {
+		return NewError(ErrorInvalidRequest, "invalid_repetition_penalty", "repetition_penalty must be finite and positive", nil)
+	}
 	if err := validateSamplingProbability(sampling); err != nil {
 		return err
 	}
@@ -367,8 +386,8 @@ func finiteFloat(value float64) bool {
 }
 
 func validateSamplingCounts(sampling Sampling) error {
-	if sampling.TopK != nil && *sampling.TopK < 0 {
-		return NewError(ErrorInvalidRequest, "invalid_top_k", "top_k cannot be negative", nil)
+	if sampling.TopK != nil && *sampling.TopK < -1 {
+		return NewError(ErrorInvalidRequest, "invalid_top_k", "top_k must be -1, zero, or positive", nil)
 	}
 	if sampling.MaxOutputTokens != nil && *sampling.MaxOutputTokens < 0 {
 		return NewError(ErrorInvalidRequest, "invalid_max_output_tokens", "max output tokens cannot be negative", nil)

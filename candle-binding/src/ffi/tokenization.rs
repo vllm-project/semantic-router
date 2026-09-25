@@ -9,7 +9,7 @@ use std::ffi::{c_char, CStr};
 /// # Safety
 /// - `text` must be a valid null-terminated C string
 #[no_mangle]
-pub extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> TokenizationResult {
+pub unsafe extern "C" fn tokenize_text(text: *const c_char, max_length: i32) -> TokenizationResult {
     // Adapted from lib.rs:410-483 to match types.rs TokenizationResult structure
     let text = unsafe {
         match CStr::from_ptr(text).to_str() {

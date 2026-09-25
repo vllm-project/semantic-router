@@ -122,16 +122,13 @@ func GetMissingModels(specs []ModelSpec) ([]ModelSpec, error) {
 			return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
 		}
 
-		// A complete immutable HF snapshot is reusable offline. Mutable refs and
-		// unknown/mismatched snapshots require the download path's safety check.
-		pinned := true
-		if spec.Revision != "" && spec.Revision != "main" {
-			pinned, err = cachedRevisionMatches(spec)
+		if complete && spec.PreparedArtifact == "" && spec.Revision != "" && spec.Revision != "main" {
+			complete, err = cachedRevisionMatches(spec)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("failed to check model %s: %w", spec.LocalPath, err)
 			}
 		}
-		if !complete || !pinned {
+		if !complete {
 			missing = append(missing, spec)
 		}
 	}
@@ -140,6 +137,13 @@ func GetMissingModels(specs []ModelSpec) ([]ModelSpec, error) {
 }
 
 func isSpecComplete(spec ModelSpec) (bool, error) {
+	if spec.PreparedArtifact != "" {
+		_, err := verifyPreparedArtifact(spec)
+		if errors.Is(err, fs.ErrNotExist) {
+			return false, nil
+		}
+		return err == nil, err
+	}
 	if spec.FilesOnly {
 		for _, name := range spec.RequiredFiles {
 			info, err := os.Stat(filepath.Join(spec.LocalPath, name))
@@ -159,7 +163,11 @@ func isSpecComplete(spec ModelSpec) (bool, error) {
 			return complete, err
 		}
 	}
-	for _, group := range spec.RequiredFileGroups {
+	groups, err := requiredRerankerGraphGroups(spec)
+	if err != nil {
+		return false, err
+	}
+	for _, group := range groups {
 		found := false
 		for _, pattern := range group {
 			matches, err := filepath.Glob(filepath.Join(spec.LocalPath, pattern))

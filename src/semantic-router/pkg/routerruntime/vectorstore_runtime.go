@@ -48,6 +48,44 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 	cfg.VectorStore.ApplyDefaults()
 	success := false
 
+	var pool *binding.Pool
+	if len(pools) > 0 {
+		pool = pools[0]
+	}
+	// Ingestion outlives individual request generations and owns independent
+	// embedding references until all its workers have stopped.
+	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
+	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
+	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
+	embeddingConfig.ModelDeployments = cfg.ModelDeployments
+	embeddingConfig.GlobalModelBindings = cfg.GlobalModelBindings
+	// Ingestion owns only the shared embedding consumer. Recipe classifier and
+	// safety bindings require their signal declarations and do not belong to
+	// this service's preparation scope.
+	embeddingConfig.ExternalModels = cfg.ExternalModels
+	embeddingConfig.ModelAdmission = cfg.ModelAdmission
+	prepared, err := modelruntime.PrepareOwnedGlobalServiceEmbeddings(context.Background(), embeddingConfig, native.New(pool))
+	if err != nil {
+		return nil, fmt.Errorf("prepare vector store embedding: %w", err)
+	}
+	embedder, err := prepareVectorStoreEmbedding(prepared, cfg.VectorStore)
+	if err != nil {
+		_ = prepared.Close()
+		return nil, err
+	}
+	defer func() {
+		if !success {
+			_ = prepared.Close()
+		}
+	}()
+	identity, err := embedding.ResolveProviderIdentity(embedder, embedding.ConsumerSettings{
+		ModelType: cfg.VectorStore.EmbeddingModel, Dimension: cfg.VectorStore.EmbeddingDimension,
+		InputPolicy: "vectorstore-chunk-content-and-query-v1",
+	})
+	if err != nil && (cfg.VectorStore.EmbeddingModel == "mmbert" || cfg.VectorStore.EmbeddingModel == "multimodal" || !errors.Is(err, embedding.ErrIdentityUnsupported)) {
+		return nil, fmt.Errorf("bind vector store embedding representation: %w", err)
+	}
+
 	storeReg, fileReg, regCloser, err := buildMetadataRegistries(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create metadata registry: %w", err)
@@ -74,7 +112,7 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 			_ = backend.Close()
 		}
 	}()
-	manager := vectorstore.NewManager(backend, storeReg, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType)
+	manager := vectorstore.NewManager(backend, storeReg, cfg.VectorStore.EmbeddingDimension, cfg.VectorStore.BackendType, vectorstore.WithEmbeddingIdentity(identity.Fingerprint))
 
 	ctx := context.Background()
 	if err = manager.LoadFromRegistry(ctx); err != nil {
@@ -84,28 +122,6 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 		logging.Warnf("Failed to load file registry on startup: %v", err)
 	}
 
-	var pool *binding.Pool
-	if len(pools) > 0 {
-		pool = pools[0]
-	}
-	// Ingestion outlives individual request generations and owns independent
-	// embedding references until all its workers have stopped.
-	embeddingConfig := &config.RouterConfig{VectorStore: cfg.VectorStore}
-	embeddingConfig.EmbeddingModels = cfg.EmbeddingModels
-	embeddingConfig.EmbeddingConfig = cfg.EmbeddingConfig
-	embeddingConfig.ModelDeployments = cfg.ModelDeployments
-	embeddingConfig.ModelBindings = cfg.ModelBindings
-	embeddingConfig.ExternalModels = cfg.ExternalModels
-	embeddingConfig.ModelAdmission = cfg.ModelAdmission
-	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), embeddingConfig, native.New(pool))
-	if err != nil {
-		return nil, fmt.Errorf("prepare vector store embedding: %w", err)
-	}
-	embedder, err := prepared.Get(cfg.VectorStore.EmbeddingModel, cfg.VectorStore.EmbeddingDimension, 0)
-	if err != nil {
-		_ = prepared.Close()
-		return nil, err
-	}
 	pipeline := vectorstore.NewIngestionPipeline(backend, fileStore, manager, embedder, vectorstore.PipelineConfig{
 		Workers:   cfg.VectorStore.IngestionWorkers,
 		QueueSize: 100,
@@ -123,6 +139,22 @@ func NewVectorStoreRuntime(cfg *config.RouterConfig, pools ...*binding.Pool) (*V
 		embeddings:     prepared,
 		drainTimeout:   time.Duration(cfg.VectorStore.IngestionDrainTimeoutSeconds) * time.Second,
 	}, nil
+}
+
+// Resolve output width before opening a backend or creating collection metadata.
+// Request a full provider first so an unchecked option view cannot masquerade
+// as support for a dimension that the model does not actually produce.
+func prepareVectorStoreEmbedding(prepared *embedding.Set, cfg *config.VectorStoreConfig) (embedding.Provider, error) {
+	provider, err := prepared.Get(cfg.EmbeddingModel, 0, 0)
+	if err != nil {
+		return nil, err
+	}
+	dimension, err := embedding.ResolveDimension(provider, cfg.EmbeddingDimension)
+	if err != nil {
+		return nil, fmt.Errorf("vector store output dimension: %w", err)
+	}
+	cfg.EmbeddingDimension = dimension
+	return embedding.WithOptions(provider, embedding.Options{Dimension: dimension}), nil
 }
 
 func buildMetadataRegistries(cfg *config.RouterConfig) (vectorstore.StoreRegistry, vectorstore.FileRegistry, io.Closer, error) {

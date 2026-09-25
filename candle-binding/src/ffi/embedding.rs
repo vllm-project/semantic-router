@@ -734,6 +734,10 @@ fn generate_mmbert_embedding(
         .get_mmbert_tokenizer()
         .ok_or_else(|| "mmBERT tokenizer not available".to_string())?;
 
+    if tokens_exceed_window(tokenizer, text, model.config().max_position_embeddings)? {
+        return Err("input exceeds the embedding model context window".into());
+    }
+
     // Tokenize
     let encoding = tokenizer
         .encode(text, true)
@@ -785,7 +789,13 @@ fn generate_mmbert_embeddings_batch(
 
     // Batch encode
     let embeddings = model
-        .encode_batch_with_matryoshka(tokenizer, texts, 8192, target_layer, target_dim)
+        .encode_batch_with_matryoshka(
+            tokenizer,
+            texts,
+            model.config().max_position_embeddings,
+            target_layer,
+            target_dim,
+        )
         .map_err(|e| format!("mmBERT batch encoding failed: {:?}", e))?;
 
     // Convert to Vec<Vec<f32>>
@@ -1325,7 +1335,8 @@ pub extern "C" fn calculate_embedding_similarity(
             eprintln!("Error generating embedding for text1");
             // Clean up allocated memory before returning
             if !emb_result1.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
             }
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
@@ -1345,11 +1356,13 @@ pub extern "C" fn calculate_embedding_similarity(
         if status2 != 0 || emb_result2.error {
             eprintln!("Error generating embedding for text2");
             if !emb_result1.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
             }
             // Also clean up emb_result2
             if !emb_result2.data.is_null() {
-                crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
+                // SAFETY: this live result owns the matching allocation and is released once.
+                unsafe { crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length) };
             }
             unsafe {
                 (*result) = EmbeddingSimilarityResult::default();
@@ -1368,8 +1381,10 @@ pub extern "C" fn calculate_embedding_similarity(
         let model_id = emb_result1.model_type;
 
         // Free the raw data
-        crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length);
-        crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length);
+        // SAFETY: this live result owns the matching allocation and is released once.
+        unsafe { crate::ffi::memory::free_embedding(emb_result1.data, emb_result1.length) };
+        // SAFETY: this live result owns the matching allocation and is released once.
+        unsafe { crate::ffi::memory::free_embedding(emb_result2.data, emb_result2.length) };
 
         (emb1, emb2, model_id)
     } else {

@@ -366,18 +366,68 @@ spec:
                             for semantic matching
                           items:
                             type: string
-                          maxItems: 100
-                          minItems: 1
+                          maxItems: 1000
+                          type: array
+                        imageCandidates:
+                          description: ImageCandidates contains local image paths
+                            or inline base64 images in the positive bank.
+                          items:
+                            type: string
+                          maxItems: 1000
                           type: array
                         name:
                           description: Name is the unique identifier for this signal
                           maxLength: 100
                           minLength: 1
                           type: string
+                        negativeCandidates:
+                          description: NegativeCandidates contains text anchors subtracted
+                            from the positive score.
+                          items:
+                            type: string
+                          maxItems: 1000
+                          type: array
+                        negativeImageCandidates:
+                          description: NegativeImageCandidates contains image anchors
+                            subtracted from the positive score.
+                          items:
+                            type: string
+                          maxItems: 1000
+                          type: array
+                        prototypeScoring:
+                          description: |-
+                            PrototypeScoring overrides the family's prototype construction and scoring.
+                            An omitted object inherits the family; an empty object uses core defaults.
+                          properties:
+                            bestWeight:
+                              description: BestWeight weights the best similarity
+                                against top-M support.
+                              type: number
+                            clusterSimilarityThreshold:
+                              description: ClusterSimilarityThreshold controls membership
+                                in prototype clusters.
+                              type: number
+                            enabled:
+                              description: Enabled controls clustering and the representative
+                                cap, not aggregation.
+                              type: boolean
+                            marginThreshold:
+                              description: MarginThreshold controls the winner-versus-runner-up
+                                score margin.
+                              type: number
+                            maxPrototypes:
+                              description: MaxPrototypes caps representatives when
+                                clustering is enabled.
+                              type: integer
+                            topM:
+                              description: TopM is the number of top similarities
+                                used for support.
+                              type: integer
+                          type: object
                         queryModality:
                           description: |-
                             QueryModality declares which modality of the incoming request payload
-                            the query embedding is computed from. Candidates always remain text;
+                            the query embedding is computed from. Candidates are encoded according to their declared text or image field;
                             the rule cosine-matches the text-anchor set against a query embedding
                             produced from the declared modality, all in the shared multimodal
                             embedding space.
@@ -397,13 +447,12 @@ spec:
                           - audio
                           type: string
                         threshold:
-                          description: Threshold is the similarity threshold for matching
-                            (0.0-1.0)
-                          maximum: 1
-                          minimum: 0
+                          description: Threshold accepts a cosine score, or positive-minus-negative
+                            margin when negatives are configured.
+                          maximum: 2
+                          minimum: -2
                           type: number
                       required:
-                      - candidates
                       - name
                       - threshold
                       type: object

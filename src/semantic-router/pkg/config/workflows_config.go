@@ -63,6 +63,8 @@ type WorkflowFinalConfig struct {
 }
 
 type WorkflowPlannerConfig struct {
+	// Model overrides the planner; when absent, the first assigned worker
+	// eligible for the actual planner-stage request is used.
 	Model               string `yaml:"model,omitempty" json:"model,omitempty"`
 	MaxCompletionTokens int    `yaml:"max_completion_tokens,omitempty" json:"max_completion_tokens,omitempty"`
 }
@@ -158,7 +160,7 @@ func (c *RouterConfig) HasFlowDecision() bool {
 	if c == nil {
 		return false
 	}
-	for _, decision := range c.Decisions {
+	for _, decision := range c.AllRoutingDecisions() {
 		if decision.Algorithm != nil && decision.Algorithm.Type == DecisionAlgorithmWorkflows {
 			return true
 		}
@@ -219,9 +221,6 @@ func validateWorkflowModeAndPlan(cfg *WorkflowsAlgorithmConfig) error {
 	case "", WorkflowModeStatic, WorkflowModeDynamic:
 	default:
 		return fmt.Errorf("mode must be %q or %q, got %q", WorkflowModeStatic, WorkflowModeDynamic, cfg.Mode)
-	}
-	if mode == WorkflowModeDynamic && strings.TrimSpace(cfg.Planner.Model) == "" {
-		return fmt.Errorf("planner.model is required when mode=dynamic")
 	}
 	return validateWorkflowStaticPlanConfig(mode, cfg)
 }

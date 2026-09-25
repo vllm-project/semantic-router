@@ -3,7 +3,11 @@
 //! Every call acquires an Arc before leaving the registry lock. Removing a
 //! handle cannot unload a model underneath an in-flight native operation.
 
+mod embedding_dimensions;
 mod generative;
+mod grounding;
+mod pair_scores;
+mod sequence;
 mod tasks;
 #[cfg(test)]
 mod tests;
@@ -31,6 +35,9 @@ use crate::model_architectures::traditional::bert::{
     TraditionalBertClassifier, TraditionalBertTokenClassifier,
 };
 use crate::model_architectures::traditional::deberta_v3::DebertaV3Classifier;
+use crate::model_architectures::traditional::modernbert::reranker::{
+    MatryoshkaReranker, PairScorerSelection,
+};
 use crate::model_architectures::traditional::modernbert::{
     ModernBertBackbone, TraditionalModernBertClassifier, TraditionalModernBertTokenClassifier,
 };
@@ -46,6 +53,8 @@ struct Options {
     precision: String,
     #[serde(default)]
     max_input_tokens: usize,
+    #[serde(default)]
+    document_max_input_tokens: usize,
     #[serde(default)]
     overflow: String,
     #[serde(default)]
@@ -69,14 +78,19 @@ struct Info {
     precision: String,
     architectural_max_tokens: usize,
     max_input_tokens: usize,
+    document_max_input_tokens: usize,
     overflow: String,
     labels: Vec<String>,
     modalities: Vec<String>,
+    available_dimensions: Vec<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pair_scorer: Option<PairScorerSelection>,
 }
 
 // Internal storage only: each FFI inference entry point has a distinct request
 // and response type, and rejects a handle of the wrong task.
 enum Model {
+    Reranker(Box<MatryoshkaReranker>),
     Backbone(Box<ModernBertBackbone>),
     Sequence(Box<TraditionalModernBertClassifier>),
     Token(Box<TraditionalModernBertTokenClassifier>),
@@ -171,7 +185,19 @@ fn task_tokenizer(path: &str, max_input_tokens: usize) -> Result<Tokenizer> {
     Ok(tokenizer)
 }
 
-fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
+fn load(options: Options, task: &str) -> Result<Arc<Instance>> {
+    load_selected(options, task, None)
+}
+
+fn load_selected(
+    mut options: Options,
+    task: &str,
+    selection: Option<PairScorerSelection>,
+) -> Result<Arc<Instance>> {
+    ensure!(
+        selection.is_none() || task == "pair_scores",
+        "configuration: pair scorer selection requires its task loader"
+    );
     let device = resolve_device(&options.device)?;
     let generative = matches!(task, "guard" | "generative");
     let precision = if generative && !device.is_cpu() {
@@ -194,30 +220,6 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
         "{}/config.json",
         options.model_path
     ))?)?;
-    let architectural_max_tokens = raw["max_position_embeddings"]
-        .as_u64()
-        .or_else(|| raw["text_max_position_embeddings"].as_u64())
-        .unwrap_or(512) as usize;
-    let limit = if task == "embedding" || generative {
-        architectural_max_tokens
-    } else {
-        architectural_max_tokens.min(512)
-    };
-    let max_input_tokens = if options.max_input_tokens == 0 {
-        limit
-    } else {
-        options.max_input_tokens
-    };
-    ensure!(
-        max_input_tokens > 0 && max_input_tokens <= limit,
-        "capability: input budget exceeds the task limit ({limit})"
-    );
-    let tokenizer = if task == "backbone" {
-        None
-    } else {
-        let tokenizer = task_tokenizer(&options.model_path, max_input_tokens)?;
-        Some(tokenizer)
-    };
     if options.model_type.is_empty() {
         options.model_type = raw
             .get("model_type")
@@ -227,15 +229,90 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
     }
     let modern = matches!(
         options.model_type.as_str(),
-        "modernbert" | "mmbert" | "mmbert32k" | "mmbert-32k"
+        "modernbert" | "mmbert" | "mmbert32k" | "mmbert-32k" | "vela_halu"
     );
+    let vela_halu = options.model_type == "vela_halu";
+    if vela_halu {
+        ensure!(
+            task == "hallucination",
+            "capability: vela_halu requires grounded text input"
+        );
+        grounding::validate_policy(&options.model_path, &raw)?;
+    }
+    let architectural_max_tokens = raw["max_position_embeddings"]
+        .as_u64()
+        .or_else(|| raw["text_max_position_embeddings"].as_u64())
+        .unwrap_or(512) as usize;
+    // An omitted classification budget preserves the historical default. An
+    // explicit budget is checked against the loaded adapter and checkpoint.
+    let limit = if vela_halu {
+        architectural_max_tokens.min(8192)
+    } else if modern || task == "embedding" || generative {
+        architectural_max_tokens
+    } else {
+        architectural_max_tokens.min(512)
+    };
+    let max_input_tokens = if options.max_input_tokens == 0 {
+        if vela_halu || task == "embedding" || task == "pair_scores" || generative {
+            limit
+        } else {
+            limit.min(512)
+        }
+    } else {
+        options.max_input_tokens
+    };
+    ensure!(
+        max_input_tokens > 0 && max_input_tokens <= limit,
+        "capability: input budget exceeds the task limit ({limit})"
+    );
+    let document_max_input_tokens = if options.document_max_input_tokens == 0 {
+        max_input_tokens
+    } else {
+        ensure!(
+            modern && matches!(task, "backbone" | "sequence" | "label_scores" | "token"),
+            "capability: document_max_input_tokens requires a typed ModernBERT window task"
+        );
+        ensure!(
+            options.document_max_input_tokens >= max_input_tokens,
+            "capability: document budget is smaller than the physical input budget"
+        );
+        options.document_max_input_tokens
+    };
+    let tokenizer = if task == "backbone" {
+        None
+    } else {
+        Some(task_tokenizer(&options.model_path, max_input_tokens)?)
+    };
+    sequence::validate_problem_type(&raw, task)?;
+    if task == "pair_scores" {
+        ensure!(
+            options.overflow.is_empty() || options.overflow == "reject",
+            "capability: pair scoring requires reject overflow"
+        );
+        let special_tokens = tokenizer
+            .as_ref()
+            .and_then(|t| t.get_post_processor())
+            .map_or(0, |p| p.added_tokens(true));
+        ensure!(
+            max_input_tokens >= special_tokens,
+            "capability: pair budget is smaller than its special-token template"
+        );
+    }
     let model = match task {
+        "pair_scores" if modern => Model::Reranker(
+            MatryoshkaReranker::load(&options.model_path, &device, selection.unwrap_or_default())?
+                .into(),
+        ),
         "backbone" if modern => {
             Model::Backbone(ModernBertBackbone::load(&options.model_path, &device)?.into())
         }
-        "sequence" | "nli" if modern => {
+        "sequence" | "label_scores" | "nli" if modern => {
             let model =
-                TraditionalModernBertClassifier::load_from_directory(&options.model_path, use_cpu)?;
+                TraditionalModernBertClassifier::load_from_directory_with_max_sequence_length(
+                    &options.model_path,
+                    use_cpu,
+                    max_input_tokens,
+                )?;
             ensure!(
                 device_name(model.device()) == device_name(&device),
                 "capability: classifier silently selected a different device"
@@ -273,7 +350,11 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
             Model::Deberta(model.into())
         }
         "token" | "hallucination" if modern => {
-            let model = TraditionalModernBertTokenClassifier::new(&options.model_path, use_cpu)?;
+            let model = TraditionalModernBertTokenClassifier::new_with_max_sequence_length(
+                &options.model_path,
+                use_cpu,
+                max_input_tokens,
+            )?;
             ensure!(
                 device_name(model.device()) == device_name(&device),
                 "capability: token classifier silently selected a different device"
@@ -384,7 +465,7 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
         _ => bail!("capability: model type does not implement requested task"),
     };
     let overflow = if options.overflow.is_empty() {
-        if generative {
+        if vela_halu || generative || task == "pair_scores" {
             "reject".to_owned()
         } else {
             "truncate".to_owned()
@@ -397,7 +478,7 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
         "configuration: overflow must be truncate or reject"
     );
     ensure!(!generative || overflow == "reject", "capability: generative task inputs use reject overflow to preserve full templates and candidates");
-    let mut labels = if task == "backbone" {
+    let mut labels = if task == "backbone" || task == "pair_scores" {
         vec![]
     } else {
         raw["id2label"]
@@ -435,8 +516,10 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
             labels = vec!["SUPPORTED".to_owned(), "HALLUCINATED".to_owned()];
         }
         ensure!(
-            labels.len() == 2,
-            "capability: hallucination requires two labels"
+            labels.len() == 2
+                && labels[0].eq_ignore_ascii_case("supported")
+                && labels[1].eq_ignore_ascii_case("hallucinated"),
+            "capability: hallucination requires supported=0, hallucinated=1 labels"
         );
     }
     let modalities = if task == "embedding" {
@@ -454,6 +537,11 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
     .into_iter()
     .map(str::to_owned)
     .collect();
+    let available_dimensions = embedding_dimensions::for_model(&model);
+    let pair_scorer = match &model {
+        Model::Reranker(model) => Some(model.selection()),
+        _ => None,
+    };
     crate::core::device::drain_loader_queue(&device);
     Ok(Arc::new(Instance {
         model,
@@ -466,28 +554,52 @@ fn load(mut options: Options, task: &str) -> Result<Arc<Instance>> {
             precision: precision.to_owned(),
             architectural_max_tokens,
             max_input_tokens,
+            document_max_input_tokens,
             overflow,
             labels,
             modalities,
+            available_dimensions,
+            pair_scorer,
         },
     }))
 }
 
 fn bind_head(source: &Instance, path: &str, task: &str) -> Result<Arc<Instance>> {
+    let raw: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(format!("{path}/config.json"))?)?;
+    sequence::validate_problem_type(&raw, task)?;
     let tokenizer = task_tokenizer(path, source.info.max_input_tokens)?;
     let model = match (&source.model, task) {
-        (Model::Backbone(model), "sequence") => {
-            Model::Sequence(model.bind_sequence_head(path)?.into())
-        }
-        (Model::Backbone(model), "token") => Model::Token(model.bind_token_head(path)?.into()),
-        (Model::Sequence(model), "sequence") => {
-            Model::Sequence(model.bind_sequence_head(path)?.into())
-        }
-        (Model::Sequence(model), "token") => Model::Token(model.bind_token_head(path)?.into()),
-        (Model::Token(model), "sequence") => {
-            Model::Sequence(model.bind_sequence_head(path)?.into())
-        }
-        (Model::Token(model), "token") => Model::Token(model.bind_token_head(path)?.into()),
+        (Model::Backbone(model), "sequence" | "label_scores") => Model::Sequence(
+            model
+                .bind_sequence_head(path, source.info.max_input_tokens)?
+                .into(),
+        ),
+        (Model::Backbone(model), "token") => Model::Token(
+            model
+                .bind_token_head(path, source.info.max_input_tokens)?
+                .into(),
+        ),
+        (Model::Sequence(model), "sequence" | "label_scores") => Model::Sequence(
+            model
+                .bind_sequence_head(path, source.info.max_input_tokens)?
+                .into(),
+        ),
+        (Model::Sequence(model), "token") => Model::Token(
+            model
+                .bind_token_head(path, source.info.max_input_tokens)?
+                .into(),
+        ),
+        (Model::Token(model), "sequence" | "label_scores") => Model::Sequence(
+            model
+                .bind_sequence_head(path, source.info.max_input_tokens)?
+                .into(),
+        ),
+        (Model::Token(model), "token") => Model::Token(
+            model
+                .bind_token_head(path, source.info.max_input_tokens)?
+                .into(),
+        ),
         _ => bail!("capability: only ModernBERT backbones support explicit head binding"),
     };
     let mut info = source.info.clone();

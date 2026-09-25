@@ -12,23 +12,43 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/admission"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
 // writeClassificationError maps a classification service error to an HTTP
-// status code: empty/whitespace input is a client error (400 INVALID_INPUT);
-// an unresolved decision under fail_request is a backend outage
-// (503 DECISION_UNRESOLVED, matching ExtProc); anything else is treated as an
+// status code: empty/whitespace input or a model input limit is a client error
+// (400 INVALID_INPUT);
+// an unavailable classifier or unresolved decision under fail_request is a
+// service outage (503); anything else is treated as an
 // internal error (500 CLASSIFICATION_ERROR).
 func (s *ClassificationAPIServer) writeClassificationError(w http.ResponseWriter, err error) {
+	if errors.Is(err, services.ErrConfigHashMismatch) {
+		s.writeErrorResponse(w, http.StatusPreconditionFailed, "CONFIG_HASH_MISMATCH", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrConfigHashUnavailable) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CONFIG_HASH_UNAVAILABLE", err.Error())
+		return
+	}
 	if errors.Is(err, services.ErrEmptyText) ||
-		errors.Is(err, services.ErrInvalidRequestFacts) {
+		errors.Is(err, services.ErrInvalidRequestFacts) ||
+		errors.Is(err, binding.ErrInputLimit) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_INPUT", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrUnknownDiagnosticRecipe) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_RECIPE", err.Error())
 		return
 	}
 	if errors.Is(err, services.ErrUnknownRoutingModel) {
 		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_ROUTING_MODEL", err.Error())
+		return
+	}
+	if errors.Is(err, services.ErrClassifierUnavailable) {
+		s.writeErrorResponse(w, http.StatusServiceUnavailable, "CLASSIFIER_UNAVAILABLE", err.Error())
 		return
 	}
 	if errors.Is(err, decision.ErrDecisionUnresolved) {
@@ -64,10 +84,16 @@ func (s *ClassificationAPIServer) handleIntentClassification(w http.ResponseWrit
 // should be evaluated regardless of whether they are used in decisions
 func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter, r *http.Request) {
 	var req services.IntentRequest
+	expected := r.Header.Get(headers.SRBenchExpectedConfigHash)
+	if expected != "" && !headers.ValidConfigHash(expected) {
+		s.writeErrorResponse(w, http.StatusBadRequest, "INVALID_CONFIG_HASH", "expected config hash must be a lowercase SHA-256 digest")
+		return
+	}
 	if err := s.parseStrictJSONRequest(r, &req); err != nil {
 		s.writeJSONRequestError(w, err)
 		return
 	}
+	req.ExpectedConfigHash = expected
 
 	if r.URL.Query().Get("trace") == "true" {
 		if req.Options == nil {
@@ -75,17 +101,7 @@ func (s *ClassificationAPIServer) handleEvalClassification(w http.ResponseWriter
 		}
 		req.Options.Trace = true
 	}
-	response, err := s.classificationSvc.ClassifyIntentForEval(r.Context(), req)
-	if err != nil {
-		if response != nil {
-			s.writeJSONResponse(w, http.StatusServiceUnavailable, response)
-			return
-		}
-		s.writeClassificationError(w, err)
-		return
-	}
-
-	s.writeJSONResponse(w, http.StatusOK, response)
+	s.runRoutingPreview(w, r, req)
 }
 
 // handlePIIDetection handles PII detection requests
@@ -135,6 +151,13 @@ func (s *ClassificationAPIServer) handleBatchClassification(w http.ResponseWrite
 		return
 	}
 
+	selected, releaseRecipe, scopeErr := recipeDiagnosticService(service, req.Recipe)
+	defer releaseRecipe()
+	if scopeErr != nil {
+		s.writeClassificationError(w, scopeErr)
+		return
+	}
+	service = selected
 	metrics.RecordBatchClassificationTexts("unified", len(req.Texts))
 	if !s.ensureUnifiedClassifierAvailable(w, service) {
 		return
@@ -229,6 +252,7 @@ func (s *ClassificationAPIServer) ensureUnifiedClassifierAvailable(w http.Respon
 
 func (s *ClassificationAPIServer) buildBatchClassificationResponse(unifiedResults *services.UnifiedBatchResponse, req BatchClassificationRequest) BatchClassificationResponse {
 	return BatchClassificationResponse{
+		Recipe:           diagnosticRecipeName(req.Recipe),
 		Results:          s.extractRequestedResults(unifiedResults, req.TaskType, req.Options),
 		TotalCount:       len(req.Texts),
 		ProcessingTimeMs: unifiedResults.ProcessingTimeMs,

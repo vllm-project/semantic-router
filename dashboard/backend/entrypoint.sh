@@ -12,16 +12,24 @@ SERVER_READONLY=${DASHBOARD_READONLY:-false}
 RUNTIME_CONFIG_WRITABLE=${DASHBOARD_RUNTIME_CONFIG_WRITABLE:-true}
 RECIPE_STORE_WRITABLE=${DASHBOARD_RECIPE_STORE_WRITABLE:-true}
 LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}
-EVALUATION_DATA_DIR=${EVALUATION_DATA_DIR:-/app/data/evaluation}
-EVALUATION_ENABLED=${EVALUATION_ENABLED:-true}
-export EVALUATION_DATA_DIR EVALUATION_ENABLED
+K8S_CONFIGMAP_TARGET=
+if [ -n "${VLLM_SR_K8S_CONFIGMAP_NAME:-}" ] &&
+   [ -n "${VLLM_SR_K8S_CONFIGMAP_NAMESPACE:-}" ]; then
+    K8S_CONFIGMAP_TARGET=true
+fi
 
 # OpenShift restricted SCCs run images with an arbitrary non-root UID that is
 # a member of the root group. Such a process cannot prepare users or bind
-# mounts, so keep runtime mutations fail-closed and start directly. The image
-# grants group 0 write access only to /app/data for Dashboard-owned state.
+# mounts, so keep local-file mutations fail-closed and start directly. The
+# image grants group 0 write access only to /app/data for Dashboard-owned
+# state. Runtime config writes are the one exception: when a Kubernetes
+# ConfigMap target is configured (issue #3688), that write goes through the
+# Kubernetes API instead of the local filesystem, so it does not need the
+# permission preparation this branch skips.
 if [ "$(id -u)" -ne 0 ]; then
-    DASHBOARD_RUNTIME_CONFIG_WRITABLE=false
+    if [ -z "$K8S_CONFIGMAP_TARGET" ]; then
+        DASHBOARD_RUNTIME_CONFIG_WRITABLE=false
+    fi
     DASHBOARD_RECIPE_STORE_WRITABLE=false
     OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
     export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE \
@@ -60,7 +68,8 @@ fi
 # mutations. Config mount availability is intentionally independent from the
 # managed Recipe package store: an admin may still import packages for later
 # activation when only the runtime config mount is read-only.
-if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; then
+if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ] &&
+   [ -z "$K8S_CONFIGMAP_TARGET" ]; then
     if [ ! -f "$CONFIG_FILE_PATH" ] || [ ! -d "$STATE_DIR" ] ||
        ! python3 "$PERMISSION_HELPER" probe-config "$STATE_DIR" "$CONFIG_FILE_PATH"; then
         echo "Dashboard runtime config is read-only; runtime mutation is disabled while Recipe package storage remains independent" >&2
@@ -79,7 +88,8 @@ DASHBOARD_RUNTIME_CONFIG_WRITABLE=$RUNTIME_CONFIG_WRITABLE
 DASHBOARD_RECIPE_STORE_WRITABLE=$RECIPE_STORE_WRITABLE
 export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE
 
-if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; then
+if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ] &&
+   [ -z "$K8S_CONFIGMAP_TARGET" ]; then
     STATE_GID=65532
     if [ -d "$STATE_DIR" ]; then
         add_nonroot_group_gid "$STATE_GID"
@@ -111,13 +121,7 @@ if [ -d /app/data ]; then
     DATA_GID=65532
     add_nonroot_group_gid "$DATA_GID"
     python3 "$PERMISSION_HELPER" prepare-tree /app/data "$DATA_GID" \
-        --exclude-path "$EVALUATION_DATA_DIR"
-fi
-if ! python3 "$PERMISSION_HELPER" prepare-private-tree \
-    "$EVALUATION_DATA_DIR" 65532 65532; then
-    EVALUATION_ENABLED=false
-    export EVALUATION_ENABLED
-    echo "Warning: Evaluation Plane is disabled because its private data store could not be prepared safely" >&2
+        --exclude-path /app/data/evaluation
 fi
 
 # The dashboard is deliberately nonroot, but managed Recipe topology and

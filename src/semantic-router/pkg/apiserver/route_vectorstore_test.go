@@ -3,8 +3,11 @@
 package apiserver
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/vectorstore"
@@ -68,4 +71,75 @@ func TestParseVectorStoreListParamsCapsLimit(t *testing.T) {
 	if params.After != "vs_a" {
 		t.Fatalf("expected after cursor vs_a, got %q", params.After)
 	}
+}
+
+func TestHandleListVectorStoresStablePagination(t *testing.T) {
+	ctx := context.Background()
+	registry := vectorstore.NewMemoryMetadataRegistry()
+	for _, id := range []string{"vs_a", "vs_b", "vs_c"} {
+		if err := registry.SaveStore(ctx, &vectorstore.VectorStore{
+			ID:        id,
+			Object:    "vector_store",
+			CreatedAt: 1,
+			Status:    "active",
+		}); err != nil {
+			t.Fatalf("save store %s: %v", id, err)
+		}
+	}
+
+	manager := vectorstore.NewManager(
+		vectorstore.NewMemoryBackend(vectorstore.MemoryBackendConfig{}),
+		registry,
+		2,
+		vectorstore.BackendTypeMemory,
+	)
+	if err := manager.LoadFromRegistry(ctx); err != nil {
+		t.Fatalf("load stores: %v", err)
+	}
+	SetVectorStoreManager(manager)
+	t.Cleanup(func() { SetVectorStoreManager(nil) })
+
+	server := &ClassificationAPIServer{}
+	firstRequest := httptest.NewRequest(http.MethodGet, "/api/v1/storage/vector-stores?limit=2", nil)
+	firstResponse := httptest.NewRecorder()
+	server.handleListVectorStores(firstResponse, firstRequest)
+	if firstResponse.Code != http.StatusOK {
+		t.Fatalf("first page returned %d: %s", firstResponse.Code, firstResponse.Body.String())
+	}
+
+	var first objectListResponse[*vectorstore.VectorStore]
+	if err := json.Unmarshal(firstResponse.Body.Bytes(), &first); err != nil {
+		t.Fatalf("decode first page: %v", err)
+	}
+	if got := vectorStoreResponseIDs(first.Data); !reflect.DeepEqual(got, []string{"vs_c", "vs_b"}) {
+		t.Fatalf("first page IDs = %v, want [vs_c vs_b]", got)
+	}
+
+	cursor := first.Data[len(first.Data)-1].ID
+	secondRequest := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/storage/vector-stores?limit=2&after="+cursor,
+		nil,
+	)
+	secondResponse := httptest.NewRecorder()
+	server.handleListVectorStores(secondResponse, secondRequest)
+	if secondResponse.Code != http.StatusOK {
+		t.Fatalf("second page returned %d: %s", secondResponse.Code, secondResponse.Body.String())
+	}
+
+	var second objectListResponse[*vectorstore.VectorStore]
+	if err := json.Unmarshal(secondResponse.Body.Bytes(), &second); err != nil {
+		t.Fatalf("decode second page: %v", err)
+	}
+	if got := vectorStoreResponseIDs(second.Data); !reflect.DeepEqual(got, []string{"vs_a"}) {
+		t.Fatalf("second page IDs = %v, want [vs_a]", got)
+	}
+}
+
+func vectorStoreResponseIDs(stores []*vectorstore.VectorStore) []string {
+	ids := make([]string, 0, len(stores))
+	for _, store := range stores {
+		ids = append(ids, store.ID)
+	}
+	return ids
 }

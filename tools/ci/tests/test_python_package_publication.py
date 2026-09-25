@@ -7,10 +7,12 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
+from check_cli_wheel import check_wheel  # noqa: E402
 from prepare_dev_package import prepare_version  # noqa: E402
 from validate_workflows import load_workflows, needs  # noqa: E402
 
@@ -61,9 +63,9 @@ class PythonPublisherContractTests(unittest.TestCase):
         self.assertEqual(publisher["with"]["channel"], "dev")
         for job_name in ("pypi", "images", "helm"):
             job = main.jobs[job_name]
-            self.assertIn("gate", needs(job))
+            self.assertIn("ci", needs(job))
             self.assertIn("!cancelled()", job["if"])
-            self.assertIn("needs.gate.result == 'success'", job["if"])
+            self.assertIn("needs.ci.result == 'success'", job["if"])
 
     def test_only_trusted_main_and_release_events_can_publish(self) -> None:
         condition = " ".join(self.publisher.jobs["pypi"]["if"].split())
@@ -107,12 +109,95 @@ class PythonPublisherContractTests(unittest.TestCase):
         )
         self.assertLess(smoke_index, upload_index)
         self.assertEqual(needs(self.publisher.jobs["pypi"]), {"build"})
-        integration = self.workflows["integration-test-vllm-sr-cli.yml"]
-        self.assertIn(
-            "check_cli_wheel.py",
-            str(integration.jobs["package-tests"]["steps"]),
-        )
-        self.assertNotIn("secrets.", str(integration.jobs["package-tests"]))
+        package = self.workflows["package-check.yml"]
+        self.assertIn("package_contract.py", str(package.jobs))
+        implementation = (REPO_ROOT / "tools/ci/package_contract.py").read_text()
+        self.assertIn("check_wheel(wheels[0])", implementation)
+        for filename in ("main.yml", "release.yml"):
+            self.assertTrue(
+                self.workflows[filename].jobs["pypi"]["with"]["prebuilt-dist"]
+            )
+
+    def test_installer_uses_isolated_home_without_runtime_bootstrap(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            wheel = Path(temporary) / "candidate.whl"
+            wheel.touch()
+            with (
+                patch.dict(
+                    os.environ,
+                    {
+                        "VLLM_SR_INSTALL_ROOT": "/outside",
+                        "VLLM_SR_PIP_SPEC": "/outside.whl",
+                        "BASH_ENV": "/outside",
+                        "PYTHONPATH": "/outside",
+                    },
+                ),
+                patch("check_cli_wheel.sys.platform", "linux"),
+                patch("check_cli_wheel.venv.EnvBuilder.create"),
+                patch(
+                    "check_cli_wheel.subprocess.run",
+                    side_effect=RuntimeError("stop before installation"),
+                ) as run,
+                self.assertRaisesRegex(RuntimeError, "stop before installation"),
+            ):
+                check_wheel(wheel)
+
+            command = run.call_args.kwargs["args"]
+            environment = run.call_args.kwargs["env"]
+            self.assertEqual(command[:2], ["bash", str(REPO_ROOT / "install.sh")])
+            self.assertEqual(command[command.index("--mode") + 1], "cli")
+            self.assertEqual(command[command.index("--runtime") + 1], "skip")
+            self.assertIn("--no-launch", command)
+            self.assertEqual(
+                command[command.index("--pip-spec") + 1], str(wheel.resolve())
+            )
+            for name in (
+                "VLLM_SR_INSTALL_ROOT",
+                "VLLM_SR_PIP_SPEC",
+                "BASH_ENV",
+                "PYTHONPATH",
+            ):
+                self.assertNotIn(name, environment)
+            for option in ("--install-root", "--bin-dir"):
+                self.assertTrue(
+                    Path(command[command.index(option) + 1]).is_relative_to(
+                        run.call_args.kwargs["cwd"]
+                    )
+                )
+            self.assertEqual(environment["PIP_CONFIG_FILE"], os.devnull)
+            self.assertNotEqual(Path(environment["HOME"]), Path.home())
+            self.assertTrue(
+                Path(environment["HOME"]).is_relative_to(run.call_args.kwargs["cwd"])
+            )
+
+    def test_windows_keeps_the_direct_wheel_installation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            wheel = Path(temporary) / "candidate.whl"
+            wheel.touch()
+            with (
+                patch("check_cli_wheel.sys.platform", "win32"),
+                patch("check_cli_wheel.venv.EnvBuilder.create") as create,
+                patch(
+                    "check_cli_wheel.subprocess.run",
+                    side_effect=RuntimeError("stop before installation"),
+                ) as run,
+                self.assertRaisesRegex(RuntimeError, "stop before installation"),
+            ):
+                check_wheel(wheel)
+
+            create.assert_called_once()
+            command = run.call_args.kwargs["args"]
+            self.assertEqual(
+                command[1:],
+                [
+                    "-I",
+                    "-m",
+                    "pip",
+                    "install",
+                    "--disable-pip-version-check",
+                    str(wheel.resolve()),
+                ],
+            )
 
     def _run_version_contract(
         self, *, channel: str, version: str, tag: str, snapshot: str

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -233,6 +234,62 @@ func TestCallRouterAPIUsesServerCredential(t *testing.T) {
 
 	require.Empty(t, result.Warning)
 	require.Equal(t, "balanced-route", result.MatchedDecision)
+}
+
+func TestTopologyPreviewUsesCanonicalTimeout(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("version: v0.3\nglobal:\n  services:\n    api:\n      routing_preview:\n        request_timeout_seconds: 600\n"), 0o600))
+	require.Equal(t, 605*time.Second, topologyPreviewTimeout(configPath))
+}
+
+func TestTopologyPreviewPreservesTimeoutAndOverloadStatus(t *testing.T) {
+	for _, status := range []int{http.StatusGatewayTimeout, http.StatusTooManyRequests} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(status)
+			}))
+			defer upstream.Close()
+			handler := TopologyTestQueryHandler("", upstream.URL)
+			recorder := httptest.NewRecorder()
+			handler(recorder, httptest.NewRequest(http.MethodPost, "/api/topology/test-query", strings.NewReader(`{"query":"hello"}`)))
+			require.Equal(t, status, recorder.Code)
+		})
+	}
+}
+
+func TestTopologyPreviewPropagatesClientCancellation(t *testing.T) {
+	started, canceled := make(chan struct{}), make(chan struct{})
+	upstream := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
+		var request RouterIntentRequest
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		close(started)
+		<-r.Context().Done()
+		close(canceled)
+	}))
+	defer upstream.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		callRouterAPI(ctx, TestQueryRequest{Query: "hello", Mode: TestQueryModeDryRun}, upstream.URL, "")
+	}()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("Topology did not invoke Preview")
+	}
+	cancel()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("Topology did not cancel upstream Preview")
+	}
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Topology caller did not return after cancellation")
+	}
 }
 
 func TestTopologyConfigForRequestModelSelectsRecipeDecisions(t *testing.T) {

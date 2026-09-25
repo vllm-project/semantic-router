@@ -53,12 +53,15 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelBindings: cloneModelMap(cfg.ModelBindings),
-		ModelCards:    routingModelsFromRouterConfig(cfg),
-		Signals:       canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
-		Projections:   canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
-		Decisions:     copyDecisions(cfg.Decisions),
-		Strategy:      cfg.Strategy,
+		ModelBindings:         cloneModelMap(cfg.ModelBindings),
+		CandidateRequirements: cfg.CandidateRequirements.Clone(),
+		DataPolicy:            cfg.DataPolicy.Clone(),
+		ModelCards:            routingModelsFromRouterConfig(cfg),
+		Signals:               canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
+		Projections:           canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
+		Decisions:             copyDecisions(cfg.Decisions),
+		Strategy:              cfg.Strategy,
+		Fallback:              cfg.Fallback.Clone(),
 	}
 }
 
@@ -78,6 +81,7 @@ func canonicalSignalsFromSignals(signals Signals) CanonicalSignals {
 		Modality:      append([]ModalityRule(nil), signals.ModalityRules...),
 		RoleBindings:  append([]RoleBinding(nil), signals.RoleBindings...),
 		Jailbreak:     append([]JailbreakRule(nil), signals.JailbreakRules...),
+		Safety:        append([]SafetyRule(nil), signals.SafetyRules...),
 		Hallucination: append([]HallucinationRule(nil), signals.HallucinationRules...),
 		PII:           append([]PIIRule(nil), signals.PIIRules...),
 		KB:            append([]KBSignalRule(nil), signals.KBRules...),
@@ -272,6 +276,7 @@ func routingModelsFromRuntimeConfig(cfg *RouterConfig) []RoutingModel {
 			Name:              cardName,
 			ParamSize:         params.ParamSize,
 			ContextWindowSize: params.ContextWindowSize,
+			MaxOutputTokens:   params.MaxOutputTokens,
 			Description:       params.Description,
 			Capabilities:      append([]string(nil), params.Capabilities...),
 			LoRAs:             copyLoRAAdapters(params.LoRAs),
@@ -305,6 +310,7 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 			SkipProcessing: cfg.SkipProcessing,
 			ModelSelection: cfg.ModelSelection,
 			Learning:       cfg.RouterLearning,
+			Fallback:       cfg.Fallback.Clone(),
 		},
 		Services: CanonicalServiceGlobal{
 			API:           cfg.API,
@@ -350,10 +356,13 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 
 	return CanonicalModelCatalog{
 		Deployments: cloneModelMap(cfg.ModelDeployments),
+		Bindings:    cloneModelMap(cfg.GlobalModelBindings),
 		Embeddings: CanonicalEmbeddingModels{
 			Semantic: cfg.EmbeddingModels,
 		},
 		System: CanonicalSystemModels{
+			Safety:                 cfg.SafetyModels.Safety.ModelID,
+			Hazard:                 cfg.SafetyModels.Hazard.ModelID,
 			PromptGuard:            cfg.PromptGuard.ModelID,
 			DomainClassifier:       cfg.CategoryModel.ModelID,
 			PIIClassifier:          cfg.PIIModel.ModelID,
@@ -366,6 +375,7 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 		KBs:       append([]KnowledgeBaseConfig(nil), cfg.KnowledgeBases...),
 		Admission: cloneAdmissionMap(cfg.ModelAdmission),
 		Modules: CanonicalModelModules{
+			Safety:            cfg.SafetyModels,
 			PromptCompression: cfg.PromptCompression,
 			PromptGuard: CanonicalPromptGuardModule{
 				PromptGuardConfig: cfg.PromptGuard,
@@ -566,7 +576,7 @@ func canonicalProviderBackendRefs(
 		}
 		refs := make([]CanonicalBackendRef, 0, len(modelEndpoints))
 		for _, endpoint := range modelEndpoints {
-			refs = append(refs, canonicalBackendRefFromRuntime(endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
+			refs = append(refs, canonicalBackendRefFromRuntime(modelName, endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
 		}
 		return refs
 	}
@@ -577,14 +587,15 @@ func canonicalProviderBackendRefs(
 		if !ok {
 			continue
 		}
-		refs = append(refs, canonicalBackendRefFromRuntime(endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
+		refs = append(refs, canonicalBackendRefFromRuntime(modelName, endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
 	}
 	return refs
 }
 
-func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
+func canonicalBackendRefFromRuntime(modelName string, endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
 	ref := CanonicalBackendRef{
-		Name:       endpoint.Name,
+		// Import adds exactly one model namespace; remove only that generated prefix.
+		Name:       strings.TrimPrefix(endpoint.Name, modelName+"_"),
 		Protocol:   endpoint.Protocol,
 		Weight:     endpoint.Weight,
 		Provider:   profile.Type,

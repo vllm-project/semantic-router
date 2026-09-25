@@ -174,35 +174,11 @@ func (c *Client) callModel(
 	target ModelTarget,
 	options CallOptions,
 ) (*ModelResponse, error) {
-	// Clone and modify the request with the target model
-	modifiedReq := cloneRequest(req)
-	modifiedReq.Model = target.Name
-
-	// Configure logprobs based on config
-	if options.Logprobs != nil && options.Logprobs.Enabled {
-		modifiedReq.Logprobs = openai.Bool(true)
-		topLogprobs := options.Logprobs.TopLogprobs
-		if topLogprobs < 1 {
-			topLogprobs = 1 // Need at least 1 for margin calculation
-		}
-		if topLogprobs > 5 {
-			topLogprobs = 5 // API limit
-		}
-		modifiedReq.TopLogprobs = openai.Int(int64(topLogprobs))
-	}
-
-	// Marshal request to JSON first
-	body, err := json.Marshal(modifiedReq)
+	body, err := prepareModelCallBody(req, target, options)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+		return nil, err
 	}
-
-	// Add stream parameter via JSON manipulation (SDK doesn't expose Stream field)
 	streaming := options.Mode == ResponseSSE
-	body, err = setStreamParam(body, streaming)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set stream param: %w", err)
-	}
 
 	logprobsEnabled := options.Logprobs != nil && options.Logprobs.Enabled
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
@@ -278,11 +254,7 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		Parsed:      &completion,
 		Model:       modelName, // Use the requested model name, not the backend's response
 		IsStreaming: false,
-		Usage: TokenUsage{
-			PromptTokens:     completion.Usage.PromptTokens,
-			CompletionTokens: completion.Usage.CompletionTokens,
-			TotalTokens:      completion.Usage.TotalTokens,
-		},
+		Usage:       parseResponseUsage(body),
 	}
 
 	// Extract content, tool_calls, and logprobs

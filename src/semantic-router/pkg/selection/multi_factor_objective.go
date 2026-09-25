@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selectiontrace"
 )
 
 func normalizeMultiFactorObjective(objective *MultiFactorObjective) {
@@ -49,24 +50,41 @@ func normalizeMultiFactorObjective(objective *MultiFactorObjective) {
 func (s *MultiFactorSelector) chooseCandidate(
 	signals []signalSet,
 	mins, maxs extrema,
-) (int, map[string]float64, float64, float64) {
+) (int, CandidateScores, float64, float64, []int, *selectiontrace.MultiFactorObjective) {
+	var bestIndex int
+	var candidateScores []float64
+	var bestScore, secondBest float64
+	var survivors []int
+	var trace *selectiontrace.MultiFactorObjective
 	if s.config.Objective.Strategy == config.MultiFactorObjectiveLexicographic {
-		return s.chooseLexicographic(signals)
+		bestIndex, candidateScores, bestScore, secondBest, survivors, trace = s.chooseLexicographic(signals)
+	} else {
+		bestIndex, candidateScores, bestScore, secondBest = s.chooseWeighted(signals, mins, maxs)
 	}
-	return s.chooseWeighted(signals, mins, maxs)
+	scores := make(CandidateScores, len(signals))
+	for i, signal := range signals {
+		scores[i] = CandidateScore{Candidate: signal.candidate, Score: candidateScores[i]}
+		if signal.hasQ {
+			scores[i].Evidence = signal.evidence
+		}
+	}
+	if winner := scores.Best(HigherIsBetter, s.qualityRelevant()); winner >= 0 {
+		bestIndex = winner
+	}
+	return bestIndex, scores, bestScore, secondBest, survivors, trace
 }
 
 func (s *MultiFactorSelector) chooseWeighted(
 	signals []signalSet,
 	mins, maxs extrema,
-) (int, map[string]float64, float64, float64) {
-	allScores := make(map[string]float64, len(signals))
+) (int, []float64, float64, float64) {
+	candidateScores := make([]float64, len(signals))
 	bestIndex := 0
 	bestScore := math.Inf(-1)
 	secondBest := math.Inf(-1)
 	for index, signal := range signals {
 		score := s.scoreCandidate(signal, mins, maxs)
-		allScores[signal.model] = score
+		candidateScores[index] = score
 		if score > bestScore {
 			secondBest = bestScore
 			bestScore = score
@@ -75,19 +93,25 @@ func (s *MultiFactorSelector) chooseWeighted(
 			secondBest = score
 		}
 	}
-	return bestIndex, allScores, bestScore, secondBest
+	return bestIndex, candidateScores, bestScore, secondBest
 }
 
 func (s *MultiFactorSelector) chooseLexicographic(
 	signals []signalSet,
-) (int, map[string]float64, float64, float64) {
+) (int, []float64, float64, float64, []int, *selectiontrace.MultiFactorObjective) {
 	active := make([]int, len(signals))
 	for index := range signals {
 		active[index] = index
 	}
-	allScores := make(map[string]float64, len(signals))
+	candidateScores := make([]float64, len(signals))
+	trace := &selectiontrace.MultiFactorObjective{Stages: make([]selectiontrace.ObjectiveStage, 0, len(s.config.Objective.Priorities))}
 	denominator := float64(len(s.config.Objective.Priorities) + 1)
 	for stage, priority := range s.config.Objective.Priorities {
+		stageTrace := s.objectiveStageTrace(priority, signals, active)
+		if stageTrace.Action == selectiontrace.StageSkipped {
+			trace.Stages = append(trace.Stages, stageTrace)
+			continue
+		}
 		best := 0.0
 		bestSet := false
 		higherIsBetter := false
@@ -104,35 +128,40 @@ func (s *MultiFactorSelector) chooseLexicographic(
 				bestSet = true
 			}
 		}
-		if len(values) == 0 {
-			continue
-		}
 		retained := make([]int, 0, len(active))
-		for _, index := range active {
+		for position, index := range active {
 			value, available := values[index]
 			if available && withinRelativeTolerance(value, best, higherIsBetter, priority.Tolerance) {
 				retained = append(retained, index)
 				continue
 			}
-			allScores[signals[index].model] = float64(stage) / denominator
+			candidateScores[index] = float64(stage) / denominator
+			stageTrace.Candidates[position].EliminationReason = selectiontrace.OutsideTolerance
+			if !available {
+				stageTrace.Candidates[position].EliminationReason = selectiontrace.MissingMeasurement
+			}
 		}
+		trace.Stages = append(trace.Stages, stageTrace)
 		active = retained
 		if len(active) == 1 {
 			break
 		}
 	}
 	for _, index := range active {
-		allScores[signals[index].model] = 1
+		candidateScores[index] = 1
+		trace.FinalSurvivors = append(trace.FinalSurvivors, traceCandidate(signals[index].candidate))
 	}
 	winner := active[0]
 	secondBest := math.Inf(-1)
-	for index, signal := range signals {
+	for index := range signals {
 		if index == winner {
 			continue
 		}
-		secondBest = math.Max(secondBest, allScores[signal.model])
+		secondBest = math.Max(secondBest, candidateScores[index])
 	}
-	return winner, allScores, 1, secondBest
+	// Preserve the actual objective survivors for downstream adaptation and
+	// protection. Scores retain eliminated candidates for diagnostics only.
+	return winner, candidateScores, 1, secondBest, active, trace
 }
 
 func factorValue(signal signalSet, factor string) (float64, bool, bool) {

@@ -1,15 +1,15 @@
 ---
 title: AMD ROCm 部署
-description: 在 AMD Instinct GPU 上运行 OpenAI 兼容的 vLLM 后端，并将其连接到 vLLM Semantic Router。
+description: 连接 AMD vLLM 后端，并在 AMD GPU 上运行 Vela 路由模型。
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "96399a94b9030d66f46c5d45f9a838defc091153"
   source_file: "docs/installation/amd-rocm.md"
   outdated: false
 ---
 
 # 使用 AMD ROCm 部署
 
-Semantic Router 可以在 CPU 上运行，同时由 vLLM 在 AMD Instinct GPU 上服务所选模型。本指南先启动一个 ROCm 后端，直接验证它，然后再将其连接到本地 Router 栈。
+Semantic Router 可以在 CPU 上运行，同时由 vLLM 在 AMD Instinct GPU 上服务所选模型。本指南先启动一个 ROCm 后端，直接验证它，然后再将其连接到本地 Router 栈。若还需要在 AMD 上运行全部十个 Vela 路由任务模型，使用下文的 [Vela AMD 配方](#run-vela-routing-models-on-amd)。
 
 该示例用一个 checkpoint 对应多个已服务模型别名，以便维护中的 `balance` 配方可以演练其路由通道。这对功能评估有用，但并不会把一个 checkpoint 变成多个模型。在生产环境中，将每个逻辑 provider 绑定到具备配方所声明能力、容量和运行成本的后端。
 
@@ -147,6 +147,82 @@ curl --fail --include http://127.0.0.1:8899/v1/chat/completions \
 ```
 
 确认响应成功，并检查路由标头中的所选决策和 provider 模型。使用配方维护的探针进行更广泛的路由评估；使用有代表性的应用请求，衡量实际部署上的回答质量和运行行为。
+
+## 在 AMD 上运行 Vela 路由模型 {#run-vela-routing-models-on-amd}
+
+[Vela AMD 模型卡片](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md)及完整配置显式选择十个任务模型的 GPU 执行。Embedding 和 Reranker 通过 ROCm 使用固定的 CK FlashAttention 图，保留 native 精度并拒绝 CPU fallback；分类器使用 MIGraphX。完整信号流水线在 8K 完成测量，独立 Embedding/Reranker 执行已验证至 32K。Hazard 保留已验证的 2,048-token 窗口及 32K 逻辑预算。这些结果不代表每个分类器都完成了 AMD 32K 验证。
+
+连接已有的 OpenAI 兼容后端，使用 `--served-model-name vela-default`。配置预期地址是 `http://vllm:8000`：将后端接入 `vllm-sr-network` 并设置网络别名 `vllm`，或修改 endpoint。前面的多别名示例默认不提供 `vela-default`，需要添加该服务名。先用这个名称验证直连请求。为 Router 和生成后端保留足够内存与算力；选择 Router GPU 时使用 `VLLM_SR_AMD_ROUTER_VISIBLE_DEVICES`，deployment 中索引 `0` 指向可见 GPU。
+
+```bash
+curl --fail --location --output vela-amd.yaml \
+  https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/vela-amd/config.yaml
+vllm-sr config validate --config vela-amd.yaml
+vllm-sr serve --platform amd --config vela-amd.yaml
+```
+
+平台标志选择镜像和设备访问，具名 deployment 选择实际 provider 与计算图；显式 CPU 选择仍然保留。MIGraphX 冷编译可能比缓存启动更慢。CLI 默认等待 1,800 秒；若实测需要更长时间，可用 `--startup-timeout SECONDS` 设置有界等待。超时后所属容器仍保留，可继续查看日志与就绪状态。
+
+AMD Docker 部署会把 Router 的 COMGR 编译缓存保存在 `<state-root>/.vllm-sr/compiler-cache/`，按 stack 和不可变 Router 镜像隔离。相同镜像重启时可以复用已编译的内核；更换镜像或镜像内 ROCm 用户态版本后会使用新的缓存。默认 state root 是源配置所在目录。需要清理旧镜像缓存时，请先停止对应 stack。
+
+`/ready` 成功后，查看真实信号与时延：
+
+```bash
+curl --fail http://localhost:8080/ready
+curl --fail 'http://localhost:8080/api/v1/routing/preview?trace=true' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"vela-auto","text":"Debug this Python program and fix its error."}' \
+  | jq '{decision_result, signal_confidences, signal_values, signal_errors, metrics, eval_trace}'
+```
+
+使用默认配方时，全部信号的 Preview 输入应保持在 8K 分类器预算内。Preview 不执行检索或生成。按配方和[神经重排](../tutorials/plugin/rag.md#neural-reranking)指南将文档入库，再使用 `vela-auto` 发送真实聊天请求验证 RAG。
+
+### 可选的 Domain 和 FactCheck 32K ROCm 部署 {#optional-32k-domain-and-factcheck-on-rocm}
+
+[Vela Domain](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Domain) 和 [Vela FactCheck](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-FactCheck) 提供固定 32K FP32 图 `onnx/model_rocm_32k.onnx`。以下配置已锁定包含该图的模型发布版本。
+
+若需启用，在 `vela-amd.yaml` 中用以下片段替换这两个 binding 条目及两个完整的 deployment 条目。下面的 ROCm 条目会替换原 MIGraphX 条目，包括移除其 `compilation_cache_dir` 设置；保留配方的其余配置。
+
+```yaml
+routing:
+  model_bindings:
+    domain_classifier:
+      deployment: domain-amd
+      contract: label_distribution.v1
+      adapter: modernbert
+      head: onnx/model_rocm_32k.onnx
+      mapping_path: models/Vela-1.0-Encoder-307M-Domain/category_mapping.json
+    fact_check_classifier:
+      deployment: factcheck-amd
+      contract: label_distribution.v1
+      adapter: modernbert
+      head: onnx/model_rocm_32k.onnx
+global:
+  model_catalog:
+    deployments:
+      domain-amd:
+        artifact: models/Vela-1.0-Encoder-307M-Domain
+        revision: f6354f54adcf38770f635ad903be2b00577f6c11
+        provider: ort
+        device: rocm:0
+        precision: native
+        input:
+          max_tokens: 32768
+          overflow: reject
+      factcheck-amd:
+        artifact: models/Vela-1.0-Encoder-307M-FactCheck
+        revision: 99ede1aba1563e59e416f744d25b3f6b7e9d8274
+        provider: ort
+        device: rocm:0
+        precision: native
+        input:
+          max_tokens: 32768
+          overflow: reject
+```
+
+用上面的相同命令校验并启动修改后的配置。每个 binding 始终使用选定的图，不会按请求长度自动切换。固定图会将短输入也填充到 32,768 tokens，增加时延和显存开销；若工作负载能容纳在 8K 预算内，可继续使用默认的 8K MIGraphX 部署。
+
+容量规划可参考：一条使用这两个分类器的 27,001-token Preview 请求实测耗时 15.84 秒。独立的单分类器验证达到 38.70 GiB GPU 显存占用，还需为其他常驻模型及并发请求预留容量。这些测量仅覆盖 Domain/FactCheck 选项；其他启用的分类器仍保留各自输入上限，修改这两个 deployment 不代表全部十个模型的流水线支持 32K。
 
 ## 生产检查清单
 

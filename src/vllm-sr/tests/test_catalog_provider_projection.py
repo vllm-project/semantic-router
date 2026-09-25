@@ -1,5 +1,6 @@
 """Contracts for projecting sparse provider bindings into Envoy config."""
 
+import re
 import sys
 from pathlib import Path
 
@@ -108,7 +109,10 @@ routing:
     route = _model_route(rendered, "frontier")
     assert route["route"]["cluster"] == "model_frontier_cluster"
     assert route["route"]["host_rewrite_literal"] == "api.openai.com"
-    assert route["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
+    assert "regex_rewrite" not in route["route"]
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
+    )
     headers = {
         header["header"]["key"]: header["header"]["value"]
         for header in route.get("request_headers_to_add", [])
@@ -279,7 +283,10 @@ routing: {}
 
     route = _model_route(rendered, "frontier-responses")
     assert route["route"]["cluster"] == "model_frontier_2dresponses_cluster"
-    assert route["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
+    assert "regex_rewrite" not in route["route"]
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"] == "/v1\\1"
+    )
     headers = {
         header["header"]["key"]: header["header"]["value"]
         for header in route.get("request_headers_to_add", [])
@@ -348,7 +355,11 @@ routing:
     )
     route = _model_route(rendered, "frontier")
     assert route["route"]["host_rewrite_literal"] == "gateway.example.test"
-    assert route["route"]["regex_rewrite"]["substitution"] == "/openai/v1\\1"
+    assert "regex_rewrite" not in route["route"]
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"]
+        == "/openai/v1\\1"
+    )
 
 
 def test_catalog_provider_projection_rejects_missing_model_mapping(tmp_path):
@@ -376,6 +387,64 @@ routing: {}
             config,
             str(tmp_path / "envoy.yaml"),
         )
+
+
+@pytest.mark.parametrize(
+    ("catalog_model", "provider"),
+    [
+        ("amazon/nova-pro-v1", "bedrock"),
+        ("amazon/nova-premier-v1", "bedrock"),
+        ("amazon/nova-2-lite", "bedrock"),
+        ("moonshot/kimi-k2.5", "moonshot"),
+    ],
+)
+def test_catalog_provider_projection_rejects_unsupported_built_in_mapping(
+    tmp_path, catalog_model, provider
+):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        f"""
+version: v0.3
+providers:
+  models:
+    - name: unavailable
+      catalog: {catalog_model}
+      backend_refs:
+        - provider: {provider}
+          base_url: https://example.test/v1
+routing: {{}}
+"""
+    )
+    config = parse_user_config(str(config_path))
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            f"provider '{provider}' has no catalog mapping for model '{catalog_model}'"
+        ),
+    ):
+        generate_envoy_config_from_user_config(config, str(tmp_path / "envoy.yaml"))
+
+
+def test_nova_2_lite_remains_available_through_openrouter(tmp_path):
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(
+        """
+version: v0.3
+providers:
+  models:
+    - name: nova-2-lite
+      catalog: amazon/nova-2-lite
+      backend_refs:
+        - provider: openrouter
+routing: {}
+"""
+    )
+
+    projected = project_provider_models_for_envoy(parse_user_config(str(config_path)))
+
+    assert projected[0].external_model_ids["openrouter"] == "amazon/nova-2-lite-v1"
+    assert projected[0].backend_refs[0].base_url == "https://openrouter.ai/api/v1"
 
 
 def test_catalog_provider_projection_rejects_provider_without_endpoint(tmp_path):
@@ -567,7 +636,11 @@ routing: {{}}
     }
     route = _model_route(rendered, "local-model")
     assert route["route"]["host_rewrite_literal"] == expected_authority
-    assert route["route"]["regex_rewrite"]["substitution"] == "/v1" + r"\1"
+    assert "regex_rewrite" not in route["route"]
+    assert (
+        _default_route(rendered)["route"]["regex_rewrite"]["substitution"]
+        == "/v1" + r"\1"
+    )
     assert ("transport_socket" in cluster) is expected_https
 
 

@@ -17,6 +17,7 @@ from domain_registry import (
     matching_domains,
     profile_records,
 )
+from verification_catalog import full_cpu_ids, profile_image_dependencies
 
 PRODUCTION_RELEASE_IMAGES = (
     "dashboard",
@@ -29,9 +30,7 @@ PRODUCTION_RELEASE_IMAGES = (
     "vllm-sr-rocm",
 )
 NIGHTLY_IMAGES = (
-    "anthropic-shim",
     *PRODUCTION_RELEASE_IMAGES,
-    "llm-katan",
     "vllm-sr-sim",
 )
 
@@ -102,21 +101,33 @@ def is_test_only_change(paths: tuple[str, ...]) -> bool:
 
 def full_e2e_profiles() -> tuple[str, ...]:
     return tuple(
-        name for name, data in profile_records().items() if data.get("full_ci")
+        name.removeprefix("e2e.") for name in full_cpu_ids() if name.startswith("e2e.")
     )
 
 
 def select_profiles(
     changed: tuple[str, ...], *, full: bool, suppress_expensive: bool
 ) -> tuple[str, ...]:
-    if full:
-        return full_e2e_profiles()
-    if suppress_expensive:
+    if suppress_expensive and not full:
         return ()
+    required = set(full_e2e_profiles()) if full else set()
+    changed_images = {
+        name
+        for name, data in image_records().items()
+        if name != "extproc"
+        and any_matches(
+            changed, data.get("verification_paths", data.get("pr_paths", []))
+        )
+    }
+    # Reuse the framework's actual image capabilities. Fixture source changes
+    # select their PR consumers without promoting manual profiles into CI.
+    dependencies = profile_image_dependencies()
     return tuple(
         name
         for name, data in profile_records(selection="pr").items()
-        if any_matches(changed, data.get("paths", []))
+        if name in required
+        or any_matches(changed, data.get("paths", []))
+        or changed_images.intersection(dependencies[name])
     )
 
 
@@ -145,27 +156,20 @@ def select_jobs(
     jobs = job_records()
     enabled = {name for name, data in jobs.items() if data.get("always")}
     if full:
-        enabled.update(name for name, data in jobs.items() if data.get("full"))
-    if not docs_only:
+        enabled.update(full_cpu_ids())
+    if not docs_only or full:
         enabled.add("security")
-
     records = domain_records()
     for domain_name in domains:
         domain = records[domain_name]
-        enabled.update(domain.get("ci_jobs", []))
+        enabled.update(domain.get("verifications", []))
         escalation = domain.get("escalation", {})
-        if not suppress_expensive and any_matches(changed, escalation.get("paths", [])):
-            enabled.update(escalation.get("jobs", []))
-
-    # A reusable workflow edit runs that workflow's own job, but does not imply
-    # unrelated product or deployment coverage.
+        if not docs_only and any_matches(changed, escalation.get("paths", [])):
+            enabled.update(escalation.get("verifications", []))
     for name, data in jobs.items():
-        if data.get("workflow") in changed:
+        if data["executor"] != "e2e" and data.get("workflow") in changed:
             enabled.add(name)
-    if profiles:
-        enabled.add("e2e")
-    if pr_images:
-        enabled.add("images")
+    enabled.update(f"e2e.{profile}" for profile in profiles)
     return tuple(name for name in jobs if name in enabled)
 
 
@@ -177,21 +181,12 @@ def build_signals(
     full: bool,
     docs_only: bool,
 ) -> dict[str, bool]:
-    selected = set(selected_jobs)
-    signals = {
-        str(data["output"]): name in selected
-        for name, data in job_records().items()
-        if data.get("output")
+    return {
+        "website": any(path.startswith("website/") for path in changed),
+        "docs_only": docs_only,
+        "helm": "helm" in domains,
+        "full": full,
     }
-    signals.update(
-        {
-            "website": any(path.startswith("website/") for path in changed),
-            "docs_only": docs_only,
-            "helm": "helm" in domains,
-            "full": full,
-        }
-    )
-    return signals
 
 
 def classify(
@@ -217,11 +212,9 @@ def classify(
         if name in executable_domains or name in documentation_domains
     )
     test_only = is_test_only_change(changed)
-    # Unit tests under source trees stay in their owning domain. E2E files are
-    # already explicit deployment contracts and may select their named profile.
-    suppress_expensive = docs_only or (
-        test_only and not any(path.startswith("e2e/") for path in changed)
-    )
+    # Test names do not define their boundary: integration tests and fixtures
+    # retain every explicit consumer selected by the registry.
+    suppress_expensive = docs_only
     profiles = select_profiles(
         changed, full=full, suppress_expensive=suppress_expensive
     )
@@ -249,7 +242,11 @@ def classify(
             docs_only=docs_only,
         ),
         domains=domains,
-        profiles=profiles,
+        profiles=tuple(
+            name.removeprefix("e2e.")
+            for name in selected_jobs
+            if name.startswith("e2e.")
+        ),
         pr_images=pr_images,
         publish_images=publish_images,
         selected_jobs=selected_jobs,
@@ -260,7 +257,7 @@ def classify(
 def git_changed_files(base: str, head: str) -> list[str]:
     if base and set(base) != {"0"}:
         result = subprocess.run(
-            ["git", "diff", "--name-only", "-z", base, head],
+            args=["git", "diff", "--name-only", "--no-renames", "-z", base, head],
             check=True,
             capture_output=True,
         )

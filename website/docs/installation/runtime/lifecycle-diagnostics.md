@@ -1,46 +1,108 @@
 ---
 title: Operations and troubleshooting
-description: Check readiness, limit model concurrency, and update running models.
+description: Check readiness, inspect real routing signals, and manage model updates.
 ---
 
-Use these checks after configuring an [in-process model](in-process.md) or
-[external service](external.md).
+Use this page after setting up [local models](in-process.md) or
+[external services](external.md).
 
 ## Check startup
 
 ```bash
 vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
+curl -fsS http://localhost:8080/ready
 curl -fsS http://localhost:8080/startup-status
 ```
 
-Validation checks the configuration. Startup then loads or connects the models
-and checks the capabilities needed by enabled features. GPU kernel compilation
-can make the first startup slower than later requests.
+Validation checks configuration. Startup loads the required models, checks their
+capabilities, and warms them before readiness. On AMD, first-time MIGraphX
+compilation can take several minutes.
 
-| Problem | What to check |
+The CLI waits up to 1,800 seconds by default. Increase the budget if your measured
+cold startup needs longer:
+
+```bash
+vllm-sr serve --config config.yaml --startup-timeout 7200
+```
+
+A timeout leaves containers running for inspection. Check their status and logs:
+
+```bash
+vllm-sr status
+vllm-sr logs router
+```
+
+`--startup-timeout` controls readiness waiting; it does not change inference
+request deadlines.
+
+## Inspect the executed path
+
+Route Preview runs your configured signals without generating an answer. Native
+output selection may call the backend's render endpoint to check capacity:
+
+```bash
+curl -fsS 'http://localhost:8080/api/v1/routing/preview?trace=true' \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"auto","text":"Help me debug this Python program."}' \
+  | jq '{decision_result, signal_confidences, signal_values, signal_errors, metrics, eval_trace, decision_ranking}'
+```
+
+Replace `auto` with your public entrypoint name; the Vela AMD recipe uses
+`vela-auto`. Inspect:
+
+| Field | What it tells you |
 | --- | --- |
-| Model cannot load | Complete checkpoint or ONNX files, tokenizer, labels, and mounted paths |
-| Engine or device unavailable | Image and host match the selected CPU/GPU runtime |
-| Label mismatch | Checkpoint label order and the rule's labels or mapping file |
-| Unsupported embedding layer or dimension | Export the requested layer and match the consumer or stored index |
+| `decision_result` | Selected route and model |
+| `signal_confidences`, `signal_values` | Actual classifier scores and extracted values |
+| `signal_errors` | Failed or unavailable signal evaluations |
+| `metrics` | Time spent evaluating the request and signals |
+| `eval_trace` | How conditions produced the routing decision |
+| `decision_ranking` | Which key ordered the matched decisions, and why confidence did not |
+
+Preview does not run RAG retrieval or reranking. Test those with a real
+`/v1/chat/completions` request after indexing documents. Its trace includes
+`rag.rerank_candidates`, `rag.rerank_latency_seconds`, `rag.reranker_identity`,
+and relevance scores. Cached RAG context may avoid a new reranker call.
+See [Neural reranking](../../tutorials/plugin/rag.md#neural-reranking).
+
+Compare warm inference latency separately from startup, retrieval, and backend
+generation. Preview timing is not complete chat-response latency.
+
+## Common problems
+
+| Symptom | What to check |
+| --- | --- |
+| Model cannot load | Complete weights or ONNX files, tokenizer, labels, and mounted paths |
+| Engine or device unavailable | Router image, host libraries, and GPU access match the deployment |
+| Label mismatch | Checkpoint label order, rule labels, and mapping file |
+| Input rejected | Deployment token budget and special tokens; [input policies](in-process.md#choose-an-input-budget) |
+| Missing embedding layer or dimension | Model exports and requirements of caches, memory, or stored vectors |
 | Remote inference fails | Endpoint, credentials, timeout, response format, and response-size limit |
-| Confidence is `null` | The result has no model score; see [Safety models](safety.md#handle-failures-and-missing-scores) |
+| Preview returns 429 or 504 | Worker saturation or request timeout under `global.services.api.routing_preview` |
+| Confidence is `null` | No model score was available; [failure policies](safety.md#handle-failures-and-missing-scores) |
+
+A timed-out native Preview worker retains its slot until inference finishes.
+Use a smaller input budget or reduce request concurrency before increasing
+Preview deadlines.
 
 ## AMD startup problems
 
-Use the maintained ROCm image so ORT and MIGraphX libraries match. It includes
-ORT 1.22.1 / MIGraphX 2.13 and sets `MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention`.
-Keep that setting with this image; it disables MLIR attention fusion.
+`rocm:N` selects the ROCm execution provider; `migraphx:N` selects MIGraphX.
+A CK graph also requires `custom_ops_profile: ck_flash_attention` and its library
+in the image. Use the graph and provider pair from the
+[Vela AMD recipe](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/vela-amd/README.md).
+Requested GPU inference rejects CPU fallback.
 
-| Error or symptom | Action |
+| Symptom | Action |
 | --- | --- |
-| `IsNaN` unsupported in the SDPA graph | Use the compatible standard `onnx/model.onnx` graph |
-| Missing GPU embedding budget | Set a positive deployment `input.max_tokens`; see [Embeddings](embeddings.md#amd-gpu) |
-| Model fails during GPU preparation | Check the graph and vendor libraries; requested GPU execution does not fall back to CPU |
-| Unexpectedly slow first startup | Allow time for compilation and warmup of every requested embedding layer |
+| Unsupported graph operator | Select an export compatible with the chosen execution provider |
+| Missing GPU embedding budget | Set a positive deployment `input.max_tokens` |
+| Slow cold startup | Allow compilation and warmup; consider the [MIGraphX compilation cache](in-process.md#advanced-migraphx-settings) |
+| MIGraphX environment conflict | Remove the overrides below and configure precision/cache on the deployment |
 
-Unset these process variables and configure precision in the deployment instead:
+Keep `MIGRAPHX_MLIR_USE_SPECIFIC_OPS=~attention` in the maintained MIGraphX image.
+Leave the following variables unset, including values of `0`:
 
 ```text
 ORT_MIGRAPHX_FP16_ENABLE
@@ -50,19 +112,19 @@ ORT_MIGRAPHX_INT8_ENABLE
 ORT_MIGRAPHX_MODEL_CACHE_PATH
 ```
 
-Any nonempty value, including `0`, is rejected because it can override the
-configured precision or compiled model. The maintained images leave them unset.
+These process-wide overrides conflict with the deployment's explicit precision
+or cache settings.
 
 ## Limit concurrent inference
 
-For the `email-risk-cpu` deployment in [In-process models](in-process.md),
-this allows two calls and a queue of eight, with a one-second queue timeout:
+For the `vela-domain` deployment in [In-process models](in-process.md), allow two
+concurrent calls and a queue of eight with a one-second queue timeout:
 
 ```yaml
 global:
   model_catalog:
     admission:
-      email-risk-cpu:
+      vela-domain:
         max_concurrency: 2
         max_queue: 8
         queue_timeout_ms: 1000
@@ -70,31 +132,33 @@ global:
 ```
 
 `shed` rejects excess work, `wait` waits for a queue slot, and `fail_open`
-bypasses the limit when full. `wait` requires a nonzero queue size. Omit the
-admission setting for unbounded admission. Uses of the same shared model also
-share its capacity; request deadlines include queue time.
+bypasses the limit when full. `wait` requires a nonzero queue size. Omitting
+admission settings leaves admission unbounded. Shared uses of a model share its
+capacity, and request deadlines include queue time.
 
-Changing admission settings for a shared model requires stopping and restarting
-the Router. A hot reload with different settings is rejected, and the active
-configuration continues serving.
+Restart the Router after changing a shared model's admission settings. A hot
+reload with different settings is rejected while the active configuration
+continues serving.
 
 ## Update a running model
 
-Put a replacement model revision in a new directory, update its configuration,
-then reload through the Dashboard or your existing management workflow.
-The Router prepares the replacement before activating it. Failed preparation
-leaves the current configuration running; existing requests finish before
-old model resources are released.
+Place the new revision in a new directory, update its deployment, and reload
+through the Dashboard or management API. The Router prepares the replacement
+before activating it; a failed load leaves the current configuration serving.
+Existing requests finish before old model resources are released.
 
-A Dashboard change may be saved but still pending. For updates that return
-`202`, poll `GET /api/router/api/v1/config/hash` through the Dashboard and wait
-for `active_runtime_hash` to equal the update's `generated_runtime_hash`.
-A competing change returns `409` while the first update is pending.
+For a Dashboard update returning `202`, poll
+`GET /api/router/api/v1/config/hash` until `active_runtime_hash` matches the
+update's `generated_runtime_hash`. Another change returns `409` while an update
+is pending. See the [management API reference](../../api/apiserver.md).
 
-Knowledge-base updates keep old asset versions for active readers. Old versions
-are retained on disk; automatic removal is not provided. See the
-[management API reference](../../api/apiserver.md) for request and response details.
+Changing an embedding space requires [reindexing affected documents](embeddings.md#change-a-model-without-mixing-vector-spaces).
+Old knowledge-base asset versions remain on disk; remove them only after they
+are no longer needed by active readers.
 
 `serve` preserves configuration saved through the Dashboard or API. To replace
-it with a local file, run
-`vllm-sr serve --config config.yaml --replace-active-config`.
+it with a local file, run:
+
+```bash
+vllm-sr serve --config config.yaml --replace-active-config
+```

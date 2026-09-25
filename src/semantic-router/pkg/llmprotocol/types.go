@@ -177,14 +177,22 @@ const (
 )
 
 type Sampling struct {
-	Temperature      *float64
-	TopP             *float64
-	TopK             *int64
-	MaxOutputTokens  *int64
-	Seed             *int64
-	FrequencyPenalty *float64
-	PresencePenalty  *float64
-	Stop             []string
+	Temperature       *float64
+	TopP              *float64
+	TopK              *int64 // -1 disables the limit for supporting providers.
+	MinP              *float64
+	RepetitionPenalty *float64
+	MaxOutputTokens   *int64
+	Seed              *int64
+	FrequencyPenalty  *float64
+	PresencePenalty   *float64
+	Stop              []string
+
+	// AutomaticOutput is router policy, never populated from or encoded onto
+	// a provider wire. Retaining it permits recalculation after model reroutes.
+	AutomaticOutput      bool
+	AutomaticOutputCap   *int64
+	AutomaticInputTokens *int64
 }
 
 // StreamOptions contains public response-stream preferences. These options
@@ -243,6 +251,11 @@ type Request struct {
 	// (e.g. vLLM enable_thinking) opaquely from decode to encode. It is not
 	// interpreted by the router.
 	ChatTemplateKwargs json.RawMessage
+	// ContextManagement carries Anthropic context edits through routing and
+	// same-format re-encoding. Other wire formats must reject or report its loss.
+	ContextManagement json.RawMessage
+	// CacheSalt isolates backend prefix-cache entries; it is never prompt text.
+	CacheSalt *string
 }
 
 type StopReason string

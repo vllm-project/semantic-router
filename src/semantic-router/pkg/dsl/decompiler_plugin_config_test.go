@@ -245,7 +245,8 @@ func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
 								"min_tokens":    2000,
 								"target_tokens": 1000,
 							},
-							"rag": map[string]interface{}{"mode": "preserve"},
+							"rag":          map[string]interface{}{"mode": "preserve"},
+							"current_user": map[string]interface{}{"mode": "truncate"},
 						},
 						"request_controls": map[string]interface{}{
 							"enabled": true,
@@ -273,7 +274,8 @@ func TestContextCompressionPluginNestedRoundTrip(t *testing.T) {
 		t.Fatalf("context_compression decode error: %v", err)
 	}
 	if pluginConfig.Targets == nil ||
-		pluginConfig.Targets.ToolOutputs.TargetTokens != 1000 {
+		pluginConfig.Targets.ToolOutputs.TargetTokens != 1000 ||
+		pluginConfig.Targets.CurrentUser.Mode != "truncate" {
 		t.Fatalf("context_compression targets = %#v", pluginConfig.Targets)
 	}
 }

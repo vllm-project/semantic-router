@@ -117,6 +117,37 @@ func TestHandleRequestHeadersSkipProcessingHeaderIsCaseInsensitive(t *testing.T)
 	}
 }
 
+func TestHandleRequestHeadersSkipProcessingReturnsToDefaultRoute(t *testing.T) {
+	router := newRouterWithSkipProcessingGate(true)
+	ctx := &RequestContext{Headers: make(map[string]string)}
+	request := newSkipProcessingRequestHeaders("POST", "/v1/chat/completions", "true")
+	request.RequestHeaders.Headers.Headers = append(
+		request.RequestHeaders.Headers.Headers,
+		&core.HeaderValue{Key: "X-Selected-Model", Value: "test-model"},
+	)
+
+	response, err := router.handleRequestHeaders(request, ctx)
+	if err != nil {
+		t.Fatalf("handleRequestHeaders failed: %v", err)
+	}
+	common := response.GetRequestHeaders().GetResponse()
+	if !common.GetClearRouteCache() {
+		t.Fatal("expected selected-route cache to be cleared for skip processing")
+	}
+	if !containsHeaderName(common.GetHeaderMutation().GetRemoveHeaders(), headers.SelectedModel) {
+		t.Fatalf("selected-model header was not removed: %v", common.GetHeaderMutation().GetRemoveHeaders())
+	}
+}
+
+func containsHeaderName(names []string, want string) bool {
+	for _, name := range names {
+		if name == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestHandleRequestHeadersSkipProcessingBypassesValidation(t *testing.T) {
 	router := newRouterWithSkipProcessingGate(true)
 	ctx := &RequestContext{Headers: make(map[string]string)}
@@ -280,8 +311,13 @@ func TestHandleResponseHeadersSkipProcessingBypassesVSRHeaders(t *testing.T) {
 	if response.GetResponseHeaders().Response.Status != ext_proc.CommonResponse_CONTINUE {
 		t.Fatalf("expected CONTINUE status, got %v", response.GetResponseHeaders().Response.Status)
 	}
-	if response.GetResponseHeaders().Response.HeaderMutation != nil {
-		t.Fatal("expected no header mutation when skipping processing")
+	mutation := response.GetResponseHeaders().Response.HeaderMutation
+	if len(mutation.GetSetHeaders()) != 0 {
+		t.Fatal("expected no router headers to be added when skipping processing")
+	}
+	removed := mutation.GetRemoveHeaders()
+	if len(removed) != 2 || removed[0] != headers.VSREffectiveInputTokens || removed[1] != headers.VSREffectiveMaxOutputTokens {
+		t.Fatalf("expected only removal of untrusted automatic-output receipts, got %v", removed)
 	}
 	if response.ModeOverride != nil {
 		t.Fatal("did not expect mode override when skipping processing on a non-streaming response")

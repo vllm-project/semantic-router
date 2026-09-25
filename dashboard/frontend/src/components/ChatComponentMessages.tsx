@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useId, useState } from 'react'
 import { ThinkingOrb } from 'thinking-orbs'
 
 import styles from './ChatComponent.module.css'
@@ -15,9 +15,12 @@ import type { Message } from './ChatComponentTypes'
 import { formatPlaygroundFileSize } from './playgroundFileAttachments'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
 import { useAuth } from '../contexts/AuthContext'
+import { buildFeedbackInsightsHref } from './chatComponentSupport'
 
 interface ChatComponentMessagesProps {
+  canSubmitFeedback: boolean
   expandedToolCards: Set<string>
+  feedbackInsightsBasePath?: string
   messages: Message[]
   onToggleToolCard: (toolCallId: string) => void
   thinking?: boolean
@@ -96,14 +99,18 @@ function ToolCalls({
 }
 
 interface AssistantRatingsMessageProps {
+  canSubmitFeedback: boolean
   expandedToolCards: Set<string>
+  feedbackInsightsBasePath?: string
   message: Message
   onToggleToolCard: (toolCallId: string) => void
   prevUserQuery?: string
 }
 
 function AssistantRatingsMessage({
+  canSubmitFeedback,
   expandedToolCards,
+  feedbackInsightsBasePath,
   message,
   onToggleToolCard,
   prevUserQuery,
@@ -138,14 +145,20 @@ function AssistantRatingsMessage({
               </ErrorBoundary>
               {message.isStreaming && index === 0 ? <StreamingResponseIndicator /> : null}
             </div>
-            {!message.isStreaming &&
+            {canSubmitFeedback &&
+            !message.isStreaming &&
             !message.incomplete &&
             choice.model &&
+            choice.model === message.headers?.['x-vsr-selected-model'] &&
             message.headers?.['x-vsr-replay-id'] ? (
               <div className={styles.choiceActions}>
                 <FeedbackButtons
                   modelId={choice.model}
                   replayId={message.headers['x-vsr-replay-id']}
+                  insightsHref={buildFeedbackInsightsHref(
+                    feedbackInsightsBasePath,
+                    message.headers['x-vsr-replay-id'],
+                  )}
                   category={message.headers?.['x-vsr-selected-decision']}
                   query={prevUserQuery}
                 />
@@ -202,10 +215,40 @@ function AssistantSingleMessage({
 }
 
 interface MessageCardProps {
+  canSubmitFeedback: boolean
   expandedToolCards: Set<string>
+  feedbackInsightsBasePath?: string
   message: Message
   onToggleToolCard: (toolCallId: string) => void
   prevUserQuery?: string
+}
+
+function UserMessageText({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const contentId = useId()
+  // Bound the preview by both characters and lines without splitting a surrogate pair.
+  const preview = content
+    .slice(0, 1200)
+    .replace(/[\uD800-\uDBFF]$/u, '')
+    .split('\n', 9)
+    .slice(0, 8)
+    .join('\n')
+  if (preview.length === content.length) return <span>{content}</span>
+
+  return (
+    <>
+      <span id={contentId}>{expanded ? content : `${preview}…`}</span>
+      <button
+        type="button"
+        className={styles.userMessageToggle}
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        {expanded ? 'Show less' : 'Show more'}
+      </button>
+    </>
+  )
 }
 
 function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
@@ -230,7 +273,13 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
         </div>
       ) : null}
       <MessageImages message={message} />
-      {message.content || message.isStreaming ? <span>{message.content}</span> : null}
+      {message.content || message.isStreaming ? (
+        message.role === 'user' ? (
+          <UserMessageText content={message.content} />
+        ) : (
+          <span>{message.content}</span>
+        )
+      ) : null}
       {message.isStreaming ? <StreamingResponseIndicator /> : null}
     </div>
   )
@@ -238,7 +287,9 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
 
 const MessageCard = memo(
   function MessageCard({
+    canSubmitFeedback,
     expandedToolCards,
+    feedbackInsightsBasePath,
     message,
     onToggleToolCard,
     prevUserQuery,
@@ -264,7 +315,9 @@ const MessageCard = memo(
             <UserOrSystemMessage message={message} />
           ) : isRatingsMessage ? (
             <AssistantRatingsMessage
+              canSubmitFeedback={canSubmitFeedback}
               expandedToolCards={expandedToolCards}
+              feedbackInsightsBasePath={feedbackInsightsBasePath}
               message={message}
               onToggleToolCard={onToggleToolCard}
               prevUserQuery={prevUserQuery}
@@ -290,13 +343,18 @@ const MessageCard = memo(
           {showCopyAction ? (
             <div className={styles.messageActionRow}>
               <MessageActionBar content={message.content} />
-              {message.role === 'assistant' &&
+              {canSubmitFeedback &&
+              message.role === 'assistant' &&
               !message.incomplete &&
               message.headers?.['x-vsr-selected-model'] &&
               message.headers?.['x-vsr-replay-id'] ? (
                 <FeedbackButtons
                   modelId={message.headers['x-vsr-selected-model']}
                   replayId={message.headers['x-vsr-replay-id']}
+                  insightsHref={buildFeedbackInsightsHref(
+                    feedbackInsightsBasePath,
+                    message.headers['x-vsr-replay-id'],
+                  )}
                   category={message.headers['x-vsr-selected-decision']}
                   query={prevUserQuery}
                 />
@@ -308,6 +366,8 @@ const MessageCard = memo(
     )
   },
   (prevProps, nextProps) =>
+    prevProps.canSubmitFeedback === nextProps.canSubmitFeedback &&
+    prevProps.feedbackInsightsBasePath === nextProps.feedbackInsightsBasePath &&
     prevProps.message === nextProps.message &&
     prevProps.prevUserQuery === nextProps.prevUserQuery &&
     prevProps.onToggleToolCard === nextProps.onToggleToolCard &&
@@ -315,7 +375,9 @@ const MessageCard = memo(
 )
 
 export default function ChatComponentMessages({
+  canSubmitFeedback,
   expandedToolCards,
+  feedbackInsightsBasePath,
   messages,
   onToggleToolCard,
   thinking = false,
@@ -346,7 +408,9 @@ export default function ChatComponentMessages({
           return (
             <MessageCard
               key={message.id}
+              canSubmitFeedback={canSubmitFeedback}
               expandedToolCards={expandedToolCards}
+              feedbackInsightsBasePath={feedbackInsightsBasePath}
               message={message}
               onToggleToolCard={onToggleToolCard}
               prevUserQuery={prevUserQuery}

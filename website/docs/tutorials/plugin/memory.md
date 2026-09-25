@@ -47,3 +47,20 @@ selected model. Choose user/tenant isolation, retention, authentication, and
 transport security appropriate for that data. Thresholds depend on the
 embedding model. See a complete example:
 [`config/fragments/plugin/memory/session-memory.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/plugin/memory/session-memory.yaml).
+
+## Upgrading the embedding model
+
+Restart the model runtime after changing embedding weights. For local `mmbert`
+models, including Vela Embedding, the router binds memory to
+the loaded model, tokenizer, inference settings, and vector dimension. Changing
+these creates a separate physical collection or index and a separate Redis hot
+cache. Restarting with the same representation reuses its existing storage.
+Your configured logical names remain unchanged.
+
+Earlier untagged collections are preserved, but are not adopted automatically:
+equal vector dimensions do not prove that two models produce compatible
+embeddings. The management API has no import or bulk export endpoint for
+memories, so the collection for the new model starts empty and repopulates
+from new traffic. No old collection is deleted during
+startup or model migration. This automatic identity binding currently covers
+local `mmbert`; other embedding providers keep their existing behavior.

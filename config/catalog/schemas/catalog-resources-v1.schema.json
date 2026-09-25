@@ -238,6 +238,20 @@
             "propertyNames": {"minLength": 1},
             "additionalProperties": {"type": "string", "pattern": "^/"}
           },
+          "operation_overrides": {
+            "type": "object",
+            "propertyNames": {"minLength": 1},
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {"type": "string", "pattern": "^/"},
+                "absolute_path": {"type": "boolean"},
+                "suppress_api_version": {"type": "boolean"}
+              },
+              "required": ["path"]
+            }
+          },
           "default_headers": {
             "type": "object",
             "propertyNames": {"pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"},
@@ -379,7 +393,7 @@
             "items": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["name", "required", "minimum_candidates", "traits", "recommended_pool"],
+              "required": ["name", "required", "minimum_candidates", "traits"],
               "properties": {
                 "name": {"$ref": "#/$defs/slug"},
                 "required": {"type": "boolean"},
@@ -387,7 +401,6 @@
                 "traits": {"$ref": "#/$defs/stringSet"},
                 "recommended_pool": {
                   "type": "array",
-                  "minItems": 1,
                   "uniqueItems": true,
                   "items": {"$ref": "#/$defs/modelID"}
                 }

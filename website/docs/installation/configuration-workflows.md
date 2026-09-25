@@ -23,9 +23,12 @@ vllm-sr serve --config config.yaml
 `config init` writes the packaged minimal canonical template and refuses to
 replace an existing file unless `--force` is explicit. When a Router is already
 running, start from `vllm-sr config get` instead so unrelated active settings
-are preserved. A model becomes a routing candidate only after the same model
-name appears in `providers.models`, `routing.modelCards`, and the applicable
-decision's `modelRefs`.
+are preserved. Declare physical models in `providers.models` and reference their
+names in the applicable decision's `modelRefs`. For named recipes, decisions
+live under `recipes[].routing.decisions`; reusable built-in recipes receive
+model assignments when an Entrypoint is published. Optional model metadata
+stays in the shared top-level `routing.modelCards`. Add the metadata required by
+the selected algorithm or capability, such as context limits or LoRA adapters.
 
 The local runtime derives stack-specific service addresses in runtime-owned
 state without rewriting the source file. Concurrent `serve` and `stop`
@@ -116,6 +119,13 @@ helm upgrade --install semantic-router \
   oci://ghcr.io/vllm-project/charts/semantic-router \
   -f values.yaml
 ```
+
+Helm values seed the Router ConfigMap at install. If the Dashboard or Router
+API later saves a config edit, an ordinary Helm upgrade preserves that live
+document. To intentionally apply a revised `configOverride`, change
+`configMap.applyValuesRevision` in the values file for that upgrade. Reusing
+the same revision on later upgrades preserves subsequent live edits. A saved
+ConfigMap edit takes effect after the Router deployment rolls out.
 
 `vllm-sr serve --target k8s --config config.yaml` passes the selected document
 as an atomic override, so chart example routes cannot merge into it. The command

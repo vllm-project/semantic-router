@@ -4,8 +4,14 @@
   "$defs": {
     "APIConfig": {
       "properties": {
+        "embeddings": {
+          "$ref": "#/$defs/EmbeddingAPIConfig"
+        },
         "batch_classification": {
           "$ref": "#/$defs/BatchClassificationConfig"
+        },
+        "routing_preview": {
+          "$ref": "#/$defs/RoutingPreviewConfig"
         }
       },
       "additionalProperties": false,
@@ -382,6 +388,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CandidateRequirements": {
+      "properties": {
+        "capabilities": {
+          "type": "string",
+          "enum": [
+            "declared"
+          ]
+        },
+        "context": {
+          "type": "string",
+          "enum": [
+            "known_limits"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CanonicalBackendRef": {
       "properties": {
         "name": {
@@ -432,6 +456,9 @@
     },
     "CanonicalCategoryModule": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -588,6 +615,9 @@
     },
     "CanonicalFactCheckModule": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "model_id": {
           "type": "string"
         },
@@ -609,6 +639,9 @@
     },
     "CanonicalFeedbackDetectorModule": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -732,11 +765,30 @@
     },
     "CanonicalModelCatalog": {
       "properties": {
+        "bindings": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ModelBinding"
+          },
+          "type": "object"
+        },
         "deployments": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelDeployment"
           },
-          "type": "object"
+          "type": "object",
+          "default": {
+            "hazard": {
+              "artifact": "models/Vela-1.0-Encoder-307M-Hazard",
+              "revision": "5dd25f2cc3c98f338e6a79b667662d60f936a28d",
+              "provider": "candle",
+              "device": "cpu",
+              "precision": "fp32",
+              "input": {
+                "max_tokens": 32768,
+                "overflow": "reject"
+              }
+            }
+          }
         },
         "embeddings": {
           "$ref": "#/$defs/CanonicalEmbeddingModels"
@@ -771,6 +823,9 @@
     },
     "CanonicalModelModules": {
       "properties": {
+        "safety": {
+          "$ref": "#/$defs/SafetyModelsConfig"
+        },
         "prompt_compression": {
           "$ref": "#/$defs/PromptCompressionConfig"
         },
@@ -798,6 +853,12 @@
     },
     "CanonicalPIIModule": {
       "properties": {
+        "window": {
+          "$ref": "#/$defs/SequenceHeadWindowConfig"
+        },
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -855,8 +916,14 @@
     },
     "CanonicalPromptGuardModule": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "backend": {
           "$ref": "#/$defs/RemoteClassifierBackend"
+        },
+        "window": {
+          "$ref": "#/$defs/SequenceHeadWindowConfig"
         },
         "enabled": {
           "type": "boolean"
@@ -880,9 +947,6 @@
           "type": "array"
         },
         "variant": {
-          "type": "string"
-        },
-        "protocol": {
           "type": "string"
         },
         "on_error": {
@@ -1023,6 +1087,12 @@
     },
     "CanonicalRecipeRouting": {
       "properties": {
+        "candidate_requirements": {
+          "$ref": "#/$defs/CandidateRequirements"
+        },
+        "data_policy": {
+          "$ref": "#/$defs/RoutingDataPolicy"
+        },
         "model_bindings": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelBinding"
@@ -1047,6 +1117,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1091,6 +1164,9 @@
         },
         "learning": {
           "$ref": "#/$defs/RouterLearningConfig"
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1098,6 +1174,12 @@
     },
     "CanonicalRouting": {
       "properties": {
+        "candidate_requirements": {
+          "$ref": "#/$defs/CandidateRequirements"
+        },
+        "data_policy": {
+          "$ref": "#/$defs/RoutingDataPolicy"
+        },
         "model_bindings": {
           "additionalProperties": {
             "$ref": "#/$defs/ModelBinding"
@@ -1128,6 +1210,9 @@
             "priority",
             "confidence"
           ]
+        },
+        "fallback": {
+          "$ref": "#/$defs/FallbackPolicy"
         }
       },
       "additionalProperties": false,
@@ -1249,6 +1334,12 @@
           },
           "type": "array"
         },
+        "safety": {
+          "items": {
+            "$ref": "#/$defs/SafetyRule"
+          },
+          "type": "array"
+        },
         "hallucination": {
           "items": {
             "$ref": "#/$defs/HallucinationRule"
@@ -1333,6 +1424,12 @@
     },
     "CanonicalSystemModels": {
       "properties": {
+        "safety": {
+          "type": "string"
+        },
+        "hazard": {
+          "type": "string"
+        },
         "prompt_guard": {
           "type": "string"
         },
@@ -1382,6 +1479,28 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "CircuitBreakerConfig": {
+      "properties": {
+        "consecutive_failures": {
+          "type": "integer"
+        },
+        "cooldown_period": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "half_open_probes": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ClassifierSignalRule": {
       "properties": {
         "name": {
@@ -1407,6 +1526,9 @@
         },
         "instructions": {
           "type": "string"
+        },
+        "disable_rationale": {
+          "type": "boolean"
         },
         "use_cpu": {
           "type": "boolean"
@@ -1473,6 +1595,9 @@
       "properties": {
         "name": {
           "type": "string"
+        },
+        "prototype_scoring": {
+          "$ref": "#/$defs/PrototypeScoringConfig"
         },
         "threshold": {
           "type": "number"
@@ -1583,6 +1708,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ContextCompressionCurrentUserConfig": {
+      "properties": {
+        "mode": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ContextCompressionPluginConfig": {
       "properties": {
         "enabled": {
@@ -1687,6 +1821,9 @@
     },
     "ContextCompressionTargetsConfig": {
       "properties": {
+        "current_user": {
+          "$ref": "#/$defs/ContextCompressionCurrentUserConfig"
+        },
         "tool_outputs": {
           "$ref": "#/$defs/ContextCompressionTargetConfig"
         },
@@ -2256,6 +2393,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "EmbeddingAPIConfig": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "EmbeddingEndpointConfig": {
       "properties": {
         "base_url": {
@@ -2327,11 +2473,32 @@
           },
           "type": "array"
         },
+        "image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "negative_image_candidates": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "aggregation_method": {
           "type": "string"
         },
         "query_modality": {
           "type": "string"
+        },
+        "prototype_scoring": {
+          "$ref": "#/$defs/PrototypeScoringConfig"
         }
       },
       "additionalProperties": false,
@@ -2417,6 +2584,9 @@
         "temperature": {
           "type": "number"
         },
+        "reasoning": {
+          "$ref": "#/$defs/ExternalModelReasoningConfig"
+        },
         "max_request_bytes": {
           "type": "integer"
         },
@@ -2427,6 +2597,25 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ExternalModelReasoningConfig": {
+      "properties": {
+        "family": {
+          "type": "string"
+        },
+        "use_reasoning": {
+          "type": "boolean"
+        },
+        "reasoning_effort": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "family",
+        "use_reasoning"
+      ]
+    },
     "FactCheckRule": {
       "properties": {
         "name": {
@@ -2434,6 +2623,50 @@
         },
         "description": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FallbackPolicy": {
+      "properties": {
+        "version": {
+          "type": "integer"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "max_attempts": {
+          "type": "integer"
+        },
+        "total_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "per_attempt_timeout": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            }
+          ]
+        },
+        "retryable_status_codes": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "circuit_breaker": {
+          "$ref": "#/$defs/CircuitBreakerConfig"
         }
       },
       "additionalProperties": false,
@@ -2502,6 +2735,12 @@
           "type": "boolean"
         },
         "on_error": {
+          "type": "string"
+        },
+        "quorum_failure_policy": {
+          "type": "string"
+        },
+        "quorum_fallback_target": {
           "type": "string"
         },
         "analysis_template": {
@@ -2579,6 +2818,9 @@
     },
     "HNSWConfig": {
       "properties": {
+        "full_context": {
+          "type": "boolean"
+        },
         "backend": {
           "type": "string"
         },
@@ -3069,6 +3311,12 @@
         },
         "timeout": {
           "type": "string"
+        },
+        "api_keys": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -3372,6 +3620,9 @@
         },
         "reflection": {
           "$ref": "#/$defs/MemoryReflectionConfig"
+        },
+        "persistence": {
+          "$ref": "#/$defs/MemoryPersistenceConfig"
         }
       },
       "additionalProperties": false,
@@ -3390,6 +3641,32 @@
         },
         "num_partitions": {
           "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "MemoryPersistenceConfig": {
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer",
+          "maximum": 9223372036,
+          "minimum": 0
+        },
+        "concurrency": {
+          "type": "integer",
+          "maximum": 64,
+          "minimum": 0
+        },
+        "queue": {
+          "type": "integer",
+          "maximum": 1024,
+          "minimum": 0
+        },
+        "shutdown_grace_seconds": {
+          "type": "integer",
+          "maximum": 9223372036,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -3775,6 +4052,9 @@
     },
     "ModalityClassifierConfig": {
       "properties": {
+        "max_sequence_length": {
+          "type": "integer"
+        },
         "model_path": {
           "type": "string"
         },
@@ -3846,6 +4126,12 @@
         },
         "mapping_path": {
           "type": "string"
+        },
+        "pair_scorer": {
+          "$ref": "#/$defs/PairScorerSelection"
+        },
+        "operating_point": {
+          "$ref": "#/$defs/OperatingPointReference"
         }
       },
       "additionalProperties": false,
@@ -3869,6 +4155,12 @@
           "type": "string"
         },
         "precision": {
+          "type": "string"
+        },
+        "custom_ops_profile": {
+          "type": "string"
+        },
+        "compilation_cache_dir": {
           "type": "string"
         },
         "input": {
@@ -4051,8 +4343,19 @@
         "quality": {
           "$ref": "#/$defs/QualityEvidenceConfig"
         },
+        "expected_output_tokens": {
+          "type": "integer",
+          "minimum": 1
+        },
         "latency_percentile": {
           "type": "integer"
+        },
+        "latency_metric": {
+          "type": "string",
+          "enum": [
+            "ttft",
+            "tpot"
+          ]
         },
         "on_no_candidates": {
           "type": "string"
@@ -4156,6 +4459,22 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "OperatingPointReference": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "sha256"
+      ]
     },
     "OutputContractChoiceSetSpec": {
       "properties": {
@@ -4295,6 +4614,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "PairScorerSelection": {
+      "properties": {
+        "layer": {
+          "type": "integer"
+        },
+        "dimension": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "PolarityGuardConfig": {
       "properties": {
         "mode": {
@@ -4362,6 +4693,56 @@
         },
         "bind": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ProgressGateTuning": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "observe",
+            "enforce"
+          ]
+        },
+        "calibration_id": {
+          "type": "string"
+        },
+        "window_size": {
+          "type": "integer",
+          "maximum": 256,
+          "minimum": 1
+        },
+        "window_ttl_seconds": {
+          "type": "integer",
+          "maximum": 86400,
+          "minimum": 1
+        },
+        "min_window_outcomes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_consecutive_regressions": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "min_consecutive_recoveries": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cooldown_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "max_switches_per_window": {
+          "type": "integer",
+          "maximum": 256,
+          "minimum": 0
         }
       },
       "additionalProperties": false,
@@ -4485,6 +4866,7 @@
             "modality",
             "authz",
             "jailbreak",
+            "safety",
             "pii",
             "kb",
             "conversation",
@@ -4737,6 +5119,9 @@
         "injection_mode": {
           "type": "string"
         },
+        "rerank": {
+          "$ref": "#/$defs/RAGRerankConfig"
+        },
         "backend_config": {
           "additionalProperties": true,
           "type": "object"
@@ -4752,6 +5137,15 @@
         },
         "min_confidence_threshold": {
           "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RAGRerankConfig": {
+      "properties": {
+        "top_k": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -5065,6 +5459,18 @@
     },
     "RequestParamsPluginConfig": {
       "properties": {
+        "default_max_tokens": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "const": "auto"
+            }
+          ]
+        },
         "blocked_params": {
           "items": {
             "type": "string"
@@ -5490,6 +5896,9 @@
         "stability_weight": {
           "type": "number",
           "minimum": 0
+        },
+        "progress_gate": {
+          "$ref": "#/$defs/ProgressGateTuning"
         }
       },
       "additionalProperties": false,
@@ -5730,6 +6139,15 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "RoutingDataPolicy": {
+      "properties": {
+        "replay": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "RoutingModel": {
       "properties": {
         "name": {
@@ -5802,6 +6220,23 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "RoutingPreviewConfig": {
+      "properties": {
+        "request_timeout_seconds": {
+          "type": "integer",
+          "maximum": 3600,
+          "minimum": 1,
+          "default": 120
+        },
+        "max_concurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 16
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "RuleNode": {
       "properties": {
         "type": {
@@ -5826,6 +6261,7 @@
             "pii",
             "preference",
             "reask",
+            "safety",
             "structure",
             "user_feedback",
             "projection"
@@ -5859,6 +6295,108 @@
             "$ref": "#/$defs/RuleNode"
           },
           "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SafetyHazardRule": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SafetyModelsConfig": {
+      "properties": {
+        "safety": {
+          "$ref": "#/$defs/SequenceHeadModelConfig"
+        },
+        "hazard": {
+          "$ref": "#/$defs/SequenceHeadModelConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SafetyRule": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "unsafe_labels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "threshold": {
+          "type": "number"
+        },
+        "hazard": {
+          "$ref": "#/$defs/SafetyHazardRule"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SequenceHeadModelConfig": {
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "model_ref": {
+          "type": "string"
+        },
+        "use_cpu": {
+          "type": "boolean"
+        },
+        "max_sequence_length": {
+          "type": "integer"
+        },
+        "window": {
+          "$ref": "#/$defs/SequenceHeadWindowConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SequenceHeadWindowConfig": {
+      "properties": {
+        "size": {
+          "type": "integer"
+        },
+        "overlap": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -6520,9 +7058,6 @@
         "update_interval": {
           "type": "string"
         },
-        "queue_depth_estimation": {
-          "type": "boolean"
-        },
         "max_models": {
           "type": "integer"
         }
@@ -6853,6 +7388,14 @@
         "schema_ref": "#/$defs/JailbreakRule"
       },
       {
+        "type": "safety",
+        "display_name": "Safety",
+        "collection": "safety",
+        "observation_key": "safety",
+        "decision_referenceable": true,
+        "schema_ref": "#/$defs/SafetyRule"
+      },
+      {
         "type": "hallucination",
         "display_name": "Hallucination",
         "collection": "hallucination",
@@ -7172,6 +7715,7 @@
       "modality",
       "authz",
       "jailbreak",
+      "safety",
       "pii",
       "kb",
       "conversation",
@@ -7307,6 +7851,15 @@
         ]
       },
       {
+        "key": "bindings",
+        "layer": "model_catalog",
+        "display_name": "Bindings",
+        "path": [
+          "model_catalog",
+          "bindings"
+        ]
+      },
+      {
         "key": "deployments",
         "layer": "model_catalog",
         "display_name": "Deployments",
@@ -7349,6 +7902,16 @@
         "path": [
           "model_catalog",
           "kbs"
+        ]
+      },
+      {
+        "key": "safety",
+        "layer": "model_catalog",
+        "display_name": "Safety",
+        "path": [
+          "model_catalog",
+          "modules",
+          "safety"
         ]
       },
       {

@@ -7,6 +7,11 @@ interface KnowledgeBaseActivation {
 // replacement generation. Refresh the displayed live list only after that
 // exact candidate becomes active.
 export async function waitForKnowledgeBaseActivation(result: KnowledgeBaseActivation): Promise<void> {
+  // On a Kubernetes ConfigMap target the write never reaches the running
+  // router, so there is nothing to poll for: it needs a restart, not time.
+  if (result.activation_status === 'persisted') {
+    throw new Error('Knowledge base saved to the Kubernetes ConfigMap; it takes effect on the router\'s next restart.')
+  }
   if (result.activation_status !== 'pending') return
   const target = result.generated_runtime_hash
   if (!target) throw new Error('Knowledge base saved; router activation is pending.')

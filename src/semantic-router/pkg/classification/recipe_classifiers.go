@@ -267,6 +267,22 @@ func (s *RecipeClassifiers) anyClassifierReady(ready func(*Classifier) bool) boo
 	return false
 }
 
+// HasAnyPreparedEmbeddings reports actual providers across active recipe owners.
+func (s *RecipeClassifiers) HasAnyPreparedEmbeddings() bool {
+	return s.anyClassifierReady(func(c *Classifier) bool { return c.PreparedEmbeddings().Ready() })
+}
+
+// HasPreparedKnowledgeBases reports KB warmup readiness only from the routing
+// recipes that own KB consumers, independently of default or global embeddings.
+func (s *RecipeClassifiers) HasPreparedKnowledgeBases() bool {
+	for _, name := range s.routingLifecycleOrder() {
+		if s.byRecipe[name].HasPreparedKnowledgeBases() {
+			return true
+		}
+	}
+	return false
+}
+
 // PreloadKnowledgeBases prepares recipe-local KB classifiers without sharing
 // policy or symbol state across recipe boundaries.
 func (s *RecipeClassifiers) PreloadKnowledgeBases() error {
