@@ -64,3 +64,35 @@ func TestStreamBoundaryRejectsDynamoPrefixOnDecodeError(t *testing.T) {
 		})
 	}
 }
+
+func TestStreamBoundaryRejectionPersistsAcrossResponseBodies(t *testing.T) {
+	router := dynamoBoundaryTestRouter("vllm")
+	ctx := &RequestContext{
+		SourceFormat: llmprotocol.OpenAIChatV1, TargetFormat: llmprotocol.OpenAIChatV1,
+		RequestModel: "model-a", UpstreamBackendType: "vllm",
+		TraceContext: context.Background(), SemanticRequest: &llmprotocol.Request{},
+	}
+	body := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}],\"nvext\":{\"token_ids\":[1]}}\n\n")
+	first := router.handleSemanticStreamingResponseBody(body, false, ctx)
+	mutation := first.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil || mutation.GetMutation() == nil || len(mutation.GetBody()) != 0 {
+		t.Fatalf("rejected terminal chunk must be replaced with an empty body: %v", mutation)
+	}
+	if !ctx.StreamingAborted || ctx.StreamingComplete {
+		t.Fatal("first body must abort the request without finalizing it")
+	}
+
+	// Use the real handler again: each response-body call creates a new buffer,
+	// but the request-scoped rejection must survive and suppress normal completion.
+	second := router.handleSemanticStreamingResponseBody([]byte("data: [DONE]\n\n"), true, ctx)
+	mutation = second.GetResponseBody().GetResponse().GetBodyMutation()
+	if mutation == nil || mutation.GetMutation() == nil || len(mutation.GetBody()) != 0 {
+		t.Fatalf("second body must not emit a finish frame or [DONE]: %v", mutation)
+	}
+	if !ctx.StreamingAborted || !ctx.StreamingComplete {
+		t.Fatal("final body must preserve rejection and complete cleanup")
+	}
+	if ctx.SemanticStreamState.terminal || len(ctx.SemanticStreamState.items) != 0 {
+		t.Fatal("rejected events must not enter response reconstruction state")
+	}
+}

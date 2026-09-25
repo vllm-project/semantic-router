@@ -75,7 +75,7 @@ type semanticStreamBuffers struct {
 }
 
 func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestContext) {
-	if len(responseBody) == 0 {
+	if ctx.StreamingAborted || len(responseBody) == 0 {
 		return
 	}
 	if ctx.PublicChatUsageFilter != nil {
@@ -101,6 +101,9 @@ func (buffers *semanticStreamBuffers) push(responseBody []byte, ctx *RequestCont
 }
 
 func (buffers *semanticStreamBuffers) finalize(ctx *RequestContext) {
+	if ctx.StreamingAborted {
+		return
+	}
 	if ctx.ProtocolResponseStream != nil {
 		frames, events, diagnostics, err := ctx.ProtocolResponseStream.Finalize(buffers.streamErr)
 		boundaryErr := validateDynamoResponseEvents(ctx, events)
