@@ -222,3 +222,29 @@ func TestConsolidationEnqueueNilAndEmptyAreNoops(t *testing.T) {
 	t.Cleanup(func() { _ = live.RetireAndWait(time.Second) })
 	live.Enqueue("")
 }
+
+func TestConsolidationRunnerEvictsExpiredCooldownEntries(t *testing.T) {
+	store := newScriptMemoryStore(&Memory{ID: "a", UserID: "user-1", Content: "only one"})
+	runner := NewConsolidationRunner(store, ConsolidationOptions{
+		Cooldown:    20 * time.Millisecond,
+		Timeout:     time.Second,
+		Concurrency: 1,
+	})
+	t.Cleanup(func() { _ = runner.RetireAndWait(time.Second) })
+
+	before := consolidationCount("completed", "finished")
+	runner.Enqueue("user-1")
+	waitConsolidation(t, "completed", "finished", before)
+
+	runner.mu.Lock()
+	require.Contains(t, runner.lastAccepted, "user-1")
+	runner.mu.Unlock()
+
+	require.Eventually(t, func() bool {
+		runner.Enqueue("user-2")
+		runner.mu.Lock()
+		defer runner.mu.Unlock()
+		_, kept := runner.lastAccepted["user-1"]
+		return !kept
+	}, time.Second, 5*time.Millisecond)
+}

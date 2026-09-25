@@ -41,41 +41,68 @@ func ConsolidateUser(ctx context.Context, store Store, userID string) (merged in
 		return 0, 0, nil
 	}
 
-	groups := groupBySimilarity(result.Memories, consolidationGroupThreshold)
-
-	for _, group := range groups {
-		if len(group) < 2 {
+	// Never merge across project or type: similar text in different scopes must stay separate.
+	for _, scoped := range partitionByProjectAndType(result.Memories) {
+		if len(scoped) < 2 {
 			continue
 		}
-
-		summary := mergeGroup(group)
-		summaryMem := &Memory{
-			ID:         generateMemoryID(),
-			Type:       group[0].Type,
-			Content:    summary,
-			UserID:     userID,
-			Source:     "consolidation",
-			CreatedAt:  earliestCreatedAt(group),
-			Importance: maxImportance(group),
-		}
-
-		if err := store.Store(ctx, summaryMem); err != nil {
-			logging.Warnf("ConsolidateUser: failed to store merged memory: %v", err)
-			continue
-		}
-
-		for _, old := range group {
-			if ferr := store.Forget(ctx, old.ID); ferr != nil {
-				logging.Warnf("ConsolidateUser: failed to delete original memory id=%s: %v", old.ID, ferr)
-			} else {
-				deleted++
+		groups := groupBySimilarity(scoped, consolidationGroupThreshold)
+		for _, group := range groups {
+			if len(group) < 2 {
+				continue
 			}
+
+			summary := mergeGroup(group)
+			summaryMem := &Memory{
+				ID:         generateMemoryID(),
+				Type:       group[0].Type,
+				Content:    summary,
+				UserID:     userID,
+				ProjectID:  group[0].ProjectID,
+				Source:     "consolidation",
+				CreatedAt:  earliestCreatedAt(group),
+				Importance: maxImportance(group),
+			}
+
+			if err := store.Store(ctx, summaryMem); err != nil {
+				logging.Warnf("ConsolidateUser: failed to store merged memory: %v", err)
+				continue
+			}
+
+			for _, old := range group {
+				if ferr := store.Forget(ctx, old.ID); ferr != nil {
+					logging.Warnf("ConsolidateUser: failed to delete original memory id=%s: %v", old.ID, ferr)
+				} else {
+					deleted++
+				}
+			}
+			merged++
 		}
-		merged++
 	}
 
 	logging.Infof("ConsolidateUser: user=%s merged=%d groups, deleted=%d originals", userID, merged, deleted)
 	return merged, deleted, nil
+}
+
+// partitionByProjectAndType keeps consolidation inside one (project_id, type) bucket.
+func partitionByProjectAndType(memories []*Memory) [][]*Memory {
+	order := make([]string, 0)
+	buckets := make(map[string][]*Memory)
+	for _, mem := range memories {
+		if mem == nil {
+			continue
+		}
+		key := string(mem.Type) + "\x00" + mem.ProjectID
+		if _, ok := buckets[key]; !ok {
+			order = append(order, key)
+		}
+		buckets[key] = append(buckets[key], mem)
+	}
+	out := make([][]*Memory, 0, len(order))
+	for _, key := range order {
+		out = append(out, buckets[key])
+	}
+	return out
 }
 
 // groupBySimilarity clusters memories by pairwise Jaccard similarity.

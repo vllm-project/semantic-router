@@ -102,6 +102,7 @@ func (r *ConsolidationRunner) Enqueue(userID string) {
 		recordConsolidation("skipped", "in_flight", 0, 0)
 		return
 	}
+	r.evictExpiredLastAcceptedLocked(time.Now())
 	if last, ok := r.lastAccepted[userID]; ok && time.Since(last) < r.cooldown {
 		r.mu.Unlock()
 		recordConsolidation("skipped", "cooldown", 0, 0)
@@ -119,6 +120,17 @@ func (r *ConsolidationRunner) Enqueue(userID string) {
 	r.wg.Add(1)
 	r.mu.Unlock()
 	go r.run(userID)
+}
+
+// evictExpiredLastAcceptedLocked drops cooldown entries older than the cooldown
+// window so a long-lived router does not retain every processed user ID forever.
+// Caller must hold r.mu.
+func (r *ConsolidationRunner) evictExpiredLastAcceptedLocked(now time.Time) {
+	for id, acceptedAt := range r.lastAccepted {
+		if now.Sub(acceptedAt) >= r.cooldown {
+			delete(r.lastAccepted, id)
+		}
+	}
 }
 
 func (r *ConsolidationRunner) run(userID string) {

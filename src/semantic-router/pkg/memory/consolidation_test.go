@@ -1,10 +1,12 @@
 package memory
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGroupBySimilarity(t *testing.T) {
@@ -101,4 +103,98 @@ func TestMaxImportance(t *testing.T) {
 		{Importance: 0.5},
 	}
 	assert.InDelta(t, 0.9, maxImportance(group), 0.01)
+}
+
+func TestConsolidateUserDoesNotMergeAcrossProjects(t *testing.T) {
+	// Exact-head style repro: near-identical content in two projects must stay
+	// project-scoped. Before the fix, both originals were deleted and the
+	// replacement had ProjectID == "".
+	contentA := "User prefers morning standups for the alpha roadmap"
+	contentB := "User prefers morning standups for the alpha project plan"
+	store := newScriptMemoryStore(
+		&Memory{
+			ID: "proj-a", UserID: "user-1", ProjectID: "project-a",
+			Type: MemoryTypeSemantic, Content: contentA, CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "proj-b", UserID: "user-1", ProjectID: "project-b",
+			Type: MemoryTypeSemantic, Content: contentB, CreatedAt: time.Now(),
+		},
+	)
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Equal(t, 0, store.stores)
+	require.Equal(t, 0, store.forgets)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	byID := map[string]*Memory{}
+	for _, mem := range store.memories {
+		byID[mem.ID] = mem
+	}
+	require.Equal(t, "project-a", byID["proj-a"].ProjectID)
+	require.Equal(t, "project-b", byID["proj-b"].ProjectID)
+}
+
+func TestConsolidateUserDoesNotMergeAcrossTypes(t *testing.T) {
+	content := "Deploy payment-service with npm build then docker push"
+	store := newScriptMemoryStore(
+		&Memory{
+			ID: "sem", UserID: "user-1", ProjectID: "shared",
+			Type: MemoryTypeSemantic, Content: content + " semantic note", CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "proc", UserID: "user-1", ProjectID: "shared",
+			Type: MemoryTypeProcedural, Content: content + " procedural steps", CreatedAt: time.Now(),
+		},
+	)
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 0, merged)
+	require.Equal(t, 0, deleted)
+	require.Len(t, store.memories, 2)
+}
+
+func TestConsolidateUserPreservesProjectOnMerge(t *testing.T) {
+	store := newScriptMemoryStore(
+		&Memory{
+			ID: "a1", UserID: "user-1", ProjectID: "project-a",
+			Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "a2", UserID: "user-1", ProjectID: "project-a",
+			Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "b1", UserID: "user-1", ProjectID: "project-b",
+			Type: MemoryTypeSemantic, Content: "alpha beta gamma", CreatedAt: time.Now(),
+		},
+		&Memory{
+			ID: "b2", UserID: "user-1", ProjectID: "project-b",
+			Type: MemoryTypeSemantic, Content: "alpha beta gamma delta", CreatedAt: time.Now(),
+		},
+	)
+
+	merged, deleted, err := ConsolidateUser(context.Background(), store, "user-1")
+	require.NoError(t, err)
+	require.Equal(t, 2, merged)
+	require.Equal(t, 4, deleted)
+
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	require.Len(t, store.memories, 2)
+	projects := map[string]int{}
+	for _, mem := range store.memories {
+		require.NotEmpty(t, mem.ProjectID)
+		require.Equal(t, MemoryTypeSemantic, mem.Type)
+		require.Equal(t, "consolidation", mem.Source)
+		projects[mem.ProjectID]++
+	}
+	require.Equal(t, 1, projects["project-a"])
+	require.Equal(t, 1, projects["project-b"])
 }
