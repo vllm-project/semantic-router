@@ -51,13 +51,14 @@ type responsesRequestWire struct {
 	MaxToolCalls         json.RawMessage             `json:"max_tool_calls,omitempty"`
 	Moderation           json.RawMessage             `json:"moderation,omitempty"`
 	Prompt               json.RawMessage             `json:"prompt,omitempty"`
-	PromptCacheKey       json.RawMessage             `json:"prompt_cache_key,omitempty"`
+	PromptCacheKey       string                      `json:"prompt_cache_key,omitempty"`
 	PromptCacheRetention json.RawMessage             `json:"prompt_cache_retention,omitempty"`
 	PromptCacheOptions   json.RawMessage             `json:"prompt_cache_options,omitempty"`
 	SafetyIdentifier     json.RawMessage             `json:"safety_identifier,omitempty"`
 	ServiceTier          json.RawMessage             `json:"service_tier,omitempty"`
 	StreamOptions        *responsesStreamOptionsWire `json:"stream_options,omitempty"`
 	TopLogprobs          json.RawMessage             `json:"top_logprobs,omitempty"`
+	ClientMetadata       map[string]string           `json:"client_metadata,omitempty"`
 }
 
 type responsesReasoningWire struct {
@@ -215,13 +216,16 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	}
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"background": wire.Background, "context_management": wire.ContextManagement,
-		"include": wire.Include, "max_tool_calls": wire.MaxToolCalls, "moderation": wire.Moderation,
-		"prompt": wire.Prompt, "prompt_cache_key": wire.PromptCacheKey,
+		"max_tool_calls": wire.MaxToolCalls, "moderation": wire.Moderation, "prompt": wire.Prompt,
 		"prompt_cache_retention": wire.PromptCacheRetention,
 		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
 		"service_tier": wire.ServiceTier,
 		"top_logprobs": wire.TopLogprobs,
 	}); err != nil {
+		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
+	}
+	diagnostics, err := decodeResponsesDroppedFields(wire, policy)
+	if err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
 	if wire.MaxOutputTokens != nil && *wire.MaxOutputTokens < 16 {
@@ -252,15 +256,50 @@ func (OpenAIResponsesCodec) DecodeRequest(body []byte, policy llmprotocol.Policy
 	if err := decodeResponsesRequestOptions(wire, &request, policy); err != nil {
 		return llmprotocol.Request{}, llmprotocol.Envelope{}, nil, err
 	}
-	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, request.Generation, policy), nil, nil
+	return request, requestEnvelope(llmprotocol.OpenAIResponsesV1, body, request.Generation, policy), diagnostics, nil
+}
+
+// decodeResponsesDroppedFields accepts include and client_metadata without
+// forwarding them. The Router already drops provider-encrypted reasoning from
+// responses, so it can never honor that include, and client telemetry is not
+// model input. Each drop is reported instead of discarded silently.
+func decodeResponsesDroppedFields(wire responsesRequestWire, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
+	var diagnostics llmprotocol.Diagnostics
+	include, err := decodeResponsesInclude(wire.Include, policy)
+	if err != nil {
+		return nil, err
+	}
+	if len(include) > 0 {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "include", "provider-encrypted reasoning is not relayed")
+	}
+	if len(wire.ClientMetadata) > 0 {
+		appendProviderFieldOmission(&diagnostics, policy, llmprotocol.OpenAIResponsesV1, "client_metadata", "client telemetry is not model input")
+	}
+	return diagnostics, nil
+}
+
+func decodeResponsesInclude(raw json.RawMessage, policy llmprotocol.Policy) ([]string, error) {
+	if len(raw) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, nil
+	}
+	var values []string
+	if err := decodeWireValue(raw, &values, policy); err != nil {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_include", "Responses include must be an array of strings", err)
+	}
+	for _, value := range values {
+		if value != "reasoning.encrypted_content" {
+			return nil, rejectUnsupportedRequestField("include", raw)
+		}
+	}
+	return values, nil
 }
 
 func decodeResponsesBaseRequest(wire responsesRequestWire, conversationID string) llmprotocol.Request {
 	request := llmprotocol.Request{
 		Generation: 1, Model: wire.Model, Stream: wire.Stream, Metadata: wire.Metadata,
 		EndUserID: wire.User, PreviousResponseID: wire.PreviousResponseID, ConversationID: conversationID,
-		Truncation: wire.Truncation,
-		Store:      wire.Store, AutoStore: wire.AutoStore, ParallelToolCalls: wire.ParallelToolCalls,
+		Truncation: wire.Truncation, PromptCacheKey: wire.PromptCacheKey,
+		Store: wire.Store, AutoStore: wire.AutoStore, ParallelToolCalls: wire.ParallelToolCalls,
 		Sampling: llmprotocol.Sampling{Temperature: wire.Temperature, TopP: wire.TopP, MaxOutputTokens: wire.MaxOutputTokens},
 		Trusted:  llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIResponsesV1},
 	}
