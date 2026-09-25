@@ -11,11 +11,15 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 const defaultMCPMaxResponseBytes int64 = 16 * 1024 * 1024
 const maxMCPErrorBodyBytes int64 = 8 * 1024
+
+// defaultMCPMaxListPages stops a list call against a server that keeps returning nextCursor.
+const defaultMCPMaxListPages int = 100
 
 const (
 	// MCPProtocolVersion is the MCP protocol version supported by this implementation.
@@ -34,6 +38,7 @@ type HTTPClient struct {
 	httpClient       *http.Client
 	baseURL          string
 	maxResponseBytes int64
+	maxListPages     int
 }
 
 // NewHTTPClient creates a new HTTP MCP client
@@ -43,6 +48,10 @@ func NewHTTPClient(name string, config ClientConfig) *HTTPClient {
 	if maxResponseBytes <= 0 {
 		maxResponseBytes = defaultMCPMaxResponseBytes
 	}
+	maxListPages := config.MaxListPages
+	if maxListPages <= 0 {
+		maxListPages = defaultMCPMaxListPages
+	}
 	return &HTTPClient{
 		BaseClient: baseClient,
 		httpClient: &http.Client{
@@ -50,6 +59,7 @@ func NewHTTPClient(name string, config ClientConfig) *HTTPClient {
 		},
 		baseURL:          config.URL,
 		maxResponseBytes: maxResponseBytes,
+		maxListPages:     maxListPages,
 	}
 }
 
@@ -147,44 +157,74 @@ func (c *HTTPClient) initializeCapabilities() error {
 	return nil
 }
 
+// listAllPages follows nextCursor until the server omits it or the client's
+// page limit is reached.
+func listAllPages[R, T any](
+	ctx context.Context,
+	c *HTTPClient,
+	method string,
+	page func(R) ([]T, mcp.Cursor),
+) ([]T, error) {
+	var items []T
+	request := mcp.PaginatedRequest{}
+	for pages := 1; ; pages++ {
+		response, err := c.sendRequest(ctx, method, request)
+		if err != nil {
+			return nil, err
+		}
+
+		var result R
+		if err := json.Unmarshal(response, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse %s response: %w", method, err)
+		}
+
+		pageItems, nextCursor := page(result)
+		items = append(items, pageItems...)
+		if nextCursor == "" {
+			return items, nil
+		}
+		if pages >= c.maxListPages {
+			// The router installs no client log handler, so a c.log warning would be dropped.
+			logging.ComponentWarnEvent("mcp", "mcp_list_page_limit_reached", map[string]interface{}{
+				"client":       c.name,
+				"method":       method,
+				"max_pages":    c.maxListPages,
+				"items_loaded": len(items),
+			})
+			return items, nil
+		}
+		request.Params.Cursor = nextCursor
+	}
+}
+
 // loadTools loads available tools from the HTTP MCP server
 func (c *HTTPClient) loadTools(ctx context.Context) error {
-	request := mcp.ListToolsRequest{}
-
-	response, err := c.sendRequest(ctx, "tools/list", request)
+	tools, err := listAllPages(ctx, c, "tools/list", func(result mcp.ListToolsResult) ([]mcp.Tool, mcp.Cursor) {
+		return result.Tools, result.NextCursor
+	})
 	if err != nil {
 		return fmt.Errorf("failed to load tools: %w", err)
 	}
 
-	var toolsResult mcp.ListToolsResult
-	if err := json.Unmarshal(response, &toolsResult); err != nil {
-		return fmt.Errorf("failed to parse tools response: %w", err)
-	}
-
 	// Apply tool filtering
-	filteredTools := FilterTools(toolsResult.Tools, c.config.Options.ToolFilter)
+	filteredTools := FilterTools(tools, c.config.Options.ToolFilter)
 
 	c.tools = filteredTools
-	c.log(LoggingLevelInfo, fmt.Sprintf("Loaded %d tools (filtered from %d)", len(c.tools), len(toolsResult.Tools)))
+	c.log(LoggingLevelInfo, fmt.Sprintf("Loaded %d tools (filtered from %d)", len(c.tools), len(tools)))
 
 	return nil
 }
 
 // loadResources loads available resources from the HTTP MCP server
 func (c *HTTPClient) loadResources(ctx context.Context) error {
-	request := mcp.ListResourcesRequest{}
-
-	response, err := c.sendRequest(ctx, "resources/list", request)
+	resources, err := listAllPages(ctx, c, "resources/list", func(result mcp.ListResourcesResult) ([]mcp.Resource, mcp.Cursor) {
+		return result.Resources, result.NextCursor
+	})
 	if err != nil {
 		return fmt.Errorf("failed to load resources: %w", err)
 	}
 
-	var resourcesResult mcp.ListResourcesResult
-	if err := json.Unmarshal(response, &resourcesResult); err != nil {
-		return fmt.Errorf("failed to parse resources response: %w", err)
-	}
-
-	c.resources = resourcesResult.Resources
+	c.resources = resources
 	c.log(LoggingLevelInfo, fmt.Sprintf("Loaded %d resources", len(c.resources)))
 
 	return nil
@@ -192,19 +232,14 @@ func (c *HTTPClient) loadResources(ctx context.Context) error {
 
 // loadPrompts loads available prompts from the HTTP MCP server
 func (c *HTTPClient) loadPrompts(ctx context.Context) error {
-	request := mcp.ListPromptsRequest{}
-
-	response, err := c.sendRequest(ctx, "prompts/list", request)
+	prompts, err := listAllPages(ctx, c, "prompts/list", func(result mcp.ListPromptsResult) ([]mcp.Prompt, mcp.Cursor) {
+		return result.Prompts, result.NextCursor
+	})
 	if err != nil {
 		return fmt.Errorf("failed to load prompts: %w", err)
 	}
 
-	var promptsResult mcp.ListPromptsResult
-	if err := json.Unmarshal(response, &promptsResult); err != nil {
-		return fmt.Errorf("failed to parse prompts response: %w", err)
-	}
-
-	c.prompts = promptsResult.Prompts
+	c.prompts = prompts
 	c.log(LoggingLevelInfo, fmt.Sprintf("Loaded %d prompts", len(c.prompts)))
 
 	return nil
