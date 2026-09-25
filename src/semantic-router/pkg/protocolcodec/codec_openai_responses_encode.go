@@ -66,8 +66,11 @@ func encodeResponsesRequestWire(request llmprotocol.Request) (responsesRequestWi
 	if request.ConversationID != "" {
 		wire.Conversation, _ = json.Marshal(request.ConversationID)
 	}
-	if request.ReasoningEffort != "" {
+	if request.ReasoningEffort != "" || request.ReasoningSummary != "" {
 		wire.Reasoning = &responsesReasoningWire{Effort: request.ReasoningEffort}
+		if request.ReasoningSummary != "" {
+			wire.Reasoning.Summary, _ = json.Marshal(request.ReasoningSummary)
+		}
 	}
 	items, err := encodeResponsesRequestItems(request)
 	if err != nil {

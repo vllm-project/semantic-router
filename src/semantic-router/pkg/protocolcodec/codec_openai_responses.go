@@ -277,11 +277,16 @@ func decodeResponsesReasoningRequest(reasoning *responsesReasoningWire, request 
 	request.ReasoningEffort = reasoning.Effort
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
 		"reasoning.mode":             reasoning.Mode,
-		"reasoning.summary":          reasoning.Summary,
 		"reasoning.context":          reasoning.Context,
 		"reasoning.generate_summary": reasoning.GenerateSummary,
 	}); err != nil {
 		return err
+	}
+	if len(reasoning.Summary) == 0 || bytes.Equal(bytes.TrimSpace(reasoning.Summary), []byte("null")) {
+		return nil
+	}
+	if err := json.Unmarshal(reasoning.Summary, &request.ReasoningSummary); err != nil {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_reasoning_summary", "reasoning summary must be auto, concise, or detailed", err)
 	}
 	return nil
 }

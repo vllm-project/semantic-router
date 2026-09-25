@@ -95,6 +95,7 @@ instead of being silently dropped.
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
 | Reasoning content and effort | Supported | Supported | Supported |
+| Reasoning summary requests (`reasoning.summary`) | Not forwarded; reported as `dropped` | Supported | Not forwarded; reported as `dropped` |
 | JSON object mode without a schema | Supported | Supported | Not supported |
 | Audio input | Supported | Not supported | Not supported |
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
