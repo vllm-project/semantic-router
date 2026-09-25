@@ -108,6 +108,9 @@ func adminUserPasswordHandler(svc *Service) http.HandlerFunc {
 			writePasswordHashError(w, err)
 			return
 		}
+		if RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := svc.store.UpdatePassword(r.Context(), req.UserID, hash); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
