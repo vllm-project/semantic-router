@@ -102,6 +102,13 @@ must be confirmed with maintainers before the PR that depends on it merges.
 - [ ] `CONFIRM-07` Which provenance fields are safe on user-facing responses versus
   operator-only Replay. Default: Replay-only, with any response header gated behind
   the existing debug trigger.
+
+  `TASK-07` implemented the Replay-only default and added no response header.
+  Replay stores a status and reason codes, never a value the caller sent.
+  `root_invocation_id` is deliberately not recorded. It would let an operator
+  find every request of one agent task, but it is a string the caller chooses
+  and could contain anything. It can be added later without a migration,
+  because `route_diagnostics` is one JSONB column.
 - [ ] `CONFIRM-08` What happens when a presented envelope fails validation.
   Default: drop the whole envelope, route the request exactly as if no facts had
   been presented, and record the rejection reasons in Replay. No partial
@@ -251,7 +258,8 @@ must be confirmed with maintainers before the PR that depends on it merges.
   seam routes through, per `CONFIRM-06`. It only copies entries out of its
   input, so the subset rule holds by construction rather than by assertion, and
   `eligibilityExclusions` carries per-reason counts that are content-free by
-  design so `TASK-07` can record them with nothing to strip.
+  design. `TASK-07` chose not to store these counts in Replay; they stay in the
+  `decision_models_filtered` log event.
 
   Applied at three seams: the live decision path, the route-action fallback,
   and the learning candidate pool. Learning mattered most: two of its candidate
@@ -278,14 +286,48 @@ must be confirmed with maintainers before the PR that depends on it merges.
   against the merged proposal: `allowed_candidates` and `budget.currency`.
   Both are recorded in `CONFIRM-09`, along with a correction to an earlier
   claim about which budget counters the proposal evidences.
-- [ ] `TASK-07` Emit content-minimized Replay provenance for accepted and rejected
-  facts and for eligibility narrowing.
+- [x] `TASK-07` Emit content-minimized Replay provenance for accepted and rejected
+  facts and for eligibility narrowing. Landed in `pkg/routerreplay` and
+  `pkg/extproc`, pending review.
+
+  Replay records two fields in `route_diagnostics`: `agentic_facts_status`
+  (`accepted` or `rejected`) and `agentic_facts_reasons` (one entry per
+  rejection, as `field:reason`, or a bare reason code when the whole envelope
+  failed, with repeats removed). Both are absent when the contract is disabled
+  or no envelope was sent, so existing records do not change. The shape copies
+  the existing Memory fields, `memory_status` and `memory_reason`, rather than
+  adding a new nested type. Redaction follows the same rule as Memory: the
+  status stays visible, and the reasons are cleared for readers without
+  `replay.detail`. A test puts a marker string in every caller-supplied field
+  and checks it never appears in the stored JSON, for both an accepted and a
+  rejected envelope.
+
+  Scope was cut to the minimum on purpose:
+
+  - **Eligibility narrowing counts are not recorded.** The task text asks for
+    them, but they already appear in the `decision_models_filtered` log event,
+    and the matched rule names in `signals.agentic_facts` already show which
+    rules fired. If they are added later, learning's counts must stay separate
+    from the decision's counts: learning can filter a much larger list, up to
+    every model in the deployment, so one shared number would be misleading.
+  - **A request refused with `422` writes no Replay record.** This was already
+    true for context-window refusals before this plan, and `TASK-07` keeps that
+    behavior rather than changing a path shared by four other refusal reasons.
+    The facts that cause a refusal are therefore visible only in the log and in
+    the `422` response body.
+
+  Found and fixed while doing this task, in its own commit: `ingestAgenticFacts`
+  checked the trust marker before checking whether an envelope was sent, so
+  every ordinary request with the contract enabled was recorded as rejected
+  with reason `untrusted`. Routing was never affected, but Replay would have
+  shown almost every request as a rejected envelope. It now checks for an
+  envelope first.
 - [ ] `TASK-08` Add maintained E2E coverage for authenticated, untrusted, malformed,
   stale, nested-delegation, and conflicting-constraint requests.
 
 ## Next Action
 
-Start `TASK-07` on `feat/3379-agentic-facts-schema`, then `TASK-08`.
+Start `TASK-08` on `feat/3379-agentic-facts-schema`.
 
 Every `CONFIRM` item except `CONFIRM-01` is now implemented and externally
 visible in code rather than recorded as a default, so all of them need a
@@ -294,9 +336,10 @@ rest because they were decided here rather than by the proposal: `CONFIRM-06`,
 which exempts a route action's destination from caller-declared capability
 filtering, and `CONFIRM-09`, which removed two envelope fields.
 
-`TASK-07` has a head start: `eligibilityExclusions` already carries per-reason
-counts and holds no model names or caller values, so recording eligibility
-narrowing in Replay needs no redaction step.
+`TASK-08` can use Replay to check its cases: each of the untrusted, malformed,
+stale, and conflicting requests should produce `agentic_facts_status:
+rejected` with a known reason, and an authenticated valid request should
+produce `accepted`.
 
 ## Operating Rules
 
