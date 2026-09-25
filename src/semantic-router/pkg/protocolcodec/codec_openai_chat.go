@@ -54,7 +54,7 @@ type chatRequestWire struct {
 	Metadata             map[string]string      `json:"metadata,omitempty"`
 	Store                *bool                  `json:"store,omitempty"`
 	User                 string                 `json:"user,omitempty"`
-	PromptCacheKey       json.RawMessage        `json:"prompt_cache_key,omitempty"`
+	PromptCacheKey       string                 `json:"prompt_cache_key,omitempty"`
 	PromptCacheRetention json.RawMessage        `json:"prompt_cache_retention,omitempty"`
 	PromptCacheOptions   json.RawMessage        `json:"prompt_cache_options,omitempty"`
 	SafetyIdentifier     json.RawMessage        `json:"safety_identifier,omitempty"`
@@ -204,8 +204,8 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 
 func validateChatRequestWire(wire chatRequestWire) error {
 	if err := rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"prompt_cache_key": wire.PromptCacheKey, "prompt_cache_retention": wire.PromptCacheRetention,
-		"prompt_cache_options": wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
+		"prompt_cache_retention": wire.PromptCacheRetention,
+		"prompt_cache_options":   wire.PromptCacheOptions, "safety_identifier": wire.SafetyIdentifier,
 		"audio": wire.Audio, "function_call": wire.FunctionCall, "functions": wire.Functions,
 		"logit_bias": wire.LogitBias, "logprobs": wire.Logprobs, "modalities": wire.Modalities,
 		"moderation": wire.Moderation, "prediction": wire.Prediction, "service_tier": wire.ServiceTier,
@@ -255,6 +255,7 @@ func decodeChatBaseRequest(wire chatRequestWire) llmprotocol.Request {
 		},
 		Trusted:            llmprotocol.TrustedMetadata{SourceFormat: llmprotocol.OpenAIChatV1},
 		ChatTemplateKwargs: wire.ChatTemplateKwargs, CacheSalt: wire.CacheSalt,
+		PromptCacheKey: wire.PromptCacheKey,
 	}
 	if wire.StreamOptions != nil {
 		request.StreamOptions = llmprotocol.StreamOptions{

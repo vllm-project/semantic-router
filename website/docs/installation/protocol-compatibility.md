@@ -100,6 +100,7 @@ instead of being silently dropped.
 | Hosted image-generation lifecycle | Not supported | Supported | Not supported |
 | Multiple response candidates | Supported | Not supported | Not supported |
 | Prompt-cache directives | Supported | Not supported | Supported |
+| Prompt cache key (`prompt_cache_key`) | Supported | Supported | Not supported |
 | Reasoning token budget | Supported extension | Not supported | Supported |
 | Seed and frequency or presence penalties | Supported | Not supported | Not supported |
 | `top_k` sampling | Supported extension | Not supported | Supported for nonnegative values |
@@ -178,3 +179,30 @@ Envoy ExtProc boundary, and in an 18-cell deployment matrix: three client
 formats by three backend formats by buffered or streaming mode. See the
 [implemented codec design](../proposals/multi-protocol-adaptor) for the full
 verification and extension contract.
+
+## Codex CLI
+
+Codex CLI uses the Responses endpoint and sends three fields on every request.
+The Router handles them as follows:
+
+| Field | Router behavior |
+| --- | --- |
+| `prompt_cache_key` | Forwarded to `openai` and `responses` backends. A route to an `anthropic` backend fails with `unsupported_prompt_cache_key`, because Messages has no equivalent. |
+| `include: ["reasoning.encrypted_content"]` | Accepted and not forwarded. The Router never relays provider-encrypted reasoning, so reasoning items carry no `encrypted_content`. Other `include` values remain unsupported. |
+| `client_metadata` | Accepted and not forwarded, because it carries Codex telemetry rather than model input. |
+
+Each accepted but unforwarded field appears as a `dropped` entry in
+`x-vsr-protocol-warnings`.
+
+Codex can also request reasoning summaries, multi-agent namespace tools, and the
+hosted web search tool. The Router does not support those, so turn them off in
+the Codex `config.toml` that points at the Router. These settings were checked
+with Codex CLI 0.156.1:
+
+```toml
+model_reasoning_summary = "none"
+web_search = "disabled"
+
+[features]
+multi_agent = false
+```
