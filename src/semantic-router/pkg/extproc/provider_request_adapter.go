@@ -14,6 +14,18 @@ func (r *OpenAIRouter) adaptProviderRequest(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) ([]byte, error) {
+	adapted, err := r.applyProviderDialect(body, dispatch, ctx)
+	if err == nil {
+		reportDroppedReasoningSummary(ctx, body, adapted)
+	}
+	return adapted, err
+}
+
+func (r *OpenAIRouter) applyProviderDialect(
+	body []byte,
+	dispatch *providerDispatch,
+	ctx *RequestContext,
+) ([]byte, error) {
 	body, mutation, err := r.projectProviderRequest(body, dispatch, ctx)
 	if err == nil && mutation != nil {
 		r.observeReasoningMutation(mutation, dispatch.useReasoning)

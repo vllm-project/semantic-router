@@ -11,7 +11,64 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
+
+var droppedChatTemplateReasoningSummary = llmprotocol.Diagnostic{
+	Source: llmprotocol.OpenAIResponsesV1, Field: "reasoning.summary",
+	Action: llmprotocol.DiagnosticDropped, Reason: "chat_template_kwargs cannot request a reasoning summary",
+}
+
+func TestResponsesReasoningSummaryIsForwardedOrReported(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		transport   modelcatalog.ReasoningTransport
+		wantSummary bool
+	}{
+		{name: "chat_template_kwargs", transport: modelcatalog.ReasoningTransportChatTemplate},
+		{name: "top_level_effort", transport: modelcatalog.ReasoningTransportTopLevelEffort, wantSummary: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIResponsesV1)
+			profile := router.Config.ProviderProfiles["provider"]
+			profile.ReasoningTransport = test.transport
+			router.Config.ProviderProfiles["provider"] = profile
+			params := router.Config.ModelConfig[logicalModel]
+			params.ReasoningFamily = "local-effort"
+			router.Config.ModelConfig[logicalModel] = params
+			router.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{"local-effort": {
+				Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "reasoning_effort",
+				Levels: []string{"low", "high"}, Default: "high",
+				Modes: []string{config.ReasoningModeEnabled}, DefaultMode: config.ReasoningModeEnabled,
+			}}
+			decision := config.Decision{Name: "route", ModelRefs: []config.ModelRef{{
+				Model: logicalModel, ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"},
+			}}}
+			ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, nil)
+			request, immediate := router.prepareProtocolRequest(
+				[]byte(`{"model":"virtual","input":"hello","reasoning":{"effort":"high","summary":"auto"}}`), ctx,
+			)
+			require.Nil(t, immediate)
+			ctx.VSRSelectedDecision = &decision
+
+			response, err := router.handleEntrypointModelRouting(
+				request, "virtual", decision.Name, entropy.ReasoningDecision{UseReasoning: true}, logicalModel, ctx,
+			)
+			require.NoError(t, err)
+			dispatched := unmarshalReasoningRequest(t, response.GetRequestBody().GetResponse().GetBodyMutation().GetBody())
+			reasoning, hasReasoning := dispatched["reasoning"].(map[string]interface{})
+			if test.wantSummary {
+				require.True(t, hasReasoning)
+				assert.Equal(t, "auto", reasoning["summary"])
+				assert.NotContains(t, ctx.ProtocolDiagnostics, droppedChatTemplateReasoningSummary)
+				return
+			}
+			assert.False(t, hasReasoning)
+			assertChatTemplateReasoningField(t, dispatched, "reasoning_effort", "high")
+			assert.Contains(t, ctx.ProtocolDiagnostics, droppedChatTemplateReasoningSummary)
+		})
+	}
+}
 
 func TestResponsesLocalReasoningUsesOneWireControl(t *testing.T) {
 	router := newReasoningRouter(
@@ -32,6 +89,10 @@ func TestResponsesLocalReasoningUsesOneWireControl(t *testing.T) {
 		"reasoning":{"effort":"high","summary":"auto"},
 		"output_config":{"effort":"low","format":{"type":"json_schema"}}
 	}`)
+	ctx := &RequestContext{
+		VSRSelectedDecision: decision, SourceFormat: llmprotocol.OpenAIResponsesV1,
+		SemanticRequest: &llmprotocol.Request{ReasoningSummary: "auto"},
+	}
 
 	adapted, err := router.adaptProviderRequest(
 		body,
@@ -40,7 +101,7 @@ func TestResponsesLocalReasoningUsesOneWireControl(t *testing.T) {
 			decisionName: "route", useReasoning: true,
 			profile: &config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportChatTemplate},
 		},
-		&RequestContext{VSRSelectedDecision: decision},
+		ctx,
 	)
 	require.NoError(t, err)
 	request := unmarshalReasoningRequest(t, adapted)
@@ -48,6 +109,7 @@ func TestResponsesLocalReasoningUsesOneWireControl(t *testing.T) {
 	assertChatTemplateReasoningField(t, request, "reasoning_effort", "high")
 	_, hasReasoning := request["reasoning"]
 	assert.False(t, hasReasoning)
+	assert.Contains(t, ctx.ProtocolDiagnostics, droppedChatTemplateReasoningSummary)
 	_, hasTopLevelEffort := request["reasoning_effort"]
 	assert.False(t, hasTopLevelEffort)
 	_, hasThinking := request["thinking"]

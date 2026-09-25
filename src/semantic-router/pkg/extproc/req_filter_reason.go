@@ -3,6 +3,9 @@ package extproc
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
+
+	"github.com/tidwall/gjson"
 
 	modelcatalog "github.com/vllm-project/semantic-router/src/semantic-router/pkg/catalog"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -708,6 +711,24 @@ func prepareChatTemplateReasoningMutation(mutation *reasoningRequestMutation, pa
 	removeOutputConfigEffort(mutation, "effort")
 	if parameter != "effort" {
 		removeOutputConfigEffort(mutation, parameter)
+	}
+}
+
+// reportDroppedReasoningSummary records a Responses summary request removed by
+// the chat_template_kwargs transport, which has no summary control. Fallback
+// attempts adapt the same request again, so the warning is recorded once.
+func reportDroppedReasoningSummary(ctx *RequestContext, encoded, adapted []byte) {
+	if ctx == nil || ctx.SemanticRequest == nil || ctx.SemanticRequest.ReasoningSummary == "" ||
+		!gjson.GetBytes(encoded, "reasoning.summary").Exists() ||
+		gjson.GetBytes(adapted, "reasoning.summary").Exists() {
+		return
+	}
+	diagnostic := llmprotocol.Diagnostic{
+		Source: ctx.SourceFormat, Field: "reasoning.summary", Action: llmprotocol.DiagnosticDropped,
+		Reason: "chat_template_kwargs cannot request a reasoning summary",
+	}
+	if !slices.Contains(ctx.ProtocolDiagnostics, diagnostic) {
+		ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, diagnostic)
 	}
 }
 
