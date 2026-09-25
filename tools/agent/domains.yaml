@@ -263,6 +263,7 @@ domains:
       - tools/models/classifier-operating-point/**
       - tools/calibration/image-routing/**
       - bench/grounded_fusion/fusioneval/**
+      - bench/memory_coldstart/**
       - tools/make/go-tools.mk
     checks: [make go-tools-test]
     verifications: [core]
