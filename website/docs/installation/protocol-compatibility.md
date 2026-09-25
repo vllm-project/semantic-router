@@ -92,6 +92,7 @@ instead of being silently dropped.
 | --- | --- | --- | --- |
 | Text, image input, and file input | Supported | Supported | Supported |
 | Tools, parallel tool calls, and strict tool schemas | Supported | Supported | Supported |
+| Custom (free-form) tools and their calls | Supported | Not supported | Not supported |
 | Strict JSON Schema output | Supported | Supported | Supported |
 | Buffered and streaming responses | Supported | Supported | Supported |
 | Reasoning content and effort | Supported | Supported | Supported |

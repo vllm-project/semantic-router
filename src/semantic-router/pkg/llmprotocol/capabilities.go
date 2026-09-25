@@ -54,6 +54,9 @@ const (
 	CapabilitySamplingMinP
 	CapabilityRepetitionPenalty
 	CapabilityCacheIsolation
+	// CapabilityCustomTools covers free-form custom tools and their calls, which
+	// a JSON Schema function tool cannot represent.
+	CapabilityCustomTools
 )
 
 // CapabilitySet is an immutable value bitset.
@@ -139,6 +142,7 @@ func (set CapabilitySet) Names() []string {
 		{CapabilityReasoningDisplay, "reasoning_display"},
 		{CapabilityMatchedStopSequence, "matched_stop_sequence"},
 		{CapabilityImageGeneration, "image_generation"},
+		{CapabilityCustomTools, "custom_tools"},
 	}
 	names := make([]string, 0, len(known))
 	for _, item := range known {
@@ -266,6 +270,9 @@ func toolCapabilities(tools []Tool) Capability {
 		if tool.Cache != nil {
 			required |= CapabilityCacheDirectives
 		}
+		if tool.Kind == ToolKindCustom {
+			required |= CapabilityCustomTools
+		}
 	}
 	return required
 }
@@ -322,6 +329,9 @@ func RequiredEventCapabilities(event Event) CapabilitySet {
 		event.Content != nil && event.Content.Kind == ContentGeneratedImage {
 		required.bits |= CapabilityImageGeneration
 	}
+	if event.ToolCall != nil && event.ToolCall.Kind == ToolKindCustom {
+		required.bits |= CapabilityCustomTools
+	}
 	return required
 }
 
@@ -329,6 +339,9 @@ func capabilityForRequestContent(content Content) Capability {
 	var cache Capability
 	if content.Cache != nil {
 		cache = CapabilityCacheDirectives
+	}
+	if isCustomToolCall(content) {
+		return CapabilityTools | CapabilityCustomTools | cache
 	}
 	if capability, found := requestContentCapability[content.Kind]; found {
 		return capability | cache
@@ -346,6 +359,9 @@ func capabilityForRequestContent(content Content) Capability {
 }
 
 func capabilityForResponseContent(content Content) Capability {
+	if isCustomToolCall(content) {
+		return CapabilityTools | CapabilityCustomTools
+	}
 	if capability, found := responseContentCapability[content.Kind]; found {
 		return capability
 	}
@@ -411,6 +427,10 @@ func reasoningContentCapabilities(signature string) Capability {
 	return capabilities
 }
 
+func isCustomToolCall(content Content) bool {
+	return content.Kind == ContentToolCall && content.ToolCall != nil && content.ToolCall.Kind == ToolKindCustom
+}
+
 func ParseCapabilities(names []string) (CapabilitySet, error) {
 	lookup := map[string]Capability{
 		"text": CapabilityText, "chat": CapabilityText, "image_input": CapabilityImageInput,
@@ -445,6 +465,7 @@ func ParseCapabilities(names []string) (CapabilitySet, error) {
 		"reasoning_display":     CapabilityReasoningDisplay,
 		"matched_stop_sequence": CapabilityMatchedStopSequence,
 		"image_generation":      CapabilityImageGeneration,
+		"custom_tools":          CapabilityCustomTools,
 	}
 	var set CapabilitySet
 	for _, name := range names {

@@ -475,9 +475,9 @@ func (state *streamState) recordToolDelta(event llmprotocol.Event) (llmprotocol.
 		return llmprotocol.Event{}, err
 	}
 	state.toolCalls[event.ItemIndex] = call
-	event.ToolCall.ID, event.ToolCall.Name = call.ID, call.Name
+	event.ToolCall.Kind, event.ToolCall.ID, event.ToolCall.Name = call.Kind, call.ID, call.Name
 	current := state.toolArguments[event.ItemIndex]
-	if bytes.Equal(bytes.TrimSpace(current), []byte("{}")) && event.ToolCall.Arguments != "" {
+	if call.Kind == "" && bytes.Equal(bytes.TrimSpace(current), []byte("{}")) && event.ToolCall.Arguments != "" {
 		current = nil
 	}
 	if err := state.validateStreamToolArgumentAppend(current, event.ToolCall.Arguments); err != nil {

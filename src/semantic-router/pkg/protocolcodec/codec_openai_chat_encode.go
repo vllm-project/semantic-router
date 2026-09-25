@@ -118,6 +118,10 @@ func appendChatMessages(wire *chatRequestWire, request llmprotocol.Request) erro
 
 func appendChatTools(wire *chatRequestWire, tools []llmprotocol.Tool) {
 	for _, tool := range tools {
+		if tool.Kind == llmprotocol.ToolKindCustom {
+			wire.Tools = append(wire.Tools, encodeChatCustomTool(tool))
+			continue
+		}
 		wire.Tools = append(wire.Tools, chatToolWire{Type: "function", Function: chatFunctionDefinitionWire{
 			Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema, Strict: tool.Strict,
 		}, CacheControl: encodeAnthropicCacheControl(tool.Cache)})
@@ -265,10 +269,7 @@ func (state *chatMessageEncodingState) appendToolCall(call *llmprotocol.ToolCall
 	if call == nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_tool_call", "tool call content is invalid", nil)
 	}
-	state.wire.ToolCalls = append(state.wire.ToolCalls, chatToolCallWire{
-		ID: call.ID, Type: "function",
-		Function: chatFunctionCallWire{Name: call.Name, Arguments: call.Arguments},
-	})
+	state.wire.ToolCalls = append(state.wire.ToolCalls, encodeChatToolCall(*call))
 	return nil
 }
 
