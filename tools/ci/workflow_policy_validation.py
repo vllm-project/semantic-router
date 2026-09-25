@@ -7,9 +7,9 @@ from pathlib import Path
 from typing import Any, Protocol
 
 import yaml
-from ci_plan import EXECUTORS
-from classify_pr_changes import PRODUCTION_RELEASE_IMAGES
+from classify_pr_changes import NIGHTLY_IMAGES, PRODUCTION_RELEASE_IMAGES
 from domain_registry import job_records, load_domain_registry
+from execution_batches import ALL_DISPATCH_JOBS, dispatch_job
 from image_artifacts import publication_tags
 from verification_catalog import catalog_errors
 
@@ -42,6 +42,39 @@ def needs(job: dict[str, Any]) -> set[str]:
     if isinstance(value, list):
         return {item for item in value if isinstance(item, str)}
     return set()
+
+
+def validate_gate_transport(gate: dict[str, Any], errors: list[str]) -> None:
+    steps = gate.get("steps", [])
+    reconciliations = [
+        step for step in steps if "check_ci_gate.py" in step.get("run", "")
+    ]
+    expected = {
+        name: {"result": "${{ needs." + name + ".result }}"}
+        for name in ALL_DISPATCH_JOBS
+    }
+    try:
+        actual = json.loads(
+            reconciliations[0].get("env", {}).get("EXECUTOR_RESULTS", "")
+        )
+    except (ValueError, TypeError, IndexError):
+        actual = None
+    if len(reconciliations) != 1 or actual != expected:
+        errors.append(
+            "ci.yml gate must pass only every prerequisite's result, without job outputs"
+        )
+    if not any(
+        step.get("uses", "").startswith("actions/download-artifact@")
+        and step.get("with", {}).get("name") == "ci-plan"
+        and step.get("with", {}).get("path") == ".agent-harness/ci"
+        for step in steps
+    ) or not any(
+        "--plan .agent-harness/ci/plan.json" in step.get("run", "")
+        for step in reconciliations
+    ):
+        errors.append(
+            "ci.yml gate must read the independently downloaded ci-plan artifact"
+        )
 
 
 def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) -> None:
@@ -84,12 +117,13 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
     if not shared:
         errors.append("missing shared ci.yml")
         return
-    expected = {"plan", "images", "native-build", *EXECUTORS}
+    expected = set(ALL_DISPATCH_JOBS)
     gate = shared.jobs.get("gate", {})
     if needs(gate) != expected or gate.get("if") != "always()":
         errors.append(
             "ci.yml gate must aggregate every executor and build prerequisite"
         )
+    validate_gate_transport(gate, errors)
     text = shared.path.read_text()
     if (
         "check_ci_gate.py" not in text
@@ -100,7 +134,7 @@ def validate_pr_contract(workflows: dict[str, WorkflowLike], errors: list[str]) 
             "ci.yml must reconcile execution artifacts against the pre-execution plan"
         )
     for record in job_records().values():
-        call = shared.jobs.get(record["executor"], {})
+        call = shared.jobs.get(dispatch_job(record), {})
         if local_target(call) != Path(record["workflow"]).name:
             errors.append(f"ci.yml: no executor for {record['workflow']}")
     errors.extend(catalog_errors(load_domain_registry()))
@@ -165,8 +199,7 @@ def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
         errors.append("release images must consume the planner publication inventory")
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
-        "- `anthropic-shim`",
-        "- `llm-katan`",
+        "- `provider-mocker`",
         "- `vllm-sr-sim`",
     }
     if any(bullet in release_text for bullet in fixture_bullets):
@@ -216,11 +249,14 @@ def validate_nightly_docker_owner(
 def validate_fixture_tag_policy(
     workflows: dict[str, WorkflowLike], errors: list[str]
 ) -> None:
-    for image in ("anthropic-shim", "llm-katan"):
-        if "nightly" not in publication_tags(image, "nightly", "", False, "20260101"):
-            errors.append(
-                f"nightly fixture {image} must retain its mutable nightly tag"
-            )
+    if "provider-mocker" in set(NIGHTLY_IMAGES) | RELEASE_IMAGES:
+        errors.append("provider-mocker cannot follow product publication schedules")
+    for mode in ("pr", "nightly", "release"):
+        try:
+            publication_tags("provider-mocker", mode, "", False, "20260101")
+        except ValueError:
+            continue
+        errors.append(f"provider-mocker cannot be published in {mode} mode")
 
 
 def validate_security_boundary(

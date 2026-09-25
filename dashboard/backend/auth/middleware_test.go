@@ -210,8 +210,12 @@ func TestRequiredPermissions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/api/v1/storage/context-recovery/invalidate", expected: PermConfigWrite},
 		{method: http.MethodGet, path: "/api/openclaw/teams", expected: PermOpenClawRead},
 		{method: http.MethodPost, path: "/api/openclaw/teams", expected: PermOpenClaw},
-		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
-		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermConfigRead},
+		{method: http.MethodGet, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClawRead},
+		{method: http.MethodPost, path: "/api/openclaw/rooms/room-1/messages", expected: PermOpenClaw},
+		{method: http.MethodGet, path: "/api/openclaw/rooms/room-1/ws", expected: PermOpenClaw},
+		{method: http.MethodGet, path: "/api/openclaw/token", expected: PermOpenClaw},
+		{method: http.MethodGet, path: "/embedded/openclaw/worker-1/", expected: PermOpenClaw},
+		{method: http.MethodPost, path: "/api/router/v1/chat/completions", expected: PermInferenceRun},
 		{method: http.MethodPost, path: "/api/router/api/v1/observability/outcomes", expected: PermFeedbackSubmit},
 		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays", expected: PermReplayRead},
 		{method: http.MethodGet, path: "/api/router/api/v1/observability/replays/record-1", expected: PermReplayRead},
@@ -265,6 +269,16 @@ func TestAuthenticateRequestRequiresSRBenchWriteAndRunPermissions(t *testing.T) 
 		{
 			name: "dataset composition requires write", path: "/api/sr-bench/v1/datasets/compose",
 			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset preparation requires write", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalWrite, wantStatus: http.StatusForbidden,
+			wantRequired: []string{PermEvalWrite},
+		},
+		{
+			name: "dataset preparation needs no generation permission", path: "/api/sr-bench/v1/dataset-preparations",
+			removePermission: PermEvalRun, wantStatus: http.StatusNoContent,
 			wantRequired: []string{PermEvalWrite},
 		},
 		{

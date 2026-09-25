@@ -689,6 +689,9 @@ func WebSearchHandler() http.HandlerFunc {
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		// Shared upstream budget, charged only for requests that reach DuckDuckGo
 		if !globalRateLimiter.reserveUpstream() {
 			log.Printf("Upstream search budget exhausted, rejecting client: %s", clientKey)

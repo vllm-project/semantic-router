@@ -94,6 +94,58 @@ for native context budgets, external endpoints and failure policies, and the
 [complete HTTP example](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/safety/content-safety.yaml)
 for a category-specific policy.
 
+## Select Vela Shield
+
+The built-in Safety module uses
+[Vela Safety](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Safety)
+by default.
+[Vela Shield](https://huggingface.co/llm-semantic-router/Vela-1.0-Encoder-307M-Shield)
+is a separately trained alternative with the same `safe`/`unsafe` labels, so
+existing rules and thresholds apply without other changes. Validate thresholds
+again after switching models.
+
+To use Shield for every safety rule, set the module's model:
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      safety:
+        safety:
+          model_id: models/Vela-1.0-Encoder-307M-Shield
+```
+
+To use Shield for one rule in one recipe, declare a deployment and bind the
+rule to it. Other recipes keep the module's model:
+
+```yaml
+global:
+  model_catalog:
+    deployments:
+      shield:
+        artifact: models/Vela-1.0-Encoder-307M-Shield
+        revision: a981a99eeb05a2859b88b5cee9af4352897ec4ec
+        provider: candle
+recipes:
+  - name: care
+    routing:
+      model_bindings:
+        safety.unsafe-content:
+          deployment: shield
+          adapter: modernbert
+          contract: label_distribution.v1
+      signals:
+        safety:
+          - name: unsafe-content
+            threshold: 0.5
+```
+
+The module form uses the pinned revision from the built-in registry; a
+deployment uses the `revision` it declares. Either way, the download contains
+only the root classifier. The Shield repository also publishes auxiliary heads
+under `heads/` and a label-conditioned encoder under `lc/`; the router does not
+load them and does not download them.
+
 ## Long-input scanning
 
 Native heads use whole-input inference by default. A separately calibrated

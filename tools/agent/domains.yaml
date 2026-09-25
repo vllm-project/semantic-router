@@ -150,6 +150,7 @@ domains:
         - src/semantic-router/pkg/config/default_execution_onnx.go
         - src/semantic-router/tools/model-test-assets/**
         - tools/ci/run_model_tests.py
+        - tools/ci/prepare_model_test_assets.py
         - tools/make/models.mk
 
   # All three published suites consume the shared pinned-artifact provisioner.
@@ -170,15 +171,33 @@ domains:
         - src/semantic-router/pkg/config/canonical_global.go
         - src/semantic-router/pkg/modeldownload/**
 
-  vela-model-artifacts:
+  vela-omni-artifacts:
     owner: native-bindings
     paths:
       - tools/models/vela_omni/**
-      - tools/models/vela_halu/**
     checks:
       - python3 -m unittest discover -s tools/models/vela_omni -p test_contract.py
       - python3 -m unittest discover -s tools/models/vela_omni -p test_bundle.py
-    verifications: [core, native.ort-cpu, e2e.vela-omni, e2e.vela-halu]
+    verifications: [core, native.ort-cpu, e2e.vela-omni]
+
+  vela-halu-artifacts:
+    owner: native-bindings
+    paths:
+      - tools/models/vela_halu/**
+    checks:
+      - python3 -m unittest discover -s tools/models/vela_halu -p test_contract.py
+    verifications: [core, native.candle-cpu, e2e.vela-halu]
+
+  prepared-model-contracts:
+    owner: native-bindings
+    paths:
+      - src/semantic-router/pkg/cache/omni_storage_integration_test.go
+      - src/semantic-router/pkg/cache/embedding*.go
+      - src/semantic-router/pkg/memory/embedding*.go
+      - src/semantic-router/pkg/modeldownload/prepared_artifact*.go
+      - tools/ci/prepare_model_test_assets.py
+    checks: []
+    verifications: [native.ort-cpu]
 
   model-compatibility:
     owner: router-core
@@ -207,8 +226,6 @@ domains:
       - src/semantic-router/tools/model-test-assets/**
       - src/semantic-router/pkg/config/registry*.go
       - src/semantic-router/pkg/modeldownload/**
-      - src/semantic-router/pkg/cache/**
-      - src/semantic-router/pkg/memory/**
       - e2e/testcases/testdata/image-fixtures/**
       # The whole profile: the CRD mirror, the chart values, and the package
       # test that asserts the mirror, which runs only inside this gate.
@@ -274,12 +291,19 @@ domains:
     checks: [make harness-check]
     verifications: [core]
 
-  provider-simulator:
+  provider-mocker:
     owner: evaluation-quality
     paths:
-      - tools/test/services/mock-vllm/**
-    checks: [make test-provider-simulator]
-    verifications: [mock-provider, operator]
+      - tools/test/services/provider-mocker/**
+    checks: [make test-provider-mocker]
+    verifications: [mock-provider, operator, local.cli, local.memory]
+
+  tiny-model:
+    owner: evaluation-quality
+    paths:
+      - tools/test/services/tiny-model/**
+    checks: [make test-tiny-model]
+    verifications: [harness-tools]
 
   native-bindings:
     owner: native-bindings
@@ -457,7 +481,7 @@ domains:
       - e2e/testing/09-memory-features-test.py
       - e2e/testing/memory_tests/**
       - e2e/testing/run_memory_integration.sh
-      - e2e/testing/llm-katan/**
+      - tools/test/services/provider-mocker/**
       - tools/make/milvus.mk
       - tools/make/docker.mk
       - e2e/config/config.memory*.yaml
@@ -478,7 +502,7 @@ domains:
         - e2e/testing/09-memory-features-test.py
         - e2e/testing/memory_tests/**
         - e2e/testing/run_memory_integration.sh
-        - e2e/testing/llm-katan/**
+        - tools/test/services/provider-mocker/**
         - tools/make/milvus.mk
         - tools/make/docker.mk
         - e2e/config/config.memory*.yaml
@@ -611,6 +635,7 @@ domains:
     owner: maintainers
     paths:
       - tools/ci/image_artifacts.py
+      - tools/ci/provider_mocker_image.py
       - .github/actions/load-ci-images/**
     checks: [make harness-check]
     verifications: [local.cli, operator, e2e.envoy-ai-gateway]
@@ -736,15 +761,19 @@ images:
       - tools/docker/check-native-abi.sh
       - .dockerignore
       - tools/agent/domains.yaml
-  mock-vllm:
-    pr_paths: [tools/test/services/mock-vllm/**]
-    publish_paths: []
-  anthropic-shim:
-    pr_paths: [e2e/testing/anthropic-shim/Dockerfile]
-    publish_paths: []
-  llm-katan:
-    pr_paths: [e2e/testing/llm-katan/Dockerfile]
-    publish_paths: []
+  provider-mocker:
+    verification_paths:
+      - tools/test/services/provider-mocker/**
+    pr_paths:
+      - tools/test/services/provider-mocker/.dockerignore
+      - tools/test/services/provider-mocker/Dockerfile
+      - tools/test/services/provider-mocker/requirements.txt
+      - tools/test/services/provider-mocker/provider_mocker/**
+    publish_paths:
+      - tools/test/services/provider-mocker/.dockerignore
+      - tools/test/services/provider-mocker/Dockerfile
+      - tools/test/services/provider-mocker/requirements.txt
+      - tools/test/services/provider-mocker/provider_mocker/**
   vllm-sr-sim:
     pr_paths: [src/fleet-sim/Dockerfile]
     publish_paths: [src/fleet-sim/**]
@@ -823,6 +852,16 @@ profiles:
       - e2e/testcases/local_classifier_routing.go
       - src/semantic-router/pkg/classification/generic_classifier_local.go
       - src/semantic-router/pkg/classification/native_labels.go
+  structure-routing:
+    display_name: Structure Routing
+    owner: e2e
+    coverage_role: structure-routing
+    selection: pr
+    paths:
+      - e2e/profiles/structure-routing/**
+      - e2e/testcases/structure_routing.go
+      - src/semantic-router/pkg/classification/structure_classifier.go
+      - src/semantic-router/pkg/classification/classifier_signal_structure.go
   external-gateway-responses:
     display_name: External Gateway Responses
     owner: e2e
@@ -861,6 +900,9 @@ profiles:
     display_name: Vela Omni Nano and Mini
     owner: e2e
     coverage_role: real-omni-text-image-audio-and-recipe-isolation
+    runtime: ort
+    device: cpu
+    resource_class: model
     selection: pr
     paths:
       - e2e/profiles/vela-omni/**
@@ -874,6 +916,8 @@ profiles:
     display_name: Multimodal Routing
     owner: e2e
     coverage_role: image-modality-embedding-signal-routing
+    runtime: ort
+    device: cpu
     selection: pr
     paths:
       - e2e/profiles/multimodal-routing/**
@@ -970,17 +1014,17 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
-  anthropic-shim:
-    display_name: Anthropic Compatibility
+  provider-protocols:
+    display_name: Provider Protocols
     owner: e2e
-    coverage_role: anthropic-shape-backend-translation-contracts
+    coverage_role: native-chat-responses-messages-and-cross-protocol-contracts
     selection: pr
     paths:
-      - e2e/profiles/anthropic-shim/**
-      - e2e/testing/anthropic-shim/**
+      - e2e/profiles/provider-protocols/**
+      - tools/test/services/provider-mocker/**
       - e2e/testcases/anthropic_*.go
       - e2e/testcases/protocol_codec_*.go
-      - deploy/kubernetes/anthropic-backend/**
+      - deploy/kubernetes/provider-mocker/**
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_protocol_contract.go
@@ -1009,8 +1053,8 @@ profiles:
       - e2e/testcases/anthropic_response_api_streaming.go
       - e2e/testcases/protocol_codec_*.go
       - deploy/kubernetes/response-api/gwapi-resources.yaml
-      - deploy/kubernetes/response-api/mock-vllm.yaml
-      - tools/test/services/mock-vllm/**
+      - deploy/kubernetes/response-api/provider-mocker.yaml
+      - tools/test/services/provider-mocker/**
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_protocol_contract.go
@@ -1060,7 +1104,7 @@ profiles:
     paths:
       - e2e/profiles/router-replay/**
       - deploy/kubernetes/router-replay/**
-      - tools/test/services/mock-vllm/**
+      - tools/test/services/provider-mocker/**
       - e2e/testcases/shadow_dispatch*.go
       - e2e/testcases/shadow_dataset*.go
       - src/semantic-router/pkg/extproc/shadow_dispatch*.go
@@ -1095,6 +1139,8 @@ profiles:
     display_name: Vela Halu Grounding
     owner: e2e
     coverage_role: published-halu-pair-grounding-and-input-budget
+    runtime: candle
+    device: cpu
     selection: pr
     paths:
       - e2e/profiles/vela-halu/**
@@ -1104,6 +1150,18 @@ profiles:
       - candle-binding/src/ffi/instances/grounding.rs
       - onnx-binding/src/instances/grounding.rs
       - tools/models/vela_halu/**
+  vela-shield:
+    display_name: Vela Shield Safety
+    owner: e2e
+    coverage_role: published-shield-safety-model-selection
+    runtime: candle
+    device: cpu
+    selection: pr
+    paths:
+      - e2e/profiles/vela-shield/**
+      - e2e/testcases/vela_shield.go
+      - src/semantic-router/pkg/classification/classifier_signal_safety.go
+      - src/semantic-router/pkg/classification/safety_classifier_local.go
   hallucination:
     display_name: Hallucination Detection
     owner: e2e
@@ -1145,4 +1203,4 @@ profiles:
       - src/semantic-router/pkg/classification/classifier_jailbreak_risk.go
       - src/semantic-router/pkg/config/signal_stage.go
       - src/semantic-router/pkg/config/validator_signal_stage.go
-      - tools/test/services/mock-vllm/classify.py
+      - tools/test/services/provider-mocker/provider_mocker/classify.py

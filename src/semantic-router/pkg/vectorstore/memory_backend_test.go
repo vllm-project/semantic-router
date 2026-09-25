@@ -104,6 +104,28 @@ var _ = Describe("MemoryBackend", func() {
 			Expect(err).To(HaveOccurred())
 		})
 
+		It("should reject embeddings with a mismatched dimension", func() {
+			err := backend.InsertChunks(ctx, "vs_insert", []EmbeddedChunk{
+				{ID: "wrong-dimension", Embedding: []float32{1, 0}},
+			})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("embedding dimension mismatch"))
+
+			results, searchErr := backend.Search(ctx, "vs_insert", []float32{1, 0, 0}, 10, 0, nil)
+			Expect(searchErr).NotTo(HaveOccurred())
+			Expect(results).To(BeEmpty())
+		})
+
+		It("should accept embeddings when collection dimension is unspecified", func() {
+			err := backend.CreateCollection(ctx, "vs_unspecified_dimension", 0)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = backend.InsertChunks(ctx, "vs_unspecified_dimension", []EmbeddedChunk{
+				{ID: "c1", Embedding: []float32{1, 0, 0}},
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
+
 		It("should respect max entries limit", func() {
 			limited := NewMemoryBackend(MemoryBackendConfig{MaxEntriesPerStore: 2})
 			err := limited.CreateCollection(ctx, "vs_limit", 3)

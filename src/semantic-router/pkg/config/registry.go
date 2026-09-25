@@ -89,6 +89,12 @@ type ModelSpec struct {
 
 var velaTrainingArtifactPatterns = []string{"reproduction/*", "reproducibility/*", "lora/*"}
 
+// velaShieldArtifactPatterns keep a Shield download at the root sequence
+// classifier. The repository also publishes auxiliary heads, a separate
+// label-conditioned encoder and demo files that the router does not load.
+// Patterns follow HF fnmatch semantics, where '*' crosses directories.
+var velaShieldArtifactPatterns = append([]string{"lc/*", "heads/*", "demo.py", "DEMO_OUTPUT.txt"}, velaTrainingArtifactPatterns...)
+
 // DefaultModelRegistry provides the structured model registry
 // Users can override this by specifying mom_registry in their config.yaml
 var DefaultModelRegistry = []ModelSpec{
@@ -206,6 +212,19 @@ var DefaultModelRegistry = []ModelSpec{
 		Aliases:                 []string{"Vela-1.0-Encoder-307M-Safety"},
 		Purpose:                 PurposeSafety,
 		Description:             "Identify unsafe content independently of prompt attacks.",
+		ParameterSize:           "307M encoder + classifier",
+		MaxContextLength:        32768,
+		Tags:                    []string{"vela", "multilingual", "long-context", "safety", "classification"},
+		NumClasses:              2,
+	},
+	{
+		LocalPath:               "models/Vela-1.0-Encoder-307M-Shield",
+		RepoID:                  "llm-semantic-router/Vela-1.0-Encoder-307M-Shield",
+		Revision:                "a981a99eeb05a2859b88b5cee9af4352897ec4ec",
+		DownloadExcludePatterns: velaShieldArtifactPatterns,
+		Aliases:                 []string{"Vela-1.0-Encoder-307M-Shield"},
+		Purpose:                 PurposeSafety,
+		Description:             "Identify unsafe requests with a jointly trained multilingual safety encoder; alternative to Vela Safety.",
 		ParameterSize:           "307M encoder + classifier",
 		MaxContextLength:        32768,
 		Tags:                    []string{"vela", "multilingual", "long-context", "safety", "classification"},

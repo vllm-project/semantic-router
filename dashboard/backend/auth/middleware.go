@@ -1,8 +1,10 @@
 package auth
 
 import (
+	"bufio"
 	"context"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -30,7 +32,10 @@ type AuthContext struct {
 	Perms     map[string]bool
 }
 
-func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
+func AuthenticateRequest(service *Service, resolvers ...RoutePolicyResolver) func(http.Handler) http.Handler {
+	if len(resolvers) > 0 && resolvers[0] != nil {
+		return authenticateWithRoutePolicy(service, resolvers[0])
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !requiresAuthentication(r.URL.Path) {
@@ -86,7 +91,12 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			for _, required := range RequiredPermissions(r.Method, r.URL.Path) {
+			requiredPermissions := RequiredPermissions(r.Method, r.URL.Path)
+			if len(requiredPermissions) == 0 && isProtectedNamespace(r.URL.Path) {
+				http.Error(w, "Forbidden", http.StatusForbidden)
+				return
+			}
+			for _, required := range requiredPermissions {
 				if !perms[required] {
 					http.Error(w, "Forbidden", http.StatusForbidden)
 					return
@@ -115,7 +125,10 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 // This is the deny-by-default counterpart to AuthenticateRequest: it shares
 // the same requiresAuthentication policy so the set of protected routes cannot
 // drift between the two paths.
-func ServiceUnavailableGuard() func(http.Handler) http.Handler {
+func ServiceUnavailableGuard(resolvers ...RoutePolicyResolver) func(http.Handler) http.Handler {
+	if len(resolvers) > 0 && resolvers[0] != nil {
+		return unavailableWithRoutePolicy(resolvers[0])
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if requiresAuthentication(r.URL.Path) {
@@ -144,10 +157,6 @@ func requiredPermission(method, path string) string {
 		if permission, ok := resolver(method, path); ok {
 			return permission
 		}
-	}
-
-	if strings.HasPrefix(path, "/api/") {
-		return PermConfigRead
 	}
 
 	return ""
@@ -208,6 +217,8 @@ func matchesRoute(path, base string) bool {
 
 func adminPermission(method, path string) (string, bool) {
 	switch {
+	case path == "/api/auth/me" || path == "/api/auth/me/":
+		return PermSessionRead, true
 	case strings.HasPrefix(path, "/api/admin/users/password"):
 		return PermUsersManage, true
 	case strings.HasPrefix(path, "/api/admin/audit-logs"), strings.HasPrefix(path, "/api/admin/permissions"):
@@ -259,7 +270,7 @@ func routerPermission(method, path string) (string, bool) {
 		}
 		return PermConfigWrite, true
 	case path == "/api/router/v1/chat/completions" && method == http.MethodPost:
-		return PermConfigRead, true
+		return PermInferenceRun, true
 	case strings.HasPrefix(path, "/api/router/"):
 		return "", true
 	default:
@@ -334,6 +345,8 @@ func observabilityPermission(_ string, path string) (string, bool) {
 
 func featurePermission(method, path string) (string, bool) {
 	switch {
+	case path == "/api/workflows/health":
+		return PermConfigRead, true
 	case path == "/api/sr-bench/v1" || strings.HasPrefix(path, "/api/sr-bench/v1/"):
 		if IsSRBenchComparisonRequest(method, path) {
 			return PermEvalRead, true
@@ -373,7 +386,7 @@ func isSRBenchRunAction(path, action string) bool {
 func openclawPermission(method, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/embedded/openclaw/"):
-		return PermOpenClawRead, true
+		return PermOpenClaw, true
 	case strings.HasPrefix(path, "/api/openclaw/mcp"):
 		return PermMcpManage, true
 	case hasAnyPrefix(path,
@@ -382,14 +395,17 @@ func openclawPermission(method, path string) (string, bool) {
 		"/api/openclaw/stop",
 		"/api/openclaw/containers/",
 		"/api/openclaw/next-port",
+		"/api/openclaw/token",
 	):
+		return PermOpenClaw, true
+	case strings.HasPrefix(path, "/api/openclaw/rooms/") &&
+		(strings.HasSuffix(path, "/ws") || (method == http.MethodPost && strings.HasSuffix(path, "/messages"))):
 		return PermOpenClaw, true
 	case strings.HasPrefix(path, "/api/openclaw/rooms/") && (strings.HasSuffix(path, "/messages") || strings.HasSuffix(path, "/stream") || strings.HasSuffix(path, "/ws")):
 		return PermOpenClawRead, true
 	case hasAnyPrefix(path,
 		"/api/openclaw/status",
 		"/api/openclaw/skills",
-		"/api/openclaw/token",
 	):
 		return PermOpenClawRead, true
 	case hasAnyPrefix(path,
@@ -563,6 +579,24 @@ type auditResponseWriter struct {
 func (w *auditResponseWriter) WriteHeader(status int) {
 	w.status = status
 	w.ResponseWriter.WriteHeader(status)
+}
+
+func (w *auditResponseWriter) Flush() {
+	if flusher, ok := w.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (w *auditResponseWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+func (w *auditResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	conn, buffered, err := http.NewResponseController(w.ResponseWriter).Hijack()
+	if err == nil {
+		w.status = http.StatusSwitchingProtocols
+	}
+	return conn, buffered, err
 }
 
 func (w *auditResponseWriter) statusCodeOr200() int {

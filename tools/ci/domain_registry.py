@@ -184,6 +184,10 @@ def registry_schema_errors(
             continue
         _validate_string_list(image, "pr_paths", f"image {name!r}", errors)
         _validate_string_list(image, "publish_paths", f"image {name!r}", errors)
+        if "verification_paths" in image:
+            _validate_string_list(
+                image, "verification_paths", f"image {name!r}", errors
+            )
 
     for name, profile in profile_records(data).items():
         if not isinstance(profile, dict):

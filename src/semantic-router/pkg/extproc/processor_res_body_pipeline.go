@@ -1,7 +1,9 @@
 package extproc
 
 import (
+	"bytes"
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -20,6 +22,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	ctx *RequestContext,
 	completionLatency time.Duration,
 ) *ext_proc.ProcessingResponse {
+	diagnosticsBeforeBody := len(ctx.ProtocolDiagnostics)
 	semanticResponse, err := r.decodeClientResponse(responseBody, ctx)
 	if err != nil {
 		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
@@ -36,6 +39,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		logging.ComponentErrorEvent("extproc", "neutral_response_decode_failed", decodeEvent)
 		return r.createErrorResponse(502, "The selected model returned an invalid response")
 	}
+	decodedDiagnosticsEnd := len(ctx.ProtocolDiagnostics)
 	clientBody := responseBody
 	rewriteClientBody := requiresClientResponseRewrite(ctx)
 	if rewriteClientBody {
@@ -43,6 +47,9 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 		if err != nil {
 			return r.createErrorResponse(502, "The selected model returned an incompatible response")
 		}
+		ctx.ProtocolDiagnostics = deduplicateReencodedResponseDiagnostics(
+			ctx.ProtocolDiagnostics, diagnosticsBeforeBody, decodedDiagnosticsEnd,
+		)
 	}
 	usage := r.takeNeutralResponseUsage(ctx)
 	r.reportNonStreamingUsage(ctx, completionLatency, usage)
@@ -50,35 +57,155 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 
 	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
+	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
+	lateWarning, hasLateDiagnostics := recordBufferedProtocolDiagnostics(ctx, diagnosticsBeforeBody)
+	if blocked != nil {
+		return blocked
+	}
+
+	response := buildResponseBodyContinueResponse(nil, nil)
+	if len(headerOptions) > 0 {
+		response.GetResponseBody().GetResponse().HeaderMutation = &ext_proc.HeaderMutation{
+			SetHeaders: headerOptions,
+		}
+	}
+	if hasLateDiagnostics {
+		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, lateWarning)
+	}
+	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
+		setResponseBodyMutation(response, finalBody)
+	}
+	return response
+}
+
+// Translation validates and renders the client wire before response policy
+// runs. The buffered path renders it again to apply response mutations; a
+// warning emitted by both renders describes one loss, not two.
+func deduplicateReencodedResponseDiagnostics(
+	diagnostics llmprotocol.Diagnostics,
+	existingStart, reencodeStart int,
+) llmprotocol.Diagnostics {
+	existing := diagnostics[existingStart:reencodeStart]
+	encoded := diagnostics[reencodeStart:]
+	kept := diagnostics[:reencodeStart]
+	for _, diagnostic := range encoded {
+		if !slices.Contains(existing, diagnostic) {
+			kept = append(kept, diagnostic)
+		}
+	}
+	return kept
+}
+
+// finalizeResponsePolicy runs the shared response-stage processing across normal and fallback paths:
+// scoring response signals, evaluating guardrail plugins (jailbreak, hallucination) for blocking or warning,
+// executing memory suppression decisions, applying warnings and cost headers,
+// persisting Responses objects, and updating replay audit records.
+func (r *OpenAIRouter) finalizeResponsePolicy(
+	ctx *RequestContext,
+	semanticResponse *llmprotocol.Response,
+	clientBody []byte,
+) (*ext_proc.ProcessingResponse, []byte, []*core.HeaderValueOption) {
+	plan := r.prepareResponsePolicy(ctx, semanticResponse, clientBody)
+	plan.commit()
+	return plan.blocked, plan.finalBody, plan.headerOptions()
+}
+
+// responsePolicyPlan separates response-policy evaluation and body mutation
+// from irreversible persistence. Fallback can therefore validate the final
+// public wire before committing memory, Responses, and replay side effects.
+type responsePolicyPlan struct {
+	blocked    *ext_proc.ProcessingResponse
+	finalBody  []byte
+	response   *ext_proc.ProcessingResponse
+	commitFunc func()
+}
+
+func (p *responsePolicyPlan) commit() {
+	if p == nil || p.commitFunc == nil {
+		return
+	}
+	commit := p.commitFunc
+	p.commitFunc = nil
+	commit()
+}
+
+func (p *responsePolicyPlan) headerOptions() []*core.HeaderValueOption {
+	if p == nil || p.response == nil {
+		return nil
+	}
+	bodyResp := p.response.GetResponseBody()
+	if bodyResp == nil || bodyResp.GetResponse() == nil || bodyResp.GetResponse().GetHeaderMutation() == nil {
+		return nil
+	}
+	return bodyResp.GetResponse().GetHeaderMutation().GetSetHeaders()
+}
+
+func (r *OpenAIRouter) prepareResponsePolicy(
+	ctx *RequestContext,
+	semanticResponse *llmprotocol.Response,
+	clientBody []byte,
+) *responsePolicyPlan {
+	if r == nil || ctx == nil || semanticResponse == nil {
+		return &responsePolicyPlan{finalBody: clientBody}
+	}
+
 	// The response-stage signal is scored from the declared rules before any
 	// plugin runs, so the observation exists whether or not the selected
 	// decision carries a plugin; the plugins below then consume it. Recorded
 	// before a block returns, so a blocked response leaves the same evidence in
 	// Router Replay as a delivered one.
 	recordPrimaryOutputDigest(ctx, semanticResponse)
-	r.observeResponseStageSignals(ctx, semanticAssistantContent(semanticResponse))
+	assistantContent := semanticAssistantContent(semanticResponse)
+	r.evaluateResponseJailbreakSignal(ctx, assistantContent)
+	r.evaluateHallucinationSignal(ctx, assistantContent)
+	commitSignalOutcomes := func() {
+		r.recordRouterReplayResponseJailbreak(ctx)
+		r.recordRouterReplayHallucination(ctx)
+	}
 
 	if jailbreakResponse := r.performSemanticResponseJailbreakDetection(ctx, semanticResponse); jailbreakResponse != nil {
-		r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
-		return jailbreakResponse
+		return &responsePolicyPlan{
+			blocked: jailbreakResponse,
+			commitFunc: func() {
+				commitSignalOutcomes()
+				r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
+			},
+		}
 	}
 	if hallucinationResponse := r.performSemanticHallucinationDetection(ctx, semanticResponse); hallucinationResponse != nil {
-		r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
-		return hallucinationResponse
+		return &responsePolicyPlan{
+			blocked: hallucinationResponse,
+			commitFunc: func() {
+				commitSignalOutcomes()
+				r.recordUnscheduledResponseMemoryStore(ctx, "policy_blocked", "hallucination_blocked", false)
+			},
+		}
 	}
 
-	r.scheduleSemanticResponseMemoryStore(ctx, semanticResponse)
 	r.markUnverifiedFactualResponse(ctx)
+	memoryResponse := semanticResponse
+	if cloned, err := cloneSemanticResponseForCommit(semanticResponse); err == nil {
+		memoryResponse = cloned
+	} else {
+		logging.ComponentErrorEvent("extproc", "response_policy_commit_snapshot_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"error":      err.Error(),
+		})
+	}
 
 	response, finalBody := r.applySemanticResponseWarnings(ctx, semanticResponse, clientBody)
-	addResponseCostHeaders(ctx, response)
-	if rewriteClientBody && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
-		setResponseBodyMutation(response, clientBody)
+	return &responsePolicyPlan{
+		finalBody: finalBody,
+		response:  response,
+		commitFunc: func() {
+			commitSignalOutcomes()
+			r.scheduleSemanticResponseMemoryStore(ctx, memoryResponse)
+			addResponseCostHeaders(ctx, response)
+			r.persistResponseObject(ctx)
+			r.updateRouterReplayHallucinationStatus(ctx)
+			r.attachRouterReplayResponse(ctx, finalBody, true)
+		},
 	}
-	r.persistResponseObject(ctx)
-	r.updateRouterReplayHallucinationStatus(ctx)
-	r.attachRouterReplayResponse(ctx, finalBody, true)
-	return response
 }
 
 // observeResponseStageSignals scores the response-stage rules against the
@@ -121,8 +248,10 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	if !changed {
 		return response, originalBody
 	}
+	diagnosticsBeforeEncode := len(ctx.ProtocolDiagnostics)
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
+		ctx.ProtocolDiagnostics = ctx.ProtocolDiagnostics[:diagnosticsBeforeEncode]
 		logging.ComponentErrorEvent("extproc", "neutral_response_warning_encode_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"format":     ctx.SourceFormat,
@@ -130,6 +259,9 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 		})
 		return response, originalBody
 	}
+	ctx.ProtocolDiagnostics = deduplicateReencodedResponseDiagnostics(
+		ctx.ProtocolDiagnostics, 0, diagnosticsBeforeEncode,
+	)
 	setResponseBodyMutation(response, encoded)
 	return response, encoded
 }
@@ -195,6 +327,14 @@ func addResponseCostHeaders(ctx *RequestContext, response *ext_proc.ProcessingRe
 // setResponseBodyHeader sets one response header from the body phase, merging
 // with any header mutation the response already carries.
 func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value string) {
+	setResponseBodyHeaderWithAction(response, key, value, core.HeaderValueOption_APPEND_IF_EXISTS_OR_ADD)
+}
+
+func setResponseBodyHeaderOverwrite(response *ext_proc.ProcessingResponse, key, value string) {
+	setResponseBodyHeaderWithAction(response, key, value, core.HeaderValueOption_OVERWRITE_IF_EXISTS_OR_ADD)
+}
+
+func setResponseBodyHeaderWithAction(response *ext_proc.ProcessingResponse, key, value string, action core.HeaderValueOption_HeaderAppendAction) {
 	bodyResponse, ok := response.Response.(*ext_proc.ProcessingResponse_ResponseBody)
 	if !ok {
 		return
@@ -207,6 +347,7 @@ func setResponseBodyHeader(response *ext_proc.ProcessingResponse, key, value str
 			Key:      key,
 			RawValue: []byte(value),
 		},
+		AppendAction: action,
 	}
 	if hm := bodyResponse.ResponseBody.Response.HeaderMutation; hm != nil {
 		hm.SetHeaders = append(hm.SetHeaders, opt)
