@@ -367,7 +367,28 @@ func decodeChatResponseMessage(wire chatMessageWire, index int, policy llmprotoc
 	if err != nil {
 		return llmprotocol.Message{}, err
 	}
-	return assembleChatMessage(wire, index, role, contents, policy)
+	message, err := assembleChatMessage(wire, index, role, contents, policy)
+	if err != nil {
+		return llmprotocol.Message{}, err
+	}
+	message.Content = dropEmptyTextBesideOtherContent(message.Content)
+	return message, nil
+}
+
+// Ollama answers "content":"" beside reasoning and tool calls. That empty
+// string is not an answer, so it is kept only when nothing else was returned.
+func dropEmptyTextBesideOtherContent(contents []llmprotocol.Content) []llmprotocol.Content {
+	kept := make([]llmprotocol.Content, 0, len(contents))
+	for _, content := range contents {
+		if content.Kind == llmprotocol.ContentText && content.Text == "" && len(content.Citations) == 0 {
+			continue
+		}
+		kept = append(kept, content)
+	}
+	if len(kept) == 0 {
+		return contents
+	}
+	return kept
 }
 
 func assembleChatMessage(
