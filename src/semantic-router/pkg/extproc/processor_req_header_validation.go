@@ -28,6 +28,14 @@ func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_p
 		return r.validateResponseAPIItemMethod(method)
 	}
 
+	if _, ok := azureChatDeployment(normalizedPath); ok {
+		return validateAllowedMethod(r, method, "POST")
+	}
+
+	if isAzureDeploymentPath(normalizedPath) {
+		return r.createErrorResponse(404, "endpoint not found")
+	}
+
 	if normalizedPath == routerReplayAPIBasePath || strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/") {
 		return r.createErrorResponse(404, "endpoint not found")
 	}

@@ -68,7 +68,12 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+	mutation := buildIdentityEncodingRequestMutation()
+	if _, ok := azureChatDeployment(path); ok {
+		// The Azure client key authenticates to the Router, never to a provider.
+		mutation.RemoveHeaders = append(mutation.RemoveHeaders, azureAPIKeyHeader)
+	}
+	return newContinueRequestHeadersResponse(mutation), nil
 }
 
 func startRequestHeaderSpan(
