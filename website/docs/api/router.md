@@ -19,14 +19,15 @@ queries. See [Router management API](./apiserver).
 | `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
 | `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
 | `POST` | `/openai/deployments/{deployment}/chat/completions` | Azure OpenAI Chat Completions | The deployment names the Router model; `api-version` is accepted and not forwarded |
+| `POST` | `/openai/v1/chat/completions` | Azure OpenAI Chat Completions | Azure's versionless v1 route; the body names the model, as on `/v1/chat/completions` |
+| `POST` | `/openai/v1/responses`, `/openai/responses` | Azure OpenAI Responses | Handled as `/v1/responses`; `api-version` is accepted and not forwarded |
 | `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
 
 Other `/v1/*` paths fail closed. In particular, `/v1/files`,
 `/v1/vector_stores`, and Router Replay paths are not available on a public
 inference listener. Router-owned file and vector-store operations use
 `/api/v1/storage/files` and `/api/v1/storage/vector-stores` on the management
-listener. Other `/openai/deployments/*` operations, such as embeddings, return
-`404`.
+listener. Other `/openai/*` operations, such as embeddings, return `404`.
 
 See [Protocol Compatibility](../installation/protocol-compatibility) for the
 client-to-backend translation matrix, backend `api_format` values, and
@@ -147,10 +148,11 @@ curl -sS http://localhost:8899/v1/messages \
 ### Azure OpenAI clients
 
 Clients built for Azure OpenAI can call the Router as if it were an Azure
-resource. The deployment in the path is the model name, so `auto` selects a
-route and a concrete model name targets that model directly. The Router checks
-the client's `api-key` header against the listener's `api_keys` when they are
-set, and removes the header before dispatch.
+resource. On the deployment route, the deployment in the path is the model
+name, so `auto` selects a route and a concrete model name targets that model
+directly. The v1 and Responses routes take the model from the request body.
+The Router checks the client's `api-key` header against the listener's
+`api_keys` when they are set, and removes the header before dispatch.
 
 ```bash
 curl -sS 'http://localhost:8899/openai/deployments/auto/chat/completions?api-version=2024-10-21' \
@@ -161,8 +163,10 @@ curl -sS 'http://localhost:8899/openai/deployments/auto/chat/completions?api-ver
 
 For GitHub Copilot CLI, set `COPILOT_PROVIDER_TYPE=azure`, point
 `COPILOT_PROVIDER_BASE_URL` at the listener, and set
-`COPILOT_PROVIDER_AZURE_API_VERSION` so the CLI uses the deployment route.
-`COPILOT_PROVIDER_WIRE_MODEL` is the Router model name.
+`COPILOT_PROVIDER_WIRE_MODEL` to the Router model name. The CLI calls the
+deployment route when `COPILOT_PROVIDER_AZURE_API_VERSION` is set and the v1
+route otherwise. With `COPILOT_PROVIDER_WIRE_API=responses` it calls the
+Responses routes, which accept the same request fields as `/v1/responses`.
 
 Protocol translation is limited to fields the router supports. When a request
 crosses protocols, inspect `x-vsr-client-protocol`,

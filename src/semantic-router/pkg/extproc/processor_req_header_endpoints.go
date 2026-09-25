@@ -152,7 +152,7 @@ func detectSourceFormat(path string, ctx *RequestContext) {
 	case strings.HasPrefix(path, "/v1/messages"):
 		ctx.SourceFormat = llmprotocol.AnthropicMessagesV1
 		logging.Debugf("Detected Anthropic client protocol from path: %s", path)
-	case strings.HasPrefix(path, "/v1/responses"):
+	case strings.HasPrefix(path, "/v1/responses"), azureIngressFormat(path) == llmprotocol.OpenAIResponsesV1:
 		ctx.SourceFormat = llmprotocol.OpenAIResponsesV1
 	default:
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1

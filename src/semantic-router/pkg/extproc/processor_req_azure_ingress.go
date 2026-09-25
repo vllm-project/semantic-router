@@ -5,16 +5,40 @@ import (
 	"strings"
 
 	"github.com/tidwall/sjson"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 // Azure OpenAI clients select a model by deployment, as in
 // POST /openai/deployments/{deployment}/chat/completions?api-version=..., and
 // send their key in an api-key header.
 const (
+	azureOpenAIPath      = "/openai"
 	azureDeploymentsPath = "/openai/deployments"
 	azureChatOperation   = "/chat/completions"
 	azureAPIKeyHeader    = "api-key"
 )
+
+// azureBodyModelPaths are the Azure OpenAI routes whose request body names the
+// model: the versionless v1 API, and Responses with an api-version query.
+var azureBodyModelPaths = map[string]llmprotocol.WireFormat{
+	"/openai/v1/chat/completions": llmprotocol.OpenAIChatV1,
+	"/openai/v1/responses":        llmprotocol.OpenAIResponsesV1,
+	"/openai/responses":           llmprotocol.OpenAIResponsesV1,
+}
+
+// azureIngressFormat returns the public wire format of a supported Azure
+// OpenAI path, or "" for any other path.
+func azureIngressFormat(path string) llmprotocol.WireFormat {
+	normalizedPath := normalizeRequestPath(path)
+	if format, ok := azureBodyModelPaths[normalizedPath]; ok {
+		return format
+	}
+	if _, ok := azureChatDeployment(normalizedPath); ok {
+		return llmprotocol.OpenAIChatV1
+	}
+	return ""
+}
 
 // azureChatDeployment returns the deployment named by an Azure Chat
 // Completions path. Router model names such as vllm-sr/auto contain slashes,
@@ -35,9 +59,9 @@ func azureChatDeployment(path string) (string, bool) {
 	return deployment, true
 }
 
-func isAzureDeploymentPath(normalizedPath string) bool {
-	return normalizedPath == azureDeploymentsPath ||
-		strings.HasPrefix(normalizedPath, azureDeploymentsPath+"/")
+func isAzureOpenAIPath(normalizedPath string) bool {
+	return normalizedPath == azureOpenAIPath ||
+		strings.HasPrefix(normalizedPath, azureOpenAIPath+"/")
 }
 
 // withAzureDeploymentModel makes the deployment the request model. Azure's

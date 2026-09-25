@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_proc.ProcessingResponse {
@@ -28,11 +30,14 @@ func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_p
 		return r.validateResponseAPIItemMethod(method)
 	}
 
-	if _, ok := azureChatDeployment(normalizedPath); ok {
+	switch azureIngressFormat(normalizedPath) {
+	case llmprotocol.OpenAIChatV1:
 		return validateAllowedMethod(r, method, "POST")
+	case llmprotocol.OpenAIResponsesV1:
+		return r.validateResponseAPICollectionMethod(method)
 	}
 
-	if isAzureDeploymentPath(normalizedPath) {
+	if isAzureOpenAIPath(normalizedPath) {
 		return r.createErrorResponse(404, "endpoint not found")
 	}
 
