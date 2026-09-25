@@ -734,6 +734,7 @@ func TestValkeyStoreInteg_ConsolidateUser(t *testing.T) {
 	t.Logf("ConsolidateUser: merged=%d, deleted=%d, remaining=%d", merged, deleted, list.Total)
 }
 
+// StorageIntegration: valkey
 func TestValkeyStoreInteg_ConsolidationRunnerMergesAfterEnqueue(t *testing.T) {
 	store, _ := setupValkeyMemoryIntegration(t)
 	ctx := context.Background()
