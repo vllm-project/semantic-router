@@ -1124,6 +1124,81 @@ class AdvancedToolFilteringConfig(BaseModel):
     hybrid_history: Optional[HybridHistoryConfig] = None
 
 
+class StickyToolSelectionConfig(BaseModel):
+    """Session-scoped sticky tool-set selection (issue #3347).
+
+    Mirrors the Go-side `config.StickyToolSelectionConfig`. Opt-in and
+    disabled by default. This layer mirrors the schema and structural bounds
+    so Pydantic does not drop malformed nested configuration; the Go side
+    remains authoritative for full runtime admission and request-time checks.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool = False
+    max_tools: Optional[int] = Field(default=None, ge=1, le=128)
+    max_new_tools_per_turn: Optional[int] = Field(default=None, ge=0)
+    pin_called_tools: Optional[bool] = None
+
+    @model_validator(mode="after")
+    def validate_bounds(self):
+        effective_max_tools = self.max_tools if self.max_tools is not None else 16
+        effective_max_new_tools_per_turn = (
+            self.max_new_tools_per_turn
+            if self.max_new_tools_per_turn is not None
+            else 2
+        )
+        if effective_max_new_tools_per_turn > effective_max_tools:
+            raise ValueError(
+                "max_new_tools_per_turn must be less than or equal to max_tools"
+            )
+        return self
+
+
+class ToolSessionRedisConfig(BaseModel):
+    """Redis connectivity for shared sticky tool-session state."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    address: StrictStr
+    password: Optional[StrictStr] = None
+    database: int = Field(default=0, ge=0)
+    key_prefix: Optional[StrictStr] = None
+
+
+class ToolSessionStoreConfig(BaseModel):
+    """Global bounded storage for session-scoped sticky tool selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    backend: Literal["local", "redis"] = "local"
+    ttl_seconds: Optional[int] = Field(default=None, ge=1, le=604800)
+    max_sessions: Optional[int] = Field(default=None, ge=1, le=100000)
+    max_sessions_per_identity: Optional[int] = Field(default=None, ge=1)
+    max_state_bytes: Optional[int] = Field(default=None, ge=1024, le=65536)
+    timeout_ms: Optional[int] = Field(default=None, ge=1, le=1000)
+    redis: Optional[ToolSessionRedisConfig] = None
+
+    @model_validator(mode="after")
+    def validate_backend_contract(self):
+        if self.backend == "local" and self.redis is not None:
+            raise ValueError("redis config is not allowed when backend is local")
+        if self.backend == "redis" and (
+            self.redis is None or not self.redis.address.strip()
+        ):
+            raise ValueError("redis.address is required when backend is redis")
+
+        max_sessions = self.max_sessions if self.max_sessions is not None else 10000
+        if (
+            self.max_sessions_per_identity is not None
+            and self.max_sessions_per_identity > max_sessions
+        ):
+            raise ValueError(
+                "max_sessions_per_identity must be less than or equal to max_sessions"
+            )
+        return self
+
+
 class ToolSelectionPluginConfig(BaseModel):
     """Configuration for tool_selection plugin (semantic add/filter on request tools)."""
 
@@ -1137,6 +1212,13 @@ class ToolSelectionPluginConfig(BaseModel):
     relevance_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     preserve_count: Optional[int] = Field(default=None, ge=0)
     advanced_filtering: Optional[AdvancedToolFilteringConfig] = None
+    sticky: Optional[StickyToolSelectionConfig] = None
+
+    @model_validator(mode="after")
+    def validate_sticky_contract(self):
+        if self.sticky is not None and self.sticky.enabled and not self.enabled:
+            raise ValueError("sticky.enabled requires tool_selection to be enabled")
+        return self
 
 
 class SystemPromptPluginConfig(BaseModel):

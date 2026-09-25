@@ -25,11 +25,17 @@ func headerValueCI(ctx *RequestContext, canonical string) string {
 	return ""
 }
 
-// authHeaderUserID returns the authenticated user id from the authz header.
-// Matching is case-insensitive on the header name: Envoy/HTTP2 may normalize
-// keys differently than our canonical constant, and direct map lookup would miss.
+// authHeaderUserID returns the authenticated user id from the configured
+// authz header. Matching is case-insensitive on the header name: Envoy/HTTP2
+// may normalize keys differently than our configured value, and direct map
+// lookup would miss. Contexts assembled outside the request processor use the
+// canonical default for compatibility with existing helpers and tests.
 func authHeaderUserID(ctx *RequestContext) string {
-	return headerValueCI(ctx, headers.AuthzUserID)
+	header := headers.AuthzUserID
+	if ctx != nil && ctx.AuthzUserIDHeader != "" {
+		header = ctx.AuthzUserIDHeader
+	}
+	return headerValueCI(ctx, header)
 }
 
 // cacheScopeUserID resolves the user id used only for semantic-cache key scoping.

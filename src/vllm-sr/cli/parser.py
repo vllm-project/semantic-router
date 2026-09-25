@@ -15,7 +15,7 @@ from cli.config_contract import (
 from cli.config_schema.validation import validate_config_structure
 from cli.config_yaml import safe_load_router_config
 from cli.context_bands import references_environment
-from cli.models import UserConfig
+from cli.models import ToolSessionStoreConfig, UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -142,6 +142,30 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
     return fields
 
 
+def _tool_session_store_schema_errors(data: Dict[str, Any]) -> list[str]:
+    global_config = data.get("global")
+    if not isinstance(global_config, dict):
+        return []
+    stores = global_config.get("stores")
+    if not isinstance(stores, dict) or "tool_sessions" not in stores:
+        return []
+    tool_sessions = stores.get("tool_sessions")
+    if not isinstance(tool_sessions, dict):
+        return ["global.stores.tool_sessions must be an object"]
+    try:
+        ToolSessionStoreConfig.model_validate(tool_sessions)
+    except ValidationError as exc:
+        errors: list[str] = []
+        for error in exc.errors():
+            loc = ".".join(str(part) for part in error["loc"])
+            path = "global.stores.tool_sessions"
+            if loc:
+                path = f"{path}.{loc}"
+            errors.append(f"{path}: {error['msg']}")
+        return errors
+    return []
+
+
 def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> None:
     deprecated_fields = _deprecated_config_fields(data)
     if deprecated_fields:
@@ -162,6 +186,16 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "session or conversation protection, and `routing.decisions[].adaptations` "
             "only when a decision needs apply/observe/bypass control or a local "
             "adaptation candidate_set override."
+        )
+
+    # JSON Schema owns the store's structural contract. Validate its
+    # cross-field bounds here before the operational UserConfig projection is
+    # built.
+    tool_session_store_schema_errors = _tool_session_store_schema_errors(data)
+    if tool_session_store_schema_errors:
+        joined_errors = "; ".join(tool_session_store_schema_errors)
+        raise ConfigParseError(
+            f"Invalid Tool Session Store config values: {joined_errors}."
         )
 
 

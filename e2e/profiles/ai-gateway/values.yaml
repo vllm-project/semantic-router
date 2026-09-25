@@ -122,6 +122,37 @@ config:
             threshold: 0.72
             on_error: skip
             escalation_order: small_to_large
+      # Sticky tool selection contract.
+      - &sticky_tool_selection_decision
+        name: sticky_tool_selection_decision
+        description: Contract route for trusted-session sticky tool selection and provider-prefix retention
+        priority: 505
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: sticky_tool_selection
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: tools
+            configuration:
+              enabled: true
+              mode: passthrough
+              semantic_selection: false
+          - type: tool_selection
+            configuration:
+              enabled: true
+              mode: filter
+              relevance_threshold: 0.95
+              preserve_count: 1
+              sticky:
+                enabled: true
+                max_tools: 2
+                max_new_tools_per_turn: 1
+                pin_called_tools: true
       - &plugin_request_mutations_decision
         name: plugin_request_mutations_decision
         description: Deterministic route for provider-boundary plugin mutation coverage (issue #3180).
@@ -809,6 +840,12 @@ config:
           keywords:
             - __TOOL_SELECTION_WITH_SYSTEM_PROMPT__
           case_sensitive: false
+        - &sticky_tool_selection
+          name: sticky_tool_selection
+          operator: OR
+          keywords:
+            - __STICKY_TOOL_SELECTION__
+          case_sensitive: false
         - &plugin_request_mutations
           name: plugin_request_mutations
           operator: OR
@@ -1032,6 +1069,7 @@ config:
             - *tool_selection_filter_threshold
             - *tool_selection_add_topk_one
             - *tool_selection_with_system_prompt
+            - *sticky_tool_selection
         decisions:
           - *plugin_request_mutations_decision
           - *tools_passthrough_decision
@@ -1043,6 +1081,7 @@ config:
           - *tool_selection_filter_threshold_decision
           - *tool_selection_add_topk_one_decision
           - *tool_selection_with_system_prompt_decision
+          - *sticky_tool_selection_decision
     - name: e2e-cache
       description: Cache hit, paraphrase, and contradiction probes independent of domain routing.
       routing:
@@ -1200,6 +1239,14 @@ config:
           mode: lexical+nli
           nli:
             contradiction_threshold: 0.5
+      tool_sessions:
+        backend: local
+        # Keep state alive across the multi-minute restart recovery contract.
+        ttl_seconds: 900
+        max_sessions: 100
+        max_sessions_per_identity: 10
+        max_state_bytes: 4096
+        timeout_ms: 50
       memory:
         embedding_model: mmbert
       vector_store:
@@ -1287,3 +1334,7 @@ resources:
 # E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
   enabled: false
+
+extraEnv:
+  - name: USER_SCOPE_NAMESPACE_SECRET
+    value: e2e-sticky-tool-selection-secret

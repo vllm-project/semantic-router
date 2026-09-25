@@ -61,9 +61,11 @@ func (r *OpenAIRouter) getOrLoadToolDatabaseForSelection(absPath string) (*tools
 	db := tools.NewToolsDatabase(tools.ToolsDatabaseOptions{
 		Enabled:             true,
 		SimilarityThreshold: 0,
+		Backend:             emb.EmbeddingBackend(),
 		ModelType:           emb.EmbeddingConfig.ModelType,
 		TargetDimension:     emb.EmbeddingConfig.TargetDimension,
 		Provider:            provider,
+		ProviderIdentity:    toolsEmbeddingProviderIdentity(r.Config),
 	})
 	if err := db.LoadToolsFromFile(absPath); err != nil {
 		return nil, err

@@ -66,6 +66,26 @@ var BaselineRouterContract = []string{
 	"reask-routing",
 }
 
+// StickyToolSelectionContract covers the opt-in trusted-session tool-set
+// behavior. It is kept separate from the stateless baseline so profiles that
+// do not configure a session store retain the existing contract unchanged.
+var StickyToolSelectionContract = []string{
+	"sticky-tool-selection",
+	"sticky-tool-selection-recovery",
+}
+
+// StickyToolSelectionExpiryContract isolates the short local-store TTL from
+// restart coverage that needs retained state to survive for several minutes.
+var StickyToolSelectionExpiryContract = []string{
+	"sticky-tool-selection-expiry",
+}
+
+// StickyToolSelectionRedisContract is isolated because its unavailable-store
+// case intentionally restarts Redis and must not run beside unrelated cases.
+var StickyToolSelectionRedisContract = []string{
+	"sticky-tool-selection-redis-recovery",
+}
+
 // DashboardContract is the canonical E2E contract for the dashboard API surface.
 var DashboardContract = []string{
 	// Core API
@@ -95,6 +115,7 @@ var ProviderProtocolsContract = []string{
 	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
 	"anthropic-chat-cache-control",
+	"sticky-tool-selection-provider-prefix",
 	"anthropic-messages-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",

@@ -174,6 +174,50 @@ providers:
         with pytest.raises(PydanticValidationError):
             ToolSelectionPluginConfig(enabled=True, mode="bogus")
 
+    def test_sticky_unknown_field_rejected(self):
+        """Unknown sticky fields are rejected instead of being silently dropped."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "sticky": {"enabled": True, "unknown_field": True},
+                }
+            )
+
+    def test_sticky_max_new_tools_per_turn_exceeds_max_tools_rejected(self):
+        """max_new_tools_per_turn cannot exceed the configured max_tools."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "sticky": {
+                        "enabled": True,
+                        "max_tools": 4,
+                        "max_new_tools_per_turn": 5,
+                    },
+                }
+            )
+
+    def test_sticky_max_new_tools_per_turn_uses_default_max_tools(self):
+        """The default max_tools bound is applied when max_tools is omitted."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig.model_validate(
+                {
+                    "enabled": True,
+                    "sticky": {
+                        "enabled": True,
+                        "max_new_tools_per_turn": 17,
+                    },
+                }
+            )
+
+    def test_sticky_enabled_requires_tool_selection_enabled(self):
+        """sticky.enabled cannot be used when the parent plugin is disabled."""
+        with pytest.raises(PydanticValidationError):
+            ToolSelectionPluginConfig.model_validate(
+                {"enabled": False, "sticky": {"enabled": True}}
+            )
+
     def test_tool_selection_invalid_mode_in_full_config(self):
         """Invalid mode surfaces as a validator error referencing tool_selection."""
         config_yaml = """

@@ -21,7 +21,7 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 		"plugin_request_mutations", "tools_passthrough", "tools_filtered", "tools_none",
 		"tool_selection_add_weather", "tool_selection_add_calc",
 		"tool_selection_filter", "tool_selection_filter_threshold", "tool_selection_add_topk_one",
-		"tool_selection_with_system_prompt",
+		"tool_selection_with_system_prompt", "sticky_tool_selection",
 	}
 	if len(routing["decisions"].([]any)) != len(names) || len(signals["keywords"].([]any)) != len(names) {
 		t.Fatal("plugin recipe must preserve every feature route without additional policies")

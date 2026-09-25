@@ -29,14 +29,21 @@ type Profile struct {
 // NewProfile creates the baseline profile backed by the shared Envoy AI Gateway stack.
 func NewProfile() *Profile {
 	return &Profile{
-		stack: gatewaystack.New(gatewaystack.Config{
-			Name:                     "ai-gateway",
-			SemanticRouterValuesFile: valuesFile,
-			ResourceManifests:        resourceManifests,
-			WaitDeployments: []helpers.DeploymentRef{
-				{Namespace: "default", Name: "mock-sequence-classifier"},
-			},
-		}),
+		stack: gatewaystack.New(BaseStackConfig("ai-gateway")),
+	}
+}
+
+// BaseStackConfig returns the shared AI Gateway deployment inputs so focused
+// profiles can change one runtime dependency without copying the full values
+// file or gateway resource set.
+func BaseStackConfig(name string) gatewaystack.Config {
+	return gatewaystack.Config{
+		Name:                     name,
+		SemanticRouterValuesFile: valuesFile,
+		ResourceManifests:        append([]string(nil), resourceManifests...),
+		WaitDeployments: []helpers.DeploymentRef{
+			{Namespace: "default", Name: "mock-sequence-classifier"},
+		},
 	}
 }
 
@@ -62,7 +69,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
-	return testmatrix.Combine(testmatrix.BaselineRouterContract)
+	return testmatrix.Combine(testmatrix.BaselineRouterContract, testmatrix.StickyToolSelectionContract)
 }
 
 // GetServiceConfig returns the service configuration for accessing the deployed service.

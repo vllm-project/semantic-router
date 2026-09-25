@@ -27,6 +27,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection/lookuptable"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontelemetry"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/sessiontools"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
@@ -68,6 +69,7 @@ type routerComponents struct {
 	recipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
 	fallbackCircuitBreaker      *fallback.BackendCircuitBreaker
 	resources                   *resourceScope
+	stickyToolSelectionManager  *sessiontools.Manager
 }
 
 // NewOpenAIRouter creates a new OpenAI API router instance.
@@ -154,11 +156,41 @@ func buildOpenAIRouterFromConfig(cfg *config.RouterConfig, pools ...*binding.Poo
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
+	if err := validateStickyToolSelectionSecret(cfg); err != nil {
+		return nil, err
+	}
 	components, err := buildRouterComponents(cfg, pools...)
 	if err != nil {
 		return nil, err
 	}
 	return components.buildRouter(), nil
+}
+
+// validateStickyToolSelectionSecret requires USER_SCOPE_NAMESPACE_SECRET
+// whenever any decision enables tool_selection.sticky.enabled (issue #3347,
+// PL-0042 section 2.4). Unlike validateResponseCacheScopeSecret just below,
+// this is unconditional — not gated on cfg.ManagementAPI.RemoteExposure.
+// Response-cache scoping without
+// the secret degrades to a documented, bounded fallback (a plain hash) that
+// is merely weaker, not silently wrong; sticky tool-set identity has no
+// such acceptable degraded mode — ResolveStickyToolIdentity
+// (sticky_tool_identity.go) fails closed with no fallback path at all when
+// the secret is absent, so an unkeyed deployment with sticky enabled would
+// otherwise construct successfully and then simply never activate sticky
+// selection for any request, silently. Fail at construction time instead,
+// with an actionable error.
+func validateStickyToolSelectionSecret(cfg *config.RouterConfig) error {
+	if cfg == nil || cache.UserScopeSecretConfigured() {
+		return nil
+	}
+	for _, decision := range cfg.AllRoutingDecisions() {
+		plugin := decision.GetToolSelectionConfig()
+		if plugin == nil || plugin.Sticky == nil || !plugin.Sticky.Enabled {
+			continue
+		}
+		return fmt.Errorf("USER_SCOPE_NAMESPACE_SECRET is required when tool_selection sticky selection is enabled")
+	}
+	return nil
 }
 
 func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
@@ -207,6 +239,14 @@ func buildRouterComponents(cfg *config.RouterConfig, pools ...*binding.Pool) (*r
 		protocolCodecs:     protocolcodec.NewBuiltinRegistry(),
 	}
 	registerRouterSessionStore(components.resources, components.routerSessionStore)
+	stickyManager, stickyStore, err := buildStickyToolSelectionManager(cfg)
+	if err != nil {
+		return nil, rollbackResources(components.resources, err)
+	}
+	components.stickyToolSelectionManager = stickyManager
+	if stickyStore != nil {
+		components.resources.add(stickyStore.Close)
+	}
 	embeddings, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, components.modelRuntime)
 	if err != nil {
 		return nil, rollbackResources(components.resources, err)
@@ -494,6 +534,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		WorkflowStateService:        components.workflowStateService,
 		FallbackOrchestrator:        components.fallbackOrchestrator,
 		RecipeFallbackOrchestrators: components.recipeFallbackOrchestrators,
+		stickyToolSelectionManager:  components.stickyToolSelectionManager,
 		resources:                   components.resources,
 	}
 	if components.classificationSvc != nil {

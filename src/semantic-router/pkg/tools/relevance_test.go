@@ -237,6 +237,18 @@ var _ = Describe("FilterAndRankTools", func() {
 		Expect(selected).To(HaveLen(2))
 		Expect(selected[0].Function.Name).To(Equal("weather_tool"))
 	})
+
+	It("should use a deterministic identity tie-break for equal scores", func() {
+		candidates := []tools.ToolSimilarity{
+			candidate("zeta", "same description", "misc", nil, 0.8),
+			candidate("alpha", "same description", "misc", nil, 0.8),
+		}
+
+		selected := tools.FilterAndRankTools("unrelated", candidates, 2, nil, "")
+		Expect(selected).To(HaveLen(2))
+		Expect(selected[0].Function.Name).To(Equal("alpha"))
+		Expect(selected[1].Function.Name).To(Equal("zeta"))
+	})
 })
 
 func candidate(name string, description string, category string, tags []string, similarity float32) tools.ToolSimilarity {
