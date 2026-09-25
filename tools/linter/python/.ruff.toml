@@ -86,19 +86,6 @@ ignore = [
 "src/training/model_classifier/modality_routing_classifier/label_audit/test_*.py" = ["PLR2004"]
 "bench/test_*.py" = ["PLR2004"]
 "bench/reasoning/test_*.py" = ["PLR2004"]
-"bench/agent_crew/test_*.py" = [
-  "PLR2004",  # expected call counts and costs are readable inline
-  "RUF012",   # stub HTTP handler class attributes are per-test state
-]
-"bench/agent_crew/report.py" = [
-  "PLC0415",  # matplotlib is an optional dependency used only by --figures
-]
-# The crew fixture is a pull request with deliberately defective code. Its bugs
-# are what the arms are scored against, so correctness rules must not remove them.
-"bench/agent_crew/fixture/pr/*.py" = [
-  "E722",     # bare except is a seeded defect
-  "SIM105",   # so is the try/except/pass it sits in
-]
 "bench/reasoning/router_reason_bench_multi_dataset.py" = [
   "PLR2004",  # answer-parsing and token thresholds are readable inline
 ]
