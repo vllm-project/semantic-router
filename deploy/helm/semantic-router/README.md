@@ -125,6 +125,7 @@ the locked chart dependencies.
 | config.global.stores.semantic_cache.similarity_threshold | float | `0.8` |  |
 | config.global.stores.semantic_cache.ttl_seconds | int | `3600` |  |
 | configOverride | object | `null` | Complete canonical Router config supplied by deployment tooling. Unlike `config`, this map atomically replaces chart defaults before Kubernetes integration rewrites. |
+| configMap.applyValuesRevision | string | `""` | Chart values seed the ConfigMap at install. Change this revision on an upgrade to explicitly replace the live config with `config` or `configOverride`; repeating the same revision preserves later API edits. |
 | dashboard.allowOpenBootstrap | bool | `false` | Allow first-admin creation via the public, unauthenticated web-form bootstrap endpoint. Off by default: a fresh, internet-reachable deployment should not be claimable by the first stranger who finds it. Production provisions the admin via the DASHBOARD_ADMIN_* env vars (which create it at startup and close the bootstrap path automatically). Set this to true only for demos where signing up the first admin through the UI is acceptable. |
 | dashboard.enabled | bool | `false` | Enable the vLLM-SR dashboard |
 | dashboard.envFrom | list | `[]` | Extra envFrom sources for the dashboard container (configMapRef / secretRef). Standard core/v1 EnvFromSource list. |
@@ -137,7 +138,7 @@ the locked chart dependencies.
 | dashboard.jwtSecret.existingSecretKey | string | `"jwt-secret"` | Key within existingSecret holding the JWT signing secret. |
 | dashboard.persistence.accessMode | string | `"ReadWriteOnce"` | Access mode for the dashboard-local state PVC |
 | dashboard.persistence.annotations | object | `{}` | Annotations for the dashboard-local state PVC |
-| dashboard.persistence.enabled | bool | `false` | Persist dashboard-local SQLite state for auth/session/workflow data. This is restart-safe for one dashboard replica, not a shared HA session store. |
+| dashboard.persistence.enabled | bool | `true` | Persist dashboard-local auth/session/workflow state and config backups. ConfigMap edits require a rollout, so backups must survive pod replacement for the rollback API to remain usable. Set false only for disposable demos. |
 | dashboard.persistence.existingClaim | string | `""` | Existing PVC to mount for dashboard-local state |
 | dashboard.persistence.mountPath | string | `"/app/data"` | Container mount path for dashboard-local state |
 | dashboard.persistence.size | string | `"1Gi"` | Requested dashboard-local state size |
@@ -246,8 +247,8 @@ the locked chart dependencies.
 | env[2].valueFrom.secretKeyRef.key | string | `"token"` |  |
 | env[2].valueFrom.secretKeyRef.name | string | `"hf-token-secret"` |  |
 | env[2].valueFrom.secretKeyRef.optional | bool | `true` |  |
-| extraVolumeMounts | list | `[]` |  |
-| extraVolumes | list | `[]` |  |
+| extraVolumeMounts | list | `[]` | Extra Router mounts. A mount at `/app/models` replaces the default model volume mount. |
+| extraVolumes | list | `[]` | Volumes for custom mounts; provide a matching volume when replacing `/app/models`. |
 | fullnameOverride | string | `""` | Override the full name of the chart |
 | global.imageRegistry | string | `""` | Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com) |
 | global.namespace | string | `""` | Namespace for all resources (if not specified, uses Release.Namespace) |
@@ -437,8 +438,26 @@ activation on the reconciling replica. A failed subsequent candidate reports
 Status persistence failures are retried without rebuilding a successful generation.
 The startup probe retains its configurable 60-minute default model-download budget.
 
-The mounted ConfigMap is immutable through the Router management API. Config
-mutation endpoints return HTTP 403 with `CONFIG_READ_ONLY` for read-only files or
-Kubernetes CR-managed configuration. Update the owning CR or ConfigMap through
-Kubernetes; ConfigMap `subPath` changes require a rollout. Writable local-file
-configuration continues to support management API updates.
+For chart-managed file configuration, Router management writes update the named
+ConfigMap through the Kubernetes API. A successful write returns HTTP 202 with
+`activation_status: persisted`; the existing `subPath` mount and active Router
+generation stay on the prior document until the Router deployment is rolled
+out. `/api/v1/config/hash` reads the saved ConfigMap and reports when activation
+becomes active. A second mutation on a stale Pod returns HTTP 409
+`CONFIG_ROLLOUT_REQUIRED`, preventing it from overwriting the saved change.
+Kubernetes CR-managed configuration remains read-only through this API. Helm
+upgrades preserve the live `config.yaml` by default, including Dashboard and
+Router API edits. Chart values seed the first install. To intentionally replace
+the live document with reviewed chart values, set a new
+`configMap.applyValuesRevision` on that upgrade. Reusing that revision on later
+upgrades preserves subsequent API edits. Use a server-side Helm dry run when
+previewing an upgrade: a client-side render cannot look up the live ConfigMap.
+The Router stores its config versions under `/app/models/.vllm-sr/config-backups`.
+The default models PVC keeps Router rollback versions available after the
+required rollout. A custom `/app/models` mount must be writable and persistent
+for durable config versions and rollback; `persistence.enabled=false` uses
+ephemeral storage suitable only for disposable demos. When the Dashboard is
+enabled, its separate PVC retains Dashboard config backups.
+Managed knowledge base assets need a writable, persistent directory in
+addition to the YAML document; their mutation API returns
+`KB_ASSET_STORAGE_READ_ONLY` on ConfigMap-backed deployments.
