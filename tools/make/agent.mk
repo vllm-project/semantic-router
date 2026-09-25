@@ -118,10 +118,14 @@ harness-markdown-bootstrap: harness-node-bootstrap ## Install repo-local markdow
 		PATH="$$NODE_PATH" npm install --prefix "$(AGENT_NODE_TOOLS)" --no-audit --no-fund --loglevel=error markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION); \
 	fi
 
+# golangci-lint cannot type-check a standard library newer than the Go that
+# built it, so rebuild it after a Go release upgrade such as 1.26 to 1.27.
 harness-go-bootstrap: ## Install Go lint tooling only when Go changed
 	@if command -v go >/dev/null 2>&1; then \
 		GOLANGCI_BIN="$$(go env GOPATH)/bin/golangci-lint"; \
-		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) "; then \
+		GO_MINOR='s/.*go1\.\([0-9][0-9]*\).*/\1/p'; \
+		if [ ! -x "$$GOLANGCI_BIN" ] || ! "$$GOLANGCI_BIN" version 2>/dev/null | grep -q " $(AGENT_GOLANGCI_LINT_VERSION) " || \
+			[ "$$(go version "$$GOLANGCI_BIN" | sed -n "$$GO_MINOR")" -lt "$$(go env GOVERSION | sed -n "$$GO_MINOR")" ]; then \
 			go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(AGENT_GOLANGCI_LINT_VERSION); \
 		fi; \
 	fi
