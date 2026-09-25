@@ -70,6 +70,8 @@ plugins:
 
 本地 `mmbert` 嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。这项绑定不会自动识别可变远程嵌入端点的模型身份。
 
+Candle `bert` 嵌入改用编码器版本区分缓存空间。每当 Candle BERT 的向量发生变化，这个版本就会随之更新，例如填充 token 不再计入平均值时。跨越这类变化升级后，BERT 会使用新的缓存空间：升级前写入的条目不会被复用，并保留到过期为止，缓存会随新流量重新填充。由其他运行时提供的 BERT 保留已有缓存。
+
 ## 运维 {#operations}
 
 管理 API 在 `/api/v1/storage/response-cache/*` 下暴露经过脱敏的健康、能力、统计、候选配置测试、限定范围失效、基于 epoch 的清空。统一哈希链审计位于 `/api/v1/observability/audit`，需要 `audit.read` 权限。`/api/v1/plugins/response_cache` 提供插件发现与操作链接。失效默认是 dry-run。清空需要显式确认短语 `flush response cache`，并且永不调用后端范围的 `FLUSHALL`。

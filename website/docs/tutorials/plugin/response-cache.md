@@ -86,6 +86,13 @@ The first requests after a model upgrade are cache misses. Restarting with the
 same representation reuses its compatible cache. This binding does not infer
 the identity of a mutable remote embedding endpoint.
 
+Candle `bert` embeddings are keyed by an encoder version instead, which changes
+whenever Candle BERT vectors change, as they did when padding tokens stopped
+counting toward the average. Upgrading across such a change starts a new BERT
+cache space. Entries written before the upgrade are not reused and remain until
+they expire, and the cache fills again from new traffic. BERT served by another
+runtime keeps its existing cache.
+
 ## Operations
 
 The management API exposes redacted health, capabilities, statistics, candidate
