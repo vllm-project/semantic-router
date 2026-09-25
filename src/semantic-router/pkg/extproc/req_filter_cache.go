@@ -293,6 +293,7 @@ func (r *OpenAIRouter) performCacheLookup(
 		}
 
 		metrics.RecordCachePluginHit(requestDecisionStateKey(ctx), "response_cache")
+		tracing.SetSpanAttributes(span, attribute.String(tracing.AttrCacheNegationGuard, string(lookupResult.NegationGuard)))
 		tracing.EndPluginSpan(span, "success", lookupTime, "cache_hit")
 
 		// The cache partition includes the selected backend, independently of
@@ -300,11 +301,12 @@ func (r *OpenAIRouter) performCacheLookup(
 		r.startRouterReplay(ctx, ctx.CacheRequestModel, ctx.CacheSelectedModel, categoryName)
 		r.reportCacheHitTelemetry(ctx, cachedResponse, lookupDuration)
 		logging.LogEvent("cache_hit", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"model":      requestModel,
-			"query":      ctx.RequestQuery,
-			"category":   categoryName,
-			"threshold":  threshold,
+			"request_id":     ctx.RequestID,
+			"model":          requestModel,
+			"query":          ctx.RequestQuery,
+			"category":       categoryName,
+			"threshold":      threshold,
+			"negation_guard": string(lookupResult.NegationGuard),
 		})
 		// Intermediate cache detail (category, matched keywords, similarity) is
 		// demoted to the x-vsr-debug surface (#2205).
