@@ -681,7 +681,25 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             for provider in resources["providers"]
             if provider.get("models")
         }
-        self.assertEqual(relationships["bedrock"], {"first_party"})
+        providers = {provider["id"]: provider for provider in resources["providers"]}
+        self.assertEqual(providers["bedrock"]["models"], [])
+        self.assertFalse(providers["bedrock"]["presentation"]["featured"])
+        self.assertNotIn(
+            "moonshot/kimi-k2.5",
+            {binding["catalog"] for binding in providers["moonshot"]["models"]},
+        )
+        self.assertIn(
+            "moonshot/kimi-k2.5",
+            {binding["catalog"] for binding in providers["vllm"]["models"]},
+        )
+        self.assertEqual(
+            next(
+                binding
+                for binding in providers["openrouter"]["models"]
+                if binding["catalog"] == "amazon/nova-2-lite"
+            )["id"],
+            "amazon/nova-2-lite-v1",
+        )
         self.assertEqual(
             relationships["baidu-qianfan"], {"first_party", "managed_cloud"}
         )
@@ -691,7 +709,6 @@ class ModelCatalogCompilerTests(unittest.TestCase):
         for provider_id in ("vllm", "sglang"):
             self.assertEqual(relationships[provider_id], {"self_hosted"})
 
-        providers = {provider["id"]: provider for provider in resources["providers"]}
         self.assertEqual(
             providers["perplexity"]["path_overrides"][
                 "openai/chat-completions@1#create"
@@ -938,11 +955,11 @@ class ModelCatalogCompilerTests(unittest.TestCase):
             )
         self.assertEqual(
             models["amazon/nova-premier-v1"]["limits"],
-            {"context_window_size": 1_000_000, "max_output_tokens": 10_000},
+            {"context_window_size": 1_000_000, "max_output_tokens": 25_000},
         )
         self.assertEqual(
             models["amazon/nova-pro-v1"]["limits"],
-            {"context_window_size": 300_000, "max_output_tokens": 10_000},
+            {"context_window_size": 300_000, "max_output_tokens": 5_000},
         )
 
     def test_every_model_reasoning_mode_materializes_default_slots_including_missing(

@@ -2,8 +2,11 @@
 
 The shared `.venv-agent` contains pinned harness tools. Linked Git worktrees
 reuse the primary worktree's environment through an ignored symlink; run
-`make harness-bootstrap` to create it. Set `AGENT_VENV=<path>` only for an
-intentionally isolated tool environment.
+`make harness-bootstrap` to create it. The bootstrap needs Python 3.10 or newer
+and uses `python3` from `PATH`; set `AGENT_BOOTSTRAP_PYTHON=<interpreter>` to
+choose another one. It rebuilds an existing environment that runs an older
+Python. Set `AGENT_VENV=<path>` only for an intentionally isolated tool
+environment.
 
 ## Local runtime
 

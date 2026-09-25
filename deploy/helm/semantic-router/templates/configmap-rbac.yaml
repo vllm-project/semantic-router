@@ -1,0 +1,38 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-config-writer
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+rules:
+  # Scoped to the one ConfigMap that backs the mounted config file (issue
+  # #3688). Neither the Router nor the Dashboard gets configmaps access
+  # generally, only get/update/patch on this named resource.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ include "semantic-router.configMapName" . | quote }}]
+    verbs: ["get", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-config-writer
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "semantic-router.fullname" . }}-config-writer
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "semantic-router.serviceAccountName" . }}
+    namespace: {{ include "semantic-router.namespace" . }}
+  {{- if .Values.dashboard.enabled }}
+  - kind: ServiceAccount
+    name: {{ include "semantic-router.dashboardServiceAccountName" . }}
+    namespace: {{ include "semantic-router.namespace" . }}
+  {{- end }}
+{{- end }}

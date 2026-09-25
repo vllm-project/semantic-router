@@ -9,7 +9,7 @@ import {
 export type SetupStep = 0 | 1 | 2;
 export type { ProviderKind } from "./setupWizardProviderCatalog";
 export type SetupValidationState = "idle" | "validating" | "valid" | "error";
-export type SetupActivationState = "idle" | "activating" | "error";
+export type SetupActivationState = "idle" | "activating" | "persisted" | "error";
 export type SetupRoutingMode = "scratch" | "remote" | "preset";
 export type RemoteImportState = "idle" | "importing" | "imported" | "error";
 export type PresetCatalogState = "loading" | "ready" | "error";
