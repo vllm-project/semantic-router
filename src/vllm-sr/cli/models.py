@@ -47,9 +47,10 @@ class Listener(BaseModel):
     timeout: Optional[str] = "300s"
     api_keys: Optional[List[str]] = Field(
         default=None,
-        description="Bearer tokens required to call this listener. "
-        "If set, requests without 'Authorization: Bearer <key>' matching one of these "
-        "values are rejected with HTTP 401.",
+        description="Client keys required to call this listener. "
+        "If set, requests must send one of these values as "
+        "'Authorization: Bearer <key>' or, for Azure OpenAI clients, "
+        "'api-key: <key>'; other requests are rejected with HTTP 401.",
     )
 
 

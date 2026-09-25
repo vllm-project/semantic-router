@@ -133,6 +133,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if ctx.SourceFormat == "" {
 		ctx.SourceFormat = llmprotocol.OpenAIChatV1
 	}
+	body = withAzureDeploymentModel(body, ctx.Headers[":path"])
 	engine, err := r.protocolEngine()
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
