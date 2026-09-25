@@ -39,6 +39,7 @@ type HTTPClient struct {
 	baseURL          string
 	maxResponseBytes int64
 	maxListPages     int
+	maxListBytes     int64
 }
 
 // NewHTTPClient creates a new HTTP MCP client
@@ -52,6 +53,11 @@ func NewHTTPClient(name string, config ClientConfig) *HTTPClient {
 	if maxListPages <= 0 {
 		maxListPages = defaultMCPMaxListPages
 	}
+	// Default to the response cap so a first page within that cap always fits.
+	maxListBytes := config.MaxListBytes
+	if maxListBytes <= 0 {
+		maxListBytes = maxResponseBytes
+	}
 	return &HTTPClient{
 		BaseClient: baseClient,
 		httpClient: &http.Client{
@@ -60,6 +66,7 @@ func NewHTTPClient(name string, config ClientConfig) *HTTPClient {
 		baseURL:          config.URL,
 		maxResponseBytes: maxResponseBytes,
 		maxListPages:     maxListPages,
+		maxListBytes:     maxListBytes,
 	}
 }
 
@@ -158,7 +165,7 @@ func (c *HTTPClient) initializeCapabilities() error {
 }
 
 // listAllPages follows nextCursor until the server omits it or the client's
-// page limit is reached.
+// page or byte limit is reached.
 func listAllPages[R, T any](
 	ctx context.Context,
 	c *HTTPClient,
@@ -166,11 +173,17 @@ func listAllPages[R, T any](
 	page func(R) ([]T, mcp.Cursor),
 ) ([]T, error) {
 	var items []T
+	var listBytes int64
 	request := mcp.PaginatedRequest{}
 	for pages := 1; ; pages++ {
 		response, err := c.sendRequest(ctx, method, request)
 		if err != nil {
 			return nil, err
+		}
+		listBytes += int64(len(response))
+		if listBytes > c.maxListBytes {
+			c.warnListTruncated("mcp_list_byte_limit_reached", method, len(items))
+			return items, nil
 		}
 
 		var result R
@@ -184,17 +197,23 @@ func listAllPages[R, T any](
 			return items, nil
 		}
 		if pages >= c.maxListPages {
-			// The router installs no client log handler, so a c.log warning would be dropped.
-			logging.ComponentWarnEvent("mcp", "mcp_list_page_limit_reached", map[string]interface{}{
-				"client":       c.name,
-				"method":       method,
-				"max_pages":    c.maxListPages,
-				"items_loaded": len(items),
-			})
+			c.warnListTruncated("mcp_list_page_limit_reached", method, len(items))
 			return items, nil
 		}
 		request.Params.Cursor = nextCursor
 	}
+}
+
+// warnListTruncated uses the router logger because the router installs no
+// client log handler, so a c.log warning would be dropped.
+func (c *HTTPClient) warnListTruncated(event, method string, itemsLoaded int) {
+	logging.ComponentWarnEvent("mcp", event, map[string]interface{}{
+		"client":       c.name,
+		"method":       method,
+		"max_pages":    c.maxListPages,
+		"max_bytes":    c.maxListBytes,
+		"items_loaded": itemsLoaded,
+	})
 }
 
 // loadTools loads available tools from the HTTP MCP server

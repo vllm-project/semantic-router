@@ -34,6 +34,24 @@ func TestHTTPClientDefaultsListPageLimit(t *testing.T) {
 	}
 }
 
+func TestHTTPClientDefaultsListByteLimit(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		config ClientConfig
+		want   int64
+	}{
+		{name: "unset", config: ClientConfig{}, want: defaultMCPMaxResponseBytes},
+		{name: "follows response cap", config: ClientConfig{MaxResponseBytes: 64 << 20}, want: 64 << 20},
+		{name: "explicit", config: ClientConfig{MaxResponseBytes: 64 << 20, MaxListBytes: 1 << 20}, want: 1 << 20},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NewHTTPClient("test", tc.config).maxListBytes; got != tc.want {
+				t.Fatalf("maxListBytes = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestHTTPClientStopsListingAtPageLimit(t *testing.T) {
 	core, logs := observer.New(zapcore.WarnLevel)
 	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))

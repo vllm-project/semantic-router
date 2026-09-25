@@ -12,6 +12,9 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 type pagedListServer struct {
@@ -20,8 +23,11 @@ type pagedListServer struct {
 	cursors map[string][]string
 }
 
+const pagedListPageBytes = 1024
+
 // newPagedListServer serves tools/list, resources/list, and prompts/list one
-// item per page and records the cursor that each list request carried.
+// item per page, pads each page with trailing whitespace to pagedListPageBytes,
+// and records the cursor that each list request carried.
 func newPagedListServer(t *testing.T, pages int) *pagedListServer {
 	t.Helper()
 	pageByCursor := map[string]int{"": 1}
@@ -82,7 +88,11 @@ func newPagedListServer(t *testing.T, pages int) *pagedListServer {
 			http.NotFound(w, r)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(result)
+		body, _ := json.Marshal(result)
+		if pad := pagedListPageBytes - len(body); pad > 0 {
+			body = append(body, strings.Repeat(" ", pad)...)
+		}
+		_, _ = w.Write(body)
 	}))
 	t.Cleanup(server.Close)
 	return server
@@ -111,6 +121,14 @@ func toolNames(tools []mcp.Tool) []string {
 	return itemNames(tools, func(tool mcp.Tool) string { return tool.Name })
 }
 
+func resourceNames(resources []mcp.Resource) []string {
+	return itemNames(resources, func(resource mcp.Resource) string { return resource.Name })
+}
+
+func promptNames(prompts []mcp.Prompt) []string {
+	return itemNames(prompts, func(prompt mcp.Prompt) string { return prompt.Name })
+}
+
 func TestHTTPClientLoadsEveryListPage(t *testing.T) {
 	server := newPagedListServer(t, 3)
 	client := NewHTTPClient("paged", ClientConfig{URL: server.URL})
@@ -131,12 +149,12 @@ func TestHTTPClientLoadsEveryListPage(t *testing.T) {
 		},
 		{
 			method: "resources/list",
-			loaded: itemNames(client.GetResources(), func(resource mcp.Resource) string { return resource.Name }),
+			loaded: resourceNames(client.GetResources()),
 			want:   []string{"resource-1", "resource-2", "resource-3"},
 		},
 		{
 			method: "prompts/list",
-			loaded: itemNames(client.GetPrompts(), func(prompt mcp.Prompt) string { return prompt.Name }),
+			loaded: promptNames(client.GetPrompts()),
 			want:   []string{"prompt-1", "prompt-2", "prompt-3"},
 		},
 	} {
@@ -148,5 +166,45 @@ func TestHTTPClientLoadsEveryListPage(t *testing.T) {
 				t.Errorf("cursors sent %q, want %q", got, wantCursors)
 			}
 		})
+	}
+}
+
+func TestHTTPClientStopsListingAtByteLimit(t *testing.T) {
+	core, logs := observer.New(zapcore.WarnLevel)
+	t.Cleanup(zap.ReplaceGlobals(zap.New(core)))
+
+	server := newPagedListServer(t, 10)
+	// The list budget defaults to the response cap. Two pages fill it exactly,
+	// so each list reads a third page and does not keep it.
+	client := NewHTTPClient("paged", ClientConfig{URL: server.URL, MaxResponseBytes: 2 * pagedListPageBytes})
+	if err := client.Connect(); err != nil {
+		t.Fatalf("Connect() error = %v", err)
+	}
+
+	for _, tc := range []struct {
+		method string
+		loaded []string
+		want   []string
+	}{
+		{method: "tools/list", loaded: toolNames(client.GetTools()), want: []string{"tool-1", "tool-2"}},
+		{method: "resources/list", loaded: resourceNames(client.GetResources()), want: []string{"resource-1", "resource-2"}},
+		{method: "prompts/list", loaded: promptNames(client.GetPrompts()), want: []string{"prompt-1", "prompt-2"}},
+	} {
+		t.Run(tc.method, func(t *testing.T) {
+			if !slices.Equal(tc.loaded, tc.want) {
+				t.Errorf("loaded %v, want %v", tc.loaded, tc.want)
+			}
+			if got := len(server.cursorsSent(tc.method)); got != 3 {
+				t.Errorf("requests = %d, want 3", got)
+			}
+		})
+	}
+
+	var warned []any
+	for _, entry := range logs.FilterMessage("mcp_list_byte_limit_reached").All() {
+		warned = append(warned, entry.ContextMap()["method"])
+	}
+	if want := []any{"tools/list", "resources/list", "prompts/list"}; !slices.Equal(warned, want) {
+		t.Errorf("byte limit warnings for %v, want %v", warned, want)
 	}
 }
