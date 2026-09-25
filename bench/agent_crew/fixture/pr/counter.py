@@ -22,7 +22,9 @@ class RequestCounter:
             return {"total": self.total, "errors": self.errors}
 
 
-def run_workers(counter: RequestCounter, workers: int = 8, per_worker: int = 5000) -> dict:
+def run_workers(
+    counter: RequestCounter, workers: int = 8, per_worker: int = 5000
+) -> dict:
     def work() -> None:
         for i in range(per_worker):
             counter.record(ok=i % 50 != 0)

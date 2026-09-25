@@ -173,7 +173,10 @@ def problems(body: dict[str, Any]) -> list[str]:
             f"response.service_tier {body['service_tier']!r} is not one the router accepts"
         )
     fingerprint = body.get("system_fingerprint")
-    if fingerprint is not None and not 1 <= len(str(fingerprint)) <= MAX_FINGERPRINT_CHARS:
+    if (
+        fingerprint is not None
+        and not 1 <= len(str(fingerprint)) <= MAX_FINGERPRINT_CHARS
+    ):
         found.append(
             "response.system_fingerprint must be 1 to 256 characters when present"
         )
