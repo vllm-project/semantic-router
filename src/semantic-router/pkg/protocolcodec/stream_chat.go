@@ -359,8 +359,14 @@ func (decoder *chatStreamDecoder) decodeChoiceTextEvents(choice chatChunkChoiceW
 }
 
 func chatChoiceNeedsItem(choice chatChunkChoiceWire) bool {
-	return choice.Delta.Content != nil || len(choice.Delta.Annotations) > 0 ||
+	return chatDeltaHasText(choice) || len(choice.Delta.Annotations) > 0 ||
 		choice.Delta.Reasoning != nil || choice.Delta.AlternateReasoning != nil || choice.Delta.Refusal != nil
+}
+
+// Ollama sends "content":"" beside reasoning and tool call deltas. An empty
+// string carries no output, so it must not open or resume a text part.
+func chatDeltaHasText(choice chatChunkChoiceWire) bool {
+	return choice.Delta.Content != nil && *choice.Delta.Content != ""
 }
 
 type chatEventFactory func() ([]llmprotocol.Event, error)
@@ -375,7 +381,7 @@ func (decoder *chatStreamDecoder) chatChoiceEventFactories(choice chatChunkChoic
 }
 
 func (decoder *chatStreamDecoder) decodeContentDelta(choice chatChunkChoiceWire) ([]llmprotocol.Event, error) {
-	if choice.Delta.Content == nil {
+	if !chatDeltaHasText(choice) {
 		return nil, nil
 	}
 	content := llmprotocol.Content{Kind: llmprotocol.ContentText, Text: *choice.Delta.Content}
