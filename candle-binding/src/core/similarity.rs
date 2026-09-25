@@ -115,7 +115,10 @@ impl BertSimilarity {
 
         let config = std::fs::read_to_string(config_filename)?;
         let config: Config = serde_json::from_str(&config)?;
-        let tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
+        let mut tokenizer = Tokenizer::from_file(tokenizer_filename).map_err(E::msg)?;
+        // all-MiniLM's tokenizer.json pads every input to 128 tokens, and
+        // get_embedding averages every position, so pads would otherwise skew it.
+        tokenizer.with_padding(None);
 
         // Use the approximate GELU for better performance
         // Keep original activation function to match PyTorch exactly
