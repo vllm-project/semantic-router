@@ -2,8 +2,6 @@
 
 package catalog
 
-const builtInCatalogDigest = "sha256:5220fbc6ab22b721d5e8d7b85c4341bfa72906b33849cf8273e7e7e17658214f"
-
 const builtInCatalogJSON = `{
   "benchmarks": [
     {
