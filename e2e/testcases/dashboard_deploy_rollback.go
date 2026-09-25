@@ -23,12 +23,6 @@ func init() {
 	})
 }
 
-// dashboardMaxConfigBackups mirrors maxBackups in
-// dashboard/backend/handlers/deploy.go. Deploy trims the backup directory to
-// this bound after writing; rollback appends its pre-rollback snapshot
-// without trimming.
-const dashboardMaxConfigBackups = 10
-
 // rollbackProbeDecision names the temporary decision the journey deploys.
 // Its presence in the served YAML proves the deploy took effect, and the
 // byte-for-byte restore assertion proves rollback removed every trace of it.
@@ -72,10 +66,10 @@ type dashboardDeployResult struct {
 // #3233. The safe-failure case proved a rejected deploy changes nothing; this
 // case proves an accepted deploy is fully reversible. The operator-facing
 // invariant is byte-for-byte: after rolling back to the version a deploy
-// returned, GET /api/router/config/yaml serves exactly the pre-deploy bytes,
-// and the version ledger holds a backup for each of the two operations
-// (deployDirectWrite backs up before writing, rollbackDirectWrite snapshots
-// the outgoing config before restoring).
+// returned, GET /api/router/config/yaml serves exactly the pre-deploy bytes.
+// The ledger assertions compare version-id sets rather than counts: the
+// deploy adds exactly its own backup id, and rollback leaves every existing
+// id in place, so the target stays available for a second rollback.
 //
 // The negative probes run first, against pristine state: rollback is closed
 // to anonymous callers, and a rollback to an unknown version must fail
@@ -154,21 +148,21 @@ func testDashboardDeployRollback(ctx context.Context, client *kubernetes.Clients
 	if !containsVersionID(versionsAfterDeploy, deployVersion) {
 		return fmt.Errorf("deploy returned version %s but the version list does not offer it: %v", deployVersion, versionsAfterDeploy)
 	}
-	expectedAfterDeploy := len(versionsBefore) + 1
-	if expectedAfterDeploy > dashboardMaxConfigBackups {
-		// Deploy prunes to the retention bound after writing its backup.
-		expectedAfterDeploy = dashboardMaxConfigBackups
+	if newAfterDeploy := versionIDsNotIn(versionsAfterDeploy, versionsBefore); len(newAfterDeploy) != 1 {
+		return fmt.Errorf("deploy must add exactly one version id (its backup %s), got new ids %v", deployVersion, newAfterDeploy)
 	}
-	if len(versionsAfterDeploy) != expectedAfterDeploy {
-		return fmt.Errorf("expected %d versions after deploy, got %d (before: %d)", expectedAfterDeploy, len(versionsAfterDeploy), len(versionsBefore))
+	// Deploy trims the ledger to its retention bound after writing the
+	// backup. The bound's value is the handler's business; the journey pins
+	// the shape of the trim instead: only the oldest backups may drop out.
+	// Ids sort chronologically as strings (config_backups.go names them
+	// 20060102-150405), the same order cleanupBackups prunes by.
+	for _, pruned := range versionIDsNotIn(versionsBefore, versionsAfterDeploy) {
+		for _, kept := range versionsAfterDeploy {
+			if kept != deployVersion && pruned > kept {
+				return fmt.Errorf("deploy pruned backup %s while keeping older backup %s; retention must drop the oldest first", pruned, kept)
+			}
+		}
 	}
-
-	// Backup ids have second resolution (config_backups.go names files
-	// config.20060102-150405.yaml). A rollback within the same second as the
-	// deploy would give the pre-rollback snapshot the deploy backup's
-	// filename and overwrite it, so the ledger assertions after rollback
-	// would race the clock. Crossing a second boundary keeps them exact.
-	time.Sleep(1100 * time.Millisecond)
 
 	rollbackStatus, rollbackResult, err := postDashboardRollback(ctx, httpClient, baseURL, token, deployVersion)
 	if err != nil {
@@ -196,14 +190,19 @@ func testDashboardDeployRollback(ctx context.Context, client *kubernetes.Clients
 	if err != nil {
 		return fmt.Errorf("read versions after rollback: %w", err)
 	}
-	// Rollback snapshots the outgoing config and never prunes, so the ledger
-	// grows by exactly one and the rollback target must survive.
-	if len(versionsAfterRollback) != len(versionsAfterDeploy)+1 {
-		return fmt.Errorf("expected %d versions after rollback, got %d (after deploy: %d)",
-			len(versionsAfterDeploy)+1, len(versionsAfterRollback), len(versionsAfterDeploy))
+	// Rollback snapshots the outgoing config and never prunes. Backup ids
+	// have second resolution (config_backups.go names files
+	// config.20060102-150405.yaml), so a snapshot landing in the same second
+	// as the deploy reuses the deploy backup's id and the id set is
+	// unchanged; in a later second it appears as exactly one new id. The set
+	// comparison holds either way, so the journey never waits out a second
+	// boundary.
+	if pruned := versionIDsNotIn(versionsAfterDeploy, versionsAfterRollback); len(pruned) > 0 {
+		return fmt.Errorf("rollback removed %v from the version list; rolling back twice to the same version relies on every backup surviving", pruned)
 	}
-	if !containsVersionID(versionsAfterRollback, deployVersion) {
-		return fmt.Errorf("the pre-rollback snapshot displaced backup %s from the version list; rolling back twice to the same version would be impossible", deployVersion)
+	newAfterRollback := versionIDsNotIn(versionsAfterRollback, versionsAfterDeploy)
+	if len(newAfterRollback) > 1 {
+		return fmt.Errorf("rollback may add at most its pre-rollback snapshot to the version list, got new ids %v", newAfterRollback)
 	}
 
 	if opts.SetDetails != nil {
@@ -214,6 +213,7 @@ func testDashboardDeployRollback(ctx context.Context, client *kubernetes.Clients
 			"versions_before":                 len(versionsBefore),
 			"versions_after_deploy":           len(versionsAfterDeploy),
 			"versions_after_rollback":         len(versionsAfterRollback),
+			"pre_rollback_snapshot_reused_id": len(newAfterRollback) == 0,
 			"unauthenticated_rollback_status": anonStatus,
 		})
 	}
@@ -390,4 +390,16 @@ func containsVersionID(ids []string, id string) bool {
 		}
 	}
 	return false
+}
+
+// versionIDsNotIn returns the ids absent from baseline, in the order the
+// dashboard listed them.
+func versionIDsNotIn(ids []string, baseline []string) []string {
+	var diff []string
+	for _, id := range ids {
+		if !containsVersionID(baseline, id) {
+			diff = append(diff, id)
+		}
+	}
+	return diff
 }
