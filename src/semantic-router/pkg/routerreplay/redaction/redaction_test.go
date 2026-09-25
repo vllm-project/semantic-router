@@ -203,3 +203,28 @@ func TestRedactResponseBodyRetainsFusionQuorumDiagnostics(t *testing.T) {
 		t.Fatalf("Fusion attempt diagnostics changed during redaction: %#v", second)
 	}
 }
+
+// Agentic facts follow the Memory convention: the status stays visible and
+// the reasons are cleared, like every other *_reason field.
+func TestRedactResponseBodyClearsAgenticFactsReasonsKeepsStatus(t *testing.T) {
+	body, err := json.Marshal(store.Record{
+		ID: "agentic-facts",
+		RouteDiagnostics: &store.RouteDiagnostics{
+			AgenticFactsStatus:  "rejected",
+			AgenticFactsReasons: []string{"expires_at:expired"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal agentic facts Replay record: %v", err)
+	}
+
+	redacted := mustRedactChanged(t, body)
+	record := decodeRedactedRecord(t, redacted)
+	routeDiagnostics := record["route_diagnostics"].(map[string]any)
+	if routeDiagnostics["agentic_facts_status"] != "rejected" {
+		t.Fatalf("agentic facts status changed during redaction: %#v", routeDiagnostics["agentic_facts_status"])
+	}
+	if reasons, ok := routeDiagnostics["agentic_facts_reasons"].([]any); !ok || len(reasons) != 0 {
+		t.Fatalf("agentic facts reasons were not cleared: %#v", routeDiagnostics["agentic_facts_reasons"])
+	}
+}
