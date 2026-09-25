@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -136,7 +137,7 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, str
 	}
 
 	// Connect to target
-	targetConn, err := net.DialTimeout("tcp", targetHost, 10*time.Second)
+	targetConn, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(r.Context(), "tcp", targetHost)
 	if err != nil {
 		log.Printf("WebSocket proxy: failed to connect to %s: %v", targetHost, err)
 		http.Error(w, "Bad Gateway", http.StatusBadGateway)
@@ -158,6 +159,14 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, str
 		return
 	}
 	defer clientConn.Close()
+	// A caller can revoke access by canceling the request context after the
+	// upgrade. Hijacked connections are not closed by net/http on cancellation,
+	// so interrupt both copy directions explicitly.
+	stopCancelClose := context.AfterFunc(r.Context(), func() {
+		_ = clientConn.Close()
+		_ = targetConn.Close()
+	})
+	defer stopCancelClose()
 
 	// Rebuild the original HTTP request and forward to target
 	reqURL := path
@@ -227,5 +236,8 @@ func proxyWebSocket(w http.ResponseWriter, r *http.Request, target *url.URL, str
 		done <- struct{}{}
 	}()
 
+	<-done
+	_ = clientConn.Close()
+	_ = targetConn.Close()
 	<-done
 }
