@@ -133,8 +133,9 @@ vllm-sr serve --config config.yaml
 ```
 
 To run supported Router-side local embeddings and classifiers on CUDA, use
-`--platform nvidia`. The CLI selects and pulls the published
-`ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` image by default:
+`--platform nvidia`. A stable CLI selects the matching published release image
+(for example, CLI `0.4.0` uses `vllm-sr-cuda:v0.4.0`). Development CLI builds
+use `:latest` unless an image is specified explicitly:
 
 ```bash
 vllm-sr config validate --config config.yaml
@@ -153,9 +154,9 @@ vllm-sr serve \
   --image-pull-policy ifnotpresent
 ```
 
-Pin a release tag or digest in production. If the Router shares a GPU with
-vLLM, measure memory and latency under representative concurrency; moving
-small, batch-one signal models to CUDA does not always improve end-to-end
+Pin a digest when deployments require an immutable image identity. If the
+Router shares a GPU with vLLM, measure memory and latency under representative
+concurrency; moving small, batch-one signal models to CUDA does not always improve end-to-end
 latency.
 
 ## Verify the routed path

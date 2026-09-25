@@ -1,6 +1,6 @@
 id: bedrock
 display_name: Amazon Bedrock
-description: Models exposed through Amazon Bedrock-compatible routing.
+description: Custom models exposed through Amazon Bedrock's OpenAI-compatible Chat Completions API.
 category: model_api
 support_tier: native
 protocols:
@@ -19,41 +19,11 @@ presentation:
   logo: monogram
   monogram: AWS
   monochrome: false
-  featured: true
+  featured: false
 conformance:
   status: fixture_verified
   verified_at: 2026-09-04
 models:
-- catalog: amazon/nova-pro-v1
-  relationship: first_party
-  id: amazon.nova-pro-v1:0
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
-- catalog: amazon/nova-premier-v1
-  relationship: first_party
-  id: amazon.nova-premier-v1:0
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
-- catalog: amazon/nova-2-lite
-  relationship: first_party
-  id: amazon.nova-2-lite-v1:0
-  protocols:
-  - openai/chat-completions@1
-  lifecycle: active
-  verification:
-    status: claimed
-    verified_at: 2026-09-05
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
 - catalog: amazon/nova-lite-v1
   relationship: first_party
   id: amazon.nova-lite-v1:0

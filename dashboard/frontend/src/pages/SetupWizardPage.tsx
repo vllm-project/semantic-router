@@ -594,7 +594,11 @@ const SetupWizardPage: React.FC = () => {
 
     try {
       const payload = validatedConfig ?? draftConfig;
-      await activateSetupConfig(payload);
+      const response = await activateSetupConfig(payload);
+      if (response.status === "persisted") {
+        setActivationState("persisted");
+        return;
+      }
       markOnboardingPending();
       await refreshSetupState();
       navigate("/dashboard", { replace: true });
@@ -727,11 +731,14 @@ const SetupWizardPage: React.FC = () => {
                     validationState !== "valid" ||
                     !validatedCounts.canActivate ||
                     activationState === "activating" ||
+                    activationState === "persisted" ||
                     (!readonlyLoading && isReadonly)
                   }
                 >
                   {activationState === "activating"
                     ? "Activating…"
+                    : activationState === "persisted"
+                      ? "Saved; rollout required"
                     : "Activate"}
                 </button>
               )}

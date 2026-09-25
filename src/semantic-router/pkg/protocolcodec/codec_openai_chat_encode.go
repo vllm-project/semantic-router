@@ -61,6 +61,12 @@ func (OpenAIChatCodec) EncodeRequest(request llmprotocol.Request, envelope llmpr
 
 func chatRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	if len(request.ContextManagement) > 0 {
+		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIChatV1,
+			"context_management", "Chat Completions cannot apply Anthropic context edits"); err != nil {
+			return diagnostics, err
+		}
+	}
 	if request.PreviousResponseID == "" && request.ConversationID == "" && request.Truncation == "" {
 		return diagnostics, nil
 	}

@@ -41445,7 +41445,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -43051,7 +43051,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -44066,7 +44066,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {

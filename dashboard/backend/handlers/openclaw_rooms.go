@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 type ClawRoomEntry struct {
@@ -652,6 +654,9 @@ func (h *OpenClawHandler) handlePostRoomMessage(w http.ResponseWriter, r *http.R
 	}
 
 	created := newRoomMessage(*room, senderType, senderID, senderName, content, nil)
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	if err := h.appendRoomMessage(room.ID, created); err != nil {
 		writeJSONError(w, fmt.Sprintf("Failed to save room message: %v", err), http.StatusInternalServerError)
 		return
@@ -694,6 +699,13 @@ func defaultSenderID(senderType, senderName string) string {
 
 // handleRoomStream serves legacy SSE clients when WebSocket is unavailable.
 // Primary room collaboration transport is WebSocket (/rooms/{id}/ws).
+func roomStreamPermissionActive(r *http.Request) bool {
+	if _, authenticated := auth.AuthFromContext(r); !authenticated {
+		return true
+	}
+	return auth.RevalidateRequest(r) == nil
+}
+
 func (h *OpenClawHandler) handleRoomStream(w http.ResponseWriter, r *http.Request, roomID string) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -709,6 +721,10 @@ func (h *OpenClawHandler) handleRoomStream(w http.ResponseWriter, r *http.Reques
 	}
 	if findRoomByID(rooms, roomID) == nil {
 		writeJSONError(w, "room not found", http.StatusNotFound)
+		return
+	}
+	if !roomStreamPermissionActive(r) {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -735,6 +751,9 @@ func (h *OpenClawHandler) handleRoomStream(w http.ResponseWriter, r *http.Reques
 	writeSSE(w, flusher, "connected", map[string]string{"roomId": roomID})
 	if lastAny, ok := h.roomSSELastEvent.Load(roomID); ok {
 		if lastEvent, ok := lastAny.(clawRoomStreamEvent); ok {
+			if !roomStreamPermissionActive(r) {
+				return
+			}
 			writeSSE(w, flusher, lastEvent.Type, lastEvent)
 		}
 	}
@@ -748,10 +767,16 @@ func (h *OpenClawHandler) handleRoomStream(w http.ResponseWriter, r *http.Reques
 		case <-ctx.Done():
 			return
 		case <-heartbeat.C:
+			if !roomStreamPermissionActive(r) {
+				return
+			}
 			_, _ = fmt.Fprintf(w, ": heartbeat\n\n")
 			flusher.Flush()
 		case event, ok := <-clientChan:
 			if !ok {
+				return
+			}
+			if !roomStreamPermissionActive(r) {
 				return
 			}
 			writeSSE(w, flusher, event.Type, event)
