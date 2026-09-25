@@ -266,6 +266,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				item.toolCall = &llmprotocol.ToolCall{}
 			}
 			if event.ToolCall != nil {
+				if event.ToolCall.Kind != "" {
+					item.toolCall.Kind = event.ToolCall.Kind
+				}
 				if event.ToolCall.ID != "" {
 					item.toolCall.ID = event.ToolCall.ID
 				}

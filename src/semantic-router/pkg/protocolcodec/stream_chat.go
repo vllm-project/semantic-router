@@ -110,7 +110,8 @@ type chatChunkToolCallWire struct {
 	Index    int                  `json:"index"`
 	ID       string               `json:"id,omitempty"`
 	Type     string               `json:"type,omitempty"`
-	Function chatFunctionCallWire `json:"function"`
+	Function chatFunctionCallWire `json:"function,omitzero"`
+	Custom   *chatCustomCallWire  `json:"custom,omitempty"`
 }
 
 func (decoder *chatStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
@@ -455,23 +456,19 @@ func (decoder *chatStreamDecoder) chatContentIndex(itemIndex int, kind llmprotoc
 func (decoder *chatStreamDecoder) decodeToolCalls(calls []chatChunkToolCallWire) ([]llmprotocol.Event, error) {
 	events := make([]llmprotocol.Event, 0, len(calls)*2)
 	for _, call := range calls {
-		if call.Type != "" && call.Type != "function" {
-			return nil, llmprotocol.NewError(
-				llmprotocol.ErrorUnsupportedFeature,
-				"unsupported_tool_call",
-				"only function tool calls enter the model protocol",
-				nil,
-			)
+		delta, deltaErr := decodeChatToolCallDelta(call)
+		if deltaErr != nil {
+			return nil, deltaErr
 		}
 		itemIndex := call.Index + 1
 		if !decoder.items[itemIndex] {
-			started, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: itemIndex, Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{ID: call.ID, Name: call.Function.Name}})
+			started, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventOutputItemStarted, ItemIndex: itemIndex, Role: llmprotocol.RoleAssistant, ToolCall: &llmprotocol.ToolCall{Kind: delta.Kind, ID: delta.ID, Name: delta.Name}})
 			if err != nil {
 				return nil, err
 			}
 			events = append(events, started)
 		}
-		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventToolCallDelta, ItemIndex: itemIndex, ToolCall: &llmprotocol.ToolCall{ID: call.ID, Name: call.Function.Name, Arguments: call.Function.Arguments}})
+		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventToolCallDelta, ItemIndex: itemIndex, ToolCall: &delta})
 		if err != nil {
 			return nil, err
 		}
@@ -647,9 +644,9 @@ func (encoder *chatStreamEncoder) applyToolCallDelta(event llmprotocol.Event, ch
 		index = len(encoder.toolIndexes)
 		encoder.toolIndexes[event.ToolCall.ID] = index
 	}
+	call := encodeChatToolCall(*event.ToolCall)
 	choice.Delta.ToolCalls = []chatChunkToolCallWire{{
-		Index: index, ID: event.ToolCall.ID, Type: "function",
-		Function: chatFunctionCallWire{Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments},
+		Index: index, ID: call.ID, Type: call.Type, Function: call.Function, Custom: call.Custom,
 	}}
 	return nil
 }

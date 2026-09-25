@@ -55,16 +55,17 @@ func (state *streamState) validateCompletedItemContent(event llmprotocol.Event) 
 }
 
 func (state *streamState) completeToolItem(event llmprotocol.Event) (llmprotocol.Event, error) {
-	arguments, err := state.finalToolArguments(event)
-	if err != nil {
-		return llmprotocol.Event{}, err
-	}
 	call := state.toolCalls[event.ItemIndex]
 	if event.ToolCall != nil {
-		call, err = state.mergeStreamToolIdentity(call, *event.ToolCall)
+		merged, err := state.mergeStreamToolIdentity(call, *event.ToolCall)
 		if err != nil {
 			return llmprotocol.Event{}, err
 		}
+		call = merged
+	}
+	arguments, err := state.finalToolArguments(event, call.Kind)
+	if err != nil {
+		return llmprotocol.Event{}, err
 	}
 	if err := state.validateStreamToolIdentity(call, true); err != nil {
 		return llmprotocol.Event{}, err
@@ -80,6 +81,17 @@ func (state *streamState) completeToolItem(event llmprotocol.Event) (llmprotocol
 func (state *streamState) mergeStreamToolIdentity(current, incoming llmprotocol.ToolCall) (llmprotocol.ToolCall, error) {
 	if err := state.validateStreamToolIdentity(incoming, false); err != nil {
 		return llmprotocol.ToolCall{}, err
+	}
+	if incoming.Kind != "" {
+		if current.Kind != "" && current.Kind != incoming.Kind {
+			return llmprotocol.ToolCall{}, llmprotocol.NewError(
+				llmprotocol.ErrorUpstreamUnavailable,
+				"stream_tool_identity_mismatch",
+				"upstream stream changed a tool call kind",
+				nil,
+			)
+		}
+		current.Kind = incoming.Kind
 	}
 	if incoming.ID != "" {
 		if current.ID != "" && current.ID != incoming.ID {
@@ -159,7 +171,7 @@ func (state *streamState) validateStreamToolArgumentAppend(current []byte, incom
 	return nil
 }
 
-func (state *streamState) finalToolArguments(event llmprotocol.Event) ([]byte, error) {
+func (state *streamState) finalToolArguments(event llmprotocol.Event, kind llmprotocol.ToolKind) ([]byte, error) {
 	arguments := state.toolArguments[event.ItemIndex]
 	if event.ToolCall != nil && event.ToolCall.Arguments != "" {
 		if err := state.validateStreamToolArgumentAppend(nil, event.ToolCall.Arguments); err != nil {
@@ -170,7 +182,7 @@ func (state *streamState) finalToolArguments(event llmprotocol.Event) ([]byte, e
 		}
 		arguments = []byte(event.ToolCall.Arguments)
 	}
-	if !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
+	if kind == "" && !isJSONObject(arguments, state.policy.Limits.JSONDepth) {
 		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_stream_tool_arguments", "upstream streamed tool arguments are not a JSON object", nil)
 	}
 	return arguments, nil

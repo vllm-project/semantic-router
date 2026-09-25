@@ -266,25 +266,21 @@ func TestOfficialUnsupportedAnthropicToolDiscriminatorsAreTyped(t *testing.T) {
 	}
 }
 
-func TestOfficialUnsupportedChatCustomToolCallsAreTyped(t *testing.T) {
+func TestOfficialChatCustomToolCallsRejectFunctionPayloads(t *testing.T) {
 	engine := NewBuiltinEngine()
 	request := []byte(`{
 		"model":"m",
 		"messages":[
 			{"role":"user","content":"use the grammar"},
-			{"role":"assistant","tool_calls":[{"id":"call_1","type":"custom","custom":{"name":"grammar","input":"answer"}}]}
+			{"role":"assistant","tool_calls":[{"id":"call_1","type":"custom","custom":{"name":"grammar","input":"answer"},"function":{"name":"grammar","arguments":"{}"}}]}
 		]
 	}`)
 	_, _, _, err := engine.DecodeRequest(llmprotocol.OpenAIChatV1, request)
-	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_tool_call")
+	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_tool_call")
 
-	response := []byte(`{
-		"id":"chatcmpl_1","object":"chat.completion","model":"m",
-		"choices":[{"index":0,"message":{"role":"assistant","tool_calls":[{"id":"call_1","type":"custom","custom":{"name":"grammar","input":"answer"}}]},"finish_reason":"tool_calls"}],
-		"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}
-	}`)
-	_, _, _, err = engine.DecodeResponse(llmprotocol.OpenAIChatV1, response)
-	assertProtocolError(t, err, llmprotocol.ErrorUnsupportedFeature, "unsupported_tool_call")
+	request = []byte(`{"model":"m","messages":[{"role":"user","content":"hi"}],"tools":[{"type":"custom","custom":{"name":"grammar"},"function":{"name":"grammar"}}]}`)
+	_, _, _, err = engine.DecodeRequest(llmprotocol.OpenAIChatV1, request)
+	assertProtocolError(t, err, llmprotocol.ErrorInvalidRequest, "invalid_tool_variant")
 }
 
 func TestOfficialChatRequestContentBlockUnionsAreRoleScoped(t *testing.T) {
