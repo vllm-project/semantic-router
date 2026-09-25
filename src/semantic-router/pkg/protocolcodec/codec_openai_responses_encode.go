@@ -14,12 +14,19 @@ func (OpenAIResponsesCodec) EncodeRequest(request llmprotocol.Request, envelope 
 	if err := validateResponsesEncodableRequest(request); err != nil {
 		return nil, nil, err
 	}
+	var diagnostics llmprotocol.Diagnostics
+	if len(request.ContextManagement) > 0 {
+		if err := appendLossy(&diagnostics, policy, request.Trusted.SourceFormat, llmprotocol.OpenAIResponsesV1,
+			"context_management", "Responses cannot apply Anthropic context edits"); err != nil {
+			return nil, diagnostics, err
+		}
+	}
 	wire, err := encodeResponsesRequestWire(request)
 	if err != nil {
-		return nil, nil, err
+		return nil, diagnostics, err
 	}
 	body, err := marshalWire(wire)
-	return body, nil, err
+	return body, diagnostics, err
 }
 
 func validateResponsesEncodableRequest(request llmprotocol.Request) error {

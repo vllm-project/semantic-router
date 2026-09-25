@@ -126,11 +126,11 @@ Feature controls:
 | `DASHBOARD_SETUP_MODE` | Enable the trusted first-run setup flow. |
 | `SR_BENCH_URL` | Server-owned sr-bench service origin; default `http://127.0.0.1:8090`. |
 | `SR_BENCH_TOKEN_ENV` | Environment variable containing the service token; default `SR_BENCH_TOKEN`. The browser never receives this token. |
-| `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. |
+| `ML_PIPELINE_ENABLED` | Enable benchmark, training, and config-generation jobs. Defaults to `false`. |
 | `ML_TRAINING_DIR` | Training script directory for subprocess mode. |
 | `ML_SERVICE_URL` | Use an ML service instead of local subprocesses; co-located sidecars use `http://127.0.0.1:8686`. |
 | `MCP_ENABLED` | Enable MCP server and tool management. |
-| `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. |
+| `OPENCLAW_ENABLED` | Enable OpenClaw provisioning and room workflows. Defaults to `false`; `vllm-sr serve` mounts the container socket only when explicitly enabled. |
 
 OpenClaw provisioning accepts optional `skills` entries as exact IDs from the
 server's skills catalog (`GET /api/openclaw/skills`). IDs use lowercase ASCII

@@ -251,6 +251,9 @@ type Request struct {
 	// (e.g. vLLM enable_thinking) opaquely from decode to encode. It is not
 	// interpreted by the router.
 	ChatTemplateKwargs json.RawMessage
+	// ContextManagement carries Anthropic context edits through routing and
+	// same-format re-encoding. Other wire formats must reject or report its loss.
+	ContextManagement json.RawMessage
 	// CacheSalt isolates backend prefix-cache entries; it is never prompt text.
 	CacheSalt *string
 	// PromptCacheKey is an OpenAI cache-routing hint. It never changes model
