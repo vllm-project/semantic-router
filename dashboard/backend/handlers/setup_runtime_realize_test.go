@@ -40,6 +40,9 @@ func managedSetupRuntime(t *testing.T) (string, *setupmode.Resolver) {
 
 func importSetupRuntimePatch(t *testing.T, path string, resolver *setupmode.Resolver, patch map[string]interface{}) json.RawMessage {
 	t.Helper()
+	// The fixture server is on loopback; declare it the way an operator would
+	// declare a real internal target (#1388).
+	allowLoopbackForTest(t)
 	patch["version"] = "v0.3"
 	raw, err := yaml.Marshal(patch)
 	if err != nil {

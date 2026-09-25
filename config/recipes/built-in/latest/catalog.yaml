@@ -476,7 +476,7 @@ providers:
       source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
 - id: bedrock
   display_name: Amazon Bedrock
-  description: Models exposed through Amazon Bedrock-compatible routing.
+  description: Custom models exposed through Amazon Bedrock's OpenAI-compatible Chat Completions API.
   category: model_api
   support_tier: native
   protocols:
@@ -495,41 +495,11 @@ providers:
     logo: monogram
     monogram: AWS
     monochrome: false
-    featured: true
+    featured: false
   conformance:
     status: fixture_verified
     verified_at: '2026-09-04'
-  models:
-  - catalog: amazon/nova-pro-v1
-    relationship: first_party
-    id: amazon.nova-pro-v1:0
-    protocols:
-    - openai/chat-completions@1
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
-  - catalog: amazon/nova-premier-v1
-    relationship: first_party
-    id: amazon.nova-premier-v1:0
-    protocols:
-    - openai/chat-completions@1
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
-  - catalog: amazon/nova-2-lite
-    relationship: first_party
-    id: amazon.nova-2-lite-v1:0
-    protocols:
-    - openai/chat-completions@1
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+  models: []
 - id: celeris
   display_name: Celeris
   description: Low-latency Celeris diffusion models through an OpenAI-compatible API.
@@ -1458,17 +1428,6 @@ providers:
   conformance:
     status: unverified
   models:
-  - catalog: moonshot/kimi-k2.5
-    relationship: first_party
-    id: kimi-k2.5
-    protocols:
-    - openai/chat-completions@1
-    reasoning_transport: thinking_object
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://platform.moonshot.ai/docs/api/chat
   - catalog: moonshot/kimi-k2.6
     relationship: first_party
     id: kimi-k2.6
@@ -2012,6 +1971,16 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://openrouter.ai/bytedance-seed/seed-2-1-turbo
+  - catalog: amazon/nova-2-lite
+    relationship: gateway
+    id: amazon/nova-2-lite-v1
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://openrouter.ai/amazon/nova-2-lite-v1
   - catalog: amazon/nova-premier-v1
     relationship: gateway
     id: amazon/nova-premier-v1
@@ -4571,12 +4540,12 @@ models:
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html
   family: nova-1
   lifecycle: active
   limits:
     context_window_size: 1000000
-    max_output_tokens: 10000
+    max_output_tokens: 25000
   capabilities:
   - chat
   - tools
@@ -4593,8 +4562,8 @@ models:
   verification:
     authority: Amazon
     status: claimed
-    verified_at: '2026-09-05'
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    verified_at: '2026-09-24'
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html
   tags:
   - proprietary
   - frontier
@@ -4612,12 +4581,12 @@ models:
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html
   family: nova-1
   lifecycle: active
   limits:
     context_window_size: 300000
-    max_output_tokens: 10000
+    max_output_tokens: 5000
   capabilities:
   - chat
   - tools
@@ -4634,8 +4603,8 @@ models:
   verification:
     authority: Amazon
     status: claimed
-    verified_at: '2026-09-05'
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    verified_at: '2026-09-24'
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html
   tags:
   - proprietary
   - multimodal
