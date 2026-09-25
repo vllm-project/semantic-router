@@ -113,6 +113,9 @@ type InstructionBlock struct {
 }
 
 type ToolCall struct {
+	// Kind is empty for a function call. A custom call carries the model's
+	// free-form input in Arguments instead of a JSON object.
+	Kind      ToolKind
 	ID        string
 	Name      string
 	Arguments string
@@ -129,12 +132,26 @@ type ToolResult struct {
 	DeferredLink bool
 }
 
+// ToolKind separates JSON Schema function tools, the empty kind, from OpenAI
+// custom tools, which take free-form text that a grammar may constrain.
+type ToolKind string
+
+const ToolKindCustom ToolKind = "custom"
+
 type Tool struct {
+	Kind        ToolKind
 	Name        string
 	Description string
 	Strict      *bool
 	InputSchema json.RawMessage
-	Cache       *CacheDirective
+	// CustomFormat constrains a custom tool's input. Nil means unconstrained text.
+	CustomFormat *CustomToolFormat
+	Cache        *CacheDirective
+}
+
+type CustomToolFormat struct {
+	Syntax     string
+	Definition string
 }
 
 type ToolChoiceMode string
