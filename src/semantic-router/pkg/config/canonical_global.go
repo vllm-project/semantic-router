@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v2"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 )
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
@@ -19,16 +21,17 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
-	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
-	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
-	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
-	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
-	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
-	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
+	ConfigSource              ConfigSource             `yaml:"config_source,omitempty"`
+	Strategy                  RoutingStrategy          `yaml:"strategy,omitempty"`
+	AutoModelName             string                   `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            *[]string                `yaml:"auto_model_names,omitempty"`
+	IncludeConfigModelsInList bool                     `yaml:"include_config_models_in_list"`
+	ClearRouteCache           bool                     `yaml:"clear_route_cache"`
+	StreamedBody              CanonicalStreamedBody    `yaml:"streamed_body"`
+	SkipProcessing            SkipProcessingConfig     `yaml:"skip_processing"`
+	ModelSelection            ModelSelectionConfig     `yaml:"model_selection"`
+	Learning                  RouterLearningConfig     `yaml:"learning,omitempty"`
+	Fallback                  *fallback.FallbackPolicy `yaml:"fallback,omitempty" json:"fallback,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -66,12 +69,14 @@ type CanonicalIntegrationGlobal struct {
 // CanonicalModelCatalog groups router-owned model assets and the module
 // configs that resolve through those assets.
 type CanonicalModelCatalog struct {
-	Embeddings CanonicalEmbeddingModels   `yaml:"embeddings"`
-	System     CanonicalSystemModels      `yaml:"system"`
-	External   []ExternalModelConfig      `yaml:"external,omitempty"`
-	KBs        []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
-	Modules    CanonicalModelModules      `yaml:"modules"`
-	Admission  map[string]AdmissionConfig `yaml:"admission,omitempty"`
+	Bindings    map[string]ModelBinding    `yaml:"bindings,omitempty"`
+	Deployments map[string]ModelDeployment `yaml:"deployments,omitempty"`
+	Embeddings  CanonicalEmbeddingModels   `yaml:"embeddings"`
+	System      CanonicalSystemModels      `yaml:"system"`
+	External    []ExternalModelConfig      `yaml:"external,omitempty"`
+	KBs         []KnowledgeBaseConfig      `yaml:"kbs,omitempty"`
+	Modules     CanonicalModelModules      `yaml:"modules"`
+	Admission   map[string]AdmissionConfig `yaml:"admission,omitempty"`
 }
 
 // CanonicalEmbeddingModels groups embedding-related model assets.
@@ -82,6 +87,7 @@ type CanonicalEmbeddingModels struct {
 // CanonicalModelModules groups configurable capability modules built on top of
 // router-owned model assets.
 type CanonicalModelModules struct {
+	Safety                  SafetyModelsConfig              `yaml:"safety"`
 	PromptCompression       PromptCompressionConfig         `yaml:"prompt_compression"`
 	PromptGuard             CanonicalPromptGuardModule      `yaml:"prompt_guard"`
 	Classifier              CanonicalClassifierModule       `yaml:"classifier"`
@@ -93,6 +99,8 @@ type CanonicalModelModules struct {
 
 // CanonicalSystemModels centralizes stable capability bindings for built-in models.
 type CanonicalSystemModels struct {
+	Safety                 string `yaml:"safety,omitempty"`
+	Hazard                 string `yaml:"hazard,omitempty"`
 	PromptGuard            string `yaml:"prompt_guard,omitempty"`
 	DomainClassifier       string `yaml:"domain_classifier,omitempty"`
 	PIIClassifier          string `yaml:"pii_classifier,omitempty"`
@@ -187,6 +195,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err != nil {
 		return CanonicalGlobal{}, err
 	}
+	normalizeSparseCanonicalEmbeddingOverride(&resolved, rawOverride)
 	if err := normalizeSparseCanonicalCategoryOverride(&resolved, rawOverride); err != nil {
 		return CanonicalGlobal{}, err
 	}
@@ -194,6 +203,27 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 		return CanonicalGlobal{}, err
 	}
 	return resolved, nil
+}
+
+// Representation defaults belong to the default mmBERT model. Selecting a
+// different family must not silently request mmBERT's layer 22 from that owner.
+func normalizeSparseCanonicalEmbeddingOverride(resolved *CanonicalGlobal, raw *StructuredPayload) {
+	if raw == nil {
+		return
+	}
+	global, err := raw.AsStringMap()
+	if err != nil {
+		return
+	}
+	catalog := nestedStringMap(global["model_catalog"])
+	embeddings := nestedStringMap(catalog["embeddings"])
+	semantic := nestedStringMap(embeddings["semantic"])
+	settings := nestedStringMap(semantic["embedding_config"])
+	if model, ok := settings["model_type"].(string); ok && strings.TrimSpace(model) != "" && strings.ToLower(strings.TrimSpace(model)) != "mmbert" {
+		if !hasRawKey(settings, "target_layer") {
+			resolved.ModelCatalog.Embeddings.Semantic.EmbeddingConfig.TargetLayer = 0
+		}
+	}
 }
 
 func mergeCanonicalGlobalOverride(
@@ -221,6 +251,9 @@ func normalizeSparseCanonicalCategoryOverride(
 	resolved *CanonicalGlobal,
 	rawOverride *StructuredPayload,
 ) error {
+	if err := normalizeCanonicalPromptGuardBackend(&resolved.ModelCatalog.Modules.PromptGuard.PromptGuardConfig, rawOverride); err != nil {
+		return err
+	}
 	categoryModel := &resolved.ModelCatalog.Modules.Classifier.Domain.CategoryModel
 	if rawDomain := rawCanonicalCategoryOverride(rawOverride); rawDomain != nil {
 		if hasRawKey(rawDomain, "backend") && !hasActiveRawCategoryLocalSelector(rawDomain) {
@@ -242,7 +275,23 @@ func normalizeSparseCanonicalCategoryOverride(
 			categoryModel.Variant = ""
 		}
 	}
+	normalizeCanonicalPIIBackend(&resolved.ModelCatalog.Modules.Classifier.PII.PIIModel, rawOverride)
 	return normalizeCanonicalCategoryVariant(categoryModel)
+}
+
+// normalizeCanonicalPIIBackend applies the domain rule to PII: the canonical
+// default selects the local mmBERT PII model, and a sparse override that
+// attaches a remote backend must replace that inherited selector rather than be
+// rejected for mixing local and remote. Only a backend key the operator wrote
+// counts; an unrelated sparse pii override keeps the default. model_ref still
+// resolves, so the mapping file the token_spans adapter needs is provisioned
+// with the local model.
+func normalizeCanonicalPIIBackend(model *PIIModel, rawOverride *StructuredPayload) {
+	rawPII := rawCanonicalClassifierModuleOverride(rawOverride, "pii")
+	if rawPII == nil || !hasRawKey(rawPII, "backend") || rawBoolValue(rawPII, "use_mmbert_32k") {
+		return
+	}
+	model.UseMmBERT32K = false
 }
 
 // normalizeCanonicalCategoryVariant resolves legacy selectors after a sparse
@@ -269,6 +318,13 @@ func normalizeCanonicalCategoryVariant(model *CategoryModel) error {
 }
 
 func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]interface{} {
+	return rawCanonicalClassifierModuleOverride(rawOverride, "domain")
+}
+
+// rawCanonicalClassifierModuleOverride returns the raw (pre-merge) mapping the
+// override supplied for one classifier module, so normalization can tell an
+// inherited default from a key the operator actually wrote.
+func rawCanonicalClassifierModuleOverride(rawOverride *StructuredPayload, module string) map[string]interface{} {
 	if rawOverride == nil || rawOverride.IsEmpty() {
 		return nil
 	}
@@ -279,7 +335,7 @@ func rawCanonicalCategoryOverride(rawOverride *StructuredPayload) map[string]int
 	modelCatalog := nestedStringMap(global["model_catalog"])
 	modules := nestedStringMap(modelCatalog["modules"])
 	classifier := nestedStringMap(modules["classifier"])
-	return nestedStringMap(classifier["domain"])
+	return nestedStringMap(classifier[module])
 }
 
 func hasRawKey(raw map[string]interface{}, key string) bool {
@@ -327,6 +383,9 @@ func applyCanonicalRouterGlobal(cfg *RouterConfig, router CanonicalRouterGlobal)
 	cfg.SkipProcessing = router.SkipProcessing
 	cfg.ModelSelection = router.ModelSelection
 	cfg.RouterLearning = router.Learning
+	if router.Fallback != nil && cfg.Fallback == nil {
+		cfg.Fallback = router.Fallback.Clone()
+	}
 }
 
 func applyCanonicalServiceGlobal(cfg *RouterConfig, services CanonicalServiceGlobal) {
@@ -352,6 +411,8 @@ func applyCanonicalIntegrationGlobal(cfg *RouterConfig, integrations CanonicalIn
 }
 
 func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalModelCatalog) {
+	cfg.ModelDeployments = cloneModelMap(modelCatalog.Deployments)
+	cfg.GlobalModelBindings = cloneModelMap(modelCatalog.Bindings)
 	cfg.ExternalModels = append([]ExternalModelConfig(nil), modelCatalog.External...)
 	cfg.EmbeddingModels = modelCatalog.Embeddings.Semantic
 	cfg.KnowledgeBases = append([]KnowledgeBaseConfig(nil), modelCatalog.KBs...)
@@ -362,6 +423,7 @@ func applyCanonicalModelCatalogGlobal(cfg *RouterConfig, modelCatalog CanonicalM
 	cfg.HallucinationMitigation = modelCatalog.Modules.HallucinationMitigation.runtimeConfig()
 	cfg.FeedbackDetector = modelCatalog.Modules.FeedbackDetector.FeedbackDetectorConfig
 	cfg.ModalityDetector = modelCatalog.Modules.ModalityDetector
+	cfg.SafetyModels = modelCatalog.Modules.Safety
 	cfg.ModelAdmission = cloneAdmissionMap(modelCatalog.Admission)
 }
 
@@ -382,6 +444,14 @@ func resolveModuleModelRefs(global *CanonicalGlobal) error {
 	}
 
 	var err error
+	for name, head := range map[string]*SequenceHeadModelConfig{
+		"safety": &global.ModelCatalog.Modules.Safety.Safety,
+		"hazard": &global.ModelCatalog.Modules.Safety.Hazard,
+	} {
+		if head.ModelID, err = resolveSystemModelRef(head.ModelRef, head.ModelID, global.ModelCatalog.System); err != nil {
+			return fmt.Errorf("global.model_catalog.modules.safety.%s: %w", name, err)
+		}
+	}
 	if global.ModelCatalog.Modules.PromptGuard.ModelID, err = resolveSystemModelRef(
 		global.ModelCatalog.Modules.PromptGuard.ModelRef,
 		global.ModelCatalog.Modules.PromptGuard.ModelID,
@@ -444,6 +514,10 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 
 	var modelID string
 	switch ref {
+	case "safety":
+		modelID = catalog.Safety
+	case "hazard":
+		modelID = catalog.Hazard
 	case "prompt_guard":
 		modelID = catalog.PromptGuard
 	case "domain_classifier":
@@ -465,4 +539,26 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 		return "", fmt.Errorf("model_ref %q is not configured in global.model_catalog.system", ref)
 	}
 	return modelID, nil
+}
+
+// Explicit backend overrides clear only inherited defaults; a legacy protocol
+// in canonical input must be converted by the migration command.
+func normalizeCanonicalPromptGuardBackend(model *PromptGuardConfig, rawOverride *StructuredPayload) error {
+	if rawOverride == nil || rawOverride.IsEmpty() {
+		return nil
+	}
+	var global map[string]interface{}
+	if err := rawOverride.DecodeInto(&global); err != nil {
+		return err
+	}
+	catalog := nestedStringMap(global["model_catalog"])
+	modules := nestedStringMap(catalog["modules"])
+	raw := nestedStringMap(modules["prompt_guard"])
+	if protocol, ok := raw["protocol"].(string); ok && strings.TrimSpace(protocol) != "" {
+		return fmt.Errorf("global.model_catalog.modules.prompt_guard.protocol is legacy; run vllm-sr config migrate to declare a named backend")
+	}
+	if hasRawKey(raw, "backend") && !hasRawKey(raw, "variant") {
+		model.Variant = ""
+	}
+	return nil
 }

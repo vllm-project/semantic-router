@@ -141,7 +141,7 @@ def test_migrate_materializes_legacy_router_owned_anthropic_backend(tmp_path):
     anthropic_cluster = next(
         cluster
         for cluster in rendered["static_resources"]["clusters"]
-        if cluster["name"] == "claude_legacy_cluster"
+        if cluster["name"] == "model_claude_2dlegacy_cluster"
     )
     endpoint = anthropic_cluster["load_assignment"]["endpoints"][0]["lb_endpoints"][0][
         "endpoint"
@@ -558,10 +558,13 @@ def test_cli_config_migrate_writes_canonical_yaml(tmp_path: Path):
     assert result.stderr == ""
     assert "✓ Configuration migrated" in result.stdout
     assert "Files" in result.stdout
-    assert f"Source  {config_path}" in result.stdout
+    # Terminal fields wrap long paths; preserve all path characters when
+    # checking the displayed source and output on platforms with long tmp roots.
+    compact_output = "".join(result.stdout.split())
+    assert f"Source{config_path}" in compact_output
 
     migrated_path = tmp_path / "config.migrated.yaml"
-    assert f"Output  {migrated_path}" in result.stdout
+    assert f"Output{migrated_path}" in compact_output
     migrated = yaml.safe_load(migrated_path.read_text())
 
     assert migrated["version"] == "v0.3"

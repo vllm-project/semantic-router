@@ -15,9 +15,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/fallback"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
@@ -33,6 +35,10 @@ import (
 
 // OpenAIRouter is an Envoy ExtProc server that routes OpenAI API requests.
 type OpenAIRouter struct {
+	rerankers            map[config.RecipeName]modelruntime.PairScorer
+	Embeddings           *embedding.Set
+	serviceEmbeddings    *embedding.Set
+	cacheEmbeddings      *embedding.Set
 	Config               *config.RouterConfig
 	CategoryDescriptions []string
 	Classifier           *classification.Classifier
@@ -47,6 +53,7 @@ type OpenAIRouter struct {
 	CompressionRecovery   contextcompression.RecoveryStore
 	CompressionEmbedding  embedding.Provider
 	CompressionScorer     contextcompression.RelevanceScorer
+	compressionScorers    map[string]contextcompression.RelevanceScorer
 	contextCompressionMu  sync.Mutex
 	ToolsDatabase         *tools.ToolsDatabase
 	ToolsRegistry         *tools.Registry // retriever strategy registry
@@ -77,6 +84,8 @@ type OpenAIRouter struct {
 	ProtocolCodecs       *protocolcodec.Registry
 	looperClient         *looper.Client
 
+	memoryPersistence *memory.PersistenceRunner
+
 	// CredentialResolver resolves per-user LLM API keys from multiple sources
 	// (ext_authz injected headers -> static config fallback).
 	CredentialResolver *authz.CredentialResolver
@@ -89,10 +98,21 @@ type OpenAIRouter struct {
 	// paths back through package-global API-server state.
 	RuntimeRegistry *routerruntime.Registry
 
+	// FallbackOrchestrator manages bounded execution and fallback across model candidates.
+	FallbackOrchestrator        *fallback.Orchestrator
+	RecipeFallbackOrchestrators map[config.RecipeName]*fallback.Orchestrator
+	fallbackCaller              fallbackTransportCaller
+
 	routerLearningMu        sync.Mutex
 	routerLearningRuntime   *routerLearningRuntime
+	generation              *routerGeneration
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
+
+	// WorkflowStateService owns the shared workflow tool-state store so that
+	// pause/resume works across independent HTTP requests without leaking
+	// backend connections. Closed with the rest of the generation resources.
+	WorkflowStateService *looper.WorkflowStateService
 
 	resources *resourceScope
 }
@@ -260,4 +280,16 @@ func (r *OpenAIRouter) RegisterToolStrategy(name string, retriever tools.ToolRet
 		r.ToolsRegistry = tools.NewRegistry()
 	}
 	r.ToolsRegistry.Register(name, retriever)
+}
+
+func (r *OpenAIRouter) fallbackOrchestratorForContext(ctx *RequestContext) *fallback.Orchestrator {
+	if r == nil {
+		return nil
+	}
+	if ctx != nil && ctx.Routing.RecipeName() != "" && r.RecipeFallbackOrchestrators != nil {
+		if orch, ok := r.RecipeFallbackOrchestrators[ctx.Routing.RecipeName()]; ok && orch != nil {
+			return orch
+		}
+	}
+	return r.FallbackOrchestrator
 }

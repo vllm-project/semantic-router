@@ -5,11 +5,22 @@ package apiserver
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
+
+func (s *ClassificationAPIServer) rejectConfigMapKnowledgeBaseMutation(w http.ResponseWriter) bool {
+	if _, managed := configwriter.ConfigMapTargetFromEnv(); !managed {
+		return false
+	}
+	// Managed KB definitions and embedding assets live under the config base
+	// directory. A ConfigMap update can persist the YAML reference, but it cannot
+	// persist these files through a pod rollout. Reject before staging anything.
+	s.writeErrorResponse(w, http.StatusForbidden, "KB_ASSET_STORAGE_READ_ONLY", "Managed knowledge base assets cannot be edited on this ConfigMap-backed deployment. Update the knowledge base source and roll out the deployment.")
+	return true
+}
 
 func (s *ClassificationAPIServer) handleListKnowledgeBases(w http.ResponseWriter, _ *http.Request) {
 	cfg := s.currentConfig()
@@ -49,6 +60,9 @@ func (s *ClassificationAPIServer) handleGetKnowledgeBase(w http.ResponseWriter, 
 }
 
 func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	if s.rejectConfigMapKnowledgeBaseMutation(w) {
+		return
+	}
 	guard, ok := s.acquireConfigMutationGuard(w)
 	if !ok {
 		return
@@ -93,6 +107,9 @@ func (s *ClassificationAPIServer) handleCreateKnowledgeBase(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	if s.rejectConfigMapKnowledgeBaseMutation(w) {
+		return
+	}
 	guard, ok := s.acquireConfigMutationGuard(w)
 	if !ok {
 		return
@@ -151,6 +168,9 @@ func (s *ClassificationAPIServer) handleUpdateKnowledgeBase(w http.ResponseWrite
 }
 
 func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWriter, r *http.Request) {
+	if s.rejectConfigMapKnowledgeBaseMutation(w) {
+		return
+	}
 	guard, ok := s.acquireConfigMutationGuard(w)
 	if !ok {
 		return
@@ -170,16 +190,19 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 
 	paths := resolveConfigPersistencePaths(s.configPath)
 	baseDir := knowledgeBaseConfigBaseDir(cfg, s.configPath)
-	existingData, err := os.ReadFile(paths.sourcePath)
+	existingData, err := readPersistedSourceConfig(paths.sourcePath)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("failed to read config: %v", err))
 		return
 	}
 
-	removeTxn, err := stageManagedKnowledgeBaseRemoval(baseDir, existingKB.Source.Path, name)
-	if err != nil {
-		s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", err.Error())
-		return
+	var removeTxn *managedKnowledgeBaseAssetsTxn
+	if s.runtimeRegistry == nil {
+		removeTxn, err = stageManagedKnowledgeBaseRemoval(baseDir, existingKB.Source.Path, name)
+		if err != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", err.Error())
+			return
+		}
 	}
 	committed := false
 	defer rollbackManagedKnowledgeBaseRemoval(removeTxn, &committed)
@@ -204,9 +227,11 @@ func (s *ClassificationAPIServer) handleDeleteKnowledgeBase(w http.ResponseWrite
 		removeTxn.Commit()
 		committed = true
 	}
-	s.writeJSONResponse(w, http.StatusOK, knowledgeBaseDeleteResponse{
-		Status: "deleted",
-		Name:   name,
+	activation, status := s.knowledgeBaseActivationStatus(paths.runtimePath, updatedYAML, http.StatusOK)
+	s.writeJSONResponse(w, status, knowledgeBaseDeleteResponse{
+		knowledgeBaseActivation: activation,
+		Status:                  "deleted",
+		Name:                    name,
 	})
 }
 
@@ -244,6 +269,24 @@ func (s *ClassificationAPIServer) writableKnowledgeBaseConfig(w http.ResponseWri
 		s.writeErrorResponse(w, http.StatusInternalServerError, "NO_CONFIG_PATH", "Router configPath not set")
 		return nil, false
 	}
+	if s.runtimeRegistry != nil {
+		// Callers hold the existing mutation guard. A second write must not
+		// derive its KB list from the old generation and discard the candidate.
+		paths := resolveConfigPersistencePaths(s.configPath)
+		candidateHash, err := configFileHash(paths.runtimePath)
+		if err != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "CONFIG_HASH_ERROR", "Unable to verify the pending runtime configuration")
+			return nil, false
+		}
+		if activeHash := s.activeConfigDocumentHash(); activeHash == "" || activeHash != candidateHash {
+			if s.configActivationStatus(candidateHash, activeHash) == "failed" {
+				s.writeErrorResponse(w, http.StatusConflict, "CONFIG_ACTIVATION_FAILED", "The saved configuration failed activation. Correct or roll back the full configuration before editing knowledge bases.")
+				return nil, false
+			}
+			s.writeErrorResponse(w, http.StatusConflict, "CONFIG_ACTIVATION_PENDING", "A saved configuration is awaiting activation. Wait for activation or restore the previous configuration before editing knowledge bases.")
+			return nil, false
+		}
+	}
 	return cfg, true
 }
 
@@ -257,10 +300,19 @@ func (s *ClassificationAPIServer) persistManagedKnowledgeBase(
 ) error {
 	paths := resolveConfigPersistencePaths(s.configPath)
 	baseDir := knowledgeBaseConfigBaseDir(cfg, s.configPath)
-	existingData, err := os.ReadFile(paths.sourcePath)
+	existingData, err := readPersistedSourceConfig(paths.sourcePath)
 	if err != nil {
 		s.writeErrorResponse(w, http.StatusInternalServerError, "READ_ERROR", fmt.Sprintf("failed to read config: %v", err))
 		return err
+	}
+	if s.runtimeRegistry != nil {
+		revisionPath, revisionErr := newManagedKnowledgeBaseRevisionPath(kb.Name)
+		if revisionErr != nil {
+			s.writeErrorResponse(w, http.StatusInternalServerError, "ASSET_STAGE_ERROR", revisionErr.Error())
+			return revisionErr
+		}
+		kb.Source = config.KnowledgeBaseSource{Path: revisionPath, Manifest: knowledgeBaseManifestName}
+		desired = desiredKnowledgeBases(desired, kb)
 	}
 
 	assetTxn, err := stageManagedKnowledgeBaseAssets(baseDir, kb.Source.Path, payload)
@@ -296,7 +348,9 @@ func (s *ClassificationAPIServer) persistManagedKnowledgeBase(
 		s.writeErrorResponse(w, http.StatusInternalServerError, "KB_READ_ERROR", err.Error())
 		return err
 	}
-	s.writeJSONResponse(w, successStatus, document)
+	activation, status := s.knowledgeBaseActivationStatus(paths.runtimePath, updatedYAML, successStatus)
+	document.knowledgeBaseActivation = activation
+	s.writeJSONResponse(w, status, document)
 	return nil
 }
 

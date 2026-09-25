@@ -1,5 +1,6 @@
 export const AGENT_SKILL_PATH = '/install/agent/vllm-sr/SKILL.md'
 export const AGENT_SKILL_URL = `https://vllm-sr.ai${AGENT_SKILL_PATH}`
+export const AGENT_INSTALL_DOC_PATH = '/docs/installation/agent'
 
 export const CURL_INSTALL_COMMAND = 'curl -fsSL https://vllm-sr.ai/install.sh | bash -s -- --channel stable'
 

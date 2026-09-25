@@ -6,3 +6,9 @@ pub mod pooling;
 
 pub use mmbert_embedding::{MatryoshkaConfig, MmBertEmbeddingConfig, MmBertEmbeddingModel};
 pub use multimodal_embedding::{MultiModalConfig, MultiModalEmbeddingModel};
+
+pub(crate) mod runtime_identity;
+#[cfg(test)]
+mod runtime_identity_test;
+
+pub mod omni;

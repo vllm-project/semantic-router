@@ -12,7 +12,7 @@ import (
 const valuesFile = "e2e/profiles/response-api/values.yaml"
 
 var resourceManifests = []string{
-	"deploy/kubernetes/response-api/mock-vllm.yaml",
+	"deploy/kubernetes/response-api/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -55,6 +55,7 @@ func (p *Profile) Teardown(ctx context.Context, opts *framework.TeardownOptions)
 // GetTestCases returns the list of test cases for this profile.
 func (p *Profile) GetTestCases() []string {
 	return []string{
+		"provider-native-image-generation",
 		"response-api-create",
 		"response-api-get",
 		"response-api-delete",
@@ -71,6 +72,8 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-edge-special-characters",
 		"response-api-edge-concurrent-requests",
 		"response-api-image-file-id",
+		"response-api-image-generation",
+		"response-api-image-generation-stream",
 		"input-modality-cross-protocol",
 		"model-catalog-astra",
 		"protocol-codec-chat-backend-buffered-matrix",

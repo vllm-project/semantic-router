@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
@@ -149,7 +150,44 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 
 	inbound := normalizeProtocol(string(ctx.SourceFormat))
 	outbound := normalizeProtocol(string(ctx.TargetFormat))
+	value, included := formatProtocolDiagnostics(diagnostics)
+	for _, diagnostic := range diagnostics[:included] {
+		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
+	}
+	builder.addString(headers.VSRProtocolWarnings, value)
+}
 
+// recordBufferedProtocolDiagnostics reports only diagnostics discovered after
+// response headers. The body phase replaces the bounded header with the full
+// list, but diagnostics already reported in the header phase must not be
+// counted again. Diagnostics omitted by truncation follow the same accounting
+// rule as addProtocolDiagnostics.
+func recordBufferedProtocolDiagnostics(ctx *RequestContext, before int) (string, bool) {
+	if ctx.VSRCacheHit || len(ctx.ProtocolDiagnostics) <= before {
+		return "", false
+	}
+	value, included := formatProtocolDiagnostics(ctx.ProtocolDiagnostics)
+	if included > before {
+		inbound := normalizeProtocol(string(ctx.SourceFormat))
+		outbound := normalizeProtocol(string(ctx.TargetFormat))
+		for _, diagnostic := range ctx.ProtocolDiagnostics[before:included] {
+			recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
+		}
+	}
+	return value, true
+}
+
+// formatProtocolDiagnostics is shared by the early header phase and the
+// buffered body phase. The latter can discover diagnostics after Envoy has
+// already asked for response headers, so it must replace the warning header
+// with the full bounded list without counting early diagnostics twice.
+func formatProtocolDiagnostics(diagnostics llmprotocol.Diagnostics) (string, int) {
+	if len(diagnostics) == 0 {
+		return "", 0
+	}
+	// Reserve the largest possible truncation trailer before appending entries.
+	// A single diagnostic obeys the same bound as a longer warning list.
+	trailerBudget := len(fmt.Sprintf("%s;%s;count=%d", llmprotocol.DiagnosticTruncated, "diagnostics_truncated", len(diagnostics))) + 1
 	var sb strings.Builder
 	truncatedAt := -1
 	for i, diagnostic := range diagnostics {
@@ -158,7 +196,7 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 		if sb.Len() > 0 {
 			separatorLen = 1
 		}
-		if sb.Len()+separatorLen+len(entry) > lossinessHeaderSizeLimit && sb.Len() > 0 {
+		if sb.Len()+separatorLen+len(entry) > lossinessHeaderSizeLimit-trailerBudget {
 			truncatedAt = i
 			break
 		}
@@ -166,7 +204,6 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 			sb.WriteByte(',')
 		}
 		sb.WriteString(entry)
-		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
 	}
 
 	if truncatedAt >= 0 {
@@ -181,7 +218,11 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 		sb.WriteString(trailer)
 	}
 
-	builder.addString(headers.VSRProtocolWarnings, sb.String())
+	included := len(diagnostics)
+	if truncatedAt >= 0 {
+		included = truncatedAt
+	}
+	return sb.String(), included
 }
 
 func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {
@@ -192,29 +233,21 @@ func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {
 	)
 }
 
-// sanitizeWarningField percent-encodes the format separators ',' and
-// ';' so a pathological JSON-path field name cannot break the
-// single-line encoding, and strips CR/LF so a hostile value cannot
-// inject a new header line. PR2's parser never produces such paths;
-// this is belt-and-suspenders.
+// sanitizeWarningField percent-encodes the format separators, percent signs,
+// and ASCII control bytes so a JSON field name cannot break the warning list
+// or produce a header value rejected by Envoy.
 func sanitizeWarningField(field string) string {
-	if !strings.ContainsAny(field, ",;\r\n") {
-		return field
-	}
+	const hex = "0123456789ABCDEF"
 	var sb strings.Builder
 	sb.Grow(len(field))
-	for _, r := range field {
-		switch r {
-		case ',':
-			sb.WriteString("%2C")
-		case ';':
-			sb.WriteString("%3B")
-		case '\r':
-			sb.WriteString("%0D")
-		case '\n':
-			sb.WriteString("%0A")
-		default:
-			sb.WriteRune(r)
+	for i := 0; i < len(field); i++ {
+		b := field[i]
+		if b == ',' || b == ';' || b == '%' || b < 0x20 || b == 0x7f {
+			sb.WriteByte('%')
+			sb.WriteByte(hex[b>>4])
+			sb.WriteByte(hex[b&0x0f])
+		} else {
+			sb.WriteByte(b)
 		}
 	}
 	return sb.String()
@@ -334,18 +367,27 @@ func addRetentionDirectiveHeaders(builder *responseHeaderMutationBuilder, ctx *R
 
 // addFinalDecisionHeaders adds the final routing facts that ride on the default
 // surface of every successful non-cache-hit response: the selected decision and
-// its confidence, the selection algorithm, the selected model, and the replay-id
-// entry point.
+// its confidence, the selection algorithm, the selected model and how long
+// choosing it took, and the replay-id entry point.
 func addFinalDecisionHeaders(builder *responseHeaderMutationBuilder, ctx *RequestContext) {
 	builder.addString(headers.VSRSelectedRecipe, string(ctx.Routing.RecipeName()))
 	builder.addString(headers.VSRSelectedDecision, ctx.VSRSelectedDecisionName)
-	if ctx.VSRSelectedDecisionName != "" {
+	if ctx.VSRSelectedDecisionName != "" && ctx.VSRSelectedDecisionConfidenceScored {
 		builder.addNonNegativeFloat(headers.VSRSelectedConfidence, ctx.VSRSelectedDecisionConfidence)
 	}
 	builder.addString(headers.VSRSelectedAlgorithm, ctx.VSRSelectionMethod)
 	builder.addString(headers.VSRSelectedModel, ctx.VSRSelectedModel)
+	if ctx.RoutingLatency > 0 {
+		builder.addString(headers.VSRRoutingLatencyMs, formatMilliseconds(ctx.RoutingLatency))
+	}
 	builder.addString(headers.VSRAppliedUnknownPolicy, appliedUnknownPolicyHeader(ctx))
 	builder.addString(headers.RouterReplayID, ctx.RouterReplayID)
+}
+
+// formatMilliseconds keeps sub-millisecond precision: keyword routing usually
+// finishes well under 1 ms, which whole milliseconds would report as 0.
+func formatMilliseconds(d time.Duration) string {
+	return strconv.FormatFloat(float64(d)/float64(time.Millisecond), 'f', 3, 64)
 }
 
 func appliedUnknownPolicyHeader(ctx *RequestContext) string {
@@ -404,6 +446,7 @@ func addMatchedSignalHeaders(builder *responseHeaderMutationBuilder, ctx *Reques
 	builder.addJoined(headers.VSRMatchedModality, ctx.VSRMatchedModality)
 	builder.addJoined(headers.VSRMatchedAuthz, ctx.VSRMatchedAuthz)
 	builder.addJoined(headers.VSRMatchedJailbreak, ctx.VSRMatchedJailbreak)
+	builder.addJoined(headers.VSRMatchedSafety, ctx.VSRMatchedSafety)
 	builder.addJoined(headers.VSRMatchedPII, ctx.VSRMatchedPII)
 	builder.addJoined(headers.VSRMatchedKB, ctx.VSRMatchedKB)
 	builder.addJoined(headers.VSRMatchedConversation, ctx.VSRMatchedConversation)

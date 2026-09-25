@@ -123,6 +123,40 @@ func TestExecuteReturnsErrorForRequiredFailure(t *testing.T) {
 	}
 }
 
+func TestExecutePreservesRequiredFailureWhileCancellingConcurrentTasks(t *testing.T) {
+	concurrentStarted := make(chan struct{})
+	failure := errors.New("boom")
+	summary, err := Execute(context.Background(), []Task{
+		{
+			Name: "concurrent-init",
+			Run: func(ctx context.Context) error {
+				close(concurrentStarted)
+				<-ctx.Done()
+				return ctx.Err()
+			},
+		},
+		{
+			Name: "required-init",
+			Run: func(context.Context) error {
+				<-concurrentStarted
+				return failure
+			},
+		},
+	}, Options{MaxParallelism: 2})
+	if !errors.Is(err, failure) {
+		t.Fatalf("Execute() error = %v, want required task failure", err)
+	}
+	if len(summary.Results) != 2 {
+		t.Fatalf("Execute() summary has %d results, want 2", len(summary.Results))
+	}
+	if result := summary.Results["required-init"]; result.Status != TaskFailed || !errors.Is(result.Error, failure) {
+		t.Fatalf("required task result = %+v, want failed with original error", result)
+	}
+	if result := summary.Results["concurrent-init"]; result.Status != TaskFailed || !errors.Is(result.Error, context.Canceled) {
+		t.Fatalf("concurrent task result = %+v, want failed with context cancellation", result)
+	}
+}
+
 // Regression for the goroutine-panic class first reported in
 // https://github.com/vllm-project/semantic-router/issues/1843.
 //

@@ -3,53 +3,18 @@
 package apiserver
 
 import (
-	"fmt"
 	"path"
 	"strings"
 
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-// getEmbeddingModelsInfo returns information about loaded embedding models.
-func (s *ClassificationAPIServer) getEmbeddingModelsInfo(runtimeState *startupstatus.State) []ModelInfo {
-	var models []ModelInfo
-
-	embeddingInfo, err := candle_binding.GetEmbeddingModelsInfo()
-	if err != nil {
-		logging.Warnf("Failed to get embedding models info: %v", err)
-		return models
-	}
-
-	for _, model := range embeddingInfo.Models {
-		modelPath := normalizeEmbeddingModelPath(model.ModelPath, model.ModelName)
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelPath)
-		}
-		if modelPath == "" {
-			modelPath = strings.TrimSpace(model.ModelName)
-		}
-
-		models = append(models, ModelInfo{
-			Name:      fmt.Sprintf("%s_embedding_model", model.ModelName),
-			Type:      "embedding",
-			Loaded:    model.IsLoaded,
-			ModelPath: modelPath,
-			Metadata: map[string]string{
-				"model_type":           model.ModelName,
-				"max_sequence_length":  fmt.Sprintf("%d", model.MaxSequenceLength),
-				"default_dimension":    fmt.Sprintf("%d", model.DefaultDimension),
-				"matryoshka_supported": "true",
-			},
-		})
-	}
-
-	for i := range models {
-		models[i] = enrichModelInfo(models[i], runtimeState)
-	}
-
+// getEmbeddingModelsInfo lists the current generation's prepared embedding
+// bindings, including service and named-recipe owners of shared resources.
+func (s *ClassificationAPIServer) getEmbeddingModelsInfo() []ModelInfo {
+	_, service, release := s.acquireClassificationRuntime()
+	defer release()
+	models, _ := preparedEmbeddingModelsInfo(service)
 	return models
 }
 

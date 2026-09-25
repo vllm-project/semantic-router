@@ -1,78 +1,55 @@
 ---
 name: vllm-sr-agent-operations
-description: Operate a vLLM Semantic Router directly through its CLI and HTTP contracts. Use when an agent needs to install or deploy vLLM-SR, author or change canonical YAML configuration and Recipes, validate and plan changes, test routing with preview and real end-to-end requests, run the Intelligence 1.0 benchmark suite, analyze replay evidence, or continuously optimize a physical or virtual model pool. Dashboard is never required.
+description: Install, configure, verify, and improve vLLM Semantic Router through its CLI and Router API. Use for deployment, recipe tuning, and single-model/MoM evaluation, with Dashboard verification when requested.
 ---
 
-# vLLM-SR agent operations
+# vLLM Semantic Router operations
 
-Treat the running Router as the authority for the version it supports. Use YAML
-as the reviewable source, the management API or CLI as transport, and immutable
-receipts as evidence. Do not invent a second DSL or scrape Dashboard state.
+Work against the user's selected stack and objective. Inspect the installed CLI,
+running configuration and available backends before choosing an approach.
+Preserve unrelated workloads, credentials and the user's existing authorization.
 
-## Discover before acting
+## Discover the contract
 
-1. Check `GET /health` and `GET /ready` on the management listener.
-2. Fetch `GET /api/v1?audience=agent&visibility=primary` for the compact
-   capability directory.
-3. Narrow discovery with `?capability=<name>` or fetch filtered OpenAPI from
-   `/openapi.json?capability=<name>&audience=agent`.
-4. Discover configuration progressively:
-   - `vllm-sr config schema --endpoint <management-origin>`
-   - add `--section <path>` or `--surface <kind:name>` for one contract;
-   - use `--full` only when a complete schema is necessary.
+Use `vllm-sr --help`, command-specific help and `vllm-sr config schema`.
+For a running Router, `GET /api/v1` advertises its operations and schemas.
+Management origin, inference listener and public model entrypoint are separate;
+discover them instead of assuming default ports or a recipe name.
 
-The management origin normally serves `/api/v1/**`, `/openapi.json`, and
-`/docs`. The routed inference origin separately serves OpenAI-compatible
-requests such as `/v1/chat/completions`. Never infer one port from the other.
+Read only the reference needed for the task:
 
-## Use the safe control loop
+| Task | Reference |
+| --- | --- |
+| Install, select hardware/runtime, isolate a stack, open Dashboard access | [Deployment](https://vllm-sr.ai/install/agent/vllm-sr/references/deployment-loop.md) |
+| Change live config, activate a recipe, recover a revision | [Configuration](https://vllm-sr.ai/install/agent/vllm-sr/references/configuration-loop.md) |
+| Verify routing, tools, context boundaries or delivery | [Route verification](https://vllm-sr.ai/install/agent/vllm-sr/references/route-verification.md) |
+| Improve signal, decision or model-selection policy | [Recipe tuning](https://vllm-sr.ai/install/agent/vllm-sr/references/recipe-tuning.md) |
+| Compare single models and MoM; run a measured optimization loop | [sr-bench](https://vllm-sr.ai/install/agent/vllm-sr/references/sr-bench.md) |
 
-For configuration changes, follow this exact order:
+For installation or an authorized upgrade, default to the published dev package
+unless the user selects another version:
 
-1. Edit canonical YAML locally.
-2. Run local validation, then authoritative Router validation.
-3. Plan against current state without writing.
-4. Apply with the ETag returned by the plan.
-5. Confirm readiness and active configuration.
-6. Preview representative routing cases without model calls.
-7. Probe the Envoy-routed endpoint with real model calls and assertions.
-8. Run the appropriate routing workload or full model benchmark.
-9. Review replays, outcomes, latency, token use, cost, and failures.
-10. Keep the change only when its declared gate passes; otherwise apply the
-    previous version or use config rollback.
+```bash
+curl -fsSL https://vllm-sr.ai/install.sh | \
+  bash -s -- --channel dev --mode cli --runtime skip --no-launch
+export PATH="$HOME/.local/bin:$PATH"
+vllm-sr --version
+```
 
-Read [configuration-loop.md](references/configuration-loop.md) when changing
-configuration or Recipes. Read [evaluation-loop.md](references/evaluation-loop.md)
-when testing or optimizing routing. Read
-[deployment-loop.md](references/deployment-loop.md) for installation, serving,
-or model-pool changes.
+## Work loop
 
-## Evidence boundaries
+- Establish the intended behavior and a small reproducible baseline.
+- For a new stack, initialize and validate config before `serve`. For an existing
+  stack, derive changes from fresh `config get`, then validate, plan and apply.
+  Respect restart-required changes and verify the active revision afterward.
+- Preview checks routing without generating an answer. Probe or live evaluation
+  checks actual delivery. Verify the behavior affected by the change, including
+  final output; readiness or HTTP 200 alone is insufficient.
+- Compare the same workload before and after a coherent change. Use sr-bench
+  when capability, cost or latency is the objective. Preserve unsuccessful
+  attempts and distinguish small-sample evidence from a quality claim.
 
-- `vllm-sr route preview` evaluates signals and a decision without calling a
-  generation backend. Use it for fast route assertions.
-- `vllm-sr route probe` sends one real request through the routed inference
-  listener and emits a JSON receipt containing selected route headers, latency,
-  response, and assertions.
-- `vllm-sr benchmark` runs versioned routing workloads.
-- `vllm-sr benchmark intelligence` plans or runs the six fixed Intelligence
-  1.0 model benchmarks against any physical or virtual model ID. A virtual
-  model is evaluated through its endpoint; never synthesize its score from
-  member-model scores.
-
-Route evidence and full task-quality evidence answer different questions. A
-successful preview does not establish backend quality, and one successful
-probe does not establish benchmark performance.
-
-## Operational security and reproducibility
-
-- Put credentials only in named environment variables. Pass the variable name,
-  never its value, to `--token-env` or `--api-key-env`.
-- Never put secrets in YAML, command arguments, logs, receipts, or prompts.
-- Use exact runner and dataset revisions returned by
-  `vllm-sr benchmark intelligence list`.
-- Treat `--sample-limit` as smoke evidence only. It cannot enter the 1.0 index.
-- HLE 1.0 is always the frozen 2,158-question text-only subset. Do not enable
-  multimodal questions or substitute a rolling/verified subset.
-- Preserve raw benchmark artifacts outside Git. Commit only intentional
-  configuration, Recipe, documentation, or code changes.
+For Dashboard work, exercise the corresponding user flow against the same stack
+and inspect the resulting artifacts. Leave the user with the active config or
+recipe, access details, evidence and material limitations. Keep secret values and
+private request content out of public artifacts.

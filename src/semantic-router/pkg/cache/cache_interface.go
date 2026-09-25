@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // CacheEntry represents a complete cached request-response pair with associated metadata
@@ -20,6 +21,9 @@ type CacheEntry struct {
 	HitCount     int64     // Access count
 	TTLSeconds   int       // Per-entry TTL in seconds (0 = not cached, -1 = use cache default, >0 = specific TTL)
 	ExpiresAt    time.Time // Calculated expiration time based on TTL
+
+	// Immutable in-memory lookup metadata; not part of the stored/public entry.
+	polarityTokens []string
 }
 
 // LookupResult carries the request-owned outcome of one lookup. A hit includes
@@ -196,6 +200,9 @@ const (
 
 // CacheConfig contains configuration settings shared across all cache backends
 type CacheConfig struct {
+	// EmbeddingProvider is prepared by the generation owner and is never serialized.
+	EmbeddingProvider embedding.Provider `yaml:"-" json:"-"`
+
 	// BackendType specifies which cache implementation to use
 	BackendType CacheBackendType `yaml:"backend_type"`
 

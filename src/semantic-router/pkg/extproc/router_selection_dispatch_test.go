@@ -1,13 +1,40 @@
 package extproc
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/native"
 )
+
+func TestSelectionUsesPreparedProviderForEveryLocalBackend(t *testing.T) {
+	for _, backend := range []string{"candle", "ort", "openvino"} {
+		t.Run(backend, func(t *testing.T) {
+			cfg := &config.RouterConfig{}
+			cfg.EmbeddingConfig = config.HNSWConfig{Backend: backend, ModelType: "multimodal"}
+			calls := 0
+			provider, err := embedding.NewFuncProvider(backend, 768, func(context.Context, string) ([]float32, error) {
+				calls++
+				return make([]float32, 768), nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			set := embedding.NewSet(map[string]embedding.Provider{"multimodal": provider}, "multimodal")
+			embed, options := resolveSelectionEmbeddingFunc(cfg, set)
+			vector, err := embed("query", options)
+			if err != nil || len(vector) != 768 || calls != 1 {
+				t.Fatalf("selection bypassed its prepared provider: dimension=%d calls=%d err=%v", len(vector), calls, err)
+			}
+		})
+	}
+}
 
 func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -25,7 +52,7 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	}))
 	defer server.Close()
 
-	embed, defaultConfig := resolveSelectionEmbeddingFunc(&config.RouterConfig{
+	cfg := &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
 				EmbeddingConfig: config.HNSWConfig{
@@ -39,7 +66,15 @@ func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 				},
 			},
 		},
-	})
+	}
+	cfg.ModelSelection.Enabled = true
+	cfg.ModelSelection.ML.ModelsPath = "test-model-selection"
+	prepared, err := modelruntime.PrepareOwnedEmbeddings(context.Background(), cfg, native.New(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer prepared.Close()
+	embed, defaultConfig := resolveSelectionEmbeddingFunc(cfg, prepared)
 
 	embedding, err := embed("hello", defaultConfig)
 	if err != nil {

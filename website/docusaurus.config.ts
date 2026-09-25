@@ -157,6 +157,26 @@ const config: Config = {
       {
         redirects: [
           {
+            from: '/blog/introduce-vela',
+            to: '/blog/vela-models',
+          },
+          {
+            from: '/docs/installation/runtime/engines-and-hardware',
+            to: '/docs/installation/runtime/in-process',
+          },
+          {
+            from: '/docs/installation/runtime/models-and-bindings',
+            to: '/docs/installation/runtime/in-process',
+          },
+          {
+            from: '/docs/tutorials/global/safety-models-and-policy',
+            to: '/docs/installation/runtime/safety',
+          },
+          {
+            from: '/docs/tutorials/global/remote-embeddings',
+            to: '/docs/installation/runtime/embeddings',
+          },
+          {
             from: '/docs/installation/kubernetes',
             to: '/docs/installation/k8s/ai-gateway',
           },
@@ -241,11 +261,9 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      // No `style` — the navbar follows the reader's color mode. The homepage
-      // opts back into dark chrome in shell.css, where its palette is pinned.
+      // Navbar and logo follow the reader's color mode on every page.
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        // Logo follows color mode; homepage keeps dark chrome via theme/Navbar/Logo swizzle.
         src: 'img/vllm-sr-logo.light.png',
         srcDark: 'img/vllm-sr-logo.white.png',
       },
@@ -298,6 +316,10 @@ const config: Config = {
               to: '/models',
             },
             {
+              label: 'Leaderboard',
+              to: '/community/contributors',
+            },
+            {
               label: 'GitHub',
               href: 'https://github.com/vllm-project/semantic-router',
             },
@@ -308,10 +330,6 @@ const config: Config = {
             {
               label: 'Discussions',
               href: 'https://github.com/vllm-project/semantic-router/discussions',
-            },
-            {
-              label: 'Leaderboard',
-              to: '/community/contributors',
             },
           ],
         },
@@ -386,6 +404,10 @@ const config: Config = {
             {
               label: 'Vision Paper',
               to: '/vision-paper',
+            },
+            {
+              label: 'Decision Paper',
+              to: '/decision-paper',
             },
 
             {

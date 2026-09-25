@@ -19,13 +19,14 @@ type ClassificationMetricsResponse struct {
 }
 
 func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWriter, _ *http.Request) {
-	cfg := s.currentConfig()
+	cfg, service, release := s.acquireClassificationRuntime()
+	defer release()
 	response := ClassificationMetricsResponse{
-		UnifiedClassifier:      s.classificationSvc.HasUnifiedClassifier(),
-		FactCheckClassifier:    s.classificationSvc.HasFactCheckClassifier(),
-		HallucinationDetector:  s.classificationSvc.HasHallucinationDetector(),
-		HallucinationExplainer: s.classificationSvc.HasHallucinationExplainer(),
-		FeedbackDetector:       s.classificationSvc.HasFeedbackDetector(),
+		UnifiedClassifier:      service.HasUnifiedClassifier(),
+		FactCheckClassifier:    service.HasFactCheckClassifier(),
+		HallucinationDetector:  service.HasHallucinationDetector(),
+		HallucinationExplainer: service.HasHallucinationExplainer(),
+		FeedbackDetector:       service.HasFeedbackDetector(),
 		RouterConfigAPI:        true,
 		SignalCounts:           map[string]int{},
 	}

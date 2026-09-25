@@ -1,3 +1,5 @@
+PREBUILT_RUNTIME_IMAGES ?= 0
+
 # ======== docker.mk ============
 # = Docker build and management =
 # ======== docker.mk ============
@@ -20,11 +22,19 @@
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
 
+# An explicit CI/registry reference is reused; local development builds once.
+E2E_PREBUILT_PROVIDER_MOCKER_IMAGE ?=
+PROVIDER_MOCKER_PREBUILT := $(or $(E2E_PREBUILT_PROVIDER_MOCKER_IMAGE),$(if $(filter undefined,$(origin PROVIDER_MOCKER_IMAGE)),,$(PROVIDER_MOCKER_IMAGE)))
+PROVIDER_MOCKER_IMAGE ?= $(if $(E2E_PREBUILT_PROVIDER_MOCKER_IMAGE),$(E2E_PREBUILT_PROVIDER_MOCKER_IMAGE),semantic-router-ci/provider-mocker:e2e-test)
+PROVIDER_MOCKER_PORT ?= 8000
+PROVIDER_MOCKER_SCENARIO ?= default
+PROVIDER_MOCKER_MODEL ?= Model-A
+
 # Build all Docker images
 # Note: extproc-rocm is excluded because it requires x86_64 + ROCm hardware.
 # Build it explicitly with: make docker-build-extproc-rocm
 docker-build-all: ## Build all Docker images
-docker-build-all: docker-build-extproc docker-build-llm-katan docker-build-dashboard docker-build-precommit docker-build-vllm-sr-sim
+docker-build-all: docker-build-extproc docker-build-provider-mocker docker-build-dashboard docker-build-precommit docker-build-vllm-sr-sim
 
 # Build extproc Docker image
 docker-build-extproc: ## Build extproc Docker image
@@ -48,12 +58,14 @@ docker-build-openvino-binding:
 	@echo "Building openvino-binding Docker image (x86_64 only)..."
 	@$(CONTAINER_RUNTIME) build -f openvino-binding/Dockerfile -t $(DOCKER_REGISTRY)/openvino-binding:$(DOCKER_TAG) .
 
-# Build llm-katan Docker image
-docker-build-llm-katan: ## Build llm-katan Docker image
-docker-build-llm-katan:
+# One shared deterministic backend; publishing is handled by its scoped CI job.
+docker-build-provider-mocker: ## Build the provider mocker, or reuse an explicitly supplied image
 	@$(LOG_TARGET)
-	@echo "Building llm-katan Docker image..."
-	@$(CONTAINER_RUNTIME) build -f e2e/testing/llm-katan/Dockerfile -t $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) e2e/testing/llm-katan/
+ifneq ($(strip $(PROVIDER_MOCKER_PREBUILT)),)
+	@$(CONTAINER_RUNTIME) image inspect "$(PROVIDER_MOCKER_IMAGE)" >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull "$(PROVIDER_MOCKER_IMAGE)"
+else
+	@$(CONTAINER_RUNTIME) build -t "$(PROVIDER_MOCKER_IMAGE)" tools/test/services/provider-mocker
+endif
 
 # Build dashboard Docker image
 docker-build-dashboard: ## Build dashboard Docker image
@@ -68,13 +80,14 @@ docker-build-vllm-sr-envoy:
 	@$(LOG_TARGET)
 	@echo "Ensuring official Envoy image is available..."
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
+	@$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
 
 # Build router runtime image using the existing vllm-sr Dockerfile
 docker-build-vllm-sr-router: ## Build vllm-sr-router Docker image
 docker-build-vllm-sr-router:
 	@$(LOG_TARGET)
 	@echo "Building vllm-sr-router Docker image..."
-	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(DOCKER_REGISTRY)/vllm-sr-router:$(DOCKER_TAG) .
+	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -f $(VLLM_SR_DOCKERFILE) -t $(VLLM_SR_ROUTER_IMAGE) .
 
 # Build vllm-sr-sim Docker image
 docker-build-vllm-sr-sim: ## Build vllm-sr-sim Docker image
@@ -90,36 +103,38 @@ docker-build-precommit:
 	@echo "Building precommit Docker image..."
 	@$(CONTAINER_RUNTIME) build -f tools/docker/Dockerfile.precommit -t $(DOCKER_REGISTRY)/precommit:$(DOCKER_TAG) .
 
-# Test llm-katan Docker image locally
-docker-test-llm-katan: ## Test llm-katan Docker image locally
-docker-test-llm-katan:
+# Smoke-test the deterministic backend without downloading models or claiming host ports.
+# Cleanup only the container created by this invocation, including on failure.
+docker-test-provider-mocker: docker-build-provider-mocker ## Test the provider mocker Docker image locally
 	@$(LOG_TARGET)
-	@echo "Testing llm-katan Docker image..."
-	@curl -f http://localhost:8000/v1/models || (echo "Models endpoint failed" && exit 1)
-	@echo "\nllm-katan Docker image test passed"
+	@set -eu; \
+	container_id=$$($(CONTAINER_RUNTIME) run --detach --network none \
+		-e PROVIDER_MOCKER_MODEL=smoke-test "$(PROVIDER_MOCKER_IMAGE)"); \
+	trap '$(CONTAINER_RUNTIME) rm --force "$$container_id" >/dev/null 2>&1 || true' EXIT; \
+	trap 'exit 130' INT; trap 'exit 143' TERM; \
+	ready=0; attempts=0; \
+	while [ $$attempts -lt 60 ]; do \
+		if $(CONTAINER_RUNTIME) exec "$$container_id" python -c \
+			'import sys, urllib.request; urllib.request.urlopen(sys.argv[1], timeout=5).read()' \
+			http://127.0.0.1:8000/health >/dev/null 2>&1; then \
+			ready=1; break; \
+		fi; \
+		if [ "$$($(CONTAINER_RUNTIME) inspect --format '{{.State.Running}}' "$$container_id")" != true ]; then break; fi; \
+		attempts=$$((attempts + 1)); sleep 1; \
+	done; \
+	if [ $$ready -ne 1 ]; then \
+		$(CONTAINER_RUNTIME) logs "$$container_id"; \
+		echo "provider-mocker did not become healthy" >&2; exit 1; \
+	fi; \
+	$(CONTAINER_RUNTIME) exec "$$container_id" python -c \
+		'import sys, urllib.request; print(urllib.request.urlopen(sys.argv[1], timeout=5).read().decode())' \
+		http://127.0.0.1:8000/v1/models; \
+	echo "provider-mocker Docker image test passed"
 
-# Run llm-katan Docker image locally
-docker-run-llm-katan: ## Run llm-katan Docker image locally
-docker-run-llm-katan: docker-build-llm-katan
-	@$(LOG_TARGET)
-	@echo "Running llm-katan Docker image on port 8000..."
-	@echo "Access the server at: http://localhost:8000"
-	@echo "Press Ctrl+C to stop"
-	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
-
-# Run llm-katan with custom served model name
-docker-run-llm-katan-custom: ## Run with custom served model name, by append SERVED_NAME=name
-docker-run-llm-katan-custom:
-	@$(LOG_TARGET)
-	@echo "Running llm-katan with custom served model name..."
-	@echo "Usage: make docker-run-llm-katan-custom SERVED_NAME=your-served-model-name"
-	@if [ -z "$(SERVED_NAME)" ]; then \
-		echo "Error: SERVED_NAME variable is required"; \
-		echo "Example: make docker-run-llm-katan-custom SERVED_NAME=claude-3-haiku"; \
-		exit 1; \
-	fi
-	@$(CONTAINER_RUNTIME) run --rm -p 8000:8000 $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG) \
-		llm-katan --model "Qwen/Qwen3-0.6B" --served-model-name "$(SERVED_NAME)" --host 0.0.0.0 --port 8000
+docker-run-provider-mocker: docker-build-provider-mocker ## Run the shared provider mocker on localhost
+	@$(CONTAINER_RUNTIME) run --rm -p 127.0.0.1:$(PROVIDER_MOCKER_PORT):8000 \
+		-e PROVIDER_MOCKER_SCENARIO="$(PROVIDER_MOCKER_SCENARIO)" \
+		-e PROVIDER_MOCKER_MODEL="$(PROVIDER_MOCKER_MODEL)" "$(PROVIDER_MOCKER_IMAGE)"
 
 # Pull a specific release of all production images
 # Usage: make docker-pull-release DOCKER_TAG=v0.3.0
@@ -146,7 +161,7 @@ docker-clean:
 # Push Docker images (for CI/CD)
 # Note: extproc-rocm is excluded; push it explicitly with: make docker-push-extproc-rocm
 docker-push-all: ## Push all Docker images
-docker-push-all: docker-push-extproc docker-push-llm-katan docker-push-dashboard docker-push-vllm-sr-sim
+docker-push-all: docker-push-extproc docker-push-dashboard docker-push-vllm-sr-sim
 	@$(LOG_TARGET)
 	@echo "All Docker images pushed successfully"
 
@@ -162,12 +177,6 @@ docker-push-extproc-rocm:
 	@echo "Pushing extproc-rocm Docker image..."
 	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/extproc-rocm:$(DOCKER_TAG)
 
-docker-push-llm-katan: ## Push llm-katan Docker image
-docker-push-llm-katan:
-	@$(LOG_TARGET)
-	@echo "Pushing llm-katan Docker image..."
-	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/llm-katan:$(DOCKER_TAG)
-
 docker-push-dashboard: ## Push dashboard Docker image
 docker-push-dashboard:
 	@$(LOG_TARGET)
@@ -178,7 +187,7 @@ docker-push-vllm-sr-router: ## Push vllm-sr-router Docker image
 docker-push-vllm-sr-router:
 	@$(LOG_TARGET)
 	@echo "Pushing vllm-sr-router Docker image..."
-	@$(CONTAINER_RUNTIME) push $(DOCKER_REGISTRY)/vllm-sr-router:$(DOCKER_TAG)
+	@$(CONTAINER_RUNTIME) push $(VLLM_SR_ROUTER_IMAGE)
 
 docker-push-vllm-sr-envoy: ## Push vllm-sr-envoy Docker image
 docker-push-vllm-sr-envoy:
@@ -199,7 +208,7 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 	@echo "  DOCKER_REGISTRY   - Docker registry (default: ghcr.io/vllm-project/semantic-router)"
 	@echo "  DOCKER_TAG        - Docker tag (default: latest)"
 	@echo "  SKIP_ROUTER_IMAGE - set to 1 only when the local router image is already up to date"
-	@echo "  SERVED_NAME       - Served model name for custom runs"
+	@echo "  PROVIDER_MOCKER_IMAGE - Existing mocker image to reuse (otherwise build locally)"
 	@echo "  VLLM_SR_PLATFORM  - vllm-sr platform hint (set to amd for ROCm defaults, nvidia for CUDA defaults)"
 	@echo "  VLLM_SR_TARGETARCH - target image architecture (default: host-native, amd64 for ROCm)"
 	@echo "  VLLM_SR_BUILDPLATFORM - Docker build platform (default: host-native, linux/amd64 for ROCm)"
@@ -214,13 +223,13 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 
 # vLLM-SR specific variables — image tags default to DOCKER_TAG so that a
 # single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
-VLLM_SR_IMAGE ?= ghcr.io/vllm-project/semantic-router/vllm-sr:$(DOCKER_TAG)
-VLLM_SR_IMAGE_ROCM ?= ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:$(DOCKER_TAG)
-VLLM_SR_IMAGE_CUDA ?= ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:$(DOCKER_TAG)
+VLLM_SR_IMAGE ?= $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
+VLLM_SR_IMAGE_ROCM ?= $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG)
+VLLM_SR_IMAGE_CUDA ?= $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE_DEFAULT ?= $(VLLM_SR_IMAGE)
 VLLM_SR_ROUTER_IMAGE_ROCM ?= $(VLLM_SR_IMAGE_ROCM)
 VLLM_SR_ROUTER_IMAGE_CUDA ?= $(VLLM_SR_IMAGE_CUDA)
-VLLM_SR_ENVOY_IMAGE_DEFAULT ?= envoyproxy/envoy:v1.34-latest
+VLLM_SR_ENVOY_IMAGE_DEFAULT ?= envoyproxy/envoy:v1.35.3
 VLLM_SR_DASHBOARD_IMAGE_DEFAULT ?= ghcr.io/vllm-project/semantic-router/dashboard:$(DOCKER_TAG)
 VLLM_SR_ROUTER_IMAGE ?= $(VLLM_SR_ROUTER_IMAGE_DEFAULT)
 VLLM_SR_ENVOY_IMAGE ?= $(VLLM_SR_ENVOY_IMAGE_DEFAULT)
@@ -323,7 +332,13 @@ IMAGE_REGISTRY ?= $(shell \
   else \
     printf "docker.io/"; \
   fi)
+VELA_OMNI_VARIANTS ?= nano
 VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
+# Minimum GPU architecture the NVIDIA image is compiled for; unset keeps the
+# Dockerfile default.
+ifneq ($(CUDA_COMPUTE_CAP),)
+VLLM_SR_BUILD_ARGS += --build-arg CUDA_COMPUTE_CAP=$(CUDA_COMPUTE_CAP)
+endif
 ifeq ($(GIT_SSL_NO_VERIFY),1)
 VLLM_SR_BUILD_ARGS += --build-arg GIT_SSL_NO_VERIFY=1
 endif
@@ -337,7 +352,10 @@ ifneq ($(shell git status --porcelain -- dashboard/backend dashboard/frontend sr
 VLLM_SR_DASHBOARD_VERSION := $(VLLM_SR_DASHBOARD_VERSION).dirty
 endif
 endif
-VLLM_SR_DASHBOARD_BUILD_ARGS := $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
+# Hash the source only when a build consumes these arguments.
+VLLM_SR_BUILD_ARGS += --build-arg VELA_OMNI_VARIANTS="$(VELA_OMNI_VARIANTS)"
+
+VLLM_SR_DASHBOARD_BUILD_ARGS = $(VLLM_SR_BUILD_ARGS) --build-arg DASHBOARD_VERSION=$(VLLM_SR_DASHBOARD_VERSION) --build-arg VLLM_SR_SOURCE_REVISION=$(VLLM_SR_SOURCE_REVISION)
 
 vllm-sr-dev: ## Rebuild vLLM Semantic Router router image and install CLI
 vllm-sr-dev:
@@ -388,6 +406,7 @@ vllm-sr-dev:
 		echo "  Image: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
 		$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE); \
+		$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null; \
 		echo ""; \
 		echo "Envoy image available: $(VLLM_SR_ENVOY_IMAGE)"; \
 		echo ""; \
@@ -430,7 +449,11 @@ vllm-sr-build:
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
+	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_IMAGE) >/dev/null
+else
 	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+endif
 	@echo "Image built: $(VLLM_SR_IMAGE)"
 
 vllm-sr-router-build: ## Build vLLM Semantic Router router Docker image
@@ -440,7 +463,11 @@ vllm-sr-router-build:
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DOCKERFILE)"
+ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
+	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ROUTER_IMAGE) >/dev/null
+else
 	@$(CONTAINER_RUNTIME) build $(VLLM_SR_BUILD_ARGS) -t $(VLLM_SR_ROUTER_IMAGE) -f $(VLLM_SR_DOCKERFILE) .
+endif
 	@echo "Image built: $(VLLM_SR_ROUTER_IMAGE)"
 
 vllm-sr-envoy-build: ## Build vLLM Semantic Router Envoy Docker image
@@ -448,6 +475,7 @@ vllm-sr-envoy-build:
 	@$(LOG_TARGET)
 	@echo "Ensuring official Envoy image is available..."
 	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_ENVOY_IMAGE) >/dev/null 2>&1 || $(CONTAINER_RUNTIME) pull $(VLLM_SR_ENVOY_IMAGE)
+	@$(CONTAINER_RUNTIME) run --rm $(VLLM_SR_ENVOY_IMAGE) --version >/dev/null
 	@echo "Image available: $(VLLM_SR_ENVOY_IMAGE)"
 
 vllm-sr-dashboard-build: ## Build vLLM Semantic Router dashboard Docker image
@@ -457,7 +485,11 @@ vllm-sr-dashboard-build:
 	@echo "  Target arch: $(VLLM_SR_TARGETARCH)"
 	@echo "  Build platform: $(VLLM_SR_BUILDPLATFORM)"
 	@echo "  Dockerfile: $(VLLM_SR_DASHBOARD_DOCKERFILE)"
+ifeq ($(PREBUILT_RUNTIME_IMAGES),1)
+	@$(CONTAINER_RUNTIME) image inspect $(VLLM_SR_DASHBOARD_IMAGE) >/dev/null
+else
 	@$(CONTAINER_RUNTIME) build $(VLLM_SR_DASHBOARD_BUILD_ARGS) -t $(VLLM_SR_DASHBOARD_IMAGE) -f $(VLLM_SR_DASHBOARD_DOCKERFILE) .
+endif
 	@echo "Image built: $(VLLM_SR_DASHBOARD_IMAGE)"
 
 vllm-sr-start: ## Start vLLM Semantic Router service
@@ -503,15 +535,69 @@ vllm-sr-sim-start: vllm-sr-sim-build
 vllm-sr-test: ## Run CLI unit tests (fast, no Docker image required)
 vllm-sr-test: vllm-sr-install-cli
 	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" -m pip install -e "src/vllm-sr[bench]"
 	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" run_cli_tests.py --verbose
+	@PATH="$(AGENT_VENV)/bin:$$PATH" "$(AGENT_PYTHON)" -m pytest -q \
+		src/vllm-sr/tests/test_container_images.py \
+		src/vllm-sr/tests/test_container_log_spool.py \
+		src/vllm-sr/tests/test_dashboard_dockerfile_surface.py \
+		src/vllm-sr/tests/test_embedding_api_config.py \
+		src/vllm-sr/tests/test_envoy_identity_and_local_bindings.py \
+		src/vllm-sr/tests/test_evaluation_cli.py \
+		src/vllm-sr/tests/test_sr_bench.py \
+		src/vllm-sr/tests/test_sr_bench_accounting.py \
+		src/vllm-sr/tests/test_sr_bench_activity.py \
+		src/vllm-sr/tests/test_sr_bench_client.py \
+		src/vllm-sr/tests/test_sr_bench_collection.py \
+		src/vllm-sr/tests/test_sr_bench_datasets.py \
+		src/vllm-sr/tests/test_sr_bench_dataset_validation.py \
+		src/vllm-sr/tests/test_sr_bench_dataset_fingerprints.py \
+		src/vllm-sr/tests/test_sr_bench_large_datasets.py \
+		src/vllm-sr/tests/test_sr_bench_large_plans.py \
+		src/vllm-sr/tests/test_sr_bench_experiments.py \
+		src/vllm-sr/tests/test_sr_bench_experiment_deletion.py \
+		src/vllm-sr/tests/test_sr_bench_experiment_admin.py \
+		src/vllm-sr/tests/test_routing_preview.py \
+		src/vllm-sr/tests/test_sr_bench_grading.py \
+		src/vllm-sr/tests/test_sr_bench_harness.py \
+		src/vllm-sr/tests/test_sr_bench_history_exclusions.py \
+		src/vllm-sr/tests/test_sr_bench_bridge.py \
+		src/vllm-sr/tests/test_sr_bench_native_output.py \
+		src/vllm-sr/tests/test_sr_bench_plan_hash.py \
+		src/vllm-sr/tests/test_sr_bench_preparation_cli.py \
+		src/vllm-sr/tests/test_sr_bench_preparation_collections.py \
+		src/vllm-sr/tests/test_sr_bench_preparation_sources.py \
+		src/vllm-sr/tests/test_sr_bench_preparations.py \
+		src/vllm-sr/tests/test_sr_bench_recovery.py \
+		src/vllm-sr/tests/test_sr_bench_replay.py \
+		src/vllm-sr/tests/test_sr_bench_reporting.py \
+		src/vllm-sr/tests/test_sr_bench_request_fields.py \
+		src/vllm-sr/tests/test_sr_bench_run_options.py \
+		src/vllm-sr/tests/test_sr_bench_setup.py \
+		src/vllm-sr/tests/test_sr_bench_snapshots.py \
+		src/vllm-sr/tests/test_sr_bench_sources.py \
+		src/vllm-sr/tests/test_sr_bench_runtime.py \
+		src/vllm-sr/tests/test_sr_bench_shutdown.py \
+		src/vllm-sr/tests/test_install_package_resolution.py \
+		src/vllm-sr/tests/test_install_runtime_behavior.py \
+		src/vllm-sr/tests/test_install_script_surface.py \
+		src/vllm-sr/tests/test_model_binding_contract.py \
+		src/vllm-sr/tests/test_recipe_builtin.py \
+		src/vllm-sr/tests/test_reasoning_controls.py \
+		src/vllm-sr/tests/test_route_command.py \
+		src/vllm-sr/tests/test_runtime_lifecycle.py \
+		src/vllm-sr/tests/test_runtime_observability.py \
+		src/vllm-sr/tests/test_setup_bootstrap.py \
+		src/vllm-sr/tests/test_split_runtime_backend_provisioning.py \
+		src/vllm-sr/tests/test_split_runtime_stack.py
 
-vllm-sr-test-integration: ## Run CLI unit + integration tests (requires local runtime images)
-vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli
+vllm-sr-test-integration: ## Run CLI integration tests (requires local runtime images)
+vllm-sr-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker
 	@$(LOG_TARGET)
-	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}" VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}" VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) VLLM_SR_TEST_UPSTREAM_IMAGE=$(VLLM_SR_TEST_UPSTREAM_IMAGE) RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration
+	@cd e2e/testing/vllm-sr-cli && PATH="$(AGENT_VENV)/bin:$$PATH" CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) VLLM_SR_STACK_NAME="$${VLLM_SR_STACK_NAME:-vllm-sr-cli-integration}" VLLM_SR_PORT_OFFSET="$${VLLM_SR_PORT_OFFSET:-4200}" VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) PROVIDER_MOCKER_IMAGE="$(PROVIDER_MOCKER_IMAGE)" RUN_INTEGRATION_TESTS=true "$(AGENT_PYTHON)" run_cli_tests.py --verbose --integration-only
 
-memory-test-integration: ## Run memory integration tests with local Milvus, llm-katan, and vllm-sr serve
-memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-llm-katan
+memory-test-integration: ## Run memory integration tests with local Milvus, provider-mocker, and vllm-sr serve
+memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-build vllm-sr-install-cli docker-build-provider-mocker
 	@$(LOG_TARGET)
 	@CONTAINER_RUNTIME=$(CONTAINER_RUNTIME) \
 	DOCKER_REGISTRY=$(DOCKER_REGISTRY) \
@@ -521,4 +607,4 @@ memory-test-integration: vllm-sr-build vllm-sr-envoy-build vllm-sr-dashboard-bui
 	VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) \
 	VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) \
 	PATH="$(AGENT_VENV)/bin:$$PATH" \
-	bash e2e/testing/run_memory_integration.sh
+	PROVIDER_MOCKER_IMAGE="$(PROVIDER_MOCKER_IMAGE)" bash e2e/testing/run_memory_integration.sh

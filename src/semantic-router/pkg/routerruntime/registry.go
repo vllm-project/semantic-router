@@ -1,13 +1,16 @@
 package routerruntime
 
 import (
+	"crypto/rand"
 	"sync"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime/binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/pluginruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
@@ -15,10 +18,12 @@ import (
 // Registry is the narrow runtime-owned dependency seam shared by startup,
 // reload, extproc, and the API server.
 type Registry struct {
+	modelPool             *binding.Pool
+	configPublicationMu   sync.Mutex
 	mu                    sync.RWMutex
 	config                *config.RouterConfig
 	classificationService *services.ClassificationService
-	acquireClassification AcquireClassification
+	acquireGeneration     AcquireClassification
 	memoryStore           memory.Store
 	vectorStore           *VectorStoreRuntime
 	modelSelector         *selection.Registry
@@ -27,6 +32,10 @@ type Registry struct {
 	responseCache         *cache.ResponseCacheService
 	contextCompression    *contextcompression.Service
 	compressionRecovery   contextcompression.RecoveryStore
+	plugins               pluginruntime.Capabilities
+	configActivation      ConfigActivation
+	instanceID            string
+	startupStatus         *localStartupSnapshot
 }
 
 // RouterRuntimeSnapshot is the router-owned management surface published as
@@ -49,6 +58,7 @@ type RouterRuntimeSnapshot struct {
 	ResponseCache         *cache.ResponseCacheService
 	ContextCompression    *contextcompression.Service
 	CompressionRecovery   contextcompression.RecoveryStore
+	Plugins               pluginruntime.Capabilities
 }
 
 func (r *Registry) ContextCompression() (
@@ -136,7 +146,7 @@ type LearningRuntime interface {
 }
 
 func NewRegistry(cfg *config.RouterConfig) *Registry {
-	return &Registry{config: cfg}
+	return &Registry{config: cfg, modelPool: binding.NewPool(), instanceID: rand.Text()}
 }
 
 func (r *Registry) CurrentConfig() *config.RouterConfig {
@@ -166,30 +176,44 @@ func (r *Registry) ClassificationService() *services.ClassificationService {
 	return r.classificationService
 }
 
+// AcquireClassificationRuntime returns one generation's config and
+// classification service and keeps that generation alive until release runs.
+func (r *Registry) AcquireClassificationRuntime() (
+	*config.RouterConfig,
+	*services.ClassificationService,
+	func(),
+	bool,
+) {
+	if r == nil {
+		return nil, nil, nil, false
+	}
+	r.mu.RLock()
+	cfg := r.config
+	service := r.classificationService
+	if service == nil {
+		r.mu.RUnlock()
+		return nil, nil, nil, false
+	}
+	acquire := r.acquireGeneration
+	if acquire == nil {
+		r.mu.RUnlock()
+		return cfg, service, func() {}, true
+	}
+	release, ok := acquire()
+	r.mu.RUnlock()
+	if !ok {
+		return nil, nil, nil, false
+	}
+	return cfg, service, release, true
+}
+
 // AcquireClassificationService returns the live classification service together
 // with a release function that must be called when the caller is done with it.
 // Holding the reference keeps the owning runtime generation from closing the
 // service mid-call. It reports false when no live service is available.
 func (r *Registry) AcquireClassificationService() (*services.ClassificationService, func(), bool) {
-	if r == nil {
-		return nil, nil, false
-	}
-	r.mu.RLock()
-	service := r.classificationService
-	acquire := r.acquireClassification
-	r.mu.RUnlock()
-	if service == nil {
-		return nil, nil, false
-	}
-	if acquire == nil {
-		// No generation owns this service, so nothing can close it underneath us.
-		return service, func() {}, true
-	}
-	release, ok := acquire()
-	if !ok {
-		return nil, nil, false
-	}
-	return service, release, true
+	_, service, release, ok := r.AcquireClassificationRuntime()
+	return service, release, ok
 }
 
 func (r *Registry) SetClassificationService(service *services.ClassificationService) {
@@ -208,6 +232,31 @@ func (r *Registry) MemoryStore() memory.Store {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return r.memoryStore
+}
+
+// AcquireMemoryStore returns one generation's memory store and keeps that
+// generation alive until release runs.
+func (r *Registry) AcquireMemoryStore() (memory.Store, func(), bool) {
+	if r == nil {
+		return nil, nil, false
+	}
+	r.mu.RLock()
+	store := r.memoryStore
+	if store == nil {
+		r.mu.RUnlock()
+		return nil, nil, false
+	}
+	acquire := r.acquireGeneration
+	if acquire == nil {
+		r.mu.RUnlock()
+		return store, func() {}, true
+	}
+	release, ok := acquire()
+	r.mu.RUnlock()
+	if !ok {
+		return nil, nil, false
+	}
+	return store, release, true
 }
 
 func (r *Registry) SetMemoryStore(store memory.Store) {
@@ -351,6 +400,7 @@ func (r *Registry) PublishRouterRuntime(
 	}
 	r.classificationService = classificationService
 	r.memoryStore = memoryStore
+	r.acquireGeneration = nil
 	r.mu.Unlock()
 }
 
@@ -363,7 +413,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 		r.config = snapshot.Config
 	}
 	r.classificationService = snapshot.ClassificationService
-	r.acquireClassification = snapshot.AcquireClassification
+	r.acquireGeneration = snapshot.AcquireClassification
 	r.memoryStore = snapshot.MemoryStore
 	r.modelSelector = snapshot.ModelSelector
 	r.learningRuntime = snapshot.LearningRuntime
@@ -371,6 +421,7 @@ func (r *Registry) PublishRouterRuntimeSnapshot(snapshot RouterRuntimeSnapshot) 
 	r.responseCache = snapshot.ResponseCache
 	r.contextCompression = snapshot.ContextCompression
 	r.compressionRecovery = snapshot.CompressionRecovery
+	r.plugins = snapshot.Plugins
 	r.mu.Unlock()
 }
 
@@ -388,4 +439,18 @@ func (r *Registry) RefreshRuntimeConfig(newCfg *config.RouterConfig) {
 		}
 	}
 	r.UpdateConfig(newCfg)
+}
+
+// ModelPool shares immutable resources between service-owned consumers and
+// router generations. References, rather than the registry, own their close.
+func (r *Registry) ModelPool() *binding.Pool {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.modelPool == nil {
+		r.modelPool = binding.NewPool()
+	}
+	return r.modelPool
 }

@@ -9,7 +9,8 @@ import (
 // These inventories are the top-level request fields published by the
 // OpenAI OpenAPI contract at 690521b1753dce0c6d6b275f583d22537679cff9 and the
 // generated Anthropic Messages API types at
-// d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa.
+// d19dea9ed85bbb5fdb2d6f20fb6f903920ed23fa, plus the later published
+// context-editing, thinking-token-count, and iteration-usage fields.
 // Every field is either represented semantically or decoded into an explicit
 // unsupported_feature error; adding a silent JSON sink is not allowed.
 func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
@@ -31,7 +32,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 				"stream_options", "temperature", "tool_choice", "tools", "top_logprobs", "top_p", "user",
 				"verbosity", "web_search_options",
 			),
-			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens"),
+			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
 		},
 		{
 			name: "OpenAI Responses",
@@ -50,7 +51,7 @@ func TestOfficialRequestFieldInventoriesAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicRequestWire{},
 			official: fields(
-				"cache_control", "container", "inference_geo", "max_tokens", "messages", "metadata", "model",
+				"cache_control", "container", "context_management", "inference_geo", "max_tokens", "messages", "metadata", "model",
 				"output_config", "service_tier", "stop_sequences", "stream", "system", "temperature", "thinking",
 				"tool_choice", "tools", "top_k", "top_p",
 			),
@@ -90,7 +91,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 				"prediction", "prompt_cache_key", "prompt_cache_options", "prompt_cache_retention",
 				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
 			),
-			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens"),
+			extensions: fields("chat_template_kwargs", "reasoning_budget_tokens", "top_k", "min_p", "repetition_penalty", "cache_salt"),
 			transport:  fields("stream_options"),
 		},
 		{
@@ -113,7 +114,7 @@ func TestOfficialRequestFieldDispositionsAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicRequestWire{},
 			semantic: fields(
-				"max_tokens", "messages", "metadata", "model", "output_config", "stop_sequences", "stream",
+				"context_management", "max_tokens", "messages", "metadata", "model", "output_config", "stop_sequences", "stream",
 				"system", "temperature", "thinking", "tool_choice", "tools", "top_k", "top_p",
 			),
 			unsupported: fields("cache_control", "container", "inference_geo", "service_tier"),
@@ -145,7 +146,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			extensions: fields(
 				"do_remote_decode", "do_remote_prefill", "ec_transfer_params", "error", "kv_transfer_params", "metrics",
 				"prompt_logprobs", "prompt_routed_experts", "prompt_text", "prompt_token_ids", "remote_block_ids", "remote_engine_id",
-				"remote_host", "remote_port",
+				"remote_host", "remote_port", "usage_breakdown", "x_groq",
 			),
 		},
 		{
@@ -165,7 +166,7 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 			name: "Anthropic Messages",
 			wire: anthropicResponseWire{},
 			official: fields(
-				"container", "content", "id", "model", "role", "stop_details", "stop_reason",
+				"container", "content", "context_management", "id", "model", "role", "stop_details", "stop_reason",
 				"stop_sequence", "type", "usage",
 			),
 			extensions: fields("error"),
@@ -185,9 +186,10 @@ func TestOfficialResponseFieldInventoriesAreClosed(t *testing.T) {
 
 func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 	tests := []struct {
-		name     string
-		wire     any
-		official []string
+		name       string
+		wire       any
+		official   []string
+		extensions []string
 	}{
 		{
 			name: "OpenAI Chat Completions",
@@ -195,6 +197,10 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			official: fields(
 				"completion_tokens", "completion_tokens_details", "compute_units", "prompt_tokens",
 				"prompt_tokens_details", "total_tokens",
+			),
+			// xAI and Groq accounting fields on their OpenAI-compatible endpoints.
+			extensions: fields(
+				"completion_time", "cost_in_usd_ticks", "num_sources_used", "prompt_time", "queue_time", "service_tier", "total_time",
 			),
 		},
 		{
@@ -210,15 +216,17 @@ func TestOfficialUsageFieldInventoriesAreClosed(t *testing.T) {
 			wire: anthropicUsageWire{},
 			official: fields(
 				"cache_creation", "cache_creation_input_tokens", "cache_read_input_tokens", "inference_geo",
-				"input_tokens", "output_tokens", "output_tokens_details", "server_tool_use", "service_tier",
+				"input_tokens", "iterations", "output_tokens", "output_tokens_details", "server_tool_use", "service_tier",
 			),
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := jsonFieldNames(reflect.TypeOf(test.wire)); !reflect.DeepEqual(got, test.official) {
-				t.Fatalf("usage field inventory drifted\n got: %v\nwant: %v", got, test.official)
+			want := append(append([]string(nil), test.official...), test.extensions...)
+			sort.Strings(want)
+			if got := jsonFieldNames(reflect.TypeOf(test.wire)); !reflect.DeepEqual(got, want) {
+				t.Fatalf("usage field inventory drifted\n got: %v\nwant: %v", got, want)
 			}
 		})
 	}

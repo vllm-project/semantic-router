@@ -6,8 +6,9 @@ This directory contains the Docusaurus-based documentation website for the vLLM 
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - npm or yarn
+- Python 3.10+ with `venv` support
 
 ### Development
 
@@ -32,8 +33,20 @@ Build the static site for production:
 make docs-build
 
 # Or manually
+make docs-install
 cd website && npm run build
 ```
+
+`make docs-install` installs Node dependencies and creates an isolated Python
+environment at `website/.venv` for generated-reference checks. `make docs-build`
+runs this setup automatically, including when a deployment service builds from
+the repository root. The checks run before Docusaurus and reject stale
+committed references without rewriting them.
+
+Direct `npm` builds reuse `website/.venv` when present. CI may instead install
+`website/requirements.txt` in its Python environment or select an interpreter
+with `VLLM_SR_DOCS_PYTHON`. The documentation setup never installs the runtime
+CLI package or invokes its package build hooks.
 
 ### Preview Production Build
 
@@ -46,6 +59,51 @@ make docs-serve
 # Or manually
 cd website && npm run serve
 ```
+
+## Netlify deployments
+
+Production builds automatically after changes reach `main`, using Netlify's Git
+integration and the existing build command and publish directory. PR pushes do
+not request previews. A collaborator with current **write**, **maintain**, or
+**admin** access can post a new comment containing exactly `/netlify` on an open
+PR targeting `main` to build its current head commit, including fork PRs.
+
+The **Netlify Preview** workflow builds that exact commit and uploads the static
+site as a draft. Its `netlify-preview/PR-<number>` commit status and Actions summary
+link to the preview. Repeated requests for a pending or successful commit are
+skipped; failed requests can be retried with a new `/netlify` comment. Each new
+commit needs a new comment. A PR that closes or changes head before publication
+does not publish the old build. Editing a comment does not trigger a build.
+
+### One-time project setup
+
+1. In Netlify **Project configuration > Developer settings > Continuous
+   deployment > Branches and deploy contexts**, keep the production branch as
+   `main`, disable automatic **Deploy Previews**, and disable **branch deploys**.
+   Keep builds active and production auto publishing enabled.
+2. Add the GitHub Actions repository secret `NETLIFY_AUTH_TOKEN` with access to
+   this Netlify project, and the repository variable `NETLIFY_SITE_ID` with the
+   project ID from Netlify. Do not put the token in the repository or PR comments.
+3. Keep the Netlify production build command and publish directory configured
+   for this website. The root `netlify.toml` adds only an ignore rule: Git-triggered
+   builds proceed only for the `production` context on `main`.
+4. Remove any required native `netlify/.../deploy-preview` check from branch
+   protection. Previews are optional; do not require the comment-triggered check
+   for every PR.
+
+The Netlify UI settings are necessary: they also stop automatic builds for PRs
+that do not yet contain `netlify.toml`. The ignore rule is a fallback, evaluated
+after Netlify starts build setup. The workflow must reach the default branch
+before GitHub will process `/netlify` comments.
+
+PR build code runs on a separate runner with a read-only GitHub token and no
+Netlify credentials. Only the trusted default-branch publisher receives the
+deploy token; it uploads static files without running PR scripts or configuration.
+These draft uploads do not trigger another Netlify build or replace production.
+
+See Netlify's [Deploy Preview controls](https://docs.netlify.com/deploy/deploy-types/deploy-previews/#configure-deploy-previews-for-pull--merge-requests),
+[ignore command](https://docs.netlify.com/build/configure-builds/ignore-builds/),
+and [draft deploy API](https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api/#draft-deploys).
 
 ## Features
 

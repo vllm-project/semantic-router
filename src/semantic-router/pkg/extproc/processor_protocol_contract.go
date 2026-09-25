@@ -89,11 +89,39 @@ func (r *OpenAIRouter) protocolEngine() (*protocolcodec.Engine, error) {
 	if r == nil {
 		return nil, fmt.Errorf("protocol runtime is unavailable")
 	}
-	registry := r.ProtocolCodecs
+	return protocolEngineFor(r.ProtocolCodecs)
+}
+
+// protocolEngineFor serves callers that hold only the registry, such as
+// detached work that must not capture the router.
+func protocolEngineFor(registry *protocolcodec.Registry) (*protocolcodec.Engine, error) {
 	if registry == nil {
 		registry = protocolcodec.NewBuiltinRegistry()
 	}
 	return protocolcodec.NewEngine(registry, llmprotocol.DefaultPolicy())
+}
+
+// protocolEngineForVendor creates an engine with the specified response vendor policy.
+func (r *OpenAIRouter) protocolEngineForVendor(vendor llmprotocol.ResponseVendor) (*protocolcodec.Engine, error) {
+	if r == nil {
+		return nil, fmt.Errorf("protocol runtime is unavailable")
+	}
+	registry := r.ProtocolCodecs
+	if registry == nil {
+		registry = protocolcodec.NewBuiltinRegistry()
+	}
+	policy := llmprotocol.DefaultPolicy()
+	policy.ResponseVendor = vendor
+	return protocolcodec.NewEngine(registry, policy)
+}
+
+// protocolEngineForBackend permits extensions only for live provider responses.
+func (r *OpenAIRouter) protocolEngineForBackend(ctx *RequestContext) (*protocolcodec.Engine, error) {
+	var vendor llmprotocol.ResponseVendor
+	if ctx != nil {
+		vendor = ctx.ResponseVendor
+	}
+	return r.protocolEngineForVendor(vendor)
 }
 
 // prepareProtocolRequest decodes every public wire format exactly once. The
@@ -109,7 +137,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	if err != nil {
 		return nil, r.createErrorResponse(503, "protocol runtime unavailable")
 	}
-	request, envelope, diagnostics, err := engine.DecodeRequestForMutation(ctx.SourceFormat, body)
+	request, envelope, diagnostics, err := decodeRequestWithLooperEvidence(engine, body, ctx)
 	if err != nil {
 		recordIngressProtocolError(ctx, err)
 		var protocolError *llmprotocol.ProtocolError
@@ -123,6 +151,7 @@ func (r *OpenAIRouter) prepareProtocolRequest(
 	request.Trusted.CorrelationID = ctx.RequestID
 	ctx.IngressBodyBytes = len(body)
 	ctx.SemanticRequest = &request
+	ctx.RequestAutoStore = cloneBoolPtr(request.AutoStore)
 	ctx.ProtocolEnvelope = envelope
 	ctx.ProtocolDiagnostics = append(llmprotocol.Diagnostics(nil), diagnostics...)
 	ctx.ExpectStreamingResponse = ctx.ExpectStreamingResponse || request.Stream
@@ -200,7 +229,7 @@ func (r *OpenAIRouter) encodeDispatchRequest(ctx *RequestContext) ([]byte, error
 		return nil, err
 	}
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, encoded.Diagnostics...)
-	return encoded.Body, nil
+	return encodeLooperEvidence(encoded.Body, format, ctx)
 }
 
 func streamUsageAlreadyRequested(options llmprotocol.StreamOptions) bool {
@@ -221,7 +250,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	if ctx == nil {
 		return nil, fmt.Errorf("request context is unavailable")
 	}
-	engine, err := r.protocolEngine()
+	engine, err := r.protocolEngineForBackend(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +268,7 @@ func (r *OpenAIRouter) decodeClientResponse(
 	}
 	ctx.SemanticResponse = &decoded.Response
 	ctx.ResponseEnvelope = decoded.Envelope
+	ctx.ResponseVendorExtensions = protocolcodec.DiagnosticsDroppedVendorExtensions(decoded.Diagnostics)
 	ctx.ProtocolDiagnostics = append(ctx.ProtocolDiagnostics, decoded.Diagnostics...)
 	return ctx.SemanticResponse, nil
 }

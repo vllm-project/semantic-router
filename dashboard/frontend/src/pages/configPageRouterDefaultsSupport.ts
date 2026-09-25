@@ -807,7 +807,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'model_id',
           label: 'Model ID Override',
           type: 'text',
-          placeholder: 'models/mmbert32k-feedback-detector-merged',
+          placeholder: 'models/Vela-1.0-Encoder-307M-Feedback',
         },
         { name: 'threshold', label: 'Threshold', type: 'percentage', placeholder: '70' },
         { name: 'use_cpu', label: 'Use CPU', type: 'boolean' },
@@ -828,25 +828,25 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'domain_classifier',
           label: 'Domain Classifier Binding',
           type: 'text',
-          placeholder: 'models/mmbert32k-intent-classifier-merged',
+          placeholder: 'models/Vela-1.0-Encoder-307M-Domain',
         },
         {
           name: 'pii_classifier',
           label: 'PII Classifier Binding',
           type: 'text',
-          placeholder: 'models/mmbert32k-pii-detector-merged',
+          placeholder: 'models/Vela-1.0-Encoder-307M-PII',
         },
         {
           name: 'fact_check_classifier',
           label: 'Fact Check Binding',
           type: 'text',
-          placeholder: 'models/mmbert32k-factcheck-classifier-merged',
+          placeholder: 'models/Vela-1.0-Encoder-307M-FactCheck',
         },
         {
           name: 'hallucination_detector',
           label: 'Hallucination Detector Binding',
           type: 'text',
-          placeholder: 'models/mom-halugate-detector',
+          placeholder: 'models/Vela-1.0-Encoder-307M-Halu',
         },
         {
           name: 'hallucination_explainer',
@@ -858,7 +858,7 @@ function curatedFieldsForKey(key: RouterSystemKey): FieldConfig[] {
           name: 'feedback_detector',
           label: 'Feedback Detector Binding',
           type: 'text',
-          placeholder: 'models/mmbert32k-feedback-detector-merged',
+          placeholder: 'models/Vela-1.0-Encoder-307M-Feedback',
         },
       ]
     case 'embedding_models':

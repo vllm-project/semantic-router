@@ -426,6 +426,11 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 
 	// Check field constraints
 	v.checkFieldConstraints(s.Fields, s.Pos, context)
+	if s.SignalType == "embedding" || s.SignalType == "complexity" {
+		if _, err := prototypeScoringFromSignal(s); err != nil {
+			v.addDiag(DiagConstraint, s.Pos, fmt.Sprintf("%s: %v", context, err), nil)
+		}
+	}
 
 	// Signal-type-specific required fields
 	switch s.SignalType {
@@ -443,7 +448,7 @@ func (v *Validator) checkSignalConstraints(s *SignalDecl) {
 				nil,
 			)
 		}
-		if _, ok := s.Fields["candidates"]; !ok {
+		if _, ok := s.Fields["candidates"]; !ok && s.Fields["image_candidates"] == nil {
 			v.addDiag(DiagConstraint, s.Pos,
 				fmt.Sprintf("%s: 'candidates' field is recommended", context),
 				nil,

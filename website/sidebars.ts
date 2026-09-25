@@ -15,6 +15,7 @@ const sidebars: SidebarsConfig = {
   // By default, Docusaurus generates a sidebar from the docs folder structure
   tutorialSidebar: [
     'intro',
+    'faq',
     {
       type: 'category',
       label: 'Overview',
@@ -33,6 +34,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'installation/installation',
+        'installation/agent',
         {
           type: 'category',
           label: 'Plan a Deployment',
@@ -101,6 +103,7 @@ const sidebars: SidebarsConfig = {
                 'tutorials/signal/learned/fact-check',
                 'tutorials/signal/learned/hallucination',
                 'tutorials/signal/learned/jailbreak',
+                'tutorials/signal/learned/safety',
                 'tutorials/signal/learned/pii',
                 'tutorials/signal/learned/preference',
                 'tutorials/signal/learned/reask',
@@ -230,8 +233,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'tutorials/global/api-and-observability',
             'tutorials/global/stores-and-tools',
-            'tutorials/global/safety-models-and-policy',
-            'tutorials/global/remote-embeddings',
+            'tutorials/global/vela-models',
           ],
         },
       ],
@@ -363,24 +365,29 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'Runtime Reference',
+          label: 'Router Runtime',
+          link: { type: 'doc', id: 'installation/native-backends' },
           items: [
-            'installation/native-backends',
+            {
+              type: 'category',
+              label: 'Run models',
+              items: [
+                'installation/runtime/in-process',
+                'installation/runtime/openvino',
+                'installation/runtime/external',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Model guides',
+              items: [
+                'installation/runtime/embeddings',
+                'installation/runtime/safety',
+              ],
+            },
+            'installation/runtime/lifecycle-diagnostics',
           ],
         },
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Fleet Simulator',
-      collapsed: false,
-      items: [
-        'fleet-sim/overview',
-        'fleet-sim/getting-started',
-        'fleet-sim/use-cases',
-        'fleet-sim/sim-algorithms',
-        'fleet-sim/power-model',
-        'fleet-sim/guide',
       ],
     },
     {
@@ -396,6 +403,7 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Routing & Selection',
           items: [
+            'proposals/decision-ranking-semantics',
             'proposals/batch-and-capacity-aware-routing',
             'proposals/router-learning-memory-and-adaptations',
             'proposals/prompt-classification-routing',
@@ -491,7 +499,7 @@ const sidebars: SidebarsConfig = {
         'benchmarking/open-intelligence-index',
         'benchmarking/agent-evaluation-loop',
         'benchmarking/custom-evaluations',
-        'benchmarking/evaluation-plane',
+        'benchmarking/sr-bench',
       ],
     },
     {
@@ -499,6 +507,7 @@ const sidebars: SidebarsConfig = {
       label: 'API Reference',
       collapsed: false,
       items: [
+        'api/cli',
         'api/router',
         'api/configuration-schema',
         'api/apiserver',
@@ -506,6 +515,19 @@ const sidebars: SidebarsConfig = {
         'api/session-identification',
         'api/semantic-router-crd',
         'api/crd-reference',
+      ],
+    },
+    {
+      type: 'category',
+      label: 'Fleet Simulator',
+      collapsed: false,
+      items: [
+        'fleet-sim/overview',
+        'fleet-sim/getting-started',
+        'fleet-sim/use-cases',
+        'fleet-sim/sim-algorithms',
+        'fleet-sim/power-model',
+        'fleet-sim/guide',
       ],
     },
     {

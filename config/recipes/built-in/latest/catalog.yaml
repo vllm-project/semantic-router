@@ -23,7 +23,7 @@ defaults:
 assets:
 - id: mom-v1
   bundle: mom-v1
-  sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
+  sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
 protocols:
 - id: openai/chat-completions@1
   display_name: OpenAI Chat Completions
@@ -288,12 +288,20 @@ providers:
   support_tier: native
   protocols:
   - openai/chat-completions@1
+  - openai/responses@1
   default_protocol: openai/chat-completions@1
   supported_operations:
   - openai/chat-completions@1#create
+  - openai/responses@1#create
   path_overrides:
     openai/chat-completions@1#create: /chat/completions
+  operation_overrides:
+    openai/responses@1#create:
+      path: /openai/v1/responses
+      absolute_path: true
+      suppress_api_version: true
   api_version_query: true
+  reasoning_transport: top_level_effort
   auth:
     strategy: api_key_header
     header: api-key
@@ -307,6 +315,49 @@ providers:
   conformance:
     status: fixture_verified
     verified_at: '2026-09-04'
+  models:
+  - catalog: openai/gpt-6-astra
+    relationship: managed_cloud
+    id: gpt-6-astra
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_modes:
+    - enabled
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    reasoning_efforts_by_protocol:
+      openai/chat-completions@1:
+      - low
+      - medium
+      - high
+      - xhigh
+    restrictions:
+      provider_model_id_kind: deployment_name
+      catalog_model_name: gpt-6-astra
+      tools_protocols:
+      - openai/responses@1
+      unsupported_request_fields:
+        openai/chat-completions@1:
+        - temperature
+        - top_p
+        - top_logprobs
+        - logprobs
+        openai/responses@1:
+        - temperature
+        - top_p
+        - top_logprobs
+      unsupported_include_values:
+      - message.output_text.logprobs
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-08'
+      source: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/reasoning
 - id: baidu-ai-studio
   display_name: Baidu AI Studio
   description: ERNIE models through Baidu AI Studio's OpenAI-compatible LLM API.
@@ -425,7 +476,7 @@ providers:
       source: https://intl.cloud.baidu.com/en/doc/qianfan/s/7m95lyy43-intl-en
 - id: bedrock
   display_name: Amazon Bedrock
-  description: Models exposed through Amazon Bedrock-compatible routing.
+  description: Custom models exposed through Amazon Bedrock's OpenAI-compatible Chat Completions API.
   category: model_api
   support_tier: native
   protocols:
@@ -444,41 +495,11 @@ providers:
     logo: monogram
     monogram: AWS
     monochrome: false
-    featured: true
+    featured: false
   conformance:
     status: fixture_verified
     verified_at: '2026-09-04'
-  models:
-  - catalog: amazon/nova-pro-v1
-    relationship: first_party
-    id: amazon.nova-pro-v1:0
-    protocols:
-    - openai/chat-completions@1
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
-  - catalog: amazon/nova-premier-v1
-    relationship: first_party
-    id: amazon.nova-premier-v1:0
-    protocols:
-    - openai/chat-completions@1
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
-  - catalog: amazon/nova-2-lite
-    relationship: first_party
-    id: amazon.nova-2-lite-v1:0
-    protocols:
-    - openai/chat-completions@1
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+  models: []
 - id: celeris
   display_name: Celeris
   description: Low-latency Celeris diffusion models through an OpenAI-compatible API.
@@ -541,12 +562,14 @@ providers:
     strategy: bearer
     header: Authorization
     prefix: Bearer
+    injected_header: x-user-cloudflare-workers-ai-key
   presentation:
     logo: monogram
     monogram: Cf
     monochrome: false
   conformance:
-    status: unverified
+    status: live_verified
+    verified_at: '2026-09-19'
 - id: cohere
   display_name: Cohere
   description: Command models through the compatibility API.
@@ -944,6 +967,52 @@ providers:
     monochrome: false
   conformance:
     status: unverified
+  models:
+  - catalog: meta/muse-glimmer-30b
+    relationship: managed_cloud
+    id: accounts/fireworks/models/muse-glimmer-30b
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.35
+      cached_input_per_1m: 0.04
+      completion_per_1m: 1.5
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/muse-glimmer-30b
+  - catalog: moonshot/kimi-k3
+    relationship: managed_cloud
+    id: accounts/fireworks/models/kimi-k3
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 3.0
+      cached_input_per_1m: 0.3
+      completion_per_1m: 15.0
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/kimi-k3
+  - catalog: thinking-machines/inkling
+    relationship: managed_cloud
+    id: accounts/fireworks/models/inkling
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.0
+      cached_input_per_1m: 0.17
+      completion_per_1m: 4.05
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-10'
+      source: https://app.fireworks.ai/models/fireworks/inkling
 - id: friendli
   display_name: FriendliAI
   description: Friendli serverless model endpoints.
@@ -1359,17 +1428,6 @@ providers:
   conformance:
     status: unverified
   models:
-  - catalog: moonshot/kimi-k2.5
-    relationship: first_party
-    id: kimi-k2.5
-    protocols:
-    - openai/chat-completions@1
-    reasoning_transport: thinking_object
-    lifecycle: active
-    verification:
-      status: claimed
-      verified_at: '2026-09-05'
-      source: https://platform.moonshot.ai/docs/api/chat
   - catalog: moonshot/kimi-k2.6
     relationship: first_party
     id: kimi-k2.6
@@ -1913,6 +1971,16 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://openrouter.ai/bytedance-seed/seed-2-1-turbo
+  - catalog: amazon/nova-2-lite
+    relationship: gateway
+    id: amazon/nova-2-lite-v1
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://openrouter.ai/amazon/nova-2-lite-v1
   - catalog: amazon/nova-premier-v1
     relationship: gateway
     id: amazon/nova-premier-v1
@@ -2535,6 +2603,31 @@ providers:
       status: claimed
       verified_at: '2026-09-06'
       source: https://huggingface.co/stepfun-ai/Step3-VL-10B
+- id: snowflake-cortex
+  display_name: Snowflake Cortex AI
+  description: Frontier models hosted and governed inside your Snowflake perimeter.
+  category: model_api
+  support_tier: native
+  protocols:
+  - openai/chat-completions@1
+  - anthropic/messages@1
+  default_protocol: openai/chat-completions@1
+  supported_operations:
+  - openai/chat-completions@1#create
+  - anthropic/messages@1#create
+  default_headers:
+    anthropic-version: '2023-06-01'
+  auth:
+    strategy: bearer
+    header: Authorization
+    prefix: Bearer
+  presentation:
+    logo: monogram
+    monogram: SF
+    monochrome: true
+  conformance:
+    status: fixture_verified
+    verified_at: '2026-09-20'
 - id: stepfun
   display_name: StepFun
   description: Step models through StepFun's OpenAI-compatible API.
@@ -2603,6 +2696,60 @@ providers:
     featured: true
   conformance:
     status: unverified
+  models:
+  - catalog: minimax/minimax-m3
+    relationship: managed_cloud
+    id: MiniMaxAI/MiniMax-M3
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 0.3
+      cached_input_per_1m: 0.06
+      completion_per_1m: 1.2
+    restrictions:
+      context_window_size: 524288
+      quantization: FP4
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-16'
+      source: https://docs.together.ai/docs/serverless/models
+  - catalog: moonshot/kimi-k3
+    relationship: managed_cloud
+    id: moonshotai/Kimi-K3
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 3.0
+      cached_input_per_1m: 0.3
+      completion_per_1m: 15.0
+    restrictions:
+      context_window_size: 1048576
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-16'
+      source: https://docs.together.ai/docs/serverless/models
+  - catalog: zai/glm-5.2
+    relationship: managed_cloud
+    id: zai-org/GLM-5.2
+    protocols:
+    - openai/chat-completions@1
+    pricing:
+      currency: USD
+      prompt_per_1m: 1.4
+      cached_input_per_1m: 0.26
+      completion_per_1m: 4.4
+    restrictions:
+      context_window_size: 1048575
+      quantization: FP4
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-16'
+      source: https://docs.together.ai/docs/serverless/models
 - id: triton
   display_name: NVIDIA Triton
   description: Connect a private NVIDIA Triton endpoint.
@@ -3439,6 +3586,39 @@ providers:
       status: claimed
       verified_at: '2026-09-09'
       source: https://huggingface.co/Qwen/Qwen3-30B-A3B-Thinking-2507
+  - catalog: ibm/granite-4.2-30b
+    relationship: self_hosted
+    id: ibm-granite/granite-4.2-30b
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-17'
+      source: https://huggingface.co/ibm-granite/granite-4.2-30b
+  - catalog: ibm/granite-4.2-8b
+    relationship: self_hosted
+    id: ibm-granite/granite-4.2-8b
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-17'
+      source: https://huggingface.co/ibm-granite/granite-4.2-8b
+  - catalog: ibm/granite-4.2-3b
+    relationship: self_hosted
+    id: ibm-granite/granite-4.2-3b
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-17'
+      source: https://huggingface.co/ibm-granite/granite-4.2-3b
 - id: volcengine-ark
   display_name: Volcengine Ark
   description: ByteDance Seed and Doubao models through the Ark OpenAI-compatible API.
@@ -3620,6 +3800,16 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://platform.xiaomimimo.com/docs/en-US/usage-guide/passing-back-reasoning_content
+  - catalog: xiaomi/mimo-v2.6-flash
+    relationship: first_party
+    id: mimo-v2.6-flash
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://mimo.mi.com/docs/en-US/quick-start/summary/model
 - id: xinference
   display_name: Xinference
   description: Connect a private Xinference endpoint.
@@ -4340,12 +4530,12 @@ models:
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html
   family: nova-1
   lifecycle: active
   limits:
     context_window_size: 1000000
-    max_output_tokens: 10000
+    max_output_tokens: 25000
   capabilities:
   - chat
   - tools
@@ -4362,8 +4552,8 @@ models:
   verification:
     authority: Amazon
     status: claimed
-    verified_at: '2026-09-05'
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    verified_at: '2026-09-24'
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-premier.html
   tags:
   - proprietary
   - frontier
@@ -4381,12 +4571,12 @@ models:
     monochrome: false
   distribution:
     type: proprietary_api
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html
   family: nova-1
   lifecycle: active
   limits:
     context_window_size: 300000
-    max_output_tokens: 10000
+    max_output_tokens: 5000
   capabilities:
   - chat
   - tools
@@ -4403,8 +4593,8 @@ models:
   verification:
     authority: Amazon
     status: claimed
-    verified_at: '2026-09-05'
-    source: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    verified_at: '2026-09-24'
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-pro.html
   tags:
   - proprietary
   - multimodal
@@ -5555,6 +5745,133 @@ models:
   - multimodal
   - dense
   released_at: '2025-03-12'
+- id: ibm/granite-4.2-30b
+  display_name: Granite 4.2 30B
+  description: IBM's flagship Granite 4.2 reasoning model for reasoning, coding, tool calling, agentic workflows and multilingual
+    dialogue.
+  kind: physical
+  publisher: IBM / Granite
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    license: Apache-2.0
+  family: granite-4.2
+  parameter_size: 30B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - coding
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Granite Team, IBM
+    status: claimed
+    verified_at: '2026-09-17'
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+  tags:
+  - open_weights
+  - reasoning
+  - dense
+  - coding
+  - agentic
+  released_at: '2026-08-25'
+- id: ibm/granite-4.2-8b
+  display_name: Granite 4.2 8B
+  description: IBM's mid size Granite 4.2 reasoning model for reasoning, coding, tool calling, agentic workflows and multilingual
+    dialogue.
+  kind: physical
+  publisher: IBM / Granite
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    license: Apache-2.0
+  family: granite-4.2
+  parameter_size: 8B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - coding
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Granite Team, IBM
+    status: claimed
+    verified_at: '2026-09-17'
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+  tags:
+  - open_weights
+  - reasoning
+  - dense
+  - coding
+  - agentic
+  released_at: '2026-08-25'
+- id: ibm/granite-4.2-3b
+  display_name: Granite 4.2 3B
+  description: IBM's compact Granite 4.2 reasoning model for reasoning, coding, tool calling, agentic workflows and multilingual
+    dialogue.
+  kind: physical
+  publisher: IBM / Granite
+  presentation:
+    logo: monogram
+    monogram: IBM
+    monochrome: true
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    license: Apache-2.0
+  family: granite-4.2
+  parameter_size: 3B
+  lifecycle: active
+  limits:
+    context_window_size: 131072
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - coding
+  - long_context
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: Granite Team, IBM
+    status: claimed
+    verified_at: '2026-09-17'
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+  tags:
+  - open_weights
+  - reasoning
+  - dense
+  - coding
+  - agentic
+  - efficient
+  released_at: '2026-08-25'
 - id: meta/muse-spark-1.3
   display_name: Muse Spark 1.3
   description: Meta's latest Muse Spark model for agentic workflows, coding, and long-running collaborative work.
@@ -7882,6 +8199,56 @@ models:
   - reasoning
   - agentic
   released_at: '2026-05-15'
+- id: xiaomi/mimo-v2.6-flash
+  display_name: MiMo V2.6 Flash
+  description: Efficiency-balanced open-weight omnimodal Xiaomi MoE model for coding and agentic workloads.
+  kind: physical
+  publisher: Xiaomi
+  presentation:
+    logo: package:xiaomimimo
+    monogram: Mi
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL
+    license: MIT
+  family: mimo-v2
+  parameter_size: 309B (15B active)
+  reasoning_family: mimo
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - audio
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    - audio
+    output:
+    - text
+  verification:
+    authority: Xiaomi
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL
+  tags:
+  - open_weights
+  - reasoning
+  - coding
+  - agentic
+  - multimodal
+  - efficient
+  - moe
+  released_at: '2026-09-22'
 - id: xiaomi/mimo-v2.5-pro
   display_name: MiMo V2.5 Pro
   description: High-capability open-weight Xiaomi model for complex software agents.
@@ -8184,7 +8551,7 @@ models:
   released_at: '2026-04-07'
 - id: vllm-sr/mom-v1-blend
   display_name: MoM V1 Blend
-  description: Multi-objective routing across intelligence, latency, cost, and answer recovery.
+  description: Balances measured quality, latency, and cost across reasoning, simple, and general requests.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -8196,7 +8563,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 1.3.0
+  policy_version: 3.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -8219,56 +8586,41 @@ models:
   - tools
   - multimodal
   roles:
-  - name: economy
-    required: true
-    minimum_candidates: 1
-    traits:
-    - chat
-    - tools
-    - long_context
-    recommended_pool:
-    - local/qwen3.5-9b
-  - name: balanced
-    required: true
-    minimum_candidates: 2
-    traits:
-    - chat
-    - reasoning
-    - tools
-    recommended_pool:
-    - local/qwen3.6-35b
-    - local/step-3.7-flash
-    - local/qwen3.5-122b
-    - local/mistral-small-4
-  - name: vision
-    required: true
-    minimum_candidates: 1
-    traits:
-    - chat
-    - vision
-    - multimodal
-    - tools
-    recommended_pool:
-    - local/qwen3.6-35b
-    - local/step-3.7-flash
-  - name: terminal_context
+  - name: reasoning
     required: true
     minimum_candidates: 1
     traits:
     - chat
     - reasoning
-    - text
-    - long_context
     recommended_pool:
-    - local/glm-5.2
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: simple
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: medium
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
   verification:
     authority: vllm-sr-maintainers
-    status: reproduced
-    verified_at: '2026-09-04'
-    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
+    status: claimed
+    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
 - id: vllm-sr/mom-v1-lite
   display_name: MoM V1 Lite
-  description: Economy-first direct answers with bounded opt-in reasoning.
+  description: Prioritizes known cost within task-specific quality bands for tools, reasoning, and economy routing.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -8280,7 +8632,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 1.2.0
+  policy_version: 3.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -8300,44 +8652,42 @@ models:
   - reasoning
   - tools
   roles:
+  - name: tools
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - tools
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: reasoning
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - reasoning
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
   - name: economy
     required: true
     minimum_candidates: 1
     traits:
     - chat
-    - reasoning
-    - tools
-    - long_context
     recommended_pool:
-    - local/qwen3.5-9b
-  - name: multimodal_guard
-    required: true
-    minimum_candidates: 1
-    traits:
-    - chat
-    - vision
-    - multimodal
-    - long_context
-    recommended_pool:
-    - local/qwen3.6-35b
-  - name: terminal_context
-    required: true
-    minimum_candidates: 1
-    traits:
-    - chat
-    - reasoning
-    - text
-    - long_context
-    recommended_pool:
-    - local/glm-5.2
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
   verification:
     authority: vllm-sr-maintainers
-    status: reproduced
-    verified_at: '2026-09-04'
-    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
+    status: claimed
+    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
 - id: vllm-sr/mom-v1-flash
   display_name: MoM V1 Flash
-  description: Latency-first interactive, tool, vision, and heavy-workload routing.
+  description: Prioritizes measured first-token or output-token latency within task-specific quality bands.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -8349,10 +8699,11 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 1.3.0
+  policy_version: 3.0.0
   lifecycle: active
   capabilities:
   - chat
+  - reasoning
   - tools
   - multimodal
   modalities:
@@ -8367,47 +8718,46 @@ models:
   traits:
   - latency_optimized
   - chat
+  - reasoning
   - tools
   - multimodal
   roles:
-  - name: interactive
+  - name: tools
     required: true
     minimum_candidates: 1
     traits:
     - chat
     - tools
-    - low_latency
     recommended_pool:
-    - local/qwen3.5-9b
-    - local/qwen3.6-35b
-  - name: vision
-    required: true
-    minimum_candidates: 1
-    traits:
-    - vision
-    - multimodal
-    - tools
-    recommended_pool:
-    - local/qwen3.6-35b
-    - local/step-3.7-flash
-  - name: terminal_context
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: reasoning
     required: true
     minimum_candidates: 1
     traits:
     - chat
     - reasoning
-    - text
-    - long_context
     recommended_pool:
-    - local/glm-5.2
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: fast
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
   verification:
     authority: vllm-sr-maintainers
-    status: reproduced
-    verified_at: '2026-09-04'
-    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
+    status: claimed
+    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
 - id: vllm-sr/mom-v1-ultra
   display_name: MoM V1 Ultra
-  description: Accuracy-first direct and bounded multi-model orchestration.
+  description: Combines strict quality selection with bounded review and agent workflows.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -8419,7 +8769,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 1.2.0
+  policy_version: 3.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -8444,69 +8794,55 @@ models:
   - multimodal
   - orchestration
   roles:
-  - name: frontier
+  - name: agent
     required: true
-    minimum_candidates: 1
+    minimum_candidates: 2
+    traits:
+    - chat
+    - reasoning
+    - tools
+    - structured_output
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: review
+    required: true
+    minimum_candidates: 2
     traits:
     - chat
     - reasoning
     - structured_output
-    - long_context
-    - tools
     recommended_pool:
-    - local/glm-5.2
-    - local/qwen3.5-122b
-  - name: panel
-    required: true
-    minimum_candidates: 3
-    traits:
-    - reasoning
-    - provider_diversity
-    - tools
-    recommended_pool:
-    - local/step-3.7-flash
-    - local/mistral-small-4
-    - local/gpt-oss-120b
-  - name: confidence
-    required: true
-    minimum_candidates: 2
-    traits:
-    - token_logprobs
-    - reasoning
-    recommended_pool:
-    - local/qwen3.6-35b
-    - local/step-3.7-flash
-    - local/glm-5.2
-  - name: vision
-    required: true
-    minimum_candidates: 1
-    traits:
-    - chat
-    - vision
-    - multimodal
-    - tools
-    recommended_pool:
-    - local/qwen3.6-35b
-    - local/step-3.7-flash
-  - name: terminal_context
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: reasoning
     required: true
     minimum_candidates: 1
     traits:
     - chat
     - reasoning
-    - text
-    - long_context
-    - tools
     recommended_pool:
-    - local/glm-5.2
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
+  - name: simple
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    recommended_pool:
+    - deepseek/deepseek-v4-flash
+    - deepseek/deepseek-v4-pro
+    - zai/glm-5.1
   verification:
     authority: vllm-sr-maintainers
-    status: reproduced
-    verified_at: '2026-09-04'
-    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
+    status: claimed
+    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
 - id: vllm-sr/mom-v1-vault
   display_name: MoM V1 Vault
-  description: Local-only privacy, containment, and tool-history minimization.
+  description: Contains prompt attacks and routes private or sensitive work to the operator-assigned model pools.
   kind: virtual
   publisher: vllm-sr.ai
   presentation:
@@ -8518,7 +8854,7 @@ models:
     source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/built-in/latest/mom-v1
   family: mom
   generation: 1
-  policy_version: 1.2.0
+  policy_version: 3.0.0
   lifecycle: active
   capabilities:
   - chat
@@ -8534,48 +8870,29 @@ models:
   recipe: vault
   traits:
   - privacy
-  - local_only
   - chat
   - reasoning
   - tool_isolation
+  - private_deployment
   roles:
+  - name: sensitive
+    required: true
+    minimum_candidates: 1
+    traits:
+    - chat
+    - private_deployment
+    recommended_pool: []
   - name: private
     required: true
-    minimum_candidates: 2
-    traits:
-    - local_only
-    - chat
-    - reasoning
-    recommended_pool:
-    - local/qwen3.5-9b
-    - local/qwen3.6-35b
-    - local/gpt-oss-120b
-  - name: private_vision
-    required: true
     minimum_candidates: 1
     traits:
-    - local_only
-    - vision
-    - multimodal
-    recommended_pool:
-    - local/qwen3.5-122b
-    - local/qwen3.6-35b
-  - name: terminal_context
-    required: true
-    minimum_candidates: 1
-    traits:
-    - local_only
     - chat
-    - reasoning
-    - text
-    - long_context
-    recommended_pool:
-    - local/glm-5.2
+    - private_deployment
+    recommended_pool: []
   verification:
     authority: vllm-sr-maintainers
-    status: reproduced
-    verified_at: '2026-09-04'
-    asset_sha256: sha256:ebc493aca8f13dfb04938a5cbf0223e30f1c1cac789aa46c995245706a9d18b8
+    status: claimed
+    asset_sha256: sha256:e831a0680472bedd87d35a5983faac9f1639397eeed63ddadf01f3973fa12b71
 benchmarks:
 - id: tiger-ai-lab/mmlu-pro@1.0.0
   display_name: MMLU-Pro
@@ -18524,6 +18841,261 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/models/gemma-3-12b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-ifbench@1.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7717
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-aime@2025.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.8917
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-livecodebench@6.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.7577
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.776
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-30b-model-card-scicode@1.0.0
+  model: ibm/granite-4.2-30b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 30B
+    source_kind: official_model_card
+  metrics:
+    score: 0.3876
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-30b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-ifbench@1.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7933
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-aime@2025.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.8667
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-livecodebench@6.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.7324
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7404
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-8b-model-card-scicode@1.0.0
+  model: ibm/granite-4.2-8b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 8B
+    source_kind: official_model_card
+  metrics:
+    score: 0.3609
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-8b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-ifbench@1.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.7433
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-aime@2025.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.7833
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-livecodebench@6.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: livecodebench/livecodebench@6.0.0
+  benchmark_profile: published-code-generation
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    pass_at_1: 0.6971
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.6784
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
+    redistributable: true
+- id: ibm/granite-4.2-3b-model-card-scicode@1.0.0
+  model: ibm/granite-4.2-3b
+  benchmark: scicode-bench/scicode@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: unspecified
+  subject:
+    variant: Granite 4.2 3B
+    source_kind: official_model_card
+  metrics:
+    score: 0.2411
+  status: available
+  observed_at: '2026-09-17'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/ibm-granite/granite-4.2-3b
     redistributable: true
 - id: independent/muse-spark-1-3-aa-briefcase@1.0.0
   model: meta/muse-spark-1.3
@@ -35489,6 +36061,91 @@ evaluations:
     verification: imported
     source: https://benchmarks.duellab.org/model-x-ai-grok-4-5
     redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-deep-swe-1.1@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.679
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-automation-bench@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    score: 0.523
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-agents-last-exam@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: berkeley-rdi/agents-last-exam@1.0.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    pass_rate: 0.276
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.876
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
+- id: xiaomi/mimo-v2.6-flash-model-card-osworld-verified@1.0.0
+  model: xiaomi/mimo-v2.6-flash
+  benchmark: osworld/verified@1.0.0
+  benchmark_profile: official
+  reasoning_effort: unspecified
+  subject:
+    variant: MiMo-V2.6-Flash-RL
+    source_kind: official_model_card
+  metrics:
+    success_rate: 0.808
+  status: available
+  observed_at: '2026-09-23'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/XiaomiMiMo/MiMo-V2.6-Flash-RL/blob/5711b268169967567844e1e560e8a3966da959b1/README.md
+    redistributable: true
 - id: independent/mimo-v2-5-pro-non-reasoning-critpt@1.0.0
   model: xiaomi/mimo-v2.5-pro
   benchmark: artificial-analysis/critpt@1.0.0
@@ -40879,6 +41536,177 @@ index_results:
   - independent/gemma-3-12b-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 0.0
+- model: ibm/granite-4.2-30b
+  reasoning_effort: unspecified
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 77.60000000000001
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.776
+    normalized: 0.776
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - ibm/granite-4.2-30b-model-card-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 77.60000000000001
+- model: ibm/granite-4.2-30b
+  reasoning_effort: unspecified
+  index: vllm-sr/coding@1.0.0
+  status: available
+  score: 57.265
+  coverage: 1.0
+  components:
+  - weight: 0.5
+    status: available
+    value: 0.7577
+    normalized: 0.7577
+    benchmark: livecodebench/livecodebench@6.0.0
+    metric: pass_at_1
+    benchmark_profiles:
+    - independent-code-generation
+    - published-code-generation
+    evaluation: ibm/granite-4.2-30b-model-card-livecodebench@6.0.0
+    benchmark_profile: published-code-generation
+  - weight: 0.5
+    status: available
+    value: 0.3876
+    normalized: 0.3876
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: ibm/granite-4.2-30b-model-card-scicode@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - ibm/granite-4.2-30b-model-card-livecodebench@6.0.0
+  - ibm/granite-4.2-30b-model-card-scicode@1.0.0
+  domains:
+    competitive_programming: 75.77000000000001
+    scientific_coding: 38.76
+- model: ibm/granite-4.2-8b
+  reasoning_effort: unspecified
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 74.03999999999999
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.7404
+    normalized: 0.7404
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - ibm/granite-4.2-8b-model-card-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 74.03999999999999
+- model: ibm/granite-4.2-8b
+  reasoning_effort: unspecified
+  index: vllm-sr/coding@1.0.0
+  status: available
+  score: 54.665000000000006
+  coverage: 1.0
+  components:
+  - weight: 0.5
+    status: available
+    value: 0.7324
+    normalized: 0.7324
+    benchmark: livecodebench/livecodebench@6.0.0
+    metric: pass_at_1
+    benchmark_profiles:
+    - independent-code-generation
+    - published-code-generation
+    evaluation: ibm/granite-4.2-8b-model-card-livecodebench@6.0.0
+    benchmark_profile: published-code-generation
+  - weight: 0.5
+    status: available
+    value: 0.3609
+    normalized: 0.3609
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: ibm/granite-4.2-8b-model-card-scicode@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - ibm/granite-4.2-8b-model-card-livecodebench@6.0.0
+  - ibm/granite-4.2-8b-model-card-scicode@1.0.0
+  domains:
+    competitive_programming: 73.24000000000001
+    scientific_coding: 36.09
+- model: ibm/granite-4.2-3b
+  reasoning_effort: unspecified
+  index: vllm-sr/general@1.0.0
+  status: available
+  score: 67.84
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.6784
+    normalized: 0.6784
+    benchmark: tiger-ai-lab/mmlu-pro@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - ibm/granite-4.2-3b-model-card-mmlu-pro@1.0.0
+  domains:
+    general_reasoning: 67.84
+- model: ibm/granite-4.2-3b
+  reasoning_effort: unspecified
+  index: vllm-sr/coding@1.0.0
+  status: available
+  score: 46.910000000000004
+  coverage: 1.0
+  components:
+  - weight: 0.5
+    status: available
+    value: 0.6971
+    normalized: 0.6971
+    benchmark: livecodebench/livecodebench@6.0.0
+    metric: pass_at_1
+    benchmark_profiles:
+    - independent-code-generation
+    - published-code-generation
+    evaluation: ibm/granite-4.2-3b-model-card-livecodebench@6.0.0
+    benchmark_profile: published-code-generation
+  - weight: 0.5
+    status: available
+    value: 0.2411
+    normalized: 0.2411
+    benchmark: scicode-bench/scicode@1.0.0
+    metric: score
+    benchmark_profiles:
+    - independent-test-288
+    - published-standard
+    evaluation: ibm/granite-4.2-3b-model-card-scicode@1.0.0
+    benchmark_profile: published-standard
+  provenance:
+  - ibm/granite-4.2-3b-model-card-livecodebench@6.0.0
+  - ibm/granite-4.2-3b-model-card-scicode@1.0.0
+  domains:
+    competitive_programming: 69.71000000000001
+    scientific_coding: 24.11
 - model: meta/muse-spark-1.3
   reasoning_effort: xhigh
   index: vllm-sr/reasoning@1.0.0
@@ -47350,6 +48178,28 @@ index_results:
   - independent/grok-4-3-non-reasoning-terminalbench-v2-1@1.0.0
   domains:
     agentic_systems: 34.0823970037453
+- model: xiaomi/mimo-v2.6-flash
+  reasoning_effort: unspecified
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 87.6
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.876
+    normalized: 0.876
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0
+    benchmark_profile: published-agent
+  provenance:
+  - xiaomi/mimo-v2.6-flash-model-card-terminal-bench-2.1@1.0.0
+  domains:
+    agentic_systems: 87.6
 - model: xiaomi/mimo-v2.5-pro
   reasoning_effort: enabled
   index: vllm-sr/reasoning@1.0.0

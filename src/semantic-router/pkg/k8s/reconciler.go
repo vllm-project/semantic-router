@@ -20,11 +20,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
 
 	yamlv3 "gopkg.in/yaml.v3"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/rest"
@@ -43,10 +45,11 @@ import (
 type Reconciler struct {
 	client         client.Client
 	scheme         *runtime.Scheme
+	runtimeManager manager.Manager
 	namespace      string
 	converter      *CRDConverter
 	staticConfig   *config.RouterConfig
-	onConfigUpdate func(*config.RouterConfig) error
+	onConfigUpdate func(context.Context, *config.RouterConfig) error
 	mu             sync.RWMutex
 	lastPool       *v1alpha1.IntelligentPool
 	lastRoute      *v1alpha1.IntelligentRoute
@@ -57,7 +60,7 @@ type ReconcilerConfig struct {
 	Namespace      string
 	Kubeconfig     string // Optional: if empty, uses in-cluster config
 	StaticConfig   *config.RouterConfig
-	OnConfigUpdate func(*config.RouterConfig) error
+	OnConfigUpdate func(context.Context, *config.RouterConfig) error
 }
 
 // NewReconciler creates a new reconciler with controller-runtime
@@ -104,22 +107,11 @@ func NewReconciler(cfg ReconcilerConfig) (*Reconciler, error) {
 	reconciler := &Reconciler{
 		client:         mgr.GetClient(),
 		scheme:         scheme,
+		runtimeManager: mgr,
 		namespace:      cfg.Namespace,
 		converter:      NewCRDConverter(),
 		staticConfig:   cfg.StaticConfig,
 		onConfigUpdate: cfg.OnConfigUpdate,
-	}
-
-	// Start the manager in a goroutine
-	go func() {
-		if err := mgr.Start(context.Background()); err != nil {
-			logging.Errorf("Failed to start manager: %v", err)
-		}
-	}()
-
-	// Wait for cache to sync
-	if !mgr.GetCache().WaitForCacheSync(context.Background()) {
-		return nil, fmt.Errorf("failed to wait for cache sync")
 	}
 
 	return reconciler, nil
@@ -127,17 +119,75 @@ func NewReconciler(cfg ReconcilerConfig) (*Reconciler, error) {
 
 // Start starts watching for CRD changes
 func (r *Reconciler) Start(ctx context.Context) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	logging.Infof("Starting Kubernetes reconciler in namespace %s", r.namespace)
+	runCtx, cancel := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
 
-	// Initial sync
-	if err := r.reconcile(ctx); err != nil {
-		logging.Warnf("Initial reconciliation failed (will retry on CRD changes): %v", err)
+	managerDone := make(chan error, 1)
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		err := r.runtimeManager.Start(runCtx)
+		cancel()
+		managerDone <- err
+	}()
+	cacheSynced := make(chan bool, 1)
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		cacheSynced <- r.runtimeManager.GetCache().WaitForCacheSync(runCtx)
+	}()
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-managerDone:
+		if ctx.Err() != nil {
+			return nil
+		}
+		return runtimeManagerExitError(err)
+	case synced := <-cacheSynced:
+		if !synced {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return errors.New("failed to wait for cache sync")
+		}
 	}
 
-	// Start watch loops
-	go r.watchLoop(ctx)
+	// Reconciliation may wait for model preparation and activation. Run it
+	// beside the manager monitor so a terminal watcher error cancels that work.
+	workers.Add(1)
+	go func() {
+		defer workers.Done()
+		if err := r.reconcile(runCtx); err != nil && runCtx.Err() == nil {
+			logging.Warnf("Initial reconciliation failed (will retry): %v", err)
+		}
+		r.watchLoop(runCtx)
+	}()
 
-	return nil
+	select {
+	case <-ctx.Done():
+		return nil
+	case err := <-managerDone:
+		if ctx.Err() != nil {
+			return nil
+		}
+		return runtimeManagerExitError(err)
+	}
+}
+
+func runtimeManagerExitError(err error) error {
+	if err == nil {
+		return errors.New("kubernetes runtime manager stopped unexpectedly")
+	}
+	return fmt.Errorf("kubernetes runtime manager: %w", err)
 }
 
 // Stop stops the reconciler
@@ -195,12 +245,16 @@ func (r *Reconciler) reconcile(ctx context.Context) error {
 
 	// Check if anything changed
 	r.mu.RLock()
-	poolChanged := r.lastPool == nil || pool.Generation != r.lastPool.Generation
-	routeChanged := r.lastRoute == nil || route.Generation != r.lastRoute.Generation
+	poolChanged := r.lastPool == nil || pool.Generation != r.lastPool.Generation || pool.UID != r.lastPool.UID || client.ObjectKeyFromObject(pool) != client.ObjectKeyFromObject(r.lastPool)
+	routeChanged := r.lastRoute == nil || route.Generation != r.lastRoute.Generation || route.UID != r.lastRoute.UID || client.ObjectKeyFromObject(route) != client.ObjectKeyFromObject(r.lastRoute)
 	r.mu.RUnlock()
 
 	if !poolChanged && !routeChanged {
-		return nil // No changes
+		// Runtime activation already succeeded. Retry failed status writes and
+		// repair external status changes without rebuilding the generation.
+		r.updatePoolStatus(ctx, pool, metav1.ConditionTrue, "Ready", "Configuration is active on this router")
+		r.updateRouteStatus(ctx, route, metav1.ConditionTrue, "Ready", "Configuration is active on this router")
+		return nil
 	}
 
 	logging.Infof("CRD changes detected, reconciling configuration")
@@ -248,54 +302,62 @@ func (r *Reconciler) reportConflict(ctx context.Context, pools []v1alpha1.Intell
 func (r *Reconciler) validateAndUpdate(ctx context.Context, pool *v1alpha1.IntelligentPool, route *v1alpha1.IntelligentRoute) error {
 	// Validate
 	if err := r.validate(pool, route); err != nil {
-		// Update status to Invalid
-		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		return err
+		return r.rejectInvalidCandidate(ctx, pool, route, err)
 	}
 
 	canonicalBase := config.CanonicalStaticConfigFromRouterConfig(r.staticConfig)
 	canonicalCfg, err := r.converter.Convert(pool, route, &canonicalBase)
 	if err != nil {
-		return fmt.Errorf("failed to convert CRDs to canonical config: %w", err)
+		return r.rejectInvalidCandidate(ctx, pool, route, fmt.Errorf("failed to convert CRDs to canonical config: %w", err))
 	}
 
 	canonicalBytes, err := yamlv3.Marshal(canonicalCfg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal canonical config: %w", err)
+		return r.rejectInvalidCandidate(ctx, pool, route, fmt.Errorf("failed to marshal canonical config: %w", err))
 	}
 
 	newConfig, err := config.ParseYAMLBytes(canonicalBytes)
 	if err != nil {
-		return fmt.Errorf("failed to normalize canonical config: %w", err)
+		return r.rejectInvalidCandidate(ctx, pool, route, fmt.Errorf("failed to normalize canonical config: %w", err))
 	}
 	newConfig.ConfigSource = config.ConfigSourceKubernetes
 
-	// The initial Kubernetes static-config parse is intentionally tolerant
-	// because routing state comes from CRDs. Once pool and route have been
-	// converted, run the shared K8s-safe validator dispatch so reconcile holds
-	// CRD-loaded config to the same family contracts as file-loaded config.
+	// Parsing already validates static global settings. Now validate the complete
+	// routing graph from CRDs before publishing the candidate to the runtime.
 	if err := config.ValidateKubernetesConfigContracts(newConfig); err != nil {
-		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
-		return fmt.Errorf("kubernetes config validation failed: %w", err)
+		return r.rejectInvalidCandidate(ctx, pool, route, fmt.Errorf("kubernetes config validation failed: %w", err))
 	}
 
-	// Call update callback
-	if r.onConfigUpdate != nil {
-		if err := r.onConfigUpdate(newConfig); err != nil {
-			r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "UpdateFailed", err.Error())
-			r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "UpdateFailed", err.Error())
-			return fmt.Errorf("config update failed: %w", err)
-		}
+	// Status publication is best-effort; it must never prevent runtime activation.
+	r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "Activating", "Waiting for runtime activation")
+	r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "Activating", "Waiting for runtime activation")
+	var activationErr error
+	if r.onConfigUpdate == nil {
+		activationErr = errors.New("runtime activation callback is not configured")
+	} else {
+		activationErr = r.onConfigUpdate(ctx, newConfig)
+	}
+	if activationErr != nil {
+		r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ActivationFailed", activationErr.Error())
+		r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ActivationFailed", activationErr.Error())
+		return fmt.Errorf("config activation failed: %w", activationErr)
 	}
 
 	// Update status to Ready
-	r.updatePoolStatus(ctx, pool, metav1.ConditionTrue, "Ready", "Configuration applied successfully")
-	r.updateRouteStatus(ctx, route, metav1.ConditionTrue, "Ready", "Configuration applied successfully")
+	r.updatePoolStatus(ctx, pool, metav1.ConditionTrue, "Ready", "Configuration is active on this router")
+	r.updateRouteStatus(ctx, route, metav1.ConditionTrue, "Ready", "Configuration is active on this router")
 
 	logging.Infof("Configuration updated successfully from CRDs")
 	return nil
+}
+
+// Every pre-activation failure must replace a previous Ready condition with
+// the rejected generation and its cause, including converter/encoding errors.
+// The last successfully activated snapshot remains unchanged for retries.
+func (r *Reconciler) rejectInvalidCandidate(ctx context.Context, pool *v1alpha1.IntelligentPool, route *v1alpha1.IntelligentRoute, err error) error {
+	r.updatePoolStatus(ctx, pool, metav1.ConditionFalse, "ValidationFailed", err.Error())
+	r.updateRouteStatus(ctx, route, metav1.ConditionFalse, "ValidationFailed", err.Error())
+	return err
 }
 
 // validate validates the CRDs
@@ -322,26 +384,19 @@ func (r *Reconciler) updatePoolStatus(ctx context.Context, pool *v1alpha1.Intell
 		ObservedGeneration: poolCopy.Generation,
 	}
 
-	// Find and update existing condition or append new one
-	found := false
-	for i, c := range poolCopy.Status.Conditions {
-		if c.Type == "Ready" {
-			poolCopy.Status.Conditions[i] = condition
-			found = true
-			break
-		}
-	}
-	if !found {
-		poolCopy.Status.Conditions = append(poolCopy.Status.Conditions, condition)
-	}
+	apimeta.SetStatusCondition(&poolCopy.Status.Conditions, condition)
 
 	poolCopy.Status.ObservedGeneration = poolCopy.Generation
 	poolCopy.Status.ModelCount = int32(len(poolCopy.Spec.Models)) //nolint:gosec // Model count is unlikely to overflow int32
 
-	// Update status subresource
+	if reflect.DeepEqual(pool.Status, poolCopy.Status) {
+		return
+	}
 	if err := r.client.Status().Update(ctx, poolCopy); err != nil {
 		logging.Errorf("Failed to update IntelligentPool status: %v", err)
+		return
 	}
+	*pool = *poolCopy
 }
 
 // updateRouteStatus updates the status of IntelligentRoute
@@ -359,18 +414,7 @@ func (r *Reconciler) updateRouteStatus(ctx context.Context, route *v1alpha1.Inte
 		ObservedGeneration: routeCopy.Generation,
 	}
 
-	// Find and update existing condition or append new one
-	found := false
-	for i, c := range routeCopy.Status.Conditions {
-		if c.Type == "Ready" {
-			routeCopy.Status.Conditions[i] = condition
-			found = true
-			break
-		}
-	}
-	if !found {
-		routeCopy.Status.Conditions = append(routeCopy.Status.Conditions, condition)
-	}
+	apimeta.SetStatusCondition(&routeCopy.Status.Conditions, condition)
 
 	routeCopy.Status.ObservedGeneration = routeCopy.Generation
 
@@ -382,8 +426,12 @@ func (r *Reconciler) updateRouteStatus(ctx context.Context, route *v1alpha1.Inte
 		Domains:    int32(len(routeCopy.Spec.Signals.Domains)),    //nolint:gosec // Domain count is unlikely to overflow int32
 	}
 
-	// Update status subresource
+	if reflect.DeepEqual(route.Status, routeCopy.Status) {
+		return
+	}
 	if err := r.client.Status().Update(ctx, routeCopy); err != nil {
 		logging.Errorf("Failed to update IntelligentRoute status: %v", err)
+		return
 	}
+	*route = *routeCopy
 }

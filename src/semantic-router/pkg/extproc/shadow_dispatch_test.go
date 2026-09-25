@@ -902,19 +902,69 @@ func TestSplitShadowEndpoint(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			path, query, err := splitShadowEndpoint(tt.endpoint)
+			path, query, err := splitProviderEndpoint(tt.endpoint)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("splitShadowEndpoint(%q) = %q, %q, want error", tt.endpoint, path, query)
+					t.Fatalf("splitProviderEndpoint(%q) = %q, %q, want error", tt.endpoint, path, query)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("splitShadowEndpoint(%q) error = %v", tt.endpoint, err)
+				t.Fatalf("splitProviderEndpoint(%q) error = %v", tt.endpoint, err)
 			}
 			if path != tt.wantPath || query != tt.wantQuery {
-				t.Fatalf("splitShadowEndpoint(%q) = %q, %q, want %q, %q", tt.endpoint, path, query, tt.wantPath, tt.wantQuery)
+				t.Fatalf("splitProviderEndpoint(%q) = %q, %q, want %q, %q", tt.endpoint, path, query, tt.wantPath, tt.wantQuery)
 			}
 		})
+	}
+}
+
+// TestShadowOutcomeSurvivesRouterAssignedReplayID is the regression for #3914.
+//
+// The other cases here hand the router a replay id that already exists, so they
+// never exercise the order the request path actually runs in: the record is
+// started inside handleEntrypointModelRouting, and a shadow job built before
+// that carries an empty id, which makes its outcome drop with no error.
+func TestShadowOutcomeSurvivesRouterAssignedReplayID(t *testing.T) {
+	backend := newShadowTestBackend(t)
+	router, primaryModel := newShadowTestRouter(t, backend)
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+
+	request := testNeutralRequest("virtual", "please shadow this prompt")
+	ctx := routingTestContext(llmprotocol.OpenAIChatV1, request)
+	decision := &config.Decision{
+		Name:      shadowTestDecision,
+		ModelRefs: []config.ModelRef{{Model: primaryModel}},
+	}
+	ctx.VSRSelectedDecision = decision
+	ctx.VSRSelectedDecisionName = decision.Name
+	ctx.ShadowDispatchPluginConfig = shadowTestPluginConfig()
+	// The router assigns the id, the way it does in production, so the recorder
+	// is reached through the router rather than handed to the context.
+	router.ReplayRecorder = recorder
+	ctx.RouterReplayPluginConfig = &config.RouterReplayPluginConfig{Enabled: true}
+
+	if _, err := router.handleEntrypointModelRouting(
+		request, "virtual", decision.Name, entropy.ReasoningDecision{}, primaryModel, ctx,
+	); err != nil {
+		t.Fatalf("handleEntrypointModelRouting: %v", err)
+	}
+	waitForShadow(t, router)
+
+	if ctx.RouterReplayID == "" {
+		t.Fatal("the router did not start a replay record, so this proves nothing")
+	}
+	record, ok := recorder.GetRecord(ctx.RouterReplayID)
+	if !ok {
+		t.Fatalf("replay record %q missing", ctx.RouterReplayID)
+	}
+	shadows := 0
+	for _, outcome := range record.Outcomes {
+		if outcome.Source == shadowDispatchOutcomeSource {
+			shadows++
+		}
+	}
+	if shadows != 1 {
+		t.Fatalf("shadow outcomes = %d, want one on the record the router created", shadows)
 	}
 }

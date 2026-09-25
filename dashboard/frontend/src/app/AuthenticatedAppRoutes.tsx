@@ -43,8 +43,10 @@ interface AuthenticatedAppRoutesProps {
   user: PermissionUser | null
   setupMode: boolean
   settingsLoading: boolean
-  evaluationAvailable: boolean
-  evaluationUnavailableReason: string
+  srBenchAvailable: boolean
+  srBenchUnavailableReason: string
+  settingsError: string | null
+  onRefreshAccess: () => void
 }
 
 const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
@@ -84,16 +86,20 @@ const renderShellContent = (
 const renderShellElement = (
   route: ShellRouteDefinition,
   settingsLoading: boolean,
-  evaluationAvailable: boolean,
-  evaluationUnavailableReason: string,
+  srBenchAvailable: boolean,
+  srBenchUnavailableReason: string,
+  settingsError: string | null,
+  onRefreshAccess: () => void,
 ) => {
   const content = renderShellContent(route, shellPageElements[route.page])
   if (route.page !== 'evaluation') return content
   return (
     <EvaluationAvailabilityRoute
-      available={evaluationAvailable}
+      available={srBenchAvailable}
       isLoading={settingsLoading}
-      reason={evaluationUnavailableReason}
+      reason={srBenchUnavailableReason}
+      settingsError={settingsError}
+      onRefreshAccess={onRefreshAccess}
     >
       {content}
     </EvaluationAvailabilityRoute>
@@ -105,8 +111,10 @@ export const renderAuthenticatedAppRoutes = ({
   user,
   setupMode,
   settingsLoading,
-  evaluationAvailable,
-  evaluationUnavailableReason,
+  srBenchAvailable,
+  srBenchUnavailableReason,
+  settingsError,
+  onRefreshAccess,
 }: AuthenticatedAppRoutesProps): React.ReactElement => (
   <>
     <Route
@@ -122,8 +130,10 @@ export const renderAuthenticatedAppRoutes = ({
             renderShellElement(
               route,
               settingsLoading,
-              evaluationAvailable,
-              evaluationUnavailableReason,
+              srBenchAvailable,
+              srBenchUnavailableReason,
+              settingsError,
+              onRefreshAccess,
             )
           ) : (
             <Navigate to="/dashboard" replace />

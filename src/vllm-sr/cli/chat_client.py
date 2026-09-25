@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any
-from urllib.parse import urljoin
 
 import requests
 
@@ -87,7 +86,14 @@ def build_chat_payload(
 
 
 def chat_completions_url(base: str) -> str:
-    return urljoin(base.rstrip("/") + "/", CHAT_COMPLETIONS_PATH.lstrip("/"))
+    """Resolve a chat-completions URL from an origin or OpenAI ``/v1`` root."""
+
+    normalized = normalize_base_url(base)
+    if normalized.endswith(CHAT_COMPLETIONS_PATH):
+        return normalized
+    if normalized.endswith("/v1"):
+        return normalized + "/chat/completions"
+    return normalized + CHAT_COMPLETIONS_PATH
 
 
 def extract_assistant_text(data: dict[str, Any]) -> str:

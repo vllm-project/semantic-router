@@ -24,6 +24,36 @@ from cli.validator import (
 )
 
 log = get_logger(__name__)
+CONFIG_TEMPLATE_PATH = (
+    Path(__file__).resolve().parents[1] / "templates" / "config.template.yaml"
+)
+
+
+def init_config_command(
+    output_path: str = "config.yaml",
+    *,
+    force: bool = False,
+) -> Path:
+    """Write the packaged minimal canonical configuration template."""
+
+    destination = Path(output_path)
+    if destination.exists():
+        if destination.is_dir():
+            raise ValueError(f"Config output path is a directory: {destination}")
+        if not force:
+            raise ValueError(
+                f"Config file already exists: {destination}. Use --force to overwrite it."
+            )
+    try:
+        template = CONFIG_TEMPLATE_PATH.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeError("packaged config template is unavailable") from exc
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(template, encoding="utf-8")
+
+    success("Configuration template created")
+    fields((("Output", destination),))
+    return destination
 
 
 def config_schema_command(
@@ -32,6 +62,7 @@ def config_schema_command(
     full: bool = False,
     section: str | None = None,
     surface: str | None = None,
+    expanded: bool = False,
     timeout: float = 15,
     token_env: str = "VSR_MGMT_TOKEN",
 ) -> None:
@@ -40,6 +71,8 @@ def config_schema_command(
     selected = sum((full, section is not None, surface is not None))
     if selected > 1:
         raise ValueError("use only one of --full, --section, or --surface")
+    if expanded and section is None:
+        raise ValueError("--expanded requires --section")
     view = (
         "full" if full else "section" if section else "surface" if surface else "index"
     )
@@ -60,6 +93,7 @@ def config_schema_command(
                 path=section,
                 surface_kind=surface_kind,
                 surface_name=surface_name,
+                expanded=expanded,
             )
             .payload
         )
@@ -72,6 +106,7 @@ def config_schema_command(
         path=section,
         surface_kind=surface_kind,
         surface_name=surface_name,
+        expanded=expanded,
     )
     echo(json.dumps(document, indent=2, sort_keys=True) + "\n", nl=False)
 

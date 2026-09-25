@@ -1,6 +1,7 @@
 package protocolcodec
 
 import (
+	"bytes"
 	"encoding/json"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
@@ -70,7 +71,7 @@ func decodeAnthropicContentBlock(
 	if err := validateAnthropicContentVariant(body, typeName, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
-	if err := validateAnthropicContentExtensions(block); err != nil {
+	if err := validateAnthropicContentExtensions(block, providerOutput); err != nil {
 		return llmprotocol.Content{}, err
 	}
 	return decodeAnthropicTypedContent(typeName, block, policy)
@@ -206,17 +207,59 @@ func anthropicResponseContentType(body json.RawMessage) (string, error) {
 	}
 }
 
-func validateAnthropicContentExtensions(block anthropicContentWire) error {
+func validateAnthropicContentExtensions(block anthropicContentWire, providerOutput bool) error {
 	if len(block.Citations) > 0 {
 		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_citations", "Anthropic citations are not supported by the neutral contract", nil)
 	}
+	if err := validateAnthropicToolCaller(block.Caller, providerOutput); err != nil {
+		return err
+	}
 	return rejectUnsupportedRequestFields(map[string]json.RawMessage{
-		"content.caller":          block.Caller,
 		"content.context":         block.Context,
 		"content.title":           block.Title,
 		"content.toolset_name":    block.ToolsetName,
 		"content.transformations": block.Transformations,
 	})
+}
+
+func validateAnthropicToolCaller(raw json.RawMessage, providerOutput bool) error {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return nil
+	}
+
+	var caller map[string]json.RawMessage
+	if err := json.Unmarshal(trimmed, &caller); err != nil || caller == nil {
+		return invalidAnthropicToolCaller(providerOutput, err)
+	}
+	var callerType string
+	if err := json.Unmarshal(caller["type"], &callerType); err != nil || callerType == "" {
+		return invalidAnthropicToolCaller(providerOutput, err)
+	}
+	if callerType != "direct" {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature,
+			"unsupported_content_caller",
+			"Anthropic programmatic tool callers are not supported by the neutral contract",
+			nil,
+		)
+	}
+	if len(caller) != 1 {
+		return invalidAnthropicToolCaller(providerOutput, nil)
+	}
+	return nil
+}
+
+func invalidAnthropicToolCaller(providerOutput bool, cause error) error {
+	category := llmprotocol.ErrorInvalidRequest
+	code := "invalid_content_variant"
+	message := "Anthropic tool_use caller must be an object with type direct"
+	if providerOutput {
+		category = llmprotocol.ErrorUpstreamUnavailable
+		code = "invalid_response_content"
+		message = "Anthropic provider output has an invalid tool_use caller"
+	}
+	return llmprotocol.NewError(category, code, message, cause)
 }
 
 func decodeAnthropicTypedContent(
@@ -363,6 +406,12 @@ func (AnthropicMessagesCodec) EncodeRequest(request llmprotocol.Request, envelop
 }
 
 func validateAnthropicEncodableRequest(request llmprotocol.Request) error {
+	if err := rejectChatOnlyControls(request); err != nil {
+		return err
+	}
+	if request.Sampling.TopK != nil && *request.Sampling.TopK < 0 {
+		return llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "unsupported_top_k", "Messages cannot represent top_k=-1", nil)
+	}
 	if request.Sampling.Temperature != nil && *request.Sampling.Temperature > 1 {
 		return llmprotocol.NewError(
 			llmprotocol.ErrorUnsupportedFeature,
@@ -492,6 +541,7 @@ func encodeAnthropicBaseRequest(request llmprotocol.Request) (anthropicRequestWi
 	wire := anthropicRequestWire{
 		Model: request.Model, Stream: request.Stream, Temperature: request.Sampling.Temperature,
 		TopP: request.Sampling.TopP, TopK: request.Sampling.TopK, StopSequences: append([]string(nil), request.Sampling.Stop...),
+		ContextManagement: append(json.RawMessage(nil), request.ContextManagement...),
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if request.Sampling.MaxOutputTokens == nil {

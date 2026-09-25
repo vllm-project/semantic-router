@@ -1,55 +1,8 @@
-version: 2
+version: 3
 
 # The only changed-path registry. Domains express ownership and the smallest
-# deterministic check. Integration jobs and E2E profiles are selected only by
+# deterministic check. Integration verifications and E2E profiles are selected only by
 # explicit escalation paths.
-jobs:
-  quality:
-    workflow: .github/workflows/pre-commit.yml
-    always: true
-    full: true
-  security:
-    workflow: .github/workflows/security-scan.yml
-    output: security
-    full: true
-  core-tests:
-    workflow: .github/workflows/test-and-build.yml
-    output: core_test
-    full: true
-  dashboard:
-    workflow: .github/workflows/dashboard-test.yml
-    output: dashboard
-  operator:
-    workflow: .github/workflows/operator-ci.yml
-    output: operator
-  e2e:
-    workflow: .github/workflows/integration-test-k8s.yml
-    full: true
-  cli:
-    workflow: .github/workflows/integration-test-vllm-sr-cli.yml
-    output: cli
-  memory:
-    workflow: .github/workflows/integration-test-memory.yml
-    output: memory
-  recipe-conformance:
-    workflow: .github/workflows/recipe-conformance.yml
-    output: recipe_conformance
-    full: true
-  openvino:
-    workflow: .github/workflows/openvino-binding-ci.yml
-    output: openvino
-  images:
-    workflow: .github/workflows/docker-validate.yml
-  performance:
-    workflow: .github/workflows/performance-test.yml
-    output: performance
-  router-learning:
-    workflow: .github/workflows/router-learning-eval.yml
-    output: router_learning
-  paper:
-    workflow: .github/workflows/paper-build.yml
-    output: paper
-
 domains:
   harness:
     owner: maintainers
@@ -65,13 +18,14 @@ domains:
       - .pre-commit-config.yaml
       - .prowlabels.yaml
       - Makefile
+      - netlify.toml
       - tools/agent/**
       - tools/ci/**
       - tools/docker/Dockerfile.precommit
       - tools/linter/**
       - tools/make/**
     checks: [make harness-check]
-    ci_jobs: []
+    verifications: [harness-tools]
 
   documentation:
     owner: documentation
@@ -81,31 +35,275 @@ domains:
       - CONTRIBUTING.md
       - website/**
     checks: [make docs-check-translation-coverage]
-    ci_jobs: []
+    verifications: []
+
+  generated-model-catalog:
+    owner: router-core
+    documentation_check: true
+    paths:
+      - config/catalog/**
+      - config/recipes/built-in/**
+      - src/vllm-sr/cli/model_bundle.py
+      - src/semantic-router/pkg/catalog/zz_generated_catalog.go
+      - website/static/model-catalog/**
+      - tools/catalog/**
+      - tools/make/model-catalog.mk
+      - tools/release/stage_model_catalog_package.py
+      - tools/release/snapshot_model_catalog.py
+      - tools/ci/package_contract.py
+      - tools/ci/check_cli_wheel.py
+      - tools/ci/prepare_dev_package.py
+      - config/schemas/recipe-metadata-v1.schema.json
+      - config/schemas/recipe-probes-v1.schema.json
+    checks: [make model-catalog-generated-check]
+    verifications: [cli-package]
+
+  generated-cli-reference:
+    owner: documentation
+    documentation_check: true
+    paths:
+      - src/vllm-sr/cli/**/*.py
+      - tools/docs/**
+      - website/docs/api/cli.md
+      - website/scripts/check-generated.mjs
+      - website/requirements.txt
+    checks: [make docs-cli-check, make docs-cli-test]
+    verifications: []
+
+  generated-configuration-reference:
+    owner: documentation
+    documentation_check: true
+    paths:
+      - config/fragments/**
+      - website/docs/tutorials/**
+      - website/docs/installation/configuration.md
+      - website/scripts/generate-configuration-catalog.mjs
+      - website/scripts/lib/configuration-catalog.mjs
+    checks: [make docs-config-check]
+    verifications: []
+
+  generated-crd-reference:
+    owner: documentation
+    documentation_check: true
+    paths:
+      - deploy/operator/api/**
+      - tools/codegen/crd/**
+      - website/docs/api/crd-reference.md
+    checks: [make docs-crd-check]
+    verifications: [generated-contracts]
+
+  generated-community-snapshots:
+    owner: documentation
+    documentation_check: true
+    paths:
+      - website/scripts/generate-contributor-rank.mjs
+      - website/scripts/generate-committer-activity.mjs
+      - website/scripts/lib/generated-source.mjs
+      - website/scripts/lib/generated-source.test.mjs
+      - website/scripts/lib/identity-audit.mjs
+      - website/src/data/teamMembers.tsx
+      - website/src/data/contributorRank.generated.ts
+      - website/src/data/committerActivity.generated.ts
+    checks: [make docs-community-check, make docs-community-test]
+    verifications: []
 
   generated-api-contract:
     owner: router-core
     documentation_check: true
     paths:
-      - tools/openapi-gen/**
+      - src/semantic-router/pkg/apiserver/**/*.go
+      - src/semantic-router/pkg/catalog/**/*.go
+      - src/semantic-router/pkg/config/**/*.go
+      - src/semantic-router/pkg/configschema/**/*.go
+      - src/semantic-router/pkg/configschema/router-config-v0.3.schema.json
+      - tools/codegen/configschema/**
+      - tools/codegen/openapi/**
+      - tools/codegen/embed_generated_index.py
+      - tools/make/docs.mk
+      - tools/make/golang.mk
+      - dashboard/frontend/src/generated/routerConfigContract.ts
       - website/docs/api/apiserver.md
       - website/static/openapi/apiserver/**
-    checks: [make api-docs-check]
-    ci_jobs: [core-tests]
+    checks: [make generated-contract-check]
+    verifications: [generated-contracts]
 
   router-core:
     owner: router-core
     paths:
       - src/semantic-router/**
       - config/**
-      - tools/configschema/**
+      - tools/codegen/configschema/**
       - dashboard/frontend/src/generated/routerConfigContract.ts
       - go.mod
       - go.sum
       - Cargo.toml
       - Cargo.lock
     checks: [make test-semantic-router, make config-schema-check]
-    ci_jobs: [core-tests]
+    verifications: [core]
+    escalation:
+      verifications: [native.candle-cpu, native.ort-cpu]
+      paths:
+        - src/semantic-router/pkg/classification/**
+        - src/semantic-router/pkg/modelruntime/**
+        - src/semantic-router/pkg/config/default_execution.go
+        - src/semantic-router/pkg/config/default_execution_candle.go
+        - src/semantic-router/pkg/config/default_execution_onnx.go
+        - src/semantic-router/tools/model-test-assets/**
+        - tools/ci/run_model_tests.py
+        - tools/ci/prepare_model_test_assets.py
+        - tools/make/models.mk
+
+  # All three published suites consume the shared pinned-artifact provisioner.
+  model-artifacts:
+    owner: native-bindings
+    paths:
+      - src/semantic-router/pkg/config/registry.go
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/config/canonical_global.go
+      - src/semantic-router/pkg/modeldownload/**
+    checks: []
+    verifications: []
+    escalation:
+      verifications: [native.candle-cpu, native.ort-cpu, native.openvino-cpu, native.candle-riscv64-qemu, performance]
+      paths:
+        - src/semantic-router/pkg/config/registry.go
+        - src/semantic-router/pkg/config/canonical_defaults.go
+        - src/semantic-router/pkg/config/canonical_global.go
+        - src/semantic-router/pkg/modeldownload/**
+
+  vela-omni-artifacts:
+    owner: native-bindings
+    paths:
+      - tools/models/vela_omni/**
+    checks:
+      - python3 -m unittest discover -s tools/models/vela_omni -p test_contract.py
+      - python3 -m unittest discover -s tools/models/vela_omni -p test_bundle.py
+    verifications: [core, native.ort-cpu, e2e.vela-omni]
+
+  vela-halu-artifacts:
+    owner: native-bindings
+    paths:
+      - tools/models/vela_halu/**
+    checks:
+      - python3 -m unittest discover -s tools/models/vela_halu -p test_contract.py
+    verifications: [core, native.candle-cpu, e2e.vela-halu]
+
+  prepared-model-contracts:
+    owner: native-bindings
+    paths:
+      - src/semantic-router/pkg/cache/omni_storage_integration_test.go
+      - src/semantic-router/pkg/cache/embedding*.go
+      - src/semantic-router/pkg/memory/embedding*.go
+      - src/semantic-router/pkg/modeldownload/prepared_artifact*.go
+      - tools/ci/prepare_model_test_assets.py
+    checks: []
+    verifications: [native.ort-cpu]
+
+  model-compatibility:
+    owner: router-core
+    paths:
+      - tools/modelcompat/**
+      - src/semantic-router/pkg/modelruntime/compatibility/**
+      - tools/make/models.mk
+    checks: [make check-modelcompat]
+    verifications: [core]
+
+  image-calibration:
+    owner: router-core
+    documentation_check: true
+    paths:
+      - config/fragments/signal/embedding/image-routing.yaml
+      - config/assets/image-routing/**
+      - tools/calibration/image-routing/**
+      - tools/models/vela_omni/**
+      - onnx-binding/**
+      - src/semantic-router/pkg/embedding/**
+      - src/semantic-router/pkg/modelruntime/embedding*.go
+      - src/semantic-router/pkg/modelruntime/native/embedding*.go
+      - src/semantic-router/pkg/modelruntime/native/ort_execution*.go
+      - tools/ci/image_calibration.py
+      - tools/ci/tests/test_image_calibration.py
+      - src/semantic-router/tools/model-test-assets/**
+      - src/semantic-router/pkg/config/registry*.go
+      - src/semantic-router/pkg/modeldownload/**
+      - e2e/testcases/testdata/image-fixtures/**
+      # The whole profile: the CRD mirror, the chart values, and the package
+      # test that asserts the mirror, which runs only inside this gate.
+      - e2e/profiles/multimodal-routing/**
+      - website/static/img/**
+      - dashboard/frontend/public/**
+      - candle-binding/**
+      - src/semantic-router/pkg/classification/**
+      - src/semantic-router/pkg/config/canonical_config.go
+      - src/semantic-router/pkg/config/canonical_defaults.go
+      - src/semantic-router/pkg/config/embedding_config.go
+      - src/semantic-router/pkg/config/model_config_types.go
+      - src/semantic-router/pkg/config/prototype_scoring_config.go
+      - src/semantic-router/pkg/config/signal_config.go
+      - src/semantic-router/pkg/modelruntime/router_runtime.go
+      - src/semantic-router/go.mod
+      - src/semantic-router/go.sum
+      - Makefile
+      - tools/make/rust.mk
+      - tools/make/common.mk
+      - tools/make/models.mk
+      # Defines build-onnx-binding and its features, which rust-ci depends on.
+      - tools/make/build-run-test.mk
+      - tools/make/go-tools.mk
+      # Defines the make target the gate runs for the profile package test.
+      - tools/make/e2e.mk
+    checks: [make test-e2e-profile-multimodal]
+    verify: [make verify-image-routing-calibration]
+    verifications: [native.image-calibration-cpu]
+
+  router-tools:
+    owner: developer-experience
+    paths:
+      - tools/dev/dsl/**
+      - tools/models/classifier-operating-point/**
+      - tools/calibration/image-routing/**
+      - bench/grounded_fusion/fusioneval/**
+      - tools/make/go-tools.mk
+    checks: [make go-tools-test]
+    verifications: [core]
+
+  calibration-tuning:
+    owner: router-core
+    paths:
+      - tools/calibration/recipe/**
+      - tools/calibration/tuning/**
+      - config/schemas/recipe-metadata-v1.schema.json
+      - config/schemas/recipe-metadata-v1.contract.yaml
+      - config/schemas/recipe-probes-v1.schema.json
+      - tools/make/tooling.mk
+    checks: [make test-calibration]
+    verifications: [learning-tools]
+
+  developer-tools:
+    owner: developer-experience
+    paths:
+      - tools/dev/kind/**
+      - tools/dev/examples/**
+      - tools/dev/local-up-router.sh
+      - tools/test/smoke/**
+      - tools/test/soak/**
+      - tools/test/services/mcp-classifier-server/**
+    checks: [make harness-check]
+    verifications: [core]
+
+  provider-mocker:
+    owner: evaluation-quality
+    paths:
+      - tools/test/services/provider-mocker/**
+    checks: [make test-provider-mocker]
+    verifications: [mock-provider, operator, local.cli, local.memory]
+
+  tiny-model:
+    owner: evaluation-quality
+    paths:
+      - tools/test/services/tiny-model/**
+    checks: [make test-tiny-model]
+    verifications: [harness-tools]
 
   native-bindings:
     owner: native-bindings
@@ -114,31 +312,104 @@ domains:
       - ml-binding/**
       - nlp-binding/**
       - onnx-binding/**
+      - tools/make/rust.mk
+      - tools/make/common.mk
+      - tools/make/build-run-test.mk
     checks: [make test-binding-minimal]
-    verify: [make test-binding-lora]
-    ci_jobs: [core-tests]
+    verify: [make test-models]
+    verifications: [core, native.candle-cpu, native.ort-cpu]
+
+  published-model-tests:
+    owner: native-bindings
+    paths:
+      - src/semantic-router/pkg/modelruntime/native/published_vela*_test.go
+      - src/semantic-router/pkg/classification/*realmodel_test.go
+      - src/semantic-router/pkg/classification/real_model*_test.go
+      - src/semantic-router/pkg/classification/fact_check_classifier_test.go
+      - src/semantic-router/pkg/classification/generic_classifier_local_test.go
+      - src/semantic-router/pkg/classification/unified_classifier_integration_test.go
+      - src/semantic-router/pkg/classification/embedding_classifier_integration_test.go
+      - src/semantic-router/tools/model-test-assets/**
+      - tools/ci/run_model_tests.py
+      - tools/make/models.mk
+    checks: []
+    verify: [make test-models]
+    verifications: [native.candle-cpu, native.ort-cpu]
+
+  riscv-runtime:
+    owner: native-bindings
+    paths:
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - tools/make/rust.mk
+      - tools/docker/check-native-abi.sh
+      - tools/ci/riscv-qemu-router-smoke.sh
+      - tools/ci/riscv_evidence.py
+      - src/semantic-router/tools/model-test-assets/**
+      - tools/make/models.mk
+      - e2e/config/config.riscv-qemu.yaml
+      - src/semantic-router/pkg/classification/unified_classifier_cgo_candle.go
+      - src/semantic-router/pkg/cache/valkey_*.go
+      - src/semantic-router/pkg/cache/exact_cache_valkey.go
+      - src/semantic-router/pkg/memory/valkey_*.go
+      - src/semantic-router/pkg/vectorstore/valkey_*.go
+      - src/semantic-router/pkg/extproc/router_memory.go
+      - src/semantic-router/pkg/extproc/router_memory_valkey.go
+      - src/semantic-router/pkg/extproc/router_memory_valkey_unavailable.go
+    checks: []
+    verifications: [native.candle-riscv64-qemu]
+
+  onnx-artifact-tools:
+    owner: native-bindings
+    paths:
+      - onnx-binding/scripts/pack_shared_weights.py
+      - onnx-binding/scripts/artifact_tests/**
+      - onnx-binding/scripts/onnx_artifacts.py
+    checks: [make onnx-artifact-test]
+    verifications: [onnx-artifacts]
+
+  onnx-export-tools:
+    owner: training
+    paths:
+      - onnx-binding/scripts/export_*.py
+      - onnx-binding/scripts/modernbert_inputs.py
+      - onnx-binding/scripts/model_precision.py
+      - onnx-binding/scripts/onnx_*.py
+      - onnx-binding/scripts/tests/**
+    checks: [make test-training-contracts]
+    verifications: [training]
 
   ck-flash-attn-rewriter:
     owner: native-bindings
     paths: [onnx-binding/ort-ck-flash-attn/**]
     checks: [make ck-rewrite-test]
-    ci_jobs: [core-tests]
+    verifications: [ck-rewrite]
 
   vllm-sr-cli:
     owner: vllm-sr-cli
     paths:
       - src/vllm-sr/**
       - pyproject.toml
+      - e2e/testing/vllm-sr-cli/**
+      - tools/make/docker.mk
     checks: [make vllm-sr-test]
     verify: [make vllm-sr-test-integration]
-    ci_jobs: [core-tests]
+    verifications: [cli-unit, cli-package]
     escalation:
-      jobs: [cli]
+      verifications: [local.cli]
       paths:
         - src/vllm-sr/Dockerfile*
         - src/vllm-sr/cli/core.py
-        - src/vllm-sr/cli/commands/runtime.py
-        - src/vllm-sr/cli/container_cli.py
+        - src/vllm-sr/cli/commands/runtime*.py
+        - src/vllm-sr/cli/container_*.py
+        - src/vllm-sr/cli/runtime_*.py
+        - src/vllm-sr/cli/config_generator.py
+        - src/vllm-sr/cli/config_translator.py
+        - src/vllm-sr/cli/catalog_provider_projection.py
+        - src/vllm-sr/cli/envoy_backend_pool.py
+        - src/vllm-sr/cli/deployment_backend.py
+        - src/vllm-sr/cli/templates/envoy*.yaml
         - e2e/testing/vllm-sr-cli/**
         - tools/make/docker.mk
 
@@ -146,7 +417,7 @@ domains:
     owner: fleet-sim
     paths: [src/fleet-sim/**]
     checks: [make vllm-sr-sim-test]
-    ci_jobs: [core-tests]
+    verifications: [fleet-sim]
 
   dashboard:
     owner: dashboard
@@ -157,13 +428,11 @@ domains:
       - src/semantic-router/pkg/modelinventory/**
       - src/semantic-router/pkg/nlgen/**
       - src/semantic-router/pkg/startupstatus/**
-      - src/vllm-sr/cli/evaluation/golden/metric_analysis_catalog.v1.json
-      - src/vllm-sr/cli/evaluation/golden/research_benchmark_inventory.v1.json
-      - tools/ci/sync_evaluation_catalogs.py
+      - src/vllm-sr/cli/sr_bench/**
       - tools/make/dashboard.mk
     checks: [make dashboard-check]
     verify: [make dashboard-test-e2e-evaluation]
-    ci_jobs: [dashboard]
+    verifications: [dashboard]
 
   operator:
     owner: operator
@@ -171,8 +440,10 @@ domains:
       - deploy/operator/**
       - deploy/kubernetes/crds/**
       - src/semantic-router/pkg/apis/**
-    checks: [make generate-crd]
-    ci_jobs: [operator]
+      - tools/codegen/boilerplate.go.txt
+      - deploy/helm/semantic-router/crds/**
+    checks: [make generate-api-check]
+    verifications: [operator]
 
   helm:
     owner: deployment
@@ -181,19 +452,20 @@ domains:
     verify:
       - make helm-ci-validate HELM_REPO_UPDATE=false
       - make helm-safety-validate HELM_REPO_UPDATE=false
-    ci_jobs: [core-tests]
+    verifications: [core]
 
   maintained-recipes:
     owner: router-core
     paths:
       - config/recipes/**
-      - tools/dev/router-calibration/**
+      - tools/calibration/recipe/**
       - config/schemas/recipe-metadata-v1.schema.json
       - config/schemas/recipe-probes-v1.schema.json
       - tools/make/recipe-conformance.mk
+      - e2e/testing/run_recipe_conformance.sh
     checks: [make recipe-conformance-static]
     verify: [make recipe-conformance-live-cpu-all]
-    ci_jobs: [core-tests, recipe-conformance]
+    verifications: [recipe-conformance]
 
   memory:
     owner: router-core
@@ -207,8 +479,11 @@ domains:
       - src/semantic-router/pkg/vectorstore/*memory*
       - src/semantic-router/pkg/cache/*memory*
       - e2e/testing/09-memory-features-test.py
+      - e2e/testing/memory_tests/**
       - e2e/testing/run_memory_integration.sh
-      - e2e/testing/llm-katan/**
+      - tools/test/services/provider-mocker/**
+      - tools/make/milvus.mk
+      - tools/make/docker.mk
       - e2e/config/config.memory*.yaml
       - e2e/profiles/response-api/**
       - e2e/profiles/response-api-redis/**
@@ -216,16 +491,20 @@ domains:
       - deploy/kubernetes/response-api/**
     checks: []
     verify: [make memory-test-integration]
-    ci_jobs: []
+    verifications: []
     escalation:
-      jobs: [memory]
+      verifications: [local.memory]
       paths:
+        - src/semantic-router/pkg/memory/**
         - src/semantic-router/pkg/responseapi/**
         - src/semantic-router/pkg/responsestore/**
         - src/semantic-router/pkg/extproc/*memory*
         - e2e/testing/09-memory-features-test.py
+        - e2e/testing/memory_tests/**
         - e2e/testing/run_memory_integration.sh
-        - e2e/testing/llm-katan/**
+        - tools/test/services/provider-mocker/**
+        - tools/make/milvus.mk
+        - tools/make/docker.mk
         - e2e/config/config.memory*.yaml
         - e2e/profiles/response-api/**
         - deploy/kubernetes/response-api/**
@@ -240,19 +519,55 @@ domains:
       - e2e/go.mod
       - e2e/go.sum
     checks: [make build-e2e]
-    ci_jobs: []
+    verifications: [e2e.envoy-ai-gateway]
+
+  e2e-unit:
+    owner: e2e
+    paths:
+      - e2e/pkg/**
+      - e2e/cmd/**
+      - e2e/testcases/**
+      - e2e/profiles/**
+      - e2e/*.go
+      - e2e/go.mod
+      - e2e/go.sum
+      - tools/make/e2e.mk
+      - tools/ci/run_e2e_unit.py
+    checks: [make test-e2e-unit]
+    verifications: [e2e-unit]
 
   openvino:
     owner: native-bindings
-    paths: [openvino-binding/**]
+    paths:
+      - openvino-binding/**
+      - tools/make/openvino.mk
+      - tools/make/models.mk
+      - tools/make/rust.mk
+      - tools/make/common.mk
+      - tools/make/build-run-test.mk
+      - src/semantic-router/tools/model-test-assets/**
+      - src/semantic-router/pkg/modelruntime/**
+      - src/semantic-router/pkg/classification/**
+      - src/semantic-router/pkg/config/default_execution_openvino.go
+      - src/semantic-router/pkg/config/model_deployments.go
+      - src/semantic-router/pkg/config/model_deployments_openvino_test.go
+      - tools/ci/openvino_evidence.py
     checks: []
-    ci_jobs: [openvino]
+    verifications: [native.openvino-cpu]
 
   performance:
     owner: performance
-    paths: [perf/**]
-    checks: [make perf-check]
-    ci_jobs: [performance]
+    paths:
+      - perf/**
+      - tools/make/performance.mk
+      - tools/make/rust.mk
+      - tools/make/common.mk
+      - tools/make/build-run-test.mk
+      - tools/make/models.mk
+      - src/semantic-router/tools/model-test-assets/**
+    checks: [make perf-test-unit]
+    verify: [make perf-check]
+    verifications: [performance]
 
   router-learning:
     owner: router-core
@@ -260,28 +575,123 @@ domains:
       - bench/agentic_routing_experiment.py
       - bench/profiles/router_learning/**
       - bench/test_agentic_routing_experiment.py
-      - src/semantic-router/pkg/extproc/router_learning*
-      - src/semantic-router/pkg/config/*learning*
-      - src/semantic-router/pkg/routerreplay/store/learning_diagnostics.go
-      - src/semantic-router/pkg/apiserver/route_router_outcomes.go
-    checks: [make bench-router-learning]
-    ci_jobs: [router-learning]
+    checks: [make test-learning-tools]
+    verifications: [learning-tools]
 
   paper:
     owner: paper
     paths: [paper/**]
     checks: []
-    ci_jobs: [paper]
+    verifications: []
 
   training:
     owner: training
     paths:
       - src/training/**
       - tools/make/models.mk
-      - tools/models/train-mmbert32k-gpu.sh
+      - tools/ci/training-test-requirements.txt
       - website/docs/training/**
     checks: [make test-training-contracts]
-    ci_jobs: []
+    verifications: [training]
+
+  model-selection-parity:
+    owner: training
+    paths:
+      - src/training/model_selection/ml_model_selection/models.py
+      - src/training/model_selection/ml_model_selection/tests/**
+      - src/training/model_selection/ml_model_selection/requirements-parity.txt
+    checks: []
+    verifications: [core]
+
+
+  storage-integration:
+    owner: router-core
+    paths:
+      - src/semantic-router/pkg/cache/**
+      - src/semantic-router/pkg/memory/**
+      - src/semantic-router/pkg/vectorstore/**
+      - tools/make/milvus.mk
+      - tools/make/build-run-test.mk
+      - tools/ci/run_core_tests.py
+      - src/semantic-router/pkg/contextcompression/*redis*
+      - src/semantic-router/pkg/responsestore/*redis*
+      - src/semantic-router/pkg/routerreplay/store/*postgres*
+      - src/semantic-router/pkg/postgres/**
+    checks: []
+    verifications: [storage]
+
+  soak-tools:
+    owner: e2e
+    paths:
+      - e2e/pkg/soak/**
+      - e2e/cmd/soak/**
+      - bench/openai_fault_proxy.py
+      - bench/test_openai_fault_proxy.py
+      - tools/make/soak.mk
+    checks: [make soak-test]
+    verifications: [soak-tools]
+
+  image-runtime-artifacts:
+    owner: maintainers
+    paths:
+      - tools/ci/image_artifacts.py
+      - tools/ci/provider_mocker_image.py
+      - .github/actions/load-ci-images/**
+    checks: [make harness-check]
+    verifications: [local.cli, operator, e2e.envoy-ai-gateway]
+
+  native-runtime-artifacts:
+    owner: native-bindings
+    paths:
+      - tools/ci/native_artifact.py
+      - .github/workflows/build-native.yml
+      - .github/actions/load-native-artifact/**
+    checks: [make harness-check]
+    verifications: [core, storage, dashboard, generated-contracts, native.candle-cpu, native.ort-cpu, native.openvino-cpu, native.image-calibration-cpu, performance]
+
+  framework-result-adapters:
+    owner: maintainers
+    paths:
+      - tools/ci/workflow_evidence.py
+    checks: [make harness-check]
+    verifications: [core, storage, dashboard, performance, security, soak-tools, generated-contracts, native.image-calibration-cpu, e2e-unit]
+
+  python-framework-observer:
+    owner: maintainers
+    paths:
+      - tools/ci/python_test_evidence.py
+    checks: [make harness-check]
+    verifications: [cli-unit, fleet-sim, training, learning-tools, harness-tools, onnx-artifacts, ck-rewrite]
+
+  runtime-evidence:
+    owner: maintainers
+    paths:
+      - tools/ci/runtime_evidence.py
+    checks: [make harness-check]
+    verifications: [native.candle-cpu, native.ort-cpu, native.openvino-cpu, native.candle-riscv64-qemu, native.image-calibration-cpu, local.cli, local.memory, recipe-conformance]
+
+  deployment-evidence:
+    owner: e2e
+    paths:
+      - tools/ci/deployment_test_results.py
+      - tools/ci/check_operator_request.py
+    checks: [make harness-check]
+    verifications: [operator, e2e.envoy-ai-gateway]
+
+  planner:
+    owner: maintainers
+    paths:
+      - tools/ci/verification_catalog.yaml
+      - tools/ci/ci_plan.py
+      - tools/ci/ci_results.py
+      - tools/ci/check_ci_gate.py
+      - tools/ci/classify_pr_changes.py
+      - tools/ci/domain_registry.py
+      - tools/agent/domains.yaml
+      - .github/workflows/ci.yml
+      - .github/workflows/ci-changes.yml
+    checks: [make harness-check]
+    verifications: [quality]
 
 images:
   dashboard:
@@ -298,7 +708,21 @@ images:
       - tools/docker/Dockerfile.extproc
   extproc-rocm:
     pr_paths: [tools/docker/Dockerfile.extproc-rocm]
-    publish_paths: [tools/docker/Dockerfile.extproc-rocm]
+    publish_paths:
+      - src/semantic-router/**
+      - config/**
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - onnx-binding/**
+      - openvino-binding/**
+      - tools/docker/Dockerfile.extproc-rocm
+      - tools/docker/check-native-abi.sh
+      - tools/docker/entrypoint.sh
+      - tools/make/**
+      - Makefile
+      - .dockerignore
+      - tools/agent/domains.yaml
   operator:
     pr_paths: [deploy/operator/Dockerfile*]
     publish_paths: [deploy/operator/**]
@@ -309,7 +733,7 @@ images:
     pr_paths:
       - src/vllm-sr/Dockerfile
       - tools/docker/Dockerfile.vllm-sr
-      - .github/workflows/docker-validate.yml
+      - .github/workflows/build-artifacts.yml
     publish_paths:
       - src/vllm-sr/**
       - src/semantic-router/**
@@ -325,19 +749,38 @@ images:
       - tools/docker/*cuda*
   vllm-sr-rocm:
     pr_paths: [src/vllm-sr/Dockerfile.rocm]
-    publish_paths: [src/vllm-sr/Dockerfile.rocm]
-  anthropic-shim:
-    pr_paths: [e2e/testing/anthropic-shim/Dockerfile]
-    publish_paths: []
-  llm-katan:
-    pr_paths: [e2e/testing/llm-katan/Dockerfile]
-    publish_paths: []
+    publish_paths:
+      - src/vllm-sr/**
+      - src/semantic-router/**
+      - config/**
+      - candle-binding/**
+      - ml-binding/**
+      - nlp-binding/**
+      - onnx-binding/**
+      - openvino-binding/**
+      - tools/docker/check-native-abi.sh
+      - .dockerignore
+      - tools/agent/domains.yaml
+  provider-mocker:
+    verification_paths:
+      - tools/test/services/provider-mocker/**
+    pr_paths:
+      - tools/test/services/provider-mocker/.dockerignore
+      - tools/test/services/provider-mocker/Dockerfile
+      - tools/test/services/provider-mocker/requirements.txt
+      - tools/test/services/provider-mocker/provider_mocker/**
+    publish_paths:
+      - tools/test/services/provider-mocker/.dockerignore
+      - tools/test/services/provider-mocker/Dockerfile
+      - tools/test/services/provider-mocker/requirements.txt
+      - tools/test/services/provider-mocker/provider_mocker/**
   vllm-sr-sim:
     pr_paths: [src/fleet-sim/Dockerfile]
     publish_paths: [src/fleet-sim/**]
 
 profiles:
   istio:
+    display_name: Istio Gateway
     owner: e2e
     coverage_role: istio-service-mesh-contracts
     selection: pr
@@ -346,6 +789,7 @@ profiles:
       - e2e/testcases/istio_*.go
       - deploy/kubernetes/istio/**
   agentgateway:
+    display_name: Agent Gateway
     owner: e2e
     coverage_role: agentgateway-integration
     selection: pr
@@ -353,11 +797,11 @@ profiles:
       - e2e/profiles/agentgateway/**
       - deploy/kubernetes/agentgateway/**
   envoy-ai-gateway:
+    display_name: Envoy AI Gateway
     owner: e2e
     coverage_role: baseline-router-contract
     selection: pr
     default_local: true
-    full_ci: true
     paths:
       - e2e/profiles/ai-gateway/**
       - deploy/kubernetes/ai-gateway/**
@@ -368,6 +812,7 @@ profiles:
       - e2e/go.sum
       - .github/workflows/integration-test-k8s.yml
   category-remote-backend:
+    display_name: Remote Category Classifier
     owner: e2e
     coverage_role: category-remote-classifier-backend
     selection: pr
@@ -375,6 +820,7 @@ profiles:
       - e2e/profiles/category-remote-backend/**
       - e2e/testcases/category_backend_routing.go
   complexity-remote-backend:
+    display_name: Remote Complexity Classifier
     owner: e2e
     coverage_role: complexity-remote-scorer-backend
     selection: pr
@@ -387,7 +833,37 @@ profiles:
       - src/semantic-router/pkg/config/complexity_boundaries.go
       - src/semantic-router/pkg/classification/complexity_remote_backend.go
       - src/semantic-router/pkg/classification/complexity_remote_eval.go
+  pii-remote-backend:
+    display_name: Remote PII Classifier
+    owner: e2e
+    coverage_role: pii-remote-classifier-backend
+    selection: pr
+    paths:
+      - e2e/profiles/pii-remote-backend/**
+      - deploy/kubernetes/pii-remote-backend/**
+      - e2e/testcases/pii_backend_routing.go
+  local-classifier-backend:
+    display_name: Local Classifier Backend
+    owner: e2e
+    coverage_role: local-classifier-backend
+    selection: pr
+    paths:
+      - e2e/profiles/local-classifier-backend/**
+      - e2e/testcases/local_classifier_routing.go
+      - src/semantic-router/pkg/classification/generic_classifier_local.go
+      - src/semantic-router/pkg/classification/native_labels.go
+  structure-routing:
+    display_name: Structure Routing
+    owner: e2e
+    coverage_role: structure-routing
+    selection: pr
+    paths:
+      - e2e/profiles/structure-routing/**
+      - e2e/testcases/structure_routing.go
+      - src/semantic-router/pkg/classification/structure_classifier.go
+      - src/semantic-router/pkg/classification/classifier_signal_structure.go
   external-gateway-responses:
+    display_name: External Gateway Responses
     owner: e2e
     coverage_role: responses-state-with-external-dispatch
     selection: pr
@@ -398,15 +874,16 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_req_body.go
       - src/semantic-router/pkg/extproc/router_build.go
   aibrix:
+    display_name: AIBrix
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway
     selection: pr
     paths: [e2e/profiles/aibrix/**, deploy/kubernetes/aibrix/**]
   dashboard:
+    display_name: Dashboard E2E
     owner: e2e
     coverage_role: dashboard-api-contract
     selection: pr
-    full_ci: true
     paths:
       - e2e/profiles/dashboard/**
       - e2e/testcases/dashboard_*.go
@@ -414,29 +891,64 @@ profiles:
       - dashboard/backend/handlers/deploy.go
       - dashboard/backend/handlers/canonical_transport.go
   dynamic-config:
+    display_name: Dynamic Configuration
     owner: e2e
     coverage_role: dynamic-crd-routing-contracts
     selection: pr
     paths: [e2e/profiles/dynamic-config/**]
+  vela-omni:
+    display_name: Vela Omni Nano and Mini
+    owner: e2e
+    coverage_role: real-omni-text-image-audio-and-recipe-isolation
+    runtime: ort
+    device: cpu
+    resource_class: model
+    selection: pr
+    paths:
+      - e2e/profiles/vela-omni/**
+      - e2e/testcases/vela_omni.go
+      - onnx-binding/src/model_architectures/embedding/omni/**
+      - tools/models/vela_omni/**
+      - src/semantic-router/pkg/embedding/audio*.go
+      - src/semantic-router/pkg/modelruntime/native/embedding_*.go
+
   multimodal-routing:
+    display_name: Multimodal Routing
     owner: e2e
     coverage_role: image-modality-embedding-signal-routing
+    runtime: ort
+    device: cpu
     selection: pr
-    paths: [e2e/profiles/multimodal-routing/**]
+    paths:
+      - e2e/profiles/multimodal-routing/**
+      - e2e/testcases/embedding_signal_image_routing.go
+      - e2e/testcases/testdata/embedding_signal_image_cases.json
+      - e2e/testcases/testdata/image-fixtures/**
+      - config/fragments/signal/embedding/image-routing.yaml
+      - config/assets/image-routing/**
+      - tools/calibration/image-routing/**
+      - tools/models/vela_omni/**
+      - onnx-binding/**
+      - src/semantic-router/pkg/embedding/**
+      - src/semantic-router/pkg/modelruntime/embedding*.go
+      - src/semantic-router/pkg/modelruntime/native/embedding*.go
+      - src/semantic-router/pkg/modelruntime/native/ort_execution*.go
   remote-embedding:
+    display_name: Remote Embeddings
     owner: e2e
     coverage_role: openai-compatible-remote-embedding-provider
     selection: pr
-    full_ci: true
     paths:
       - e2e/profiles/remote-embedding/**
       - e2e/testcases/remote_embedding_routing.go
   llm-d:
+    display_name: LLM-D Gateway
     owner: e2e
     coverage_role: llm-d-inference-gateway-health
     selection: pr
     paths: [e2e/profiles/llm-d/**, deploy/kubernetes/llmd-base/**]
   looper:
+    display_name: Looping Algorithms
     owner: e2e
     coverage_role: deterministic-looper-algorithm-contracts
     selection: pr
@@ -445,6 +957,7 @@ profiles:
       - e2e/testcases/looper_*.go
       - src/semantic-router/pkg/looper/**
   routing-strategies:
+    display_name: Routing Strategies
     owner: e2e
     coverage_role: routing-strategy-contracts
     selection: pr
@@ -452,6 +965,7 @@ profiles:
       - e2e/profiles/routing-strategies/**
       - deploy/kubernetes/routing-strategies/**
   production-stack:
+    display_name: Production Stack
     owner: e2e
     coverage_role: production-ha-load-observability
     selection: pr
@@ -460,6 +974,7 @@ profiles:
       - deploy/kubernetes/ai-gateway/aigw-resources/base-model.yaml
       - deploy/kubernetes/ai-gateway/aigw-resources/gwapi-resources.yaml
   ml-model-selection:
+    display_name: Learned Model Selection
     owner: e2e
     coverage_role: ml-model-selection-contracts
     selection: pr
@@ -469,14 +984,16 @@ profiles:
       - src/training/model_selection/ml_model_selection/**
       - ml-binding/**
   multi-endpoint:
+    display_name: Multiple Endpoints
     owner: e2e
     coverage_role: environment-policy-routing
     selection: pr
     paths:
       - e2e/profiles/multi-endpoint/**
       - e2e/config/config.multi-endpoint.yaml
-      - tools/demos/multi-endpoint.sh
+      - tools/dev/examples/multi-endpoint.sh
   authz-rbac:
+    display_name: Authorization Policies
     owner: e2e
     coverage_role: trusted-identity-routing-contracts
     selection: pr
@@ -485,6 +1002,7 @@ profiles:
       - e2e/config/config.authz-rbac.yaml
       - src/semantic-router/pkg/classification/authz*.go
   streaming:
+    display_name: Streaming
     owner: e2e
     coverage_role: streaming-request-and-cache
     selection: pr
@@ -496,16 +1014,17 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
-  anthropic-shim:
+  provider-protocols:
+    display_name: Provider Protocols
     owner: e2e
-    coverage_role: anthropic-shape-backend-translation-contracts
+    coverage_role: native-chat-responses-messages-and-cross-protocol-contracts
     selection: pr
     paths:
-      - e2e/profiles/anthropic-shim/**
-      - e2e/testing/anthropic-shim/**
+      - e2e/profiles/provider-protocols/**
+      - tools/test/services/provider-mocker/**
       - e2e/testcases/anthropic_*.go
       - e2e/testcases/protocol_codec_*.go
-      - deploy/kubernetes/anthropic-backend/**
+      - deploy/kubernetes/provider-mocker/**
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_protocol_contract.go
@@ -513,6 +1032,7 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
       - src/semantic-router/pkg/extproc/provider_request_adapter.go
   route-action:
+    display_name: Route Actions
     owner: e2e
     coverage_role: decision-route-action-contracts
     selection: pr
@@ -524,6 +1044,7 @@ profiles:
       - src/semantic-router/pkg/dsl/validator_route_action.go
       - src/semantic-router/pkg/extproc/req_filter_model_eligibility.go
   response-api:
+    display_name: Responses API
     owner: e2e
     coverage_role: responses-api-memory
     selection: pr
@@ -532,8 +1053,8 @@ profiles:
       - e2e/testcases/anthropic_response_api_streaming.go
       - e2e/testcases/protocol_codec_*.go
       - deploy/kubernetes/response-api/gwapi-resources.yaml
-      - deploy/kubernetes/response-api/mock-vllm.yaml
-      - tools/mock-vllm/**
+      - deploy/kubernetes/response-api/provider-mocker.yaml
+      - tools/test/services/provider-mocker/**
       - src/semantic-router/pkg/llmprotocol/**
       - src/semantic-router/pkg/protocolcodec/**
       - src/semantic-router/pkg/extproc/processor_protocol_contract.go
@@ -542,6 +1063,7 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
       - src/semantic-router/pkg/extproc/provider_request_adapter.go
   response-api-redis:
+    display_name: Responses API (Redis)
     owner: e2e
     coverage_role: responses-api-redis-ttl
     selection: manual
@@ -549,29 +1071,56 @@ profiles:
       - e2e/profiles/response-api-redis/**
       - deploy/kubernetes/response-api/redis.yaml
   response-api-redis-cluster:
+    display_name: Responses API (Redis Cluster)
     owner: e2e
     coverage_role: responses-api-redis-cluster-ttl
     selection: manual
     paths:
       - e2e/profiles/response-api-redis-cluster/**
       - deploy/kubernetes/response-api/redis-cluster.yaml
-  router-replay:
+  progress-gate:
+    display_name: Progress Gate
     owner: e2e
-    coverage_role: router-replay-management-boundary-and-restart-recovery
+    coverage_role: session-evidence-to-switch
+    selection: pr
+    paths:
+      - e2e/profiles/progress-gate/**
+      - e2e/testcases/router_progress_gate*.go
+      - src/semantic-router/pkg/extproc/router_learning_progress_gate*.go
+      - src/semantic-router/pkg/extproc/router_learning_gate_constraints.go
+      - src/semantic-router/pkg/extproc/router_learning_protection*.go
+      - src/semantic-router/pkg/extproc/router_learning_outcome_ingest.go
+      - src/semantic-router/pkg/extproc/router_learning_helpers.go
+      - src/semantic-router/pkg/extproc/session_evidence*.go
+      - src/semantic-router/pkg/selection/session_switch_gate*.go
+      - src/semantic-router/pkg/selection/session_progress_evidence*.go
+      - src/semantic-router/pkg/sessiontelemetry/session_evidence*.go
+      - src/semantic-router/pkg/sessiontelemetry/router_memory*.go
+  router-replay:
+    display_name: Router Replay
+    owner: e2e
+    coverage_role: router-replay-management-recovery-and-single-shadow-isolation
     selection: manual
     paths:
       - e2e/profiles/router-replay/**
       - deploy/kubernetes/router-replay/**
+      - tools/test/services/provider-mocker/**
+      - e2e/testcases/shadow_dispatch*.go
+      - e2e/testcases/shadow_dataset*.go
+      - src/semantic-router/pkg/extproc/shadow_dispatch*.go
       - src/semantic-router/pkg/routerreplay/**
+      - src/semantic-router/pkg/shadowdataset/**
       - src/semantic-router/pkg/extproc/router_replay*.go
       - src/semantic-router/pkg/apiserver/route_router_replay*.go
       - dashboard/backend/router/router_replay*.go
   dynamo:
+    display_name: Dynamo Gateway
     owner: e2e
     coverage_role: dynamo-gpu-and-batching
     selection: manual
     paths: [e2e/profiles/dynamo/**]
   vectorstore-registry:
+    display_name: Vector Store Registry
     owner: e2e
     coverage_role: vectorstore-registry-restart-recovery
     selection: manual
@@ -581,11 +1130,40 @@ profiles:
       - src/semantic-router/pkg/vectorstore/metadata_registry*.go
       - src/semantic-router/pkg/postgres/**
   rag-hybrid-search:
+    display_name: Hybrid RAG Search
     owner: e2e
     coverage_role: rag-hybrid-search
     selection: manual
     paths: [e2e/profiles/rag-hybrid-search/**]
+  vela-halu:
+    display_name: Vela Halu Grounding
+    owner: e2e
+    coverage_role: published-halu-pair-grounding-and-input-budget
+    runtime: candle
+    device: cpu
+    selection: pr
+    paths:
+      - e2e/profiles/vela-halu/**
+      - e2e/testcases/vela_halu.go
+      - src/semantic-router/pkg/classification/hallucination_detector.go
+      - src/semantic-router/pkg/modelruntime/native/grounding*.go
+      - candle-binding/src/ffi/instances/grounding.rs
+      - onnx-binding/src/instances/grounding.rs
+      - tools/models/vela_halu/**
+  vela-shield:
+    display_name: Vela Shield Safety
+    owner: e2e
+    coverage_role: published-shield-safety-model-selection
+    runtime: candle
+    device: cpu
+    selection: pr
+    paths:
+      - e2e/profiles/vela-shield/**
+      - e2e/testcases/vela_shield.go
+      - src/semantic-router/pkg/classification/classifier_signal_safety.go
+      - src/semantic-router/pkg/classification/safety_classifier_local.go
   hallucination:
+    display_name: Hallucination Detection
     owner: e2e
     coverage_role: hallucination-detection
     selection: pr
@@ -599,6 +1177,7 @@ profiles:
       - src/semantic-router/pkg/extproc/processor_res_body_pipeline.go
       - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   jailbreak-onerror:
+    display_name: Guard Error Policies
     owner: e2e
     coverage_role: prompt-guard-on-error
     selection: manual
@@ -607,6 +1186,7 @@ profiles:
       - e2e/testcases/jailbreak_onerror_block.go
       - deploy/kubernetes/jailbreak-onerror/**
   response-jailbreak:
+    display_name: Response Guard
     owner: e2e
     coverage_role: response-jailbreak-window
     selection: pr
@@ -623,4 +1203,4 @@ profiles:
       - src/semantic-router/pkg/classification/classifier_jailbreak_risk.go
       - src/semantic-router/pkg/config/signal_stage.go
       - src/semantic-router/pkg/config/validator_signal_stage.go
-      - tools/mock-vllm/classify.py
+      - tools/test/services/provider-mocker/provider_mocker/classify.py

@@ -65,24 +65,27 @@ ignore = [
   "SIM108",
   "SIM115",
 ]
-"tools/agent/scripts/tuning/engine.py" = [
+"tools/calibration/tuning/engine.py" = [
   "E402",     # re-exports at bottom of module (after all definitions)
   "F401",     # re-exported names appear unused locally
   "PLR2004",  # threshold/weight magic numbers are readable inline
   "SIM102",   # nested ifs mirror the trace-tree dispatch pattern
 ]
-"tools/agent/scripts/tuning/engine_selection.py" = [
+"tools/calibration/tuning/engine_selection.py" = [
   "PLR2004",  # threshold/weight magic numbers are readable inline
 ]
-"tools/agent/scripts/tuning/scenarios/*.py" = ["PLR2004"]
-"tools/agent/scripts/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
-"tools/mcp-classifier-server/server_*.py" = [
+"tools/calibration/tuning/scenarios/*.py" = ["PLR2004"]
+"tools/calibration/tuning/tests/*.py" = ["PLC0415", "PLR2004"]
+"tools/test/services/mcp-classifier-server/server_*.py" = [
   "N812",     # torch.nn.functional as F is the PyTorch convention
   "PLC0415",  # aiohttp is an optional dependency used only in HTTP mode
 ]
 "src/vllm-sr/tests/*.py" = ["PLR2004"]
-"e2e/testing/anthropic-shim/tests/*.py" = ["PLR2004"]
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
+"src/training/model_classifier/modality_routing_classifier/test_*.py" = ["PLR2004"]
+"src/training/model_classifier/modality_routing_classifier/label_audit/test_*.py" = ["PLR2004"]
+"bench/test_*.py" = ["PLR2004"]
+"bench/reasoning/test_*.py" = ["PLR2004"]
 "bench/agent_crew/test_*.py" = [
   "PLR2004",  # expected call counts and costs are readable inline
   "RUF012",   # stub HTTP handler class attributes are per-test state
@@ -96,13 +99,44 @@ ignore = [
   "E722",     # bare except is a seeded defect
   "SIM105",   # so is the try/except/pass it sits in
 ]
-"tools/mock-vllm/tests/*.py" = ["PLR2004"]
-"tools/mock-vllm/app.py" = [
-  "PLR0911",  # endpoint dispatch keeps one response path per request outcome
+"bench/reasoning/router_reason_bench_multi_dataset.py" = [
+  "PLR2004",  # answer-parsing and token thresholds are readable inline
 ]
+"tools/test/services/provider-mocker/tests/*.py" = ["PLR2004"]
 "src/vllm-sr/tests/test_config_template.py" = ["E402", "UP015"]
 "src/training/model_embeddings/cache_embeddings/lora_trainer.py" = [
   "N812",     # torch.nn.functional as F is the PyTorch convention
+]
+# The PII training and multitask experiment scripts keep their pre-existing
+# local style. Correctness rules remain enabled here.
+"e2e/scripts/generate_test_data.py" = ["B007", "B905", "C416", "N806", "PLC0415"]
+"src/training/model_classifier/pii_model_fine_tuning_lora/pii_bert_finetuning_lora.py" = [
+  "B007",
+  "B905",
+  "E741",
+  "F841",
+  "PLC0415",
+  "PLR1714",
+  "PLR2004",
+  "RUF013",
+  "RUF059",
+]
+"src/training/model_experiment/multitask_bert_fine_tuning/multitask_bert_training.py" = [
+  "B905",
+  "C401",
+  "C403",
+  "C414",
+  "E741",
+  "F841",
+]
+"src/training/model_experiment/multitask_wiki_classifier_training.py" = [
+  "B905",
+  "C401",
+  "C403",
+  "C414",
+  "PLC0415",
+  "PLR2004",
+  "SIM118",
 ]
 "src/vllm-sr/tests/test_hybrid_validator.py" = ["I001"]
 "src/vllm-sr/tests/test_latency_validation.py" = ["I001"]

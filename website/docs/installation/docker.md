@@ -24,6 +24,10 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
+A stable CLI pulls Router and Dashboard images tagged with its own release
+version. Development CLI builds use `:latest`; `--image` and the documented
+image environment overrides select a different build when needed.
+
 With no `--config`, `vllm-sr serve` uses `config.yaml` in the current directory
 or opens first-run setup in the Dashboard. The default local endpoints are:
 
@@ -33,8 +37,33 @@ or opens first-run setup in the Dashboard. The default local endpoints are:
 | Routed listener | `http://localhost:8899` | Send OpenAI-compatible model requests. |
 | Management API | `http://localhost:8080` | Validate config and use evaluation, replay, or vector-store APIs. |
 
+The Dashboard port binds to `127.0.0.1` by default. First-run admin
+registration remains available from the local host. For a remote machine,
+forward the port with `ssh -L 8700:127.0.0.1:8700 <host>` and open the local
+Dashboard URL. To publish the Dashboard on all host interfaces, set
+`VLLM_SR_DASHBOARD_HOST_BIND=0.0.0.0` and provision both
+`DASHBOARD_ADMIN_EMAIL` and `DASHBOARD_ADMIN_PASSWORD`. An explicit
+`DASHBOARD_ALLOW_OPEN_BOOTSTRAP=true` also permits a wildcard bind when
+first-admin registration on that network is intended. The CLI rejects a
+wildcard bind with neither choice configured.
+
 Ports can change with the active configuration or a stack port offset. Use
 `vllm-sr status` when you are unsure which endpoints are active.
+
+After starting containers, the CLI waits up to 1800 seconds for Router
+readiness, or Dashboard readiness during first-run setup. Set
+`--startup-timeout SECONDS` to a positive integer when model loading or GPU
+compilation needs a different budget:
+
+```bash
+vllm-sr serve --config config.yaml --startup-timeout 7200
+```
+
+Choose the budget using startup measurements for your models and hardware.
+This option applies to the local Docker target and does not change inference
+request deadlines. On timeout, the CLI exits with an error and leaves the
+containers available for `vllm-sr status` and `vllm-sr logs router`.
+Use `vllm-sr stop` when you want to stop them.
 
 ## Connect model backends
 

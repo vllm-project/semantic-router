@@ -61,7 +61,8 @@ func validateDecisionPluginPayload(
 		)
 	}
 	var err error
-	if normalizedType == DecisionPluginResponseCache ||
+	if normalizedType == DecisionPluginRequestParams ||
+		normalizedType == DecisionPluginResponseCache ||
 		normalizedType == DecisionPluginResponseJailbreak ||
 		normalizedType == DecisionPluginContextCompression ||
 		normalizedType == DecisionPluginShadowDispatch {
@@ -93,6 +94,10 @@ func validateDecodedPluginContract(
 	target interface{},
 ) error {
 	switch typed := target.(type) {
+	case *RequestParamsPluginConfig:
+		if err := ValidateRequestParamsPluginConfig(typed); err != nil {
+			return fmt.Errorf("decision %q plugins[%d] (%s): %w", decisionName, index, pluginType, err)
+		}
 	case *ResponseCachePluginConfig:
 		return validateResponseCachePlugin(decisionName, index, pluginType, typed)
 	case *FastResponsePluginConfig:
@@ -309,6 +314,12 @@ func validateContextCompressionTargets(
 	typed *ContextCompressionPluginConfig,
 	scope string,
 ) error {
+	if typed.Targets != nil {
+		mode := strings.TrimSpace(typed.Targets.CurrentUser.Mode)
+		if mode != "" && mode != ContextCompressionTargetPreserve && mode != ContextCompressionTargetTruncate {
+			return fmt.Errorf("%s: current_user.mode must be preserve or truncate", scope)
+		}
+	}
 	targets := []ContextCompressionTargetConfig{typed.EffectiveToolOutputTarget()}
 	if typed.Targets != nil {
 		targets = append(targets, typed.Targets.History, typed.Targets.RAG, typed.Targets.Memory)

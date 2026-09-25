@@ -133,12 +133,12 @@ until the selected cases are known to be isolated.
 - **multi-endpoint**: environment policy across several backends.
 - **authz-rbac**: authorization routing and rate-limit behavior.
 - **streaming**: streamed request bodies and cache round trips.
-- **anthropic-shim**: affected-change Anthropic backend and cross-protocol matrix coverage.
+- **provider-protocols**: affected-change Anthropic backend and cross-protocol matrix coverage.
 - **response-api**: affected-change memory-backed Responses API and cross-protocol matrix coverage.
 - **route-action**: decision route action for detected prompt attacks and benign traffic.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.
-- **router-replay**: manual management-boundary and restart-recovery coverage.
+- **router-replay**: manual management-boundary, restart-recovery, and single-shadow failure-isolation coverage.
 - **dynamo**: manual NVIDIA Dynamo batching and GPU health coverage.
 - **vectorstore-registry**: manual metadata restart-recovery coverage.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
@@ -160,7 +160,7 @@ owns the exact selection mode, path triggers, and coverage role for every entry.
 “Manual” describes lifecycle and prerequisites; it is not evidence that the
 profile passed in another environment.
 
-The `response-api` and `anthropic-shim` affected-change profiles jointly own the
+The `response-api` and `provider-protocols` affected-change profiles jointly own the
 three native protocol backends used by the pairwise codec matrix. Their default
 contracts exercise Chat Completions, Responses, and Messages clients against each
 backend in buffered and streaming modes: 3 client protocols x 3 backend protocols
@@ -168,7 +168,59 @@ x 2 response modes, for 18 required end-to-end cells. Each cell validates the
 client-native response envelope or SSE sequence, the terminal event, translated
 backend output, and the absence of leaked backend wire shapes. The same profiles
 also cover tool-call lifecycles, structured JSON Schema output, provider transport
-errors, incomplete streams, and midstream failures.
+errors, incomplete streams, and midstream failures. The `response-api` profile
+also verifies the deployed provider fixture's native image-generation endpoint: two
+valid deterministic PNG payloads and strict unknown-field rejection. This direct
+fixture assertion does not claim Router image-generation support.
+
+### Single-shadow failure isolation
+
+The manual `router-replay` profile covers the existing single-shadow feature.
+This is a bounded slice related to
+[the failure-isolation tracker](https://github.com/vllm-project/semantic-router/issues/3284);
+multi-arm dispatch, judging, privacy enforcement, dataset qualification,
+training, promotion, and rollback are outside this profile's shadow coverage.
+
+The profile uses real Envoy, Router, and Postgres with the local `provider-mocker`
+image. It requires CPU capacity for that stack, but no GPU or external provider
+credentials. Its manifest explicitly enables the provider's shadow controls;
+other profiles retain the default simulator behavior. The E2E owner and manual
+selection are recorded in `tools/agent/domains.yaml`.
+Response caching and tool retrieval are disabled in this profile because these
+cases exercise dispatch and Replay.
+
+| Test | Required result |
+| --- | --- |
+| `shadow-dispatch-observes-candidate-model` | The candidate completes without changing the primary response. |
+| `shadow-dispatch-fail-open-unreachable-backend` | The unavailable candidate records a transport failure or timeout. |
+| `shadow-dispatch-fail-open-timeout` | A held shadow reaches its five-second deadline; the primary finishes before it, and the same route recovers. |
+| `shadow-dispatch-fail-open-malformed-response` | HTTP 200 with an invalid JSON response shape records `malformed_response`; the same route recovers. |
+| `shadow-dispatch-fail-open-queue-full` | With concurrency and queue depth both one, exactly three requests produce one running shadow, one queued shadow, and one `queue_full` drop. |
+
+Each case sends two primary warmups. The second warmup and every measured
+primary must finish within two seconds and return exactly
+`Hello from openai/gpt-oss-20b.` with that model. Complete response bodies must
+match the baseline except for the provider's `created` timestamp. Replay rows
+must retain the same primary response and exist in Postgres.
+
+The queue case waits for provider and Router readiness signals before each
+request. After release, only the two admitted shadows may reach the provider.
+The dropped request retains its primary Replay row without a shadow outcome;
+the drop counter must increase by exactly one. A subsequent request must succeed
+on both paths. The queue deadline is 30 seconds and the fixture barrier expires
+after 60 seconds, independently of cleanup.
+
+Run all five cases explicitly and sequentially:
+
+```bash
+make e2e-test E2E_PROFILE=router-replay E2E_CLUSTER_NAME=sr-shadow-3284 \
+  E2E_PARALLEL=false \
+  E2E_TESTS=shadow-dispatch-observes-candidate-model,shadow-dispatch-fail-open-unreachable-backend,shadow-dispatch-fail-open-timeout,shadow-dispatch-fail-open-malformed-response,shadow-dispatch-fail-open-queue-full
+```
+
+The runner's report retains primary bodies, elapsed times and ceilings, Replay
+IDs and outcomes, provider counts, and queue metric snapshots. Verbose logs
+include the response and Replay evidence for diagnosing a failed contract.
 
 ## Add or change a profile
 

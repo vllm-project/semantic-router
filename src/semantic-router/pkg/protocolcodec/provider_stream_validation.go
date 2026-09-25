@@ -120,6 +120,13 @@ func validateResponsesSummaryPartEvent(wire responsesEventWire) error {
 }
 
 func validateAnthropicStreamEvent(wire anthropicEventWire, body []byte) error {
+	if len(wire.ContextManagement) > 0 && wire.Type != "message_delta" {
+		return invalidProviderResponse("invalid_context_management_event", "Anthropic context management belongs to message_delta")
+	}
+	if wire.Delta != nil && wire.Delta.EstimatedTokens != nil &&
+		(wire.Type != "content_block_delta" || wire.Delta.Type != "thinking_delta") {
+		return invalidProviderResponse("invalid_estimated_tokens_event", "Anthropic estimated tokens belong to thinking_delta")
+	}
 	if anthropicEventUsesIndex(wire.Type) && (wire.Index == nil || *wire.Index < 0) {
 		return invalidProviderResponse("invalid_stream_item_index", "Anthropic content event requires a non-negative index")
 	}
@@ -259,7 +266,10 @@ func validateAnthropicEventFieldPresence(eventType string, body []byte) error {
 		return err
 	}
 	if eventType == "message_delta" {
-		return requireProviderFields(delta, "stop_reason", "stop_sequence")
+		// Compatible providers may omit this nullable field, as they do on
+		// buffered Messages. The typed validation above still requires the
+		// matched value when stop_reason is stop_sequence.
+		return requireProviderFields(delta, "stop_reason")
 	}
 	var deltaType string
 	if err := json.Unmarshal(delta["type"], &deltaType); err != nil {

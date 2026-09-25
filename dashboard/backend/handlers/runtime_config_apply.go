@@ -1,16 +1,22 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
 const (
@@ -66,17 +72,169 @@ func formatRuntimeApplyError(prefix string, err error) string {
 	return fmt.Sprintf("%s: %v", prefix, err)
 }
 
+// atomicRename is os.Rename by default; tests override it to simulate a rename failure.
+var atomicRename = os.Rename
+
+const configMapWriteTimeout = 10 * time.Second
+
+var errConfigRolloutRequired = errors.New("the saved ConfigMap differs from this pod's mounted config; roll out the deployment before another mutation")
+
+func configActivationDeferred() bool {
+	_, ok := configwriter.ConfigMapTargetFromEnv()
+	return ok
+}
+
+func writeDeferredConfigResponse(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status":  "persisted",
+		"message": "Configuration saved to the Kubernetes ConfigMap. Roll out the Router and Envoy deployments to activate it.",
+	})
+}
+
+func writeConfigPersistenceError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, errConfigRolloutRequired):
+		http.Error(w, err.Error(), http.StatusConflict)
+	case errors.Is(err, configwriter.ErrConfigMapChanged):
+		http.Error(w, "the ConfigMap changed during this request; reload the configuration and retry", http.StatusConflict)
+	case errors.Is(err, configwriter.ErrConfigMapControllerOwned):
+		http.Error(w, "this ConfigMap is controller-owned; edit its owning resource", http.StatusForbidden)
+	default:
+		http.Error(w, "failed to persist configuration", http.StatusInternalServerError)
+		log.Printf("Configuration persistence failed: %v", err)
+	}
+}
+
+var (
+	configMapWriterMu       sync.Mutex
+	configMapWriterResult   *configwriter.ConfigMapWriter
+	configMapWriterErr      error
+	configMapWriterResolved bool
+	// newInClusterConfigMapWriter is a seam for tests; production always uses
+	// configwriter.NewInClusterConfigMapWriter.
+	newInClusterConfigMapWriter = configwriter.NewInClusterConfigMapWriter
+)
+
+// resolvedConfigMapWriter builds the in-cluster ConfigMap client once and
+// reuses it. Every shipped Kubernetes deployment mounts the config file
+// read-only (issue #3688); this is that mount's write path.
+func resolvedConfigMapWriter() (*configwriter.ConfigMapWriter, error) {
+	configMapWriterMu.Lock()
+	defer configMapWriterMu.Unlock()
+	if !configMapWriterResolved {
+		configMapWriterResult, configMapWriterErr = newInClusterConfigMapWriter()
+		configMapWriterResolved = true
+	}
+	return configMapWriterResult, configMapWriterErr
+}
+
+// readPersistedDashboardConfig reads the saved document, which may be newer
+// than the ConfigMap subPath mount used by the still-running Router.
+func readPersistedDashboardConfig(configPath string) ([]byte, error) {
+	target, ok := configwriter.ConfigMapTargetFromEnv()
+	if !ok {
+		return os.ReadFile(configPath)
+	}
+	writer, err := resolvedConfigMapWriter()
+	if err != nil {
+		return nil, fmt.Errorf("resolve config ConfigMap client: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+	defer cancel()
+	data, found, err := writer.Read(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, os.ErrNotExist
+	}
+	return data, nil
+}
+
+// writeConfigAtomically persists a canonical config document. On a
+// Kubernetes deployment that has declared a ConfigMap write target (see
+// configwriter.ConfigMapTargetFromEnv), it writes there via the Kubernetes API instead
+// of the local file, since that file is a read-only ConfigMap mount on every
+// shipped manifest (issue #3688). Every other deployment (local CLI, VM,
+// plain Docker) keeps writing the local file exactly as before.
 func writeConfigAtomically(configPath string, yamlData []byte) error {
+	if target, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		mounted, err := checkConfigMapMutationFresh(configPath)
+		if err != nil {
+			return err
+		}
+		writer, err := resolvedConfigMapWriter()
+		if err != nil {
+			return fmt.Errorf("config write target is declared but no Kubernetes client is available: %w", err)
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+		defer cancel()
+		return writer.WriteIfUnchanged(ctx, target, mounted, yamlData)
+	}
+
 	tmpConfigFile := configPath + ".tmp"
-	if err := os.WriteFile(tmpConfigFile, yamlData, 0o644); err != nil {
+	tmpFile, err := os.OpenFile(tmpConfigFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
 		return err
 	}
-	if err := os.Rename(tmpConfigFile, configPath); err != nil {
-		if writeErr := os.WriteFile(configPath, yamlData, 0o644); writeErr != nil {
-			return writeErr
-		}
+	if _, err := tmpFile.Write(yamlData); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpConfigFile)
+		return err
+	}
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpConfigFile)
+		return err
+	}
+	if err := tmpFile.Close(); err != nil {
+		os.Remove(tmpConfigFile)
+		return err
+	}
+	if err := atomicRename(tmpConfigFile, configPath); err != nil {
+		os.Remove(tmpConfigFile)
+		return err
+	}
+	// Best-effort: fsync the directory too so the rename is durable, not just the bytes.
+	if dir, derr := os.Open(filepath.Dir(configPath)); derr == nil {
+		_ = dir.Sync()
+		_ = dir.Close()
 	}
 	return nil
+}
+
+// checkConfigMapMutationFresh must run before creating a backup or DSL archive
+// as well as at the final write. A stale subPath mount otherwise lets a
+// rejected second request replace a valid backup with newer ConfigMap bytes.
+// The final WriteIfUnchanged still protects the gap after this read.
+func checkConfigMapMutationFresh(configPath string) ([]byte, error) {
+	target, ok := configwriter.ConfigMapTargetFromEnv()
+	if !ok {
+		return nil, nil
+	}
+	writer, err := resolvedConfigMapWriter()
+	if err != nil {
+		return nil, fmt.Errorf("resolve config ConfigMap client: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), configMapWriteTimeout)
+	defer cancel()
+	mounted, err := os.ReadFile(configPath)
+	if err != nil {
+		return nil, fmt.Errorf("read mounted config before ConfigMap update: %w", err)
+	}
+	persisted, found, err := writer.Read(ctx, target)
+	if err != nil {
+		return nil, fmt.Errorf("read config ConfigMap before update: %w", err)
+	}
+	if !found {
+		return nil, os.ErrNotExist
+	}
+	if !bytes.Equal(mounted, persisted) {
+		return nil, errConfigRolloutRequired
+	}
+	return mounted, nil
 }
 
 func restorePreviousRuntimeConfig(configPath string, configDir string, previousData []byte) error {
@@ -90,6 +248,11 @@ func restorePreviousRuntimeConfig(configPath string, configDir string, previousD
 }
 
 func propagateConfigToRuntime(configPath string, configDir string) error {
+	if _, ok := configwriter.ConfigMapTargetFromEnv(); ok {
+		// The ConfigMap subPath mount cannot update this process. The Router and
+		// Envoy pick up the saved config only after a deployment rollout.
+		return nil
+	}
 	effectiveConfigPath, err := syncRuntimeConfigForCurrentRuntime(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to sync runtime config: %w", err)

@@ -5,8 +5,8 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -46,7 +46,7 @@ func ConfigYAMLHandler(configPath string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
-		data, err := os.ReadFile(configPath)
+		data, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
@@ -81,12 +81,12 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		configData, err := decodeYAMLTaggedBody[routerconfig.CanonicalConfig](r.Body)
+		configData, err := decodeYAMLTaggedBody[canonicalConfigTransport](r.Body)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
-		if validationErr := validateCanonicalEndpointRefs(configData); validationErr != nil {
+		if validationErr := validateCanonicalEndpointRefs(configData.CanonicalConfig); validationErr != nil {
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", validationErr), http.StatusBadRequest)
 			return
 		}
@@ -98,7 +98,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 		defer release()
 
 		// Read existing config so runtime rollback can restore the previous file if needed.
-		existingData, err := os.ReadFile(configPath)
+		existingData, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read existing config: %v", err), http.StatusInternalServerError)
 			return
@@ -129,13 +129,20 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			}
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := writeConfigAtomically(configPath, yamlData); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+			writeConfigPersistenceError(w, err)
 			return
 		}
 
 		if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
+			return
+		}
+		if configActivationDeferred() {
+			writeDeferredConfigResponse(w)
 			return
 		}
 
@@ -206,7 +213,7 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 		}
 		defer release()
 
-		existingData, err := os.ReadFile(configPath)
+		existingData, err := readPersistedDashboardConfig(configPath)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Failed to read config: %v", err), http.StatusInternalServerError)
 			return
@@ -223,13 +230,20 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
+		if auth.RejectRevokedMutation(w, r) {
+			return
+		}
 		if err := writeConfigAtomically(configPath, yamlData); err != nil {
-			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
+			writeConfigPersistenceError(w, err)
 			return
 		}
 
 		if err := applyWrittenConfig(configPath, configDir, existingData, false); err != nil {
 			http.Error(w, formatRuntimeApplyError("Failed to apply config to runtime", err), http.StatusInternalServerError)
+			return
+		}
+		if configActivationDeferred() {
+			writeDeferredConfigResponse(w)
 			return
 		}
 

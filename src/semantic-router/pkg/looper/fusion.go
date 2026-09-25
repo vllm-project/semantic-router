@@ -16,15 +16,16 @@ import (
 // FusionLooper implements Fusion-style multi-model deliberation:
 // parallel panel responses, judge analysis, then a final synthesized answer.
 type FusionLooper struct {
+	grounding *GroundingBackends
 	*BaseLooper
 }
 
 func NewFusionLooper(cfg *config.LooperConfig) *FusionLooper {
-	return newFusionLooper(cfg, nil)
+	return newFusionLooper(cfg, ownClient(NewClient(cfg)))
 }
 
-func newFusionLooper(cfg *config.LooperConfig, client *Client) *FusionLooper {
-	return &FusionLooper{BaseLooper: newBaseLooper(cfg, client)}
+func newFusionLooper(cfg *config.LooperConfig, binding clientBinding) *FusionLooper {
+	return &FusionLooper{BaseLooper: newBaseLooper(cfg, binding)}
 }
 
 type fusionExecutionConfig struct {
@@ -40,6 +41,8 @@ type fusionExecutionConfig struct {
 	IncludeAnalysis              bool
 	IncludeIntermediateResponses bool
 	OnError                      string
+	QuorumFailurePolicy          config.FusionQuorumFailurePolicy
+	QuorumFallbackTarget         string
 	AnalysisTemplate             string
 	SynthesisTemplate            string
 	JudgePromptVersion           string
@@ -110,6 +113,60 @@ func projectFusionPublicTrace(trace *FusionTrace) *fusionPublicTrace {
 	}
 }
 
+// FusionQuorumAttemptOutcome is the bounded per-attempt projection carried on
+// the internal quorum outcome.
+//
+// It deliberately does not embed FusionPanelAttemptEvidence, which carries an
+// Error string holding raw provider error text. Only a model name, a
+// closed-enum state, and token counts cross into Replay, metrics, and logs.
+type FusionQuorumAttemptOutcome struct {
+	Model string
+	State FusionPanelAttemptState
+	Usage TokenUsage
+}
+
+// FusionQuorumOutcome records a below-quorum panel and the policy applied to it,
+// for operator surfaces only.
+//
+// It is not serialized to the caller: a recovered quorum failure returns the
+// fallback target's ordinary protocol response, and this evidence goes to Router
+// Replay, metrics, and structured logs instead. Nothing here belongs in a
+// response body.
+type FusionQuorumOutcome struct {
+	RequiredCount  int
+	UsableCount    int
+	SelectedPolicy string
+	FallbackTarget string
+	Disposition    FusionQuorumDisposition
+	Attempts       []FusionQuorumAttemptOutcome
+}
+
+// newFusionQuorumOutcome projects panel evidence onto the bounded operator type,
+// dropping the per-attempt error text that must not leave the router.
+func newFusionQuorumOutcome(
+	evidence FusionQuorumEvidence,
+	policy string,
+	target string,
+	disposition FusionQuorumDisposition,
+) *FusionQuorumOutcome {
+	attempts := make([]FusionQuorumAttemptOutcome, 0, len(evidence.Attempts))
+	for _, attempt := range evidence.Attempts {
+		attempts = append(attempts, FusionQuorumAttemptOutcome{
+			Model: attempt.Model,
+			State: attempt.State,
+			Usage: attempt.Usage,
+		})
+	}
+	return &FusionQuorumOutcome{
+		RequiredCount:  evidence.RequiredCount,
+		UsableCount:    evidence.UsableCount,
+		SelectedPolicy: policy,
+		FallbackTarget: target,
+		Disposition:    disposition,
+		Attempts:       attempts,
+	}
+}
+
 func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, error) {
 	ctx = contextWithFusionDepth(ctx, 1)
 
@@ -137,7 +194,7 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 
 	panel, err := l.executeFusionPanel(ctx, req, cfg)
 	if err != nil {
-		return nil, err
+		return l.applyQuorumFailurePolicy(ctx, req, cfg, panel, err)
 	}
 	if len(panel.failedModels) > 0 {
 		logging.ComponentWarnEvent("looper", "fusion_panel_partial", map[string]interface{}{
@@ -154,15 +211,19 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		return nil, err
 	}
 
-	judge, err := l.runFusionJudgeStages(ctx, req, cfg, groundedPanel, groundingScores)
+	panelAttempts := len(panel.dispatchedModels)
+	judge, err := l.runFusionJudgeStages(
+		ctx, req, cfg, groundedPanel, groundingScores, panelAttempts+1)
 	if err != nil {
 		return nil, err
 	}
 	usage := panel.usage.Add(judge.analysisResponse, judge.finalResponse)
 
 	trace := buildFusionTrace(cfg, groundedPanel, panel.failedModels, judge.analysis, groundingMode, groundingScores)
-	modelsUsed := orderedFusionModelsUsed(cfg.AnalysisModels, cfg.Model)
-	iterations := len(cfg.AnalysisModels) + judge.iterations
+	// Accounting describes calls actually made, not the configured plan: early
+	// quorum can stop workers still queued behind max_concurrent.
+	modelsUsed := orderedFusionModelsUsed(panel.dispatchedModels, cfg.Model)
+	iterations := panelAttempts + judge.iterations
 
 	if req.IsStreaming {
 		return l.formatFusionStreamingResponse(judge.finalResponse, modelsUsed, iterations, cfg, trace, usage)
@@ -202,8 +263,10 @@ func (l *FusionLooper) callFusionModel(
 		callReq.Temperature = openai.Float(*cfg.Temperature)
 	}
 	if override.MaxCompletionTokens > 0 {
+		callReq.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
 		callReq.MaxCompletionTokens = openai.Int(int64(override.MaxCompletionTokens))
 	} else if cfg.MaxCompletionTokens > 0 {
+		callReq.MaxTokens = (openai.ChatCompletionNewParams{}).MaxTokens
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
 	}
 	return l.dispatchModel(
@@ -243,13 +306,14 @@ func (l *FusionLooper) runFusionAnalysis(
 	cfg fusionExecutionConfig,
 	panelResponses []*ModelResponse,
 	groundingScores []groundingScore,
+	callOrdinal int,
 ) (*FusionAnalysis, *ModelResponse) {
 	prompt := buildFusionAnalysisPrompt(cfg, extractOriginalContent(req.OriginalRequest), panelResponses)
 	if notes := formatGroundingNotes(groundingScores); notes != "" {
 		prompt = prompt + "\n\n" + notes
 	}
 	analysisReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, req, analysisReq, cfg, cfg.Model, false, false, len(panelResponses)+1, config.FusionModelOverride{})
+	resp, err := l.callFusionModel(ctx, req, analysisReq, cfg, cfg.Model, false, false, callOrdinal, config.FusionModelOverride{})
 	if err != nil {
 		logging.ComponentWarnEvent("looper", "fusion_analysis_failed", map[string]interface{}{
 			"judge_model": cfg.Model,
@@ -275,6 +339,7 @@ func (l *FusionLooper) runFusionFinal(
 	panelResponses []*ModelResponse,
 	analysis *FusionAnalysis,
 	groundingScores []groundingScore,
+	callOrdinal int,
 ) (*ModelResponse, error) {
 	original := extractOriginalContent(req.OriginalRequest)
 	outputContract := requestOutputContract(req.OriginalRequest, req.OutputContract)
@@ -285,7 +350,7 @@ func (l *FusionLooper) runFusionFinal(
 		prompt = prompt + "\n\n" + notes
 	}
 	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, req, finalReq, cfg, cfg.Model, true, false, len(panelResponses)+2, config.FusionModelOverride{})
+	resp, err := l.callFusionModel(ctx, req, finalReq, cfg, cfg.Model, true, false, callOrdinal, config.FusionModelOverride{})
 	if err != nil {
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}
@@ -453,6 +518,19 @@ func orderedFusionModelsUsed(analysisModels []string, judge string) []string {
 	return models
 }
 
+// shouldIncludeFusionTrace reports whether the caller-visible Fusion extension
+// belongs on this response.
+//
+// A nil trace means the stage deliberately produced no caller-visible evidence.
+// The quorum fallback uses that: it returns the fallback target's ordinary
+// response and routes its evidence to Replay, metrics, and logs instead.
+func shouldIncludeFusionTrace(cfg fusionExecutionConfig, trace *FusionTrace) bool {
+	return trace != nil && (cfg.IncludeAnalysis ||
+		cfg.IncludeIntermediateResponses ||
+		len(trace.FailedModels) > 0 ||
+		trace.Grounding != nil)
+}
+
 func (l *FusionLooper) formatFusionJSONResponse(
 	finalResp *ModelResponse,
 	modelsUsed []string,
@@ -482,14 +560,11 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		},
 		"usage": usage.Map(),
 	}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = projectFusionPublicTrace(trace)
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal fusion response: %w", err)
 	}
-	return &Response{
+	return withFusionExtension(&Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -498,7 +573,7 @@ func (l *FusionLooper) formatFusionJSONResponse(
 		AlgorithmType:         "fusion",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}, cfg, trace)
 }
 
 func (l *FusionLooper) formatFusionToolCallJSONResponse(
@@ -517,14 +592,11 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 	completion["model"] = finalResp.Model
 	completion["usage"] = usage.Map()
 	normalizeCompletionToolFinishReason(completion)
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = projectFusionPublicTrace(trace)
-	}
 	body, err := json.Marshal(completion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal fusion tool-call response: %w", err)
 	}
-	return &Response{
+	return withFusionExtension(&Response{
 		Body:                  body,
 		ContentType:           "application/json",
 		Model:                 finalResp.Model,
@@ -533,7 +605,7 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 		AlgorithmType:         "fusion",
 		IntermediateResponses: trace,
 		Usage:                 usage,
-	}, nil
+	}, cfg, trace)
 }
 
 func (l *FusionLooper) formatFusionStreamingResponse(
@@ -551,17 +623,17 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 		err  error
 	)
 	if finalResp.HasToolCalls {
-		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, cfg, trace)
+		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, cfg, trace)
+		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content)
 	}
 	resp := streamingLooperResponse(body, finalResp.Model, modelsUsed, iterations, "fusion")
 	resp.IntermediateResponses = trace
 	resp.Usage = usage
-	return resp, nil
+	return withFusionExtension(resp, cfg, trace)
 }
 
 func buildFusionStreamingSSE(
@@ -569,8 +641,6 @@ func buildFusionStreamingSSE(
 	created int64,
 	model string,
 	content string,
-	cfg fusionExecutionConfig,
-	trace *FusionTrace,
 ) []byte {
 	var body []byte
 	roleChoice := map[string]interface{}{
@@ -578,11 +648,7 @@ func buildFusionStreamingSSE(
 		"delta":         map[string]interface{}{"role": "assistant"},
 		"finish_reason": nil,
 	}
-	var extra map[string]interface{}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		extra = map[string]interface{}{"fusion": projectFusionPublicTrace(trace)}
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
+	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, nil))
 	for _, chunk := range splitIntoChunks(content, 50) {
 		contentChoice := map[string]interface{}{
 			"index":         0,

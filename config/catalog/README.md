@@ -102,6 +102,10 @@ For a card without `reasoning_family`, labels such as `enabled`, `disabled`,
 `default`, and `unspecified` describe the published run condition only; they do
 not create a user-configurable selector.
 
+Runtime selectors consume the same exact-effort boundary. They never copy
+index evidence between efforts or multiply an index score by coverage; coverage
+may only break a tie between otherwise equal available scores.
+
 A physical Model Card represents one canonical upstream model identity. Date
 snapshots, cloud aliases, quantizations, and serving-engine packaging do not
 become duplicate cards: provider-specific names belong in that provider's
@@ -115,7 +119,7 @@ without duplicating its intrinsic identity. Virtual recipes are materialized
 from packaged assets and keep their own evaluation directory.
 
 The built-in physical inventory is curated at the creator-company level. The
-current baseline contains 84 physical cards from 22 mainstream creators and
+current baseline contains 100 physical cards from 23 mainstream creators and
 five separately stored virtual cards. For each creator, prefer roughly the
 latest three generations or representative product lines over accumulating a
 shallow long tail of lesser-known creators. This policy is about Model Cards,
@@ -184,7 +188,19 @@ This is catalog or custom-model schema, never a new decision field.
 
 Virtual-model `recommended_pool` entries are suggestions, not foreign keys.
 They may name catalog-backed models or operator-defined models that only exist
-in a deployment configuration.
+in a deployment configuration. The list may be omitted or empty. Its length does
+not change a role's required assignment or `minimum_candidates`: operators must
+still provide enough eligible backends. For private routing, the operator owns
+the deployment boundary; a recommendation does not establish where a model runs
+or how that deployment handles data. Declared capabilities, context and output
+limits, and quality evidence must match the assigned deployment and policy.
+
+The MoM 2.0 policy's reference pools use DeepSeek V4 Flash and Pro at `max`
+reasoning effort and GLM-5.1 with reasoning enabled. Configure the assigned
+backend's reasoning mode to match the catalog evidence; other effort levels may
+not have the required index. These examples do not establish image capability or
+measured deployment latency and pricing. Vault leaves recommendations empty so
+operators explicitly assign deployments that meet their privacy requirements.
 
 Model Hub is a catalog, not an overall model ranking. The generated product
 views may compare only one selected benchmark version, profile, and metric.
