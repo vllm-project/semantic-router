@@ -150,7 +150,41 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 
 	inbound := normalizeProtocol(string(ctx.SourceFormat))
 	outbound := normalizeProtocol(string(ctx.TargetFormat))
+	value, included := formatProtocolDiagnostics(diagnostics)
+	for _, diagnostic := range diagnostics[:included] {
+		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
+	}
+	builder.addString(headers.VSRProtocolWarnings, value)
+}
 
+// recordBufferedProtocolDiagnostics reports only diagnostics discovered after
+// response headers. The body phase replaces the bounded header with the full
+// list, but diagnostics already reported in the header phase must not be
+// counted again. Diagnostics omitted by truncation follow the same accounting
+// rule as addProtocolDiagnostics.
+func recordBufferedProtocolDiagnostics(ctx *RequestContext, before int) (string, bool) {
+	if ctx.VSRCacheHit || len(ctx.ProtocolDiagnostics) <= before {
+		return "", false
+	}
+	value, included := formatProtocolDiagnostics(ctx.ProtocolDiagnostics)
+	if included > before {
+		inbound := normalizeProtocol(string(ctx.SourceFormat))
+		outbound := normalizeProtocol(string(ctx.TargetFormat))
+		for _, diagnostic := range ctx.ProtocolDiagnostics[before:included] {
+			recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
+		}
+	}
+	return value, true
+}
+
+// formatProtocolDiagnostics is shared by the early header phase and the
+// buffered body phase. The latter can discover diagnostics after Envoy has
+// already asked for response headers, so it must replace the warning header
+// with the full bounded list without counting early diagnostics twice.
+func formatProtocolDiagnostics(diagnostics llmprotocol.Diagnostics) (string, int) {
+	if len(diagnostics) == 0 {
+		return "", 0
+	}
 	// Reserve the largest possible truncation trailer before appending entries.
 	// A single diagnostic obeys the same bound as a longer warning list.
 	trailerBudget := len(fmt.Sprintf("%s;%s;count=%d", llmprotocol.DiagnosticTruncated, "diagnostics_truncated", len(diagnostics))) + 1
@@ -170,7 +204,6 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 			sb.WriteByte(',')
 		}
 		sb.WriteString(entry)
-		recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
 	}
 
 	if truncatedAt >= 0 {
@@ -185,7 +218,11 @@ func (builder *responseHeaderMutationBuilder) addProtocolDiagnostics(
 		sb.WriteString(trailer)
 	}
 
-	builder.addString(headers.VSRProtocolWarnings, sb.String())
+	included := len(diagnostics)
+	if truncatedAt >= 0 {
+		included = truncatedAt
+	}
+	return sb.String(), included
 }
 
 func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {
@@ -196,29 +233,21 @@ func formatProtocolDiagnostic(diagnostic llmprotocol.Diagnostic) string {
 	)
 }
 
-// sanitizeWarningField percent-encodes the format separators ',' and
-// ';' so a pathological JSON-path field name cannot break the
-// single-line encoding, and strips CR/LF so a hostile value cannot
-// inject a new header line. PR2's parser never produces such paths;
-// this is belt-and-suspenders.
+// sanitizeWarningField percent-encodes the format separators, percent signs,
+// and ASCII control bytes so a JSON field name cannot break the warning list
+// or produce a header value rejected by Envoy.
 func sanitizeWarningField(field string) string {
-	if !strings.ContainsAny(field, ",;\r\n") {
-		return field
-	}
+	const hex = "0123456789ABCDEF"
 	var sb strings.Builder
 	sb.Grow(len(field))
-	for _, r := range field {
-		switch r {
-		case ',':
-			sb.WriteString("%2C")
-		case ';':
-			sb.WriteString("%3B")
-		case '\r':
-			sb.WriteString("%0D")
-		case '\n':
-			sb.WriteString("%0A")
-		default:
-			sb.WriteRune(r)
+	for i := 0; i < len(field); i++ {
+		b := field[i]
+		if b == ',' || b == ';' || b == '%' || b < 0x20 || b == 0x7f {
+			sb.WriteByte('%')
+			sb.WriteByte(hex[b>>4])
+			sb.WriteByte(hex[b&0x0f])
+		} else {
+			sb.WriteByte(b)
 		}
 	}
 	return sb.String()

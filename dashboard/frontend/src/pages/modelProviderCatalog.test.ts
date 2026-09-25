@@ -76,7 +76,6 @@ describe('model provider catalog presentation', () => {
       expect.arrayContaining([
         'openai',
         'anthropic',
-        'bedrock',
         'openrouter',
         'vllm',
         'sglang',
@@ -86,6 +85,7 @@ describe('model provider catalog presentation', () => {
     expect(featured.length).toBeGreaterThan(0)
     expect(featured.length).toBeLessThan(modelProviderCatalog.length)
     expect(modelProviderCatalog.some((provider) => !provider.featured)).toBe(true)
+    expect(featured.map((provider) => provider.id)).not.toContain('bedrock')
   })
 
   it('keeps custom-only provider contracts available without claiming model mappings', () => {

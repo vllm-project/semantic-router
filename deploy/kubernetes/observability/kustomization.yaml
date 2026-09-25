@@ -21,6 +21,8 @@ resources:
   - grafana/deployment.yaml
   - grafana/service.yaml
   - dashboard/configmap.yaml
+  - dashboard/serviceaccount.yaml
+  - dashboard/rbac.yaml
   - dashboard/deployment.yaml
   - dashboard/service.yaml
   - ingress.yaml
