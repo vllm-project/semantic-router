@@ -18,13 +18,11 @@ writer     = Agent(role="writer",     model="small-model")
 
 It looks like configuration. It is really a prediction, made once, about work nobody has seen yet.
 
-A task never reaches a model as one request. It arrives as a stream of calls: list the changed files, summarize a module, search for a concurrency bug, write the final comment. When a model is bound to an agent, every call that agent makes gets the same answer, whether the call is hard or trivial.
+A task never reaches a model as one request. It arrives as a stream of calls: list the changed files, summarize a module, search for a concurrency bug, write the final comment. Bind a model to an agent and every one of those calls gets the same answer, hard or trivial.
 
-vLLM Semantic Router moves that choice onto the request. Every agent sends the same model name, `MoM`, short for mixture of models. It is not a model, it is a virtual name the router resolves per call, based on what the call contains, using signals and decisions written in YAML.
+vLLM Semantic Router moves that choice onto the request. Every agent sends one model name, `MoM`, short for mixture of models. It is not a model but a virtual name the router resolves per call, from what the call contains, using signals and decisions written in YAML. Throughout this post, **local** means a small model on your own machine, free and slower, and **frontier** means a large hosted model, billed per token and fast.
 
-Two words appear throughout this post. **Local** means a small model running on your own machine, free to call and slower. **Frontier** means a large hosted model, billed per token and fast.
-
-To see what changes, we ran one four-agent crew four ways (all frontier, model per agent, model per call, all local) and recorded every call: which model served it, which decision chose it, what it cost, and how long the router took to decide.
+To see what changes, we ran one four-agent crew four ways, all frontier, model per agent, model per call and all local, recording every call: which model served it, which decision chose it, what it cost, and how long the router took to decide.
 
 Per-call routing sent **2 of 16** calls to the frontier model and cost **$1.37 per 1,000 reviews**. That is **one fifth** the cost of sending everything to the frontier model, and **less than half** the cost of a hand-tuned per-agent setup. It found **4 of 6** seeded bugs, matching the all-frontier arm and beating per-agent binding, which found 3. The router took **1.86 ms** at p50 to make each choice.
 
@@ -35,12 +33,12 @@ Per-call routing sent **2 of 16** calls to the frontier model and cost **$1.37 p
 <img src="/img/blog/model-per-call/hero.png" alt="Four agents send every call through vLLM Semantic Router, which chooses a local or frontier model per call and records each choice" width="94%" />
 </picture>
 <br />
-<em>Figure 1: One task is a stream of calls. vLLM Semantic Router chooses the model for each one and records why.</em>
+<em>Figure 1: One task is a stream of calls. The router chooses a model for each one and records why.</em>
 </p>
 
 ## One Task, Many Calls
 
-The example workload is a pull-request review, a common multi-agent pattern: one agent explores the change, one summarizes it, one searches for defects, one writes the comment. The pattern matters more than the domain. Each agent makes calls of very different difficulty.
+The example workload is a pull-request review: one agent explores the change, one summarizes it, one searches for defects, one writes the comment. The pattern matters more than the domain, and each agent makes calls of very different difficulty.
 
 | Agent | What its calls do | Calls per task |
 |---|---|---:|
@@ -65,9 +63,9 @@ router = OpenAI(base_url="http://localhost:8899/v1", api_key="unused")
 router.chat.completions.create(model="MoM", messages=messages, tools=tools)
 ```
 
-Any OpenAI-compatible agent framework takes the same two settings: a base URL and a model name. The crew code no longer holds a model choice at all. The choice lives in the router's configuration, where an operator can change it without touching the agents.
+Any OpenAI-compatible agent framework takes those same two settings, a base URL and a model name. The crew code no longer holds a model choice at all; it lives in the router's configuration, where an operator can change it without touching the agents.
 
-Per-agent binding still works on the same endpoint. An agent that sends `local` or `frontier` by name is served by that model directly. That is how the comparison arms below all run through one router.
+Per-agent binding still works on the same endpoint: an agent that sends `local` or `frontier` by name is served by that model directly, which is how the comparison arms below all run through one router.
 
 <p align="center">
 <picture>
@@ -104,30 +102,26 @@ routing:
       modelRefs:
         - model: frontier
 
-    - name: default-local
-      priority: 10
-      rules: { operator: AND, conditions: [] }
-      modelRefs:
-        - model: local
+    # plus a default-local fall-through at priority 10, pointing at `local`
 ```
 
-A call goes to the frontier model only when it asks for a defect search **and** the code involves concurrency, processes or secrets. Summarizing a threaded module stays local, and so does searching a pagination helper. The fall-through is local on purpose: a gap in the policy then shows up as a missed defect in the results, never as a surprise on the bill.
+A call goes to the frontier model only when it asks for a defect search **and** the code involves concurrency, processes or secrets. Summarizing a threaded module stays local, and so does searching a pagination helper. The fall-through is local on purpose: a gap in the policy then shows up as a missed defect, never as a surprise on the bill.
 
-Keyword signals need no classifier model, which keeps the cost of choosing small enough to measure on every call. The same decisions accept the router's other signal families, such as embedding similarity, complexity and domain, without any change to the agents.
+Keyword signals need no classifier model, which keeps choosing cheap enough to measure on every call. The same decisions accept the router's other signal families, such as embedding similarity, complexity and domain, with no change to the agents.
 
-One property matters a lot for agent traffic: **signals read the latest user message, and tool results never change a decision.** Inside a tool loop every follow-up call carries the same instruction, so the loop stays on the model that started it. The choice changes where the work changes, between agents and between files.
+One property matters for agent traffic: **signals read the latest user message, and tool results never change a decision.** A tool loop therefore stays on the model that started it, and the choice changes where the work changes, between agents and between files.
 
 <p align="center">
 <picture>
 <img src="/img/blog/model-per-call/policy-flow.png" alt="Request, signals, decision, model and accounting stages for one call" width="92%" />
 </picture>
 <br />
-<em>Figure 3: Each call passes through signals and a decision before a model is selected, and leaves with its routing and cost recorded.</em>
+<em>Figure 3: Each call passes through signals and a decision, and leaves with its routing and cost recorded.</em>
 </p>
 
 ## Every Call Is Accounted For
 
-Choosing per call is only useful if every choice can be explained afterwards. vLLM Semantic Router returns the routing facts on each response and keeps running totals on its Prometheus endpoint:
+Choosing per call is only useful if every choice can be explained afterwards. The router returns the routing facts on each response and keeps running totals on its Prometheus endpoint:
 
 | Surface | Field | What it tells you |
 |---|---|---|
@@ -148,26 +142,24 @@ One request shows all of it:
 <em>Figure 4: The router explains every call it serves, on the response itself.</em>
 </p>
 
-Cost comes from a `pricing` block on each model, giving the price per million prompt, cached and completion tokens. The router multiplies it by the real token counts, so the crew computes nothing itself. Every number below is read from these headers and counters, which means the same numbers are available to any deployment running the router.
-
-Prices are xAI's published list prices as of 2026-09-11, so cost here is the router's own accounting at configured prices, not a provider invoice.
+Cost comes from a `pricing` block on each model, which the router multiplies by the real token counts. The crew computes nothing itself, so every number below is available to any deployment running the router. Prices are xAI's published list prices as of 2026-09-11, which makes cost here the router's own accounting, not a provider invoice.
 
 ## Evaluation Setup
 
-The crew reviews one pull request that touches four files and carries six seeded defects, from obvious to subtle:
+The crew reviews one pull request across four files, carrying six seeded defects from obvious to subtle:
 
 | # | File | Defect |
 |---|---|---|
-| D1 | `counter.py` | Shared total is read and written back without the lock |
-| D2 | `counter.py` | Error counter is not synchronized either |
-| D3 | `billing.py` | `parse_amount` fails on `None` or an empty string |
-| D4 | `billing.py` | Bare `except: pass` silently drops line items |
-| D5 | `billing.py` | Money is computed with `float` |
-| D6 | `pagination.py` | Slice ends one short, so every page drops its last row |
+| D1 | `counter.py` | Shared total read and written back without the lock |
+| D2 | `counter.py` | Error counter not synchronized either |
+| D3 | `billing.py` | `parse_amount` fails on `None` or empty string |
+| D4 | `billing.py` | Bare `except: pass` drops line items silently |
+| D5 | `billing.py` | Money computed with `float` |
+| D6 | `pagination.py` | Slice ends one short, dropping each page's last row |
 
 Four arms run the identical crew, prompts and file order. Only the model name each agent sends changes: `frontier` everywhere, `frontier` for the reviewer and `local` for the rest, `MoM` everywhere, or `local` everywhere.
 
-The model-per-agent arm is what a careful team would write by hand, putting the expensive model only where the hard thinking happens. It is the baseline per-call routing has to beat. The all-local arm shows what routing buys over simply going cheap.
+The model-per-agent arm is what a careful team would write by hand, the expensive model only where the hard thinking happens. It is the baseline per-call routing has to beat, and the all-local arm shows what routing buys over simply going cheap.
 
 | Setting | Value |
 |---|---|
@@ -188,7 +180,7 @@ Grading was blind: the reviews were shuffled, the arm labels hidden, and each wa
 <img src="/img/blog/model-per-call/call-tape.png" alt="Every model call in one per-call run, coloured by the model that served it" width="92%" />
 </picture>
 <br />
-<em>Figure 5: One per-call run, the one with the median number of calls. Each tick is one model call, coloured by the model the router selected.</em>
+<em>Figure 5: One per-call run, the one with the median call count. Each tick is a call, coloured by the model chosen.</em>
 </p>
 
 | Agent | Calls to `local` | Calls to `frontier` |
@@ -199,11 +191,9 @@ Grading was blind: the reviews were shuffled, the arm labels hidden, and each wa
 | Writer | 1 | 0 |
 | **Total** | **14** | **2** |
 
-The policy escalated exactly two calls, and both were the reviewer working on `counter.py`, the one file that uses threads. The reviewer's calls on `billing.py` and `pagination.py` asked for a defect search too, but their code has nothing subtle in it by this policy's definition, so they stayed local. Summarizing `counter.py` also stayed local, because a summary is not a defect search.
+The policy escalated exactly two calls, both the reviewer working on `counter.py`, the one file that uses threads. The reviewer's other four calls asked for a defect search too, but on code this policy does not consider subtle, so they stayed local, as did the summary of `counter.py`.
 
-That is the difference a per-agent setting cannot express. The reviewer is one agent doing six calls, and only two of them were worth the expensive model.
-
-The router also keeps the tool loop stable. The planner's five calls are one conversation with tool results in the middle, and all five stayed on the same model, because the instruction that started the loop is what the signals read.
+That is the split a per-agent setting cannot express: one agent, six calls, two of them worth the expensive model. The planner's five calls, meanwhile, are a single tool loop that stayed on one model throughout, because the signals read the instruction that started it.
 
 ## Result 2: Cost, Time and Quality Across the Four Arms
 
@@ -215,25 +205,25 @@ The router also keeps the tool loop stable. The planner's five calls are one con
 | Completion tokens | 986 | 899 | 1,651 | 2,115 |
 | **Cost per 1,000 reviews** | **$6.88** | **$2.87** | **$1.37** | **$0** |
 | **Defects found (of 6)** | **4** (4 to 4) | **3** (3 to 4) | **4** (0 to 5) | **0** (0 to 1) |
-| Wall time (s) | 19.3 | 80.0 | 193.8 | 290.0 |
+| Wall time (s), local model on CPU | 19.3 | 80.0 | 193.8 | 290.0 |
 
-Median of 3 runs per arm.
+Median of 3 runs per arm. Wall time tracks where the calls ran, not how long the router took to route them: the local model here is a 3B model on CPU, so any arm that sends more calls to it takes longer. The router's own share was 0.019 percent.
 
 <p align="center">
 <picture>
 <img src="/img/blog/model-per-call/scorecard.png" alt="Cost per 1,000 reviews and defects found for the four arms" width="92%" />
 </picture>
 <br />
-<em>Figure 6: The same crew, four ways. Cost from the router's configured pricing, defects graded on the final review.</em>
+<em>Figure 6: The same crew, four ways. Cost from configured pricing, defects graded on the final review.</em>
 </p>
 
-Costs are shown per thousand reviews because one review costs a fraction of a cent, which is hard to compare at a glance.
+Costs are per thousand reviews because one review costs a fraction of a cent, which is hard to compare at a glance.
 
-**Against per-agent binding**, per-call routing cost $1.37 against $2.87 and found 4 bugs against 3. The hand-tuned baseline paid for six frontier calls because its reviewer was bound to the frontier model. Per-call routing paid for two and lost nothing by it. The saving comes from splitting one agent's work, which a per-agent setting cannot express.
+**Against per-agent binding**, per-call routing cost $1.37 against $2.87 and found 4 bugs against 3. The hand-tuned baseline paid for six frontier calls because its reviewer was bound to the frontier model; per-call routing paid for two and lost nothing by it. That saving comes from splitting one agent's work, which a per-agent setting cannot express.
 
-**Against the ceiling**, it found the same median of 4 bugs for a fifth of the cost. **Against the floor**, the difference is the review itself: the all-local arm found a median of 0 bugs, and two of its three runs reported no defects at all and described the code as already fixed.
+**Against the ceiling**, it found the same median of 4 bugs for a fifth of the cost. **Against the floor**, the difference is the review itself: all-local found a median of 0, and two of its three runs reported no defects at all.
 
-**Time is the honest trade.** Per-call routing was slower than per-agent binding, 193.8 seconds against 80.0, because it sent 14 of 16 calls to a 3B model on CPU while the per-agent arm sent 6 to a fast hosted model. That column describes the local deployment, not the router, whose own share of the time was 0.019 percent. Serving the same local model on faster hardware changes this column and nothing else in the table, because the model, the cost and the answers all stay the same.
+**The trade is time**, and it is a property of the local deployment rather than the router. Serving the same local model on faster hardware changes that column and nothing else in the table, because the model, the cost and the answers stay the same.
 
 ## Result 3: Choosing Costs 1.86 ms
 
@@ -246,7 +236,7 @@ Costs are shown per thousand reviews because one review costs a fraction of a ce
 | Median model call | 4.38 s |
 | Routing share of wall time | 0.019% |
 
-Routing time is measured by the router itself and returned on every response in `x-vsr-routing-latency-ms`, so this is not an estimate from outside. A median model call in this crew took 4.38 seconds, while the decision in front of it took under 2 milliseconds.
+The router measures this itself and returns it on every response in `x-vsr-routing-latency-ms`, so it is not an estimate from outside. A median model call took 4.38 seconds; the decision in front of it took under 2 milliseconds.
 
 <p align="center">
 <picture>
@@ -271,17 +261,11 @@ These figures are for keyword signals. Signal families that run a model, such as
 
 How many of the 3 runs of each arm named the bug in the final review.
 
-Three things here are worth stating plainly.
+Two rows are not routing results. **D5 was found by no arm**, even with every call on the frontier model, so no policy could have routed around it. **D3 was found only by per-call**, in a file it kept local, which at three runs is variation rather than evidence.
 
-**D5 was never found, by any arm.** Money computed with `float` instead of `Decimal` went unreported even when every call went to the frontier model. No policy can route around a bug that no model in the fleet reports.
+The row that is a routing result is the per-call arm's spread: **5, 4 and 0.** In the zero run the router escalated the reviewer's `counter.py` calls as designed and the frontier model found the race, then the local writer turned those notes into a comment saying the defects had already been addressed.
 
-**D3 looks like a per-call win, and it is not.** The `None` amount was found in 2 of 3 per-call runs and none of the others, but it lives in `billing.py`, which per-call routing kept local. At three runs per arm that is variation, not evidence.
-
-**The per-call arm has one zero, and the reason is the writer.** Its runs scored 5, 4 and 0. In the zero run the router sent the reviewer's `counter.py` calls to the frontier model as designed, the frontier model found the race, and then the local writer turned the notes into a comment saying the defects had already been addressed. Quality is graded on what the user receives, so that run scored nothing.
-
-That is a policy gap, and it is worth being precise about it. The write step's prompt contains the findings but not the words the policy escalates on, so it falls through to the local model. Two honest fixes: escalate the write step as well, which raises cost by one call, or keep it local and accept that a small model sometimes loses what a large one found. Either way the router shows you the choice it made, so the gap is visible instead of silent.
-
-We did not change the keyword list to improve any of these numbers.
+That is a policy gap, and a precise one: the write step's prompt carries the findings but none of the words the policy escalates on, so it falls through to local. Escalating it costs one more call; leaving it local means a small model will sometimes lose what a large one found. Either way the router reports the choice, so the gap is visible rather than silent. The keyword list was not changed to improve any of these numbers.
 
 ## Reproduce It
 
@@ -306,21 +290,15 @@ python report.py --figures
 
 One arm at a time, because the `/metrics` counters cover the whole router. Any OpenAI-compatible backend can stand in for the frontier model: change its `backend_refs` and `pricing` block, and the arms and the reported cost follow.
 
-Each run records every call, the model that served it and what it cost, and `report.py` turns those files into the table above. The grading key, `defects.json`, was written before the runs, so anyone who disagrees with a score can re-grade the same reviews by a different standard.
+Each run records every call, the model that served it and what it cost, and `report.py` turns those files into the table above. The grading key was written before the runs, so anyone who disagrees with a score can re-grade the same reviews by a different standard.
 
 ## What This Changes for vLLM Users
 
 - **Model choice moves out of agent code** and into the router, versioned with the rest of the serving configuration.
-- **The unit of choice becomes the call.** Hard and trivial calls from the same agent can go to different models, which a per-agent setting cannot express. In this run that was the whole saving: 2 frontier calls instead of 6, at the same measured quality.
-- **Choosing is cheap enough to ignore.** 1.86 ms at p50, 0.019 percent of the task.
+- **The unit of choice becomes the call.** Hard and trivial calls from one agent can go to different models, which a per-agent setting cannot express. Here that was the whole saving: 2 frontier calls instead of 6, at the same measured quality.
+- **Choosing is cheap enough to ignore**, 1.86 ms at p50.
 - **Per-agent binding still works on the same endpoint**, so teams can adopt per-call routing one agent at a time.
-- **Every choice is attributable.** Selected model, decision, routing time and cost come back on each response and accumulate on `/metrics`, so a policy can be tuned from production traffic instead of guessed at.
+- **Every choice is attributable**, so a policy can be tuned from production traffic instead of guessed at.
 - **Start with a local fall-through.** A policy that escalates only on clear signals fails toward lower cost, and its misses show up in quality results rather than hidden in the bill.
 
-## Join Us
-
-vLLM Semantic Router is building out routing for agent workloads, and there is open work on signal families for agent traffic, per-call evaluation suites, and observability for multi-agent runs.
-
-- GitHub: [vllm-project/semantic-router](https://github.com/vllm-project/semantic-router)
-- Documentation: [vllm-sr.ai](https://vllm-sr.ai)
-- Community: join the **#semantic-router** channel on [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN)
+There is open work on signal families for agent traffic, per-call evaluation suites and observability for multi-agent runs: [GitHub](https://github.com/vllm-project/semantic-router), [docs](https://vllm-sr.ai), and the **#semantic-router** channel on [vLLM Slack](https://vllm-dev.slack.com/archives/C09CTGF8KCN).
