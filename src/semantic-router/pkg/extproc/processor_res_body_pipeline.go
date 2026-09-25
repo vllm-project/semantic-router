@@ -58,14 +58,7 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 	r.updateResponseCache(ctx, r.cacheableClientResponse(clientBody, rewriteClientBody, *semanticResponse, ctx))
 
 	blocked, finalBody, headerOptions := r.finalizeResponsePolicy(ctx, semanticResponse, clientBody)
-	lateDiagnostics := ctx.ProtocolDiagnostics[diagnosticsBeforeBody:]
-	if !ctx.VSRCacheHit {
-		inbound := normalizeProtocol(string(ctx.SourceFormat))
-		outbound := normalizeProtocol(string(ctx.TargetFormat))
-		for _, diagnostic := range lateDiagnostics {
-			recordProtocolDiagnostic(ctx, inbound, outbound, diagnostic)
-		}
-	}
+	lateWarning, hasLateDiagnostics := recordBufferedProtocolDiagnostics(ctx, diagnosticsBeforeBody)
 	if blocked != nil {
 		return blocked
 	}
@@ -76,9 +69,8 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 			SetHeaders: headerOptions,
 		}
 	}
-	if len(lateDiagnostics) > 0 && !ctx.VSRCacheHit {
-		value, _ := formatProtocolDiagnostics(ctx.ProtocolDiagnostics)
-		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, value)
+	if hasLateDiagnostics {
+		setResponseBodyHeaderOverwrite(response, headers.VSRProtocolWarnings, lateWarning)
 	}
 	if (rewriteClientBody || !bytes.Equal(finalBody, clientBody)) && response.GetResponseBody().GetResponse().GetBodyMutation() == nil {
 		setResponseBodyMutation(response, finalBody)
@@ -91,13 +83,13 @@ func (r *OpenAIRouter) handleNonStreamingResponseBody(
 // warning emitted by both renders describes one loss, not two.
 func deduplicateReencodedResponseDiagnostics(
 	diagnostics llmprotocol.Diagnostics,
-	decodeStart, encodeStart int,
+	existingStart, reencodeStart int,
 ) llmprotocol.Diagnostics {
-	decoded := diagnostics[decodeStart:encodeStart]
-	encoded := diagnostics[encodeStart:]
-	kept := diagnostics[:encodeStart]
+	existing := diagnostics[existingStart:reencodeStart]
+	encoded := diagnostics[reencodeStart:]
+	kept := diagnostics[:reencodeStart]
 	for _, diagnostic := range encoded {
-		if !slices.Contains(decoded, diagnostic) {
+		if !slices.Contains(existing, diagnostic) {
 			kept = append(kept, diagnostic)
 		}
 	}
@@ -256,8 +248,10 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 	if !changed {
 		return response, originalBody
 	}
+	diagnosticsBeforeEncode := len(ctx.ProtocolDiagnostics)
 	encoded, err := r.encodeClientResponse(*semanticResponse, ctx)
 	if err != nil {
+		ctx.ProtocolDiagnostics = ctx.ProtocolDiagnostics[:diagnosticsBeforeEncode]
 		logging.ComponentErrorEvent("extproc", "neutral_response_warning_encode_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"format":     ctx.SourceFormat,
@@ -265,6 +259,9 @@ func (r *OpenAIRouter) applySemanticResponseWarnings(
 		})
 		return response, originalBody
 	}
+	ctx.ProtocolDiagnostics = deduplicateReencodedResponseDiagnostics(
+		ctx.ProtocolDiagnostics, 0, diagnosticsBeforeEncode,
+	)
 	setResponseBodyMutation(response, encoded)
 	return response, encoded
 }
