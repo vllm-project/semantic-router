@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -40,6 +41,23 @@ def local_hook(hook_id: str) -> dict:
             if hook["id"] == hook_id:
                 return hook
     raise AssertionError(f"missing hook {hook_id}")
+
+
+def write_fake_python(path: Path, version: tuple[int, int, int], calls: Path) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        "#!/bin/sh\n"
+        f'echo "$0 $*" >> "{calls}"\n'
+        'case "$1" in\n'
+        f'-c) shift; exec "{sys.executable}" -c \'import sys; '
+        f"sys.executable = sys.argv.pop(1); sys.version_info = {version}; "
+        'exec(sys.argv.pop(1))\' "$0" "$@" ;;\n'
+        '-m) if [ "$2" = venv ]; then for target; do :; done; '
+        'mkdir -p "$target/bin"; cp "$0" "$target/bin/python"; fi ;;\n'
+        "esac\n"
+    )
+    path.chmod(0o755)
+    return path
 
 
 class HarnessMakeContractTests(unittest.TestCase):
@@ -173,6 +191,65 @@ class HarnessMakeContractTests(unittest.TestCase):
         )
         self.assertNotIn("agent-changed-files-lint", str(PRECOMMIT_CONFIG))
 
+    def test_tool_environment_requires_python_3_10(self) -> None:
+        # The quote catches a recipe that splices paths into shell or Python code.
+        with tempfile.TemporaryDirectory(prefix="agent's-venv-") as directory:
+            root = Path(directory)
+            calls = root / "calls.log"
+            system_python = write_fake_python(root / "bin/python3", (3, 9, 6), calls)
+            newer_python = write_fake_python(root / "python3.12", (3, 12, 4), calls)
+            venv = root / ".venv-agent"
+            environment = {
+                key: value
+                for key, value in os.environ.items()
+                if key not in {"MAKEFLAGS", "MFLAGS", "MAKEOVERRIDES", "MAKEFILES"}
+                and not key.startswith("AGENT_")
+            }
+            environment.update(PATH=f"{system_python.parent}:{os.environ['PATH']}")
+
+            def install(*variables: str) -> subprocess.CompletedProcess[str]:
+                calls.write_text("")
+                return subprocess.run(
+                    [
+                        "make",
+                        "--no-print-directory",
+                        "-f",
+                        "tools/make/agent.mk",
+                        "harness-venv-install",
+                        f"AGENT_VENV={venv}",
+                        f"AGENT_WORKTREE_VENV={venv}",
+                        *variables,
+                    ],
+                    cwd=REPO_ROOT,
+                    env=environment,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+
+            refused = install()
+            self.assertNotEqual(refused.returncode, 0, refused.stdout)
+            self.assertIn(f"python3 is Python 3.9.6 at {system_python}", refused.stderr)
+            self.assertIn("Set AGENT_BOOTSTRAP_PYTHON", refused.stderr)
+            self.assertFalse(venv.exists())
+
+            write_fake_python(venv / "bin/python", (3, 9, 6), calls)
+            rebuilt = install(f"AGENT_BOOTSTRAP_PYTHON={newer_python}")
+            self.assertEqual(rebuilt.returncode, 0, rebuilt.stderr)
+            rebuild_calls = calls.read_text().splitlines()
+            self.assertIn(f"{newer_python} -m venv --clear {venv}", rebuild_calls)
+            self.assertIn(
+                f"{venv}/bin/python -m pip install -r tools/agent/requirements.txt",
+                rebuild_calls,
+            )
+            self.assertEqual(
+                (venv / "bin/python").read_text(), newer_python.read_text()
+            )
+
+            reused = install(f"AGENT_BOOTSTRAP_PYTHON={newer_python}")
+            self.assertEqual(reused.returncode, 0, reused.stderr)
+            self.assertNotIn(" -m venv ", calls.read_text())
+
     def test_linked_worktrees_share_one_tool_environment(self) -> None:
         install = target_block("harness-venv-install")
 
@@ -186,6 +263,58 @@ class HarnessMakeContractTests(unittest.TestCase):
         self.assertIn(
             "AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit", PRECOMMIT_MAKE
         )
+
+    def test_go_bootstrap_rebuilds_a_linter_built_by_an_older_go(self) -> None:
+        pin = (REPO_ROOT / "tools/linter/go/golangci-lint.version").read_text().strip()
+        linter_package = "github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
+        for built_with, expected in (
+            ("go1.26.8", [f"install {linter_package}@v{pin}"]),
+            ("go1.27.0", []),
+            ("go1.28.0", []),
+        ):
+            with (
+                self.subTest(built_with=built_with),
+                tempfile.TemporaryDirectory() as root,
+            ):
+                gopath = Path(root)
+                installs = gopath / "installs.log"
+                (gopath / "bin").mkdir()
+                linter = gopath / "bin" / "golangci-lint"
+                linter.write_text(
+                    f"#!/bin/sh\necho 'golangci-lint has version {pin} "
+                    f"built with {built_with}'\n"
+                )
+                go = gopath / "go"
+                go.write_text(
+                    "#!/bin/sh\n"
+                    'case "$1 $2" in\n'
+                    f'"env GOPATH") echo "{gopath}" ;;\n'
+                    '"env GOVERSION") echo go1.27.1 ;;\n'
+                    f'"version "*) echo "$2: {built_with}" ;;\n'
+                    f'"install "*) echo "$*" >> "{installs}" ;;\n'
+                    "*) exit 1 ;;\n"
+                    "esac\n"
+                )
+                linter.chmod(0o755)
+                go.chmod(0o755)
+                subprocess.run(
+                    [
+                        "make",
+                        "--no-print-directory",
+                        "-f",
+                        "tools/make/agent.mk",
+                        "harness-go-bootstrap",
+                    ],
+                    cwd=REPO_ROOT,
+                    env={**os.environ, "PATH": f"{gopath}:{os.environ['PATH']}"},
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                recorded = (
+                    installs.read_text().splitlines() if installs.exists() else []
+                )
+                self.assertEqual(recorded, expected)
 
     def test_precommit_native_builds_do_not_replace_host_toolchain_outputs(
         self,

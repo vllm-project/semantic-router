@@ -205,6 +205,13 @@ seconds by default; use `--startup-timeout SECONDS` if measurements justify a
 longer bounded wait. A timeout leaves the owned containers available for logs
 and readiness inspection.
 
+For AMD Docker serves, the Router keeps its COMGR compiler cache below
+`<state-root>/.vllm-sr/compiler-cache/`. The cache is private to the stack and
+the immutable Router image, so a restart can reuse compiled kernels while a
+new image or ROCm userspace version starts with a fresh cache. The state root
+defaults to the directory containing the source config; stop the stack before
+removing an old image's cache to reclaim disk space.
+
 Once `/ready` succeeds, inspect the real signals and their timings:
 
 ```bash

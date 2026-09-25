@@ -19,7 +19,7 @@ def build_chat_usage(req: ChatRequest, content: str) -> dict:
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": prompt_tokens + completion_tokens,
-        "prompt_tokens_details": {"cached_tokens": 0},
+        "prompt_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
         "completion_tokens_details": {"reasoning_tokens": 0},
     }
 
