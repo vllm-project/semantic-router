@@ -509,6 +509,21 @@ output. Comparisons show its saving percentage against the same selected baselin
 alongside observed four-bucket costs. Use both when sequential runs warm caches;
 the cache-neutral figure is not billed spend or a measured cache-free execution.
 
+Each target and benchmark also carries a `continuity` block. `multi_request_tasks`
+counts tasks with two or more subject requests, such as agent and coding tasks;
+each task's requests are read in stored order, without judge or simulator calls.
+`model_switches` counts consecutive requests whose selected model differs, with
+the per-task mean and maximum, and `decision_changed_tasks` counts tasks whose
+routing decision changed. `switched_accuracy` and `unswitched_accuracy` score tasks
+with and without a switch over `switched_tasks` and `unswitched_tasks`, with
+failures counted as incorrect. A request without a selected model is unknown, not
+a switch: switches are counted between the known selections around it, and
+`unknown_model_requests` records it. A request that made several inference calls
+under Fusion, Confidence, Workflows or fallback hides its own model sequence, so
+its task is counted only in `multi_inference_tasks`. A switch is reported as a
+fact, not a penalty. sr-bench sends no session identity, so these runs measure
+routing without session state.
+
 The full sr-bench score uses fixed benchmark weights: MMLU-Pro 10%, SimpleQA 10%,
 GPQA 15%, HLE 15%, ARC 10%, LiveCodeBench 10%, SciCode 10%, Terminal-Bench 10% and
 τ³ 10%. It requires all nine complete benchmarks. A subset macro result retains
