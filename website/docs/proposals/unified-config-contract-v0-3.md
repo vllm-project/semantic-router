@@ -155,6 +155,8 @@ live under:
 - `config/fragments/algorithm/`; and
 - `config/fragments/plugin/`.
 
+Under that contract, external API RAG configuration keeps non-null JSON object or array request-template roots typed, validates supported formats and hybrid children at load time, rejects unsupported lowercase runtime-like tokens before expanding uppercase environment references, and bounds successful response bodies with the exact `backend_config.max_response_bytes` field (4 MiB when omitted or `0`; negative values rejected).
+
 Runtime deployment examples remain separate from routing fragments. Contract tests
 and `make check` keep the reference config, schema, examples, and public docs
 aligned.
