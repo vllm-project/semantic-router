@@ -38,7 +38,9 @@ python3 -m bench.redteam.evaluate \
 `--dataset` accepts `jailbreakbench` to pull the 100 harmful behaviors from
 the Hub, or a path to a local JSON or JSONL file for an offline run. Pass
 `--min-baseline-recall` or `--max-flip-rate` to make the run exit non-zero when
-a model misses the bar, which is what turns it into a gate.
+a model misses the bar, which is what turns it into a gate. Flip rate is `null`
+when the model detects nothing, because no attack ran, and `--max-flip-rate`
+then fails.
 
 The loader accepts `Goal`, `goal`, `prompt`, `behavior`, or `text` fields. It
 strips surrounding whitespace and rejects a corpus with no non-empty prompts.

@@ -92,8 +92,13 @@ def main(argv: list[str] | None = None) -> int:
                 f"baseline_recall {recall} below {args.min_baseline_recall}"
             )
     if args.max_flip_rate is not None:
-        flip_rate = float(report["flip_rate"])
-        if flip_rate > args.max_flip_rate:
+        flip_rate = report["flip_rate"]
+        if flip_rate is None:
+            failures.append(
+                "flip_rate is undefined because the model detected "
+                f"0 of {report['total']} prompts"
+            )
+        elif float(flip_rate) > args.max_flip_rate:
             failures.append(f"flip_rate {flip_rate} above {args.max_flip_rate}")
 
     for failure in failures:

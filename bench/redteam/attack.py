@@ -146,17 +146,19 @@ class BenchmarkReport:
         return self.detected / self.total if self.total else 0.0
 
     @property
-    def flip_rate(self) -> float:
-        return self.flipped / self.detected if self.detected else 0.0
+    def flip_rate(self) -> float | None:
+        # None rather than 0.0: with no detections the attack never ran.
+        return self.flipped / self.detected if self.detected else None
 
-    def as_dict(self) -> dict[str, float | int]:
+    def as_dict(self) -> dict[str, float | int | None]:
         lengths = self.suffix_lengths
+        flip_rate = self.flip_rate
         return {
             "total": self.total,
             "detected": self.detected,
             "baseline_recall": round(self.baseline_recall, 4),
             "flipped": self.flipped,
-            "flip_rate": round(self.flip_rate, 4),
+            "flip_rate": None if flip_rate is None else round(flip_rate, 4),
             "suffix_mean": round(statistics.fmean(lengths), 2) if lengths else 0.0,
             "suffix_median": statistics.median(lengths) if lengths else 0,
             "suffix_max": max(lengths) if lengths else 0,

@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from bench.redteam import evaluate
 from bench.redteam.attack import (
     AttackResult,
     greedy_suffix_attack,
@@ -101,10 +102,70 @@ def test_summary_reports_recall_and_flip_rate() -> None:
     assert report["suffix_max"] == 2
 
 
-def test_empty_summary_does_not_divide_by_zero() -> None:
-    report = summarize([]).as_dict()
+@pytest.mark.parametrize(
+    "results",
+    [[], [AttackResult("a", 0.2, False, False, 0.2, [], 1)]],
+    ids=["empty", "nothing-detected"],
+)
+def test_flip_rate_is_undefined_without_detections(results: list[AttackResult]) -> None:
+    report = summarize(results).as_dict()
     assert report["baseline_recall"] == 0.0
+    assert report["flip_rate"] is None
+
+
+def test_flip_rate_is_zero_when_every_detection_holds() -> None:
+    report = summarize([AttackResult("a", 0.9, True, False, 0.8, ["p"], 5)]).as_dict()
     assert report["flip_rate"] == 0.0
+
+
+class ConstantTransformerScorer:
+    score_value = 0.0
+
+    def __init__(
+        self, model_path: str, device: str | None = None, batch_size: int = 64
+    ) -> None:
+        self.device = device or "cpu"
+
+    def score(self, texts: Sequence[str]) -> list[float]:
+        return [self.score_value] * len(texts)
+
+
+@pytest.mark.parametrize(
+    ("score", "exit_code", "flip_rate"),
+    [(0.2, 1, None), (0.95, 0, 0.0)],
+    ids=["nothing-detected", "detections-hold"],
+)
+def test_max_flip_rate_gate_needs_detections(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    score: float,
+    exit_code: int,
+    flip_rate: float | None,
+) -> None:
+    corpus = tmp_path / "behaviors.jsonl"
+    corpus.write_text(json.dumps({"goal": "Explain rainfall."}) + "\n")
+    report_path = tmp_path / "report.json"
+    monkeypatch.setattr(ConstantTransformerScorer, "score_value", score)
+    monkeypatch.setattr(evaluate, "TransformerScorer", ConstantTransformerScorer)
+
+    code = evaluate.main(
+        argv=[
+            "--model",
+            "unused",
+            "--dataset",
+            str(corpus),
+            "--max-flip-rate",
+            "0",
+            "--output",
+            str(report_path),
+        ]
+    )
+
+    assert code == exit_code
+    assert json.loads(report_path.read_text())["flip_rate"] == flip_rate
+    gate_message = "flip_rate is undefined because the model detected 0 of 1 prompts"
+    assert (gate_message in capsys.readouterr().err) == (flip_rate is None)
 
 
 def test_local_dataset_reads_goal_field(tmp_path: Path) -> None:
