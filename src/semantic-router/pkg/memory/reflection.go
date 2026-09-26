@@ -16,7 +16,8 @@ import (
 var defaultBlockPatterns = []string{}
 
 // ReflectionGate filters retrieved memories before injection using heuristic
-// rules: recency decay, redundancy dedup, and token budget enforcement.
+// rules: recency decay, redundancy dedup, token budget enforcement, and
+// hiding turns that a newer retrieved turn corrects.
 // No LLM calls -- sub-millisecond overhead.
 //
 // Adversarial content blocking is handled upstream: SR's jailbreak classifier
@@ -75,7 +76,8 @@ func NewReflectionGate(global config.MemoryReflectionConfig, perDecision *config
 
 // Filter applies all heuristic checks and returns the memories that pass.
 // The returned slice is a subset of the input, re-scored and trimmed to
-// the token budget.
+// the token budget. A session chunk that loses superseded turns is returned
+// as a trimmed copy.
 func (g *ReflectionGate) Filter(memories []*RetrieveResult) []*RetrieveResult {
 	if g == nil || len(memories) == 0 {
 		return memories
@@ -95,11 +97,19 @@ func (g *ReflectionGate) Filter(memories []*RetrieveResult) []*RetrieveResult {
 		return memories[i].Score > memories[j].Score
 	})
 
-	// Step 4: Deduplicate near-identical memories
-	memories = g.dedup(memories)
+	// Step 4: Deduplicate near-identical memories, but never drop a correction
+	// as a duplicate of the memory it corrects
+	corrections := newSupersession(memories)
+	memories = g.dedup(memories, corrections.corrects)
 
 	// Step 5: Enforce token budget
 	memories = g.enforceTokenBudget(memories)
+
+	// Step 6: Hide turns corrected by an injected memory. A trimmed session
+	// chunk can repeat a turn chunk, so dedup runs again.
+	if kept, hidden := corrections.hideCorrected(memories); hidden {
+		memories = g.dedup(kept, nil)
+	}
 
 	if len(memories) < original {
 		logging.Debugf("ReflectionGate: %d→%d memories (blocked=%d, dedup+budget trimmed)",
@@ -151,8 +161,12 @@ func (g *ReflectionGate) applyRecencyDecay(memories []*RetrieveResult, now time.
 
 // dedup removes memories that are near-duplicates of a higher-scored memory.
 // Uses simple content similarity (Jaccard on word sets) as a proxy for
-// cosine similarity -- avoids needing embeddings at this stage.
-func (g *ReflectionGate) dedup(memories []*RetrieveResult) []*RetrieveResult {
+// cosine similarity -- avoids needing embeddings at this stage. A correction
+// is never dropped as a duplicate of the memory it corrects.
+func (g *ReflectionGate) dedup(
+	memories []*RetrieveResult,
+	corrects func(newer *RetrieveResult, older *RetrieveResult) bool,
+) []*RetrieveResult {
 	if len(memories) <= 1 {
 		return memories
 	}
@@ -161,6 +175,9 @@ func (g *ReflectionGate) dedup(memories []*RetrieveResult) []*RetrieveResult {
 	for i, candidate := range memories {
 		isDup := false
 		for _, existing := range kept {
+			if corrects != nil && corrects(candidate, existing) {
+				continue
+			}
 			if wordJaccard(candidate.Memory.Content, existing.Memory.Content) >= g.dedupThreshold {
 				logging.Debugf("ReflectionGate: dedup memory id=%s (similar to id=%s)",
 					candidate.Memory.ID, existing.Memory.ID)
