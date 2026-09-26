@@ -15,20 +15,22 @@ Run `python3 -m publication.generate_arena` first. Give the packager a
 | --- | --- |
 | `artifacts` | Generator `/3` manifest, score table and six hash-matched SVGs. |
 | `arena_rank`, `public_rank` | Same-panel release rankings whose bytes match the generator manifest. |
-| `package_record` | Reviewed model ID, selected revision, architecture, immutable base revision, actual parameter inventory, TRAIN/SELECT/CAL counts, source terms and limitations. |
+| `package_record` | Reviewed model ID, selected revision, architecture, immutable base revision, actual parameter inventory, TRAIN/SELECT/CAL counts, TRAIN language counts, evaluation language scope, source terms and limitations. |
 | `score_inputs` | For each of `synthetic`, `css`, `public`, `dbv4`, `authored`: the scorer report, exact scored prediction file and native prediction manifest. |
 | `parity_receipt` | Gold-free native package check on 1,600 DEV and 1,430 transfer pilot items, with zero changed categorical answers, p99 probability drift ≤0.005 and maximum drift ≤0.02. |
 | `release_gate` | Passed pretest freeze, authored editorial, overlap, same-panel evaluation, rights, parity and performance reviews, each with an evidence hash. |
 | `provenance_inputs`, `freeze_manifest`, `gate_evidence` | The original local files matching every declared training, freeze and review evidence hash. They are checked but never copied. |
 
-The record and gate schemas are `decision2-release-package-record/1` and
+The record and gate schemas are `decision2-release-package-record/2` and
 `decision2-jevarena-release-gate/1`. The test fixture in
 `publication/tests/test_bundle_arena.py` gives a complete small example; its
 model size is mocked only to keep the CPU test fast. A real package counts
 every active safetensors tensor from its header, subtracting only explicitly
 named buffers. Every other safetensors file must be classified as a support
 weight file. The count must agree exactly with the record and JevArena roster
-and be within 25% of the nominal model name.
+and be within 25% of the nominal model name. The record's per-language TRAIN
+counts must sum to the exact TRAIN row count; the card states the evaluation
+language coverage so English-heavy panels are not read as multilingual proof.
 
 The packager accepts these functional layouts:
 

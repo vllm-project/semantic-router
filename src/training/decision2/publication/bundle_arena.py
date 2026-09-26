@@ -21,7 +21,7 @@ from .generate_arena import ARTIFACTS, matched_models
 from .generate_arena import VERSION as ARTIFACT_VERSION
 
 VERSION = "decision2-jevarena-self-contained-bundle/1"
-RECORD_VERSION = "decision2-release-package-record/1"
+RECORD_VERSION = "decision2-release-package-record/2"
 PARITY_VERSION = "decision2-native-package-parity/1"
 GATE_VERSION = "decision2-jevarena-release-gate/1"
 MODEL_ID = re.compile(r"llm-semantic-router/dev-2\.0-(?:0\.6b|0\.8b|2b|4b|8b|9b|27b)\Z")
@@ -438,6 +438,20 @@ def _rights(record: dict[str, Any], model_id: str, revision: str) -> None:
         for field in ("train_rows", "select_rows", "cal_rows")
     ):
         raise ValueError("Training partition counts are missing")
+    languages = training.get("language_counts")
+    if (
+        not isinstance(languages, dict)
+        or not languages
+        or any(
+            not isinstance(language, str)
+            or not re.fullmatch(r"[a-z]{2,3}(?:-[a-z0-9]{2,8})*", language)
+            or type(count) is not int
+            or count <= 0
+            for language, count in languages.items()
+        )
+        or sum(languages.values()) != training["train_rows"]
+    ):
+        raise ValueError("TRAIN language counts must sum to train_rows")
     for field in (
         "data_manifest_sha256",
         "run_provenance_sha256",
@@ -483,6 +497,11 @@ def _rights(record: dict[str, Any], model_id: str, revision: str) -> None:
         )
     if not isinstance(record.get("limitations"), list) or not record["limitations"]:
         raise ValueError("The model card must disclose limitations")
+    if (
+        not isinstance(record.get("evaluation_language_scope"), str)
+        or not record["evaluation_language_scope"].strip()
+    ):
+        raise ValueError("Evaluation language coverage must be disclosed")
     if not isinstance(record.get("known_overlap"), list):
         raise ValueError("Known train/evaluation overlap needs an explicit disclosure")
     if (
@@ -824,6 +843,10 @@ def _card(
         for source in rights["sources"]
     )
     notes = "\n".join(f"- {_md(value)}" for value in record["limitations"])
+    train_languages = "\n".join(
+        f"| {_md(language)} | {count:,} | {count / record['training']['train_rows']:.1%} |"
+        for language, count in sorted(record["training"]["language_counts"].items())
+    )
     overlap = (
         "\n".join(f"- {_md(value)}" for value in record["known_overlap"])
         or "- No overlap declared in the reviewed record."
@@ -874,6 +897,12 @@ TRAIN {record['training']['train_rows']:,}; SELECT {record['training']['select_r
 CAL {record['training']['cal_rows']:,}. Selection policy:
 {_md(record['training']['selection_policy'])}. Scope: `{rights['scope']}`.
 No raw upstream text or benchmark labels are bundled.
+
+| TRAIN language | Rows | Share |
+| --- | ---: | ---: |
+{train_languages}
+
+Evaluation language coverage: {_md(record['evaluation_language_scope'])}.
 
 | Source | Terms | Attribution | Use | Redistribution |
 | --- | --- | --- | --- | --- |

@@ -143,6 +143,7 @@ class ArenaBundleTests(unittest.TestCase):
             },
             "training": {
                 "train_rows": 7455,
+                "language_counts": {"en": 6085, "zh": 1370},
                 "select_rows": 700,
                 "cal_rows": 700,
                 "data_manifest_sha256": bundle_arena.sha_file(
@@ -174,6 +175,7 @@ class ArenaBundleTests(unittest.TestCase):
             "license_id": "other",
             "known_overlap": ["Pilot task exposure is disclosed."],
             "limitations": ["Long context has not been qualified."],
+            "evaluation_language_scope": "Mostly English; no multilingual Score conclusion.",
         }
         write(self.record_path, self.record)
 
@@ -215,17 +217,17 @@ class ArenaBundleTests(unittest.TestCase):
             "size_b": 0.8,
             "rank": 1,
             "score": 50.0,
-            "axes": {
-                key: 0.5
-                for key in (
+            "axes": dict.fromkeys(
+                (
                     "typed",
                     "transfer",
                     "jevbench_public",
                     "decision_bench_v4",
                     "sealed_authored",
                     "robustness",
-                )
-            },
+                ),
+                0.5,
+            ),
             "report_sha256": report_hashes,
             "coverage": {
                 "synthetic_items": 1600,
@@ -405,7 +407,10 @@ class ArenaBundleTests(unittest.TestCase):
         self.assertEqual(result["parameter_count"], 800_000_000)
         self.assertEqual(len(result["score_inputs_sha256"]), 5)
         package = self.root / "bundle"
-        self.assertIn("JevArena rank", (package / "README.md").read_text())
+        card = (package / "README.md").read_text()
+        self.assertIn("JevArena rank", card)
+        self.assertIn("| en | 6,085 | 81.6% |", card)
+        self.assertIn("Evaluation language coverage: Mostly English", card)
         self.assertEqual(bundle_arena.verify(package), result)
         (package / "native/calibration.json").write_text("tampered")
         with self.assertRaisesRegex(ValueError, "inventory has changed"):
@@ -417,6 +422,12 @@ class ArenaBundleTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "review is blocked"):
             self.assemble()
         self.assertFalse((self.root / "bundle").exists())
+
+    def test_rejects_unaccounted_training_languages(self) -> None:
+        self.record["training"]["language_counts"]["en"] -= 1
+        write(self.record_path, self.record)
+        with self.assertRaisesRegex(ValueError, "TRAIN language counts"):
+            self.assemble()
 
     def test_rejects_changed_native_predictions(self) -> None:
         item = self.score_inputs["css"]
