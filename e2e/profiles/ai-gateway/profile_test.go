@@ -18,7 +18,8 @@ func TestFeatureRecipesReuseBaselinePluginContracts(t *testing.T) {
 		t.Fatalf("plugin feature recipe must use only its explicit keyword signals: %#v", signals)
 	}
 	names := []string{
-		"plugin_request_mutations", "tools_passthrough", "tools_filtered", "tools_none",
+		"plugin_request_mutations", "rag_provider_boundary",
+		"tools_passthrough", "tools_filtered", "tools_none",
 		"tool_selection_add_weather", "tool_selection_add_calc",
 		"tool_selection_filter", "tool_selection_filter_threshold", "tool_selection_add_topk_one",
 		"tool_selection_with_system_prompt",

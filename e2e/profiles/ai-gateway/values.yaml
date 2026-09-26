@@ -159,6 +159,37 @@ config:
                   value: updated-by-router
               delete:
                 - x-vsr-e2e-deleted
+      - &rag_provider_boundary_decision
+        name: rag_provider_boundary_decision
+        description: Deterministic route for provider-boundary RAG injection coverage (issue #3180).
+        priority: 545
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: rag_provider_boundary
+        modelRefs:
+          - model: base-model
+            lora_name: general-expert
+            use_reasoning: false
+        plugins:
+          - type: rag
+            configuration:
+              enabled: true
+              backend: external_api
+              top_k: 2
+              max_context_length: 1000
+              injection_mode: tool_role
+              backend_config:
+                endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1/rag/search
+                request_format: custom
+                request_template: '{"query":"{{.Query}}","top_k":{{.TopK}}}'
+                timeout_seconds: 5
+                max_response_bytes: 4096
+                headers:
+                  x-vsr-e2e-rag-fixture: provider-boundary
+              on_failure: block
+              cache_results: false
       - &tools_passthrough_decision
         name: tools_passthrough_decision
         description: "Deterministic route for tools passthrough provider-boundary coverage (issue #3180)."
@@ -815,6 +846,12 @@ config:
           keywords:
             - __PLUGIN_REQUEST_MUTATIONS__
           case_sensitive: true
+        - &rag_provider_boundary
+          name: rag_provider_boundary
+          operator: OR
+          keywords:
+            - __RAG_PROVIDER_BOUNDARY__
+          case_sensitive: true
         - &tools_passthrough
           name: tools_passthrough
           operator: OR
@@ -1019,12 +1056,13 @@ config:
                 lora_name: general-expert
                 use_reasoning: false
     - name: e2e-plugins
-      description: Provider-boundary mutation and tool selection using the baseline plugin definitions.
+      description: Provider-boundary mutation, retrieval, and tool selection using the baseline plugin definitions.
       routing:
         strategy: priority
         signals:
           keywords:
             - *plugin_request_mutations
+            - *rag_provider_boundary
             - *tools_passthrough
             - *tools_filtered
             - *tools_none
@@ -1036,6 +1074,7 @@ config:
             - *tool_selection_with_system_prompt
         decisions:
           - *plugin_request_mutations_decision
+          - *rag_provider_boundary_decision
           - *tools_passthrough_decision
           - *tools_filtered_decision
           - *tools_none_decision
