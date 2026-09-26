@@ -71,6 +71,20 @@ def test_direct_lora_cli_requires_pinned_original_and_existing_adapter(
             train.validate_args(changed)
 
 
+def test_legacy_run_contract_has_no_new_initial_identity_field(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = _args(monkeypatch)
+    assert train.direct_lora_contract_fields(args) == {
+        "initial_model_sha256": INITIAL_SHA
+    }
+    for kind in ("base", "posttrained", "decision1", "decision2"):
+        old = SimpleNamespace(**vars(args))
+        old.init_kind = kind
+        old.initial_model_sha256 = None
+        assert train.direct_lora_contract_fields(old) == {}
+
+
 class _Backbone(nn.Module):
     def __init__(self):
         super().__init__()

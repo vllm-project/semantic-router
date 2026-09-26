@@ -406,6 +406,15 @@ def load_direct_lora_start(
     return model, tokenizer, identity
 
 
+def direct_lora_contract_fields(args: argparse.Namespace) -> dict[str, str]:
+    """Keep preexisting run contracts byte-compatible outside the new mode."""
+    return (
+        {"initial_model_sha256": args.initial_model_sha256}
+        if args.init_kind == "decision2-lora"
+        else {}
+    )
+
+
 def main() -> None:
     args = parse_args()
     validate_args(args)
@@ -573,7 +582,7 @@ def main() -> None:
         "seed": args.seed,
         "gradient_checkpointing": args.gradient_checkpointing,
         "init_kind": args.init_kind,
-        "initial_model_sha256": args.initial_model_sha256,
+        **direct_lora_contract_fields(args),
         "base_revision": args.base_revision,
         "objective": args.objective,
         "brier_weight": args.brier_weight,
@@ -651,7 +660,11 @@ def main() -> None:
                 "contract": contract,
                 "code_sha256": source_code_sha,
                 "model_source": source,
-                "initial_model_identity": initial_model_identity,
+                **(
+                    {"initial_model_identity": initial_model_identity}
+                    if initial_model_identity is not None
+                    else {}
+                ),
                 "train_examples": len(train_items),
                 "replay_pool_examples": len(replay_items),
                 "replay_examples_per_epoch": replay_count(
