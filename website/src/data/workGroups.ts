@@ -139,6 +139,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/guan404ming.png',
         profile: 'https://github.com/guan404ming',
       },
+      {
+        name: 'Binbin Zhang',
+        avatar: 'https://github.com/Bevisy.png',
+        profile: 'https://github.com/Bevisy',
+      },
     ],
     members: [
       {
@@ -175,11 +180,6 @@ export const workGroups: WorkGroup[] = [
         name: 'karthikeyan1592',
         avatar: 'https://github.com/karthikeyan1592.png',
         profile: 'https://github.com/karthikeyan1592',
-      },
-      {
-        name: 'Binbin Zhang',
-        avatar: 'https://github.com/Bevisy.png',
-        profile: 'https://github.com/Bevisy',
       },
       {
         name: 'Haoyu Jing',
@@ -225,6 +225,16 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/abhinav-m22.png',
         profile: 'https://github.com/abhinav-m22',
       },
+      {
+        name: 'Stefan Wang',
+        avatar: 'https://github.com/1fanwang.png',
+        profile: 'https://github.com/1fanwang',
+      },
+      {
+        name: 'Binbin Zhang',
+        avatar: 'https://github.com/Bevisy.png',
+        profile: 'https://github.com/Bevisy',
+      },
     ],
     members: [
       {
@@ -241,11 +251,6 @@ export const workGroups: WorkGroup[] = [
         name: 'Hikari',
         avatar: 'https://github.com/altale.png',
         profile: 'https://github.com/altale',
-      },
-      {
-        name: 'Binbin Zhang',
-        avatar: 'https://github.com/Bevisy.png',
-        profile: 'https://github.com/Bevisy',
       },
       {
         name: 'Xuge',
@@ -348,13 +353,18 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/yaojiejia.png',
         profile: 'https://github.com/yaojiejia',
       },
-    ],
-    members: [
+      {
+        name: 'Stefan Wang',
+        avatar: 'https://github.com/1fanwang.png',
+        profile: 'https://github.com/1fanwang',
+      },
       {
         name: 'Binbin Zhang',
         avatar: 'https://github.com/Bevisy.png',
         profile: 'https://github.com/Bevisy',
       },
+    ],
+    members: [
       {
         name: 'Shrek Luzz',
         avatar: 'https://github.com/Zheng-Lu.png',
