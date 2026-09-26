@@ -88946,7 +88946,7 @@
       "family": "seed-2.0",
       "id": "bytedance/seed-2.0-pro",
       "kind": "physical",
-      "lifecycle": "active",
+      "lifecycle": "deprecated",
       "limits": {
         "context_window_size": 262144
       },
@@ -88975,9 +88975,9 @@
       ],
       "verification": {
         "authority": "ByteDance Seed Team",
-        "source": "https://seed.bytedance.com/en/seed2",
+        "source": "https://docs.volcengine.com/docs/ark/model-deprecation-notice?lang=zh",
         "status": "claimed",
-        "verified_at": "2026-09-05"
+        "verified_at": "2026-09-26"
       }
     },
     {
@@ -98718,16 +98718,16 @@
         {
           "catalog": "bytedance/seed-2.0-pro",
           "id": "doubao-seed-2-0-pro-260215",
-          "lifecycle": "active",
+          "lifecycle": "deprecated",
           "protocols": [
             "openai/chat-completions@1",
             "openai/responses@1"
           ],
           "relationship": "first_party",
           "verification": {
-            "source": "https://www.volcengine.com/docs/82379/1795150",
+            "source": "https://www.volcengine.com/docs/82379/1330310",
             "status": "claimed",
-            "verified_at": "2026-09-05"
+            "verified_at": "2026-09-24"
           }
         }
       ],

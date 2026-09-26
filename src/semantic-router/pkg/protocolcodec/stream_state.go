@@ -296,7 +296,9 @@ func (state *streamState) prepareItemTool(event llmprotocol.Event) error {
 	if err := state.claimContentBlock(event); err != nil {
 		return err
 	}
-	if err := state.validateStreamToolIdentity(*event.ToolCall, true); err != nil {
+	// Incremental Chat streams may announce only the call ID at item start.
+	// Require the name when the item completes, after later deltas can supply it.
+	if err := state.validateStreamToolIdentity(*event.ToolCall, false); err != nil {
 		return err
 	}
 	if err := state.validateStreamToolArgumentAppend(nil, event.ToolCall.Arguments); err != nil {
@@ -475,9 +477,9 @@ func (state *streamState) recordToolDelta(event llmprotocol.Event) (llmprotocol.
 		return llmprotocol.Event{}, err
 	}
 	state.toolCalls[event.ItemIndex] = call
-	event.ToolCall.ID, event.ToolCall.Name = call.ID, call.Name
+	event.ToolCall.Kind, event.ToolCall.KindKnown, event.ToolCall.ID, event.ToolCall.Name = call.Kind, call.KindKnown, call.ID, call.Name
 	current := state.toolArguments[event.ItemIndex]
-	if bytes.Equal(bytes.TrimSpace(current), []byte("{}")) && event.ToolCall.Arguments != "" {
+	if call.Kind == "" && bytes.Equal(bytes.TrimSpace(current), []byte("{}")) && event.ToolCall.Arguments != "" {
 		current = nil
 	}
 	if err := state.validateStreamToolArgumentAppend(current, event.ToolCall.Arguments); err != nil {

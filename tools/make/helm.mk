@@ -25,7 +25,7 @@ HELM_OCI_CHART    ?= $(HELM_OCI_REGISTRY)/semantic-router
 # CHART_VERSION: pin to an exact chart version for remote install/upgrade.
 #
 # Release channels:
-#   CHART_VERSION=0.3.0              specific release — recommended for production
+#   CHART_VERSION=0.4.0              specific release — recommended for production
 #   CHART_VERSION=0.0.0-latest       latest main-branch build
 #   CHART_VERSION=0.0.0-nightly.YYYYMMDD  specific nightly
 #
@@ -54,8 +54,8 @@ _assert-chart-version:
 	@if [ -z "$(CHART_VERSION)" ]; then \
 		echo "$(RED)[ERROR]$(NC) CHART_VERSION is required for this target."; \
 		echo "$(BLUE)[INFO]$(NC) Set it to a specific release, e.g.:"; \
-		echo "  make helm-install-version  CHART_VERSION=0.3.0"; \
-		echo "  make helm-upgrade-version  CHART_VERSION=0.3.0"; \
+		echo "  make helm-install-version  CHART_VERSION=0.4.0"; \
+		echo "  make helm-upgrade-version  CHART_VERSION=0.4.0"; \
 		echo "  make helm-install-version  CHART_VERSION=0.0.0-nightly.20260115"; \
 		exit 1; \
 	fi

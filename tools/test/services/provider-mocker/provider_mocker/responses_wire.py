@@ -239,6 +239,16 @@ def build_responses_response(body: dict[str, Any]) -> tuple[dict[str, Any], str]
         "output_text": output,
         "usage": build_responses_usage(body, output),
     }
+    if response_input_contains(body, "__mock_responses_decorations__"):
+        response.update(
+            {
+                "access_programs": None,
+                "billing": {"payer": "openai"},
+                "frequency_penalty": 0.0,
+                "presence_penalty": 0.0,
+                "tool_usage": {"web_search": {"num_requests": 0}},
+            }
+        )
     return response, item_id
 
 
@@ -264,6 +274,8 @@ def responses_in_progress_item(item: dict[str, Any]) -> dict[str, Any]:
         pending["content"] = []
     if pending.get("type") == "function_call":
         pending["arguments"] = ""
+    if pending.get("type") == "custom_tool_call":
+        pending["input"] = ""
     return pending
 
 
@@ -403,6 +415,61 @@ def response_has_tool_result(body: dict[str, Any]) -> bool:
     return False
 
 
+CUSTOM_TOOL_FIXTURE_INPUT = "*** Begin Patch\n+provider\n*** End Patch"
+
+
+def build_responses_custom_tool_response(body: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": "resp_mock_custom_tool_123",
+        "object": "response",
+        "created_at": int(time.time()),
+        "model": body.get("model", ""),
+        "status": "completed",
+        "output": [
+            {
+                "type": "custom_tool_call",
+                "id": "item_mock_patch",
+                "call_id": "call_mock_patch",
+                "name": "apply_patch",
+                "input": CUSTOM_TOOL_FIXTURE_INPUT,
+                "status": "completed",
+            }
+        ],
+        "usage": build_responses_usage(body, CUSTOM_TOOL_FIXTURE_INPUT),
+    }
+
+
+def generate_responses_custom_tool_stream(body: dict[str, Any]) -> Iterator[str]:
+    response = build_responses_custom_tool_response(body)
+    item = response["output"][0]
+    in_progress_response = responses_in_progress_resource(response)
+    first, second = CUSTOM_TOOL_FIXTURE_INPUT[:15], CUSTOM_TOOL_FIXTURE_INPUT[15:]
+    events = [
+        ("response.created", {"response": in_progress_response}),
+        ("response.in_progress", {"response": in_progress_response}),
+        (
+            "response.output_item.added",
+            {"output_index": 0, "item": responses_in_progress_item(item)},
+        ),
+        (
+            "response.custom_tool_call_input.delta",
+            {"item_id": item["id"], "output_index": 0, "delta": first},
+        ),
+        (
+            "response.custom_tool_call_input.delta",
+            {"item_id": item["id"], "output_index": 0, "delta": second},
+        ),
+        (
+            "response.custom_tool_call_input.done",
+            {"item_id": item["id"], "output_index": 0, "input": item["input"]},
+        ),
+        ("response.output_item.done", {"output_index": 0, "item": item}),
+        ("response.completed", {"response": response}),
+    ]
+    for sequence, (event, payload) in enumerate(events):
+        yield responses_sse(event, {"sequence_number": sequence, **payload})
+
+
 def build_responses_tool_response(body: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": "resp_mock_tool_123",
@@ -457,7 +524,7 @@ def generate_responses_tool_stream(body: dict[str, Any]) -> Iterator[str]:
             {
                 "item_id": item["id"],
                 "output_index": 0,
-                "name": item["name"],
+                # The function name belongs to the output item, not this event.
                 "arguments": item["arguments"],
             },
         ),
