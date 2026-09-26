@@ -1,7 +1,7 @@
 //! Model-manager adapters used by the dual-path classifier.
 
 use super::UnifiedTaskResult;
-use crate::core::{ModelErrorType, UnifiedError};
+use crate::core::{resolve_device, ModelErrorType, UnifiedError};
 use crate::model_architectures::config::{LoRAConfig, TraditionalConfig};
 use crate::model_architectures::traits::TaskType;
 use crate::model_architectures::unified_interface::CoreModel;
@@ -78,11 +78,7 @@ impl LoRAModelManager {
         security_model_path: &str,
         use_cpu: bool,
     ) -> Result<Self, candle_core::Error> {
-        let device = if use_cpu {
-            Device::Cpu
-        } else {
-            Device::cuda_if_available(0).unwrap_or(Device::Cpu)
-        };
+        let device = resolve_device(use_cpu);
         let manager = Self {
             models: HashMap::new(),
             device,
