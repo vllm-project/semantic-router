@@ -44,6 +44,8 @@ REQUIRED_PROTECTED_ROLES = {
     "authored_v8",
     "authored_v9",
     "authored_v10",
+    "authored_v11_r1",
+    "authored_v11_r2",
 }
 SCENES = (
     "community workshop",
