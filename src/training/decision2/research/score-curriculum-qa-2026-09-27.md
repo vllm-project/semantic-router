@@ -1,0 +1,27 @@
+# Three-level Score curriculum: TRAIN-only QA
+
+Status: **mechanical QA passed; independent blind editorial and model gates pending**. No optimizer step, model score, FINAL label, CSS15 heldout label or publication claim was produced.
+
+## Diagnosis and fixed hypothesis
+
+The frozen rights-clean v2 TRAIN 7,455 has 516 Score rows: stage-4 ordinal 279, dense table 55, stage-3 logic 32, targeted quantized median 150. Only 102 use three ordered levels; 414 use four to eight. Its SELECT700 and CAL700 each have 90 Score rows, all five-level median. The same-panel 27B BEST368 typed DEV Score diagnostic is 161/400 versus Decision 1.0 Lux 9B 331/400, with strong collapse toward level 0. The data intervention was fixed as **four equally weighted mechanisms**, not adjusted from DEV confusion: obligation review, weighted points, directed route depth and timely streak. Each mechanism contributes 80 independent source groups × three related levels, so 320 groups / 960 rows before quarantine, 320 labels at each level, 75% English and 25% Chinese. All new text and labels are internally generated from explicit oracles. The obligation mechanism shares an abstract precedence skill with typed DEV; no benchmark generator template or raw item was copied.
+
+## Retained quality iterations
+
+The first generator revision (`d358dfd61`) made all 960 rows, with no detected protected overlap, but a direct within-source-group diversity audit exposed high text similarity **across** distinct source groups: 18 obligation, six streak and five weighted-point level-0 pairs at SequenceMatcher ≥.94. This first private artifact was retained and **rejected for training** because repeated templates could create a shortcut. It was not silently overwritten.
+
+The revised generator in signed commits `a3b520fd8` and `e41f52a76` varies domain attributes, score signals and one-bit streak paths. Its code SHA-256 is `bbb5b3c7da01831c8078972a4eb6f8e574041d5941307f4d97f33030b3430f19`; the exact pinned parent TRAIN/SELECT/CAL SHA-256 values are `61740be433c6cd714810a9908432ad29597c570d0d267d2731ab78cdad243755`, `32a4352d8ed93ce82430db80175339ad8e4d40c618f2866608fdb6ef5120f2a6`, and `3e34f6cb5a32c9f14d0fee0897ee3f2318e59d66fe1ff0a95e2ea5eb2497f60a`. The public-safe corpus SHA-256 is `79ae47a058d88a78dad45ff0c0dc5391386c6102e55a2202adc06134156e66f7`; merged TRAIN 8,415 SHA-256 is `f1205a65cc2ccc812dd5ceb54a6c16175675e340429607296e661e7af69c0737`; manifest SHA-256 is `c5e5dbd32cc011fa73d641358b52d01d9fecf5e33c16604ed009a9976af05745`.
+
+On the pinned Qwen3.8-27B tokenizer revision `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`, the 960 new rows span 205–273 input tokens (219,259 total), below the predeclared 1,024-token cap. All 320 source groups remain intact, with 80 groups and 80 rows at each level per mechanism. The level-0 cross-group state audit has zero pairs at SequenceMatcher ≥.94; maximum ratios by mechanism are obligation .77597, route .86802, streak .88300, weighted .91753. A high lexical distance does not guarantee semantic independence or prevent a model learning the fixed instructions.
+
+Exact ID/group/input, raw/normalized state and approximate SimHash plus SequenceMatcher context audits found **zero** hits against the frozen parent TRAIN/SELECT/CAL and 11 gold-free prompt sources: typed DEV1600, CSS pilot1430, CSS15 text6547, public JevBench231, Decision Bench text1041, pressure RQ1/RQ2/RQ3, authored v7/v8/v9 pilots. The protected inventory SHA-256 is `f0b0ce6527bf9f730d0d2f12b1a3943779fe95531280c39dc13fadf1424f8831`. No protected gold was read. These approximate checks cannot rule out paraphrase or conceptual overlap; the authored release panel remains unqualified and no separate sealed FINAL prompt inventory was available to this candidate.
+
+Rights: the added source is internally generated and private. The parent rights-clean v2 manifest retains the upstream source records, including official GoEmotions TRAIN under CC BY 4.0. The merged source remains research-only pending release review; restricted original text is not exported here.
+
+## Independent editorial gate
+
+The deterministic gold-free packet builder is signed as `b4901fdd1`; its SHA-256 is `362364ce71878d8b0b02b395c39e36171585645bc6f83037bcea920cf40e915b`. It selected 12 source groups per mechanism (48 groups, 144 shuffled variants) by fixed hash, stripped labels and audit metadata, and sealed packet SHA-256 `348bb87547000f5bbe0636209666f9bf80e437343f17f08bea69e196e884169c`. An independent reviewer must infer every answer and inspect ambiguity, wording, cue leakage and triplet coherence **before** receiving the key. Any material flaw blocks training or requires a separately versioned corpus and new review.
+
+## Conditional next experiment, not launched
+
+If the editorial gate passes, a same-source Qwen3.8-27B BEST368 continuation could compare the augmented TRAIN with a matched parent-only continuation at identical updates, batch, optimizer and schedule. The original SELECT/CAL Score cells test only five-level median, so a separately frozen group-disjoint three-level development probe is required before candidate selection; its labels must not come from any TRAIN source group. Early guardrails should prevent Choice/Noul regression. Only then should the same-panel DEV/CSS pilot/public subset show Score-level confusion, hard decisions, calibration and paired robustness. This data QA is not permission to consume GPU or an expectation that three-level transfer will improve.
