@@ -127,6 +127,11 @@ type ModelResponse struct {
 	// without stream_options.include_usage).
 	Usage TokenUsage
 
+	// UsagePresent preserves field presence independently from the numeric
+	// values. This lets benchmark accounting distinguish an explicit zero from
+	// an omitted usage block.
+	UsagePresent UsagePresence `json:"-"`
+
 	// LatencyMs is the wall-clock duration in milliseconds of the upstream
 	// round-trip (request + read + parse) for this single call.
 	LatencyMs int64
@@ -164,6 +169,8 @@ func (c *Client) CallModel(
 			FusionDepth: fusionDepthFromContext(ctx),
 			Mode:        responseMode(streaming),
 			Logprobs:    logprobs,
+			Stage:       CallStageGenerate,
+			Role:        "candidate",
 		},
 	)
 }
@@ -174,11 +181,21 @@ func (c *Client) callModel(
 	target ModelTarget,
 	options CallOptions,
 ) (*ModelResponse, error) {
+	req = applyModelSampling(ctx, req, target.Name)
 	body, err := prepareModelCallBody(req, target, options)
 	if err != nil {
 		return nil, err
 	}
 	streaming := options.Mode == ResponseSSE
+	observer := callObserverFor(ctx, options)
+	info := estimateCallInfo(body, int64(looperOutputTokenReserve(req)), target, options)
+	var reservation *CallReservation
+	if observer != nil {
+		reservation, err = observer.BeforeCall(ctx, info)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	logprobsEnabled := options.Logprobs != nil && options.Logprobs.Enabled
 	logging.ComponentDebugEvent("looper", "model_call_started", map[string]interface{}{
@@ -196,10 +213,24 @@ func (c *Client) callModel(
 		GotFirstResponseByte: func() { recordAttemptFirstByte(ctx) },
 	})
 	start := time.Now()
+	finish := func(result *ModelResponse, callErr error) (*ModelResponse, error) {
+		latency := time.Since(start).Milliseconds()
+		if result != nil {
+			result.LatencyMs = latency
+		}
+		if observer != nil {
+			observer.AfterCall(ctx, info, reservation, CallResult{
+				Response:  result,
+				Err:       callErr,
+				LatencyMs: latency,
+			})
+		}
+		return result, callErr
+	}
 	headers := c.requestHeaders(ctx, target, options)
 	respBody, err := c.callModelThroughConnector(ctx, body, headers)
 	if err != nil {
-		return nil, err
+		return finish(nil, err)
 	}
 
 	// Parse response based on streaming mode
@@ -210,11 +241,10 @@ func (c *Client) callModel(
 		result, err = c.parseNonStreamingResponse(respBody, target.Name)
 	}
 	if err != nil {
-		return nil, err
+		return finish(nil, err)
 	}
-	result.LatencyMs = time.Since(start).Milliseconds()
 	logModelCallCompleted(options.DecisionName, result)
-	return result, nil
+	return finish(result, nil)
 }
 
 func logModelCallCompleted(decisionName string, result *ModelResponse) {
@@ -249,12 +279,14 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		return nil, fmt.Errorf("model %s did not return a chat completion response", modelName)
 	}
 
+	usage, presence := parseResponseUsageWithPresence(body)
 	result := &ModelResponse{
-		Raw:         body,
-		Parsed:      &completion,
-		Model:       modelName, // Use the requested model name, not the backend's response
-		IsStreaming: false,
-		Usage:       parseResponseUsage(body),
+		Raw:          body,
+		Parsed:       &completion,
+		Model:        modelName, // Use the requested model name, not the backend's response
+		IsStreaming:  false,
+		Usage:        usage,
+		UsagePresent: presence,
 	}
 
 	// Extract content, tool_calls, and logprobs
@@ -304,7 +336,7 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 		}
 	}
 	_, _, result.StreamingChunks = parseSSEContent(body)
-	result.Usage = parseStreamingUsage(body)
+	result.Usage, result.UsagePresent = parseStreamingUsageWithPresence(body)
 
 	return result, nil
 }

@@ -253,6 +253,21 @@ func (l *FusionLooper) callFusionModel(
 	iteration int,
 	override config.FusionModelOverride,
 ) (*ModelResponse, error) {
+	return l.callFusionModelStage(ctx, req, stageReq, cfg, modelName, allowTools, streaming, iteration, CallStageGenerate, override)
+}
+
+func (l *FusionLooper) callFusionModelStage(
+	ctx context.Context,
+	req *Request,
+	stageReq *openai.ChatCompletionNewParams,
+	cfg fusionExecutionConfig,
+	modelName string,
+	allowTools bool,
+	streaming bool,
+	iteration int,
+	stage string,
+	override config.FusionModelOverride,
+) (*ModelResponse, error) {
 	callReq := cloneRequest(stageReq)
 	if !allowTools {
 		callReq = stripFusionToolUse(callReq)
@@ -279,8 +294,21 @@ func (l *FusionLooper) callFusionModel(
 			Iteration:    iteration,
 			FusionDepth:  1,
 			Mode:         responseMode(streaming),
+			Stage:        stage,
+			Role:         fusionCallRole(stage),
 		},
 	)
+}
+
+func fusionCallRole(stage string) string {
+	switch stage {
+	case CallStageJudge:
+		return "judge"
+	case CallStageSynthesize:
+		return "synthesizer"
+	default:
+		return "candidate"
+	}
 }
 
 func accessKeyForModel(req *Request, modelName string) string {
@@ -313,7 +341,7 @@ func (l *FusionLooper) runFusionAnalysis(
 		prompt = prompt + "\n\n" + notes
 	}
 	analysisReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, req, analysisReq, cfg, cfg.Model, false, false, callOrdinal, config.FusionModelOverride{})
+	resp, err := l.callFusionModelStage(ctx, req, analysisReq, cfg, cfg.Model, false, false, callOrdinal, CallStageJudge, config.FusionModelOverride{})
 	if err != nil {
 		logging.ComponentWarnEvent("looper", "fusion_analysis_failed", map[string]interface{}{
 			"judge_model": cfg.Model,
@@ -350,7 +378,7 @@ func (l *FusionLooper) runFusionFinal(
 		prompt = prompt + "\n\n" + notes
 	}
 	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, req, finalReq, cfg, cfg.Model, true, false, callOrdinal, config.FusionModelOverride{})
+	resp, err := l.callFusionModelStage(ctx, req, finalReq, cfg, cfg.Model, true, false, callOrdinal, CallStageSynthesize, config.FusionModelOverride{})
 	if err != nil {
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}

@@ -56,6 +56,12 @@ func (l *BaseLooper) dispatchModel(
 		return nil, err
 	}
 	options.candidateRequest = baseReq
+	if options.Stage == "" {
+		options.Stage = CallStageGenerate
+	}
+	if options.Role == "" {
+		options.Role = "candidate"
+	}
 	if baseReq != nil {
 		ctx = contextWithRoutingRecipe(ctx, baseReq.RecipeName)
 	}
@@ -94,12 +100,25 @@ func (l *BaseLooper) startConfidenceModelAttempt(
 			Iteration:        iteration,
 			Mode:             responseMode(streaming),
 			Logprobs:         logprobsConfig,
+			Stage:            confidenceCallStage(stage),
+			Role:             role,
 		},
 	)
 	if err != nil && attempt != nil {
 		attempt.finish(attemptResult{err: err, reason: attemptReasonFromError(err)})
 	}
 	return response, attempt, err
+}
+
+func confidenceCallStage(stage string) string {
+	switch stage {
+	case "self_verifier", CallStageVerify:
+		return CallStageVerify
+	case "candidate", CallStageGenerate:
+		return CallStageGenerate
+	default:
+		return normalizedCallStage(stage)
+	}
 }
 
 func validateLooperStageContext(
