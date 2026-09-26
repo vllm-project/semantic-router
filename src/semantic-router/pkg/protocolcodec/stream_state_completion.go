@@ -82,8 +82,10 @@ func (state *streamState) mergeStreamToolIdentity(current, incoming llmprotocol.
 	if err := state.validateStreamToolIdentity(incoming, false); err != nil {
 		return llmprotocol.ToolCall{}, err
 	}
-	if incoming.Kind != "" {
-		if current.Kind != "" && current.Kind != incoming.Kind {
+	incomingKindKnown := incoming.KindKnown || incoming.Kind != ""
+	currentKindKnown := current.KindKnown || current.Kind != ""
+	if incomingKindKnown {
+		if currentKindKnown && current.Kind != incoming.Kind {
 			return llmprotocol.ToolCall{}, llmprotocol.NewError(
 				llmprotocol.ErrorUpstreamUnavailable,
 				"stream_tool_identity_mismatch",
@@ -92,6 +94,7 @@ func (state *streamState) mergeStreamToolIdentity(current, incoming llmprotocol.
 			)
 		}
 		current.Kind = incoming.Kind
+		current.KindKnown = true
 	}
 	if incoming.ID != "" {
 		if current.ID != "" && current.ID != incoming.ID {

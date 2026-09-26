@@ -272,7 +272,7 @@ func TestOfficialUnsupportedRequestFieldsFailWithTypedErrors(t *testing.T) {
 			fields: fields(
 				"audio", "function_call", "functions", "logit_bias", "logprobs", "modalities", "moderation",
 				"prediction", "prompt_cache_options", "prompt_cache_retention",
-				"safety_identifier", "service_tier", "top_logprobs", "verbosity", "web_search_options",
+				"safety_identifier", "service_tier", "top_logprobs", "web_search_options",
 			),
 		},
 		{

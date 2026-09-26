@@ -117,13 +117,19 @@ type InstructionBlock struct {
 type ToolCall struct {
 	// Kind is empty for a function call. A custom call carries the model's
 	// free-form input in Arguments instead of a JSON object.
-	Kind      ToolKind
+	Kind ToolKind
+	// KindKnown distinguishes a streamed function declaration from an early
+	// fragment that has not yet declared its kind. It is not a wire field.
+	KindKnown bool `json:"-"`
 	ID        string
 	Name      string
 	Arguments string
 }
 
 type ToolResult struct {
+	// Kind preserves the call's wire kind when a Responses tool output is
+	// supplied without its call (for example with previous_response_id).
+	Kind    ToolKind
 	CallID  string
 	Content []Content
 	IsError *bool
@@ -169,6 +175,8 @@ const (
 type ToolChoice struct {
 	Mode ToolChoiceMode
 	Name string
+	// Kind distinguishes a named free-form custom tool from a function.
+	Kind ToolKind
 }
 
 type OutputFormatKind string
@@ -238,17 +246,19 @@ type TrustedMetadata struct {
 }
 
 type Request struct {
-	Generation            uint64
-	Model                 string
-	Instructions          []InstructionBlock
-	Messages              []Message
-	Tools                 []Tool
-	ImageGeneration       *ImageGenerationOptions
-	ToolChoice            ToolChoice
-	ParallelToolCalls     *bool
-	CandidateCount        *int64
-	Sampling              Sampling
-	OutputFormat          OutputFormat
+	Generation        uint64
+	Model             string
+	Instructions      []InstructionBlock
+	Messages          []Message
+	Tools             []Tool
+	ImageGeneration   *ImageGenerationOptions
+	ToolChoice        ToolChoice
+	ParallelToolCalls *bool
+	CandidateCount    *int64
+	Sampling          Sampling
+	OutputFormat      OutputFormat
+	// TextVerbosity is the OpenAI output detail control: low, medium or high.
+	TextVerbosity         string
 	ReasoningMode         ReasoningMode
 	ReasoningEffort       string
 	ReasoningBudgetTokens *int64

@@ -127,8 +127,13 @@ global:
         dimension: 384
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.30
 ```
+
+The Qdrant example uses plain cosine scores with `bert`
+(`mom-embedding-light`). Its 0.30 threshold is a starting point from a
+small cold-start recall check, not the default for other embedding models.
+Check unrelated queries and corrected facts before using it with your data.
 
 For full deployment instructions, see:
 

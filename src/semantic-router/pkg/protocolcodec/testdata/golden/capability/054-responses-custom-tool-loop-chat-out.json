@@ -1,0 +1,49 @@
+{
+  "status": "ok",
+  "body": {
+    "messages": [
+      {
+        "content": "Apply this patch.",
+        "role": "user"
+      },
+      {
+        "id": "item_1",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "custom": {
+              "input": "*** Begin Patch\n+hello\n*** End Patch",
+              "name": "apply_patch"
+            },
+            "id": "call_1",
+            "type": "custom"
+          }
+        ]
+      },
+      {
+        "content": "Success",
+        "role": "tool",
+        "tool_call_id": "call_1"
+      }
+    ],
+    "model": "routed-model",
+    "tool_choice": "auto",
+    "tools": [
+      {
+        "custom": {
+          "description": "Apply a patch",
+          "format": {
+            "grammar": {
+              "definition": "start: /.+/",
+              "syntax": "lark"
+            },
+            "type": "grammar"
+          },
+          "name": "apply_patch"
+        },
+        "type": "custom"
+      }
+    ],
+    "verbosity": "low"
+  }
+}

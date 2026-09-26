@@ -3,10 +3,165 @@
     {
       "name": "custom_tool_call_deltas",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_capability"
+        "status": "ok",
+        "body": {
+          "frames": [
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "chatcmpl_custom_1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [],
+                  "parallel_tool_calls": true,
+                  "status": "in_progress",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null
+                },
+                "sequence_number": 0,
+                "type": "response.created"
+              },
+              "event": "response.created"
+            },
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "chatcmpl_custom_1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [],
+                  "parallel_tool_calls": true,
+                  "status": "in_progress",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null
+                },
+                "sequence_number": 1,
+                "type": "response.in_progress"
+              },
+              "event": "response.in_progress"
+            },
+            {
+              "data": {
+                "item": {
+                  "call_id": "call_1",
+                  "id": "item_f83d24bedd5d260a16bd7b5f",
+                  "input": "",
+                  "name": "apply_patch",
+                  "status": "in_progress",
+                  "type": "custom_tool_call"
+                },
+                "output_index": 0,
+                "sequence_number": 2,
+                "type": "response.output_item.added"
+              },
+              "event": "response.output_item.added"
+            },
+            {
+              "data": {
+                "delta": "*** Begin Patch\n",
+                "item_id": "item_f83d24bedd5d260a16bd7b5f",
+                "output_index": 0,
+                "sequence_number": 3,
+                "type": "response.custom_tool_call_input.delta"
+              },
+              "event": "response.custom_tool_call_input.delta"
+            },
+            {
+              "data": {
+                "delta": "*** Add File: hello.txt\n+hi\n*** End Patch\n",
+                "item_id": "item_f83d24bedd5d260a16bd7b5f",
+                "output_index": 0,
+                "sequence_number": 4,
+                "type": "response.custom_tool_call_input.delta"
+              },
+              "event": "response.custom_tool_call_input.delta"
+            },
+            {
+              "data": {
+                "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
+                "item_id": "item_f83d24bedd5d260a16bd7b5f",
+                "output_index": 0,
+                "sequence_number": 5,
+                "type": "response.custom_tool_call_input.done"
+              },
+              "event": "response.custom_tool_call_input.done"
+            },
+            {
+              "data": {
+                "item": {
+                  "call_id": "call_1",
+                  "id": "item_f83d24bedd5d260a16bd7b5f",
+                  "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
+                  "name": "apply_patch",
+                  "status": "completed",
+                  "type": "custom_tool_call"
+                },
+                "output_index": 0,
+                "sequence_number": 6,
+                "type": "response.output_item.done"
+              },
+              "event": "response.output_item.done"
+            },
+            {
+              "data": {
+                "response": {
+                  "created_at": 0,
+                  "error": null,
+                  "id": "chatcmpl_custom_1",
+                  "incomplete_details": null,
+                  "instructions": null,
+                  "metadata": {},
+                  "model": "public-model",
+                  "object": "response",
+                  "output": [
+                    {
+                      "call_id": "call_1",
+                      "id": "item_f83d24bedd5d260a16bd7b5f",
+                      "input": "*** Begin Patch\n*** Add File: hello.txt\n+hi\n*** End Patch\n",
+                      "name": "apply_patch",
+                      "status": "completed",
+                      "type": "custom_tool_call"
+                    }
+                  ],
+                  "parallel_tool_calls": true,
+                  "status": "completed",
+                  "temperature": null,
+                  "tool_choice": "auto",
+                  "tools": [],
+                  "top_p": null,
+                  "usage": {
+                    "input_tokens": 4,
+                    "input_tokens_details": {
+                      "cache_write_tokens": null,
+                      "cached_tokens": null
+                    },
+                    "output_tokens": 3,
+                    "output_tokens_details": {
+                      "reasoning_tokens": 0
+                    },
+                    "total_tokens": 7
+                  }
+                },
+                "sequence_number": 7,
+                "type": "response.completed"
+              },
+              "event": "response.completed"
+            }
+          ]
         }
       }
     }

@@ -298,6 +298,8 @@ func decodeResponsesOutputItem(item responsesItemWire, index int, policy llmprot
 		return decodeResponsesMessageOutput(output, item, policy, diagnostics)
 	case "function_call":
 		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{ID: item.CallID, Name: item.Name, Arguments: item.Arguments}}}
+	case "custom_tool_call":
+		output.Content = []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{Kind: llmprotocol.ToolKindCustom, ID: item.CallID, Name: item.Name, Arguments: item.Input}}}
 	case "reasoning":
 		return decodeResponsesReasoningOutput(output, item, policy)
 	case "image_generation_call":
