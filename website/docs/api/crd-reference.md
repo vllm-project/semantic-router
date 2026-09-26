@@ -212,6 +212,7 @@ _Appears in:_
 | `reasoning_effort` _string_ | ReasoningEffort is the default reasoning effort for model bindings that do<br />not select a different effort. The selected model family validates the<br />value because built-in and custom families may expose different ladders. |  | Optional: \{\} <br /> |
 | `api` _[APIConfig](#apiconfig)_ | API configuration |  | Optional: \{\} <br /> |
 | `observability` _[ObservabilityConfig](#observabilityconfig)_ | Observability configuration |  | Optional: \{\} <br /> |
+| `streamed_body` _[StreamedBodyConfig](#streamedbodyconfig)_ | StreamedBody enables streamed request body handling. Mirrors<br />global.router.streamed_body; the gateway must send bodies to ExtProc in<br />STREAMED or FullDuplexStreamed mode for it to take effect. |  | Optional: \{\} <br /> |
 
 #### DecisionConfig
 
@@ -1230,6 +1231,20 @@ _Appears in:_
 | `grpc` _[PortSpec](#portspec)_ | GRPC port configuration |  | Optional: \{\} <br /> |
 | `api` _[PortSpec](#portspec)_ | API port configuration |  | Optional: \{\} <br /> |
 | `metrics` _[MetricsPortSpec](#metricsportspec)_ | Metrics port configuration |  | Optional: \{\} <br /> |
+
+#### StreamedBodyConfig
+
+StreamedBodyConfig defines streamed request body handling.
+
+_Appears in:_
+
+- [ConfigSpec](#configspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled accumulates request body chunks before routing at end-of-stream. |  | Optional: \{\} <br /> |
+| `max_bytes` _integer_ | MaxBytes caps the accumulated body size. A larger body is rejected and the<br />ExtProc stream ends; the downstream response follows the gateway's ExtProc<br />failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
+| `timeout_sec` _integer_ | TimeoutSec caps how long body accumulation may take. A slower body is<br />rejected and the ExtProc stream ends; the downstream response follows the<br />gateway's ExtProc failure policy. Zero disables the limit. |  | Minimum: 0 <br />Optional: \{\} <br /> |
 
 #### Tool
 

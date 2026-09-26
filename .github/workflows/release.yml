@@ -72,13 +72,18 @@ jobs:
             --version "${{ steps.version.outputs.version }}" \
             --github-output "$GITHUB_OUTPUT"
 
-      - name: Resolve compatible previous release for paired performance
+      - name: Resolve compatible implementation base for paired performance
         id: baseline
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          python3 tools/ci/ci_plan.py previous-release \
+          python3 tools/ci/ci_plan.py performance-base \
             --version "$RELEASE_VERSION" --github-output "$GITHUB_OUTPUT"
+
+      - name: Verify performance base is an ancestor
+        env:
+          PERFORMANCE_BASE: ${{ steps.baseline.outputs.ref }}
+        run: git merge-base --is-ancestor "$PERFORMANCE_BASE" "$GITHUB_SHA"
 
   ci:
     name: Release Candidate

@@ -108,6 +108,8 @@ func (p *Profile) GetTestCases() []string {
 		"protocol-codec-ollama-output-limit",
 		"protocol-codec-ollama-empty-content",
 		"protocol-codec-auto-unsupported-capability",
+		"protocol-codec-chat-backend-agent-client-replay",
+		"protocol-codec-responses-backend-agent-client-replay",
 	}
 }
 
