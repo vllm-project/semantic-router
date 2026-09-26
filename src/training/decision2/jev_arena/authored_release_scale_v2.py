@@ -27,6 +27,49 @@ from jev_arena.authored_release_scale_v1 import (
 VERSION = "jevarena-authored-release-scale-v2/dev-feasibility-1"
 
 
+def _domain_witness_issues(case: dict[str, Any]) -> list[str]:
+    """Reject physically impossible complete-source alternatives.
+
+    The typed oracle establishes answer sensitivity, but cannot by itself
+    establish that a hypothetical source is plausible for the decision
+    domain. Keep these rules narrow and explicit; editorial review remains
+    necessary for every surviving source.
+    """
+    if case["operation"] != "net_range":
+        return []
+    left, right = (item["data"] for item in case["sources"])
+    variant = case["variant"]
+    pairs = [("original", left, right)]
+    pair_left = variant["data"] if variant["side"] == "left" else left
+    pair_right = variant["data"] if variant["side"] == "right" else right
+    pairs.append(("variant", pair_left, pair_right))
+    for phase, base_left, base_right in list(pairs):
+        witnesses = (
+            case["witnesses"] if phase == "original" else case["variant_witnesses"]
+        )
+        pairs.extend(
+            (
+                (f"{phase}/{side}/{index}", value, base_right)
+                if side == "left"
+                else (f"{phase}/{side}/{index}", base_left, value)
+            )
+            for side in ("left", "right")
+            for index, value in enumerate(witnesses[side])
+        )
+    issues = []
+    for phase, source_left, source_right in pairs:
+        gross = source_left.get("gross")
+        tare = source_right.get("tare")
+        if (
+            type(gross) not in (int, float)
+            or type(tare) not in (int, float)
+            or tare < 0
+            or gross < tare
+        ):
+            issues.append(f"{phase}: impossible gross/tare relation")
+    return issues
+
+
 def _write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
     path.write_text(
         "".join(
@@ -103,6 +146,8 @@ def prepare(
     answers: list[dict[str, Any]] = []
     proofs: list[dict[str, Any]] = []
     for case in cases:
+        if _domain_witness_issues(case):
+            raise ValueError("Domain-invalid source necessity witness")
         proof = inspect(case)
         left, right = (item["data"] for item in case["sources"])
         sources.append(
