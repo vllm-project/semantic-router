@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from jev_arena.authored_release_scale_v1 import render_source, solve
+from jev_arena.authored_release_scale_v1 import inspect, render_source, solve
 
 
 def test_new_choice_operations_require_both_sources() -> None:
@@ -100,3 +100,53 @@ def test_private_document_requires_all_structured_fields() -> None:
         "document": "The complete revision ledger reads {entries}.",
     }
     assert '"1": "approved"' in render_source(ledger)
+
+
+def test_substitution_keeps_both_sources_causally_necessary() -> None:
+    case = {
+        "slug": "toy",
+        "operation": "net_range",
+        "domain": "toy",
+        "scene": "A toy shipment must be evaluated using two separate complete records.",
+        "contract": "Subtract tare from gross and accept an inclusive result from seven through nine.",
+        "question": "Does the toy shipment satisfy the stated inclusive net weight range?",
+        "sources": [
+            {
+                "side": "left",
+                "title": "Gross",
+                "form": "ticket",
+                "document": "The recorded gross weight is {gross} units.",
+                "data": {"gross": 10},
+            },
+            {
+                "side": "right",
+                "title": "Tare",
+                "form": "ledger",
+                "document": "The recorded tare weight is {tare} units.",
+                "data": {"tare": 2},
+            },
+        ],
+        "params": {"minimum": 7, "maximum": 9},
+        "criteria": {"true": "yes", "false": "no"},
+        "option_order": [],
+        "witnesses": {
+            "left": [{"gross": 5}, {"gross": 9}],
+            "right": [{"tare": 1}, {"tare": 6}],
+        },
+        "variant": {"side": "right", "data": {"tare": 4}},
+        "variant_witnesses": {
+            "left": [{"gross": 8}, {"gross": 12}],
+            "right": [{"tare": 1}, {"tare": 5}],
+        },
+        "provenance": {
+            "origin": "test",
+            "rights": "test",
+            "redistribution": "test",
+            "source_family": "toy",
+        },
+    }
+    proof = inspect(case)
+    assert proof["original"] is True and proof["variant"] is False
+    case["variant_witnesses"]["left"] = [{"gross": 8}, {"gross": 9}]
+    with pytest.raises(ValueError, match="unnecessary"):
+        inspect(case)

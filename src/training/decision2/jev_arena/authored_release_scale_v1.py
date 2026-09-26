@@ -220,8 +220,10 @@ def inspect(case: dict[str, Any]) -> dict[str, Any]:
     for side in ("left", "right"):
         source = case["sources"][0 if side == "left" else 1]
         values = case["witnesses"][side]
-        if len(values) != 2 or any(
-            _shape(value) != _shape(source["data"]) for value in values
+        if (
+            len(values) != 2
+            or any(_shape(value) != _shape(source["data"]) for value in values)
+            or any(value == source["data"] for value in values)
         ):
             raise ValueError("Incomplete or shape-changing source witness")
         answers = [
@@ -256,11 +258,13 @@ def inspect(case: dict[str, Any]) -> dict[str, Any]:
     pair_right = variant["data"] if side == "right" else right
     variant_witnesses: dict[str, list[str | bool | int]] = {}
     for witness_side in ("left", "right"):
-        values = [
-            pair_left if witness_side == "left" else pair_right,
-            case["sources"][0 if witness_side == "left" else 1]["data"],
-            *case["witnesses"][witness_side],
-        ]
+        pair_source = pair_left if witness_side == "left" else pair_right
+        values = case["variant_witnesses"][witness_side]
+        if len(values) != 2 or any(
+            _shape(value) != _shape(pair_source) or value == pair_source
+            for value in values
+        ):
+            raise ValueError("Incomplete substituted-source witness")
         results = [
             (
                 check_answer(case, value, pair_right)
