@@ -8,6 +8,7 @@ from pathlib import Path
 
 from inference.eikos import shared_answer
 from inference.run import load_prompts
+
 from training.eikos.io import atomic_json
 from training.eikos.native import load_decider
 from training.eikos.verify_export import compare_answers, verify_sums
@@ -23,6 +24,21 @@ def load_answers(path: Path) -> dict[str, dict]:
                 raise ValueError("Reference predictions need unique one-question rows")
             result[row["id"]] = row
     return result
+
+
+def rank_reference_disagreements(
+    reference_a: dict[str, dict], reference_b: dict[str, dict], item_ids: set[str]
+) -> list[tuple[bool, float, str]]:
+    """Put categorical changes first, then the largest probability drift."""
+    if set(reference_a) != set(reference_b) or set(reference_a) != item_ids:
+        raise ValueError("Probe reference IDs differ from panel")
+    ranked = []
+    for item_id in item_ids:
+        left = next(iter(reference_a[item_id]["answers"].values()))
+        right = next(iter(reference_b[item_id]["answers"].values()))
+        same, drift, _ = compare_answers(left, right)
+        ranked.append((not same, drift, item_id))
+    return sorted(ranked, key=lambda row: (-int(row[0]), -row[1], row[2]))
 
 
 def probe(
@@ -44,17 +60,7 @@ def probe(
     verify_sums(model_path)
     a, b = load_answers(reference_a), load_answers(reference_b)
     items = {row["id"]: row for row in load_prompts(prompts)}
-    if set(a) != set(b) or set(a) != set(items):
-        raise ValueError("Probe reference IDs differ from panel")
-    ordered = []
-    for item_id in items:
-        left = next(iter(a[item_id]["answers"].values()))
-        right = next(iter(b[item_id]["answers"].values()))
-        changed, drift, _ = compare_answers(left, right)
-        ordered.append((changed, drift, item_id))
-    selected = sorted(ordered, key=lambda row: (-int(row[0]), -row[1], row[2]))[
-        :max_items
-    ]
+    selected = rank_reference_disagreements(a, b, set(items))[:max_items]
     import torch
 
     if deterministic:
