@@ -145,3 +145,24 @@ The combined evidence does not support a 0.6B backbone promotion or a
 release claim. B's narrower native context and both models' option-order
 and counterfactual failures need resolution before they could serve as a
 training start or a JevArena candidate.
+
+## Exposed public-subset rank input
+
+The [two-arm roster](small-competitor-public-rank-roster.json) is a safe
+increment for a **development-only** public231 rank/Pareto chart. Its
+`expected_receipts` pin both native prediction and aggregate report hashes;
+its `size_b` values come from the actual safetensors header counts above.
+The [receipt verifier](small_competitor_public_rank.py) checks those bytes,
+model files, the common panel, scorer version and source hash, then calls the
+existing `jev_arena.public_rank` with the private aggregate reports. It
+hashes, but does not parse or expose, prompt and target files; it runs no
+inference. The roster SHA-256 is
+`14ff669405b42ab3db82b6962c9b3bada0c5344c68b2b25f5af0e949acbe3114`;
+the private two-entry rank output SHA-256 is
+`1774b02bb093286b9341c4c0fc25589e5cc33c5145de4ee40067e682c9184236`.
+
+Within **only these two rows**, B ranks first at 133/231 (57.58%) and A
+second at 127/231 (54.98%). Both lie on that two-row size/accuracy Pareto
+frontier: B is 22,526 parameters larger and six items better; A has 231/231
+valid responses versus B's 194/231. This exposed public diagnostic is not
+the official JevBench rank and must not enter a JevArena release roster.

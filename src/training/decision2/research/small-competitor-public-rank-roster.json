@@ -1,0 +1,56 @@
+{
+  "scope": "Two-checkpoint exposed public231 development diagnostic only; not an official or release rank",
+  "expected_panel": {
+    "prompts_sha256": "642d3fac1b6521fe33df72f9228e4e4e364b7be7ea277893207f97da5bc75ddd",
+    "targets_sha256": "abc17b971d13807a15b3cdb43062f4cd876aad9d7314e72365724904e88b937f",
+    "panel_manifest_sha256": "e0e7c67701cf05f996d3b4eac09abf1bb3e6bb363cfe007089acd3644a38ed35",
+    "score_version": "jevarena-jevbench-public-score/1",
+    "scorer_sha256": "b0f3e77a705dde923e218d92841e333c04b37f8665e324a9760f691784e42557",
+    "collector_sha256": "0912d1a5ab1914ff8a39f6880ccb1dc61c00f5f684054b7c7c68de25e2b47492",
+    "ranker_sha256": "3140c80d1d0c5dd703bfbe4c0af20bba5f153fa8b4ba5b60309b0e7a090298a2",
+    "arena_sha256": "d1b819d07db29f9eaee7269d1a4ffc50b949ff80eeabaa7de8a1ea265cc55ec7"
+  },
+  "expected_receipts": {
+    "rlcd_a": {
+      "actual_parameters": 596054018,
+      "predictions_sha256": "b60c6bf13ea2ef68201c387f5ae41274c83969e2b385d2490fe2a19bab09ff10",
+      "report_sha256": "2c193d991a4af7d6b840615229df7873672b8adda8ad60a01ffca664ce04339e",
+      "model_hashes": {
+        "model.safetensors": "d14c8e55d74af9a37301f4e90601d637791f9ecd3973b6d514d1feeb0f74cb74",
+        "tokenizer.json": "be75606093db2094d7cd20f3c2f385c212750648bd6ea4fb2bf507a6a4c55506",
+        "configuration_bouncy.py": "95bc23268a60f263f1fdbc12aefca5673e424329972d9c7c7784eb81bec061cf",
+        "modeling_bouncy.py": "75ef00bc7fa3ef1099815ddcf05f28138f1b0974dc5b7c2f715c5c23213d3e62"
+      }
+    },
+    "rlcd_b": {
+      "actual_parameters": 596076544,
+      "predictions_sha256": "9bf039290b89f787f0d1475b61e064c549f444e65f0cecb47090557aae0f5e9b",
+      "report_sha256": "5c54c25c2b084214584bfe9b1f97d64ad8fac3969f5fbc8933db05418a61e5ae",
+      "model_hashes": {
+        "model.safetensors": "ad0b65098a40026a9c2b763125c45ec312fa4e11205c07b5eb32ad10d392e47e",
+        "decision_head.safetensors": "da1328e06c64789d334350975cb3350d8d2ef7c779f133cdd5b400feb835f233",
+        "tokenizer.json": "aeb13307a71acd8fe81861d94ad54ab689df773318809eed3cbe794b4492dae4"
+      }
+    }
+  },
+  "models": [
+    {
+      "key": "rlcd_a",
+      "label": "Bouncy RLCD 0.6B",
+      "group": "open decision competitor",
+      "model_id": "thefloydd/qwen3-0.6b-rlcd",
+      "revision": "7c28eee87fc7f7a44dacabca5e89ed9281c995c2",
+      "size_b": 0.596054018,
+      "report": "a-public.json"
+    },
+    {
+      "key": "rlcd_b",
+      "label": "Eve RLCD 0.6B",
+      "group": "open decision competitor",
+      "model_id": "anthonym21/qwen3-0.6b-rlcd-decision",
+      "revision": "b327ec5efb5fdbf8bfafa3b369720ac5f6434b05",
+      "size_b": 0.596076544,
+      "report": "b-public.json"
+    }
+  ]
+}
