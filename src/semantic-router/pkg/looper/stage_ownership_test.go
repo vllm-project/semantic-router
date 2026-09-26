@@ -211,6 +211,26 @@ func TestReMoMFinalStageOwnership(t *testing.T) {
 		assert.Equal(t, StreamingEligible, ownership.Eligibility)
 	})
 
+	t.Run("eligible when ModelRefs is empty but SynthesisModel is configured", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmReMoM,
+				ReMoM: &config.ReMoMAlgorithmConfig{
+					SynthesisModel: "algorithm-owned-synthesis-model",
+				},
+			},
+			ModelRefs: nil,
+		}
+
+		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, "algorithm-owned-synthesis-model", ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.StageRole.IsUserVisible())
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+	})
+
 	t.Run("fallback to buffering when output contract requires single choice", func(t *testing.T) {
 		req := &Request{
 			IsStreaming: true,
@@ -264,6 +284,28 @@ func TestWorkflowsFinalStageOwnership(t *testing.T) {
 		assert.Equal(t, BufferingReasonNone, ownership.BufferingReason)
 	})
 
+	t.Run("eligible when ModelRefs is empty but Final.Model is configured", func(t *testing.T) {
+		req := &Request{
+			IsStreaming: true,
+			Algorithm: &config.AlgorithmConfig{
+				Type: config.DecisionAlgorithmWorkflows,
+				Workflows: &config.WorkflowsAlgorithmConfig{
+					Final: config.WorkflowFinalConfig{
+						Model: "workflow-final-synth",
+					},
+				},
+			},
+			ModelRefs: nil,
+		}
+
+		ownership := ResolveFinalStageOwnership(req)
+		assert.Equal(t, "workflow-final-synth", ownership.TargetModel)
+		assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+		assert.True(t, ownership.StageRole.IsUserVisible())
+		assert.True(t, ownership.IsFinalUserVisible)
+		assert.Equal(t, StreamingEligible, ownership.Eligibility)
+	})
+
 	t.Run("intermediate planning and execution stages are isolated", func(t *testing.T) {
 		req := &Request{
 			IsStreaming: true,
@@ -301,6 +343,8 @@ func TestConfidenceSelectionPendingBuffering(t *testing.T) {
 
 	ownership := ResolveFinalStageOwnership(req)
 	assert.Equal(t, config.DecisionAlgorithmConfidence, ownership.AlgorithmType)
+	assert.Equal(t, StageRoleDirect, ownership.StageRole)
+	assert.True(t, ownership.StageRole.IsUserVisible())
 	assert.True(t, ownership.IsFinalUserVisible)
 	assert.Equal(t, StreamingIneligibleBufferingRequired, ownership.Eligibility)
 	assert.Equal(t, BufferingReasonSelectionPending, ownership.BufferingReason)
@@ -320,6 +364,8 @@ func TestRatingsMultiChoiceBuffering(t *testing.T) {
 
 	ownership := ResolveFinalStageOwnership(req)
 	assert.Equal(t, config.DecisionAlgorithmRatings, ownership.AlgorithmType)
+	assert.Equal(t, StageRoleSynthesis, ownership.StageRole)
+	assert.True(t, ownership.StageRole.IsUserVisible())
 	assert.True(t, ownership.IsFinalUserVisible)
 	assert.Equal(t, StreamingIneligibleBufferingRequired, ownership.Eligibility)
 	assert.Equal(t, BufferingReasonMultiChoiceOutput, ownership.BufferingReason)
