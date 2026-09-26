@@ -184,7 +184,9 @@ class ComponentBatchTests(unittest.TestCase):
         job = data["jobs"]["tests"]
         self.assertEqual(job["name"], "Execute Contracts")
         go = next(
-            step for step in job["steps"] if step.get("uses") == "actions/setup-go@v5"
+            step
+            for step in job["steps"]
+            if step.get("uses") == "./.github/actions/setup-go-ci"
         )
         self.assertEqual(go["if"], "fromJSON(inputs.batch).go")
         uploads = [

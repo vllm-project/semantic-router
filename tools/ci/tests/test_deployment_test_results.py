@@ -143,8 +143,15 @@ class DeploymentResultsTests(unittest.TestCase):
         )
         self.assertEqual(jobs["integration-test"]["strategy"]["max-parallel"], 2)
         steps = jobs["checks"]["steps"]
+        setup_steps = [
+            step
+            for step in steps
+            if step.get("uses") == "./.github/actions/setup-go-ci"
+        ]
+        self.assertEqual(len(setup_steps), 1)
         self.assertEqual(
-            sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1
+            setup_steps[0]["with"]["cache-dependency-path"],
+            "deploy/operator/go.sum",
         )
         sections = {
             "Check Go Formatting": "dependencies",
