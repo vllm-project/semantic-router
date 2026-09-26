@@ -218,6 +218,9 @@ type QdrantConfig struct {
 	CollectionName string `yaml:"collection_name,omitempty"`
 }
 
+// DefaultMemorySimilarityThreshold applies when no memory similarity threshold is configured.
+const DefaultMemorySimilarityThreshold float32 = 0.70
+
 type MemoryConfig struct {
 	Enabled                    bool                    `yaml:"enabled,omitempty"`
 	Backend                    string                  `yaml:"backend,omitempty"`

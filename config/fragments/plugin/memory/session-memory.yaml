@@ -3,5 +3,5 @@ plugin:
   configuration:
     enabled: true
     retrieval_limit: 5
-    similarity_threshold: 0.72
+    # Inherit the embedding-model-calibrated global threshold.
     auto_store: true

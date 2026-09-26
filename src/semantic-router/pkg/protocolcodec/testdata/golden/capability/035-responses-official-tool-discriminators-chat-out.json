@@ -71,10 +71,31 @@
     {
       "name": "custom",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_tool"
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "Use the selected tool.",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "tool_choice": "auto",
+          "tools": [
+            {
+              "custom": {
+                "format": {
+                  "grammar": {
+                    "definition": "start: /.+/",
+                    "syntax": "lark"
+                  },
+                  "type": "grammar"
+                },
+                "name": "apply_patch"
+              },
+              "type": "custom"
+            }
+          ]
         }
       }
     },

@@ -462,6 +462,12 @@ func buildAnthropicRequestWire(
 
 func anthropicRequestDiagnostics(request llmprotocol.Request, policy llmprotocol.Policy) (llmprotocol.Diagnostics, error) {
 	var diagnostics llmprotocol.Diagnostics
+	if request.PromptCacheKey != "" {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "prompt_cache_key", "Messages does not use client cache-affinity keys")
+	}
+	if request.ReasoningSummary != "" {
+		appendProviderFieldOmission(&diagnostics, policy, request.Trusted.SourceFormat, "reasoning.summary", "Messages cannot request a reasoning summary")
+	}
 	if err := appendAnthropicContentDiagnostics(&diagnostics, request, policy); err != nil {
 		return diagnostics, err
 	}
@@ -695,7 +701,11 @@ func encodeAnthropicMessage(message llmprotocol.Message) ([]anthropicMessageWire
 	if err != nil {
 		return nil, err
 	}
-	return []anthropicMessageWire{{Role: string(role), Content: content}}, nil
+	wire := anthropicMessageWire{Role: string(role), Content: content}
+	if message.ReasoningEffort != "" {
+		wire.OutputConfig = &anthropicOutputConfigWire{Effort: message.ReasoningEffort}
+	}
+	return []anthropicMessageWire{wire}, nil
 }
 
 func encodeAnthropicContent(contents []llmprotocol.Content) (json.RawMessage, error) {
