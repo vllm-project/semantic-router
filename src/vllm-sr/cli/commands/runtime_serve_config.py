@@ -11,7 +11,6 @@ cannot also trigger a reload in the departing process.
 
 from __future__ import annotations
 
-import os
 import tempfile
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from cli.commands.runtime_observability import (
 from cli.commands.runtime_paths import (
     _runtime_config_output_path,
     materialize_runtime_config,
+    resolve_state_root_dir,
 )
 from cli.commands.runtime_support import (
     build_effective_config_bytes,
@@ -79,11 +79,7 @@ def _prepare_docker_runtime_config(
     readonly: bool = False,
 ):
     stack_layout = resolve_runtime_stack()
-    state_root_dir = (
-        Path(os.environ["VLLM_SR_STATE_ROOT_DIR"]).expanduser().absolute()
-        if os.getenv("VLLM_SR_STATE_ROOT_DIR", "").strip()
-        else config_path.expanduser().absolute().parent
-    )
+    state_root_dir = Path(resolve_state_root_dir(str(config_path)))
     effective_config_path = _runtime_config_output_path(
         config_path,
         state_root_dir=state_root_dir,

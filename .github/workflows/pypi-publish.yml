@@ -218,6 +218,10 @@ jobs:
           name: vllm-sr-dist
           path: dist
 
+      - name: Install qualification dependencies
+        if: inputs.prebuilt-dist
+        run: python -m pip install PyYAML==6.0.3
+
       - name: Verify qualified source and package content
         if: inputs.prebuilt-dist
         env:

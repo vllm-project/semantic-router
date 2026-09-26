@@ -13,6 +13,8 @@ Use this guide when you need one of the following:
 
 Semantic Router is an Envoy External Processor. In buffered mode the gateway sends the full request body in one ExtProc message. In streamed mode the gateway sends multiple body chunks. Semantic Router's streamed body handler accumulates the chunks, applies the same routing and mutation pipeline at end-of-stream, and then emits one complete mutated request body or an immediate response.
 
+Requests that name a concrete model are accumulated the same way as `auto` requests, and the `streamed_body.max_bytes` and `streamed_body.timeout_sec` limits apply to them. Their chunks are held until end-of-stream because the pipeline can still rewrite the model to the provider's model ID, translate the request to the backend's API format, or add `stream_options.include_usage` to a streamed Chat Completions request.
+
 For streamed Chat Completions responses, immediate responses keep OpenAI-compatible behavior:
 
 - looper algorithms return `Content-Type: text/event-stream` when the original request has `"stream": true`;
@@ -44,6 +46,27 @@ streaming e2e profile in `e2e/profiles/streaming/values.yaml`; they are not
 runtime defaults or experimentally calibrated limits. Omitting either value or
 setting it to zero disables that guard. The reference `config/config.yaml`
 demonstrates a smaller 1 MiB and 15-second policy.
+
+With the Kubernetes Operator, set the same fields under
+`spec.config.streamed_body`; the Operator renders them into
+`global.router.streamed_body`:
+
+```yaml
+spec:
+  gateway:
+    existingRef:
+      name: shared-gateway
+      namespace: gateway-system
+  config:
+    streamed_body:
+      enabled: true
+      max_bytes: 10485760
+      timeout_sec: 30
+```
+
+The Operator's standalone Envoy sidecar keeps `request_body_mode: BUFFERED`
+for the reason given in [Raw Envoy](#raw-envoy), so this setting only changes
+behavior when an existing Gateway invokes ExtProc in a streamed mode.
 
 ## Envoy AI Gateway / Envoy Gateway
 

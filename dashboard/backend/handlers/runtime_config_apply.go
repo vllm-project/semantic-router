@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s/configwriter"
 )
 
@@ -58,6 +59,22 @@ func applyWrittenConfig(configPath string, configDir string, previousData []byte
 	}
 
 	return nil
+}
+
+// The config write and runtime propagation are separate operations. A session
+// may be revoked while the write or apply is in progress, so restore the
+// previous config before reporting the denied mutation.
+func rejectRevokedConfigAndRestore(w http.ResponseWriter, r *http.Request, configPath, configDir string, previousData []byte) bool {
+	if auth.RevalidateContextIfPresent(r.Context()) == nil {
+		return false
+	}
+	if err := restorePreviousRuntimeConfig(configPath, configDir, previousData); err != nil {
+		log.Printf("failed to restore runtime config after authorization changed: %v", err)
+		http.Error(w, "Failed to restore previous runtime config after authorization changed", http.StatusInternalServerError)
+		return true
+	}
+	http.Error(w, "Forbidden", http.StatusForbidden)
+	return true
 }
 
 func formatRuntimeApplyError(prefix string, err error) string {

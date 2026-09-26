@@ -12,12 +12,12 @@ PREBUILT_RUNTIME_IMAGES ?= 0
 #
 # Release channels:
 #   DOCKER_TAG=latest              (default) most recent build pushed to main
-#   DOCKER_TAG=v0.3.0              specific immutable release tag — recommended for production
+#   DOCKER_TAG=v0.4.0              specific immutable release tag — recommended for production
 #   DOCKER_TAG=nightly-20260115    nightly build from a specific date
 #
 # Examples:
-#   make docker-build-extproc DOCKER_TAG=v0.3.0
-#   make docker-pull-release  DOCKER_TAG=v0.3.0
+#   make docker-build-extproc DOCKER_TAG=v0.4.0
+#   make docker-pull-release  DOCKER_TAG=v0.4.0
 # ────────────────────────────────────────────────────────────────────────────
 DOCKER_REGISTRY ?= ghcr.io/vllm-project/semantic-router
 DOCKER_TAG ?= latest
@@ -137,7 +137,7 @@ docker-run-provider-mocker: docker-build-provider-mocker ## Run the shared provi
 		-e PROVIDER_MOCKER_MODEL="$(PROVIDER_MOCKER_MODEL)" "$(PROVIDER_MOCKER_IMAGE)"
 
 # Pull a specific release of all production images
-# Usage: make docker-pull-release DOCKER_TAG=v0.3.0
+# Usage: make docker-pull-release DOCKER_TAG=v0.4.0
 docker-pull-release: ## Pull all production images at a specific DOCKER_TAG (default: latest)
 docker-pull-release:
 	@$(LOG_TARGET)
@@ -222,7 +222,7 @@ docker-help: ## Show help for Docker-related make targets and environment variab
 ##@ vLLM-SR (Semantic Router CLI)
 
 # vLLM-SR specific variables — image tags default to DOCKER_TAG so that a
-# single `DOCKER_TAG=v0.3.0` on the command line pins every image at once.
+# single `DOCKER_TAG=v0.4.0` on the command line pins every image at once.
 VLLM_SR_IMAGE ?= $(DOCKER_REGISTRY)/vllm-sr:$(DOCKER_TAG)
 VLLM_SR_IMAGE_ROCM ?= $(DOCKER_REGISTRY)/vllm-sr-rocm:$(DOCKER_TAG)
 VLLM_SR_IMAGE_CUDA ?= $(DOCKER_REGISTRY)/vllm-sr-cuda:$(DOCKER_TAG)
@@ -336,6 +336,7 @@ VELA_OMNI_VARIANTS ?= nano
 VLLM_SR_BUILD_ARGS := --network=host --build-arg TARGETARCH=$(VLLM_SR_TARGETARCH) --build-arg BUILDPLATFORM=$(VLLM_SR_BUILDPLATFORM) --build-arg IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 # Minimum GPU architecture the NVIDIA image is compiled for; unset keeps the
 # Dockerfile default.
+CUDA_COMPUTE_CAP ?=
 ifneq ($(CUDA_COMPUTE_CAP),)
 VLLM_SR_BUILD_ARGS += --build-arg CUDA_COMPUTE_CAP=$(CUDA_COMPUTE_CAP)
 endif
@@ -437,7 +438,7 @@ vllm-sr-dev:
 	@echo "=========================================="
 	@echo ""
 	@echo "Next steps:"
-	@echo "  Start service: cd src/vllm-sr && vllm-sr serve --config config.yaml"
+	@echo "  Start service: VLLM_SR_IMAGE=$(VLLM_SR_IMAGE) VLLM_SR_ROUTER_IMAGE=$(VLLM_SR_ROUTER_IMAGE) VLLM_SR_ENVOY_IMAGE=$(VLLM_SR_ENVOY_IMAGE) VLLM_SR_DASHBOARD_IMAGE=$(VLLM_SR_DASHBOARD_IMAGE) vllm-sr serve --image-pull-policy never$(if $(VLLM_SR_PLATFORM_NORMALIZED), --platform $(VLLM_SR_PLATFORM_NORMALIZED))"
 	@echo "  Or use:        make vllm-sr-start"
 	@echo ""
 

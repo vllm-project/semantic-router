@@ -17,12 +17,14 @@ const (
 
 type permissionRevalidator func(context.Context) error
 
-var errPermissionDenied = errors.New("permission denied")
+// ErrPermissionDenied distinguishes a revoked permission from an invalid
+// session when a handler rechecks authorization before a side effect.
+var ErrPermissionDenied = errors.New("permission denied")
 
 func authenticateWithRoutePolicy(service *Service, resolver RoutePolicyResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.Path)
+			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.EscapedPath())
 			switch lookup {
 			case RouteMethodNotAllowed:
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -81,19 +83,28 @@ func authenticateWithRoutePolicy(service *Service, resolver RoutePolicyResolver)
 				return
 			}
 			if policy.MaxBodyBytes > 0 && r.Body != nil {
-				body, readErr := io.ReadAll(http.MaxBytesReader(w, r.Body, policy.MaxBodyBytes))
-				if readErr != nil {
-					var maxErr *http.MaxBytesError
-					if errors.As(readErr, &maxErr) {
-						http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
-					} else {
-						http.Error(w, "Invalid request body", http.StatusBadRequest)
-					}
+				if r.ContentLength > policy.MaxBodyBytes {
+					http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
 					return
 				}
-				r.Body = io.NopCloser(bytes.NewReader(body))
+				limited := http.MaxBytesReader(w, r.Body, policy.MaxBodyBytes)
+				if policy.StreamBody {
+					r.Body = limited
+				} else {
+					body, readErr := io.ReadAll(limited)
+					if readErr != nil {
+						var maxErr *http.MaxBytesError
+						if errors.As(readErr, &maxErr) {
+							http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+						} else {
+							http.Error(w, "Invalid request body", http.StatusBadRequest)
+						}
+						return
+					}
+					r.Body = io.NopCloser(bytes.NewReader(body))
+				}
 			}
-			if policy.Revalidate && policy.MaxBodyBytes > 0 {
+			if policy.Revalidate && policy.MaxBodyBytes > 0 && !policy.StreamBody {
 				user, perms, err = authorizeRouteClaims(r.Context(), service, claims, policy)
 				if err != nil {
 					writeRouteAuthError(w, err)
@@ -122,7 +133,7 @@ func authenticateWithRoutePolicy(service *Service, resolver RoutePolicyResolver)
 func unavailableWithRoutePolicy(resolver RoutePolicyResolver) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.Path)
+			policy, lookup := resolver.LookupRoutePolicy(r.Method, r.URL.EscapedPath())
 			if lookup == RouteMethodNotAllowed {
 				http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 				return
@@ -148,14 +159,14 @@ func authorizeRouteClaims(ctx context.Context, service *Service, claims *TokenCl
 	}
 	for _, required := range append([]string{policy.Permission}, policy.AdditionalPermissions...) {
 		if !perms[required] {
-			return nil, nil, errPermissionDenied
+			return nil, nil, ErrPermissionDenied
 		}
 	}
 	return user, perms, nil
 }
 
 func writeRouteAuthError(w http.ResponseWriter, err error) {
-	if errors.Is(err, errPermissionDenied) {
+	if errors.Is(err, ErrPermissionDenied) {
 		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}

@@ -31,7 +31,8 @@ For the default local image workflow:
 
 ```bash
 make vllm-sr-dev
-vllm-sr serve --image-pull-policy never
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr:latest \
+  vllm-sr serve --image-pull-policy never
 ```
 
 See the [Development Guide](./development) for targeted tests and runtime
