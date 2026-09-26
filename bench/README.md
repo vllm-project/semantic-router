@@ -16,6 +16,7 @@ For an interpretation of maintained benchmark coverage, see the
 | Does the router improve reasoning-task selection over a direct backend? | `vllm-semantic-router-bench` |
 | Does a model benefit from its reasoning mode, and what does that cost? | `reasoning-mode-eval` |
 | Does session routing preserve continuity and tool-loop invariants? | `agentic_routing_experiment.py` and `agentic_routing_live_benchmark.py` |
+| How does routing handle a recorded coding-agent session with a tool catalog? | `agent_session_replay.py` |
 | Does production protection obey maintained per-turn contracts? | [`make bench-agent-routing-protection`](../website/docs/benchmarking/agent-routing-protection.md) |
 | Does a routed model complete maintained multi-turn agent tasks? | `agent_task_live_benchmark.py` |
 | Does a backend report prompt-cache usage through the router? | `cache_token_probe.py` |
@@ -165,6 +166,7 @@ The related tools are intentionally separate:
 | Tool | Purpose |
 | --- | --- |
 | `agent_task_live_benchmark.py` | Score maintained smoke or long-horizon tasks and their tool transitions |
+| `agent_session_replay.py` | Replay the coding-agent session in `data/coding_agent_session.v1.json`, with its tool catalog and tool result, and record the model chosen for each turn |
 | `cache_token_probe.py` | Repeat a session prefix and classify cached-token reporting as missing, zero, or positive |
 | `openai_fault_proxy.py` | Inject controlled upstream failures, plus optional fixed and jittered response latency, for recovery tests |
 | `session_routing_branch_image_probe.py` | Record diagnostics from a reviewed branch image |
