@@ -78,6 +78,28 @@ Do not set `providers.models[].reasoning` on a catalog-backed Model. That
 combination is rejected so an alias cannot silently change a repository-owned
 reasoning contract.
 
+## Match the window a self-hosted backend serves
+
+A built-in card declares the model's full context window. A vLLM server
+started with a smaller `--max-model-len` rejects longer requests, but the
+Router still uses the card's window to decide which candidates fit a request
+and how much input context compression may keep. To align them, start vLLM
+with a matching `--max-model-len`, or set the served window on the canonical
+card:
+
+```yaml
+routing:
+  modelCards:
+    - name: qwen/qwen3.6-27b
+      context_window_size: 32768
+```
+
+When a configuration loads or reloads, the Router reads `max_model_len` from
+each `vllm` backend's `/v1/models` response. If a backend serves less than the
+card declares, the Router logs a `served_context_window_below_model_card`
+warning with both values. It keeps routing with the card's window until you
+change the configuration or the deployment.
+
 ## Override the protocol only when necessary
 
 The selected Provider mapping normally supplies the correct protocol and

@@ -776,6 +776,7 @@ func publishRouterState(
 		return
 	}
 	publishRouterLearningStateStore(router)
+	router.startServedContextWindowCheck()
 	if runtimeRegistry != nil {
 		runtimeRegistry.PublishRouterRuntimeSnapshot(routerruntime.RouterRuntimeSnapshot{
 			Config:                cfg,
