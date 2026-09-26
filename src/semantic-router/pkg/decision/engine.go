@@ -91,6 +91,7 @@ type SignalMatches struct {
 	MetadataRules      []string // untrusted request metadata rule names matched
 	ClassifierRules    []string // generic classifier label names matched
 	InputModalityRules []string // structural input-modality presence rule names matched
+	ActionRules        []string // the request's single action, when declared
 	ProjectionRules    []string // Derived routing outputs from routing.projections.mappings
 
 	SignalConfidences  map[string]float64 // "signalType:ruleName" → real score (0.0-1.0), e.g. {"embedding:ai": 0.88}. Defaults to 1.0 if missing
@@ -599,6 +600,8 @@ func resolvePrimarySignalRules(
 		return signals.PreferenceRules, true
 	case config.SignalTypeLanguage:
 		return signals.LanguageRules, true
+	case config.SignalTypeAction:
+		return signals.ActionRules, true
 	case config.SignalTypeContext:
 		return signals.ContextRules, true
 	case config.SignalTypeStructure:

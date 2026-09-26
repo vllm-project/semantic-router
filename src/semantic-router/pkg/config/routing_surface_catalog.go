@@ -87,6 +87,7 @@ var signalCatalog = []SignalCatalogEntry{
 	{Type: SignalTypeMetadata, DisplayName: "Metadata", Collection: "metadata", ObservationKey: "metadata", DecisionReferenceable: true},
 	{Type: SignalTypeClassifier, DisplayName: "Classifier", Collection: "classifiers", ObservationKey: "classifier", DecisionReferenceable: true, ReferenceQualifier: SignalReferenceQualifierLabel},
 	{Type: SignalTypeInputModality, DisplayName: "Input Modality", Collection: "input_modality", ObservationKey: "input_modality", DecisionReferenceable: true},
+	{Type: SignalTypeAction, DisplayName: "Action", Collection: "actions", ObservationKey: "action", DecisionReferenceable: true},
 }
 
 // DecisionPluginCatalogEntry describes one route-local plugin family. Its

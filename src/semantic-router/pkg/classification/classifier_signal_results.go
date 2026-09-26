@@ -68,6 +68,7 @@ type SignalResults struct {
 	MatchedMetadataRules      []string // Matched untrusted request metadata rules
 	MatchedClassifierRules    []string // Matched generic classifier label names
 	MatchedInputModalityRules []string // Matched structural input-modality presence rules
+	MatchedActionRules        []string // The request's single action, when a rule declares it
 	MatchedProjectionRules    []string // Matched derived routing outputs from routing.projections.mappings
 	ProjectionScores          map[string]float64
 	ProjectionTrace           *projectiontrace.Trace // Explainability payload for projections (replay / dashboard)
@@ -120,4 +121,5 @@ type SignalMetricsCollection struct {
 	Metadata      SignalMetrics `json:"metadata"`
 	Classifier    SignalMetrics `json:"classifier"`
 	InputModality SignalMetrics `json:"input_modality"`
+	Action        SignalMetrics `json:"action"`
 }

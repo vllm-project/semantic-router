@@ -685,6 +685,12 @@ routing:
         description: Request contains at least one audio content part.
         modality: audio
 
+    actions:
+      - name: explain
+        description: Describe code or answer a question without editing anything.
+      - name: fix
+        description: Repair a bug or a failing behavior.
+
     classifiers:
       - name: content-risk
         description: Independent content hazards with model-specific operating points.
