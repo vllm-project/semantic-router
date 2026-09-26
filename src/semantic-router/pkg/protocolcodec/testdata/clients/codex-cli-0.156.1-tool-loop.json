@@ -1,0 +1,613 @@
+[
+  {
+    "model": "vllm-sr/auto",
+    "instructions": "You are a coding agent running in the Codex CLI, a terminal-based coding assistant. (Codex base instructions shortened for this fixture.)",
+    "input": [
+      {
+        "type": "message",
+        "id": "msg_00000000-0000-4000-8000-000000000001",
+        "role": "developer",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "<skills_instructions>\n(Skill list shortened for this fixture.)\n</skills_instructions>"
+          },
+          {
+            "type": "input_text",
+            "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\n</permissions instructions>"
+          }
+        ]
+      },
+      {
+        "type": "message",
+        "id": "msg_00000000-0000-4000-8000-000000000002",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "<environment_context>\n  <cwd>/workspace/project</cwd>\n  <shell>zsh</shell>\n  <current_date>2026-09-25</current_date>\n  <timezone>UTC</timezone>\n  <filesystem><workspace_roots><root>/workspace/project</root></workspace_roots><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>"
+          }
+        ]
+      },
+      {
+        "type": "message",
+        "id": "msg_00000000-0000-4000-8000-000000000003",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Run echo hi"
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "name": "exec_command",
+        "description": "Runs a command in a PTY, returning output or a session ID for ongoing interaction.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cmd": {
+              "type": "string",
+              "description": "Shell command to execute."
+            },
+            "justification": {
+              "type": "string",
+              "description": "User-facing approval question for `require_escalated`; omit otherwise."
+            },
+            "login": {
+              "type": "boolean",
+              "description": "True runs the shell with -l/-i semantics; false disables them. Defaults to true."
+            },
+            "max_output_tokens": {
+              "type": "number",
+              "description": "Output token budget. Defaults to 10000 tokens; larger requests may be capped by policy."
+            },
+            "prefix_rule": {
+              "type": "array",
+              "description": "Reusable approval prefix for `cmd`, only with `sandbox_permissions: \"require_escalated\"`; for example [\"git\", \"pull\"].",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sandbox_permissions": {
+              "type": "string",
+              "description": "Per-command sandbox override. Defaults to `use_default`; use `require_escalated` for unsandboxed execution.",
+              "enum": [
+                "use_default",
+                "require_escalated"
+              ]
+            },
+            "shell": {
+              "type": "string",
+              "description": "Shell binary to launch. Defaults to the user's default shell."
+            },
+            "tty": {
+              "type": "boolean",
+              "description": "True allocates a PTY for the command; false or omitted uses plain pipes."
+            },
+            "workdir": {
+              "type": "string",
+              "description": "Working directory for the command. Defaults to the turn cwd."
+            },
+            "yield_time_ms": {
+              "type": "number",
+              "description": "Wait before yielding output. Defaults to 10000 ms; effective range is 250-30000 ms."
+            }
+          },
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "write_stdin",
+        "description": "Writes characters to an existing unified exec session and returns recent output.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "chars": {
+              "type": "string",
+              "description": "Bytes to write to stdin. Defaults to empty, which polls without writing."
+            },
+            "max_output_tokens": {
+              "type": "number",
+              "description": "Output token budget. Defaults to 10000 tokens; larger requests may be capped by policy."
+            },
+            "session_id": {
+              "type": "number",
+              "description": "Identifier of the running unified exec session."
+            },
+            "yield_time_ms": {
+              "type": "number",
+              "description": "Wait before yielding output. Non-empty writes default to 250 ms and cap at 30000 ms; empty polls wait 5000-300000 ms by default."
+            }
+          },
+          "required": [
+            "session_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "request_user_input",
+        "description": "Request user input for one to three short questions and wait for the response. This tool is only available in Plan mode.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "questions": {
+              "type": "array",
+              "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "header": {
+                    "type": "string",
+                    "description": "Short header label shown in the UI (12 or fewer chars)."
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "Stable identifier for mapping answers (snake_case)."
+                  },
+                  "options": {
+                    "type": "array",
+                    "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                          "description": "One short sentence explaining impact/tradeoff if selected."
+                        },
+                        "label": {
+                          "type": "string",
+                          "description": "User-facing label (1-5 words)."
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "description"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "question": {
+                    "type": "string",
+                    "description": "Single-sentence prompt shown to the user."
+                  }
+                },
+                "required": [
+                  "id",
+                  "header",
+                  "question",
+                  "options"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "questions"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "view_image",
+        "description": "View a local image file from the filesystem when visual inspection is needed. Use this for images already available on disk.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Local filesystem path to an image file."
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "get_goal",
+        "description": "Get the current goal for this thread, including status, budgets, token and elapsed-time usage, and remaining token budget.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "create_goal",
+        "description": "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks.\nSet token_budget only when an explicit token budget is requested. Fails if an unfinished goal exists; use update_goal only for status.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "objective": {
+              "type": "string",
+              "description": "Required. The concrete objective to start pursuing. This starts a new active goal when no goal exists or replaces the current goal when it is complete."
+            },
+            "token_budget": {
+              "type": "integer",
+              "description": "Positive token budget for the new goal. Omit unless explicitly requested."
+            }
+          },
+          "required": [
+            "objective"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "update_goal",
+        "description": "Update the existing goal.\nSet status to `paused` only at the user's explicit request to pause this goal, never on your own initiative.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "Required. `paused` requires an explicit user request. Set to `complete` only when the objective is achieved and no required work remains. Set to `blocked` only after the same blocking condition has recurred for at least three consecutive goal turns and the agent is at an impasse. After a previously blocked goal is resumed, the resumed run starts a fresh blocked audit.",
+              "enum": [
+                "complete",
+                "blocked",
+                "paused"
+              ]
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "tool_choice": "auto",
+    "parallel_tool_calls": true,
+    "reasoning": {},
+    "store": false,
+    "stream": true,
+    "include": [
+      "reasoning.encrypted_content"
+    ],
+    "prompt_cache_key": "00000000-0000-4000-8000-000000000004",
+    "client_metadata": {
+      "x-codex-turn-metadata": "{\"installation_id\":\"00000000-0000-4000-8000-000000000005\",\"session_id\":\"00000000-0000-4000-8000-000000000004\",\"thread_id\":\"00000000-0000-4000-8000-000000000004\",\"agent_name\":\"/root\",\"turn_id\":\"00000000-0000-4000-8000-000000000006\",\"window_id\":\"00000000-0000-4000-8000-000000000004:0\",\"window_number\":0,\"context_window_id\":\"00000000-0000-4000-8000-000000000007\",\"request_kind\":\"turn\",\"root_turn_id\":\"00000000-0000-4000-8000-000000000006\",\"thread_source\":\"user\",\"turn_trigger\":\"exec\",\"sandbox\":\"none\",\"sandbox_mode\":\"read-only\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"turn_started_at_unix_ms\":0,\"analytics_enabled\":true,\"model\":\"vllm-sr/auto\"}",
+      "turn_id": "00000000-0000-4000-8000-000000000006",
+      "root_turn_id": "00000000-0000-4000-8000-000000000006",
+      "thread_id": "00000000-0000-4000-8000-000000000004",
+      "x-codex-installation-id": "00000000-0000-4000-8000-000000000005",
+      "x-codex-window-id": "00000000-0000-4000-8000-000000000004:0",
+      "session_id": "00000000-0000-4000-8000-000000000004"
+    }
+  },
+  {
+    "model": "vllm-sr/auto",
+    "instructions": "You are a coding agent running in the Codex CLI, a terminal-based coding assistant. (Codex base instructions shortened for this fixture.)",
+    "input": [
+      {
+        "type": "message",
+        "id": "msg_00000000-0000-4000-8000-000000000001",
+        "role": "developer",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "<skills_instructions>\n(Skill list shortened for this fixture.)\n</skills_instructions>"
+          },
+          {
+            "type": "input_text",
+            "text": "<permissions instructions>\nFilesystem sandboxing defines which files can be read or written. `sandbox_mode` is `read-only`: The sandbox only permits reading files. Network access is restricted.\nApproval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.\n</permissions instructions>"
+          }
+        ]
+      },
+      {
+        "type": "message",
+        "id": "msg_00000000-0000-4000-8000-000000000002",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "<environment_context>\n  <cwd>/workspace/project</cwd>\n  <shell>zsh</shell>\n  <current_date>2026-09-25</current_date>\n  <timezone>UTC</timezone>\n  <filesystem><workspace_roots><root>/workspace/project</root></workspace_roots><permission_profile type=\"managed\"><file_system type=\"restricted\"><entry access=\"read\"><special>:root</special></entry></file_system></permission_profile></filesystem>\n</environment_context>"
+          }
+        ]
+      },
+      {
+        "type": "message",
+        "id": "msg_00000000-0000-4000-8000-000000000003",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "Run echo hi"
+          }
+        ]
+      },
+      {
+        "type": "function_call",
+        "id": "fc_1",
+        "name": "exec_command",
+        "arguments": "{\"cmd\": \"echo hi\"}",
+        "call_id": "call_1"
+      },
+      {
+        "type": "function_call_output",
+        "id": "fco_00000000-0000-4000-8000-000000000008",
+        "call_id": "call_1",
+        "output": "Chunk ID: d9a39a\nWall time: 0.0000 seconds\nProcess exited with code 0\nOriginal token count: 1\nOutput:\nhi\n"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "name": "exec_command",
+        "description": "Runs a command in a PTY, returning output or a session ID for ongoing interaction.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "cmd": {
+              "type": "string",
+              "description": "Shell command to execute."
+            },
+            "justification": {
+              "type": "string",
+              "description": "User-facing approval question for `require_escalated`; omit otherwise."
+            },
+            "login": {
+              "type": "boolean",
+              "description": "True runs the shell with -l/-i semantics; false disables them. Defaults to true."
+            },
+            "max_output_tokens": {
+              "type": "number",
+              "description": "Output token budget. Defaults to 10000 tokens; larger requests may be capped by policy."
+            },
+            "prefix_rule": {
+              "type": "array",
+              "description": "Reusable approval prefix for `cmd`, only with `sandbox_permissions: \"require_escalated\"`; for example [\"git\", \"pull\"].",
+              "items": {
+                "type": "string"
+              }
+            },
+            "sandbox_permissions": {
+              "type": "string",
+              "description": "Per-command sandbox override. Defaults to `use_default`; use `require_escalated` for unsandboxed execution.",
+              "enum": [
+                "use_default",
+                "require_escalated"
+              ]
+            },
+            "shell": {
+              "type": "string",
+              "description": "Shell binary to launch. Defaults to the user's default shell."
+            },
+            "tty": {
+              "type": "boolean",
+              "description": "True allocates a PTY for the command; false or omitted uses plain pipes."
+            },
+            "workdir": {
+              "type": "string",
+              "description": "Working directory for the command. Defaults to the turn cwd."
+            },
+            "yield_time_ms": {
+              "type": "number",
+              "description": "Wait before yielding output. Defaults to 10000 ms; effective range is 250-30000 ms."
+            }
+          },
+          "required": [
+            "cmd"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "write_stdin",
+        "description": "Writes characters to an existing unified exec session and returns recent output.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "chars": {
+              "type": "string",
+              "description": "Bytes to write to stdin. Defaults to empty, which polls without writing."
+            },
+            "max_output_tokens": {
+              "type": "number",
+              "description": "Output token budget. Defaults to 10000 tokens; larger requests may be capped by policy."
+            },
+            "session_id": {
+              "type": "number",
+              "description": "Identifier of the running unified exec session."
+            },
+            "yield_time_ms": {
+              "type": "number",
+              "description": "Wait before yielding output. Non-empty writes default to 250 ms and cap at 30000 ms; empty polls wait 5000-300000 ms by default."
+            }
+          },
+          "required": [
+            "session_id"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "request_user_input",
+        "description": "Request user input for one to three short questions and wait for the response. This tool is only available in Plan mode.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "questions": {
+              "type": "array",
+              "description": "Questions to show the user. Prefer 1 and do not exceed 3",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "header": {
+                    "type": "string",
+                    "description": "Short header label shown in the UI (12 or fewer chars)."
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "Stable identifier for mapping answers (snake_case)."
+                  },
+                  "options": {
+                    "type": "array",
+                    "description": "Provide 2-3 mutually exclusive choices. Put the recommended option first and suffix its label with \"(Recommended)\". Do not include an \"Other\" option in this list; the client will add a free-form \"Other\" option automatically.",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "description": {
+                          "type": "string",
+                          "description": "One short sentence explaining impact/tradeoff if selected."
+                        },
+                        "label": {
+                          "type": "string",
+                          "description": "User-facing label (1-5 words)."
+                        }
+                      },
+                      "required": [
+                        "label",
+                        "description"
+                      ],
+                      "additionalProperties": false
+                    }
+                  },
+                  "question": {
+                    "type": "string",
+                    "description": "Single-sentence prompt shown to the user."
+                  }
+                },
+                "required": [
+                  "id",
+                  "header",
+                  "question",
+                  "options"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "questions"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "view_image",
+        "description": "View a local image file from the filesystem when visual inspection is needed. Use this for images already available on disk.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Local filesystem path to an image file."
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "get_goal",
+        "description": "Get the current goal for this thread, including status, budgets, token and elapsed-time usage, and remaining token budget.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": [],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "create_goal",
+        "description": "Create a goal only when explicitly requested by the user or system/developer instructions; do not infer goals from ordinary tasks.\nSet token_budget only when an explicit token budget is requested. Fails if an unfinished goal exists; use update_goal only for status.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "objective": {
+              "type": "string",
+              "description": "Required. The concrete objective to start pursuing. This starts a new active goal when no goal exists or replaces the current goal when it is complete."
+            },
+            "token_budget": {
+              "type": "integer",
+              "description": "Positive token budget for the new goal. Omit unless explicitly requested."
+            }
+          },
+          "required": [
+            "objective"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "type": "function",
+        "name": "update_goal",
+        "description": "Update the existing goal.\nSet status to `paused` only at the user's explicit request to pause this goal, never on your own initiative.",
+        "strict": false,
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "Required. `paused` requires an explicit user request. Set to `complete` only when the objective is achieved and no required work remains. Set to `blocked` only after the same blocking condition has recurred for at least three consecutive goal turns and the agent is at an impasse. After a previously blocked goal is resumed, the resumed run starts a fresh blocked audit.",
+              "enum": [
+                "complete",
+                "blocked",
+                "paused"
+              ]
+            }
+          },
+          "required": [
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "tool_choice": "auto",
+    "parallel_tool_calls": true,
+    "reasoning": {},
+    "store": false,
+    "stream": true,
+    "include": [
+      "reasoning.encrypted_content"
+    ],
+    "prompt_cache_key": "00000000-0000-4000-8000-000000000004",
+    "client_metadata": {
+      "x-codex-turn-metadata": "{\"installation_id\":\"00000000-0000-4000-8000-000000000005\",\"session_id\":\"00000000-0000-4000-8000-000000000004\",\"thread_id\":\"00000000-0000-4000-8000-000000000004\",\"agent_name\":\"/root\",\"turn_id\":\"00000000-0000-4000-8000-000000000006\",\"window_id\":\"00000000-0000-4000-8000-000000000004:0\",\"window_number\":0,\"context_window_id\":\"00000000-0000-4000-8000-000000000007\",\"request_kind\":\"turn\",\"root_turn_id\":\"00000000-0000-4000-8000-000000000006\",\"thread_source\":\"user\",\"turn_trigger\":\"exec\",\"sandbox\":\"none\",\"sandbox_mode\":\"read-only\",\"auto_review_enabled\":false,\"node_repl_auto_review_required\":false,\"node_repl_disabled\":false,\"turn_started_at_unix_ms\":0,\"analytics_enabled\":true,\"model\":\"vllm-sr/auto\"}",
+      "x-codex-installation-id": "00000000-0000-4000-8000-000000000005",
+      "x-codex-window-id": "00000000-0000-4000-8000-000000000004:0",
+      "turn_id": "00000000-0000-4000-8000-000000000006",
+      "thread_id": "00000000-0000-4000-8000-000000000004",
+      "session_id": "00000000-0000-4000-8000-000000000004",
+      "root_turn_id": "00000000-0000-4000-8000-000000000006"
+    }
+  }
+]

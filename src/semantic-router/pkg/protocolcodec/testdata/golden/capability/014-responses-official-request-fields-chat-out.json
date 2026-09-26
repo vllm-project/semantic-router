@@ -21,6 +21,27 @@
       }
     },
     {
+      "name": "client_metadata",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "client_metadata",
+            "action": "dropped"
+          }
+        ]
+      }
+    },
+    {
       "name": "context_management",
       "outcome": {
         "status": "error",
@@ -43,11 +64,22 @@
     {
       "name": "include",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_include"
-        }
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "include",
+            "action": "dropped"
+          }
+        ]
       }
     },
     {
@@ -202,10 +234,16 @@
     {
       "name": "prompt_cache_key",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_prompt_cache_key"
+        "status": "ok",
+        "body": {
+          "messages": [
+            {
+              "content": "hello",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model",
+          "prompt_cache_key": "cache-key"
         }
       }
     },

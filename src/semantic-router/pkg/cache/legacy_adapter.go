@@ -116,14 +116,15 @@ func (a *LegacyBackendAdapter) LookupSemantic(
 	}
 	age, ageKnown := resultAge(result)
 	return CacheResult{
-		ResponseBody: result.ResponseBody,
-		Found:        result.Found,
-		HitKind:      HitKindSemantic,
-		Source:       CacheSourceL2,
-		Similarity:   result.Similarity,
-		Age:          age,
-		AgeKnown:     ageKnown,
-		ExpiresAt:    result.ExpiresAt,
+		ResponseBody:  result.ResponseBody,
+		Found:         result.Found,
+		HitKind:       HitKindSemantic,
+		Source:        CacheSourceL2,
+		Similarity:    result.Similarity,
+		NegationGuard: result.NegationGuard,
+		Age:           age,
+		AgeKnown:      ageKnown,
+		ExpiresAt:     result.ExpiresAt,
 	}, nil
 }
 

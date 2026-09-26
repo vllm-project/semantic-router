@@ -10,19 +10,20 @@ import (
 
 type responsesStreamDecoder struct {
 	streamState
-	framer                sseFramer
-	nextAnnotationIndexes map[streamContentKey]int
-	contentIndexes        map[responsesWireContentKey]int
-	nextContentIndex      map[int]int
-	contentLifecycle      map[responsesWireContentKey]*responsesDecodedContentLifecycle
-	nextWireContentIndex  map[responsesWireContentScopeKey]int
-	itemTypes             map[int]string
-	toolArgumentsDone     map[int]bool
-	completedOutput       map[int]json.RawMessage
-	seenLifecycleEvents   map[string]bool
-	wireSequence          uint64
-	wireSequenceSeen      bool
-	dynamoNVExtBytes      int
+	framer                      sseFramer
+	nextAnnotationIndexes       map[streamContentKey]int
+	contentIndexes              map[responsesWireContentKey]int
+	nextContentIndex            map[int]int
+	contentLifecycle            map[responsesWireContentKey]*responsesDecodedContentLifecycle
+	nextWireContentIndex        map[responsesWireContentScopeKey]int
+	itemTypes                   map[int]string
+	toolArgumentsDone           map[int]bool
+	completedOutput             map[int]json.RawMessage
+	seenLifecycleEvents         map[string]bool
+	reportedProviderDecorations map[string]bool
+	wireSequence                uint64
+	wireSequenceSeen            bool
+	dynamoNVExtBytes            int
 }
 
 type responsesOutputKind string
@@ -76,6 +77,7 @@ type responsesStreamEncoder struct {
 	outputIndexes          map[responsesOutputKey]int
 	outputIDs              map[responsesOutputKey]string
 	outputStarted          map[responsesOutputKey]bool
+	toolArgumentsEmitted   map[int]int
 	itemOutputKeys         map[int][]responsesOutputKey
 	neutralItemIDs         map[int]string
 	nextOutputIndex        int
@@ -94,17 +96,18 @@ type responsesStreamEncoder struct {
 
 func (OpenAIResponsesCodec) NewDecoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamDecoder {
 	return &responsesStreamDecoder{
-		streamState:           streamState{context: context, policy: policy},
-		framer:                newSSEFramer(policy.Limits.SSEFrameBytes),
-		nextAnnotationIndexes: make(map[streamContentKey]int),
-		contentIndexes:        make(map[responsesWireContentKey]int),
-		nextContentIndex:      make(map[int]int),
-		contentLifecycle:      make(map[responsesWireContentKey]*responsesDecodedContentLifecycle),
-		nextWireContentIndex:  make(map[responsesWireContentScopeKey]int),
-		itemTypes:             make(map[int]string),
-		toolArgumentsDone:     make(map[int]bool),
-		completedOutput:       make(map[int]json.RawMessage),
-		seenLifecycleEvents:   make(map[string]bool),
+		streamState:                 streamState{context: context, policy: policy},
+		framer:                      newSSEFramer(policy.Limits.SSEFrameBytes),
+		nextAnnotationIndexes:       make(map[streamContentKey]int),
+		contentIndexes:              make(map[responsesWireContentKey]int),
+		nextContentIndex:            make(map[int]int),
+		contentLifecycle:            make(map[responsesWireContentKey]*responsesDecodedContentLifecycle),
+		nextWireContentIndex:        make(map[responsesWireContentScopeKey]int),
+		itemTypes:                   make(map[int]string),
+		toolArgumentsDone:           make(map[int]bool),
+		completedOutput:             make(map[int]json.RawMessage),
+		seenLifecycleEvents:         make(map[string]bool),
+		reportedProviderDecorations: make(map[string]bool),
 	}
 }
 
@@ -114,6 +117,7 @@ func (OpenAIResponsesCodec) NewEncoder(context llmprotocol.StreamContext, policy
 		outputIndexes:          make(map[responsesOutputKey]int),
 		outputIDs:              make(map[responsesOutputKey]string),
 		outputStarted:          make(map[responsesOutputKey]bool),
+		toolArgumentsEmitted:   make(map[int]int),
 		itemOutputKeys:         make(map[int][]responsesOutputKey),
 		neutralItemIDs:         make(map[int]string),
 		contentIndexes:         make(map[streamContentKey]int),
@@ -143,6 +147,7 @@ type responsesEventWire struct {
 	Annotation        *responsesAnnotationWire `json:"annotation,omitempty"`
 	Name              string                   `json:"name,omitempty"`
 	Arguments         string                   `json:"arguments,omitempty"`
+	Input             string                   `json:"input,omitempty"`
 	Refusal           string                   `json:"refusal,omitempty"`
 	Status            string                   `json:"status,omitempty"`
 	SummaryIndex      *int                     `json:"summary_index,omitempty"`
@@ -172,7 +177,7 @@ func (wire responsesEventWire) MarshalJSON() ([]byte, error) {
 	switch wire.Type {
 	case "response.output_text.delta", "response.refusal.delta",
 		"response.reasoning_text.delta", "response.reasoning_summary_text.delta",
-		"response.function_call_arguments.delta":
+		"response.function_call_arguments.delta", "response.custom_tool_call_input.delta":
 		object["delta"], _ = json.Marshal(wire.Delta)
 	case "response.output_text.done", "response.reasoning_text.done", "response.reasoning_summary_text.done":
 		object["text"], _ = json.Marshal(wire.Text)
@@ -181,6 +186,8 @@ func (wire responsesEventWire) MarshalJSON() ([]byte, error) {
 	case "response.function_call_arguments.done":
 		object["name"], _ = json.Marshal(wire.Name)
 		object["arguments"], _ = json.Marshal(wire.Arguments)
+	case "response.custom_tool_call_input.done":
+		object["input"], _ = json.Marshal(wire.Input)
 	case "response.image_generation_call.partial_image":
 		object["partial_image_b64"], _ = json.Marshal(wire.PartialImageB64)
 	}
@@ -293,6 +300,13 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 		if outputErr != nil {
 			return nil, diagnostics, outputErr
 		}
+		for _, diagnostic := range responsesProviderDecorationDiagnostics(*wire.Response, decoder.policy, "stream.response.") {
+			if decoder.reportedProviderDecorations[diagnostic.Field] {
+				continue
+			}
+			decoder.reportedProviderDecorations[diagnostic.Field] = true
+			diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{diagnostic}, decoder.policy.Limits.Diagnostics)
+		}
 	}
 	if wire.Type == "" {
 		wire.Type = eventType
@@ -381,6 +395,8 @@ func (decoder *responsesStreamDecoder) validateResponsesEventItemType(wire respo
 		expected = "reasoning"
 	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
 		expected = "function_call"
+	case "response.custom_tool_call_input.delta", "response.custom_tool_call_input.done":
+		expected = "custom_tool_call"
 	case "response.image_generation_call.in_progress", "response.image_generation_call.generating",
 		"response.image_generation_call.partial_image", "response.image_generation_call.completed":
 		expected = "image_generation_call"
@@ -496,6 +512,7 @@ func isSupportedResponsesEvent(eventType string) bool {
 		"response.reasoning_summary_text.delta", "response.reasoning_summary_text.done",
 		"response.reasoning_text.delta", "response.reasoning_text.done",
 		"response.function_call_arguments.delta", "response.function_call_arguments.done",
+		"response.custom_tool_call_input.delta", "response.custom_tool_call_input.done",
 		"response.image_generation_call.in_progress", "response.image_generation_call.generating",
 		"response.image_generation_call.partial_image", "response.image_generation_call.completed":
 		return true

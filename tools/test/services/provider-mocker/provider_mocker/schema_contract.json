@@ -239,6 +239,7 @@
         "prompt_routed_experts",
         "prompt_text",
         "prompt_token_ids",
+        "provider",
         "remote_block_ids",
         "remote_engine_id",
         "remote_host",
@@ -257,10 +258,14 @@
       ],
       "extension_usage_fields": [
         "completion_time",
+        "cost",
+        "cost_details",
         "cost_in_usd_ticks",
+        "is_byok",
         "num_sources_used",
         "prompt_time",
         "queue_time",
+        "server_tool_use",
         "service_tier",
         "total_time"
       ]
@@ -302,6 +307,7 @@
       ],
       "extension_request_fields": [
         "auto_store",
+        "client_metadata",
         "nvext"
       ],
       "provider_schema_revision": "6cddad414ee46796f21aaf7b8643a6e7a00c09b5",
@@ -401,6 +407,7 @@
         "input"
       ],
       "official_response_fields": [
+        "access_programs",
         "background",
         "completed_at",
         "conversation",
@@ -438,8 +445,12 @@
         "user"
       ],
       "extension_response_fields": [
+        "billing",
         "conversation_id",
+        "frequency_penalty",
+        "presence_penalty",
         "store",
+        "tool_usage",
         "nvext"
       ],
       "official_usage_fields": [
@@ -456,6 +467,7 @@
       "official_request_fields": [
         "cache_control",
         "container",
+        "context_management",
         "inference_geo",
         "max_tokens",
         "messages",
@@ -482,6 +494,8 @@
       "official_response_fields": [
         "container",
         "content",
+        "context_management",
+        "diagnostics",
         "id",
         "model",
         "role",
@@ -500,6 +514,7 @@
         "cache_read_input_tokens",
         "inference_geo",
         "input_tokens",
+        "iterations",
         "output_tokens",
         "output_tokens_details",
         "server_tool_use",

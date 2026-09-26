@@ -24,7 +24,13 @@ func (s *ClassificationAPIServer) getSystemInfo() SystemInfo {
 }
 
 func (s *ClassificationAPIServer) loadModelsRuntimeState() *startupstatus.State {
-	if s == nil || s.configPath == "" {
+	if s == nil {
+		return nil
+	}
+	if s.runtimeRegistry != nil {
+		return s.runtimeRegistry.StartupState()
+	}
+	if s.configPath == "" {
 		return nil
 	}
 

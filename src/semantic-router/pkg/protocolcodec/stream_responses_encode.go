@@ -93,6 +93,11 @@ func (encoder *responsesStreamEncoder) responsesWireForEvent(
 func (encoder *responsesStreamEncoder) encodeResponsesItemStart(event llmprotocol.Event) ([][]byte, error) {
 	encoder.neutralItemIDs[event.ItemIndex] = event.ItemID
 	if event.ToolCall != nil {
+		// A Chat stream may reveal the call ID, name, kind, and input in
+		// separate deltas. A Responses item needs the full identity at start.
+		if !encoder.responsesToolIdentityReady(event.ToolCall) {
+			return nil, nil
+		}
 		frames, _, err := encoder.ensureResponsesOutputStarted(event, responsesOutputTool)
 		return frames, err
 	}
@@ -142,7 +147,13 @@ func (encoder *responsesStreamEncoder) ensureResponsesOutputStarted(
 	case responsesOutputTool:
 		item.Type = "function_call"
 		if event.ToolCall != nil {
-			item.CallID, item.Name, item.Arguments = event.ToolCall.ID, event.ToolCall.Name, event.ToolCall.Arguments
+			item.CallID, item.Name = event.ToolCall.ID, event.ToolCall.Name
+			// The input is carried by delta events. Starting with the first
+			// fragment here would duplicate it when clients reconstruct the call.
+			item.Arguments = ""
+			if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
+				item.Type = "custom_tool_call"
+			}
 		}
 	case responsesOutputImage:
 		item.Type = "image_generation_call"
@@ -207,22 +218,55 @@ func (encoder *responsesStreamEncoder) encodeResponsesToolDelta(event llmprotoco
 	if event.ToolCall == nil {
 		return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "tool_event_invalid", "tool event is invalid", nil)
 	}
+	frames, err := encoder.encodeResponsesToolProgress(event, string(encoder.toolArguments[event.ItemIndex]))
+	return frames, nil, err
+}
+
+func (encoder *responsesStreamEncoder) responsesToolIdentityReady(call *llmprotocol.ToolCall) bool {
+	if call == nil || call.ID == "" || call.Name == "" {
+		return false
+	}
+	// An empty Kind denotes a function, but an early Chat fragment also has an
+	// empty Kind. Its decoder marks the kind known once a type or payload is
+	// declared. Other source protocols declare the kind on item start.
+	return encoder.context.Source != llmprotocol.OpenAIChatV1 || call.KindKnown || call.Kind == llmprotocol.ToolKindCustom
+}
+
+func (encoder *responsesStreamEncoder) encodeResponsesToolProgress(
+	event llmprotocol.Event,
+	allArguments string,
+) ([][]byte, error) {
+	if !encoder.responsesToolIdentityReady(event.ToolCall) {
+		return nil, nil
+	}
 	frames, key, err := encoder.ensureResponsesOutputStarted(event, responsesOutputTool)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	emitted := encoder.toolArgumentsEmitted[event.ItemIndex]
+	if emitted > len(allArguments) {
+		return nil, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable,
+			"stream_tool_arguments_mismatch", "upstream tool input changed after it was streamed", nil)
+	}
+	if emitted == len(allArguments) {
+		return frames, nil
 	}
 	wire := responsesEventWire{
 		Type:        "response.function_call_arguments.delta",
 		Sequence:    encoder.nextWireSequence(),
 		ItemID:      encoder.outputIDs[key],
 		OutputIndex: responsesOutputIndex(encoder.outputIndexes[key]),
-		Delta:       event.ToolCall.Arguments,
+		Delta:       allArguments[emitted:],
+	}
+	if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
+		wire.Type = "response.custom_tool_call_input.delta"
 	}
 	frame, err := encoder.encodeResponsesStreamFrame(wire)
 	if err != nil {
-		return frames, nil, err
+		return frames, err
 	}
-	return append(frames, frame), nil, nil
+	encoder.toolArgumentsEmitted[event.ItemIndex] = len(allArguments)
+	return append(frames, frame), nil
 }
 
 func (encoder *responsesStreamEncoder) responsesCompletionWire(
@@ -507,6 +551,13 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesItem(
 	event llmprotocol.Event,
 ) ([][]byte, llmprotocol.Diagnostics, error) {
 	var frames [][]byte
+	if event.ToolCall != nil {
+		progress, err := encoder.encodeResponsesToolProgress(event, event.ToolCall.Arguments)
+		if err != nil {
+			return nil, nil, err
+		}
+		frames = append(frames, progress...)
+	}
 	keys := append([]responsesOutputKey(nil), encoder.itemOutputKeys[event.ItemIndex]...)
 	if len(keys) == 0 {
 		kind := responsesCompletionOutputKind(event)
@@ -563,6 +614,9 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesOutput(
 		ItemID: id, OutputIndex: responsesOutputIndex(index),
 		Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments,
 	}
+	if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
+		done.Type, done.Input, done.Name, done.Arguments = "response.custom_tool_call_input.done", event.ToolCall.Arguments, "", ""
+	}
 	doneFrame, err := encoder.encodeResponsesStreamFrame(done)
 	if err != nil {
 		return nil, nil, err
@@ -573,6 +627,9 @@ func (encoder *responsesStreamEncoder) encodeCompletedResponsesOutput(
 	item := responsesItemWire{
 		Type: "function_call", ID: id, Status: "completed",
 		CallID: event.ToolCall.ID, Name: event.ToolCall.Name, Arguments: event.ToolCall.Arguments,
+	}
+	if event.ToolCall.Kind == llmprotocol.ToolKindCustom {
+		item.Type, item.Input, item.Arguments = "custom_tool_call", event.ToolCall.Arguments, ""
 	}
 	wire.Item = marshalResponsesEventItem(item)
 	encoder.recordResponsesCompletedOutput(index, wire.Item)

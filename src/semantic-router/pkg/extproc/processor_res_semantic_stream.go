@@ -201,6 +201,7 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		Options:     clientStreamOptions(ctx),
 		PublicModel: ctx.RequestModel, PreviousResponseID: responseObjectPreviousID(ctx),
 	}
+	clientMutation := clientStreamMutation(ctx, source)
 	responseID := responseObjectPublicID(ctx)
 	if responseID != "" {
 		streamContext.ResponseID = responseID
@@ -216,8 +217,8 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 			ctx.StreamingAborted = true
 			return ctx.StreamBoundaryError
 		}
-		if responseID != "" {
-			event.ResponseID = responseID
+		if clientMutation != nil {
+			return clientMutation(event)
 		}
 		return nil
 	}
@@ -226,8 +227,10 @@ func (r *OpenAIRouter) ensureSemanticResponseStream(ctx *RequestContext) error {
 		return err
 	}
 	ctx.ProtocolResponseStream = stream
-	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 && !streamUsageRequestedByClient(ctx) {
-		ctx.PublicChatUsageFilter = protocolcodec.NewChatUsageStreamFilter(llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+	if source == llmprotocol.OpenAIChatV1 && target == llmprotocol.OpenAIChatV1 {
+		ctx.PublicChatUsageFilter = protocolcodec.NewChatPublicStreamFilter(
+			llmprotocol.DefaultPolicy().Limits.SSEFrameBytes, streamUsageRequestedByClient(ctx),
+		)
 	}
 	ctx.SemanticStreamState = &semanticResponseStreamState{
 		usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
@@ -290,6 +293,9 @@ func (state *semanticResponseStreamState) observe(events []llmprotocol.Event) {
 				item.toolCall = &llmprotocol.ToolCall{}
 			}
 			if event.ToolCall != nil {
+				if event.ToolCall.Kind != "" {
+					item.toolCall.Kind = event.ToolCall.Kind
+				}
 				if event.ToolCall.ID != "" {
 					item.toolCall.ID = event.ToolCall.ID
 				}
@@ -398,6 +404,8 @@ func (r *OpenAIRouter) finalizeSemanticStreamingResponse(ctx *RequestContext, st
 	ctx.InflightToken = 0
 
 	usage := r.takeNeutralResponseUsage(ctx)
+	// Decoded stream events carry the client-facing model, not the provider's.
+	observeUpstreamResponse(ctx, "", usage)
 	r.reportSemanticStreamingUsage(ctx, completionLatency, usage)
 	r.calibrateTokenEstimator(ctx, usage.promptTokens)
 

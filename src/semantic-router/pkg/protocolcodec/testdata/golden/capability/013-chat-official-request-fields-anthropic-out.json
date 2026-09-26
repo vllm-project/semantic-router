@@ -312,11 +312,32 @@
     {
       "name": "prompt_cache_key",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_prompt_cache_key"
-        }
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "prompt_cache_key",
+            "action": "dropped"
+          },
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
       }
     },
     {
@@ -704,11 +725,32 @@
     {
       "name": "verbosity",
       "outcome": {
-        "status": "error",
-        "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_verbosity"
-        }
+        "status": "ok",
+        "body": {
+          "max_tokens": 4096,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "hello",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "verbosity",
+            "action": "dropped"
+          },
+          {
+            "field": "max_tokens",
+            "action": "generated"
+          }
+        ]
       }
     },
     {

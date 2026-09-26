@@ -9,10 +9,13 @@ import (
 )
 
 type chatResponseWire struct {
-	ID                  string                    `json:"id"`
-	Object              string                    `json:"object,omitempty"`
-	Created             int64                     `json:"created"`
-	Model               string                    `json:"model"`
+	ID      string `json:"id"`
+	Object  string `json:"object,omitempty"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+	// OpenRouter names the upstream that served the request. It is metadata,
+	// not part of the model's answer.
+	Provider            *string                   `json:"provider,omitempty"`
 	Choices             []chatChoiceWire          `json:"choices"`
 	Usage               *chatUsageWire            `json:"usage,omitempty"`
 	Metadata            map[string]string         `json:"metadata,omitempty"`
@@ -55,13 +58,14 @@ func (wire chatResponseWire) hasLegacyKVTransferMetadata() bool {
 }
 
 type chatChoiceWire struct {
-	Index         int                 `json:"index"`
-	Message       chatMessageWire     `json:"message"`
-	FinishReason  *string             `json:"finish_reason"`
-	Logprobs      *chatLogprobsWire   `json:"logprobs,omitempty"`
-	StopReason    *chatStopReasonWire `json:"stop_reason,omitempty"`
-	TokenIDs      []int64             `json:"token_ids,omitempty"`
-	RoutedExperts *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	Index              int                 `json:"index"`
+	Message            chatMessageWire     `json:"message"`
+	FinishReason       *string             `json:"finish_reason"`
+	NativeFinishReason *string             `json:"native_finish_reason,omitempty"`
+	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
+	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs           []int64             `json:"token_ids,omitempty"`
+	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
 
 type chatServiceTierWire string
@@ -175,6 +179,23 @@ type chatUsageWire struct {
 	PromptTime     *float64 `json:"prompt_time,omitempty"`
 	CompletionTime *float64 `json:"completion_time,omitempty"`
 	TotalTime      *float64 `json:"total_time,omitempty"`
+	// OpenRouter reports its own pricing and server-tool accounting beside
+	// canonical token usage. Keep these fields typed at the provider boundary.
+	Cost          *float64                         `json:"cost,omitempty"`
+	IsBYOK        *bool                            `json:"is_byok,omitempty"`
+	CostDetails   *chatOpenRouterCostDetailsWire   `json:"cost_details,omitempty"`
+	ServerToolUse *chatOpenRouterServerToolUseWire `json:"server_tool_use,omitempty"`
+}
+
+type chatOpenRouterCostDetailsWire struct {
+	UpstreamInferenceCost            *float64 `json:"upstream_inference_cost,omitempty"`
+	UpstreamInferencePromptCost      *float64 `json:"upstream_inference_prompt_cost,omitempty"`
+	UpstreamInferenceCompletionsCost *float64 `json:"upstream_inference_completions_cost,omitempty"`
+	ServerToolCost                   *float64 `json:"server_tool_cost,omitempty"`
+}
+
+type chatOpenRouterServerToolUseWire struct {
+	WebSearchRequests *int64 `json:"web_search_requests,omitempty"`
 }
 
 type chatPromptTokensDetailsWire struct {
@@ -186,14 +207,16 @@ type chatPromptTokensDetailsWire struct {
 	AudioTokens         int64            `json:"audio_tokens,omitempty"`
 	TextTokens          int64            `json:"text_tokens,omitempty"`
 	ImageTokens         int64            `json:"image_tokens,omitempty"`
+	VideoTokens         *int64           `json:"video_tokens,omitempty"`
 }
 
 type chatCompletionTokensDetailsWire struct {
-	AcceptedPredictionTokens int64 `json:"accepted_prediction_tokens,omitempty"`
-	AudioTokens              int64 `json:"audio_tokens,omitempty"`
-	ReasoningTokens          int64 `json:"reasoning_tokens"`
-	TextTokens               int64 `json:"text_tokens,omitempty"`
-	RejectedPredictionTokens int64 `json:"rejected_prediction_tokens,omitempty"`
+	AcceptedPredictionTokens int64  `json:"accepted_prediction_tokens,omitempty"`
+	AudioTokens              int64  `json:"audio_tokens,omitempty"`
+	ReasoningTokens          int64  `json:"reasoning_tokens"`
+	TextTokens               int64  `json:"text_tokens,omitempty"`
+	ImageTokens              *int64 `json:"image_tokens,omitempty"`
+	RejectedPredictionTokens int64  `json:"rejected_prediction_tokens,omitempty"`
 }
 
 type chatErrorWire struct {

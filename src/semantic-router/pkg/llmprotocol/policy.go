@@ -155,12 +155,13 @@ type ResponseRenderContext struct {
 // Envelope is bounded, ephemeral wire fidelity and rendering state. It must
 // never be serialized into logs, snapshots, YAML, or usage records.
 type Envelope struct {
-	Format         WireFormat
-	Generation     uint64
-	Request        []byte
-	Response       []byte
-	SourceStop     string
-	ResponseRender ResponseRenderContext
+	Format                   WireFormat
+	Generation               uint64
+	Request                  []byte
+	Response                 []byte
+	ResponseReencodeRequired bool // Provider decorations must not be replayed to a same-format client.
+	SourceStop               string
+	ResponseRender           ResponseRenderContext
 	// Dynamo carries bounded, provider-specific wire fidelity. It is separate
 	// from the neutral Request and Response contracts and is never trusted
 	// identity or authorization state.
@@ -173,6 +174,9 @@ func (envelope Envelope) CanReplay(format WireFormat, generation uint64, policy 
 		return false
 	}
 	if response {
+		if envelope.ResponseReencodeRequired {
+			return false
+		}
 		if envelope.ResponseRender.PreviousResponseID != "" {
 			return false
 		}

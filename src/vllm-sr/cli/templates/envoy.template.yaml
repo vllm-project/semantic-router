@@ -131,10 +131,15 @@ static_resources:
                   local auth = request_handle:headers():get("authorization") or
                                request_handle:headers():get("Authorization") or ""
                   local token = string.match(auth, "^[Bb]earer%s+(.+)$")
+                  if not (token and VALID_KEYS[token]) then
+                    -- Azure OpenAI clients send the key in api-key instead.
+                    token = request_handle:headers():get("api-key")
+                  end
                   if token and VALID_KEYS[token] then
                     -- The listener credential authenticates the Router client;
                     -- it is never an upstream provider credential.
                     request_handle:headers():remove("authorization")
+                    request_handle:headers():remove("api-key")
                     return
                   end
                   request_handle:respond(
