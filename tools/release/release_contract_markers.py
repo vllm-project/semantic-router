@@ -31,6 +31,10 @@ def upgrade_runbook_fixture_markers(
             "DIGEST=$(docker buildx imagetools inspect",
         ),
         (
+            "Docker index digest format",
+            "--format '{{.Manifest.Digest}}'",
+        ),
+        (
             "Make Docker release pull",
             f"make docker-pull-release DOCKER_TAG={release_tag}",
         ),
@@ -40,6 +44,10 @@ def upgrade_runbook_fixture_markers(
         ),
         ("Helm values image pin", f'tag: "{release_tag}"'),
         ("Python CLI upgrade pin", f"pip install --upgrade vllm-sr=={release_version}"),
+        (
+            "Fleet simulator upgrade selection",
+            "pip install --upgrade --pre vllm-sr-sim==<published-version>",
+        ),
     )
 
 

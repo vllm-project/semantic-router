@@ -22,6 +22,7 @@ from generate_model_catalog import (  # noqa: E402
 )
 
 DEFAULT_MIN_EVALUATIONS = 5
+DEFAULT_EVALUATION_CLASS = "general_llm"
 
 
 def _family_evaluation_conditions(family: dict[str, Any]) -> list[str]:
@@ -33,6 +34,24 @@ def _selected_values(values: Iterable[str] | None) -> set[str]:
     for value in values or ():
         selected.update(part.strip() for part in value.split(",") if part.strip())
     return selected
+
+
+def _evaluation_class(model: dict[str, Any]) -> str:
+    """Return the explicit physical-card evaluation policy class.
+
+    Omission deliberately defaults to the established general LLM gate so a
+    new capability surface cannot accidentally bypass benchmark admission.
+    """
+
+    return str(model.get("evaluation_class") or DEFAULT_EVALUATION_CLASS)
+
+
+def _general_evaluation_gate_eligible(model: dict[str, Any]) -> bool:
+    """Return whether a physical model belongs in general LLM quality gates."""
+
+    # Only the explicit specialized class may opt out. This remains fail-closed
+    # if a caller bypasses source-schema validation or a future class is added.
+    return _evaluation_class(model) != "decision"
 
 
 def _evaluation_efforts(
@@ -199,6 +218,10 @@ def _model_effort_rows(
                     "model": model_id,
                     "publisher": str(model.get("publisher", "")),
                     "kind": str(model["kind"]),
+                    "evaluation_class": _evaluation_class(model),
+                    "general_evaluation_gate_eligible": (
+                        _general_evaluation_gate_eligible(model)
+                    ),
                     "reasoning_effort": effort,
                     "selectable": effort in declared_efforts,
                     "available_evaluations": len(evaluations),
@@ -216,7 +239,11 @@ def _selectable_effort_coverage(
     model_efforts: list[dict[str, Any]],
 ) -> dict[str, int]:
     selectable = [
-        row for row in model_efforts if row["kind"] == "physical" and row["selectable"]
+        row
+        for row in model_efforts
+        if row["kind"] == "physical"
+        and row["general_evaluation_gate_eligible"]
+        and row["selectable"]
     ]
     complete = sum(
         int(row["available_benchmark_count"]) >= DEFAULT_MIN_EVALUATIONS
@@ -319,6 +346,10 @@ def _model_coverage_rows(
                 "model": model_id,
                 "publisher": str(model.get("publisher", "")),
                 "kind": str(model["kind"]),
+                "evaluation_class": _evaluation_class(model),
+                "general_evaluation_gate_eligible": (
+                    _general_evaluation_gate_eligible(model)
+                ),
                 "available_evaluations": sum(
                     int(row["available_evaluations"]) for row in effort_rows
                 ),
@@ -452,6 +483,7 @@ def build_audit(
         }
         for row in model_coverage
         if row["kind"] == "physical"
+        and row["general_evaluation_gate_eligible"]
         and row["best_evidence_bucket_benchmark_count"] < DEFAULT_MIN_EVALUATIONS
     ]
     model_efforts_below_five = [
@@ -462,6 +494,7 @@ def build_audit(
         }
         for row in model_efforts
         if row["kind"] == "physical"
+        and row["general_evaluation_gate_eligible"]
         and row["available_benchmark_count"] < DEFAULT_MIN_EVALUATIONS
     ]
     return {
@@ -498,26 +531,30 @@ def build_audit(
 def gate_failures(
     report: dict[str, Any], minimum: int, *, scope: str
 ) -> list[dict[str, Any]]:
-    """Return physical model or model-effort rows below an explicit gate."""
+    """Return general-LLM physical rows below an explicit gate."""
 
     if scope == "model":
         return [
             row
             for row in report["model_coverage"]
             if row["kind"] == "physical"
+            and row["general_evaluation_gate_eligible"]
             and row["best_evidence_bucket_benchmark_count"] < minimum
         ]
     if scope == "effort":
         return [
             row
             for row in report["model_efforts"]
-            if row["kind"] == "physical" and row["available_benchmark_count"] < minimum
+            if row["kind"] == "physical"
+            and row["general_evaluation_gate_eligible"]
+            and row["available_benchmark_count"] < minimum
         ]
     if scope == "selectable-effort":
         return [
             row
             for row in report["model_efforts"]
             if row["kind"] == "physical"
+            and row["general_evaluation_gate_eligible"]
             and row["selectable"]
             and row["available_benchmark_count"] < minimum
         ]
@@ -611,7 +648,10 @@ def render_text(report: dict[str, Any]) -> str:
         ]
     )
     lines.extend(
-        ["", "Physical models below five benchmarks in any exact evidence bucket:"]
+        [
+            "",
+            "General-LLM physical models below five benchmarks in any exact evidence bucket:",
+        ]
     )
     lines.extend(
         f"  {row['model']} "
@@ -621,7 +661,7 @@ def render_text(report: dict[str, Any]) -> str:
     )
     if not report["physical_models_below_five"]:
         lines.append("  none")
-    lines.extend(["", "Model-effort rows below five available benchmarks:"])
+    lines.extend(["", "General-LLM model-effort rows below five available benchmarks:"])
     lines.extend(
         f"  {row['model']} [{row['reasoning_effort']}]: "
         f"benchmarks={row['available_benchmark_count']}"
@@ -661,7 +701,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=_nonnegative_int,
         metavar="N",
         help=(
-            "fail when a selected physical model has fewer than N benchmarks "
+            "fail when a selected general_llm physical model has fewer than N benchmarks "
             "in every exact reasoning-effort/provenance evidence bucket"
         ),
     )
@@ -670,8 +710,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=_nonnegative_int,
         metavar="N",
         help=(
-            "fail when any declared or observed physical model-effort has fewer "
-            "than N benchmarks"
+            "fail when any declared or observed general_llm physical model-effort "
+            "has fewer than N benchmarks"
         ),
     )
     gate_group.add_argument(
@@ -679,8 +719,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=_nonnegative_int,
         metavar="N",
         help=(
-            "fail when a declared reasoning-family level has fewer than N "
-            "available benchmarks; evidence-only and unspecified buckets are ignored"
+            "fail when a declared general_llm reasoning-family level has fewer "
+            "than N available benchmarks; evidence-only and unspecified buckets are ignored"
         ),
     )
     parser.add_argument(
@@ -713,7 +753,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     failures = gate_failures(report, minimum, scope=scope)
     if failures:
         print(
-            f"model catalog audit gate failed: {len(failures)} physical {scope} rows "
+            f"model catalog audit gate failed: {len(failures)} general_llm physical {scope} rows "
             f"have fewer than {minimum} available benchmarks",
             file=sys.stderr,
         )

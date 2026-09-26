@@ -16,6 +16,10 @@ on:
         description: Explicit verification for a manual run; normal entrypoints use changed paths.
         type: string
         default: ''
+      decision-runtime-images:
+        description: Include Decision images in a publishing CI profile.
+        type: boolean
+        default: false
     outputs:
       plan:
         value: ${{ jobs.plan.outputs.plan }}
@@ -127,11 +131,13 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           FULL: ${{ inputs.full }}
           DRAFT: ${{ inputs.draft }}
+          DECISION_RUNTIME_IMAGES: ${{ inputs.decision-runtime-images }}
           VERIFICATION: ${{ inputs.verification }}
         run: |
           flags=()
           if [[ "$FULL" == true ]]; then flags+=(--full); fi
           if [[ "$DRAFT" == true ]]; then flags+=(--draft); fi
+          if [[ "$DECISION_RUNTIME_IMAGES" == true ]]; then flags+=(--decision-runtime-images); fi
           if [[ -n "$VERIFICATION" ]]; then flags+=(--verification "$VERIFICATION"); fi
           python3 tools/ci/ci_plan.py --profile "$PROFILE" \
             --base "$BASE_SHA" --head "$GITHUB_SHA" "${flags[@]}" \

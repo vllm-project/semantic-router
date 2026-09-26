@@ -364,6 +364,13 @@
           "released_at": {"type": "string", "format": "date"},
           "knowledge_cutoff": {"type": "string", "minLength": 1},
           "lifecycle": {"enum": ["experimental", "active", "deprecated", "removed"]},
+          "evaluation_class": {"enum": ["general_llm", "decision"]},
+          "protocols": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"$ref": "#/$defs/protocolID"}
+          },
           "limits": {
             "type": "object",
             "additionalProperties": false,
@@ -414,7 +421,10 @@
         "allOf": [
           {
             "if": {"properties": {"kind": {"const": "virtual"}}},
-            "then": {"required": ["generation", "policy_version", "asset", "entrypoint", "recipe", "traits", "roles"]}
+            "then": {
+              "required": ["generation", "policy_version", "asset", "entrypoint", "recipe", "protocols", "traits", "roles"],
+              "not": {"required": ["evaluation_class"]}
+            }
           }
         ]
       }

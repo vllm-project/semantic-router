@@ -76,6 +76,23 @@ protocols:
   - streaming
   - tools
   - usage
+- id: typesafe/systemone@1
+  display_name: TypeSafe SystemOne
+  wire_format: typesafe.systemone.v1
+  default_base_path: /v1
+  operations:
+  - id: create
+    method: POST
+    path: /v1/systemone
+  - id: list_models
+    method: GET
+    path: /v1/models
+  capabilities:
+  - decision
+  - noul
+  - choice
+  - score
+  - usage
 providers:
 - id: agnes
   display_name: Agnes AI
@@ -806,6 +823,89 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://www.alibabacloud.com/help/en/model-studio/text-generation-model
+- id: decision-runtime
+  display_name: Decision Runtime
+  description: Serve pinned Decision 1.0 models through a private SystemOne endpoint.
+  category: private_runtime
+  support_tier: runtime
+  protocols:
+  - typesafe/systemone@1
+  default_protocol: typesafe/systemone@1
+  supported_operations:
+  - typesafe/systemone@1#create
+  - typesafe/systemone@1#list_models
+  auth:
+    strategy: none
+    header: ''
+    prefix: ''
+  presentation:
+    logo: package:vllm
+    monogram: D
+    monochrome: false
+    featured: true
+  conformance:
+    status: unverified
+  models:
+  - catalog: llm-semantic-router/decision-1.0-kai-0.6b
+    relationship: self_hosted
+    id: llm-semantic-router/Decision-1.0-Kai-0.6B
+    protocols:
+    - typesafe/systemone@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/7185f514f54b8f93c55998b1e8f9c5cc67f0d029
+  - catalog: llm-semantic-router/decision-1.0-lex-0.6b
+    relationship: self_hosted
+    id: llm-semantic-router/Decision-1.0-Lex-0.6B
+    protocols:
+    - typesafe/systemone@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/ee8e74d912fca8328a353c11d174b44da3f91781
+  - catalog: llm-semantic-router/decision-1.0-eos-0.8b
+    relationship: self_hosted
+    id: llm-semantic-router/Decision-1.0-Eos-0.8B
+    protocols:
+    - typesafe/systemone@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd
+  - catalog: llm-semantic-router/decision-1.0-sol-2b
+    relationship: self_hosted
+    id: llm-semantic-router/Decision-1.0-Sol-2B
+    protocols:
+    - typesafe/systemone@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/0665a41108e8f0b33a9515c98311c45947b99399
+  - catalog: llm-semantic-router/decision-1.0-nox-4b
+    relationship: self_hosted
+    id: llm-semantic-router/Decision-1.0-Nox-4B
+    protocols:
+    - typesafe/systemone@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/0bb833504965c0eabdb9630b7bbd385cb2fe5cd4
+  - catalog: llm-semantic-router/decision-1.0-lux-9b
+    relationship: self_hosted
+    id: llm-semantic-router/Decision-1.0-Lux-9B
+    protocols:
+    - typesafe/systemone@1
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-23'
+      source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/bd45a30aee8c84032791c245c70f86dee5389cc8
 - id: deepinfra
   display_name: DeepInfra
   description: Serverless inference across open models.
@@ -5872,6 +5972,228 @@ models:
   - agentic
   - efficient
   released_at: '2026-08-25'
+- id: llm-semantic-router/decision-1.0-kai-0.6b
+  display_name: Decision 1.0 Kai 0.6B
+  description: Compact multilingual Decision 1.0 encoder for runtime-defined Choice, Noul, and Score questions.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: K
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B
+    license: Apache-2.0
+  family: decision-encoder
+  parameter_size: 0.6B
+  revision: 7185f514f54b8f93c55998b1e8f9c5cc67f0d029
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Kai-0.6B/tree/7185f514f54b8f93c55998b1e8f9c5cc67f0d029
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
+- id: llm-semantic-router/decision-1.0-lex-0.6b
+  display_name: Decision 1.0 Lex 0.6B
+  description: English-specialized Decision 1.0 encoder for operational choices, judgments, and scoring rubrics.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: L
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B
+    license: Apache-2.0
+  family: decision-encoder
+  parameter_size: 0.6B
+  revision: ee8e74d912fca8328a353c11d174b44da3f91781
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lex-0.6B/tree/ee8e74d912fca8328a353c11d174b44da3f91781
+  tags:
+  - open_weights
+  - decision_model
+  - english
+- id: llm-semantic-router/decision-1.0-eos-0.8b
+  display_name: Decision 1.0 Eos 0.8B
+  description: Compact Qwen3.5-based Decision 1.0 model for typed decisions and probability distributions.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: E
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B
+    license: Apache-2.0
+  family: decision-qwen3.5
+  parameter_size: 0.8B
+  revision: 3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Eos-0.8B/tree/3c2d632609ceb66f3a13bbc5f77f3ab8cdeebcdd
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
+- id: llm-semantic-router/decision-1.0-sol-2b
+  display_name: Decision 1.0 Sol 2B
+  description: Qwen3.5-based Decision 1.0 model balancing typed-decision quality and serving efficiency.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: S
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B
+    license: Apache-2.0
+  family: decision-qwen3.5
+  parameter_size: 2B
+  revision: 0665a41108e8f0b33a9515c98311c45947b99399
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Sol-2B/tree/0665a41108e8f0b33a9515c98311c45947b99399
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
+- id: llm-semantic-router/decision-1.0-nox-4b
+  display_name: Decision 1.0 Nox 4B
+  description: Qwen3.5-based Decision 1.0 model for higher-capacity typed decisions with runtime-defined labels.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: N
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B
+    license: Apache-2.0
+  family: decision-qwen3.5
+  parameter_size: 4B
+  revision: 0bb833504965c0eabdb9630b7bbd385cb2fe5cd4
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Nox-4B/tree/0bb833504965c0eabdb9630b7bbd385cb2fe5cd4
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
+- id: llm-semantic-router/decision-1.0-lux-9b
+  display_name: Decision 1.0 Lux 9B
+  description: Highest-capacity Decision 1.0 model for typed decisions and runtime-defined candidate sets.
+  kind: physical
+  publisher: vLLM Semantic Router
+  presentation:
+    logo: package:vllm
+    monogram: L
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B
+    license: Apache-2.0
+  family: decision-qwen3.5
+  parameter_size: 9B
+  revision: bd45a30aee8c84032791c245c70f86dee5389cc8
+  lifecycle: active
+  evaluation_class: decision
+  capabilities:
+  - decision
+  - choice
+  - noul
+  - score
+  modalities:
+    input:
+    - text
+    output:
+    - text
+  verification:
+    authority: vLLM Semantic Router
+    status: claimed
+    verified_at: '2026-09-23'
+    source: https://huggingface.co/llm-semantic-router/Decision-1.0-Lux-9B/tree/bd45a30aee8c84032791c245c70f86dee5389cc8
+  tags:
+  - open_weights
+  - decision_model
+  - multilingual
 - id: meta/muse-spark-1.3
   display_name: Muse Spark 1.3
   description: Meta's latest Muse Spark model for agentic workflows, coding, and long-running collaborative work.
@@ -8565,6 +8887,10 @@ models:
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
@@ -8634,6 +8960,10 @@ models:
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
@@ -8701,6 +9031,10 @@ models:
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
@@ -8771,6 +9105,10 @@ models:
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning
@@ -8856,6 +9194,10 @@ models:
   generation: 1
   policy_version: 3.0.0
   lifecycle: active
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  - anthropic/messages@1
   capabilities:
   - chat
   - reasoning

@@ -106,6 +106,13 @@ function isVerification(value: unknown, virtual: boolean): boolean {
 function isCatalogModel(value: unknown): value is BuiltInModelMetadata {
   if (!isRecord(value)) return false
   const virtual = value.kind === 'virtual'
+  const validProtocols = virtual
+    ? isUniqueStringArray(value.protocols)
+    : value.protocols === undefined || isUniqueStringArray(value.protocols)
+  const validEvaluationClass = virtual
+    ? value.evaluation_class === undefined
+    : value.evaluation_class === undefined ||
+      ['general_llm', 'decision'].includes(String(value.evaluation_class))
   return (
     isNonEmptyString(value.id) &&
     isNonEmptyString(value.display_name) &&
@@ -124,6 +131,8 @@ function isCatalogModel(value: unknown): value is BuiltInModelMetadata {
     (value.distribution.type !== 'open_weights' || isNonEmptyString(value.distribution.license)) &&
     isNonEmptyString(value.family) &&
     ['experimental', 'active', 'deprecated', 'removed'].includes(String(value.lifecycle)) &&
+    validEvaluationClass &&
+    validProtocols &&
     isStringArray(value.capabilities) &&
     isRecord(value.modalities) &&
     isStringArray(value.modalities.input) &&
@@ -139,6 +148,16 @@ function isCatalogModel(value: unknown): value is BuiltInModelMetadata {
         Array.isArray(value.roles) &&
         value.roles.length > 0 &&
         value.roles.every(isCatalogRole)))
+  )
+}
+
+function modelProtocolsAreRegistered(
+  models: BuiltInModelMetadata[],
+  protocols: CatalogProtocol[],
+): boolean {
+  const registered = new Set(protocols.map((protocol) => protocol.id))
+  return models.every((model) =>
+    (model.protocols ?? []).every((protocol) => registered.has(protocol)),
   )
 }
 
@@ -573,6 +592,7 @@ function isBuiltInModelCatalog(value: unknown): value is BuiltInModelCatalog {
     Array.isArray(value.models) &&
     value.models.length > 0 &&
     value.models.every(isCatalogModel) &&
+    modelProtocolsAreRegistered(value.models, value.protocols) &&
     Array.isArray(value.benchmarks) &&
     value.benchmarks.length > 0 &&
     value.benchmarks.every(isBenchmark) &&
