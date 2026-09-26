@@ -1,23 +1,18 @@
 #!/usr/bin/env python3
-"""Fixed-policy controls for the modality routing task (AR / DIFFUSION / BOTH).
+"""Untrained baselines for modality routing (AR / DIFFUSION / BOTH).
 
-These are deliberately simple, untrained policies. They exist to set a floor:
-if a finetuned encoder does not clear them by a meaningful margin, it has not
-earned its per-request latency and memory in the router.
+The floor for #3857. If a trained classifier can't beat these by a decent
+margin it isn't worth its latency in the router.
 
-Three controls are reported:
+  lexical       keyword and shape rules
+  majority      always the most common training class
+  prior_random  sample from the training distribution
 
-  lexical         hand-written keyword / shape rules, no training
-  majority        always predict the most frequent training class
-  prior_random    sample a label from the training class distribution
+Per-class recall matters more than accuracy here. A control that never
+predicts BOTH still looks respectable on accuracy alone.
 
-Reported per control: overall accuracy plus per-class recall and precision.
-Accuracy alone hides a class that is never predicted, which is exactly the
-failure that would show up in routing.
+Rules were written against train. Measure test once.
 
-Rules were designed against the TRAIN split only. Evaluate on test once.
-
-Usage:
     python3 fixed_policy_controls.py --split train
     python3 fixed_policy_controls.py --split test --json results.json
 """
@@ -25,30 +20,21 @@ Usage:
 import argparse
 import json
 import random
+import re
 from collections import Counter
 from pathlib import Path
 
 LABELS = ["AR", "DIFFUSION", "BOTH"]
 
-# --------------------------------------------------------------------------
-# Lexical rules
-#
-# Ordering matters. A visual verb on its own is a DIFFUSION cue; a visual verb
-# alongside a text verb is a BOTH cue. Getting that order wrong makes the
-# lexical control steal DIFFUSION examples.
-# --------------------------------------------------------------------------
-
-import re
-
-# Rule 1 - the two dominant BOTH templates in the dataset.
+# Two templates cover a good chunk of BOTH.
 BOTH_TEMPLATE = re.compile(
     r"consists of both text and multiple images"
     r"|in this task, you are given a high-level goal",
     re.I,
 )
 
-# A request for written output. Stems, because "explanations" and "learning"
-# are the same signal as "explain" and "learn".
+# Asking for prose. Stems, since "explain" and "explanation" diverge at the
+# fifth letter and one prefix won't cover both.
 TEXT_VERB = re.compile(
     r"\b("
     r"explain\w*|explanat\w*|describ\w*|teach\w*|learn\w*|understand\w*|"
@@ -60,12 +46,9 @@ TEXT_VERB = re.compile(
     re.I,
 )
 
-# A request for visual output.
-#
-# Expanded after inspecting misses on the TRAIN split. These are the obvious
-# surface cues only. The residual misses carry no visual signal at all (see
-# README) and are deliberately left uncaught: chasing them would mean fitting
-# the label rather than reading the request.
+# Asking for something visual. Obvious surface cues only — plenty of BOTH
+# examples carry no visual cue at all ("How do I install a ceiling fan?") and
+# catching those would mean fitting the label rather than reading the request.
 VISUAL_CUE = re.compile(
     r"\b("
     r"illustrate|illustrated|illustration of|"
@@ -85,7 +68,7 @@ VISUAL_CUE = re.compile(
     re.I,
 )
 
-# Image-generation prompt vocabulary. Strong DIFFUSION signal.
+# Midjourney / Stable Diffusion prompt vocabulary.
 DIFFUSION_STYLE = re.compile(
     r"\b("
     r"\d+k|highly detailed|ultra[- ]detailed|intricate details|"
@@ -103,7 +86,7 @@ DIFFUSION_STYLE = re.compile(
 
 
 def looks_like_prompt(text: str) -> bool:
-    """Comma-separated tag soup with no sentence structure."""
+    """Comma-separated tags with no sentence around them."""
     if "?" in text:
         return False
     if "|" in text:
@@ -116,32 +99,28 @@ def looks_like_prompt(text: str) -> bool:
 
 
 def predict_lexical(text: str) -> str:
-    # 1. explicit BOTH templates
+    """Order matters here.
+
+    A visual verb on its own means DIFFUSION. The same verb next to a text
+    verb means BOTH. Flip those two and the control starts eating DIFFUSION
+    examples.
+    """
     if BOTH_TEMPLATE.search(text):
         return "BOTH"
 
     has_text = bool(TEXT_VERB.search(text))
     has_visual = bool(VISUAL_CUE.search(text))
 
-    # 2. asks for prose AND a visual
     if has_text and has_visual:
         return "BOTH"
 
-    # 3. image-prompt vocabulary or shape
     if DIFFUSION_STYLE.search(text) or looks_like_prompt(text):
         return "DIFFUSION"
 
-    # 4. visual request with no prose request
     if has_visual:
         return "DIFFUSION"
 
-    # 5. default
     return "AR"
-
-
-# --------------------------------------------------------------------------
-# Scoring
-# --------------------------------------------------------------------------
 
 
 def score(rows, predict):
@@ -162,6 +141,7 @@ def score(rows, predict):
     per_class = {}
     for label in LABELS:
         s = stats[label]
+        # None, not zero: precision is undefined when nothing was predicted.
         per_class[label] = {
             "recall": s["tp"] / s["gold"] if s["gold"] else None,
             "precision": s["tp"] / s["pred"] if s["pred"] else None,
@@ -198,9 +178,6 @@ def report(name, result, note=None):
         )
 
 
-# --------------------------------------------------------------------------
-
-
 def load(path):
     return [json.loads(line) for line in Path(path).open()]
 
@@ -232,7 +209,8 @@ def main():
     eval_rows = load(data_dir / f"{args.split}.jsonl")
     train_rows = load(data_dir / "train.jsonl")
 
-    # Priors come from train, never from the split being measured.
+    # From train, never from whatever split we're measuring. Otherwise the
+    # baseline is built out of the labels it's being scored against.
     train_counts = Counter(r["label_name"] for r in train_rows)
     n_train = sum(train_counts.values())
     priors = {label: train_counts[label] / n_train for label in LABELS}
@@ -256,12 +234,10 @@ def main():
         "controls": {},
     }
 
-    # --- lexical ---
     lex = score(eval_rows, predict_lexical)
     results["controls"]["lexical"] = lex
     report("lexical", lex)
 
-    # --- majority ---
     note = None
     if len(tied) > 1:
         note = f"tie between {', '.join(tied)}; broke to {majority} by label order"
@@ -269,7 +245,8 @@ def main():
     results["controls"]["majority"] = maj
     report(f"majority ({majority})", maj, note)
 
-    # --- prior-matched random ---
+    # One random run is noise, so average over many and report the spread
+    # next to the analytic expectation.
     rng = random.Random(args.seed)
     weights = [priors[label] for label in LABELS]
     accs = []
@@ -292,7 +269,7 @@ def main():
         "accuracy_analytic": analytic,
         "trials": args.trials,
         "seed": args.seed,
-        "per_class_recall": priors,  # recall for class i is P(predict i) = prior_i
+        "per_class_recall": priors,  # P(predict i) is just the prior
     }
 
     print("\nprior-matched random")

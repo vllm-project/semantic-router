@@ -1,19 +1,12 @@
-"""Regression tests for the modality routing fixed-policy controls.
+"""Tests for the modality routing controls.
 
-These pin the lexical rule behaviour that the reported floor depends on. A
-control used as a gate needs its own tests: if the rules drift, the number in
-the decision record silently stops meaning what it said.
+These pin the rule behaviour the reported floor depends on. If the rules
+drift, the number in the decision record quietly stops meaning what it said.
 """
 
 import pytest
 
 from fixed_policy_controls import LABELS, looks_like_prompt, predict_lexical, score
-
-
-# --------------------------------------------------------------------------
-# Rule ordering: a visual verb alone is DIFFUSION; with a text verb it is BOTH.
-# Getting this backwards makes the control steal DIFFUSION examples.
-# --------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -71,11 +64,11 @@ def test_plain_text_requests_are_ar(text):
 
 
 def test_unsignalled_both_falls_through_to_ar():
-    """Documents a known limit rather than asserting desired behaviour.
+    """Pins a limit rather than desired behaviour.
 
-    These carry no request for images, so the lexical control cannot reach
-    them. See README, finding 3. If a future rule change makes these BOTH,
-    that rule is fitting the label rather than reading the request.
+    Nothing in these asks for a picture, so the rules can't reach them. If a
+    later rule does catch them, it's fitting the label instead of reading the
+    request, and this test should make someone argue for it first.
     """
     for text in [
         "How do I install a ceiling fan?",
@@ -83,11 +76,6 @@ def test_unsignalled_both_falls_through_to_ar():
         "How does a sewing machine thread path work?",
     ]:
         assert predict_lexical(text) == "AR"
-
-
-# --------------------------------------------------------------------------
-# Shape heuristic
-# --------------------------------------------------------------------------
 
 
 def test_prompt_shape_needs_comma_density():
@@ -102,11 +90,6 @@ def test_question_mark_disqualifies_prompt_shape():
 
 def test_pipe_is_prompt_shape():
     assert looks_like_prompt("knight | castle | sunset")
-
-
-# --------------------------------------------------------------------------
-# Scoring
-# --------------------------------------------------------------------------
 
 
 def test_precision_is_none_when_class_never_predicted():
