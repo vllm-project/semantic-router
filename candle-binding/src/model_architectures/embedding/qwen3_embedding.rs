@@ -1112,53 +1112,28 @@ impl Qwen3Attention {
             .map_err(|e| from_candle_error(e, "Qwen3Attention: chunked attention", None))
     }
 
-    /// Compute attention using Flash Attention 2 (when feature is enabled)
-    ///
-    /// Flash Attention 2 is an optimized attention mechanism that:
-    /// - **2-3x faster** than standard attention for long sequences
-    /// - **40-50% memory savings** by avoiding materialization of attention scores
-    /// - **Numerically identical** to standard attention (no approximation)
-    ///
-    /// # Requirements
-    /// - CUDA-capable GPU with compute capability >= 8.0 (Ampere or newer)
-    /// - `flash-attn` feature enabled: `cargo build --features flash-attn`
-    ///
-    /// # Arguments
-    /// - `q`: Query tensor, shape [batch, num_heads, seq_len, head_dim]
-    /// - `k`: Key tensor (already repeated for GQA), shape [batch, num_heads, seq_len, head_dim]
-    /// - `v`: Value tensor (already repeated for GQA), shape [batch, num_heads, seq_len, head_dim]
-    /// - `attention_mask`: Optional `(batch, seq_len)` 0/1 padding mask (ignored here)
-    ///
-    /// # Returns
-    /// Attention output tensor, shape [batch, num_heads, seq_len, head_dim]
-    ///
-    /// # Implementation Status
-    /// - **COMPLETED**: Integrated `candle-flash-attn` crate
-    /// - **COMPLETED**: Handles attention masks (non-causal for embedding models)
-    /// - **COMPLETED**: Validated numerical consistency with standard attention
-    ///
-    /// # References
-    /// - Flash Attention 2 Paper: <https://arxiv.org/abs/2205.14135>
-    /// - TEI Gemma3 Implementation: backends/candle/src/models/gemma3.rs
-    /// - Research Report: analysis/api-flash-attn-research.md
-    ///
-    /// # Example
-    /// ```ignore
-    /// // Build with: cargo build --features flash-attn
-    /// let q = Tensor::randn((2, 16, 32768, 128), DType::F16, &device)?;  // 32K context
-    /// let k = Tensor::randn((2, 16, 32768, 128), DType::F16, &device)?;
-    /// let v = Tensor::randn((2, 16, 32768, 128), DType::F16, &device)?;
-    /// let output = attention.compute_attention_flash(&q, &k, &v, None)?;
-    /// // 2-3x faster than standard attention for 32K sequences
-    /// ```
+    /// Use flash attention for eligible unmasked CUDA F16/BF16 inputs.
+    /// Other inputs retain the shared attention path without changing precision.
     #[cfg(feature = "flash-attn")]
     fn compute_attention_flash(
         &self,
         q: &Tensor,
         k: &Tensor,
         v: &Tensor,
-        _attention_mask: Option<&Tensor>,
+        attention_mask: Option<&Tensor>,
     ) -> UnifiedResult<Tensor> {
+        if !q.device().is_cuda()
+            || attention_mask.is_some()
+            || !matches!(
+                q.dtype(),
+                candle_core::DType::F16 | candle_core::DType::BF16
+            )
+            || k.dtype() != q.dtype()
+            || v.dtype() != q.dtype()
+        {
+            return self.compute_attention_standard(q, k, v, attention_mask);
+        }
+
         // Flash Attention 2 implementation using candle-flash-attn
         //
         // Reference:
@@ -1188,37 +1163,22 @@ impl Qwen3Attention {
             .map_err(|e| from_candle_error(e, "Flash Attention: transpose V", None))?;
 
         // Step 2: Call Flash Attention 2
-        // Note: Qwen3-Embedding uses non-causal attention (unlike GPT)
-        // softmax_scale = 1 / sqrt(head_dim)
-        let attn_output = flash_attn(
-            &q_flash,
-            &k_flash,
-            &v_flash,
-            self.scaling as f32, // softmax scaling factor
-            false,               // causal: false (Qwen3-Embedding is non-causal)
-        )
-        .map_err(|e| UnifiedError::Processing {
-            operation: "Flash Attention 2: flash_attn".to_string(),
-            source: e.to_string(),
-            input_context: Some(format!(
-                "Q shape: {:?}, K shape: {:?}, V shape: {:?}",
-                q_flash.dims(),
-                k_flash.dims(),
-                v_flash.dims()
-            )),
-        })?;
+        let attn_output = flash_attn(&q_flash, &k_flash, &v_flash, self.scaling as f32, false)
+            .map_err(|e| UnifiedError::Processing {
+                operation: "Flash Attention 2: flash_attn".to_string(),
+                source: e.to_string(),
+                input_context: Some(format!(
+                    "Q shape: {:?}, K shape: {:?}, V shape: {:?}",
+                    q_flash.dims(),
+                    k_flash.dims(),
+                    v_flash.dims()
+                )),
+            })?;
 
         // Step 3: Transpose back to [batch, num_heads, seq_len, head_dim]
         let output = attn_output
             .transpose(1, 2)
             .map_err(|e| from_candle_error(e, "Flash Attention: transpose output", None))?;
-
-        // Note: attention_mask handling
-        // Flash Attention 2 handles padding via sequence lengths (cu_seqlens) in varlen mode
-        // Current implementation: Works correctly for non-padded sequences (standard use case)
-        // FUTURE ENHANCEMENT: Implement varlen Flash Attention for batched variable-length sequences
-        // Reference: flash_attn_varlen_func in PyTorch Flash Attention
-        // (This is an advanced optimization for specific batching scenarios)
 
         Ok(output)
     }

@@ -140,10 +140,12 @@ def resolve_state_root_dir(
     """
 
     env_vars = env_vars or {}
-    override = env_vars.get(STATE_ROOT_DIR_ENV) or os.getenv(STATE_ROOT_DIR_ENV)
+    override = (
+        env_vars.get(STATE_ROOT_DIR_ENV) or os.getenv(STATE_ROOT_DIR_ENV) or ""
+    ).strip()
     if override:
-        return os.path.abspath(override)
-    return os.path.dirname(os.path.abspath(source_config_file))
+        return os.path.abspath(Path(override).expanduser())
+    return os.path.dirname(os.path.abspath(Path(source_config_file).expanduser()))
 
 
 def _runtime_config_output_dir(

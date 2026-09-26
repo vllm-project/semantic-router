@@ -12,7 +12,26 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+
+	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 )
+
+func TestDashboardRouteBoundAuthorizationRegistered(t *testing.T) {
+	const name = "dashboard-route-bound-authorization"
+	registered := false
+	for _, testcase := range NewProfile().GetTestCases() {
+		if testcase == name {
+			registered = true
+			break
+		}
+	}
+	if !registered {
+		t.Fatalf("Dashboard profile does not include %q", name)
+	}
+	if testcase, ok := pkgtestcases.Get(name); !ok || testcase.Fn == nil {
+		t.Fatalf("Dashboard testcase %q is not registered with a runnable function", name)
+	}
+}
 
 func TestDashboardE2EStagesWritableRuntimeConfig(t *testing.T) {
 	deployment := loadDashboardDeployment(t)
