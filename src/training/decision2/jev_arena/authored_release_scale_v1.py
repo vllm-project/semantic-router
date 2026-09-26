@@ -25,6 +25,7 @@ VERSION = "jevarena-authored-release-scale-v1/private-candidate-1"
 EXTRA_OPERATIONS = {
     "coverage_cost": "choice",
     "eligibility_deadline": "choice",
+    "dual_clearance_choice": "choice",
     "quorum_veto": "noul",
     "custody_chain": "noul",
     "allocation_envelope": "noul",
@@ -83,6 +84,18 @@ def solve(
         ]
         return (
             min(eligible, key=lambda key: (right[key], -left[key]["priority"], key))
+            if eligible
+            else "HOLD"
+        )
+    if operation == "dual_clearance_choice":
+        if set(left) != set(right) or set(left) != set(params["priority"]):
+            raise ValueError("Dual clearance candidate universe mismatch")
+        eligible = [key for key in left if left[key] and right[key]["available"]]
+        return (
+            min(
+                eligible,
+                key=lambda key: (right[key]["price"], params["priority"].index(key)),
+            )
             if eligible
             else "HOLD"
         )
