@@ -17,7 +17,8 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from .generate_arena import ARTIFACTS, VERSION as ARTIFACT_VERSION, matched_models
+from .generate_arena import ARTIFACTS, matched_models
+from .generate_arena import VERSION as ARTIFACT_VERSION
 
 VERSION = "decision2-jevarena-self-contained-bundle/1"
 RECORD_VERSION = "decision2-release-package-record/1"
@@ -836,7 +837,7 @@ tags:
 - jevarena
 ---
 
-![Decision 2.0 pixel-mosaic family emblem](decision-2-sticker.png)
+![Decision 2.0 chibi pixel-mosaic owl](decision-2-sticker-chibi-v2.png)
 
 # {model_id}
 
@@ -1018,7 +1019,7 @@ def assemble(
     # Records copied to the public repository contain only reviewed, screened text.
     for path in (package_record, parity_receipt, release_gate):
         _public_text(path.read_text(encoding="utf-8"), path.name)
-    sticker = Path(__file__).with_name("decision-2-sticker.png")
+    sticker = Path(__file__).with_name("decision-2-sticker-chibi-v2.png")
     if not sticker.is_file() or sticker.is_symlink():
         raise ValueError("Family sticker asset is missing")
     output.parent.mkdir(parents=True, exist_ok=True)
