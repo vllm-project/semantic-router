@@ -158,7 +158,9 @@ func (h *HybridCache) fetchResponseFromCandidates(
 			continue
 		}
 		if len(entry.ResponseBody) > 0 && semanticCandidateMatchesPolarity(queryTokens, entry.Query) {
-			return lookupResultFromTimestamps(entry.ResponseBody, candidate.similarity, entry.Timestamp, entry.ExpiresAt), candidate, nil
+			result := lookupResultFromTimestamps(entry.ResponseBody, candidate.similarity, entry.Timestamp, entry.ExpiresAt)
+			result.NegationGuard = negationGuardOutcomeFor(queryTokens, entry.Query)
+			return result, candidate, nil
 		}
 		if candidate.similarity > rejected.Similarity {
 			rejected.Similarity = candidate.similarity
