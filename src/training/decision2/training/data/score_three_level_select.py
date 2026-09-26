@@ -583,6 +583,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     )
     overlap = audit_overlap(rows, references)
     from transformers import AutoTokenizer
+    from transformers import __version__ as transformers_version
 
     tokenizer = AutoTokenizer.from_pretrained(
         str(args.tokenizer.resolve()), local_files_only=True, trust_remote_code=False
@@ -639,6 +640,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         "protected_inventory_sha256": _sha(args.protected_inventory),
         "tokenizer_revision": args.tokenizer_revision,
         "tokenizer_config_sha256": _sha(args.tokenizer / "tokenizer_config.json"),
+        "tokenizer_json_sha256": _sha(args.tokenizer / "tokenizer.json"),
+        "transformers_version": transformers_version,
         "max_row_tokens": args.max_row_tokens,
         "token_lengths": {
             "min": min(lengths),
