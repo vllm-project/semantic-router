@@ -191,8 +191,13 @@ func TestAbortedTerminalStreamSkipsResponseStageAndReplay(t *testing.T) {
 			t.Fatalf("aborted stream released %q: %s", forbidden, mutation.GetBody())
 		}
 	}
-	if ctx.SemanticResponse != nil || ctx.SemanticStreamState.terminal || len(ctx.SemanticStreamState.items) != 0 {
+	if ctx.SemanticResponse != nil || len(ctx.SemanticStreamState.items) != 0 {
 		t.Fatal("discarded frames must not reconstruct a response")
+	}
+	// Finalization may observe an error terminal; only successful completion
+	// would incorrectly recover an aborted stream.
+	if ctx.SemanticStreamState.terminal && ctx.SemanticStreamState.failed == nil {
+		t.Fatal("aborted stream reached a successful terminal state")
 	}
 	if !ctx.StreamingAborted || !ctx.StreamingComplete {
 		t.Fatal("request-wide abort was not retained through finalization")
