@@ -296,7 +296,13 @@ def github_outputs(plan: dict) -> dict[str, str]:
         for job, selected in plan["image_producers"].items()
     }
     values = {
-        "plan": plan,
+        # The complete plan is uploaded as ci-plan for the gate. Passing it as a
+        # job output exceeds GitHub's 1 MiB UTF-16 limit for release profiles;
+        # callers only need these fields to select their workflow behavior.
+        "plan": {
+            "profile": plan["profile"],
+            "quality_context": plan["quality_context"],
+        },
         "dispatch": dispatch,
         "worker_labels": {job: list(rows) for job, rows in dispatch.items()},
         "image_producers": producers,
