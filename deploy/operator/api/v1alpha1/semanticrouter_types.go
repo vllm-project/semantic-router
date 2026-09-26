@@ -362,12 +362,16 @@ type StreamedBodyConfig struct {
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
 
-	// MaxBytes rejects larger accumulated bodies with 413. Zero disables the limit.
+	// MaxBytes caps the accumulated body size. A larger body is rejected and the
+	// ExtProc stream ends; the downstream response follows the gateway's ExtProc
+	// failure policy. Zero disables the limit.
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	MaxBytes int64 `json:"max_bytes,omitempty"`
 
-	// TimeoutSec rejects slower body accumulation with 408. Zero disables the limit.
+	// TimeoutSec caps how long body accumulation may take. A slower body is
+	// rejected and the ExtProc stream ends; the downstream response follows the
+	// gateway's ExtProc failure policy. Zero disables the limit.
 	// +kubebuilder:validation:Minimum=0
 	// +optional
 	TimeoutSec int `json:"timeout_sec,omitempty"`

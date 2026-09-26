@@ -3295,14 +3295,18 @@ spec:
                           routing at end-of-stream.
                         type: boolean
                       max_bytes:
-                        description: MaxBytes rejects larger accumulated bodies with
-                          413. Zero disables the limit.
+                        description: |-
+                          MaxBytes caps the accumulated body size. A larger body is rejected and the
+                          ExtProc stream ends; the downstream response follows the gateway's ExtProc
+                          failure policy. Zero disables the limit.
                         format: int64
                         minimum: 0
                         type: integer
                       timeout_sec:
-                        description: TimeoutSec rejects slower body accumulation with
-                          408. Zero disables the limit.
+                        description: |-
+                          TimeoutSec caps how long body accumulation may take. A slower body is
+                          rejected and the ExtProc stream ends; the downstream response follows the
+                          gateway's ExtProc failure policy. Zero disables the limit.
                         minimum: 0
                         type: integer
                     type: object
