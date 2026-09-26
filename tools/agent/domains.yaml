@@ -863,6 +863,15 @@ profiles:
       - e2e/testcases/structure_routing.go
       - src/semantic-router/pkg/classification/structure_classifier.go
       - src/semantic-router/pkg/classification/classifier_signal_structure.go
+  conversation-routing:
+    display_name: Conversation Routing
+    owner: e2e
+    coverage_role: conversation-routing
+    selection: pr
+    paths:
+      - e2e/profiles/conversation-routing/**
+      - e2e/testcases/conversation_routing.go
+      - src/semantic-router/pkg/classification/classifier_signal_conversation.go
   external-gateway-responses:
     display_name: External Gateway Responses
     owner: e2e
