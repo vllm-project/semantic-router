@@ -115,9 +115,7 @@ func (m *PolicyMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (m *PolicyMux) LookupRoutePolicy(method, path string) (RoutePolicy, RouteLookup) {
 	method = strings.ToUpper(strings.TrimSpace(method))
-	path = normalizePolicyPath(path)
-
-	request := &http.Request{Method: method, URL: &url.URL{Path: path}}
+	request := &http.Request{Method: method, URL: parsePolicyPath(path)}
 	_, pattern := m.mux.Handler(request)
 
 	m.mu.RLock()
@@ -141,6 +139,18 @@ func (m *PolicyMux) LookupRoutePolicy(method, path string) (RoutePolicy, RouteLo
 		}, RouteFound
 	}
 	return RoutePolicy{}, RouteMethodNotAllowed
+}
+
+// Preserve RawPath so encoded slashes match the same ServeMux pattern during
+// policy lookup and actual dispatch.
+func parsePolicyPath(path string) *url.URL {
+	path = normalizePolicyPath(path)
+	parsed, err := url.ParseRequestURI(path)
+	if err != nil || parsed.Path == "" {
+		return &url.URL{Path: path}
+	}
+	parsed.RawQuery, parsed.Fragment = "", ""
+	return parsed
 }
 
 func (m *PolicyMux) Contracts() []RouteContract {

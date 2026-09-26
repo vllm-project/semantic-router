@@ -3,11 +3,13 @@ package extproc
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -97,8 +99,8 @@ func (h *StreamedBodyHandler) HandleChunk(body *ext_proc.HttpBody, ctx *RequestC
 
 	h.buf.Write(chunk)
 
-	if err := h.checkGuards(); err != nil {
-		return nil, err
+	if rejection := h.checkGuards(); rejection != nil {
+		return rejection, nil
 	}
 
 	if !eos {
@@ -115,21 +117,28 @@ func (h *StreamedBodyHandler) intermediateResponse() *ext_proc.ProcessingRespons
 	return sharedContinueEmptyBody
 }
 
-// checkGuards enforces max-body and deadline limits. Returning an error causes
-// the gRPC stream to close, which makes Envoy apply its failure_mode_allow
-// policy (typically returning 500 or passing through).
-func (h *StreamedBodyHandler) checkGuards() error {
+// checkGuards enforces max-body and deadline limits with an immediate client
+// error. Returning an error instead would close the gRPC stream and leave the
+// outcome to Envoy's failure_mode_allow policy.
+func (h *StreamedBodyHandler) checkGuards() *ext_proc.ProcessingResponse {
 	if h.maxBytes > 0 && int64(h.buf.Len()) > h.maxBytes {
 		logging.Infof("[StreamedBody] Accumulated %d bytes exceeds limit %d — aborting",
 			h.buf.Len(), h.maxBytes)
-		return fmt.Errorf("streamed body too large: %d > %d bytes", h.buf.Len(), h.maxBytes)
+		return h.reject(http.StatusRequestEntityTooLarge, "request_too_large",
+			fmt.Sprintf("request body exceeds the %d-byte limit", h.maxBytes))
 	}
 	if !h.deadline.IsZero() && time.Now().After(h.deadline) {
 		logging.Infof("[StreamedBody] Accumulation deadline exceeded after %d bytes — aborting",
 			h.buf.Len())
-		return fmt.Errorf("streamed body accumulation timed out after %d bytes", h.buf.Len())
+		return h.reject(http.StatusRequestTimeout, "request_timeout",
+			"request body was not received before the streamed body timeout")
 	}
 	return nil
+}
+
+func (h *StreamedBodyHandler) reject(status int, code, message string) *ext_proc.ProcessingResponse {
+	h.ctx.ImmediateProtocolError = llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, code, message, nil)
+	return h.router.createErrorResponse(status, message)
 }
 
 // handleAccumulatedBody passes the complete wire request to the standard

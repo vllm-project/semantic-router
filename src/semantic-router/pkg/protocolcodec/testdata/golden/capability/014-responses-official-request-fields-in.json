@@ -7,6 +7,7 @@
   "cases": [
     {"name": "auto_store", "patch": {"auto_store": true}},
     {"name": "background", "patch": {"background": true}},
+    {"name": "client_metadata", "patch": {"client_metadata": {"session_id": "session-1"}}},
     {"name": "context_management", "patch": {"context_management": [{"type": "compaction", "compact_threshold": 1000}]}},
     {"name": "conversation", "patch": {"conversation": "conv-1"}},
     {"name": "include", "patch": {"include": ["reasoning.encrypted_content"]}},

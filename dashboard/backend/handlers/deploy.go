@@ -293,8 +293,14 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	archiveDeployDSL(configDir, req.DSL)
 
 	// Step 5: Atomic write to config.yaml
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
 		writeConfigPersistenceError(w, err)
+		return
+	}
+	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 		return
 	}
 
@@ -303,6 +309,9 @@ func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string
 	// Step 6: Propagate the new config to the managed runtime before returning.
 	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
 		http.Error(w, formatRuntimeApplyError("Failed to apply deployed config to runtime", err), http.StatusInternalServerError)
+		return
+	}
+	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 		return
 	}
 
@@ -548,8 +557,14 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 	}
 
 	// Atomic write to config.yaml
+	if auth.RejectRevokedMutation(w, r) {
+		return
+	}
 	if err := writeConfigAtomically(configPath, backupData); err != nil {
 		writeConfigPersistenceError(w, err)
+		return
+	}
+	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 		return
 	}
 
@@ -557,6 +572,9 @@ func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath stri
 
 	if err := applyWrittenConfig(configPath, configDir, existingData, true); err != nil {
 		http.Error(w, formatRuntimeApplyError("Failed to apply rolled back config to runtime", err), http.StatusInternalServerError)
+		return
+	}
+	if rejectRevokedConfigAndRestore(w, r, configPath, configDir, existingData) {
 		return
 	}
 	if configActivationDeferred() {

@@ -299,6 +299,26 @@ fn embedding_instances_keep_independent_ownership_and_normalization() {
 }
 
 #[test]
+fn bert_embedding_ignores_tokenizer_padding() {
+    let dir = generic_classifier_tests::bert_fixture();
+    let mut opts = options(&dir);
+    opts.model_type = "bert".into();
+    let embed = |opts: Options| {
+        let model = load(opts, "embedding").unwrap();
+        value(model.embedding("hello world", 0, 0).unwrap())["values"].clone()
+    };
+    let unpadded = embed(opts.clone());
+    let path = dir.path().join("tokenizer.json");
+    let mut tokenizer: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    tokenizer["padding"] = json!({
+        "strategy": {"Fixed": 16}, "direction": "Right", "pad_to_multiple_of": null,
+        "pad_id": 0, "pad_type_id": 0, "pad_token": "[PAD]"
+    });
+    std::fs::write(&path, tokenizer.to_string()).unwrap();
+    assert_eq!(embed(opts), unpadded);
+}
+
+#[test]
 fn owned_embedding_descriptor_uses_instance_and_existing_ffi_lifecycle() {
     let dir = fixture(&["safe", "unsafe"], 0);
     let mut opts = options(&dir);

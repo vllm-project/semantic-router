@@ -264,10 +264,11 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 				sr.Status.ReadyReplicas = 0
 				sr.Status.Phase = "Pending"
 				meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
-					Type:    typeAvailableSemanticRouter,
-					Status:  metav1.ConditionFalse,
-					Reason:  "DeploymentNotFound",
-					Message: "Deployment has not been created yet",
+					ObservedGeneration: sr.Generation,
+					Type:               typeAvailableSemanticRouter,
+					Status:             metav1.ConditionFalse,
+					Reason:             "DeploymentNotFound",
+					Message:            "Deployment has not been created yet",
 				})
 				return r.Status().Patch(ctx, sr, client.MergeFrom(baseSR))
 			}
@@ -280,26 +281,29 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 		if deployment.Status.ReadyReplicas == 0 {
 			sr.Status.Phase = "Pending"
 			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
-				Type:    typeAvailableSemanticRouter,
-				Status:  metav1.ConditionFalse,
-				Reason:  "Pending",
-				Message: "No replicas are ready",
+				ObservedGeneration: sr.Generation,
+				Type:               typeAvailableSemanticRouter,
+				Status:             metav1.ConditionFalse,
+				Reason:             "Pending",
+				Message:            "No replicas are ready",
 			})
 		} else if deployment.Status.ReadyReplicas < deployment.Status.Replicas {
 			sr.Status.Phase = "Progressing"
 			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
-				Type:    typeProgressingSemanticRouter,
-				Status:  metav1.ConditionTrue,
-				Reason:  "Progressing",
-				Message: fmt.Sprintf("%d/%d replicas ready", deployment.Status.ReadyReplicas, deployment.Status.Replicas),
+				ObservedGeneration: sr.Generation,
+				Type:               typeProgressingSemanticRouter,
+				Status:             metav1.ConditionTrue,
+				Reason:             "Progressing",
+				Message:            fmt.Sprintf("%d/%d replicas ready", deployment.Status.ReadyReplicas, deployment.Status.Replicas),
 			})
 		} else {
 			sr.Status.Phase = "Running"
 			meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
-				Type:    typeAvailableSemanticRouter,
-				Status:  metav1.ConditionTrue,
-				Reason:  "AllReplicasReady",
-				Message: "All replicas are ready",
+				ObservedGeneration: sr.Generation,
+				Type:               typeAvailableSemanticRouter,
+				Status:             metav1.ConditionTrue,
+				Reason:             "AllReplicasReady",
+				Message:            "All replicas are ready",
 			})
 			meta.RemoveStatusCondition(&sr.Status.Conditions, typeProgressingSemanticRouter)
 		}

@@ -118,3 +118,44 @@ func TestMemoryRuntimeInjectsNeutralMessage(t *testing.T) {
 	assert.Equal(t, 1, diagnostics.MemoryResultCount)
 	assert.False(t, diagnostics.MemoryFailOpen)
 }
+
+type thresholdRecordingMemoryStore struct {
+	noopMemoryStore
+	threshold float32
+}
+
+func (store *thresholdRecordingMemoryStore) Retrieve(_ context.Context, opts memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
+	store.threshold = opts.Threshold
+	return nil, nil
+}
+
+func TestMemoryRetrievalThresholdFallsBackToConfigDefault(t *testing.T) {
+	configDefault := config.DefaultCanonicalGlobal().Stores.Memory.DefaultSimilarityThreshold
+	cases := []struct {
+		name   string
+		memory string
+		want   float32
+	}{
+		{name: "omitted", memory: "{enabled: true}", want: configDefault},
+		{name: "zero means unset", memory: "{enabled: true, default_similarity_threshold: 0}", want: configDefault},
+		{name: "configured", memory: "{enabled: true, default_similarity_threshold: 0.74}", want: 0.74},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := config.ParseYAMLBytes([]byte("version: v0.3\nglobal:\n  stores:\n    memory: " + tc.memory + "\n"))
+			require.NoError(t, err)
+			store := &thresholdRecordingMemoryStore{}
+			router := &OpenAIRouter{Config: cfg, MemoryStore: store}
+			query := "What is my sister's name?"
+			request := testNeutralRequest("entrypoint", query)
+			ctx := &RequestContext{
+				Headers:         map[string]string{"x-authz-user-id": "user-1"},
+				TraceContext:    context.Background(),
+				SemanticRequest: request,
+			}
+
+			require.NoError(t, router.handleMemoryRetrieval(ctx, query, request))
+			assert.Equal(t, tc.want, store.threshold)
+		})
+	}
+}

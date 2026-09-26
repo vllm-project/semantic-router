@@ -124,6 +124,43 @@
           "code": "unsupported_tools_input_examples"
         }
       }
+    },
+    {
+      "name": "message_output_config_effort",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_tokens": 32,
+          "messages": [
+            {
+              "content": [
+                {
+                  "text": "first turn",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            },
+            {
+              "content": [],
+              "output_config": {
+                "effort": "medium"
+              },
+              "role": "system"
+            },
+            {
+              "content": [
+                {
+                  "text": "second turn",
+                  "type": "text"
+                }
+              ],
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        }
+      }
     }
   ]
 }

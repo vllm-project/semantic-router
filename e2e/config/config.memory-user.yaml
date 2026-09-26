@@ -31,6 +31,9 @@ routing:
       - name: custom_threshold_trigger
         operator: OR
         keywords: [THRESHOLD_MARKER]
+      - name: zero_threshold_trigger
+        operator: OR
+        keywords: [MEMORY_ZERO_MARKER]
   decisions:
     # Dedicated route so receipt assertions are not disturbed by other traffic.
     # Retrieval stays fail-open during the backend outage the receipt tests cause.
@@ -115,6 +118,25 @@ routing:
             similarity_threshold: 0.99
             auto_store: true
 
+    # A zero plugin threshold must resolve to the documented 0.70 default.
+    - name: zero_threshold_route
+      description: Route for the unset memory threshold regression test
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+          - type: keyword
+            name: zero_threshold_trigger
+      modelRefs:
+        - model: qwen3
+          use_reasoning: false
+      plugins:
+        - type: memory
+          configuration:
+            enabled: true
+            similarity_threshold: 0
+            auto_store: false
+
     - name: default_route
       description: Default route for memory testing
       priority: 1
@@ -143,6 +165,9 @@ routing:
             auto_store: true
 global:
   services:
+    api:
+      embeddings:
+        enabled: true
     router_replay:
       enabled: true
       store_backend: memory

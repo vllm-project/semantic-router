@@ -12,12 +12,14 @@ Test classes live in the memory_tests package:
   - ChatCompletionsMemoryTest: Memory via /v1/chat/completions
   - MemoryContentIntegrityTest: Content preserved in Milvus (no truncation/corruption)
   - SimilarityThresholdTest: Irrelevant NOT injected, relevant IS injected
+  - MemoryDefaultThresholdTest: Zero plugin threshold resolves to the 0.70 default
   - StaleMemoryTest: Contradicting facts baseline (soft-insert, no contradiction detection)
   - PluginCombinationTest: Memory + system_prompt coexistence
   - MemoryStorageTest: Conversation turns stored in Milvus
   - PerDecisionMemoryDisabledTest: Decision with memory.enabled=false skips retrieval
   - PerDecisionThresholdOverrideTest: Decision-level threshold overrides global default
   - MemoryPersistenceReceiptTest: Persistence receipts and fail-open on backend failure
+  - MemoryPersistenceShutdownTest: Shutdown receipts (MEMORY_TEST_PHASE=shutdown only)
 
 Prerequisites:
   - Milvus running
@@ -29,6 +31,9 @@ To start the deterministic memory fixture:
 
 Usage:
     python e2e/testing/09-memory-features-test.py
+
+    # Shutdown receipts destroy the stack, so they run as their own final phase
+    MEMORY_TEST_PHASE=shutdown python e2e/testing/09-memory-features-test.py
 
     # With custom endpoint
     ROUTER_ENDPOINT=http://localhost:8888 python e2e/testing/09-memory-features-test.py
@@ -44,8 +49,10 @@ import requests
 from memory_tests import (
     ChatCompletionsMemoryTest,
     MemoryContentIntegrityTest,
+    MemoryDefaultThresholdTest,
     MemoryInjectionPipelineTest,
     MemoryPersistenceReceiptTest,
+    MemoryPersistenceShutdownTest,
     MemoryStorageTest,
     PerDecisionMemoryDisabledTest,
     PerDecisionThresholdOverrideTest,
@@ -56,7 +63,11 @@ from memory_tests import (
 )
 from memory_tests.base import HTTP_OK
 from memory_tests.reporting import InventoryResult, summarize_result, test_ids
-from memory_tests.test_persistence_receipts_unit import PersistenceReceiptAssertionsTest
+from memory_tests.test_milvus_fault_proxy import MilvusFaultProxyTest
+from memory_tests.test_persistence_receipts_unit import (
+    PersistenceReceiptAssertionsTest,
+    ShutdownReceiptAssertionsTest,
+)
 
 
 def run_tests():
@@ -88,24 +99,31 @@ def run_tests():
     loader = unittest.TestLoader()
     suite = unittest.TestSuite()
 
-    test_classes = [
-        # P0: Security — run first, fail fast on data leaks
-        UserIsolationTest,
-        # P1: Pipeline correctness
-        MemoryInjectionPipelineTest,
-        ChatCompletionsMemoryTest,
-        MemoryContentIntegrityTest,
-        SimilarityThresholdTest,
-        StaleMemoryTest,
-        PluginCombinationTest,
-        MemoryStorageTest,
-        # P1: Per-decision plugin behavior
-        PerDecisionMemoryDisabledTest,
-        PerDecisionThresholdOverrideTest,
-        PersistenceReceiptAssertionsTest,
-        # P2: Persistence receipts — runs last, stops the memory backend
-        MemoryPersistenceReceiptTest,
-    ]
+    # The shutdown phase ends the router process. The harness runs it last,
+    # after the main suite, against the same invocation-owned stack.
+    if os.environ.get("MEMORY_TEST_PHASE") == "shutdown":
+        test_classes = [ShutdownReceiptAssertionsTest, MemoryPersistenceShutdownTest]
+    else:
+        test_classes = [
+            # P0: Security — run first, fail fast on data leaks
+            UserIsolationTest,
+            # P1: Pipeline correctness
+            MemoryInjectionPipelineTest,
+            ChatCompletionsMemoryTest,
+            MemoryContentIntegrityTest,
+            SimilarityThresholdTest,
+            MemoryDefaultThresholdTest,
+            StaleMemoryTest,
+            PluginCombinationTest,
+            MemoryStorageTest,
+            # P1: Per-decision plugin behavior
+            PerDecisionMemoryDisabledTest,
+            PerDecisionThresholdOverrideTest,
+            MilvusFaultProxyTest,
+            PersistenceReceiptAssertionsTest,
+            # P2: Persistence receipts with controlled write faults
+            MemoryPersistenceReceiptTest,
+        ]
 
     for test_class in test_classes:
         tests = loader.loadTestsFromTestCase(test_class)
