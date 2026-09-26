@@ -29,3 +29,16 @@ Interpretation is limited to this synthetic DEV generator. It may motivate a
 TRAIN-only ablation but cannot establish transfer, JevArena rank, or a 27B
 release. Do not use sealed FINAL or 15-task heldout transfer labels to diagnose
 or select a candidate.
+
+## Private dry-run output correction before public reporting
+
+The initial private execution produced report SHA-256
+`1ab1d053db9e31c7b1a3c1ed7e67661f499269b16d7094198153eb9881d15606`.
+Its `gold_level` histogram unintentionally split Choice by each synthetic
+symbol, yielding a large per-label table. The file remains private and was
+not published or used for selection. The analysis code now excludes Choice
+from `gold_level` while retaining all 1,600 Choice rows in family and paired
+totals; Noul and Score gold-level summaries remain. Revised source SHA-256
+is `46ddfe589a3f7e19bb1952b14886684a514a1b07e527d9e2b03c8695e34ab936`.
+The same three frozen inputs will be rerun once after this correction is
+committed. This is an output-privacy fix, not an opportunity to tune a model.

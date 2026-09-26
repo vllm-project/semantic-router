@@ -44,8 +44,9 @@ def audit(
         family[item["family"]]["n"] += 1
         family[item["family"]]["correct"] += int(correct)
         family[item["family"]]["invalid"] += int(result["status"] != "ok")
-        by_gold[str(target["value"])]["n"] += 1
-        by_gold[str(target["value"])]["correct"] += int(correct)
+        if question["type"] != "choice":
+            by_gold[str(target["value"])]["n"] += 1
+            by_gold[str(target["value"])]["correct"] += int(correct)
         if result["status"] != "ok":
             invalid_reasons[result["reason"]] += 1
         if question["type"] == "score":
