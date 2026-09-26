@@ -15,9 +15,10 @@ html[data-route-kind='blog'],
   --blog-surface-cool: var(--site-surface-alt);
   --blog-surface-tint: var(--site-accent-soft);
   --blog-card-shadow: var(--site-shadow-soft);
-  /* One width for prose, code, images and tables. In rem, not ch: ch resolves
-   * against the consumer's font-size, so prose and code would differ. */
-  --blog-prose: 46rem;
+  /* Post main column fills leftover page-max after the TOC rail (blog has
+   * no right TOC). Children use 100% of that column so title, text, and
+   * media share one width without a dead band on the right. */
+  --blog-prose: 100%;
   /* Wider than the shared --rail: the listing rail carries post titles rather
    * than short nav labels, so 18rem forced most of them onto three lines. */
   --blog-rail: 23rem;
@@ -467,32 +468,28 @@ html[data-route-kind='blog'] body,
   text-transform: uppercase;
 }
 
-/* ---- Article: contents rail, then one prose column, centred as a group ----
- * The column is the article width, not 1fr, so prose stays left-aligned
- * against the rail; the [rail | prose] group is centred inside --page-max so
- * wide screens do not leave the Docs right-TOC slot as an empty band. */
+/* ---- Article: TOC on the shared left edge; article fills the rest ----
+ * Left-aligned like Docs / BrowseLayout (no centred island / left band).
+ * Main track is 1fr so it uses the docs right-TOC slot blog does not have —
+ * a fixed rem column left a large empty right margin after left-align. */
 .site-blog-layout--post .site-blog-layout__inner {
   position: relative;
   display: grid;
-  grid-template-columns: var(--rail) minmax(0, var(--blog-prose));
-  justify-content: center;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  justify-content: start;
   gap: var(--rail-gap);
   align-items: start;
   padding: var(--space-8) var(--gutter) 5.5rem;
 }
 
 /* Only when there is a rail to divide — a post with no headings gets no TOC.
- * The divider follows the centred group: half the free space in the content
- * box, clamped at 0 once the prose track is already shrinking. */
+ * left is gutter + rail because absolute coords are from the padding edge. */
 .site-blog-layout--post .site-blog-layout__inner:has(.site-blog-layout__toc)::before {
   content: '';
   position: absolute;
   top: var(--space-8);
   bottom: 5.5rem;
-  left: calc(
-    var(--gutter) + var(--rail) +
-      max(0px, (100% - 2 * var(--gutter) - var(--rail) - var(--rail-gap) - var(--blog-prose)) / 2)
-  );
+  left: calc(var(--gutter) + var(--rail));
   width: 1px;
   background: var(--site-border);
 }
@@ -506,6 +503,16 @@ html[data-route-kind='blog'] body,
   grid-column: 2;
   grid-row: 1;
   min-width: 0;
+  width: 100%;
+}
+
+/* No headings → no TOC: article uses the full page-max content width. */
+.site-blog-layout--post .site-blog-layout__inner:not(:has(.site-blog-layout__toc)) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.site-blog-layout--post .site-blog-layout__inner:not(:has(.site-blog-layout__toc)) .site-blog-layout__main {
+  grid-column: 1;
 }
 
 .site-blog-layout--post article {
@@ -547,20 +554,22 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-post__header h1 {
-  max-width: var(--blog-prose);
+  max-width: none;
   margin: 0;
   color: var(--blog-ink);
   font-size: clamp(2.1rem, 3.6vw, 2.85rem);
   font-weight: var(--site-font-weight-semibold);
   line-height: 1.15;
   letter-spacing: -0.035em;
-  text-wrap: balance;
+  /* Do not use text-wrap: balance — it forces a mid-title break even when
+   * the full headline fits on one line in the expanded main column. */
+  text-wrap: wrap;
 }
 
 .site-blog-post__meta,
 .site-blog-post__authors,
 .site-blog-post__tags {
-  max-width: var(--blog-prose);
+  max-width: none;
 }
 
 .site-blog-post__meta {
@@ -647,16 +656,10 @@ html[data-route-kind='blog'] body,
   line-height: 1.75;
 }
 
-/* Left-aligned within the prose column so text, code and media share one
- * left edge. Never `margin-inline: auto` here. */
+/* Everything in the main column shares one width — the column IS the measure.
+ * Do not give media max-width: none while text stays capped; that desyncs edges. */
 .site-blog-post__content > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6),
-.site-blog-layout--post .markdown > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6) {
-  max-width: var(--blog-prose);
-  margin-inline: 0;
-}
-
-/* Media fills the column, same width as the prose. MDX wraps images in <p>,
- * so those need naming explicitly or the rule above would catch them. */
+.site-blog-layout--post .markdown > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6),
 .site-blog-post__content > :is(pre, table, figure, .theme-code-block, .tabs-container, details),
 .site-blog-post__content > div:has(> table),
 .site-blog-post__content > div:has(> pre),
@@ -741,6 +744,29 @@ html[data-route-kind='blog'] body,
   height: auto;
   margin-block: 0.35rem;
   border-radius: var(--radius-lg);
+}
+
+/* Markdown images (not ArticleFigure) get the same framed surface so raw
+ * ![…] posts align with figure-wrapped ones. Skip remote badges (contrib.rocks). */
+.site-blog-layout--post .markdown > p:has(> img[src^="/"]),
+.site-blog-layout--post .markdown > p:has(> a[href^="/"] > img),
+.site-blog-post__content > p:has(> img[src^="/"]),
+.site-blog-post__content > p:has(> a[href^="/"] > img) {
+  overflow: hidden;
+  margin-block: 2rem;
+  padding: 1rem;
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+}
+
+.site-blog-layout--post .markdown > p:has(> img[src^="/"]) img,
+.site-blog-layout--post .markdown > p:has(> a[href^="/"] > img) img,
+.site-blog-post__content > p:has(> img[src^="/"]) img,
+.site-blog-post__content > p:has(> a[href^="/"] > img) img {
+  margin-block: 0;
+  border-radius: 0;
+  background: #fff;
 }
 
 .site-blog-post__content table {
@@ -857,7 +883,8 @@ html[data-route-kind='blog'] body,
   }
 
   .site-blog-index__columns,
-  .site-blog-layout--post .site-blog-layout__inner {
+  .site-blog-layout--post .site-blog-layout__inner,
+  .site-blog-layout--post .site-blog-layout__inner:not(:has(.site-blog-layout__toc)) {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-5);
   }
