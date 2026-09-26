@@ -100,3 +100,48 @@ No sealed FINAL, CSS15, or authored release labels enter this screen; even a
 positive development result would need longer-input, multilingual,
 calibration, robustness, release-set and package-parity gates before
 publication.
+
+## Completed bounded result and stop decision
+
+The signed source commit `7585b44ab` passed full local `make check`. An exact
+remote source mirror passed builder/trainer SHA-256 checks. The native-512
+rights-audited CPU builder admitted 3,972/3,974 human English TRAIN rows;
+only two SQuAD2 rows overflowed. Its frozen 512-row export had 384 source
+groups, Choice336/Noul176 and no Score; export SHA-256 was
+`27c7e1c6cfbe55fd2fa7fcda4c680c0f7dbfa90d05b4417ef6fd801e453284f6`.
+The GPU zero-update preflight verified exact source/frozen-head loss parity
+(`max_abs=0`), finite nonzero classifier gradients, no encoder gradients and
+optimizer tensor groups `[0,4]`. Its private SHA-256 was
+`5c757810c35edfffc7237235b1915751709402c200c3ee0bc8208f4743e52a00`;
+the private pre-optimizer freeze receipt SHA-256 was
+`96701cd521c2deccad3322fcf4dc33d079d264cb0a3f27236a14b487e1f2bb60`.
+
+The head-only trainer completed **32/32** updates and saved a native-reloadable
+full checkpoint. Private train result SHA-256 was
+`de999c91672fefa359b1dd5c6306e66badb371b4403b9ea18784e9b999948ddc`;
+final weight SHA-256 was
+`8750c0f799cb2caee152d659721abaa623c3e81c980badb3a98816e2ecfa44c8`.
+The original classifier adapter returned 700 valid candidate SELECT answers;
+prediction/score SHA-256 were
+`6f88d103f2ef3a2ddcc9ea1417e87c676d5a5a56debc4a196dbd386045863bfb`
+and `3cbf31b29c2f19539a6380301081c0ed5e19333d467290286b6e5a8cf280f7df`.
+
+| Same native SELECT700 | Pinned source | Head-only step32 |
+| --- | ---: | ---: |
+| Correct | 372 | 372 |
+| Family-macro accuracy | .387194 | .387194 |
+| Choice correct / 320 | 163 | 163 |
+| Noul correct / 290 | 202 | 202 |
+| Score correct / 90 | 7 | 7 |
+| Invalid | 0 | 0 |
+
+All six SELECT families also retain exactly their source correct counts, and
+**0/700 categorical answers changed**. Classifier tensors did change (largest
+L2 norm `.02096`), with median absolute probability movements near
+`8e-5`–`2.4e-4` by type; this confirms a real but behaviorally tiny update.
+The predeclared +14 correct and +.02 family-macro gates both failed. The
+candidate is a **negative arm**; no typed DEV, human CSS, public subset or
+sealed evaluation was performed. The checkpoint remains private and cannot
+be presented as `dev-2.0-0.6b`. The result is confined to this fixed 32-step,
+low-LR classifier-head recipe; the human subset offers no Score supervision
+and the source still has a native 512-position limit.
