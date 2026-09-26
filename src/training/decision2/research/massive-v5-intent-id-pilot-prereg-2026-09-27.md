@@ -62,6 +62,22 @@ overlap gate before taking the first three. Abort if any stratum has fewer
 than three clean groups. Once frozen, any editorial failure quarantines its
 whole seven-locale group, with **no refill or relabeling** in v5.
 
+### Prospective execution-only clarification before any v5 rows
+
+The first source-audit invocation was stopped after about six minutes of CPU
+time with **no corpus or packet emitted**. It scanned the entire qualified
+pool before only 12 groups were needed. A deterministic rank-prefix search
+may instead audit the first 12 groups per intent, then double the prefix and
+repeat only if fewer than three clean groups per intent remain. It must
+recompute the same original rank order, exact/near exclusions and cross-group
+clone rule each time. This returns the same first three clean groups as the
+full-pool scan; an unscanned lower-rank group cannot replace an already
+selected higher-rank group. Report both total qualified supply and the number
+of groups actually screened. Near comparison may omit reference strings whose
+length makes a match impossible under the original 0.94 method's 8% length
+gate; exact normalized hashes still use every protected string. No label,
+threshold, intent, source, or selection rule changes with this optimization.
+
 MASSIVE's intent ID alone is not ground truth for whether an utterance uniquely
 expresses one of these four actions. An independently qualified reviewer must
 confirm source-key fit and the exclusion of the other three choices. The pilot
