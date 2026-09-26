@@ -97,6 +97,12 @@ and `105c17915da980e4a7a2b2f747baa05c5fe9c9b4eb1bb3ab3a86ae34bafd4283`.
 The v2 manifest is **not** training approval: semantic preservation across
 the other six languages and independent v2 review are still pending.
 
+The sealed v2 six-language review has since found only ten of 18 sampled
+source groups strictly valid in all six translations. The separate
+[`MASSIVE_V3_LOCALE_PILOT.md`](MASSIVE_V3_LOCALE_PILOT.md) preregisters a
+small, still-unapproved localized-option follow-up and records the defect
+taxonomy. Do not treat that pilot as approval of the remaining v2 TRAIN.
+
 These immutable v1/v2 manifests bind the research worktree's original source
 bytes (builder SHA-256
 `b91a1651665e002937cddf72ffe52cfc6f861389371b2b1913cfe26c86ee18ca`,
