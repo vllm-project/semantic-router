@@ -1981,6 +1981,16 @@ providers:
       status: claimed
       verified_at: '2026-09-24'
       source: https://openrouter.ai/amazon/nova-2-lite-v1
+  - catalog: amazon/nova-lite-v1
+    relationship: gateway
+    id: amazon/nova-lite-v1
+    protocols:
+    - openai/chat-completions@1
+    lifecycle: active
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://openrouter.ai/amazon/nova-lite-v1
   - catalog: amazon/nova-premier-v1
     relationship: gateway
     id: amazon/nova-premier-v1
@@ -4519,6 +4529,46 @@ models:
   - efficient
   - multimodal
   released_at: '2025-12-02'
+- id: amazon/nova-lite-v1
+  display_name: Amazon Nova Lite
+  description: Amazon's low-cost Nova 1 multimodal model for fast image, video, and text processing.
+  kind: physical
+  publisher: Amazon
+  presentation:
+    logo: package:nova
+    monogram: AWS
+    monochrome: false
+  distribution:
+    type: proprietary_api
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html
+  family: nova-1
+  lifecycle: active
+  limits:
+    context_window_size: 300000
+    max_output_tokens: 5000
+  capabilities:
+  - chat
+  - tools
+  - vision
+  - video
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    - video
+    output:
+    - text
+  verification:
+    authority: Amazon
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-amazon-nova-lite.html
+  tags:
+  - proprietary
+  - efficient
+  - multimodal
+  released_at: '2024-12-03'
 - id: amazon/nova-premier-v1
   display_name: Amazon Nova Premier
   description: Amazon's most capable Nova 1 multimodal model for complex tasks.
@@ -11015,6 +11065,150 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/evaluations/gpqa-diamond
+    redistributable: true
+- id: independent/nova-lite-critpt@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: artificial-analysis/critpt@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    score: 0
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-artificial-analysis-long-context-reasoning@1.1.0
+  model: amazon/nova-lite-v1
+  benchmark: artificial-analysis/lcr@1.1.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    score: 0.19
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-omniscience@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: artificial-analysis/omniscience@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    index: -42.166666666666664
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-humanitys-last-exam@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: independent-text-only
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.0429
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-gpqa-diamond@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: independent-standard
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.433333333333333
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-ifbench@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: allenai/ifbench@1.0.0
+  benchmark_profile: prompt-loose
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.341496598639456
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-aime-2025@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: matharena/aime@2025.0.0
+  benchmark_profile: pass-at-1
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    pass_at_1: 0.07
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
+    redistributable: true
+- id: independent/nova-lite-mmmu-pro@1.0.0
+  model: amazon/nova-lite-v1
+  benchmark: mmmu-benchmark/mmmu-pro@1.0.0
+  benchmark_profile: standard-10
+  reasoning_effort: default
+  subject:
+    source_model: Nova Lite
+    source_model_slug: nova-lite
+    run_kind: independent
+  metrics:
+    accuracy: 0.378034682080925
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: third_party
+    verification: imported
+    source: https://artificialanalysis.ai/models/nova-lite
     redistributable: true
 - id: independent/claude-fable-5-1-high-aa-briefcase@1.0.0
   model: anthropic/claude-fable-5.1
@@ -38544,6 +38738,41 @@ index_results:
   domains:
     frontier_reasoning: 2.87303058387396
     scientific_reasoning: 60.303030303030305
+- model: amazon/nova-lite-v1
+  reasoning_effort: default
+  index: vllm-sr/reasoning@1.0.0
+  status: available
+  score: 23.81166666666665
+  coverage: 1.0
+  components:
+  - weight: 0.5
+    status: available
+    value: 0.433333333333333
+    normalized: 0.433333333333333
+    benchmark: idavidrein/gpqa-diamond@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-standard
+    - published-standard
+    evaluation: independent/nova-lite-gpqa-diamond@1.0.0
+    benchmark_profile: independent-standard
+  - weight: 0.5
+    status: available
+    value: 0.0429
+    normalized: 0.0429
+    benchmark: cais/humanitys-last-exam@1.0.0
+    metric: accuracy
+    benchmark_profiles:
+    - independent-text-only
+    - text-only
+    evaluation: independent/nova-lite-humanitys-last-exam@1.0.0
+    benchmark_profile: independent-text-only
+  provenance:
+  - independent/nova-lite-gpqa-diamond@1.0.0
+  - independent/nova-lite-humanitys-last-exam@1.0.0
+  domains:
+    frontier_reasoning: 4.29
+    scientific_reasoning: 43.3333333333333
 - model: amazon/nova-premier-v1
   reasoning_effort: disabled
   index: vllm-sr/reasoning@1.0.0
