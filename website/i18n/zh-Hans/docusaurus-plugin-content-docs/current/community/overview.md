@@ -1,7 +1,7 @@
 ---
 title: 贡献
 translation:
-  source_commit: "867155c924b6527d6a412e1412ce712a9e5cc9b8"
+  source_commit: "b45450dfed60bc09e45f595278fe1ab8e0e3ee97"
   source_file: "docs/community/overview.md"
   outdated: false
 ---

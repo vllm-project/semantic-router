@@ -101,24 +101,27 @@ vllm-sr config validate --config config.yaml
 vllm-sr serve --config config.yaml
 ```
 
-要在 CUDA 上运行受支持的 Router 侧 ONNX 嵌入和分类器，使用 `--platform nvidia`。CLI 默认选择并拉取已发布的 `ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest` 镜像：
+要在 CUDA 上运行受支持的 Router 侧本地嵌入和分类器，使用 `--platform nvidia`。稳定版 CLI 会选择对应的发布镜像（例如 CLI `0.4.0` 使用 `vllm-sr-cuda:v0.4.0`）。开发版本的 CLI 默认使用 `:latest`，除非显式指定镜像：
 
 ```bash
 vllm-sr config validate --config config.yaml
 vllm-sr serve --platform nvidia --config config.yaml
 ```
 
-对于源码检出，先构建维护中的 CUDA 镜像。`ifnotpresent` 策略会保留该本地构建，同时仍允许 CLI 获取缺失的配套镜像：
+对于源码检出，先构建维护中的 CUDA 镜像，并显式选择它的 `latest` tag。即使采用可编辑安装，只要包版本号是稳定版本，CLI 默认仍会选择发布 tag。设置镜像覆盖后，`ifnotpresent` 会复用本地构建，同时允许 CLI 获取缺失的配套镜像：
 
 ```bash
 VLLM_SR_PLATFORM=nvidia make vllm-sr-build
-vllm-sr serve \
+VLLM_SR_IMAGE=ghcr.io/vllm-project/semantic-router/vllm-sr-cuda:latest \
+  vllm-sr serve \
   --platform nvidia \
   --config config.yaml \
   --image-pull-policy ifnotpresent
 ```
 
-在生产中固定发行标签或 digest。如果 Router 与 vLLM 共享 GPU，请在有代表性的并发下测量内存和延迟；将小型、batch-one 的信号模型移到 CUDA 并不总是能改善端到端延迟。
+如果覆盖了构建 tag 或仓库，请将 `VLLM_SR_IMAGE` 设为实际构建的镜像，并通过 `VLLM_SR_DASHBOARD_IMAGE` 指定自定义配套镜像。
+
+当部署需要不可变的镜像标识时，固定 digest。如果 Router 与 vLLM 共享 GPU，请在有代表性的并发下测量内存和延迟；将小型、batch-one 的信号模型移到 CUDA 并不总是能改善端到端延迟。
 
 ## 验证已路由路径
 

@@ -1,7 +1,7 @@
 ---
 title: 开发指南
 translation:
-  source_commit: "e56591a9cb24f073bf159927e87116ba6d278741"
+  source_commit: "b45450dfed60bc09e45f595278fe1ab8e0e3ee97"
   source_file: "docs/community/development.md"
   outdated: false
 ---
