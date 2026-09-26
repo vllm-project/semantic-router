@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import collections
+import difflib
+import itertools
 import json
 import unittest
 
@@ -83,7 +85,6 @@ class ScoreCurriculumV2Tests(unittest.TestCase):
         )
 
     def test_route_graphs_require_traversal_not_counts(self) -> None:
-        rows = [row for row in self.rows if row["family"] == "score_route_depth"]
         report = curriculum.shortcut_audit(self.rows)
         self.assertEqual(report["route_depth"]["count_only_correct"], 80)
         for group in self.groups.values():
@@ -116,7 +117,6 @@ class ScoreCurriculumV2Tests(unittest.TestCase):
             )
 
     def test_streak_order_changes_with_constant_counts(self) -> None:
-        rows = [row for row in self.rows if row["family"] == "score_timely_streak"]
         report = curriculum.shortcut_audit(self.rows)
         self.assertEqual(report["timely_streak"]["count_only_correct"], 80)
         for group in self.groups.values():
@@ -150,6 +150,24 @@ class ScoreCurriculumV2Tests(unittest.TestCase):
                     for state in states.values()
                 )
             )
+
+    def test_cross_group_same_level_states_are_not_near_clones(self) -> None:
+        by_cell = collections.defaultdict(list)
+        for row in self.rows:
+            by_cell[(row["family"], row["label"])].append(
+                json.dumps(
+                    row["state"],
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                )
+            )
+        for cell, states in by_cell.items():
+            closest = max(
+                difflib.SequenceMatcher(None, left, right).ratio()
+                for left, right in itertools.combinations(states, 2)
+            )
+            self.assertLess(closest, 0.94, cell)
 
 
 if __name__ == "__main__":
