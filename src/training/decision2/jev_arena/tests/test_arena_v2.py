@@ -38,6 +38,10 @@ class ArenaV2Test(unittest.TestCase):
                         "gold_sha256": "a" * 64,
                         "model": {"id": model_id, "revision": revision},
                         "macro_family_accuracy": quality,
+                        "by_type": {
+                            kind: {"accuracy_all": quality}
+                            for kind in ("choice", "noul", "score")
+                        },
                         "pairs": {
                             name: {"joint_accuracy_all": quality}
                             for name in (
@@ -52,6 +56,13 @@ class ArenaV2Test(unittest.TestCase):
                     css,
                     {
                         "gold_sha256": "b" * 64,
+                        "tasks": {
+                            f"transfer_{index:02d}": {
+                                "role": "evaluation",
+                                "macro_f1_all": quality,
+                            }
+                            for index in range(15)
+                        },
                         "roles": {
                             "evaluation": {
                                 "items": 6547,
@@ -127,6 +138,7 @@ class ArenaV2Test(unittest.TestCase):
                 result["models"][0]["coverage"]["effective_text_answers"], 10715
             )
             self.assertTrue(all(row["pareto_frontier"] for row in result["models"]))
+            self.assertEqual(len(result["models"][0]["task_scores"]["transfer"]), 15)
             changed = json.loads(Path(roster[1]["sealed_authored_report"]).read_text())
             changed["quality_gate"]["status"] = "blocked"
             write(Path(roster[1]["sealed_authored_report"]), changed)

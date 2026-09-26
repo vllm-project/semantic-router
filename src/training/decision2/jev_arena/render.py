@@ -36,10 +36,10 @@ PAPER = "#fff9ef"
 GRID = "#dce3f1"
 
 
-def _svg(height: int, title: str, description: str) -> list[str]:
+def _svg(height: int, title: str, description: str, *, width: int = WIDTH) -> list[str]:
     return [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{height}" '
-        f'viewBox="0 0 {WIDTH} {height}" role="img" aria-labelledby="title desc">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}" role="img" aria-labelledby="title desc">',
         f'<title id="title">{escape(title)}</title>',
         f'<desc id="desc">{escape(description)}</desc>',
         f'<rect width="100%" height="100%" fill="{PAPER}"/>',
@@ -319,6 +319,89 @@ def matrix_svg(report: dict[str, Any]) -> str:
     return "\n".join(parts) + "\n"
 
 
+def task_matrix_svg(report: dict[str, Any]) -> str:
+    """Show the three typed tasks and every transfer task on one model panel."""
+    if report.get("schema_version") != "jevarena-ranking/2":
+        raise ValueError("Task matrix requires the six-axis JevArena report")
+    rows = _models(report)
+    typed = ("choice", "noul", "score")
+    first = rows[0].get("task_scores", {})
+    transfer = sorted(first.get("transfer", {}))
+    expected = 15 if report.get("phase") == "release" else 3
+    if set(first.get("typed", {})) != set(typed) or len(transfer) != expected:
+        raise ValueError("Task matrix lacks the frozen typed/transfer task panel")
+    for row in rows:
+        scores = row.get("task_scores", {})
+        if set(scores.get("typed", {})) != set(typed) or set(
+            scores.get("transfer", {})
+        ) != set(transfer):
+            raise ValueError("Task matrix models do not share the same task panel")
+    columns = [("typed", kind, f"Typed / {kind.title()}") for kind in typed] + [
+        ("transfer", task, f"Transfer / {task.replace('_', ' ')}") for task in transfer
+    ]
+    x0, pitch, cell_width = 275, 88, 81
+    width = max(WIDTH, x0 + pitch * len(columns) + 35)
+    height = 262 + 45 * len(rows)
+    caveat = (
+        "Typed cells: accuracy; transfer cells: macro-F1 including invalid answers. "
+        "Both use the same frozen model panel."
+    )
+    parts = _svg(height, "JevArena model by task matrix", caveat, width=width)
+    parts.append(_text(32, 42, "JevArena: model by task", size=24, weight=700))
+    parts.append(
+        _text(
+            32,
+            67,
+            "Three typed tasks and individual human transfer tasks · percentages",
+            size=13,
+            fill=MUTED,
+        )
+    )
+    for index, (_, _, label) in enumerate(columns):
+        x = x0 + index * pitch + cell_width / 2
+        parts.append(
+            f'<text x="{x:.1f}" y="194" transform="rotate(-55 {x:.1f} 194)" '
+            f'fill="{INK}" font-family="system-ui, sans-serif" font-size="11" '
+            f'font-weight="600">{escape(label)}</text>'
+        )
+    for row_index, row in enumerate(rows):
+        y = 207 + row_index * 45
+        parts.append(
+            _text(32, y + 19, f'{row["rank"]}. {row["label"]}', size=13, weight=600)
+        )
+        for column_index, (axis, key, _) in enumerate(columns):
+            score = row["task_scores"][axis][key]
+            if (
+                type(score) not in (float, int)
+                or not math.isfinite(score)
+                or not 0 <= score <= 1
+            ):
+                raise ValueError("Invalid task score")
+            red = round(255 * (1 - score) + 49 * score)
+            green = round(231 * (1 - score) + 91 * score)
+            blue = round(197 * (1 - score) + 255 * score)
+            fill = f"#{red:02x}{green:02x}{blue:02x}"
+            x = x0 + column_index * pitch
+            parts.append(
+                f'<rect x="{x}" y="{y}" width="{cell_width}" height="29" '
+                f'rx="7" fill="{fill}"/>'
+            )
+            parts.append(
+                _text(
+                    x + cell_width / 2,
+                    y + 20,
+                    f"{100 * score:.1f}",
+                    size=12,
+                    weight=700,
+                    anchor="middle",
+                    fill="#fff" if score >= 0.85 else INK,
+                )
+            )
+    parts.append(_text(32, height - 24, caveat, size=11, fill=MUTED))
+    parts.append("</svg>")
+    return "\n".join(parts) + "\n"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, required=True)
@@ -329,6 +412,8 @@ def main() -> None:
     products = {"rank": ranking_svg(report), "pareto": pareto_svg(report)}
     if report.get("schema_version") in ("jevarena-ranking/1", "jevarena-ranking/2"):
         products["matrix"] = matrix_svg(report)
+    if report.get("schema_version") == "jevarena-ranking/2":
+        products["task-matrix"] = task_matrix_svg(report)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     for suffix, svg in products.items():
         destination = args.output_dir / f"{args.prefix}-{suffix}.svg"

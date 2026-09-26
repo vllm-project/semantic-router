@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from jev_arena.render import matrix_svg, pareto_svg, ranking_svg
+from jev_arena.render import matrix_svg, pareto_svg, ranking_svg, task_matrix_svg
 
 
 class RenderTest(unittest.TestCase):
@@ -89,6 +89,10 @@ class RenderTest(unittest.TestCase):
                         "sealed_authored": 0.9,
                         "robustness": 0.8,
                     },
+                    "task_scores": {
+                        "typed": {"choice": 0.8, "noul": 0.7, "score": 0.6},
+                        "transfer": {f"task_{index:02d}": 0.5 for index in range(15)},
+                    },
                 },
             ],
         }
@@ -104,6 +108,9 @@ class RenderTest(unittest.TestCase):
             self.assertIn(label, matrix)
         self.assertIn("6 separate axes", matrix)
         self.assertIn("sealed authored quality gate required", ranking_svg(report))
+        task_matrix = task_matrix_svg(report)
+        self.assertIn("Transfer / task 14", task_matrix)
+        self.assertIn("Typed / Choice", task_matrix)
 
 
 if __name__ == "__main__":

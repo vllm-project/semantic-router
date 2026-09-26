@@ -100,6 +100,11 @@ CSS pilot and the two public panels. All panel prompt/target/gold hashes must
 match across a rank roster. The authored axis is unavailable until its source,
 oracle, ambiguity, human review and training-overlap quality gate passes.
 The release aggregate cannot be produced from an incomplete roster.
+The ranker carries individual Choice/Noul/Score accuracy and each human
+transfer task's macro-F1 alongside its six scalar axes. `render.py` emits
+rank, actual-parameter-count Pareto, six-axis matrix, and model-by-task
+matrix SVGs from the same ranked report. The task matrix names the different
+cell metrics and exposes every transfer task rather than only their median.
 
 The v1 four-axis development ranking above is an earlier protocol. It can
 guide exploration but its scalar is not interchangeable with v2. The

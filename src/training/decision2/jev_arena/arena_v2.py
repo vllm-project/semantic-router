@@ -59,7 +59,9 @@ ROSTER_FIELDS = {
 
 def _validate_panel(
     reports: dict[str, dict[str, Any]], phase: str, model_id: str, revision: str
-) -> tuple[dict[str, float], dict[str, str], dict[str, int]]:
+) -> tuple[
+    dict[str, float], dict[str, str], dict[str, int], dict[str, dict[str, float]]
+]:
     synthetic, css, public, dbv4, authored = (
         reports[name] for name in ("synthetic", "css", "public", "dbv4", "authored")
     )
@@ -133,6 +135,21 @@ def _validate_panel(
         ),
         "robustness": robust,
     }
+    by_type = synthetic.get("by_type", {})
+    if set(by_type) != {"choice", "noul", "score"}:
+        raise ValueError("Typed report lacks all three task-type scores")
+    typed_tasks = {
+        kind: _score(by_type[kind].get("accuracy_all"), f"typed {kind}")
+        for kind in ("choice", "noul", "score")
+    }
+    css_tasks = {
+        name: _score(task.get("macro_f1_all"), f"transfer {name}")
+        for name, task in css.get("tasks", {}).items()
+        if task.get("role") == ("evaluation" if phase == "release" else "pilot")
+    }
+    if len(css_tasks) != expected_css[1]:
+        raise ValueError("Human transfer task matrix has incomplete task coverage")
+    task_scores = {"typed": typed_tasks, "transfer": dict(sorted(css_tasks.items()))}
     panel_hashes = {
         "synthetic_gold": synthetic.get("gold_sha256"),
         "css_gold": css.get("gold_sha256"),
@@ -164,7 +181,7 @@ def _validate_panel(
             + authored_items
         ),
     }
-    return axes, panel_hashes, coverage
+    return axes, panel_hashes, coverage, task_scores
 
 
 def rank(manifest_path: Path, phase: str) -> dict[str, Any]:
@@ -177,6 +194,7 @@ def rank(manifest_path: Path, phase: str) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     seen: set[str] = set()
     common: dict[str, str] | None = None
+    common_task_names: set[str] | None = None
     for entry in models:
         if not isinstance(entry, dict) or set(entry) != ROSTER_FIELDS:
             raise ValueError("Incomplete JevArena v2 model entry")
@@ -200,13 +218,18 @@ def rank(manifest_path: Path, phase: str) -> dict[str, Any]:
             )
         }
         reports = {name: _load(path) for name, path in paths.items()}
-        axes, panel_hashes, coverage = _validate_panel(
+        axes, panel_hashes, coverage, task_scores = _validate_panel(
             reports, phase, entry["model_id"], entry["revision"]
         )
         if common is None:
             common = panel_hashes
         elif panel_hashes != common:
             raise ValueError(f"{key}: panel digest differs from roster")
+        task_names = set(task_scores["transfer"])
+        if common_task_names is None:
+            common_task_names = task_names
+        elif task_names != common_task_names:
+            raise ValueError(f"{key}: transfer task names differ from roster")
         score = 100 * math.prod(axes.values()) ** (1 / len(AXES))
         rows.append(
             {
@@ -217,6 +240,7 @@ def rank(manifest_path: Path, phase: str) -> dict[str, Any]:
                 "revision": entry["revision"],
                 "size_b": float(size) if size is not None else None,
                 "axes": axes,
+                "task_scores": task_scores,
                 "score": score,
                 "coverage": coverage,
                 "report_sha256": {name: _sha(path) for name, path in paths.items()},
