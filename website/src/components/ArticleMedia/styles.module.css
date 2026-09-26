@@ -31,6 +31,12 @@
   aspect-ratio: 16 / 9;
 }
 
+.figure {
+  width: 100%;
+  max-width: min(100%, 40rem);
+  margin-inline: auto;
+}
+
 .figure .imageLink {
   display: block;
   overflow: hidden;
@@ -43,7 +49,7 @@
   display: block;
   width: 100%;
   height: auto;
-  max-height: 42rem;
+  max-height: 28rem;
   margin: 0;
   padding: 1rem;
   object-fit: contain;
