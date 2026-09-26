@@ -37,6 +37,23 @@ class ScoreCurriculumV5AbstractTests(unittest.TestCase):
                 )
             )
 
+    def test_balanced_target_position_has_exact_chance_prior(self) -> None:
+        groups = [
+            group
+            for index in range(abstract.GROUPS_PER_FAMILY)
+            if (group := abstract._group(index)) is not None
+        ]
+        self.assertEqual(len(groups), abstract.GROUPS_PER_FAMILY)
+        for language, expected_groups in (("en", 60), ("zh", 21)):
+            scoped = [group for group in groups if group.language == language]
+            self.assertEqual(len(scoped), expected_groups)
+            self.assertEqual(
+                abstract._full_feature_majority_correct(
+                    scoped, lambda group, level: group.target_positions[level]
+                ),
+                expected_groups,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

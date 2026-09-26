@@ -152,6 +152,17 @@ def _heldout_correct(groups: list[Group], feature: Feature) -> int:
     return correct
 
 
+def _full_feature_majority_correct(groups: list[Group], feature: Feature) -> int:
+    """Score an invariant feature's empirical prior without LOO anti-bias."""
+    lookup: dict[object, collections.Counter[int]] = collections.defaultdict(
+        collections.Counter
+    )
+    for group in groups:
+        for level in range(3):
+            lookup[feature(group, level)][level] += 1
+    return sum(max(counts.values()) for counts in lookup.values())
+
+
 def _feature_results(groups: list[Group]) -> dict[str, object]:
     scopes = {
         "all": groups,
@@ -185,13 +196,13 @@ def _feature_results(groups: list[Group]) -> dict[str, object]:
             "rows": len(scoped) * 3,
             "max_40pct_correct": (len(scoped) * 3 * 2) // 5,
             "by_position": positions,
-            "target_position_correct": _heldout_correct(
+            "target_position_correct": _full_feature_majority_correct(
                 scoped, lambda group, level: group.target_positions[level]
             ),
-            "unweighted_sum_correct": _heldout_correct(
+            "unweighted_sum_correct": _full_feature_majority_correct(
                 scoped, lambda group, level: sum(group.plans[level].marks)
             ),
-            "max_product_correct": _heldout_correct(
+            "max_product_correct": _full_feature_majority_correct(
                 scoped,
                 lambda group, level: max(
                     weight * mark
