@@ -82,6 +82,49 @@ class ScoreCurriculumBlindPacketV2Tests(unittest.TestCase):
                 manifest["packet_sha256"], pilot.sha_file(packet_dir / "packet.jsonl")
             )
 
+    def test_existing_private_map_parent_is_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            train = root / "train.jsonl"
+            train.write_bytes(pilot.jsonl_bytes(curriculum.generate()))
+            salt = root / "private" / "salt.bin"
+            salt.parent.mkdir(mode=0o700)
+            salt.write_bytes(b"s" * 32)
+            private_map = salt.parent / "id-map.jsonl"
+            manifest = blind.build(
+                argparse.Namespace(
+                    train=train,
+                    expected_train_sha256=pilot.sha_file(train),
+                    private_salt=salt,
+                    output_dir=root / "review",
+                    map_output=private_map,
+                )
+            )
+            self.assertEqual(manifest["packet_rows"], 144)
+            self.assertTrue(private_map.exists())
+
+    def test_rejects_public_map_parent_before_writing_packet(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            train = root / "train.jsonl"
+            train.write_bytes(pilot.jsonl_bytes(curriculum.generate()))
+            salt = root / "salt.bin"
+            salt.write_bytes(b"s" * 32)
+            map_dir = root / "world-readable"
+            map_dir.mkdir(mode=0o755)
+            packet_dir = root / "review"
+            with self.assertRaisesRegex(PermissionError, "owner-only"):
+                blind.build(
+                    argparse.Namespace(
+                        train=train,
+                        expected_train_sha256=pilot.sha_file(train),
+                        private_salt=salt,
+                        output_dir=packet_dir,
+                        map_output=map_dir / "id-map.jsonl",
+                    )
+                )
+            self.assertFalse(packet_dir.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

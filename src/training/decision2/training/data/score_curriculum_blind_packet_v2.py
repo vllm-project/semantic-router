@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import hmac
 import json
+import stat
 from pathlib import Path
 from typing import Any
 
@@ -80,8 +81,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         raise AssertionError("Review packet includes unintended fields")
     packet_bytes = pilot.jsonl_bytes(public)
     mapping_bytes = pilot.jsonl_bytes(private_map)
+    map_output.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+    if stat.S_IMODE(map_output.parent.stat().st_mode) & 0o077:
+        raise PermissionError("Private map directory must be owner-only")
     output_dir.mkdir(parents=True, mode=0o700)
-    map_output.parent.mkdir(parents=True, mode=0o700)
     pilot._atomic_write(output_dir / "packet.jsonl", packet_bytes)
     pilot._atomic_write(map_output, mapping_bytes)
     manifest = {
