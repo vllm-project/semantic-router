@@ -67,16 +67,18 @@ choose one per weighted
 score tier only if **no individual signal position has three distinct marks
 across the triplet** or a strictly increasing/decreasing mark sequence by
 level. Keep the strongest individual product fixed; reject/reseed groups
-that cannot meet all hard constraints. Counterbalance the remaining binary
-mark changes across label and position/weight buckets over complete
-three-group cycles; conditional mark histograms per position and weight
-bucket must match across labels, with at most one count of discrepancy only
-for an unavoidable remainder. A single signal cannot fully rank a triplet,
-and no named/positioned signal should become a corpus-level label proxy.
+that cannot meet all hard constraints. Rotate the remaining binary mark
+changes across positions, weights and names in complete three-group cycles,
+and publish the conditional mark histograms. A single signal cannot fully
+rank a triplet; the frozen group-held-out single-signal classifier gate below
+limits corpus-level proxies.
 It is mathematically impossible to keep every signal's own mark constant
 within a triplet while changing a fixed-weight total; the hard invariant is
-the *group marks multiset*, and per-signal label marginals are balanced over
-groups. The independent oracle must recompute all products, sum and tiers.
+the *group marks multiset*. Exact equality of mark histograms for **every
+weight bucket** across labels would also make mean weighted totals equal
+across labels, contradicting the strictly ordered tiers. Such equality is
+therefore monitored where attainable, not a hard gate. The independent
+oracle must recompute all products, sum and tiers.
 
 ## Frozen gates before any review or training
 
