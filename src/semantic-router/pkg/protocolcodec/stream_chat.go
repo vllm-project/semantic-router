@@ -10,10 +10,12 @@ import (
 
 type chatStreamDecoder struct {
 	streamState
-	framer             sseFramer
-	contentIndexes     map[chatContentKey]int
-	nextContentIndexes map[int]int
-	toolKinds          map[int]llmprotocol.ToolKind
+	framer               sseFramer
+	contentIndexes       map[chatContentKey]int
+	nextContentIndexes   map[int]int
+	toolKinds            map[int]llmprotocol.ToolKind
+	providerReported     bool
+	nativeReasonReported bool
 }
 
 type chatContentKey struct {
@@ -45,6 +47,7 @@ type chatChunkWire struct {
 	Object            string                    `json:"object,omitempty"`
 	Created           int64                     `json:"created,omitempty"`
 	Model             string                    `json:"model,omitempty"`
+	Provider          *string                   `json:"provider,omitempty"`
 	Choices           []chatChunkChoiceWire     `json:"choices,omitempty"`
 	Usage             *chatUsageWire            `json:"usage,omitempty"`
 	Moderation        json.RawMessage           `json:"moderation,omitempty"`
@@ -87,13 +90,14 @@ func (wire chatChunkWire) hasTokenizedToolArguments() bool {
 }
 
 type chatChunkChoiceWire struct {
-	Index         int                 `json:"index"`
-	Delta         chatChunkDeltaWire  `json:"delta"`
-	FinishReason  *string             `json:"finish_reason"`
-	Logprobs      *chatLogprobsWire   `json:"logprobs,omitempty"`
-	StopReason    *chatStopReasonWire `json:"stop_reason,omitempty"`
-	TokenIDs      []int64             `json:"token_ids,omitempty"`
-	RoutedExperts *chatNullOnlyWire   `json:"routed_experts,omitempty"`
+	Index              int                 `json:"index"`
+	Delta              chatChunkDeltaWire  `json:"delta"`
+	FinishReason       *string             `json:"finish_reason"`
+	NativeFinishReason *string             `json:"native_finish_reason,omitempty"`
+	Logprobs           *chatLogprobsWire   `json:"logprobs,omitempty"`
+	StopReason         *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs           []int64             `json:"token_ids,omitempty"`
+	RoutedExperts      *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
 
 type chatChunkDeltaWire struct {
@@ -181,6 +185,21 @@ func (decoder *chatStreamDecoder) appendProviderChunkDiagnostics(
 	chunk chatChunkWire,
 	diagnostics llmprotocol.Diagnostics,
 ) llmprotocol.Diagnostics {
+	if chunk.Provider != nil && !decoder.providerReported {
+		appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+			"stream.provider", "upstream provider identity is not model output")
+		decoder.providerReported = true
+	}
+	if !decoder.nativeReasonReported {
+		for _, choice := range chunk.Choices {
+			if choice.NativeFinishReason != nil {
+				appendProviderFieldOmission(&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
+					"stream.choices.native_finish_reason", "provider-native finish detail has no neutral representation")
+				decoder.nativeReasonReported = true
+				break
+			}
+		}
+	}
 	if chunk.hasTokenizedToolArguments() {
 		appendProviderFieldOmission(
 			&diagnostics, decoder.policy, llmprotocol.OpenAIChatV1,
@@ -499,9 +518,10 @@ func (decoder *chatStreamDecoder) completeChoice(reason *string) ([]llmprotocol.
 	if reason == nil {
 		return nil, nil
 	}
-	decoder.stop = decodeChatStop(*reason)
+	stop := decodeChatStop(*reason)
 	if len(decoder.items) == 0 {
-		if decoder.stop == llmprotocol.StopToolCall {
+		decoder.stop = stop
+		if stop == llmprotocol.StopToolCall {
 			return nil, invalidProviderResponse("stream_tool_output_missing", "Chat stream ended with tool_calls but emitted no tool call")
 		}
 		started, err := decoder.next(llmprotocol.Event{
@@ -523,6 +543,16 @@ func (decoder *chatStreamDecoder) completeChoice(reason *string) ([]llmprotocol.
 			active = append(active, itemIndex)
 		}
 	}
+	// OpenRouter repeats the finish reason in its content-free final usage
+	// chunk. Accept the repeat without emitting a second completion, but keep
+	// rejecting a changed terminal reason.
+	if len(active) == 0 {
+		if decoder.stop != stop {
+			return nil, invalidProviderResponse("stream_finish_reason_changed", "Chat stream changed its finish reason")
+		}
+		return nil, nil
+	}
+	decoder.stop = stop
 	sort.Ints(active)
 	events := make([]llmprotocol.Event, 0, len(active))
 	for _, itemIndex := range active {

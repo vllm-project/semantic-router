@@ -86,7 +86,8 @@ type Content struct {
 // CacheDirective marks a request block or tool definition as an explicit
 // prompt-cache boundary. It is semantic request state rather than an opaque
 // provider extension, so same-format routing mutations cannot silently erase
-// it. A target format without cache directives must reject the translation.
+// it. A target format without cache directives must reject the translation
+// unless a narrow cross-format projection reports the omitted boundaries.
 type CacheDirective struct {
 	Type string
 	TTL  string
@@ -102,9 +103,10 @@ type Citation struct {
 }
 
 type Message struct {
-	ID      string
-	Role    Role
-	Content []Content
+	ID              string
+	Role            Role
+	Content         []Content
+	ReasoningEffort string // Anthropic per-message output_config.effort.
 }
 
 type InstructionBlock struct {

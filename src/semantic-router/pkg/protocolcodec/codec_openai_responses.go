@@ -327,6 +327,9 @@ func decodeResponsesReasoningRequest(reasoning *responsesReasoningWire, request 
 	if err := json.Unmarshal(reasoning.Summary, &request.ReasoningSummary); err != nil {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_reasoning_summary", "reasoning summary must be auto, concise, or detailed", err)
 	}
+	if request.ReasoningSummary == "" {
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_reasoning_summary", "reasoning summary must be auto, concise, or detailed", nil)
+	}
 	return nil
 }
 

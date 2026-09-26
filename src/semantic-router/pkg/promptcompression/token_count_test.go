@@ -3,6 +3,7 @@ package promptcompression
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -68,5 +69,26 @@ func TestCompressAppliesBudgetToJSONAndCode(t *testing.T) {
 				t.Errorf("CompressedTokens = %d, want at most %d", result.CompressedTokens, budget)
 			}
 		})
+	}
+}
+
+func TestCompressAppliesBudgetToChinesePrefixAndCompactJSON(t *testing.T) {
+	// The prefix shares a whitespace-delimited field with the JSON, so counting
+	// only pure non-CJK fields would treat the entire payload as one word.
+	payload := strings.Repeat(`{"id":"req_0001","status":"ok","latency_ms":157},`, 60)
+	const budget = 256
+	const measuredJSONTokens = 1021 // cl100k_base, without the Chinese prefix
+	prompt := "请检查" + payload + "。 请列出请求编号。"
+
+	if got := CountTokensApprox(prompt); got < measuredJSONTokens*3/4 {
+		t.Fatalf("mixed prompt estimated at %d tokens; JSON alone measures %d", got, measuredJSONTokens)
+	}
+	result := Compress(prompt, DefaultConfig(budget))
+	if result.Ratio >= 1 {
+		t.Fatalf("Compress kept the mixed prompt at an estimated %d tokens, over the %d-token budget",
+			result.OriginalTokens, budget)
+	}
+	if result.CompressedTokens > budget {
+		t.Errorf("CompressedTokens = %d, want at most %d", result.CompressedTokens, budget)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 const azureIngressTestConfig = `
@@ -67,6 +68,63 @@ func TestValidateAzureDeploymentPaths(t *testing.T) {
 	}
 }
 
+func TestValidateAzureInferencePaths(t *testing.T) {
+	router := &OpenAIRouter{ResponseAPIFilter: NewResponseAPIFilter(NewMockResponseStore())}
+	tests := []struct {
+		method string
+		path   string
+		status typev3.StatusCode
+	}{
+		{method: "POST", path: "/openai/responses?api-version=2025-04-01-preview"},
+		{method: "POST", path: "/openai/responses?api-version=other"},
+		{method: "POST", path: "/openai/v1/responses"},
+		{method: "POST", path: "/openai/v1/chat/completions"},
+		{method: "GET", path: "/openai/responses?api-version=2025-04-01-preview", status: typev3.StatusCode_MethodNotAllowed},
+		{method: "GET", path: "/openai/v1/responses", status: typev3.StatusCode_MethodNotAllowed},
+		{method: "GET", path: "/openai/v1/chat/completions", status: typev3.StatusCode_MethodNotAllowed},
+		{method: "POST", path: "/openai/v1/embeddings", status: typev3.StatusCode_NotFound},
+		{method: "POST", path: "/openai/v1/responses/resp_123", status: typev3.StatusCode_NotFound},
+		{method: "GET", path: "/openai/v1/responses/resp_123", status: typev3.StatusCode_NotFound},
+		{method: "POST", path: "/openai/responses/resp_123", status: typev3.StatusCode_NotFound},
+		{method: "POST", path: "/openai/v1/chat/completions/extra", status: typev3.StatusCode_NotFound},
+	}
+	for _, test := range tests {
+		t.Run(test.method+" "+test.path, func(t *testing.T) {
+			response := router.validateRequestHeaders(test.method, test.path)
+			if test.status == 0 {
+				assert.Nil(t, response)
+				return
+			}
+			require.NotNil(t, response.GetImmediateResponse(), "path was not rejected")
+			assert.Equal(t, test.status, response.GetImmediateResponse().GetStatus().GetCode())
+		})
+	}
+
+	disabled := &OpenAIRouter{}
+	for _, path := range []string{azureResponsesPath, azureV1ResponsesPath} {
+		response := disabled.validateRequestHeaders("POST", path)
+		require.NotNil(t, response.GetImmediateResponse())
+		assert.Equal(t, typev3.StatusCode_NotFound, response.GetImmediateResponse().GetStatus().GetCode())
+	}
+}
+
+func TestAzureInferenceSourceFormat(t *testing.T) {
+	for _, test := range []struct {
+		path string
+		want llmprotocol.WireFormat
+	}{
+		{path: "/openai/responses?api-version=2025-04-01-preview", want: llmprotocol.OpenAIResponsesV1},
+		{path: "/openai/v1/responses", want: llmprotocol.OpenAIResponsesV1},
+		{path: "/openai/v1/chat/completions", want: llmprotocol.OpenAIChatV1},
+	} {
+		t.Run(test.path, func(t *testing.T) {
+			ctx := &RequestContext{}
+			detectSourceFormat(test.path, ctx)
+			assert.Equal(t, test.want, ctx.SourceFormat)
+		})
+	}
+}
+
 func TestAzureDeploymentChatRoutesTheDeploymentModel(t *testing.T) {
 	tests := []struct {
 		name string
@@ -114,6 +172,68 @@ func TestAzureDeploymentRejectsUnsupportedOperation(t *testing.T) {
 	assert.Equal(t, typev3.StatusCode_NotFound, immediate.GetStatus().GetCode())
 }
 
+func TestAzureResponsesAndV1ChatDispatch(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		path string
+		body string
+	}{
+		{name: "dated responses", path: "/openai/responses?api-version=2025-04-01-preview", body: `{"model":"worker","input":"hello","store":false}`},
+		{name: "v1 responses", path: "/openai/v1/responses", body: `{"model":"worker","input":"hello","store":false}`},
+		{name: "v1 chat", path: "/openai/v1/chat/completions", body: `{"model":"worker","messages":[{"role":"user","content":"hello"}]}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			stream := NewMockStream([]*ext_proc.ProcessingRequest{
+				azureIngressHeaders(test.path),
+				{Request: &ext_proc.ProcessingRequest_RequestBody{RequestBody: &ext_proc.HttpBody{
+					Body: []byte(test.body), EndOfStream: true,
+				}}},
+			})
+			require.NoError(t, newAzureIngressTestRouter(t).Process(stream))
+			require.Len(t, stream.Responses, 2)
+
+			removed := stream.Responses[0].GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+			assert.Contains(t, removed, azureAPIKeyHeader, "the client key must not reach the provider")
+
+			dispatch := stream.Responses[1].GetRequestBody().GetResponse()
+			require.NotNil(t, dispatch, "request was not dispatched: %v", stream.Responses[1].GetImmediateResponse())
+			emitted := headerValuesByName(dispatch.GetHeaderMutation().GetSetHeaders())
+			assert.Equal(t, "worker", emitted[headers.SelectedModel])
+			assert.Equal(t, "/v1/chat/completions", emitted[":path"])
+			var wire struct {
+				Model    string            `json:"model"`
+				Messages []json.RawMessage `json:"messages"`
+			}
+			require.NoError(t, json.Unmarshal(dispatch.GetBodyMutation().GetBody(), &wire))
+			assert.Equal(t, "worker-prod", wire.Model)
+			require.NotEmpty(t, wire.Messages)
+		})
+	}
+}
+
+func TestAzureSkipProcessingStripsClientAPIKey(t *testing.T) {
+	for _, path := range []string{
+		"/openai/v1/chat/completions",
+		"/openai/v1/responses",
+		"/openai/responses?api-version=2025-04-01-preview",
+	} {
+		t.Run(path, func(t *testing.T) {
+			router := newRouterWithSkipProcessingGate(true)
+			ctx := &RequestContext{Headers: make(map[string]string)}
+			request := newSkipProcessingRequestHeaders("POST", path, "true")
+			request.RequestHeaders.Headers.Headers = append(request.RequestHeaders.Headers.Headers,
+				&core.HeaderValue{Key: azureAPIKeyHeader, Value: "client-secret"})
+
+			response, err := router.handleRequestHeaders(request, ctx)
+			require.NoError(t, err)
+			require.True(t, ctx.SkipProcessing)
+			require.NotNil(t, response.GetRequestHeaders())
+			removed := response.GetRequestHeaders().GetResponse().GetHeaderMutation().GetRemoveHeaders()
+			assert.Contains(t, removed, azureAPIKeyHeader, "the skip path must not forward an Azure client key")
+		})
+	}
+}
+
 func newAzureIngressTestRouter(t *testing.T) *OpenAIRouter {
 	t.Helper()
 	cfg, err := config.ParseYAMLBytes([]byte(azureIngressTestConfig))
@@ -125,6 +245,7 @@ func newAzureIngressTestRouter(t *testing.T) *OpenAIRouter {
 		Classifier:         classifier,
 		Cache:              cache.NewInMemoryCache(cache.InMemoryCacheOptions{Enabled: false}),
 		CredentialResolver: authz.NewCredentialResolver(authz.NewStaticConfigProvider(cfg)),
+		ResponseAPIFilter:  NewResponseAPIFilter(NewMockResponseStore()),
 	}
 }
 

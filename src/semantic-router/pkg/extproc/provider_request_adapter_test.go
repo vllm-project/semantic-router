@@ -11,7 +11,72 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/entropy"
 )
+
+var droppedChatTemplateReasoningSummary = llmprotocol.Diagnostic{
+	Source: llmprotocol.OpenAIResponsesV1, Field: "reasoning.summary",
+	Action: llmprotocol.DiagnosticDropped, Reason: "chat_template_kwargs cannot request a reasoning summary",
+}
+
+func TestResponsesReasoningSummaryIsForwardedOrReported(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		transport   modelcatalog.ReasoningTransport
+		withSummary bool
+		wantSummary bool
+	}{
+		{name: "chat_template_kwargs", transport: modelcatalog.ReasoningTransportChatTemplate, withSummary: true},
+		{name: "top_level_effort", transport: modelcatalog.ReasoningTransportTopLevelEffort, withSummary: true, wantSummary: true},
+		{name: "no_summary", transport: modelcatalog.ReasoningTransportChatTemplate},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			router, logicalModel := routingTestRouterForFormat(llmprotocol.OpenAIResponsesV1)
+			profile := router.Config.ProviderProfiles["provider"]
+			profile.ReasoningTransport = test.transport
+			router.Config.ProviderProfiles["provider"] = profile
+			params := router.Config.ModelConfig[logicalModel]
+			params.ReasoningFamily = "local-effort"
+			router.Config.ModelConfig[logicalModel] = params
+			router.Config.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{"local-effort": {
+				Type: config.ReasoningFamilyTypeReasoningEffort, Parameter: "reasoning_effort",
+				Levels: []string{"low", "high"}, Default: "high",
+				Modes: []string{config.ReasoningModeEnabled}, DefaultMode: config.ReasoningModeEnabled,
+			}}
+			decision := config.Decision{Name: "route", ModelRefs: []config.ModelRef{{
+				Model: logicalModel, ModelReasoningControl: config.ModelReasoningControl{ReasoningEffort: "high"},
+			}}}
+			body := []byte(`{"model":"virtual","input":"hello","reasoning":{"effort":"high"}}`)
+			if test.withSummary {
+				body = []byte(`{"model":"virtual","input":"hello","reasoning":{"effort":"high","summary":"auto"}}`)
+			}
+			ctx := routingTestContext(llmprotocol.OpenAIResponsesV1, nil)
+			request, immediate := router.prepareProtocolRequest(body, ctx)
+			require.Nil(t, immediate)
+			ctx.VSRSelectedDecision = &decision
+
+			response, err := router.handleEntrypointModelRouting(
+				request, "virtual", decision.Name, entropy.ReasoningDecision{UseReasoning: true}, logicalModel, ctx,
+			)
+			require.NoError(t, err)
+			dispatched := unmarshalReasoningRequest(t, response.GetRequestBody().GetResponse().GetBodyMutation().GetBody())
+			reasoning, hasReasoning := dispatched["reasoning"].(map[string]interface{})
+			if test.wantSummary {
+				require.True(t, hasReasoning)
+				assert.Equal(t, "auto", reasoning["summary"])
+				assert.NotContains(t, ctx.ProtocolDiagnostics, droppedChatTemplateReasoningSummary)
+				return
+			}
+			assert.False(t, hasReasoning)
+			assertChatTemplateReasoningField(t, dispatched, "reasoning_effort", "high")
+			if test.withSummary {
+				assert.Contains(t, ctx.ProtocolDiagnostics, droppedChatTemplateReasoningSummary)
+			} else {
+				assert.NotContains(t, ctx.ProtocolDiagnostics, droppedChatTemplateReasoningSummary)
+			}
+		})
+	}
+}
 
 func TestResponsesLocalReasoningUsesOneWireControl(t *testing.T) {
 	router := newReasoningRouter(
@@ -33,21 +98,26 @@ func TestResponsesLocalReasoningUsesOneWireControl(t *testing.T) {
 		"output_config":{"effort":"low","format":{"type":"json_schema"}}
 	}`)
 
-	adapted, err := router.adaptProviderRequest(
-		body,
-		&providerDispatch{
-			logicalModel: "local-model", targetFormat: llmprotocol.OpenAIResponsesV1,
-			decisionName: "route", useReasoning: true,
-			profile: &config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportChatTemplate},
-		},
-		&RequestContext{VSRSelectedDecision: decision},
-	)
+	dispatch := &providerDispatch{
+		logicalModel: "local-model", targetFormat: llmprotocol.OpenAIResponsesV1,
+		decisionName: "route", useReasoning: true,
+		profile: &config.ProviderProfile{ReasoningTransport: modelcatalog.ReasoningTransportChatTemplate},
+	}
+	ctx := &RequestContext{
+		VSRSelectedDecision: decision, SourceFormat: llmprotocol.OpenAIResponsesV1,
+		SemanticRequest: &llmprotocol.Request{ReasoningSummary: "auto"},
+	}
+	adapted, err := router.adaptProviderRequest(body, dispatch, ctx)
 	require.NoError(t, err)
 	request := unmarshalReasoningRequest(t, adapted)
 
 	assertChatTemplateReasoningField(t, request, "reasoning_effort", "high")
 	_, hasReasoning := request["reasoning"]
 	assert.False(t, hasReasoning)
+	assert.Equal(t, llmprotocol.Diagnostics{droppedChatTemplateReasoningSummary}, ctx.ProtocolDiagnostics)
+	_, err = router.adaptProviderRequest(body, dispatch, ctx)
+	require.NoError(t, err)
+	assert.Equal(t, llmprotocol.Diagnostics{droppedChatTemplateReasoningSummary}, ctx.ProtocolDiagnostics)
 	_, hasTopLevelEffort := request["reasoning_effort"]
 	assert.False(t, hasTopLevelEffort)
 	_, hasThinking := request["thinking"]

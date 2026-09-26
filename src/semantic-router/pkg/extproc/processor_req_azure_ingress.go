@@ -14,7 +14,24 @@ const (
 	azureDeploymentsPath = "/openai/deployments"
 	azureChatOperation   = "/chat/completions"
 	azureAPIKeyHeader    = "api-key"
+	azureResponsesPath   = "/openai/responses"
+	azureV1ResponsesPath = "/openai/v1/responses"
+	azureV1ChatPath      = "/openai/v1/chat/completions"
 )
+
+func isAzureResponsesCollection(path string) bool {
+	switch normalizeRequestPath(path) {
+	case azureResponsesPath, azureV1ResponsesPath:
+		return true
+	default:
+		return false
+	}
+}
+
+func isAzureOpenAIPath(path string) bool {
+	normalized := normalizeRequestPath(path)
+	return normalized == "/openai" || strings.HasPrefix(normalized, "/openai/")
+}
 
 // azureChatDeployment returns the deployment named by an Azure Chat
 // Completions path. Router model names such as vllm-sr/auto contain slashes,
@@ -33,11 +50,6 @@ func azureChatDeployment(path string) (string, bool) {
 		return "", false
 	}
 	return deployment, true
-}
-
-func isAzureDeploymentPath(normalizedPath string) bool {
-	return normalizedPath == azureDeploymentsPath ||
-		strings.HasPrefix(normalizedPath, azureDeploymentsPath+"/")
 }
 
 // withAzureDeploymentModel makes the deployment the request model. Azure's

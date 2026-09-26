@@ -39,11 +39,13 @@ FROM --platform=$BUILDPLATFORM rust:1.90 AS rust-cross-builder
 
 # Install cross-compilation dependencies
 # libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# This builder can downgrade preinstalled OpenSSL during an upload skew;
+# the final runtime uses its own OpenSSL packages.
 RUN dpkg --add-architecture arm64 && \
     apt-get update && \
     host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
     ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
-    apt-get install -y \
+    apt-get install -y --allow-downgrades --no-remove \
     make \
     build-essential \
     pkg-config \
@@ -134,7 +136,7 @@ RUN dpkg --add-architecture arm64 && \
     apt-get update && \
     host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
     ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
-    apt-get install -y \
+    apt-get install -y --allow-downgrades --no-remove \
     make \
     cmake \
     build-essential \
@@ -382,7 +384,7 @@ RUN dpkg --add-architecture arm64 && \
     apt-get update && \
     host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
     ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
-    apt-get install -y \
+    apt-get install -y --allow-downgrades --no-remove \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
     "libssl-dev:arm64=${ssl_version}" \

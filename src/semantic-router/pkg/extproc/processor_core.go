@@ -56,7 +56,8 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 	if ctx.FullDuplexRequestBody && !streamedMode {
 		return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), eos), nil
 	}
-	if streamedMode && (!eos || ctx.FullDuplexRequestBody) {
+	// STREAMED may contain just one EOS body message; it still needs the guards.
+	if streamedMode {
 		ctx.StreamedBody = newStreamedBodyHandler(r, ctx)
 		resp, err := ctx.StreamedBody.HandleChunk(v.RequestBody, ctx)
 		if eos {
@@ -66,7 +67,7 @@ func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_R
 		return resp, err
 	}
 
-	// BUFFERED mode or single-message STREAMED — use classic pipeline
+	// BUFFERED mode uses the classic pipeline.
 	return r.handleRequestBody(v, ctx)
 }
 

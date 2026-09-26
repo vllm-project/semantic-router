@@ -253,7 +253,11 @@ func (r *OpenAIRouter) shadowRequestEncoder(
 		if decisionName != "" && target.format != llmprotocol.OpenAIChatV1 {
 			r.applySemanticReasoningMode(&request, target.logicalModel, target.format, useReasoning, decision)
 		}
-		encoded, err := engine.EncodeRequest(target.format, request, envelope)
+		projected, err := r.projectAnthropicRequestForBackend(request, target.logicalModel, target.format)
+		if err != nil {
+			return nil, err
+		}
+		encoded, err := engine.EncodeRequest(target.format, projected, envelope)
 		if err != nil {
 			return nil, err
 		}

@@ -57,7 +57,7 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 		return err
 	}
 	preview := *request
-	if decision != nil {
+	if decision != nil && !preserveExplicitAnthropicReasoning(&preview, format) {
 		if format != llmprotocol.OpenAIChatV1 {
 			if family := r.getModelReasoningFamily(ref.Model); family != nil {
 				exact := *decision
@@ -69,6 +69,10 @@ func (r *OpenAIRouter) candidateCapabilityMismatch(ref config.ModelRef, request 
 				}
 			}
 		}
+	}
+	preview, err = r.projectAnthropicRequestForBackend(preview, ref.Model, format)
+	if err != nil {
+		return err
 	}
 	demand, err := selection.EffectiveCandidateDemand(&preview, decision)
 	if err != nil {
@@ -107,6 +111,16 @@ func (r *OpenAIRouter) capabilityEligibleSelectionContext(input *selection.Selec
 	eligible := make([]config.ModelRef, 0, len(input.CandidateModels))
 	var unsupported *llmprotocol.ProtocolError
 	onlyUnsupported := true
+	// Context, budget, and hard-policy filters can narrow the decision before
+	// this stage. A wire mismatch in the remainder is not the sole exclusion.
+	if ctx.VSRSelectedDecision != nil {
+		for _, ref := range ctx.VSRSelectedDecision.ModelRefs {
+			if !modelRefInEligibility(ref, input.CandidateModels) {
+				onlyUnsupported = false
+				break
+			}
+		}
+	}
 	for _, ref := range input.CandidateModels {
 		if (!decisionUsesAutomaticOutput(request, ctx.VSRSelectedDecision) && !selection.CandidateRequirementsEnabled(requirements) && r.modelRefExceedsContextWindow(ref, ctx.VSRContextTokenCount)) ||
 			(ctx.VSREligibleModelRefs != nil && !modelRefInEligibility(ref, ctx.VSREligibleModelRefs)) ||

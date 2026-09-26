@@ -206,7 +206,8 @@ func requestSamplingCapabilities(request Request) Capability {
 	if request.Sampling.Seed != nil {
 		required |= CapabilitySamplingSeed
 	}
-	if request.Sampling.FrequencyPenalty != nil || request.Sampling.PresencePenalty != nil {
+	if (request.Sampling.FrequencyPenalty != nil && *request.Sampling.FrequencyPenalty != 0) ||
+		(request.Sampling.PresencePenalty != nil && *request.Sampling.PresencePenalty != 0) {
 		required |= CapabilitySamplingPenalties
 	}
 	if len(request.Sampling.Stop) > 0 {

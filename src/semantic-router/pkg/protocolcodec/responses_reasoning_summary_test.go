@@ -69,21 +69,28 @@ func TestResponsesReasoningSummaryIsDroppedForChatAndMessages(t *testing.T) {
 
 func TestResponsesReasoningSummaryValues(t *testing.T) {
 	tests := []struct {
+		name    string
 		summary string
 		want    string
 		code    string
 	}{
-		{summary: `"auto"`, want: "auto"},
-		{summary: `"concise"`, want: "concise"},
-		{summary: `"detailed"`, want: "detailed"},
-		{summary: `null`},
-		{summary: `"verbose"`, code: "invalid_reasoning_summary"},
-		{summary: `1`, code: "invalid_reasoning_summary"},
+		{name: "absent"},
+		{name: "auto", summary: `"auto"`, want: "auto"},
+		{name: "concise", summary: `"concise"`, want: "concise"},
+		{name: "detailed", summary: `"detailed"`, want: "detailed"},
+		{name: "null", summary: `null`},
+		{name: "empty", summary: `""`, code: "invalid_reasoning_summary"},
+		{name: "unsupported", summary: `"verbose"`, code: "invalid_reasoning_summary"},
+		{name: "number", summary: `1`, code: "invalid_reasoning_summary"},
 	}
 	engine := NewBuiltinEngine()
 	for _, test := range tests {
-		t.Run(test.summary, func(t *testing.T) {
-			body := `{"model":"m","input":"hello","reasoning":{"effort":"low","summary":` + test.summary + `}}`
+		t.Run(test.name, func(t *testing.T) {
+			body := `{"model":"m","input":"hello","reasoning":{"effort":"low"`
+			if test.summary != "" {
+				body += `,"summary":` + test.summary
+			}
+			body += `}}`
 			if test.code != "" {
 				_, _, _, err := engine.DecodeRequestForMutation(llmprotocol.OpenAIResponsesV1, []byte(body))
 				var protocolError *llmprotocol.ProtocolError

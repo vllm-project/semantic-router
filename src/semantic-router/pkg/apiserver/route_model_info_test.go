@@ -3,6 +3,9 @@
 package apiserver
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 
@@ -268,6 +271,65 @@ func TestLoadModelsRuntimeStateUsesReplicaLocalSnapshot(t *testing.T) {
 	}
 	if state := unobserved.loadModelsRuntimeState(); state != nil {
 		t.Fatalf("unobserved replica loaded shared runtime state: %+v", state)
+	}
+}
+
+func TestModelsInventoryHTTPKeepsReplicaStatusWhenStartupFileIsShared(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "router-config.yaml")
+	cfg := &config.RouterConfig{StartupStatus: config.StartupStatusConfig{StoreBackend: "file"}}
+	starting := routerruntime.NewRegistry(cfg)
+	ready := routerruntime.NewRegistry(cfg)
+
+	startingServer := &ClassificationAPIServer{config: cfg, configPath: configPath, runtimeRegistry: starting}
+	readyServer := &ClassificationAPIServer{config: cfg, configPath: configPath, runtimeRegistry: ready}
+	serveInventory := func(api *ClassificationAPIServer) *httptest.Server {
+		mux := http.NewServeMux()
+		mux.HandleFunc("/api/v1/inventory/models", api.handleModelsInfo)
+		server := httptest.NewServer(mux)
+		t.Cleanup(server.Close)
+		return server
+	}
+	startingHTTP := serveInventory(startingServer)
+	readyHTTP := serveInventory(readyServer)
+
+	startingWriter := starting.StartupStatusWriter(startupstatus.NewFileWriter(configPath))
+	readyWriter := ready.StartupStatusWriter(startupstatus.NewFileWriter(configPath))
+	if err := startingWriter.Write(startupstatus.State{Phase: "initializing_models", Ready: false, TotalModels: 2, ReadyModels: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := readyWriter.Write(startupstatus.State{Phase: "ready", Ready: true, TotalModels: 3, ReadyModels: 3}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name   string
+		server *httptest.Server
+		phase  string
+		ready  bool
+		loaded int
+		total  int
+	}{
+		{name: "starting replica", server: startingHTTP, phase: "initializing_models", ready: false, loaded: 1, total: 2},
+		{name: "ready replica", server: readyHTTP, phase: "ready", ready: true, loaded: 3, total: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response, err := tc.server.Client().Get(tc.server.URL + "/api/v1/inventory/models")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer response.Body.Close()
+			if response.StatusCode != http.StatusOK {
+				t.Fatalf("inventory status = %d, want 200", response.StatusCode)
+			}
+			var body ModelsInfoResponse
+			if err := json.NewDecoder(response.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body.Summary.Phase != tc.phase || body.Summary.Ready != tc.ready ||
+				body.Summary.LoadedModels != tc.loaded || body.Summary.TotalModels != tc.total {
+				t.Fatalf("inventory exposed another replica's startup state: %+v", body.Summary)
+			}
+		})
 	}
 }
 

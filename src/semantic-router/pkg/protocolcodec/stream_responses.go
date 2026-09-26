@@ -10,18 +10,19 @@ import (
 
 type responsesStreamDecoder struct {
 	streamState
-	framer                sseFramer
-	nextAnnotationIndexes map[streamContentKey]int
-	contentIndexes        map[responsesWireContentKey]int
-	nextContentIndex      map[int]int
-	contentLifecycle      map[responsesWireContentKey]*responsesDecodedContentLifecycle
-	nextWireContentIndex  map[responsesWireContentScopeKey]int
-	itemTypes             map[int]string
-	toolArgumentsDone     map[int]bool
-	completedOutput       map[int]json.RawMessage
-	seenLifecycleEvents   map[string]bool
-	wireSequence          uint64
-	wireSequenceSeen      bool
+	framer                      sseFramer
+	nextAnnotationIndexes       map[streamContentKey]int
+	contentIndexes              map[responsesWireContentKey]int
+	nextContentIndex            map[int]int
+	contentLifecycle            map[responsesWireContentKey]*responsesDecodedContentLifecycle
+	nextWireContentIndex        map[responsesWireContentScopeKey]int
+	itemTypes                   map[int]string
+	toolArgumentsDone           map[int]bool
+	completedOutput             map[int]json.RawMessage
+	seenLifecycleEvents         map[string]bool
+	reportedProviderDecorations map[string]bool
+	wireSequence                uint64
+	wireSequenceSeen            bool
 }
 
 type responsesOutputKind string
@@ -93,17 +94,18 @@ type responsesStreamEncoder struct {
 
 func (OpenAIResponsesCodec) NewDecoder(context llmprotocol.StreamContext, policy llmprotocol.Policy) llmprotocol.StreamDecoder {
 	return &responsesStreamDecoder{
-		streamState:           streamState{context: context, policy: policy},
-		framer:                newSSEFramer(policy.Limits.SSEFrameBytes),
-		nextAnnotationIndexes: make(map[streamContentKey]int),
-		contentIndexes:        make(map[responsesWireContentKey]int),
-		nextContentIndex:      make(map[int]int),
-		contentLifecycle:      make(map[responsesWireContentKey]*responsesDecodedContentLifecycle),
-		nextWireContentIndex:  make(map[responsesWireContentScopeKey]int),
-		itemTypes:             make(map[int]string),
-		toolArgumentsDone:     make(map[int]bool),
-		completedOutput:       make(map[int]json.RawMessage),
-		seenLifecycleEvents:   make(map[string]bool),
+		streamState:                 streamState{context: context, policy: policy},
+		framer:                      newSSEFramer(policy.Limits.SSEFrameBytes),
+		nextAnnotationIndexes:       make(map[streamContentKey]int),
+		contentIndexes:              make(map[responsesWireContentKey]int),
+		nextContentIndex:            make(map[int]int),
+		contentLifecycle:            make(map[responsesWireContentKey]*responsesDecodedContentLifecycle),
+		nextWireContentIndex:        make(map[responsesWireContentScopeKey]int),
+		itemTypes:                   make(map[int]string),
+		toolArgumentsDone:           make(map[int]bool),
+		completedOutput:             make(map[int]json.RawMessage),
+		seenLifecycleEvents:         make(map[string]bool),
+		reportedProviderDecorations: make(map[string]bool),
 	}
 }
 
@@ -291,6 +293,13 @@ func (decoder *responsesStreamDecoder) decodeResponsesWireFrame(
 		appendVendorExtensionDiagnostics(&diagnostics, decoder.policy, llmprotocol.OpenAIResponsesV1, outputVendorExtensions)
 		if outputErr != nil {
 			return nil, diagnostics, outputErr
+		}
+		for _, diagnostic := range responsesProviderDecorationDiagnostics(*wire.Response, decoder.policy, "stream.response.") {
+			if decoder.reportedProviderDecorations[diagnostic.Field] {
+				continue
+			}
+			decoder.reportedProviderDecorations[diagnostic.Field] = true
+			diagnostics = appendDiagnostics(diagnostics, llmprotocol.Diagnostics{diagnostic}, decoder.policy.Limits.Diagnostics)
 		}
 	}
 	if wire.Type == "" {

@@ -268,6 +268,18 @@
           }
         ]
       }
+    },
+    {
+      "name": "message_output_config_effort",
+      "body": {
+        "model": "client-model",
+        "max_tokens": 32,
+        "messages": [
+          {"role": "user", "content": "first turn"},
+          {"role": "system", "content": [], "output_config": {"effort": "medium"}},
+          {"role": "user", "content": "second turn"}
+        ]
+      }
     }
   ]
 }

@@ -178,7 +178,8 @@ func validateResponsesInputItemMetadata(item responsesItemWire) error {
 	if item.Namespace != "" {
 		return rejectUnsupportedRequestField("input.namespace", json.RawMessage(`true`))
 	}
-	if item.Status != "" && item.Type != "image_generation_call" {
+	if item.Status != "" && item.Type != "" && item.Type != "message" &&
+		item.Type != "function_call" && item.Type != "function_call_output" && item.Type != "image_generation_call" {
 		return rejectUnsupportedRequestField("input.status", json.RawMessage(`true`))
 	}
 	return nil

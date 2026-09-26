@@ -50,12 +50,14 @@ ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 # Install cross-compilation toolchain and OpenSSL for arm64 (needed by hf-hub -> openssl-sys, esaxx-rs -> g++)
 # libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# An upload skew can require downgrading preinstalled OpenSSL in this builder;
+# the runtime stage installs its own packages from the current archive.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       dpkg --add-architecture arm64 && \
       apt-get update && \
       host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
       ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
-      apt-get install -y \
+      apt-get install -y --allow-downgrades --no-remove \
         gcc-aarch64-linux-gnu \
         g++-aarch64-linux-gnu \
         "libssl-dev:arm64=${ssl_version}" \
@@ -307,16 +309,18 @@ RUN bash /build/check-native-abi.sh \
 # Build router (cross-compile for arm64 when TARGETARCH=arm64)
 # arm64: need libssl-dev:arm64 because libcandle_semantic_router.so dynamically links OpenSSL
 # libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# Keep all four packages pinned, including a preinstalled native libssl-dev.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       dpkg --add-architecture arm64 && \
       apt-get update && \
       host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
       ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
-      apt-get install -y \
+      apt-get install -y --allow-downgrades --no-remove \
         gcc-aarch64-linux-gnu \
         g++-aarch64-linux-gnu \
         "libssl-dev:arm64=${ssl_version}" \
         "libssl3:arm64=${ssl_version}" \
+        "libssl-dev=${ssl_version}" \
         "libssl3=${ssl_version}" && \
       rm -rf /var/lib/apt/lists/* && \
       CC=aarch64-linux-gnu-gcc \

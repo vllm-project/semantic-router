@@ -48,12 +48,8 @@ func (decoder *responsesStreamDecoder) decodeResponsesLifecycleEvent(
 func (decoder *responsesStreamDecoder) validateResponsesToolDone(wire responsesEventWire) error {
 	index := responsesWireOutputIndex(wire)
 	call := decoder.toolCalls[index]
-	if call.Name != "" && wire.Name != call.Name {
+	if wire.Name != "" && wire.Name != call.Name {
 		return invalidProviderResponse("stream_tool_identity_mismatch", "Responses function-call done event changed the tool name")
-	}
-	if call.Name == "" {
-		call.Name = wire.Name
-		decoder.toolCalls[index] = call
 	}
 	arguments := decoder.toolArguments[index]
 	if len(arguments) == 0 {
