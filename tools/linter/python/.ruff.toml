@@ -84,6 +84,7 @@ ignore = [
 "bench/grounded_fusion/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/test_*.py" = ["PLR2004"]
 "src/training/model_classifier/modality_routing_classifier/label_audit/test_*.py" = ["PLR2004"]
+"src/training/model_classifier/modality_routing_classifier/exploration_lfm25_scx/test_*.py" = ["PLR2004"]
 "bench/test_*.py" = ["PLR2004"]
 "bench/reasoning/test_*.py" = ["PLR2004"]
 "bench/reasoning/router_reason_bench_multi_dataset.py" = [
