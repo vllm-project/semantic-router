@@ -83,7 +83,7 @@ def _read_visible(state: str, pair: PolicyPair) -> list[dict[str, Any]]:
                 pattern.fullmatch(lines[2])
                 for pattern in (PROSE_RE, BULLET_RE, TABLE_RE)
             ):
-                raise ValueError("Short case has an unparseable visible fact")
+                raise ValueError("Short case has an unparsable visible fact")
             field, value = _parse_fact(lines[2], pair)
         documents.append(
             {
