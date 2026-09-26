@@ -74,6 +74,10 @@ func (c *Classifier) buildPrimarySignalDispatchers(input SignalEvaluationInput, 
 			config.SignalTypeLanguage, "Language",
 			func() { c.evaluateLanguageSignal(results, mu, textForSignal(config.SignalTypeLanguage)) },
 		},
+		{
+			config.SignalTypeAction, "Action",
+			func() { c.evaluateActionSignal(results, mu, input.CurrentUserText) },
+		},
 	}
 }
 

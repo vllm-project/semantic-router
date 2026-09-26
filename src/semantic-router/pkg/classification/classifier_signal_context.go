@@ -33,6 +33,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeMetadata:      len(c.Config.MetadataRules) > 0,
 		config.SignalTypeClassifier:    len(c.genericClassifiers) > 0,
 		config.SignalTypeInputModality: len(c.Config.InputModalityRules) > 0,
+		config.SignalTypeAction:        len(c.Config.ActionRules) > 0,
 	}
 }
 

@@ -1,0 +1,726 @@
+[
+  {
+    "text": "Write a Python function that parses ISO 8601 dates and returns a datetime.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Create a React component that shows a paginated table of users.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Implement a thread-safe LRU cache in Go.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Generate a SQL query that returns the top five customers by revenue for each month.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Build a small CLI in Rust that counts the lines in every file under a directory.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Scaffold a FastAPI app with a health check endpoint and a /users route.",
+    "true_label": "generate"
+  },
+  {
+    "text": "I need a bash script that backs up my Postgres database every night.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Give me a regex that matches US phone numbers with an optional country code.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Write a Dockerfile for a Node 20 app that runs as a non-root user.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Add an endpoint that lets admins export all orders as CSV.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Add support for reading the config from a YAML file.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Write a GitHub Actions workflow that runs the linter on every pull request.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Create a database migration that adds a nullable email column to the accounts table.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Can you code up a quick script to rename all the .jpeg files in a folder to .jpg?",
+    "true_label": "generate"
+  },
+  {
+    "text": "Implement exponential backoff with jitter for the HTTP client.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Make me a Makefile with build, test and clean targets.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Write a Kubernetes deployment manifest for this service with three replicas.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Create a TypeScript type for the API response below.\n\n{\"id\": 1, \"name\": \"widget\", \"tags\": [\"a\", \"b\"]}",
+    "true_label": "generate"
+  },
+  {
+    "text": "Draft a Terraform module that creates an S3 bucket with versioning enabled.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Write a function that merges two sorted linked lists.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Generate a JSON schema for this config format.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Please build a simple websocket chat server in Node.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Write a Python script that downloads every image linked from a web page.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Create a new Django model for blog posts with a title, body and published date.",
+    "true_label": "generate"
+  },
+  {
+    "text": "What does this function do?\n\ndef f(xs):\n    return [x for x in xs if x % 2]",
+    "true_label": "explain"
+  },
+  {
+    "text": "Explain the difference between a process and a thread.",
+    "true_label": "explain"
+  },
+  {
+    "text": "Why does Python use indentation instead of braces?",
+    "true_label": "explain"
+  },
+  {
+    "text": "How does async/await work in JavaScript under the hood?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Walk me through what this regex matches: ^(?=.*\\d)(?=.*[a-z]).{8,}$",
+    "true_label": "explain"
+  },
+  {
+    "text": "What is a closure in JavaScript?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Can you explain what this stack trace means?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Is it safe to call this map from multiple goroutines?",
+    "true_label": "explain"
+  },
+  {
+    "text": "What's the time complexity of this nested loop?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Summarize what the auth middleware in this repo does.",
+    "true_label": "explain"
+  },
+  {
+    "text": "Help me understand this SQL query with the window function.",
+    "true_label": "explain"
+  },
+  {
+    "text": "When should I use a mutex instead of a channel in Go?",
+    "true_label": "explain"
+  },
+  {
+    "text": "What happens if I close a channel twice?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Describe how requests flow from the load balancer to the database in this service.",
+    "true_label": "explain"
+  },
+  {
+    "text": "Why is this query so slow on large tables?",
+    "true_label": "explain"
+  },
+  {
+    "text": "What's the difference between git merge and git rebase?",
+    "true_label": "explain"
+  },
+  {
+    "text": "How do React hooks decide when to re-render?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Tell me how the garbage collector in Java decides what to free.",
+    "true_label": "explain"
+  },
+  {
+    "text": "What is dependency injection and why do people use it?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Which is faster for lookups, a list or a set, and why?",
+    "true_label": "explain"
+  },
+  {
+    "text": "What does the `?` operator do in Rust?",
+    "true_label": "explain"
+  },
+  {
+    "text": "I don't understand why this promise never resolves. What is going on?",
+    "true_label": "explain"
+  },
+  {
+    "text": "How is a B-tree different from a binary search tree?",
+    "true_label": "explain"
+  },
+  {
+    "text": "What are the tradeoffs between REST and gRPC for internal services?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Fix the null pointer exception in UserService.getProfile.",
+    "true_label": "fix"
+  },
+  {
+    "text": "This test is failing with an assertion error, can you fix it?",
+    "true_label": "fix"
+  },
+  {
+    "text": "Debug why the server returns a 500 when the cart is empty.",
+    "true_label": "fix"
+  },
+  {
+    "text": "The build is broken after upgrading to Go 1.23.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Resolve the merge conflict in package.json.",
+    "true_label": "fix"
+  },
+  {
+    "text": "My app crashes when I rotate the phone.",
+    "true_label": "fix"
+  },
+  {
+    "text": "I'm getting 'undefined is not a function' when I click the submit button.",
+    "true_label": "fix"
+  },
+  {
+    "text": "The login form doesn't submit when I press Enter.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Patch the SQL injection in the search handler.",
+    "true_label": "fix"
+  },
+  {
+    "text": "There's an off-by-one error in this loop, please correct it.",
+    "true_label": "fix"
+  },
+  {
+    "text": "It's not working. The output file is always empty.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Make the failing CI job pass again.",
+    "true_label": "fix"
+  },
+  {
+    "text": "The date parser returns the wrong month for dates in December.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Stop the memory leak in the worker pool.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Fix the typo in the error message on line 42.",
+    "true_label": "fix"
+  },
+  {
+    "text": "The function panics when the list is empty. Handle that case.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Our webhook handler times out under load and drops events.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Getting a CORS error when the frontend calls the API. Please sort it out.",
+    "true_label": "fix"
+  },
+  {
+    "text": "The Docker image fails to build with 'no space left on device'.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Repair the broken pagination on the search results page.",
+    "true_label": "fix"
+  },
+  {
+    "text": "This recursive function hits the maximum recursion depth, can you fix it?",
+    "true_label": "fix"
+  },
+  {
+    "text": "Images uploaded from Safari show up rotated. Fix that.",
+    "true_label": "fix"
+  },
+  {
+    "text": "The unit tests pass locally but fail in CI with a timezone error.",
+    "true_label": "fix"
+  },
+  {
+    "text": "npm install fails with ERESOLVE unable to resolve dependency tree. Help me fix it.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Refactor this class to use dependency injection.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Rename getUserData to fetchUser everywhere in the codebase.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Clean up this function, it has too many nested ifs.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Simplify this chain of if/else statements.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Extract the validation logic into its own function.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Split this 800-line file into smaller modules.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Convert these callbacks to async/await.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Make this code more readable.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Remove the duplicated code between these two handlers.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Rewrite this loop as a list comprehension.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Replace the magic numbers in this file with named constants.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Move the database access code into a repository class.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Reorganize the imports and group them by standard library and third party.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Port this Python script to TypeScript.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Modernize this Java class to use records.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Tidy up the variable names in this module.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Inline this helper since it's only called once.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Turn this class into a dataclass.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Break this long function into smaller functions with clear names.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Restructure the project so the API and the worker share a common package.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Deduplicate the retry logic across these three clients.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Change this code to use the builder pattern instead of the huge constructor.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Write unit tests for the Parser class.",
+    "true_label": "test"
+  },
+  {
+    "text": "Add a test for the empty-input case.",
+    "true_label": "test"
+  },
+  {
+    "text": "Generate pytest cases for this function.",
+    "true_label": "test"
+  },
+  {
+    "text": "Increase the test coverage for utils.go.",
+    "true_label": "test"
+  },
+  {
+    "text": "Create integration tests for the /users endpoint.",
+    "true_label": "test"
+  },
+  {
+    "text": "Write a table-driven test for this Go function.",
+    "true_label": "test"
+  },
+  {
+    "text": "Mock the HTTP client in these tests so they don't hit the network.",
+    "true_label": "test"
+  },
+  {
+    "text": "Add a regression test for the bug we just fixed.",
+    "true_label": "test"
+  },
+  {
+    "text": "Can you test this function with some edge cases?",
+    "true_label": "test"
+  },
+  {
+    "text": "Write Jest tests for this React component.",
+    "true_label": "test"
+  },
+  {
+    "text": "I need property-based tests for the sorting function.",
+    "true_label": "test"
+  },
+  {
+    "text": "Cover the error paths in this module with tests.",
+    "true_label": "test"
+  },
+  {
+    "text": "Add snapshot tests for the rendered invoice.",
+    "true_label": "test"
+  },
+  {
+    "text": "Write an end-to-end test that logs in and checks the dashboard loads.",
+    "true_label": "test"
+  },
+  {
+    "text": "Create a test fixture that seeds the database with two users.",
+    "true_label": "test"
+  },
+  {
+    "text": "Write tests that check the rate limiter blocks the eleventh request.",
+    "true_label": "test"
+  },
+  {
+    "text": "Add unit tests for the new discount calculation.",
+    "true_label": "test"
+  },
+  {
+    "text": "Please write a benchmark test for this hashing function.",
+    "true_label": "test"
+  },
+  {
+    "text": "Write a test suite for the shopping cart module.",
+    "true_label": "test"
+  },
+  {
+    "text": "Add tests to make sure the parser rejects malformed input.",
+    "true_label": "test"
+  },
+  {
+    "text": "Generate test data and tests for the CSV importer.",
+    "true_label": "test"
+  },
+  {
+    "text": "Can you add a few more test cases for leap years?",
+    "true_label": "test"
+  },
+  {
+    "text": "yes, go ahead",
+    "true_label": "other"
+  },
+  {
+    "text": "thanks!",
+    "true_label": "other"
+  },
+  {
+    "text": "ok",
+    "true_label": "other"
+  },
+  {
+    "text": "Looks good to me.",
+    "true_label": "other"
+  },
+  {
+    "text": "please continue",
+    "true_label": "other"
+  },
+  {
+    "text": "Do the same for the other file.",
+    "true_label": "other"
+  },
+  {
+    "text": "try again",
+    "true_label": "other"
+  },
+  {
+    "text": "Review this pull request for security issues.",
+    "true_label": "other"
+  },
+  {
+    "text": "Add docstrings to all the public functions in this file.",
+    "true_label": "other"
+  },
+  {
+    "text": "Write a README for this project.",
+    "true_label": "other"
+  },
+  {
+    "text": "Run the test suite and tell me the result.",
+    "true_label": "other"
+  },
+  {
+    "text": "Commit these changes with a descriptive message.",
+    "true_label": "other"
+  },
+  {
+    "text": "Deploy this branch to the staging environment.",
+    "true_label": "other"
+  },
+  {
+    "text": "hello",
+    "true_label": "other"
+  },
+  {
+    "text": "Undo the last change you made.",
+    "true_label": "other"
+  },
+  {
+    "text": "Sounds good, proceed.",
+    "true_label": "other"
+  },
+  {
+    "text": "No, I meant the other function.",
+    "true_label": "other"
+  },
+  {
+    "text": "Perfect, that's exactly what I wanted.",
+    "true_label": "other"
+  },
+  {
+    "text": "Stop.",
+    "true_label": "other"
+  },
+  {
+    "text": "Can you check this code for security vulnerabilities?",
+    "true_label": "other"
+  },
+  {
+    "text": "Generate API documentation for this module.",
+    "true_label": "other"
+  },
+  {
+    "text": "Add comments that explain each step of this function.",
+    "true_label": "other"
+  },
+  {
+    "text": "Fix this bug and add a test for it.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Add a test that reproduces the crash, then fix it.",
+    "true_label": "test"
+  },
+  {
+    "text": "Explain what this function does, then refactor it to be more readable.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Why does this throw a KeyError? Please fix it.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Refactor the parser and write unit tests for the new functions.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Write a function to validate email addresses and add tests for it.",
+    "true_label": "generate"
+  },
+  {
+    "text": "Clean up this module and fix the lint errors.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Can you explain the bug and fix it?",
+    "true_label": "fix"
+  },
+  {
+    "text": "Rename the variables to something clearer and explain what each one holds.",
+    "true_label": "refactor"
+  },
+  {
+    "text": "Implement the retry logic, and fix the flaky test while you're at it.",
+    "true_label": "generate"
+  },
+  {
+    "text": "What's wrong with this code? Fix it please.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Write tests for the payment module and fix whatever they catch.",
+    "true_label": "test"
+  },
+  {
+    "text": "yes, go ahead and apply it",
+    "true_label": "other"
+  },
+  {
+    "text": "do it",
+    "true_label": "other"
+  },
+  {
+    "text": "ok, now the second one",
+    "true_label": "other"
+  },
+  {
+    "text": "Same thing for the Python version.",
+    "true_label": "other"
+  },
+  {
+    "text": "That didn't work, I still get the same error.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Still failing.",
+    "true_label": "fix"
+  },
+  {
+    "text": "Go with option 2.",
+    "true_label": "other"
+  },
+  {
+    "text": "Can you do that again but shorter?",
+    "true_label": "other"
+  },
+  {
+    "text": "panic: runtime error: index out of range [3] with length 3\n\ngoroutine 1 [running]:\nmain.generateReport(...)\n\t/app/report.go:42\nmain.main()\n\t/app/main.go:12 +0x1d\nexit status 2\n\nwhat does this mean?",
+    "true_label": "explain"
+  },
+  {
+    "text": "```\nFAILED tests/test_refactor.py::test_rename_fields - AssertionError: assert 'user_id' == 'userId'\n1 failed, 41 passed in 2.31s\n```\nCan you fix this?",
+    "true_label": "fix"
+  },
+  {
+    "text": "Traceback (most recent call last):\n  File \"app.py\", line 8, in <module>\n    main()\n  File \"app.py\", line 5, in main\n    build_index(docs)\nTypeError: build_index() missing 1 required positional argument: 'config'\n\nwhy is this happening?",
+    "true_label": "explain"
+  },
+  {
+    "text": "npm ERR! code ERESOLVE\nnpm ERR! ERESOLVE unable to resolve dependency tree\nnpm ERR! Fix the upstream dependency conflict, or retry\nnpm ERR! this command with --force or --legacy-peer-deps\n\nWhat should I do here?",
+    "true_label": "explain"
+  },
+  {
+    "text": "error[E0382]: borrow of moved value: `config`\n  --> src/main.rs:14:20\nhelp: consider cloning the value if the performance cost is acceptable\n\nFix the build.",
+    "true_label": "fix"
+  },
+  {
+    "text": "WARN  [deprecation] Client.connect() is deprecated and will be removed in v3; refactor callers to use Client.dial() instead\nINFO  started worker pool size=8\n\nIs this warning something I need to worry about?",
+    "true_label": "explain"
+  },
+  {
+    "text": "```\n$ make test\n--- FAIL: TestCreateUser (0.02s)\n    user_test.go:31: expected status 201, got 500\nFAIL\n```\nwrite a test that covers the 500 case too",
+    "true_label": "test"
+  },
+  {
+    "text": "Here's the CI log:\n\nStep 4/9 : RUN npm run build\n> generate-types && tsc\nsrc/api.ts(12,5): error TS2322: Type 'string' is not assignable to type 'number'.\nThe command '/bin/sh -c npm run build' returned a non-zero code: 2\n\nCan you explain this error?",
+    "true_label": "explain"
+  },
+  {
+    "text": "hint: Resolve all conflicts manually, mark them as resolved with\nhint: \"git add/rm <conflicted_files>\", then run \"git rebase --continue\".\nerror: could not apply 3f2a1b... Add retry logic\n\nhow do I get out of this state?",
+    "true_label": "explain"
+  },
+  {
+    "text": "ERROR 2026-09-20T10:02:11Z worker failed to generate thumbnail id=8842 err=\"image: unknown format\"\nERROR 2026-09-20T10:02:12Z worker failed to generate thumbnail id=8843 err=\"image: unknown format\"\n\nthese keep showing up in prod, fix the worker so it skips files it can't decode",
+    "true_label": "fix"
+  },
+  {
+    "text": "Explain this:\n\n```python\ndef fix_all(items):\n    return [refactor(i) for i in items]\n```",
+    "true_label": "explain"
+  },
+  {
+    "text": "Refactor this:\n\n```js\n// TODO: fix this later\nfunction generate(opts) {\n  if (opts.a) { if (opts.b) { return 1 } }\n  return 0\n}\n```",
+    "true_label": "refactor"
+  },
+  {
+    "text": "What does the `test_client` fixture in conftest.py do?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Explain generate_report() in reports.py.",
+    "true_label": "explain"
+  },
+  {
+    "text": "The refactor_utils module fails to import after the upgrade.",
+    "true_label": "fix"
+  },
+  {
+    "text": "How do I write a unit test for a function that calls an external API?",
+    "true_label": "explain"
+  },
+  {
+    "text": "What's the best way to refactor a 500-line function?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Should I fix this deprecation warning now or ignore it?",
+    "true_label": "explain"
+  },
+  {
+    "text": "How can I fix 'permission denied' when running docker without sudo?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Is it worth writing tests for private methods?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Explain how to implement a trie.",
+    "true_label": "explain"
+  },
+  {
+    "text": "What test cases should I add for this function?",
+    "true_label": "explain"
+  },
+  {
+    "text": "Can you tell me if this refactor changed any behavior?",
+    "true_label": "other"
+  }
+]

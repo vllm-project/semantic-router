@@ -80,6 +80,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Heuristic',
               items: [
+                'tutorials/signal/heuristic/action',
                 'tutorials/signal/heuristic/authz',
                 'tutorials/signal/heuristic/context',
                 'tutorials/signal/heuristic/conversation',

@@ -161,6 +161,14 @@ func collectInputModalityRuleNames(rules []InputModalityRule) map[string]struct{
 	return names
 }
 
+func collectActionRuleNames(rules []ActionRule) map[string]struct{} {
+	names := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		names[rule.Name] = struct{}{}
+	}
+	return names
+}
+
 func collectMetadataRuleNames(rules []MetadataRule) map[string]struct{} {
 	names := make(map[string]struct{}, len(rules))
 	for _, rule := range rules {
