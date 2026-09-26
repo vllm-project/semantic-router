@@ -176,6 +176,18 @@ models:
     status: claimed
     verified_at: 2026-09-05
     source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+- catalog: deepseek/deepseek-v4.1-flash
+  relationship: self_hosted
+  id: deepseek-ai/DeepSeek-V4.1-Flash
+  protocols:
+  - openai/chat-completions@1
+  - openai/responses@1
+  reasoning_transport: top_level_effort
+  lifecycle: experimental
+  verification:
+    status: claimed
+    verified_at: 2026-09-24
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/tree/dba1be0a40aa45a94ad051997016db3960a90277
 - catalog: deepseek/deepseek-r1
   relationship: self_hosted
   id: deepseek-ai/DeepSeek-R1

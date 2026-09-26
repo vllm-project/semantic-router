@@ -879,16 +879,16 @@ providers:
     status: fixture_verified
     verified_at: '2026-09-04'
   models:
-  - catalog: deepseek/deepseek-v4-flash
+  - catalog: deepseek/deepseek-v4.1-flash
     relationship: first_party
-    id: deepseek-v4-flash
+    id: deepseek-flash
     protocols:
     - openai/chat-completions@1
     - openai/responses@1
     lifecycle: active
     verification:
       status: claimed
-      verified_at: '2026-09-05'
+      verified_at: '2026-09-24'
       source: https://api-docs.deepseek.com/quick_start/pricing
   - catalog: deepseek/deepseek-v4-pro
     relationship: first_party
@@ -3020,6 +3020,18 @@ providers:
       status: claimed
       verified_at: '2026-09-05'
       source: https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro
+  - catalog: deepseek/deepseek-v4.1-flash
+    relationship: self_hosted
+    id: deepseek-ai/DeepSeek-V4.1-Flash
+    protocols:
+    - openai/chat-completions@1
+    - openai/responses@1
+    reasoning_transport: top_level_effort
+    lifecycle: experimental
+    verification:
+      status: claimed
+      verified_at: '2026-09-24'
+      source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/tree/dba1be0a40aa45a94ad051997016db3960a90277
   - catalog: deepseek/deepseek-r1
     relationship: self_hosted
     id: deepseek-ai/DeepSeek-R1
@@ -5208,6 +5220,53 @@ models:
   - multilingual
   - efficient
   - on_device
+- id: deepseek/deepseek-v4.1-flash
+  display_name: DeepSeek V4.1 Flash
+  description: DeepSeek's multimodal V4.1 reasoning model for cost-efficient agentic workloads.
+  kind: physical
+  publisher: DeepSeek
+  presentation:
+    logo: package:deepseek
+    monogram: D
+    monochrome: false
+  distribution:
+    type: open_weights
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash
+    license: MIT
+  family: deepseek-v4.1
+  parameter_size: 552B (8B prefill, 16B decode active)
+  revision: dba1be0a40aa45a94ad051997016db3960a90277
+  lifecycle: active
+  limits:
+    context_window_size: 1048576
+    max_output_tokens: 393216
+  capabilities:
+  - chat
+  - reasoning
+  - tools
+  - structured_output
+  - vision
+  - long_context
+  modalities:
+    input:
+    - text
+    - image
+    output:
+    - text
+  reasoning_family: deepseek
+  verification:
+    authority: DeepSeek
+    status: claimed
+    verified_at: '2026-09-24'
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+  tags:
+  - efficient
+  - open_weights
+  - reasoning
+  - moe
+  - multimodal
+  - agentic
+  released_at: '2026-09-10'
 - id: deepseek/deepseek-v4-pro
   display_name: DeepSeek V4 Pro
   description: DeepSeek's high-capability V4 reasoning model.
@@ -16961,6 +17020,108 @@ evaluations:
     provenance: third_party
     verification: imported
     source: https://artificialanalysis.ai/models/deepseek-v3-1-terminus-reasoning
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-model-card-max-gpqa-diamond@1.0.0
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: idavidrein/gpqa-diamond@1.0.0
+  benchmark_profile: published-standard
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.909
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-model-card-max-humanitys-last-exam@1.0.0
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: cais/humanitys-last-exam@1.0.0
+  benchmark_profile: published-no-tools
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    hle_mode: no_tools
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_model_card
+  metrics:
+    accuracy: 0.368
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: harbor/terminal-bench@2.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    harness: DeepSeek Harness Minimal
+    attempts_per_task: 3
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.906
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-model-card-max-deep-swe@1.1.0
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: datacurve/deep-swe@1.1.0
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    harness: mini-swe-agent
+    attempts_per_task: 8
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_model_card
+  metrics:
+    resolved: 0.742
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/README.md
+    redistributable: true
+- id: deepseek/deepseek-v4.1-flash-tech-report-max-automation-bench@1.0.6
+  model: deepseek/deepseek-v4.1-flash
+  benchmark: zapier/automation-bench@1.0.6
+  benchmark_profile: published-agent
+  reasoning_effort: max
+  subject:
+    variant: DeepSeek-V4.1-Flash
+    reasoning_effort: max
+    subset: public
+    harness: official AutomationBench scaffold
+    model_revision: dba1be0a40aa45a94ad051997016db3960a90277
+    source_kind: official_technical_report
+  metrics:
+    score: 0.548
+  status: available
+  observed_at: '2026-09-24'
+  evidence:
+    provenance: vendor_claimed
+    verification: claimed
+    source: https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash/blob/dba1be0a40aa45a94ad051997016db3960a90277/DeepSeek_V41_Tech_Report.pdf
     redistributable: true
 - id: independent/gemini-3-6-flash-critpt@1.0.0
   model: google/gemini-3.6-flash
@@ -39737,6 +39898,28 @@ index_results:
   domains:
     frontier_reasoning: 5.23632993512512
     scientific_reasoning: 30.5050505050505
+- model: deepseek/deepseek-v4.1-flash
+  reasoning_effort: max
+  index: vllm-sr/agentic@1.0.0
+  status: available
+  score: 90.60000000000001
+  coverage: 1.0
+  components:
+  - weight: 1.0
+    status: available
+    value: 0.906
+    normalized: 0.906
+    benchmark: harbor/terminal-bench@2.1.0
+    metric: resolved
+    benchmark_profiles:
+    - independent-agent
+    - published-agent
+    evaluation: deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0
+    benchmark_profile: published-agent
+  provenance:
+  - deepseek/deepseek-v4.1-flash-model-card-max-terminal-bench@2.1.0
+  domains:
+    agentic_systems: 90.60000000000001
 - model: deepseek/deepseek-v4-pro
   reasoning_effort: max
   index: vllm-sr/general@1.0.0
