@@ -97,9 +97,12 @@ Use fresh random private salts to assign opaque review row/group IDs; do not
 encode source IDs, intents or labels in the visible IDs. Freeze (1) private
 candidate/key, (2) a gold-free local Choice packet with all 84 prompts, and
 (3) a gold-free seven-locale comparison packet, all with SHA-256 and restrictive
-permissions. A reviewer must first infer each local request's answer and
-option exactness **without** the English parallel anchor, and seal those
-judgments. Only then may the reviewer inspect the comparison packet and seal
+permissions. The local packet exposes only independently shuffled row IDs,
+not the source-group join token, so an English row cannot be located as the
+anchor for a particular localized row. A reviewer must first infer each local
+request's answer and option exactness **without** the English parallel anchor,
+and seal those judgments. Only then may the reviewer inspect the comparison
+packet and seal
 parallel meaning, entity/action/time preservation, naturalness, ambiguity
 and group verdict. The source-intent key remains sealed until both blind
 reviews and their hashes/timestamps are independently verified. Any shortcut,
