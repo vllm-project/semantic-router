@@ -69,7 +69,6 @@ const (
 
 // TestInitModel tests the model initialization function
 func TestInitModel(t *testing.T) {
-
 	t.Run("InitWithDefaultModel", func(t *testing.T) {
 		err := InitModel("", true) // Empty string should use default
 		if err != nil {
@@ -136,7 +135,6 @@ func TestInitModel(t *testing.T) {
 		t.Logf("Singleton test passed: embeddings identical (diff: %.6f), dimensions: %d",
 			maxDiff, len(embeddingAfter))
 	})
-
 }
 
 // TestTokenization tests all tokenization functions
@@ -215,7 +213,6 @@ func TestTokenization(t *testing.T) {
 			t.Errorf("Expected tokens <= 256, got %d", len(result256.TokenIDs))
 		}
 	})
-
 }
 
 // TestEmbeddings tests all embedding functions
@@ -282,7 +279,6 @@ func TestEmbeddings(t *testing.T) {
 			}
 		}
 	})
-
 }
 
 // TestSimilarity tests all similarity calculation functions
@@ -333,7 +329,6 @@ func TestSimilarity(t *testing.T) {
 				score, identicalScore)
 		}
 	})
-
 }
 
 // TestFindMostSimilar tests the most similar text finding functions
@@ -389,7 +384,6 @@ func TestFindMostSimilar(t *testing.T) {
 				result.Index, result.Score)
 		}
 	})
-
 }
 
 // TestBERTClassifiers tests BERT-based classification functions (not ModernBERT)
@@ -599,7 +593,6 @@ func TestBertClassifier_ConcurrentClassificationSafety(t *testing.T) {
 
 // TestUtilityFunctions tests utility functions
 func TestUtilityFunctions(t *testing.T) {
-
 	t.Run("SetMemoryCleanupHandler", func(t *testing.T) {
 		// This function should not panic
 		SetMemoryCleanupHandler()
@@ -1199,7 +1192,6 @@ func TestGetEmbeddingSmart(t *testing.T) {
 		// Short text with high latency priority should prefer Gemma (768), with Qwen3 (1024) as fallback.
 		text := "Hello world"
 		embedding, err := GetEmbeddingSmart(text, 0.3, 0.8)
-
 		if err != nil {
 			t.Fatalf("GetEmbeddingSmart failed: %v", err)
 		}
@@ -1215,7 +1207,6 @@ func TestGetEmbeddingSmart(t *testing.T) {
 		// Medium text with balanced priorities - may select Qwen3 (1024) or Gemma (768)
 		text := strings.Repeat("This is a medium length text with enough words to exceed 512 tokens. ", 10)
 		embedding, err := GetEmbeddingSmart(text, 0.5, 0.5)
-
 		if err != nil {
 			t.Fatalf("GetEmbeddingSmart failed: %v", err)
 		}
@@ -1232,7 +1223,6 @@ func TestGetEmbeddingSmart(t *testing.T) {
 		// Long text with high quality priority should use Qwen3 (1024)
 		text := strings.Repeat("This is a very long document that requires Qwen3's 32K context support. ", 50)
 		embedding, err := GetEmbeddingSmart(text, 0.9, 0.2)
-
 		if err != nil {
 			t.Fatalf("GetEmbeddingSmart failed: %v", err)
 		}
@@ -1276,7 +1266,6 @@ func TestGetEmbeddingSmart(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.desc, func(t *testing.T) {
 				embedding, err := GetEmbeddingSmart(text, tc.quality, tc.latency)
-
 				if err != nil {
 					t.Logf("Priority test %s returned error (expected): %v", tc.desc, err)
 					return
@@ -1301,7 +1290,6 @@ func TestGetEmbeddingSmart(t *testing.T) {
 
 		for i, text := range texts {
 			embedding, err := GetEmbeddingSmart(text, 0.5, 0.5)
-
 			if err != nil {
 				t.Logf("Iteration %d returned error (expected): %v", i, err)
 				continue

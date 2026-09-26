@@ -130,8 +130,8 @@ func (r *SemanticRouterReconciler) ensureInitialProgressingStatus(
 
 	err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current := &vllmv1alpha1.SemanticRouter{}
-		if err := r.Get(ctx, req.NamespacedName, current); err != nil {
-			return err
+		if getErr := r.Get(ctx, req.NamespacedName, current); getErr != nil {
+			return getErr
 		}
 		meta.SetStatusCondition(&current.Status.Conditions, metav1.Condition{
 			ObservedGeneration: current.Generation,

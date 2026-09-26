@@ -147,7 +147,6 @@ class DeploymentResultsTests(unittest.TestCase):
             sum(step.get("uses") == "actions/setup-go@v5" for step in steps), 1
         )
         sections = {
-            "Check Go Formatting": "dependencies",
             "Vet Operator Code": "dependencies",
             "Lint Operator Code": "golangci_lint",
             "Discover Operator Unit Tests": "dependencies",

@@ -11,7 +11,6 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
 	gatewaystack "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	"github.com/vllm-project/semantic-router/e2e/pkg/testmatrix"
-
 	_ "github.com/vllm-project/semantic-router/e2e/testcases"
 )
 
