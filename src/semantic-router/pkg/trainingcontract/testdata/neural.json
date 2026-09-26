@@ -1,0 +1,630 @@
+{
+  "asset": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "asset_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "name": "neural",
+    "target_contract": "signal.label-scores/v1"
+  },
+  "upload": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "upload_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "handle": "file_neural-data",
+    "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "size_bytes": 7
+  },
+  "snapshot": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "snapshot_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "asset_id": "asset_neural",
+    "upload_handle": "upload_neural",
+    "source": {
+      "repository": "example/data",
+      "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "preprocessing": [
+      {
+        "name": "normalize",
+        "version": "1"
+      }
+    ],
+    "profile": {
+      "target_contract": "signal.label-scores/v1",
+      "classifier": {
+        "label_mapping": {
+          "negative": 0,
+          "positive": 1
+        }
+      }
+    },
+    "content": {
+      "handle": "file_neural-data",
+      "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "size_bytes": 7
+    }
+  },
+  "experiment": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "experiment_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "name": "neural",
+    "target_contract": "signal.label-scores/v1"
+  },
+  "submit": {
+    "schema_version": "semantic-router.training/v1",
+    "idempotency_key": "neural-fixture",
+    "spec": {
+      "experiment_id": "experiment_neural",
+      "snapshot_id": "snapshot_neural",
+      "target_contract": "signal.label-scores/v1",
+      "trainer": {
+        "name": "neural",
+        "version": "1"
+      },
+      "parameters": {
+        "seed": 42,
+        "hidden_sizes": [
+          256,
+          128
+        ],
+        "learning_rate": 0.001
+      },
+      "tasks": [
+        {
+          "key": "train",
+          "executor": {
+            "name": "train",
+            "version": "1"
+          }
+        },
+        {
+          "key": "evaluate",
+          "depends_on": [
+            "train"
+          ],
+          "executor": {
+            "name": "evaluate",
+            "version": "1"
+          }
+        },
+        {
+          "key": "qualify",
+          "depends_on": [
+            "evaluate"
+          ],
+          "executor": {
+            "name": "qualify",
+            "version": "1"
+          }
+        }
+      ],
+      "base_model": {
+        "repository": "example/classifier",
+        "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  "graph": {
+    "run": {
+      "schema_version": "semantic-router.training/v1",
+      "id": "run_neural",
+      "created_at": "2026-09-23T00:00:00Z",
+      "spec": {
+        "experiment_id": "experiment_neural",
+        "snapshot_id": "snapshot_neural",
+        "target_contract": "signal.label-scores/v1",
+        "trainer": {
+          "name": "neural",
+          "version": "1"
+        },
+        "parameters": {
+          "seed": 42,
+          "hidden_sizes": [
+            256,
+            128
+          ],
+          "learning_rate": 0.001
+        },
+        "tasks": [
+          {
+            "key": "train",
+            "executor": {
+              "name": "train",
+              "version": "1"
+            }
+          },
+          {
+            "key": "evaluate",
+            "depends_on": [
+              "train"
+            ],
+            "executor": {
+              "name": "evaluate",
+              "version": "1"
+            }
+          },
+          {
+            "key": "qualify",
+            "depends_on": [
+              "evaluate"
+            ],
+            "executor": {
+              "name": "qualify",
+              "version": "1"
+            }
+          }
+        ],
+        "base_model": {
+          "repository": "example/classifier",
+          "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "status": "succeeded",
+      "updated_at": "2026-09-23T00:00:00Z"
+    },
+    "tasks": [
+      {
+        "schema_version": "semantic-router.training/v1",
+        "id": "task_neural-train",
+        "created_at": "2026-09-23T00:00:00Z",
+        "run_id": "run_neural",
+        "spec": {
+          "key": "train",
+          "executor": {
+            "name": "train",
+            "version": "1"
+          }
+        },
+        "status": "succeeded",
+        "attempts": [
+          {
+            "schema_version": "semantic-router.training/v1",
+            "id": "attempt_neural-train",
+            "created_at": "2026-09-23T00:00:00Z",
+            "number": 1,
+            "worker_handle": "job_neural-train",
+            "status": "succeeded",
+            "started_at": "2026-09-23T00:00:00Z",
+            "finished_at": "2026-09-23T00:00:00Z"
+          }
+        ]
+      },
+      {
+        "schema_version": "semantic-router.training/v1",
+        "id": "task_neural-evaluate",
+        "created_at": "2026-09-23T00:00:00Z",
+        "run_id": "run_neural",
+        "spec": {
+          "key": "evaluate",
+          "depends_on": [
+            "train"
+          ],
+          "executor": {
+            "name": "evaluate",
+            "version": "1"
+          }
+        },
+        "status": "succeeded",
+        "attempts": [
+          {
+            "schema_version": "semantic-router.training/v1",
+            "id": "attempt_neural-evaluate",
+            "created_at": "2026-09-23T00:00:00Z",
+            "number": 1,
+            "worker_handle": "job_neural-evaluate",
+            "status": "succeeded",
+            "started_at": "2026-09-23T00:00:00Z",
+            "finished_at": "2026-09-23T00:00:00Z"
+          }
+        ]
+      },
+      {
+        "schema_version": "semantic-router.training/v1",
+        "id": "task_neural-qualify",
+        "created_at": "2026-09-23T00:00:00Z",
+        "run_id": "run_neural",
+        "spec": {
+          "key": "qualify",
+          "depends_on": [
+            "evaluate"
+          ],
+          "executor": {
+            "name": "qualify",
+            "version": "1"
+          }
+        },
+        "status": "succeeded",
+        "attempts": [
+          {
+            "schema_version": "semantic-router.training/v1",
+            "id": "attempt_neural-qualify",
+            "created_at": "2026-09-23T00:00:00Z",
+            "number": 1,
+            "worker_handle": "job_neural-qualify",
+            "status": "succeeded",
+            "started_at": "2026-09-23T00:00:00Z",
+            "finished_at": "2026-09-23T00:00:00Z"
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "artifact_ids": [
+        "artifact_neural"
+      ],
+      "evaluation_ids": [
+        "evaluation_neural"
+      ],
+      "qualification_ids": [
+        "qualification_neural"
+      ]
+    }
+  },
+  "worker_request": {
+    "schema_version": "semantic-router.training/v1",
+    "run_id": "run_neural",
+    "attempt_id": "attempt_neural-train",
+    "snapshot": {
+      "schema_version": "semantic-router.training/v1",
+      "id": "snapshot_neural",
+      "created_at": "2026-09-23T00:00:00Z",
+      "asset_id": "asset_neural",
+      "upload_handle": "upload_neural",
+      "source": {
+        "repository": "example/data",
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "preprocessing": [
+        {
+          "name": "normalize",
+          "version": "1"
+        }
+      ],
+      "profile": {
+        "target_contract": "signal.label-scores/v1",
+        "classifier": {
+          "label_mapping": {
+            "negative": 0,
+            "positive": 1
+          }
+        }
+      },
+      "content": {
+        "handle": "file_neural-data",
+        "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "size_bytes": 7
+      }
+    },
+    "task_id": "task_neural-train",
+    "executor": {
+      "name": "train",
+      "version": "1"
+    },
+    "trainer": {
+      "name": "neural",
+      "version": "1"
+    },
+    "parameters": {
+      "seed": 42,
+      "hidden_sizes": [
+        256,
+        128
+      ],
+      "learning_rate": 0.001
+    },
+    "base_model": {
+      "repository": "example/classifier",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "train_result": {
+    "schema_version": "semantic-router.training/v1",
+    "status": "succeeded",
+    "artifacts": [
+      {
+        "profile": {
+          "target_contract": "signal.label-scores/v1",
+          "classifier": {
+            "label_mapping": {
+              "negative": 0,
+              "positive": 1
+            }
+          }
+        },
+        "manifest_bundle": {
+          "handle": "file_neural-manifests",
+          "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+          "size_bytes": 7
+        },
+        "variants": [
+          {
+            "format": {
+              "name": "safetensors",
+              "version": "1"
+            },
+            "files": {
+              "config.json": {
+                "handle": "file_neural-part0",
+                "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+                "size_bytes": 7
+              },
+              "tokenizer/tokenizer.json": {
+                "handle": "file_neural-part1",
+                "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+                "size_bytes": 7
+              },
+              "model-00001-of-00002.safetensors": {
+                "handle": "file_neural-part2",
+                "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+                "size_bytes": 7
+              },
+              "model-00002-of-00002.safetensors": {
+                "handle": "file_neural-part3",
+                "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+                "size_bytes": 7
+              }
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "artifact": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "artifact_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "profile": {
+      "target_contract": "signal.label-scores/v1",
+      "classifier": {
+        "label_mapping": {
+          "negative": 0,
+          "positive": 1
+        }
+      }
+    },
+    "provenance": {
+      "run_id": "run_neural",
+      "task_id": "task_neural-train",
+      "attempt_id": "attempt_neural-train",
+      "snapshot_id": "snapshot_neural",
+      "trainer": {
+        "name": "neural",
+        "version": "1"
+      },
+      "manifest_bundle": {
+        "handle": "file_neural-manifests",
+        "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "size_bytes": 7
+      }
+    }
+  },
+  "variant": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "variant_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "artifact_id": "artifact_neural",
+    "format": {
+      "name": "safetensors",
+      "version": "1"
+    },
+    "files": {
+      "config.json": {
+        "handle": "file_neural-part0",
+        "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "size_bytes": 7
+      },
+      "tokenizer/tokenizer.json": {
+        "handle": "file_neural-part1",
+        "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "size_bytes": 7
+      },
+      "model-00001-of-00002.safetensors": {
+        "handle": "file_neural-part2",
+        "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "size_bytes": 7
+      },
+      "model-00002-of-00002.safetensors": {
+        "handle": "file_neural-part3",
+        "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "size_bytes": 7
+      }
+    }
+  },
+  "evaluate_request": {
+    "schema_version": "semantic-router.training/v1",
+    "run_id": "run_neural",
+    "attempt_id": "attempt_neural-evaluate",
+    "snapshot": {
+      "schema_version": "semantic-router.training/v1",
+      "id": "snapshot_neural",
+      "created_at": "2026-09-23T00:00:00Z",
+      "asset_id": "asset_neural",
+      "upload_handle": "upload_neural",
+      "source": {
+        "repository": "example/data",
+        "revision": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "preprocessing": [
+        {
+          "name": "normalize",
+          "version": "1"
+        }
+      ],
+      "profile": {
+        "target_contract": "signal.label-scores/v1",
+        "classifier": {
+          "label_mapping": {
+            "negative": 0,
+            "positive": 1
+          }
+        }
+      },
+      "content": {
+        "handle": "file_neural-data",
+        "digest": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "size_bytes": 7
+      }
+    },
+    "inputs": [
+      {
+        "schema_version": "semantic-router.training/v1",
+        "id": "variant_neural",
+        "created_at": "2026-09-23T00:00:00Z",
+        "artifact_id": "artifact_neural",
+        "format": {
+          "name": "safetensors",
+          "version": "1"
+        },
+        "files": {
+          "config.json": {
+            "handle": "file_neural-part0",
+            "digest": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+            "size_bytes": 7
+          },
+          "tokenizer/tokenizer.json": {
+            "handle": "file_neural-part1",
+            "digest": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+            "size_bytes": 7
+          },
+          "model-00001-of-00002.safetensors": {
+            "handle": "file_neural-part2",
+            "digest": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+            "size_bytes": 7
+          },
+          "model-00002-of-00002.safetensors": {
+            "handle": "file_neural-part3",
+            "digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+            "size_bytes": 7
+          }
+        }
+      }
+    ],
+    "task_id": "task_neural-evaluate",
+    "executor": {
+      "name": "evaluate",
+      "version": "1"
+    },
+    "trainer": {
+      "name": "neural",
+      "version": "1"
+    },
+    "parameters": {
+      "seed": 42,
+      "hidden_sizes": [
+        256,
+        128
+      ],
+      "learning_rate": 0.001
+    },
+    "base_model": {
+      "repository": "example/classifier",
+      "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "evaluate_result": {
+    "schema_version": "semantic-router.training/v1",
+    "status": "succeeded",
+    "evaluations": [
+      {
+        "variant_id": "variant_neural",
+        "snapshot_id": "snapshot_neural",
+        "method": {
+          "name": "accuracy",
+          "version": "1"
+        },
+        "metrics": {
+          "accuracy": 0.9
+        }
+      }
+    ]
+  },
+  "evaluation": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "evaluation_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "variant_id": "variant_neural",
+    "snapshot_id": "snapshot_neural",
+    "method": {
+      "name": "accuracy",
+      "version": "1"
+    },
+    "metrics": {
+      "accuracy": 0.9
+    },
+    "provenance": {
+      "run_id": "run_neural",
+      "task_id": "task_neural-evaluate",
+      "attempt_id": "attempt_neural-evaluate",
+      "snapshot_id": "snapshot_neural",
+      "trainer": {
+        "name": "neural",
+        "version": "1"
+      },
+      "manifest_bundle": {
+        "handle": "file_neural-manifests",
+        "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "size_bytes": 7
+      }
+    }
+  },
+  "qualify_result": {
+    "schema_version": "semantic-router.training/v1",
+    "status": "succeeded",
+    "qualifications": [
+      {
+        "variant_id": "variant_neural",
+        "runtime": {
+          "name": "router",
+          "version": "1"
+        },
+        "compatible": true,
+        "receipt": {
+          "handle": "file_neural-receipt",
+          "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+          "size_bytes": 7
+        }
+      }
+    ]
+  },
+  "qualification": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "qualification_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "variant_id": "variant_neural",
+    "runtime": {
+      "name": "router",
+      "version": "1"
+    },
+    "compatible": true,
+    "receipt": {
+      "handle": "file_neural-receipt",
+      "digest": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "size_bytes": 7
+    },
+    "provenance": {
+      "run_id": "run_neural",
+      "task_id": "task_neural-qualify",
+      "attempt_id": "attempt_neural-qualify",
+      "snapshot_id": "snapshot_neural",
+      "trainer": {
+        "name": "neural",
+        "version": "1"
+      },
+      "manifest_bundle": {
+        "handle": "file_neural-manifests",
+        "digest": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "size_bytes": 7
+      }
+    }
+  },
+  "proposal": {
+    "schema_version": "semantic-router.training/v1",
+    "id": "proposal_neural",
+    "created_at": "2026-09-23T00:00:00Z",
+    "variant_id": "variant_neural",
+    "qualification_id": "qualification_neural",
+    "name": "neural"
+  }
+}

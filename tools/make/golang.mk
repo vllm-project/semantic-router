@@ -120,3 +120,12 @@ generate-api-check: install-controller-gen ## Check generated Kubernetes API cod
 	fi
 
 .PHONY: config-schema-generate config-schema-check check-perf-go-mod-tidy check-go-mod-tidy
+
+.PHONY: training-contract-generate training-contract-check
+training-contract-generate: ## Generate the shared training schema and Console types
+	@cd src/semantic-router && go generate ./pkg/trainingcontract
+
+training-contract-check: harness-venv-install ## Check training contracts without trainers or native libraries
+	@cd src/semantic-router && go run ../../tools/codegen/trainingcontract/main.go --root ../.. --check
+	@cd src/semantic-router && go test ./pkg/trainingcontract
+	@"$(AGENT_PYTHON)" -m unittest src.training.control_plane.test_contracts

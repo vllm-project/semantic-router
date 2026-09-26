@@ -1,0 +1,365 @@
+[
+  {
+    "name": "profile target mismatch",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "signal.label-scores/v1",
+      "selector": {
+        "candidate_models": [
+          "small",
+          "large"
+        ],
+        "observation_fields": [
+          "quality",
+          "latency_ms"
+        ]
+      }
+    }
+  },
+  {
+    "name": "duplicate candidates",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "selector.model-choice/v1",
+      "selector": {
+        "candidate_models": [
+          "small",
+          "small"
+        ],
+        "observation_fields": [
+          "quality",
+          "latency_ms"
+        ]
+      }
+    }
+  },
+  {
+    "name": "raw snapshot path",
+    "definition": "SubmitRunRequest",
+    "value": {
+      "schema_version": "semantic-router.training/v1",
+      "idempotency_key": "selector-fixture",
+      "spec": {
+        "experiment_id": "experiment_selector",
+        "snapshot_id": "/tmp/data.jsonl",
+        "target_contract": "selector.model-choice/v1",
+        "trainer": {
+          "name": "selector",
+          "version": "1"
+        },
+        "parameters": {
+          "seed": 42,
+          "kernel": "rbf",
+          "normalize": true
+        },
+        "tasks": [
+          {
+            "key": "train",
+            "executor": {
+              "name": "train",
+              "version": "1"
+            }
+          },
+          {
+            "key": "evaluate",
+            "depends_on": [
+              "train"
+            ],
+            "executor": {
+              "name": "evaluate",
+              "version": "1"
+            }
+          },
+          {
+            "key": "qualify",
+            "depends_on": [
+              "evaluate"
+            ],
+            "executor": {
+              "name": "qualify",
+              "version": "1"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "raw output field",
+    "definition": "SubmitRunRequest",
+    "value": {
+      "schema_version": "semantic-router.training/v1",
+      "idempotency_key": "selector-fixture",
+      "spec": {
+        "experiment_id": "experiment_selector",
+        "snapshot_id": "snapshot_selector",
+        "target_contract": "selector.model-choice/v1",
+        "trainer": {
+          "name": "selector",
+          "version": "1"
+        },
+        "parameters": {
+          "seed": 42,
+          "kernel": "rbf",
+          "normalize": true
+        },
+        "tasks": [
+          {
+            "key": "train",
+            "executor": {
+              "name": "train",
+              "version": "1"
+            }
+          },
+          {
+            "key": "evaluate",
+            "depends_on": [
+              "train"
+            ],
+            "executor": {
+              "name": "evaluate",
+              "version": "1"
+            }
+          },
+          {
+            "key": "qualify",
+            "depends_on": [
+              "evaluate"
+            ],
+            "executor": {
+              "name": "qualify",
+              "version": "1"
+            }
+          }
+        ],
+        "output_path": "/tmp/model"
+      }
+    }
+  },
+  {
+    "name": "unknown version",
+    "definition": "SubmitRunRequest",
+    "value": {
+      "schema_version": "semantic-router.training/v99",
+      "idempotency_key": "selector-fixture",
+      "spec": {
+        "experiment_id": "experiment_selector",
+        "snapshot_id": "snapshot_selector",
+        "target_contract": "selector.model-choice/v1",
+        "trainer": {
+          "name": "selector",
+          "version": "1"
+        },
+        "parameters": {
+          "seed": 42,
+          "kernel": "rbf",
+          "normalize": true
+        },
+        "tasks": [
+          {
+            "key": "train",
+            "executor": {
+              "name": "train",
+              "version": "1"
+            }
+          },
+          {
+            "key": "evaluate",
+            "depends_on": [
+              "train"
+            ],
+            "executor": {
+              "name": "evaluate",
+              "version": "1"
+            }
+          },
+          {
+            "key": "qualify",
+            "depends_on": [
+              "evaluate"
+            ],
+            "executor": {
+              "name": "qualify",
+              "version": "1"
+            }
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "empty candidate_models element",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "selector.model-choice/v1",
+      "selector": {
+        "candidate_models": [
+          ""
+        ],
+        "observation_fields": [
+          "quality",
+          "latency_ms"
+        ]
+      }
+    }
+  },
+  {
+    "name": "empty observation_fields element",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "selector.model-choice/v1",
+      "selector": {
+        "candidate_models": [
+          "small",
+          "large"
+        ],
+        "observation_fields": [
+          ""
+        ]
+      }
+    }
+  },
+  {
+    "name": "empty span label",
+    "definition": "Profile",
+    "value": {
+      "target_contract": "signal.spans/v1",
+      "spans": {
+        "labels": [
+          ""
+        ],
+        "offset_unit": "unicode-codepoint"
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name ''",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name '/tmp/model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "/tmp/model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name '../model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "../model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name 'weights/../config.json'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "weights/../config.json": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name 'C:\\\\model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "C:\\model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name 'weights\\\\model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "weights\\model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "invalid logical file name 'weights//model'",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {
+        "weights//model": {
+          "handle": "file_weights",
+          "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "size_bytes": 7
+        }
+      }
+    }
+  },
+  {
+    "name": "variant requires at least one named file",
+    "definition": "ArtifactVariantSpec",
+    "value": {
+      "format": {
+        "name": "safetensors",
+        "version": "1"
+      },
+      "files": {}
+    }
+  }
+]
