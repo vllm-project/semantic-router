@@ -20509,6 +20509,30 @@
                               "original_model": {
                                 "type": "string"
                               },
+                              "prepared_dispatch": {
+                                "nullable": true,
+                                "type": "object",
+                                "properties": {
+                                  "byte_length": {
+                                    "type": "integer"
+                                  },
+                                  "sha256": {
+                                    "type": "string"
+                                  },
+                                  "version": {
+                                    "type": "integer"
+                                  },
+                                  "wire_format": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "version",
+                                  "wire_format",
+                                  "sha256",
+                                  "byte_length"
+                                ]
+                              },
                               "previous_model": {
                                 "type": "string"
                               },
@@ -24641,6 +24665,30 @@
                         },
                         "original_model": {
                           "type": "string"
+                        },
+                        "prepared_dispatch": {
+                          "nullable": true,
+                          "type": "object",
+                          "properties": {
+                            "byte_length": {
+                              "type": "integer"
+                            },
+                            "sha256": {
+                              "type": "string"
+                            },
+                            "version": {
+                              "type": "integer"
+                            },
+                            "wire_format": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "version",
+                            "wire_format",
+                            "sha256",
+                            "byte_length"
+                          ]
                         },
                         "previous_model": {
                           "type": "string"
@@ -41434,7 +41482,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -43040,7 +43088,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {
@@ -44055,7 +44103,7 @@
             }
           },
           "202": {
-            "description": "Saved candidate awaiting publication; poll /api/v1/config/hash for its generated_runtime_hash",
+            "description": "Saved candidate awaiting publication (poll /api/v1/config/hash for its generated_runtime_hash), or, on a Kubernetes ConfigMap target, durably persisted with activation deferred to the router's next restart",
             "content": {
               "application/json": {
                 "schema": {

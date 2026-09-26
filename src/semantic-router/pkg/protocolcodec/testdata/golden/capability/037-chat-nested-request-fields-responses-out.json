@@ -24,7 +24,6 @@
                   "type": "input_file"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -46,7 +45,6 @@
                   "type": "input_file"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -69,7 +67,6 @@
                   "type": "input_image"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -113,8 +110,8 @@
       "outcome": {
         "status": "error",
         "error": {
-          "category": "unsupported_feature",
-          "code": "unsupported_tool_call"
+          "category": "invalid_request",
+          "code": "invalid_tool_call"
         }
       }
     },
@@ -131,7 +128,6 @@
                   "type": "refusal"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "assistant",
               "type": "message"
             }

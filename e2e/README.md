@@ -168,7 +168,10 @@ x 2 response modes, for 18 required end-to-end cells. Each cell validates the
 client-native response envelope or SSE sequence, the terminal event, translated
 backend output, and the absence of leaked backend wire shapes. The same profiles
 also cover tool-call lifecycles, structured JSON Schema output, provider transport
-errors, incomplete streams, and midstream failures. The `response-api` profile
+errors, incomplete streams, and midstream failures. Both profiles also replay the
+captured Claude Code and Copilot CLI tool loops in
+[`testcases/testdata/agent_clients`](testcases/testdata/agent_clients/README.md)
+against each backend a capture declares. The `response-api` profile
 also verifies the deployed provider fixture's native image-generation endpoint: two
 valid deterministic PNG payloads and strict unknown-field rejection. This direct
 fixture assertion does not claim Router image-generation support.

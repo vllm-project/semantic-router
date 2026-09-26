@@ -122,6 +122,32 @@
           "code": "unsupported_tools_input_examples"
         }
       }
+    },
+    {
+      "name": "message_output_config_effort",
+      "outcome": {
+        "status": "ok",
+        "body": {
+          "max_completion_tokens": 32,
+          "messages": [
+            {
+              "content": "first turn",
+              "role": "user"
+            },
+            {
+              "content": "second turn",
+              "role": "user"
+            }
+          ],
+          "model": "routed-model"
+        },
+        "diagnostics": [
+          {
+            "field": "messages[].output_config.effort",
+            "action": "dropped"
+          }
+        ]
+      }
     }
   ]
 }

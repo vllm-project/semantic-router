@@ -197,7 +197,7 @@ func (r *OpenAIRouter) buildMemoryRetrieveOptions(
 		retrieveOpts.Limit = 5
 	}
 	if retrieveOpts.Threshold <= 0 {
-		retrieveOpts.Threshold = 0.6
+		retrieveOpts.Threshold = config.DefaultMemorySimilarityThreshold
 	}
 
 	return retrieveOpts

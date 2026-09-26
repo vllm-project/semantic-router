@@ -581,6 +581,11 @@ def _remove_runtime_network(network_name: str) -> bool:
     detail = (stderr or "").strip()
     if "not found" in detail.lower() or "no such network" in detail.lower():
         return True
+    if "active endpoints" in detail.lower():
+        log.warning(
+            f"Keeping network {network_name}: external containers are still attached"
+        )
+        return True
     log.error(
         f"Failed to remove network {network_name}: "
         f"{detail or f'exit code {return_code}'}"

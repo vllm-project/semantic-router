@@ -25,6 +25,8 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	appendProviderFieldOmissions(&diagnostics, policy, llmprotocol.OpenAIChatV1, map[string]bool{
 		"choices.message.tool_calls.function.TokenizedArguments": chatChoicesHaveTokenizedArguments(wire.Choices),
 		"choices.message.tool_calls.index":                       chatChoicesHaveToolCallIndex(wire.Choices),
+		"provider":                                               wire.Provider != nil,
+		"choices.native_finish_reason":                           chatChoicesHaveNativeFinishReason(wire.Choices),
 		"kv_transfer":                                            wire.hasLegacyKVTransferMetadata(),
 		"metadata":                                               len(wire.Metadata) > 0,
 		"moderation":                                             len(wire.Moderation) > 0,
@@ -37,11 +39,38 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	if err := decodeChatResponseUsage(wire.Usage, &response, &diagnostics, policy); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
 	}
-	// Preserve the canonical bytes, not the upstream ones: a same-format
-	// encode replays the envelope verbatim, so preserving decorations here
-	// would re-emit what the decode just dropped.
+	// A same-format encode may replay the response byte-for-byte. OpenRouter's
+	// provider, native finish reason and accounting decorations were dropped
+	// from the neutral response, so render it again instead of leaking them.
+	needsReencode := wire.hasOpenRouterDecorations()
+	if needsReencode {
+		canonicalBody = nil
+	}
 	envelope := responseEnvelope(llmprotocol.OpenAIChatV1, canonicalBody, response.Generation, response.SourceStopReason, policy)
+	envelope.ResponseReencodeRequired = needsReencode
 	return response, envelope, diagnostics, nil
+}
+
+func chatChoicesHaveNativeFinishReason(choices []chatChoiceWire) bool {
+	for _, choice := range choices {
+		if choice.NativeFinishReason != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func (wire chatResponseWire) hasOpenRouterDecorations() bool {
+	if wire.Provider != nil || chatChoicesHaveNativeFinishReason(wire.Choices) {
+		return true
+	}
+	if wire.Usage == nil {
+		return false
+	}
+	usage := wire.Usage
+	return usage.Cost != nil || usage.IsBYOK != nil || usage.CostDetails != nil || usage.ServerToolUse != nil ||
+		usage.PromptTokensDetails != nil && usage.PromptTokensDetails.VideoTokens != nil ||
+		usage.CompletionTokensDetails != nil && usage.CompletionTokensDetails.ImageTokens != nil
 }
 
 func chatChoicesHaveTokenizedArguments(choices []chatChoiceWire) bool {
@@ -98,10 +127,12 @@ func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool 
 		prefix + "compute_units":                                        len(wire.ComputeUnits) > 0,
 		prefix + "prompt_tokens_details.audio_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.AudioTokens != 0,
 		prefix + "prompt_tokens_details.image_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.ImageTokens != 0,
+		prefix + "prompt_tokens_details.video_tokens":                   wire.PromptTokensDetails != nil && wire.PromptTokensDetails.VideoTokens != nil,
 		prefix + "prompt_tokens_details.text_tokens":                    wire.PromptTokensDetails != nil && wire.PromptTokensDetails.TextTokens != 0,
 		prefix + "prompt_tokens_details.multimodal_tokens":              wire.PromptTokensDetails != nil && len(wire.PromptTokensDetails.MultimodalTokens) > 0,
 		prefix + "completion_tokens_details.accepted_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AcceptedPredictionTokens != 0,
 		prefix + "completion_tokens_details.audio_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.AudioTokens != 0,
+		prefix + "completion_tokens_details.image_tokens":               wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.ImageTokens != nil,
 		prefix + "completion_tokens_details.rejected_prediction_tokens": wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.RejectedPredictionTokens != 0,
 		prefix + "completion_tokens_details.text_tokens":                wire.CompletionTokensDetails != nil && wire.CompletionTokensDetails.TextTokens != 0,
 		prefix + "cost_in_usd_ticks":                                    wire.CostInUSDTicks != nil,
@@ -110,6 +141,10 @@ func chatUsageFieldOmissions(wire chatUsageWire, prefix string) map[string]bool 
 		prefix + "prompt_time":                                          wire.PromptTime != nil,
 		prefix + "completion_time":                                      wire.CompletionTime != nil,
 		prefix + "total_time":                                           wire.TotalTime != nil,
+		prefix + "cost":                                                 wire.Cost != nil,
+		prefix + "is_byok":                                              wire.IsBYOK != nil,
+		prefix + "cost_details":                                         wire.CostDetails != nil,
+		prefix + "server_tool_use":                                      wire.ServerToolUse != nil,
 	}
 }
 
@@ -163,7 +198,7 @@ func decodeChatChoiceItem(choice chatChoiceWire, responseID string, policy llmpr
 	if err != nil {
 		return llmprotocol.OutputItem{}, err
 	}
-	item := llmprotocol.OutputItem(message)
+	item := llmprotocol.OutputItem{ID: message.ID, Role: message.Role, Content: message.Content}
 	if item.ID == "" && policy.MissingStableIDs == llmprotocol.MissingIDGenerateStable {
 		item.ID = llmprotocol.StableID("chat-response", responseID, fmt.Sprint(choice.Index))
 	}
