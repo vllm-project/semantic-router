@@ -35,14 +35,22 @@ def test_new_choice_operations_require_both_sources() -> None:
         solve("eligibility_deadline", eligibility, deadlines, {"deadline": 11})
         == "HOLD"
     )
-    left = {"A": True, "B": False}
+    left = {
+        "A": {"quality": 90, "endurance": 40, "certified": True},
+        "B": {"quality": 90, "endurance": 40, "certified": False},
+    }
     right = {
         "A": {"available": False, "price": 8},
         "B": {"available": True, "price": 5},
     }
-    params = {"priority": ["A", "B"]}
+    params = {
+        "priority": ["A", "B"],
+        "minimum_quality": 80,
+        "minimum_endurance": 30,
+    }
     assert solve("dual_clearance_choice", left, right, params) == "HOLD"
-    assert solve("dual_clearance_choice", {"A": True, "B": True}, right, params) == "B"
+    changed_left = {"A": left["A"], "B": {**left["B"], "certified": True}}
+    assert solve("dual_clearance_choice", changed_left, right, params) == "B"
     assert (
         solve(
             "dual_clearance_choice",

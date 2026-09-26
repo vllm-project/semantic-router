@@ -90,7 +90,14 @@ def solve(
     if operation == "dual_clearance_choice":
         if set(left) != set(right) or set(left) != set(params["priority"]):
             raise ValueError("Dual clearance candidate universe mismatch")
-        eligible = [key for key in left if left[key] and right[key]["available"]]
+        eligible = [
+            key
+            for key, record in left.items()
+            if record["quality"] >= params["minimum_quality"]
+            and record["endurance"] >= params["minimum_endurance"]
+            and record["certified"]
+            and right[key]["available"]
+        ]
         return (
             min(
                 eligible,
