@@ -208,3 +208,50 @@ there and any subsequently started partial optimizer window is discarded.
 If it passes, the same process continues to at most step483. The additional
 17 updates are disclosed in any full-run comparison; this arm does not claim
 strictly equal compute with the direct control.
+
+## A1 frozen step-128 result and stop decision
+
+The A1 run used the pinned Sol 1.0 source, the frozen 7,725-row TRAIN and the
+same 700-row SELECT/CAL as direct clean-v2. The container image digest was
+`f83b1d10f14dbe46ea14ee56fd3e5d01849673f3739fed5311c99ba54cbc2d54`;
+the trainer source SHA-256 was
+`0315661042a3d78c77fd957d315fb6ee42c8b3ce99d25d3f39df133233b747e3`,
+matching the direct clean-v2 control's recorded trainer. Source, selection,
+and calibration SHA checks passed in the run provenance (SHA-256
+`8191de42b0cd715416573f2101af052b3b775f95fceef1161992588fcd31c190`).
+Both runs had the same pretraining SELECT baseline: 506/700 and family macro
+.660833. The A1 run was paused after complete checkpoint128, screened on
+that frozen checkpoint, and stopped. Three subsequent in-flight optimizer
+windows reached training log step131 before the task-owned container stopped;
+there is no later checkpoint or completion marker, and none of those windows
+were used for selection. The complete checkpoint128 receipt SHA-256 is
+`bb2ed4321657308cf697a4b40ad72c7ec50528d110`, with adapter SHA-256
+`c49820d454b75ec817aba152fba2dc501b63780ccfc111b4e9083350f6b36046`
+and head SHA-256
+`db1ef1f005d4b6ec94f3b0cfc02597a10410d3276a1b84a24f8288be6c219d8c`.
+
+| SELECT700 checkpoint | Correct | Family macro | Macro Brier | Human Choice | Human Noul | String composition | Quantized median |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Direct clean-v2 step128 | 538 | .707407 | .169612 | 143/200 | 177/200 | 8/40 | 40/90 |
+| A1 short replay step128 | 540 | .709352 | .170669 | 146/200 | 178/200 | 9/40 | 37/90 |
+
+A1 missed the preregistered **545/700** and **.713** continuation gates;
+the human-slice floors passed. It is eliminated, with **no CAL fit, no
+DEV/CSS/public231 evaluation, and no 9B Arm B launch** from this evidence.
+The 700 raw prediction IDs, prompt digests, and token IDs matched the direct
+control exactly. Paired outcomes had nine wrong-to-right and seven
+right-to-wrong flips, net +2; a 5,000-draw bootstrap over 455 SELECT source
+groups (maximum group size two) gave micro-accuracy delta 95% interval
+[-0.72, +1.30] percentage points and family-macro delta interval
+[-1.82, +2.26] points. This is a diagnostic interval on SELECT, not proof of
+generalization. Raw A1 metrics and predictions have SHA-256
+`33f93dfbd413b32502ef61d24f67b332344e0835d9bd1d17e0ca24caa6e16972`
+and `aeaa9a3266aa1455d3a3d48cd9d9196832eef8067d4348f133cb28fe0f3ed581`.
+
+This result argues against repeating tiny, mostly arithmetic replay as the
+main 2B/9B recovery intervention. The A1 data added only 3.12% input-token
+mass and seven explicit stage3 transition-set rows; the observed +2 SELECT
+items do not support a broad model-family claim. A larger intervention needs
+new, genuinely diverse rights-audited rule/transition evidence and a frozen
+equal-compute control before GPU training. No sealed FINAL/CSS15 gold was
+opened for this arm.
