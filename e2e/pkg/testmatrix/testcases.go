@@ -81,6 +81,8 @@ var DashboardContract = []string{
 	"dashboard-deploy-invalid-yaml",
 	// A semantically invalid deploy must leave the active config serving (issue #3233)
 	"dashboard-deploy-safe-failure",
+	// Rollback must restore the exact pre-deploy config and ledger both operations (issue #3233)
+	"dashboard-deploy-rollback",
 	// sr-bench execution, final-channel scoring, accounting, idempotency, and cancellation.
 	"dashboard-sr-bench",
 	// Sessions/workflows survive Dashboard restart; independent worker evidence survives its own restart.
