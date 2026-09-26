@@ -37,6 +37,20 @@ config:
             provider: vllm
             endpoint: provider-mocker.default.svc.cluster.local:8000
             weight: 1
+      # Identical Chat candidates tie under hybrid scoring, so only
+      # prompt_cache_key affinity can move a request off the first one.
+      - name: mock/cache-affinity-a
+        backend_refs:
+          - name: test-endpoint
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
+      - name: mock/cache-affinity-b
+        backend_refs:
+          - name: test-endpoint
+            provider: vllm
+            endpoint: provider-mocker.default.svc.cluster.local:8000
+            weight: 1
       # The hosted image_generation operation is expressible on the Responses
       # wire only, so this card names a Responses-capable backend. The chat-wire
       # cards above deliberately stay without it: the dispatch must reject the
@@ -89,6 +103,34 @@ config:
         modelRefs:
           - model: nemotron-summary-responses
             use_reasoning: true
+      - name: cache_affinity_seed_decision
+        description: Serve a key's first request from the candidate the tie does not pick.
+        priority: 105
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: cache_affinity_seed
+        modelRefs:
+          - model: mock/cache-affinity-b
+      - name: cache_affinity_decision
+        description: Tie two identical candidates under hybrid selection.
+        priority: 105
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: cache_affinity_probe
+        modelRefs:
+          - model: mock/cache-affinity-a
+          - model: mock/cache-affinity-b
+        algorithm:
+          type: hybrid
+          hybrid:
+            experience_weight: 0.4
+            router_dc_weight: 0.4
+            automix_weight: 0.2
+            cost_weight: 0.1
       - name: default_decision
         description: Default catch-all decision
         priority: 1
@@ -126,6 +168,14 @@ config:
           operator: OR
           keywords:
             - reasoning_summary_template_probe
+        - name: cache_affinity_seed
+          operator: OR
+          keywords:
+            - cache_affinity_seed_probe
+        - name: cache_affinity_probe
+          operator: OR
+          keywords:
+            - cache_affinity_followup_probe
       input_modality:
         - name: image_input
           description: Request contains at least one image content part.
@@ -139,6 +189,8 @@ config:
       - name: openai/gpt-oss-20b
         capabilities: [chat]
       - name: mock/native-responses
+      - name: mock/cache-affinity-a
+      - name: mock/cache-affinity-b
       - name: mock/ollama-chat
         capabilities: [chat]
       # Explicit task declarations distinguish these custom simulator models.
