@@ -16,7 +16,7 @@ const (
 )
 
 var resourceManifests = []string{
-	"deploy/kubernetes/router-replay/mock-vllm.yaml",
+	"deploy/kubernetes/router-replay/provider-mocker.yaml",
 	"deploy/kubernetes/response-api/gwapi-resources.yaml",
 }
 
@@ -33,7 +33,7 @@ func NewProfile() *Profile {
 			SemanticRouterValuesFile: valuesFile,
 			PrerequisiteManifests:    []string{postgresManifest},
 			ResourceManifests:        resourceManifests,
-			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "mock-vllm"}},
+			WaitDeployments:          []helpers.DeploymentRef{{Namespace: "default", Name: "provider-mocker"}},
 		}),
 	}
 }

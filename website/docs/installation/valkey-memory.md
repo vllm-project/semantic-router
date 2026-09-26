@@ -159,11 +159,17 @@ global:
         index_ef_construction: 256
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.40
       hybrid_search: true
-      hybrid_mode: rerank
+      hybrid_mode: weighted
       adaptive_threshold: true
 ```
+
+The threshold in this example is calibrated for `bert` (`mom-embedding-light`)
+with weighted hybrid scoring. Other embedding models and search modes need
+their own recall and unrelated-query checks before choosing a threshold.
+Lower thresholds can also retrieve superseded facts alongside corrections;
+check updated facts before relying on the example in production.
 
 ### Configuration Reference
 
@@ -334,5 +340,5 @@ To switch an existing deployment from Milvus to Valkey:
 4. Existing memories in Milvus are **not** automatically migrated
 
 :::warning
-Switching backends does not migrate data. If you need to preserve existing memories, export them from Milvus and re-import via the memory API before switching.
+Switching backends does not migrate data, and the two backends do not share storage. The management API can list and delete memories but has no import or bulk export endpoint, so after the switch the Valkey store starts empty and repopulates from new traffic.
 :::

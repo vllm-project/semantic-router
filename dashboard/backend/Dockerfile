@@ -91,7 +91,10 @@ COPY src/semantic-router/pkg/catalog/ /app/src/semantic-router/pkg/catalog/
 COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
 COPY src/semantic-router/pkg/configschema/ /app/src/semantic-router/pkg/configschema/
 COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
+COPY src/semantic-router/pkg/fallback/ /app/src/semantic-router/pkg/fallback/
 COPY src/semantic-router/pkg/headers/ /app/src/semantic-router/pkg/headers/
+COPY src/semantic-router/pkg/k8s/configwriter/ /app/src/semantic-router/pkg/k8s/configwriter/
+COPY src/semantic-router/pkg/llmprotocol/ /app/src/semantic-router/pkg/llmprotocol/
 COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
 COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
 COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
@@ -131,7 +134,7 @@ RUN set -eux; \
       done; \
       return 1; \
     }; \
-    apt_get_install_with_retry ca-certificates curl docker.io gosu libseccomp2 wget
+    apt_get_install_with_retry ca-certificates curl docker.io git gosu libseccomp2 wget
 WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend

@@ -55,9 +55,9 @@ inventory:
           - anthropic/claude-sonnet-5
           - anthropic/claude-opus-4.8
       - publisher: ByteDance / Seed
+        min_representatives: 2
         representative_models:
           - bytedance/seed-2.1-pro
-          - bytedance/seed-2.0-pro
           - bytedance/seed-oss-36b-instruct
       - publisher: Cohere
         representative_models:
@@ -131,6 +131,7 @@ inventory:
           - thinking-machines/inkling-small
       - publisher: Xiaomi
         representative_models:
+          - xiaomi/mimo-v2.6-flash
           - xiaomi/mimo-v2.5-pro
           - xiaomi/mimo-v2.5
           - xiaomi/mimo-v2-flash

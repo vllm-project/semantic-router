@@ -29,6 +29,7 @@ RUN python tools/calibration/image-routing/prepare_assets.py --repository-root /
 FROM --platform=$BUILDPLATFORM python:3.12-slim-bookworm AS vela-omni-builder
 ENV HF_HOME=/tmp/vela-hf-cache PIP_DISABLE_PIP_VERSION_CHECK=1
 WORKDIR /build/vela-omni
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 COPY tools/models/vela_omni/requirements.txt ./
 RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.8.0 torchaudio==2.8.0 && \
     pip install --no-cache-dir -r requirements.txt
@@ -48,13 +49,21 @@ WORKDIR /build
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
 # Install cross-compilation toolchain and OpenSSL for arm64 (needed by hf-hub -> openssl-sys, esaxx-rs -> g++)
+# libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# An upload skew can require downgrading preinstalled OpenSSL in this builder;
+# the runtime stage installs its own packages from the current archive.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       dpkg --add-architecture arm64 && \
-      apt-get update && apt-get install -y \
+      apt-get update && \
+      host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
+      ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
+      apt-get install -y --allow-downgrades --no-remove \
         gcc-aarch64-linux-gnu \
         g++-aarch64-linux-gnu \
-        libssl-dev:arm64 \
-        libssl-dev \
+        "libssl-dev:arm64=${ssl_version}" \
+        "libssl3:arm64=${ssl_version}" \
+        "libssl-dev=${ssl_version}" \
+        "libssl3=${ssl_version}" \
         pkg-config && \
       rm -rf /var/lib/apt/lists/* && \
       rustup target add aarch64-unknown-linux-gnu; \
@@ -299,12 +308,20 @@ RUN bash /build/check-native-abi.sh \
 
 # Build router (cross-compile for arm64 when TARGETARCH=arm64)
 # arm64: need libssl-dev:arm64 because libcandle_semantic_router.so dynamically links OpenSSL
+# libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# Keep all four packages pinned, including a preinstalled native libssl-dev.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       dpkg --add-architecture arm64 && \
-      apt-get update && apt-get install -y \
+      apt-get update && \
+      host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
+      ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
+      apt-get install -y --allow-downgrades --no-remove \
         gcc-aarch64-linux-gnu \
         g++-aarch64-linux-gnu \
-        libssl-dev:arm64 && \
+        "libssl-dev:arm64=${ssl_version}" \
+        "libssl3:arm64=${ssl_version}" \
+        "libssl-dev=${ssl_version}" \
+        "libssl3=${ssl_version}" && \
       rm -rf /var/lib/apt/lists/* && \
       CC=aarch64-linux-gnu-gcc \
       CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \

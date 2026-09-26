@@ -152,11 +152,15 @@ global:
         index_ef_construction: 256
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.40
       hybrid_search: true
-      hybrid_mode: rerank
+      hybrid_mode: weighted
       adaptive_threshold: true
 ```
+
+此示例的阈值适用于使用加权混合评分的 `bert`（`mom-embedding-light`）。
+其他嵌入模型和检索模式应分别验证事实召回与无关查询后再选择阈值。
+较低阈值也可能同时召回更正前后的事实；在生产环境使用前应检查更新后的事实。
 
 ### 配置参考
 
@@ -313,5 +317,5 @@ Valkey 将所有数据存储在内存中。如果达到内存上限：
 4. Milvus 中的现有记忆**不会**自动迁移
 
 :::warning
-切换后端不会迁移数据。如果需要保留现有记忆，在切换之前从 Milvus 导出它们，并通过 memory API 重新导入。
+切换后端不会迁移数据，两个后端也不共享存储。管理 API 可以列出和删除记忆，但没有导入或批量导出端点，因此切换后 Valkey 存储从空开始，并随新流量重新积累记忆。
 :::

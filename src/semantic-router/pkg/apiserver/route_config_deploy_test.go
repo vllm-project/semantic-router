@@ -672,7 +672,11 @@ func TestWaitForRuntimeConfigActivationRecognizesPublishedDocument(t *testing.T)
 	registry := routerruntime.NewRegistry(activeCfg)
 	apiServer := &ClassificationAPIServer{configPath: configPath, runtimeRegistry: registry}
 
-	runtimeHash, status := apiServer.waitForRuntimeConfigActivation(configPath, 0)
+	generatedDocument, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("read generated document: %v", err)
+	}
+	runtimeHash, status := apiServer.waitForRuntimeConfigActivation(configPath, generatedDocument, 0)
 	if status != "active" || runtimeHash != activeCfg.DocumentHash {
 		t.Fatalf("activation result = (%q, %q), want (%q, active)", runtimeHash, status, activeCfg.DocumentHash)
 	}
@@ -690,7 +694,10 @@ func TestConfigVersionSourceMetadataUsesCanonicalOrigins(t *testing.T) {
 		t.Fatalf("set permissive backup directory mode: %v", err)
 	}
 
-	apiVersion, backupDir := server.recordRouterConfigArtifacts(configPath, []byte("version: v0.3\n"))
+	apiVersion, backupDir, backupErr := server.recordRouterConfigArtifacts(configPath, []byte("version: v0.3\n"))
+	if backupErr != nil {
+		t.Fatal(backupErr)
+	}
 	if got := readConfigVersionSource(backupDir, apiVersion); got != configVersionSourceAPI {
 		t.Fatalf("API backup source = %q, want %q", got, configVersionSourceAPI)
 	}
@@ -726,7 +733,9 @@ func TestConfigCleanupBackupsRemovesSourceSidecar(t *testing.T) {
 		); err != nil {
 			t.Fatalf("write backup: %v", err)
 		}
-		writeConfigVersionSource(backupDir, version, configVersionSourceAPI)
+		if sourceErr := writeConfigVersionSource(backupDir, version, configVersionSourceAPI); sourceErr != nil {
+			t.Fatal(sourceErr)
+		}
 	}
 
 	configCleanupBackups(backupDir)

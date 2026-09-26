@@ -21,6 +21,16 @@
       }
     },
     {
+      "name": "context_management",
+      "outcome": {
+        "status": "error",
+        "error": {
+          "category": "unsupported_feature",
+          "code": "lossy_translation"
+        }
+      }
+    },
+    {
       "name": "inference_geo",
       "outcome": {
         "status": "error",
@@ -43,7 +53,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -66,7 +75,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -89,7 +97,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -113,7 +120,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -136,7 +142,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -192,7 +197,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -216,7 +220,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "system",
               "type": "message"
             },
@@ -227,7 +230,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -250,7 +252,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -284,7 +285,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -321,7 +321,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }
@@ -364,7 +363,6 @@
                   "type": "input_text"
                 }
               ],
-              "id": "item_6a32e29c376158d871e9638e",
               "role": "user",
               "type": "message"
             }

@@ -137,9 +137,8 @@ func TestPlaygroundOutcomeProxyForcesRecordOnlyForReadRole(t *testing.T) {
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
-		store,
-		routerProxyCredentialProvider{token: "router-service-token"},
-	)
+		store, nil,
+		routerProxyCredentialProvider{token: "router-service-token"})
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/api/router/api/v1/observability/outcomes",
@@ -206,7 +205,7 @@ func TestPlaygroundOutcomeProxyPreservesWriterLearningBehavior(t *testing.T) {
 
 	store := &fakePlaygroundFeedbackStore{}
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, routerProxyCredentialProvider{token: "router-token"})
+	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, nil, routerProxyCredentialProvider{token: "router-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes", strings.NewReader(
 		`{"replay_id":"replay-1","target":"model","target_ref":"model-a","verdict":"good_fit"}`,
 	))
@@ -230,7 +229,7 @@ func TestPlaygroundOutcomeProxyRejectsForeignSessionBeforeRouterLookup(t *testin
 
 	store := &fakePlaygroundFeedbackStore{validateErr: auth.ErrPlaygroundReplayNotOwned}
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, routerProxyCredentialProvider{token: "router-token"})
+	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, nil, routerProxyCredentialProvider{token: "router-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes", strings.NewReader(
 		`{"replay_id":"replay-1","target":"model","target_ref":"model-a","verdict":"good_fit"}`,
 	))
@@ -258,7 +257,7 @@ func TestPlaygroundOutcomeProxySurfacesRouterFailureAndReleasesClaim(t *testing.
 
 	store := &fakePlaygroundFeedbackStore{}
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, routerProxyCredentialProvider{token: "router-token"})
+	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, nil, routerProxyCredentialProvider{token: "router-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes", strings.NewReader(
 		`{"replay_id":"replay-1","target":"model","target_ref":"model-a","verdict":"good_fit"}`,
 	))
@@ -288,9 +287,8 @@ func TestPlaygroundOutcomeProxyReusesIdempotencyKeyAfterLostResponse(t *testing.
 		mux,
 		&config.Config{RouterAPIURL: server.URL},
 		nil,
-		store,
-		routerProxyCredentialProvider{token: "router-token"},
-	)
+		store, nil,
+		routerProxyCredentialProvider{token: "router-token"})
 	var forwardedKeys []string
 	appliedKeys := map[string]bool{}
 	proxy.Transport = roundTripFunc(func(request *http.Request) (*http.Response, error) {
@@ -354,7 +352,7 @@ func TestPlaygroundOutcomeProxyRejectsInProgressRouterReplay(t *testing.T) {
 
 	store := &fakePlaygroundFeedbackStore{}
 	mux := http.NewServeMux()
-	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, routerProxyCredentialProvider{token: "router-token"})
+	registerRouterAPIProxy(mux, &config.Config{RouterAPIURL: server.URL}, nil, store, nil, routerProxyCredentialProvider{token: "router-token"})
 	request := httptest.NewRequest(http.MethodPost, "/api/router/api/v1/observability/outcomes", strings.NewReader(
 		`{"replay_id":"replay-1","target":"model","target_ref":"model-a","verdict":"good_fit"}`,
 	))

@@ -25,6 +25,7 @@ A router config uses these top-level sections:
 version: v0.3
 listeners: []
 providers: {}
+evaluation: {}
 routing: {}
 entrypoints: []
 recipes: []
@@ -37,6 +38,8 @@ global: {}
   deployment pricing metadata. A built-in model may add an optional `catalog`
   identity, while `backend_refs[].provider` selects the stable runtime Provider
   ID. Custom vLLM/SGLang models continue to omit `catalog`.
+- `evaluation` optionally defines benchmarks, indices, and model-linked
+  measurement records.
 - `routing` owns model cards, signals, projections, decisions, and the routing
   strategy for the default profile.
 - `entrypoints` maps request-facing model names to isolated `recipes`. Each

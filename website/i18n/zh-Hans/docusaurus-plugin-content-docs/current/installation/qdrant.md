@@ -183,8 +183,11 @@ global:
         dimension: 384               # 必须与嵌入模型匹配
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.30
 ```
+
+这是 `bert`（`mom-embedding-light`）使用原始余弦检索时的起点。
+请结合已回答、无关和已更正的事实查询校准实际数据；其他嵌入模型的分数范围不同。
 
 ### 已上传文档的向量存储
 

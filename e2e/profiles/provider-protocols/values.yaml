@@ -1,0 +1,162 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/vllm-project/semantic-router/extproc
+  pullPolicy: Never
+  tag: e2e-test
+service:
+  type: ClusterIP
+  port: 8080
+config:
+  version: v0.3
+  listeners: []
+  providers:
+    defaults:
+      model: MoM
+    models:
+      - name: MoM
+        # The selected backend accepts Anthropic Messages. Keep this explicit:
+        # the Router owns semantic mutation and emits the backend-native wire
+        # contract, while the gateway owns transport and transparent delivery.
+        api_format: anthropic
+        backend_refs:
+          - name: provider-mocker
+            endpoint: provider-mocker.provider-protocols-system.svc.cluster.local:8000
+            weight: 1
+            provider: anthropic
+  evaluation:
+    records:
+      - model: MoM
+        benchmark: vllm-sr/operator-rating@1.0.0
+        metrics:
+          score: 0.5
+  routing:
+    decisions:
+      - name: json_prompt_keyword
+        description: Distinguish original JSON text from the bounded signal view
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: json_prompt_marker
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+      - name: prompt_cache_enabled
+        description: Route the prompt-cache policy probe to the Anthropic backend
+        priority: 70
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: prompt_cache_enabled
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+        plugins:
+          - type: prompt_cache
+            configuration:
+              enabled: true
+              ttl: 1h
+              targets:
+                - instructions
+                - tools
+              on_unsupported: reject
+      - name: prompt_cache_disabled
+        description: Preserve the disabled prompt-cache policy contract
+        priority: 60
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: prompt_cache_disabled
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+        plugins:
+          - type: prompt_cache
+            configuration:
+              enabled: false
+      - name: route_to_anthropic_provider
+        description: Route all requests to the native Anthropic provider fixture
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+            - type: keyword
+              name: all_requests
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
+    signals:
+      keywords:
+        - name: json_prompt_marker
+          operator: OR
+          keywords:
+            - signalonlyjsonmarker
+        - name: prompt_cache_enabled
+          operator: OR
+          keywords:
+            - "__PROMPT_CACHE_ENABLED__"
+        - name: prompt_cache_disabled
+          operator: OR
+          keywords:
+            - "__PROMPT_CACHE_DISABLED__"
+        - name: all_requests
+          operator: OR
+          keywords:
+            # Catch-all routing; the AIGatewayRoute also has a bare fallback
+            # rule in gwapi-resources.yaml. Both are intentional — the router
+            # needs a signal match to route, and the gateway provides a
+            # safety-net in case the router produces no match.
+            - ""
+    modelCards:
+      - name: MoM
+        description: Deterministic Anthropic Messages provider fixture
+        capabilities:
+          - chat
+  global:
+    model_catalog:
+      kbs: []
+      modules:
+        # Keep existing protocol probes below min_length. The dedicated JSON
+        # compression case supplies a larger request and verifies routing.
+        prompt_compression:
+          enabled: true
+          max_tokens: 256
+          min_length: 4096
+    router:
+      clear_route_cache: true
+      strategy: priority
+    services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
+      observability:
+        metrics:
+          enabled: true
+        tracing:
+          enabled: false
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+    stores:
+      response_cache:
+        enabled: false
+        embedding_model: mmbert
+      memory:
+        embedding_model: mmbert
+      vector_store:
+        embedding_model: mmbert
+    integrations: {}
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi

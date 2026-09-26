@@ -127,8 +127,13 @@ global:
         dimension: 384
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.70
+      default_similarity_threshold: 0.30
 ```
+
+The Qdrant example uses plain cosine scores with `bert`
+(`mom-embedding-light`). Its 0.30 threshold is a starting point from a
+small cold-start recall check, not the default for other embedding models.
+Check unrelated queries and corrected facts before using it with your data.
 
 For full deployment instructions, see:
 
@@ -216,16 +221,18 @@ defaults when `metadata_store: postgres` is set. Use `memory` only for ephemeral
 local experiments because store and file metadata is lost on router restart.
 
 With local `mmbert` embeddings, including Vela Embedding, each new vector store
-records the identity of the representation that created its vectors. After a
-model or dimension change, existing stores remain visible and their uploaded
-files are retained. Searching or attaching files to an incompatible or untagged
-store returns `409 EMBEDDING_REINDEX_REQUIRED`. Create a new vector store and
-reattach the original uploaded file IDs to generate compatible vectors. Client
-metadata cannot replace the router-owned `_router_embedding_identity` field.
+records the identity of the representation that created its vectors. Candle
+`bert` stores also record an encoder version so the corrected unpadded vectors
+cannot mix with earlier padded vectors. Existing stores remain visible and their
+uploaded files are retained. Searching or attaching files to an incompatible or
+untagged store returns `409 EMBEDDING_REINDEX_REQUIRED`. Create a new vector
+store and reattach the original uploaded file IDs to generate compatible
+vectors. Client metadata cannot replace the router-owned
+`_router_embedding_identity` field.
 
 The same check applies to request-time RAG and cached retrieval results. The
 `llama_stack` backend embeds search queries remotely, so it cannot currently be
-combined with identity-bound local `mmbert` document embeddings. Use `memory`,
+combined with identity-bound local `mmbert` or Candle `bert` document embeddings. Use `memory`,
 `milvus`, `valkey`, or `qdrant` for that configuration. Remote provider identity
 verification is a separate capability.
 

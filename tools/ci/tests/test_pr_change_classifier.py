@@ -13,8 +13,7 @@ sys.path.insert(0, str(ROOT / "tools/ci"))
 from ci_plan import github_outputs, make_plan, previous_release  # noqa: E402
 from classify_pr_changes import classify, full_e2e_profiles  # noqa: E402
 from domain_registry import load_domain_registry, profile_records  # noqa: E402
-from image_calibration import OWNED_OMNI_TESTS  # noqa: E402
-from run_model_tests import CLASSIFIER_TESTS  # noqa: E402
+from run_model_tests import CLASSIFIER_TESTS, OWNED_OMNI_TESTS  # noqa: E402
 from verification_catalog import (  # noqa: E402
     full_cpu_ids,
     load_catalog,
@@ -97,7 +96,7 @@ class SelectionTests(unittest.TestCase):
         self.assertEqual(record["workflow"], ".github/workflows/test-native.yml")
         self.assertEqual(record["reasons"], ["manual-selection"])
         self.assertIn(IMAGE_CALIBRATION, full_cpu_ids())
-        self.assertNotIn("e2e.multimodal-routing", full_cpu_ids())
+        self.assertIn("e2e.multimodal-routing", full_cpu_ids())
         for requested in (("unknown",), (IMAGE_CALIBRATION, IMAGE_CALIBRATION)):
             with self.assertRaises(ValueError):
                 make_plan([], source_sha=SHA, requested=requested)
@@ -128,7 +127,13 @@ class SelectionTests(unittest.TestCase):
             workflow["on"]["workflow_dispatch"]["inputs"]["verification"]["type"],
             "string",
         )
-        for job in ("images", "package"):
+        for job in (
+            "image-router",
+            "image-local",
+            "image-fixtures",
+            "image-distribution",
+            "package",
+        ):
             self.assertEqual(
                 workflow["jobs"][job]["with"]["mode"],
                 "${{ fromJSON(needs.plan.outputs.plan).profile }}",
@@ -287,7 +292,7 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan([path], source_sha=SHA)
         self.assertIn("operator", plan["expected_verification_ids"])
         self.assertTrue(
-            {"operator", "operator-bundle", "extproc", "mock-vllm"}
+            {"operator", "operator-bundle", "extproc", "provider-mocker"}
             <= set(plan["images"])
         )
         self.assertNotIn(
@@ -319,7 +324,7 @@ class SelectionTests(unittest.TestCase):
                 ]
                 self.assertEqual(len(definitions), 1, name)
                 self.assertIn(
-                    "native.image-calibration-cpu",
+                    "native.ort-cpu",
                     classify(definitions).selected_jobs,
                     name,
                 )
@@ -342,7 +347,7 @@ class SelectionTests(unittest.TestCase):
             "src/fleet-sim/tests/test_simulation.py": "fleet-sim",
             "src/training/tests/test_export.py": "training",
             "tools/ci/training-test-requirements.txt": "training",
-            "tools/test/services/mock-vllm/tests/test_fixture_latency.py": "mock-provider",
+            "tools/test/services/provider-mocker/tests/test_fixture_latency.py": "mock-provider",
             "bench/test_agentic_routing_experiment.py": "learning-tools",
             "bench/test_openai_fault_proxy.py": "soak-tools",
         }
@@ -359,34 +364,34 @@ class SelectionTests(unittest.TestCase):
 
     def test_shared_mock_changes_select_declared_pr_consumers(self):
         for path in (
-            "tools/test/services/mock-vllm/app.py",
-            "tools/test/services/mock-vllm/requirements.txt",
-            "tools/test/services/mock-vllm/tests/test_fixture_latency.py",
+            "tools/test/services/provider-mocker/provider_mocker/app.py",
+            "tools/test/services/provider-mocker/requirements.txt",
+            "tools/test/services/provider-mocker/tests/test_fixture_latency.py",
         ):
             plan = make_plan([path], source_sha=SHA)
             expected = {
                 "e2e." + name
                 for name in profile_records(selection="pr")
-                if "mock-vllm" in profile_image_dependencies()[name]
+                if "provider-mocker" in profile_image_dependencies()[name]
             }
             self.assertTrue(expected <= set(plan["expected_verification_ids"]))
             self.assertIn("operator", plan["expected_verification_ids"])
             self.assertIn("mock-provider", plan["expected_verification_ids"])
-            self.assertIn("mock-vllm", plan["images"])
+            self.assertIn("provider-mocker", plan["images"])
             self.assertNotIn(
                 "e2e.response-api-redis", plan["expected_verification_ids"]
             )
 
     def test_published_model_profiles_plan_their_backend_image(self):
-        for profile in ("vela-omni", "vela-halu"):
+        for profile in ("vela-omni", "vela-halu", "vela-shield"):
             with self.subTest(profile=profile):
                 identifier = f"e2e.{profile}"
                 plan = make_plan([], source_sha=SHA, requested=(identifier,))
                 self.assertEqual(plan["expected_verification_ids"], [identifier])
                 self.assertEqual(
-                    plan["verifications"][0]["images"], ["extproc", "mock-vllm"]
+                    plan["verifications"][0]["images"], ["extproc", "provider-mocker"]
                 )
-                self.assertEqual(set(plan["images"]), {"extproc", "mock-vllm"})
+                self.assertEqual(set(plan["images"]), {"extproc", "provider-mocker"})
 
     def test_full_cpu_profiles_share_explicit_inventory(self):
         plans = [
@@ -408,7 +413,7 @@ class SelectionTests(unittest.TestCase):
     def test_full_cpu_never_removes_affected_pr_verifications(self):
         for path in (
             "e2e/profiles/route-action/profile.go",
-            "tools/test/services/mock-vllm/app.py",
+            "tools/test/services/provider-mocker/provider_mocker/app.py",
         ):
             affected = make_plan([path], source_sha=SHA)
             for profile in ("pr", "nightly", "release"):
@@ -439,7 +444,7 @@ class SelectionTests(unittest.TestCase):
                 self.assertEqual(record["runtime"], "candle")
                 self.assertEqual(record["device"], "cpu")
                 self.assertEqual(record["platform"], "linux/amd64")
-                self.assertEqual(record["images"], ["extproc", "mock-vllm"])
+                self.assertEqual(record["images"], ["extproc", "provider-mocker"])
         for path in (
             "e2e/profiles/local-classifier-backend/profile.go",
             "e2e/testcases/local_classifier_routing.go",
@@ -457,10 +462,10 @@ class SelectionTests(unittest.TestCase):
             ],
             source_sha=SHA,
         )
-        self.assertEqual(plan["images"], ["dashboard", "llm-katan", "vllm-sr"])
+        self.assertEqual(plan["images"], ["dashboard", "provider-mocker", "vllm-sr"])
         self.assertEqual(plan["publish_images"], [])
         baseline = make_plan(["e2e/profiles/ai-gateway/profile.go"], source_sha=SHA)
-        self.assertIn("mock-vllm", baseline["images"])
+        self.assertIn("provider-mocker", baseline["images"])
 
     def test_main_only_publishes_affected_inputs(self):
         docs = make_plan(["README.md"], source_sha=SHA, profile="main")
@@ -509,8 +514,8 @@ class SelectionTests(unittest.TestCase):
         plan = make_plan(["candle-binding/src/lib.rs"], source_sha=SHA)
         outputs = github_outputs(plan)
         self.assertEqual(outputs["build_native"], "true")
-        self.assertIsInstance(json.loads(outputs["native"]), list)
-        self.assertGreater(len(json.loads(outputs["native"])), 0)
+        self.assertIsInstance(json.loads(outputs["native-shared"]), list)
+        self.assertGreater(len(json.loads(outputs["native-shared"])), 0)
 
     def test_riscv_is_an_emulated_native_contract_with_preserved_source_triggers(self):
         identity = "native.candle-riscv64-qemu"

@@ -32,4 +32,12 @@ describe('knowledge base activation', () => {
     await waitForKnowledgeBaseActivation({ activation_status: 'active' })
     expect(fetcher).not.toHaveBeenCalled()
   })
+
+  it('surfaces a restart-required error for a Kubernetes ConfigMap write, without polling', async () => {
+    const fetcher = vi.fn()
+    vi.stubGlobal('fetch', fetcher)
+    await expect(waitForKnowledgeBaseActivation({ activation_status: 'persisted', generated_runtime_hash: 'candidate' }))
+      .rejects.toThrow("next restart")
+    expect(fetcher).not.toHaveBeenCalled()
+  })
 })

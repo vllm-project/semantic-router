@@ -23,6 +23,7 @@ var BaselineRouterContract = []string{
 	"semantic-cache",
 	// NLI polarity tier of the semantic cache (issue #2751)
 	"semantic-cache-polarity",
+	"exact-cache-multilingual-negation",
 	"pii-detection",
 	// PII entity positions are code-point offsets (issue #3146)
 	"pii-entity-offsets",
@@ -71,6 +72,8 @@ var DashboardContract = []string{
 	// Core API
 	"dashboard-health",
 	"dashboard-status",
+	// Issue #2466: invitation, role-bound routes, and immediate session revocation.
+	"dashboard-route-bound-authorization",
 	// Config endpoints
 	"dashboard-config-read",
 	"dashboard-deploy-preview",
@@ -84,17 +87,19 @@ var DashboardContract = []string{
 	"dashboard-restart-recovery",
 }
 
-// AnthropicShimContract is the test suite that exercises the Anthropic-
-// shaped backend (llama.cpp + anthropic-shim). These tests require the
-// anthropic-shim profile and will not run correctly against the baseline
+// ProviderProtocolsContract is the test suite that exercises the Anthropic-
+// shaped provider-mocker backend. These tests require the
+// provider-protocols profile and will not run correctly against the baseline
 // OpenAI-shaped backends because they assert on Anthropic-specific
 // behaviour such as cache-token synthesis and stop-reason mapping.
-var AnthropicShimContract = []string{
+var ProviderProtocolsContract = []string{
+	"prompt-compression-json-routing",
 	// Chat clients must receive Chat Completions even though the selected
 	// backend speaks Anthropic Messages.
 	"chat-completions-request",
 	"anthropic-messages-cache-cycle",
 	"anthropic-chat-cache-control",
+	"anthropic-prompt-cache-policy",
 	"anthropic-messages-stop-sequence",
 	"anthropic-messages-streaming",
 	"anthropic-chat-completions-streaming",
@@ -104,11 +109,17 @@ var AnthropicShimContract = []string{
 	"anthropic-response-api-streaming",
 	"protocol-codec-anthropic-backend-buffered-matrix",
 	"protocol-codec-anthropic-backend-streaming-matrix",
+	"protocol-codec-anthropic-response-diagnostics",
+	"protocol-codec-responses-verbosity-anthropic",
+	"protocol-codec-prompt-cache-key-anthropic",
+	"protocol-codec-anthropic-per-message-effort-backend",
+	"protocol-codec-zero-penalty-anthropic",
 	"protocol-codec-anthropic-backend-tool-lifecycle",
 	"protocol-codec-anthropic-backend-structured-output",
 	"protocol-codec-anthropic-backend-error-matrix",
 	"protocol-codec-anthropic-backend-incomplete-stream-matrix",
 	"protocol-codec-anthropic-backend-midstream-error-matrix",
+	"protocol-codec-anthropic-backend-agent-client-replay",
 }
 
 // Combine preserves order while removing duplicate testcase names.

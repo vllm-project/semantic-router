@@ -3,7 +3,6 @@ package handlers
 import (
 	"fmt"
 	"net"
-	"os"
 	"strings"
 
 	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -105,7 +104,7 @@ func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) erro
 
 func currentGlobalDefaults(configPath string) (*routerconfig.CanonicalGlobal, error) {
 	defaults := routerconfig.DefaultCanonicalGlobal()
-	configData, err := os.ReadFile(configPath)
+	configData, err := readPersistedDashboardConfig(configPath)
 	if err != nil {
 		return &defaults, nil
 	}

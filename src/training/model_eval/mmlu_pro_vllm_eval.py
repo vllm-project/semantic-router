@@ -8,9 +8,10 @@ import json
 import os
 import random
 import re
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -25,6 +26,8 @@ ANSWER_PATTERN = re.compile(
 )
 TIMEOUT_SECONDS = 120
 MAX_RETRIES = 1  # No retries
+HTTP_OK = 200
+MIN_SAMPLES_FOR_STAT = 50
 
 
 def parse_args():
@@ -83,10 +86,19 @@ def parse_args():
     parser.add_argument(
         "--seed", type=int, default=42, help="Random seed for reproducibility"
     )
+    parser.add_argument(
+        "--chat-template-kwargs",
+        type=str,
+        default="",
+        help="JSON string merged into the request body via extra_body. "
+        "Example: "
+        '\'{"chat_template_kwargs": {"enable_thinking": false}}\' '
+        "to disable reasoning mode for thinking models (e.g. DeepSeek/Qwen).",
+    )
     return parser.parse_args()
 
 
-def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
+def get_available_models(endpoint: str, api_key: str = "") -> list[str]:
     """Get the list of available models from the vLLM OpenAI API endpoint."""
     client = OpenAI(
         base_url=endpoint,
@@ -100,7 +112,7 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
         # Try direct HTTP request as fallback
         try:
             response = requests.get(f"{endpoint}/models")
-            if response.status_code == 200:
+            if response.status_code == HTTP_OK:
                 models_data = response.json()
                 return [model["id"] for model in models_data.get("data", [])]
             else:
@@ -111,10 +123,10 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
 
 
 def load_mmlu_pro_dataset(
-    categories: Optional[List[str]] = None,
-    samples_per_category: Optional[int] = None,
+    categories: list[str] | None = None,
+    samples_per_category: int | None = None,
     seed: int = 42,
-) -> Tuple[pd.DataFrame, List[str]]:
+) -> tuple[pd.DataFrame, list[str]]:
     """Load the MMLU-Pro dataset and filter by categories if specified."""
     dataset = load_dataset("TIGER-Lab/MMLU-Pro", split="test")
     df = pd.DataFrame(dataset)
@@ -147,7 +159,7 @@ def load_mmlu_pro_dataset(
     return df, all_categories
 
 
-def format_cot_prompt(question: str, options: List[str], use_cot: bool = False) -> str:
+def format_cot_prompt(question: str, options: list[str], use_cot: bool = False) -> str:
     """Format the prompt for the model with or without Chain-of-Thought."""
     letter_mapping = {
         0: "A",
@@ -175,7 +187,7 @@ def format_cot_prompt(question: str, options: List[str], use_cot: bool = False) 
     return prompt
 
 
-def extract_answer(response: str) -> Optional[str]:
+def extract_answer(response: str) -> str | None:
     """Extract the answer letter from the model's response."""
     # Try to find the answer using regex pattern
     match = ANSWER_PATTERN.search(response)
@@ -191,17 +203,25 @@ def extract_answer(response: str) -> Optional[str]:
 
 
 def call_model_with_retry(
-    client: OpenAI, model: str, prompt: str, max_tokens: int, temperature: float
-) -> Tuple[str, bool]:
+    client: OpenAI,
+    model: str,
+    prompt: str,
+    max_tokens: int,
+    temperature: float,
+    chat_template_kwargs: dict | None = None,
+) -> tuple[str, bool]:
     """Call the model with retry logic for handling timeouts and errors."""
     for attempt in range(MAX_RETRIES):
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=max_tokens,
-                temperature=temperature,
-            )
+            kwargs = {
+                "model": model,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+            }
+            if chat_template_kwargs:
+                kwargs["extra_body"] = chat_template_kwargs
+            response = client.chat.completions.create(**kwargs)
             return response.choices[0].message.content, True
         except Exception as e:
             if attempt < MAX_RETRIES - 1:
@@ -218,11 +238,12 @@ def call_model_with_retry(
 def process_question(
     client: OpenAI,
     model: str,
-    question_data: Dict[str, Any],
+    question_data: dict[str, Any],
     use_cot: bool,
     max_tokens: int,
     temperature: float,
-) -> Dict[str, Any]:
+    chat_template_kwargs: dict | None = None,
+) -> dict[str, Any]:
     """Process a single question and return the results."""
     question = question_data["question"]
     options = question_data["options"]
@@ -238,7 +259,7 @@ def process_question(
 
     start_time = time.time()
     response_text, success = call_model_with_retry(
-        client, model, prompt, max_tokens, temperature
+        client, model, prompt, max_tokens, temperature, chat_template_kwargs
     )
     end_time = time.time()
 
@@ -269,6 +290,7 @@ def evaluate_model(
     concurrent_requests: int,
     max_tokens: int,
     temperature: float,
+    chat_template_kwargs: dict | None = None,
 ) -> pd.DataFrame:
     """Evaluate a model on the MMLU-Pro dataset."""
     client = OpenAI(base_url=endpoint, api_key=api_key if api_key else "dummy")
@@ -289,6 +311,7 @@ def evaluate_model(
                 use_cot,
                 max_tokens,
                 temperature,
+                chat_template_kwargs,
             )
             futures.append(future)
 
@@ -300,7 +323,7 @@ def evaluate_model(
     return results_df
 
 
-def analyze_results(results_df: pd.DataFrame) -> Dict[str, float]:
+def analyze_results(results_df: pd.DataFrame) -> dict[str, float]:
     """Analyze the results and compute statistics."""
     # Skip failed requests in the analysis
     valid_results = results_df[results_df["success"]]
@@ -333,7 +356,7 @@ def analyze_results(results_df: pd.DataFrame) -> Dict[str, float]:
 
 def save_results(
     results_df: pd.DataFrame,
-    analysis: Dict[str, Any],
+    analysis: dict[str, Any],
     model: str,
     output_dir: str,
     use_cot: bool,
@@ -391,6 +414,15 @@ def save_results(
 def main():
     args = parse_args()
 
+    # Warn on small sample sizes (measured ~±20pp/q noise at 5 samples)
+    if args.samples_per_category < MIN_SAMPLES_FOR_STAT:
+        print(
+            f"WARNING: --samples-per-category={args.samples_per_category} "
+            f"is below 50; accuracy numbers are noisy and should only be "
+            f"used for pipeline smoke-testing, not capability conclusions.",
+            file=sys.stderr,
+        )
+
     # Set random seed for reproducibility
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -427,6 +459,11 @@ def main():
     # Evaluate each model
     for model in args.models:
         print(f"\nEvaluating model: {model}")
+        # Parse chat-template-kwargs JSON if provided
+        ctk = None
+        if args.chat_template_kwargs:
+            ctk = json.loads(args.chat_template_kwargs)
+
         results_df = evaluate_model(
             df=df,
             model=model,
@@ -436,6 +473,7 @@ def main():
             concurrent_requests=args.concurrent_requests,
             max_tokens=args.max_tokens,
             temperature=args.temperature,
+            chat_template_kwargs=ctk,
         )
 
         # Analyze and save results

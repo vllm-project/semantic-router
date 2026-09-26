@@ -142,6 +142,11 @@ export function ReviewActivatePanel({
               Activating the validated router configuration…
             </div>
           )}
+          {activationState === "persisted" && (
+            <div className={styles.asyncNotice} role="status">
+              Setup was saved to the Kubernetes ConfigMap. Roll out Router and Envoy to activate it.
+            </div>
+          )}
         </div>
 
         <div className={styles.previewCard}>
