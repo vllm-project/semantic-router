@@ -19,6 +19,10 @@ html[data-route-kind='blog'],
    * no right TOC). Children use 100% of that column so title, text, and
    * media share one width without a dead band on the right. */
   --blog-prose: 100%;
+  /* Diagrams/photos stay below the full column width so they do not dominate
+   * the reading surface after the article track expanded to 1fr. */
+  --blog-media-max: 40rem;
+  --blog-media-max-height: 28rem;
   /* Wider than the shared --rail: the listing rail carries post titles rather
    * than short nav labels, so 18rem forced most of them onto three lines. */
   --blog-rail: 23rem;
@@ -656,23 +660,30 @@ html[data-route-kind='blog'] body,
   line-height: 1.75;
 }
 
-/* Everything in the main column shares one width — the column IS the measure.
- * Do not give media max-width: none while text stays capped; that desyncs edges. */
+/* Text and code fill the article column. Figures and markdown images are
+ * capped separately so diagrams do not stretch with the wide 1fr track. */
 .site-blog-post__content > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6),
 .site-blog-layout--post .markdown > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6),
-.site-blog-post__content > :is(pre, table, figure, .theme-code-block, .tabs-container, details),
+.site-blog-post__content > :is(pre, table, .theme-code-block, .tabs-container, details),
 .site-blog-post__content > div:has(> table),
 .site-blog-post__content > div:has(> pre),
-.site-blog-post__content > p:has(> img),
-.site-blog-post__content > p:has(> a > img),
-.site-blog-layout--post .markdown > :is(pre, table, figure, .theme-code-block, .tabs-container, details),
+.site-blog-layout--post .markdown > :is(pre, table, .theme-code-block, .tabs-container, details),
 .site-blog-layout--post .markdown > div:has(> table),
-.site-blog-layout--post .markdown > div:has(> pre),
-.site-blog-layout--post .markdown > p:has(> img),
-.site-blog-layout--post .markdown > p:has(> a > img) {
+.site-blog-layout--post .markdown > div:has(> pre) {
   max-width: none;
   width: 100%;
   margin-inline: 0;
+}
+
+.site-blog-post__content > figure,
+.site-blog-layout--post .markdown > figure,
+.site-blog-post__content > p:has(> img),
+.site-blog-post__content > p:has(> a > img),
+.site-blog-layout--post .markdown > p:has(> img),
+.site-blog-layout--post .markdown > p:has(> a > img) {
+  width: 100%;
+  max-width: min(100%, var(--blog-media-max));
+  margin-inline: auto;
 }
 
 .site-blog-post__content > p:first-of-type {
@@ -742,7 +753,9 @@ html[data-route-kind='blog'] body,
   display: block;
   width: 100%;
   height: auto;
+  max-height: var(--blog-media-max-height);
   margin-block: 0.35rem;
+  object-fit: contain;
   border-radius: var(--radius-lg);
 }
 
@@ -754,6 +767,7 @@ html[data-route-kind='blog'] body,
 .site-blog-post__content > p:has(> a[href^="/"] > img) {
   overflow: hidden;
   margin-block: 2rem;
+  margin-inline: auto;
   padding: 1rem;
   border: 1px solid var(--site-border);
   border-radius: var(--radius-lg);
