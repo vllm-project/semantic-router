@@ -938,6 +938,8 @@ config:
       recipe: e2e-plugins
     - model_names: ["e2e-cache"]
       recipe: e2e-cache
+    - model_names: ["e2e-cache-exact"]
+      recipe: e2e-cache-exact
     - model_names: ["vllm-sr/e2e-recipe-probe"]
       recipe: entrypoint-probe
     - model_names: ["vllm-sr/metadata-policy"]
@@ -1057,6 +1059,25 @@ config:
                 lora_name: general-expert
                 use_reasoning: false
             plugins: *baseline_response_cache_plugins
+    - name: e2e-cache-exact
+      description: Exact cache reuse and multilingual negation safety, independent of domain routing.
+      routing:
+        strategy: priority
+        decisions:
+          - name: e2e_cache_exact_decision
+            priority: 1
+            rules:
+              operator: AND
+            modelRefs:
+              - model: base-model
+                lora_name: general-expert
+                use_reasoning: false
+            plugins:
+              - type: response_cache
+                configuration:
+                  enabled: true
+                  mode: exact
+                  scope: global
     - name: entrypoint-probe
       description: "Deterministic keyword-gated recipe used by the entrypoint-recipe-routing E2E (issue #2331)."
       routing:

@@ -112,10 +112,18 @@ func (r *OpenAIRouter) rejectDispatchCapabilityMismatch(
 	dispatch *providerDispatch,
 	ctx *RequestContext,
 ) error {
-	if err := r.validateDispatchRequirements(request, dispatch, ctx); err != nil {
+	projected, err := r.projectAnthropicRequestForBackend(*request, dispatch.logicalModel, dispatch.targetFormat)
+	if err != nil {
+		var protocolError *llmprotocol.ProtocolError
+		if errors.As(err, &protocolError) && ctx != nil {
+			ctx.ImmediateProtocolError = protocolError
+		}
 		return err
 	}
-	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(*request)); err != nil {
+	if err := r.validateDispatchRequirements(&projected, dispatch, ctx); err != nil {
+		return err
+	}
+	if err := r.providerCapabilityMismatch(dispatch.logicalModel, dispatch.targetFormat, llmprotocol.RequiredCapabilities(projected)); err != nil {
 		var protocolError *llmprotocol.ProtocolError
 		if errors.As(err, &protocolError) && ctx != nil {
 			ctx.ImmediateProtocolError = protocolError

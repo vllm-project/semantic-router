@@ -116,7 +116,12 @@ func TestCacheEmbeddingSettingsReflectActualBackend(t *testing.T) {
 	if !ok || settings.Layer != 0 || settings.Dimension != 768 {
 		t.Fatalf("persistent actual settings: %#v %v", settings, ok)
 	}
-	if _, ok := LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "bert"})); ok {
+	if _, ok = LocalEmbeddingSettings(NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "qwen3"})); ok {
 		t.Fatal("unsupported provider received guessed identity")
+	}
+	bert := NewInMemoryCache(InMemoryCacheOptions{EmbeddingModel: "bert", EmbeddingProvider: storagetest.Vectors{Size: 384}})
+	settings, ok = LocalEmbeddingSettings(bert)
+	if !ok || settings.Layer != 0 || settings.Dimension != 384 {
+		t.Fatalf("bert actual settings: %#v %v", settings, ok)
 	}
 }

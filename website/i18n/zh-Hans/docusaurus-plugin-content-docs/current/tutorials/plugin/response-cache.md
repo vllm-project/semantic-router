@@ -36,10 +36,8 @@ plugins:
   - type: response_cache
     configuration:
       enabled: true
-      mode: exact_then_semantic
+      mode: exact
       scope: user
-      semantic:
-        similarity_threshold: 0.92
       ttl_seconds: 86400
       request_controls:
         enabled: true
@@ -56,6 +54,13 @@ plugins:
 - `exact`：仅规范化后的精确请求查找。
 - `exact_then_semantic`：先精确查找，未命中再进行向量查找。
 
+随附的 `config/config.yaml`、多目标路由示例和 `memory.yaml` 片段使用
+`exact`：相同请求仍可命中，不会仅凭向量相似度把另一个问题的答案返回给用户。
+只有验证了该路由所用语言和矛盾问句的行为后，才应显式选择 `semantic` 或
+`exact_then_semantic`。内置词面校验只识别英语否定词；德语 `nicht` 或中文
+`不` 的反向问题可能命中原问题的缓存答案。`high-recall.yaml` 仍是显式启用
+语义缓存的示例。
+
 精确层级可用于内存、Redis、Valkey、Milvus、Qdrant 和混合缓存后端。Anthropic 客户端请求会以 Anthropic 响应或 SSE 线格式回放。
 
 流式和非流式请求使用分开的缓存身份，因此回放不会跨线模式翻译缓存响应。语义匹配使用覆盖 system/历史、工具、响应格式、生成参数、客户端协议和路由策略的兼容指纹，以及硬性的配方、租户、请求模型和所选模型分区。
@@ -68,7 +73,9 @@ plugins:
 
 `semantic-cache`、`semantic_cache` 和 `response-cache` 作为已弃用别名被接受，并规范化为 `response_cache`。同样，`global.stores.semantic_cache` 会被读取为 `global.stores.response_cache` 的已弃用别名。不要在同一文档中同时配置两种拼写。导出、控制面板保存和 DSL 反编译始终发出规范名称。
 
-本地 `mmbert` 嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。这项绑定不会自动识别可变远程嵌入端点的模型身份。
+本地 `mmbert` 嵌入（包括 Vela Embedding）更换模型、分词器、向量表示大小或推理设置后，会使用独立的缓存空间。租户命名空间和显式缓存版本保持不变；旧条目按原有过期时间保留，也可显式清理。升级模型后的首次请求会缓存未命中，使用相同向量表示重启则可复用兼容缓存。语义缓存需要本地分词器窗口，因此 Router 会拒绝为其使用[远程嵌入端点](../../installation/runtime/embeddings.md#remote-embeddings)。
+
+Candle `bert` 嵌入改用编码器版本区分缓存空间。每当 Candle BERT 的向量发生变化，这个版本就会随之更新，例如填充 token 不再计入平均值时。跨越这类变化升级后，BERT 会使用新的缓存空间：升级前写入的条目不会被复用，并保留到过期为止，缓存会随新流量重新填充。由其他运行时提供的 BERT 保留已有缓存。
 
 ## 运维 {#operations}
 

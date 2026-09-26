@@ -31,6 +31,17 @@ config:
           score: 0.5
   routing:
     decisions:
+      - name: json_prompt_keyword
+        description: Distinguish original JSON text from the bounded signal view
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+            - type: keyword
+              name: json_prompt_marker
+        modelRefs:
+          - model: MoM
+            use_reasoning: false
       - name: route_to_anthropic_provider
         description: Route all requests to the native Anthropic provider fixture
         priority: 50
@@ -44,6 +55,10 @@ config:
             use_reasoning: false
     signals:
       keywords:
+        - name: json_prompt_marker
+          operator: OR
+          keywords:
+            - signalonlyjsonmarker
         - name: all_requests
           operator: OR
           keywords:
@@ -60,6 +75,13 @@ config:
   global:
     model_catalog:
       kbs: []
+      modules:
+        # Keep existing protocol probes below min_length. The dedicated JSON
+        # compression case supplies a larger request and verifies routing.
+        prompt_compression:
+          enabled: true
+          max_tokens: 256
+          min_length: 4096
     router:
       clear_route_cache: true
       strategy: priority

@@ -38,8 +38,14 @@ RUN case "$VELA_OMNI_KEEP_GOLDEN" in 0) set -- ;; 1) set -- --keep-golden ;; *) 
 FROM --platform=$BUILDPLATFORM rust:1.90 AS rust-cross-builder
 
 # Install cross-compilation dependencies
+# libssl is Multi-Arch: same, so both architectures get the newest version they share.
+# This builder can downgrade preinstalled OpenSSL during an upload skew;
+# the final runtime uses its own OpenSSL packages.
 RUN dpkg --add-architecture arm64 && \
-    apt-get update && apt-get install -y \
+    apt-get update && \
+    host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
+    ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
+    apt-get install -y --allow-downgrades --no-remove \
     make \
     build-essential \
     pkg-config \
@@ -50,8 +56,10 @@ RUN dpkg --add-architecture arm64 && \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
     binutils-aarch64-linux-gnu \
-    libssl-dev:arm64 \
-    libssl-dev \
+    "libssl-dev:arm64=${ssl_version}" \
+    "libssl3t64:arm64=${ssl_version}" \
+    "libssl-dev=${ssl_version}" \
+    "libssl3t64=${ssl_version}" \
     && rm -rf /var/lib/apt/lists/*
 
 # Install cross-compilation Rust target
@@ -123,8 +131,12 @@ RUN echo "Building Rust library (CPU-only, no CUDA) for TARGETARCH=$TARGETARCH..
 ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM rust:1.90 AS onnx-cross-builder
 
+# libssl is Multi-Arch: same, so both architectures get the newest version they share.
 RUN dpkg --add-architecture arm64 && \
-    apt-get update && apt-get install -y \
+    apt-get update && \
+    host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
+    ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
+    apt-get install -y --allow-downgrades --no-remove \
     make \
     cmake \
     build-essential \
@@ -136,8 +148,10 @@ RUN dpkg --add-architecture arm64 && \
     g++-aarch64-linux-gnu \
     libc6-dev-arm64-cross \
     binutils-aarch64-linux-gnu \
-    libssl-dev:arm64 \
-    libssl-dev \
+    "libssl-dev:arm64=${ssl_version}" \
+    "libssl3t64:arm64=${ssl_version}" \
+    "libssl-dev=${ssl_version}" \
+    "libssl3t64=${ssl_version}" \
     && rm -rf /var/lib/apt/lists/*
 
 RUN rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
@@ -365,12 +379,18 @@ ARG BUILDPLATFORM
 FROM --platform=$BUILDPLATFORM golang:1.25 AS go-builder
 
 # Install cross-compilation tools for Go
+# libssl is Multi-Arch: same, so both architectures get the newest version they share.
 RUN dpkg --add-architecture arm64 && \
-    apt-get update && apt-get install -y \
+    apt-get update && \
+    host_versions="$(apt-cache madison libssl-dev | awk '{print $3}')" && \
+    ssl_version="$(apt-cache madison libssl-dev:arm64 | awk '{print $3}' | grep -Fxm1 "$host_versions")" && \
+    apt-get install -y --allow-downgrades --no-remove \
     gcc-aarch64-linux-gnu \
     g++-aarch64-linux-gnu \
-    libssl-dev:arm64 \
-    libssl-dev \
+    "libssl-dev:arm64=${ssl_version}" \
+    "libssl3t64:arm64=${ssl_version}" \
+    "libssl-dev=${ssl_version}" \
+    "libssl3t64=${ssl_version}" \
     file \
     && rm -rf /var/lib/apt/lists/*
 
